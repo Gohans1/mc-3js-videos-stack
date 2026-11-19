@@ -19,7 +19,7 @@ import { Toaster } from "/components/ui/toast.tsx";
 import { registerEngine } from "/core/engine.ts";
 import { setFilmSource } from "/core/filmMeta.ts";
 import { S } from "/core/state.ts";
-import { get, set, setPref, useStudio } from "/core/store.ts";
+import { get, set, setPref } from "/core/store.ts";
 import { Stage } from "/picture/Stage.tsx";
 import { render, renderFilmFrame } from "/picture/render.ts";
 import { seek, setPlaying, setVolume, toggleMute } from "/playback/transport.ts";
@@ -284,6 +284,7 @@ beforeEach(async () => {
     u.S.playing = false;
     u.S.dragging = null;
     u.S.tools.free.on = false;
+    u.S.comments = u.SHOT_LIST.map((s) => s.name);
     u.S.render(0);
     u.setPref("guides", false);
     u.setPref("guideMode", "thirds");
@@ -294,6 +295,8 @@ beforeEach(async () => {
       free: false,
       ink: null,
       compose: null,
+      camRev: 0,
+      shotsRev: 0,
       valueCheck: "off",
       ghost: false,
       blindAudio: false,
@@ -426,6 +429,20 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(sameFrameCheck.afterFree).toBe(true);
   expect(sameFrameCheck.afterRgb).toEqual([255, 235, 59]);
 
+  // Rapid camRev bumps keep active Ghost image visible without flicker and coalesce refreshes via debounce
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.resetFilmDraws();
+    for (let r = 1; r <= 5; r++) {
+      window.__EYE_TEST__.set({ camRev: r });
+    }
+  })()`);
+  expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot="0"]')`)).toBe(true);
+  expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(0);
+  await waitUntil(`window.__EYE_TEST__.getFilmDraws() === 1`);
+  await Bun.sleep(60);
+  expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(1);
+  expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot="0"]')`)).toBe(true);
+
   // Defer uncached capture while S.dragging is active, then capture on pointerup release
   await page.evaluate(`(() => {
     window.__EYE_TEST__.resetFilmDraws();
@@ -512,6 +529,16 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
   await waitUntil(`window.__EYE_TEST__.get().muted === false`);
   expect(await page.evaluate(`window.__EYE_TEST__.get().volume`)).toBe(0.65);
 
+  // While paused with curtain open, bumping shotsRev must update the imperative shot label cleanly
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.playing = false;
+    window.__EYE_TEST__.S.comments[1] = "Updated Emerald";
+    window.__EYE_TEST__.set({ playing: false, shotsRev: 1 });
+  })()`);
+  await waitUntil(
+    `document.querySelector('[aria-label="Blind audio test"][role="region"]')?.textContent?.includes("Shot 1 · Updated Emerald")`,
+  );
+
   // Esc exits Blind Audio cleanly
   await page.evaluate(
     `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }))`,
@@ -576,6 +603,7 @@ test("Director's Eye hotkeys never hijack text inputs, Review mode supports all 
       new KeyboardEvent("keydown", { key: "H", code: "KeyH", shiftKey: true, bubbles: true }),
       new KeyboardEvent("keydown", { key: "C", code: "KeyC", shiftKey: true, bubbles: true }),
       new KeyboardEvent("keydown", { key: "m", code: "KeyM", altKey: true, bubbles: true }),
+      new KeyboardEvent("keydown", { key: ";", code: "Semicolon", altKey: true, bubbles: true }),
     ]) {
       input.dispatchEvent(ev);
     }
@@ -587,6 +615,8 @@ test("Director's Eye hotkeys never hijack text inputs, Review mode supports all 
   expect(afterInput.blindAudio).toBe(false);
   expect(afterInput.colorScript).toBe(false);
   expect(afterInput.muted).toBe(false);
+  expect(afterInput.guideMode).toBe("thirds");
+  expect(afterInput.guides).toBe(false);
 
   // In Review mode, Esc exits Blind Audio FIRST without cancelling open Draw ink or note Compose behind the curtain
   await page.evaluate(`(() => {

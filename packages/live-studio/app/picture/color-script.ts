@@ -276,7 +276,7 @@ function resolveVisibleSampleAt(
   if (hit && !hit.blank) return midSample;
   const desired = start + (end - start) * 0.5;
   let bestMid = midSample;
-  let bestScore = -1;
+  let bestScore = -Infinity;
   for (const seg of timingClock.segments) {
     if (seg.blank) continue;
     const ovStart = Math.max(start, seg.from);

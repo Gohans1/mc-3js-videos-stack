@@ -12,7 +12,6 @@ import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { FPS } from "../core/time";
-import { useFrame } from "../core/useFrame";
 import { seek } from "../playback/transport";
 import { captureFramePixels } from "./capture";
 import {
@@ -45,19 +44,28 @@ function cacheKeyFor(shotIndexValue: number, sampleAt: number, ratio: string): s
   return `${shotIndexValue}:${sampleAt.toFixed(3)}:${ratio}`;
 }
 
-function waitUntilPaused(signal: AbortSignal): Promise<void> {
-  if (!S.playing || signal.aborted) return Promise.resolve();
+function waitUntilIdle(signal: AbortSignal): Promise<void> {
+  if ((!S.playing && !S.dragging) || signal.aborted) return Promise.resolve();
   return new Promise((resolve) => {
+    let done = false;
     const finish = () => {
-      off();
+      if (done) return;
+      done = true;
+      offPlay();
+      removeEventListener("pointerup", onPointerEnd);
+      removeEventListener("pointercancel", onPointerEnd);
       signal.removeEventListener("abort", finish);
       resolve();
     };
-    const off = S.watch("playing", () => {
-      if (!S.playing) finish();
-    });
+    const check = () => {
+      if (signal.aborted || (!S.playing && !S.dragging)) finish();
+    };
+    const onPointerEnd = () => queueMicrotask(check);
+    const offPlay = S.watch("playing", check);
+    addEventListener("pointerup", onPointerEnd);
+    addEventListener("pointercancel", onPointerEnd);
     signal.addEventListener("abort", finish, { once: true });
-    if (!S.playing || signal.aborted) finish();
+    check();
   });
 }
 
@@ -67,7 +75,7 @@ function ColorScriptBody() {
   const metaRev = useStudio((s) => s.metaRev);
   const shotsRev = useStudio((s) => s.shotsRev);
   const timingRev = useStudio((s) => s.timingRev);
-  const frame = useFrame();
+  const [currentShot, setCurrentShot] = useState(() => shotIndex(S.t));
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [capturing, setCapturing] = useState(false);
   const [, setPaintTick] = useState(0);
@@ -81,10 +89,14 @@ function ColorScriptBody() {
 
   const pacing = useMemo(() => analyzeShotPacing(shots), [shots]);
   const maxDuration = useMemo(() => Math.max(0.01, ...shots.map((s) => s.duration)), [shots]);
-  const currentShot = useMemo(() => {
-    void frame;
-    return shotIndex(S.t);
-  }, [frame]);
+
+  useEffect(() => {
+    const sync = () => {
+      const next = shotIndex(S.t);
+      setCurrentShot((prev) => (prev === next ? prev : next));
+    };
+    return S.watch("time", sync);
+  }, [shots]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,9 +117,9 @@ function ColorScriptBody() {
       try {
         for (const shot of missing) {
           if (signal.aborted) return;
-          if (S.playing) {
+          if (S.playing || S.dragging) {
             setCapturing(false);
-            await waitUntilPaused(signal);
+            await waitUntilIdle(signal);
             if (signal.aborted) return;
             setCapturing(true);
           }
@@ -257,14 +269,18 @@ function ColorScriptBody() {
               <div
                 className={cn(
                   "bg-stage relative w-full overflow-hidden",
-                  ratio === "9:16" ? "aspect-9/16 max-h-20" : "aspect-video",
+                  ratio === "9:16" ? "h-24" : "aspect-video",
                 )}
               >
                 {cached?.dataUrl ? (
                   <img
                     src={cached.dataUrl}
                     alt={`Shot ${shot.index} frame`}
-                    className="block size-full object-cover"
+                    className={
+                      ratio === "9:16"
+                        ? "mx-auto block h-full w-auto object-contain"
+                        : "block size-full object-cover"
+                    }
                   />
                 ) : (
                   <div className="text-tag text-muted-foreground flex size-full items-center justify-center font-mono">

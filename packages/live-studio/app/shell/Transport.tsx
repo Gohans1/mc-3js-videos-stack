@@ -367,7 +367,11 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[720px]:hidden pointer-coarse:hidden")}
+              className={cn(
+                square,
+                "pointer-coarse:hidden",
+                valueCheck === "off" && "@max-[720px]:hidden",
+              )}
               aria-label="Value check"
               aria-pressed={valueCheck !== "off"}
               onClick={() => set({ valueCheck: nextValueCheckMode(valueCheck) })}
@@ -379,7 +383,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[760px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "pointer-coarse:hidden", !ghost && "@max-[760px]:hidden")}
               aria-label="Cut-boundary ghost"
               aria-pressed={ghost}
               onClick={() => set({ ghost: !ghost })}
@@ -391,7 +395,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[820px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "pointer-coarse:hidden", !colorScript && "@max-[820px]:hidden")}
               aria-label="Color script"
               aria-pressed={colorScript}
               onClick={() => set({ colorScript: !colorScript })}
@@ -442,7 +446,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[680px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "pointer-coarse:hidden", !blindAudio && "@max-[680px]:hidden")}
               aria-label="Blind audio test"
               aria-pressed={blindAudio}
               onClick={() => set({ blindAudio: !blindAudio })}

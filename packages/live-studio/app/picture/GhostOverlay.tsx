@@ -19,32 +19,53 @@ import {
 } from "./director-eye";
 
 const MAX_GHOST_CACHE = 48;
+const REV_DEBOUNCE_MS = 200;
 const ghostCache = new Map<string, string>();
+const slotLatest = new Map<string, string>();
 const pendingGhost = new Map<string, Promise<string | null>>();
+const pendingSlot = new Set<string>();
+const queuedSlot = new Map<string, { cacheKey: string; captureAt: number }>();
 const ghostSubs = new Set<() => void>();
 
-function cacheGhostUrl(key: string, url: string) {
-  if (ghostCache.has(key)) ghostCache.delete(key);
-  ghostCache.set(key, url);
-  if (ghostCache.size > MAX_GHOST_CACHE) {
-    const oldest = ghostCache.keys().next().value;
-    if (oldest !== undefined) ghostCache.delete(oldest);
+function putLru(map: Map<string, string>, key: string, value: string) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, value);
+  if (map.size > MAX_GHOST_CACHE) {
+    const oldest = map.keys().next().value;
+    if (oldest !== undefined) map.delete(oldest);
   }
 }
 
-function ensureGhostCapture(key: string, captureAt: number) {
-  if (ghostCache.has(key) || pendingGhost.has(key)) return;
+function ensureGhostCapture(slotKey: string, cacheKey: string, captureAt: number) {
+  if (ghostCache.has(cacheKey) || pendingGhost.has(cacheKey)) return;
+  if (pendingSlot.has(slotKey)) {
+    queuedSlot.set(slotKey, { cacheKey, captureAt });
+    return;
+  }
+  pendingSlot.add(slotKey);
   const task = captureFrameDataUrl(captureAt, 960)
     .then((url) => {
-      if (url) cacheGhostUrl(key, url);
+      if (url) {
+        putLru(ghostCache, cacheKey, url);
+        putLru(slotLatest, slotKey, url);
+      }
       return url;
     })
     .catch(() => null)
     .finally(() => {
-      pendingGhost.delete(key);
+      pendingGhost.delete(cacheKey);
+      pendingSlot.delete(slotKey);
+      const next = queuedSlot.get(slotKey);
+      if (next) {
+        queuedSlot.delete(slotKey);
+        if (!ghostCache.has(next.cacheKey)) {
+          ensureGhostCapture(slotKey, next.cacheKey, next.captureAt);
+          return;
+        }
+      }
       for (const fn of ghostSubs) fn();
     });
-  pendingGhost.set(key, task);
+  pendingGhost.set(cacheKey, task);
   for (const fn of ghostSubs) fn();
 }
 
@@ -84,9 +105,8 @@ function useGhostTarget(autoCapture: boolean): {
 
   const available = target.available;
   const captureAt = target.available ? target.captureAt : -1;
-  const cacheKey = available
-    ? `${target.prevShot}:${captureAt.toFixed(4)}:${sceneRev}:${metaRev}:${ratio}`
-    : "";
+  const slotKey = available ? `${target.prevShot}:${captureAt.toFixed(4)}:${ratio}` : "";
+  const cacheKey = slotKey ? `${slotKey}:${sceneRev}:${metaRev}` : "";
   const [, setTick] = useState(0);
   const [dragEpoch, setDragEpoch] = useState(0);
 
@@ -99,7 +119,8 @@ function useGhostTarget(autoCapture: boolean): {
   }, []);
 
   useEffect(() => {
-    if (!autoCapture || !ready || !available || !cacheKey || playing) return;
+    if (!autoCapture || !ready || !available || !slotKey || !cacheKey || playing) return;
+    if (ghostCache.has(cacheKey)) return;
     if (S.dragging) {
       let active = true;
       const onRelease = () => {
@@ -115,11 +136,17 @@ function useGhostTarget(autoCapture: boolean): {
         removeEventListener("pointercancel", onRelease);
       };
     }
-    ensureGhostCapture(cacheKey, captureAt);
-  }, [autoCapture, ready, available, captureAt, cacheKey, playing, dragEpoch]);
+    if (slotLatest.has(slotKey)) {
+      const timer = setTimeout(() => {
+        ensureGhostCapture(slotKey, cacheKey, captureAt);
+      }, REV_DEBOUNCE_MS);
+      return () => clearTimeout(timer);
+    }
+    ensureGhostCapture(slotKey, cacheKey, captureAt);
+  }, [autoCapture, ready, available, captureAt, slotKey, cacheKey, playing, dragEpoch]);
 
-  const url = cacheKey ? (ghostCache.get(cacheKey) ?? null) : null;
-  const busy = available && url === null && pendingGhost.has(cacheKey);
+  const url = cacheKey ? (ghostCache.get(cacheKey) ?? slotLatest.get(slotKey) ?? null) : null;
+  const busy = available && (pendingGhost.has(cacheKey) || pendingSlot.has(slotKey));
 
   return { opacity, target, url, busy };
 }
@@ -150,7 +177,7 @@ function GhostHudBody() {
   const pct = Math.round(clampGhostOpacity(opacity) * 100);
   const status = !target.available
     ? target.reason === "shot-0"
-      ? "Shot 0 (no previous cut)"
+      ? `Shot ${target.currentShot} (no previous cut)`
       : target.reason === "blank-prev-shot"
         ? "Previous shot is blank"
         : "No cuts yet"

@@ -189,6 +189,32 @@ describe("color-script shots & pacing analysis", () => {
     // If midpoint itself lands inside a blank gap (1.5..4 in shot 1..4), choose visible frame before 1.5
     const gapAtMid = buildColorScriptShots([{ t: 1, name: "GapMid" }], 4, [], 30, clock);
     assert.ok(gapAtMid[0].sampleAt < 1.5 && gapAtMid[0].sampleAt >= 1);
+
+    // Long 30s+ shot with blank tail (negative distance-penalized score < -1) must still select the visible head
+    const longClock = {
+      segments: [
+        { from: 0, to: 1, blank: false },
+        { from: 1, to: 60, blank: true },
+      ],
+    };
+    const longShot = buildColorScriptShots([{ t: 0, name: "LongHold" }], 60, [], 30, longClock);
+    assert.ok(longShot[0].sampleAt >= 0 && longShot[0].sampleAt < 1);
+  });
+
+  test("analyzeShotPacing flags local monotonous runs even when sequence CV is not uniform overall", () => {
+    const mixedShots = buildColorScriptShots(
+      [{ t: 0 }, { t: 1 }, { t: 2 }, { t: 3 }, { t: 4 }],
+      10,
+      [],
+      30,
+    );
+    const summary = analyzeShotPacing(mixedShots);
+    assert.equal(summary.isSequenceUniform, false);
+    assert.ok(summary.byShot[0].includes("uniform"));
+    assert.ok(summary.byShot[1].includes("uniform"));
+    assert.ok(summary.byShot[2].includes("uniform"));
+    assert.ok(summary.byShot[3].includes("uniform"));
+    assert.equal(summary.byShot[4].includes("uniform"), false);
   });
 });
 
@@ -314,6 +340,25 @@ describe("cut-boundary ghost time math", () => {
         Math.abs(g.captureAt - (2 - 1 / 30)) < 1e-6,
         `Expected exact prevShotEnd ${2 - 1 / 30}, got ${g.captureAt}`,
       );
+    }
+  });
+
+  test("returns blank-prev-shot when the entire previous shot is blank", () => {
+    const shots = [
+      { t: 0, name: "BlankA" },
+      { t: 2, name: "VisibleB" },
+    ];
+    const blankClock = {
+      segments: [
+        { from: 0, to: 2, blank: true },
+        { from: 2, to: 5, blank: false },
+      ],
+    };
+    const g = cutBoundaryGhostTime({ shots, t: 2.5, fps: 30, timingClock: blankClock });
+    assert.equal(g.available, false);
+    if (!g.available) {
+      assert.equal(g.reason, "blank-prev-shot");
+      assert.equal(g.prevShot, 0);
     }
   });
 });

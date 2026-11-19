@@ -1,5 +1,5 @@
 import { Headphones, Volume2, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
@@ -15,13 +15,13 @@ export function BlindAudioCurtain() {
   const active = useStudio((s) => s.blindAudio);
   const playing = useStudio((s) => s.playing);
   const muted = useStudio((s) => s.muted);
-  useStudio((s) => s.metaRev);
-  useStudio((s) => s.shotsRev);
+  const metaRev = useStudio((s) => s.metaRev);
+  const shotsRev = useStudio((s) => s.shotsRev);
 
   const timeRef = useRef<HTMLSpanElement>(null);
   const shotRef = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!active) return;
     const sync = () => {
       if (timeRef.current) {
@@ -29,17 +29,15 @@ export function BlindAudioCurtain() {
       }
       if (shotRef.current) {
         const i = shotIndex(S.t);
-        const name = S.comments[i];
+        const name = S.comments[i]?.trim();
         shotRef.current.textContent = name ? `Shot ${i} · ${name}` : `Shot ${i}`;
       }
     };
     sync();
     return S.watch("time", sync);
-  }, [active]);
+  }, [active, metaRev, shotsRev]);
 
   if (!active) return null;
-  const i = shotIndex(S.t);
-  const shotName = S.comments[i];
 
   return (
     <div
@@ -57,12 +55,8 @@ export function BlindAudioCurtain() {
         <span
           ref={timeRef}
           className="text-heading-foreground font-mono text-2xl font-semibold tabular-nums"
-        >
-          {stamp(S.t)} / {stamp(DURATION)}
-        </span>
-        <span ref={shotRef} className="text-label text-sm">
-          {shotName ? `Shot ${i} · ${shotName}` : `Shot ${i}`}
-        </span>
+        />
+        <span ref={shotRef} className="text-label text-sm" />
       </div>
       {muted && (
         <div className="bg-warn-bg text-warn-text ring-warn/30 flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs ring-1">
