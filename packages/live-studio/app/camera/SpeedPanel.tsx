@@ -11,9 +11,11 @@ import { useFrameKey } from "../core/useFrameKey";
 import {
   canMatchAllInShot,
   canMatchCameraKey,
+  canToggleHardCut,
   DEFAULT_EASE,
   easeKeyIndex,
   edit,
+  isHardCut,
   keys,
   matchAllInShot,
   preview,
@@ -31,6 +33,7 @@ const camDoc = { snapshot, restore };
 export function CameraEasePanel() {
   useStudio((s) => s.camRev);
   useStudio((s) => s.camKey);
+  useStudio((s) => s.shotsRev);
   useFrameKey(() => shownKey(S.t));
   const rawIdx = shownKey(S.t),
     i = easeKeyIndex(rawIdx);
@@ -45,17 +48,30 @@ export function CameraEasePanel() {
 function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex: number }) {
   const rawKey = keys[rawIdx],
     k = keys[i];
+  const hardCut = isHardCut(rawIdx);
   if (i < 0 || !k) {
     return (
       <EmptyCard
         className="mx-3 mt-1"
-        title={!rawKey ? "No keyframe picked" : "A shot starts here"}
+        title={
+          !rawKey
+            ? "No keyframe picked"
+            : hardCut
+              ? "Hard cut"
+              : rawKey.cut
+                ? "Shot cut"
+                : "First keyframe"
+        }
       >
         {!rawKey
           ? "Click a diamond on the Camera track, or put the playhead on one: this sets how the camera travels into it."
-          : rawKey.cut
-            ? "No closing keyframe before this cut to ease into. Pick a keyframe inside a shot."
-            : "Nothing eases into the first keyframe of a shot. Pick a later one."}
+          : hardCut
+            ? canToggleHardCut(rawIdx)
+              ? "The camera jumps instantly here. Turn off Hard cut to ease into this key, or pick the next key to edit the move after it."
+              : "The camera jumps instantly here. Pick the next keyframe to edit the move after the cut."
+            : rawKey.cut
+              ? "No closing keyframe before this cut to ease into. Pick a keyframe inside a shot."
+              : "Nothing eases into the first keyframe of a shot. Pick a later one."}
       </EmptyCard>
     );
   }
@@ -65,7 +81,7 @@ function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex
         Unlock it in Camera to change its path or easing.
       </EmptyCard>
     );
-  const fromSplitCut = !!rawKey?.cut && i !== rawIdx;
+  const fromSplitCut = !!rawKey?.cut && !hardCut && i !== rawIdx;
   const curve = k.motion !== "hold" && Array.isArray(k.ease) ? k.ease : null;
   const canJoin = canMatchCameraKey(i);
   const hasJoinableShotKeys = joinableCameraKeysInShot(keys, i).length > 0;

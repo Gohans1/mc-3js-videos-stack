@@ -66,6 +66,65 @@ test("a relocated Freeze within a shot advances the camera across both hold boun
   }
 });
 
+test("an internal hard cut follows camera time through an output-clock Freeze", () => {
+  const timing = { freezes: [{ at: 2, duration: 3 }] };
+  setTiming(timing, 8, [{ t: 0, cameraClock: "output" }, { t: 4 }]);
+  try {
+    const clock = clockForTimeline("cam");
+    const source = [{ t: 0 }, { t: 2.4, id: "move" }, { t: 4, cut: true }];
+    const view = mapTimeline("cam", source, clock);
+    const move = view.find((row) => row.id === "move");
+    move.cut = true;
+    const cut = mapTimeline("cam", view, clock, true, source);
+    const placements = mapTimeline("cam", cut, clock).filter((row) => row.id === "move");
+    assert.deepEqual(
+      placements.map((row) => row.t),
+      [move.t],
+    );
+
+    const target = 4.5;
+    placements[0].t = target;
+    const moved = mapTimeline("cam", [view[0], ...placements, view[2]], clock, true, cut);
+    assert.equal(moved[1].t, cameraTimesAt(target).camera);
+    assert.equal(moved[1].cut, true);
+  } finally {
+    setTiming({}, 8, []);
+  }
+});
+
+test("a shot's camera cut stays at its picture boundary when a Freeze starts there", () => {
+  setTiming({ freezes: [{ at: 4, duration: 3 }] }, 8, [{ t: 0 }, { t: 4 }]);
+  try {
+    const clock = clockForTimeline("cam");
+    const rows = [{ t: 0 }, { t: 4, cut: true }];
+    const view = mapTimeline("cam", rows, clock);
+    assert.equal(view[1].t, 4);
+    assert.deepEqual(mapTimeline("cam", view, clock, true, rows), rows);
+  } finally {
+    setTiming({}, 8, []);
+  }
+});
+
+test("a scene-clock hard cut is marked at the edge where its frame first plays", () => {
+  for (const [freeze, expected] of [
+    [{ at: 2, duration: 3 }, 2],
+    [{ at: 2, frame: 1, duration: 3 }, 5],
+  ]) {
+    setTiming({ freezes: [freeze] }, 8, [{ t: 0 }, { t: 4 }]);
+    try {
+      const clock = clockForTimeline("cam");
+      const rows = [{ t: 0 }, { t: 2, cut: true }];
+      const view = mapTimeline("cam", rows, clock);
+      assert.equal(view[1].t, expected);
+      assert.ok(cameraTimesAt(expected - 0.001).camera < 2);
+      assert.equal(cameraTimesAt(expected).camera, 2);
+      assert.deepEqual(mapTimeline("cam", view, clock, true, rows), rows);
+    } finally {
+      setTiming({}, 8, []);
+    }
+  }
+});
+
 test("editing an output-clock cut stores the same picture boundary for the camera and shot", () => {
   const timing = { freezes: [{ at: 2, duration: 3 }] };
   setTiming(timing, 8, [{ t: 0, cameraClock: "output" }, { t: 4 }]);

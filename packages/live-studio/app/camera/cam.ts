@@ -3,14 +3,12 @@ import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/ca
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
-import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
+import { cameraShotAtBoundary, canPlaceCameraCut } from "../../src/camera-clock.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
 // camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
 // puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
-// A key's time moves only inside its shot. A cut belongs to the film's SHOTS as much as to the camera, so a cut key moves only
-// when the film keeps its shots as data (shots.ts), and then both move together (rollCut), and a shot can be split at the playhead
-// or merged with the one before (splitShot, removeKey on a cut), CapCut's Split and its undo.
+// Rolling a shot boundary moves both the camera cut and its shot. Cuts inside a shot are camera keys only.
 import { lightEdit } from "../activity/activity";
 import { together } from "../core/doc";
 import {
@@ -201,6 +199,58 @@ export const room = (i: number): [number, number] => {
 };
 export const movable = (i: number) =>
   i > 0 && !!keys[i] && !keys[i].cut && !keys[i].locked && keys[i].__timing?.source !== 0;
+const boundaryOf = (i: number) => {
+  const key = keys[i];
+  if (!key?.cut) return -1;
+  const clock = clockForTimeline("cam");
+  return clock.cameraShotStarts?.length
+    ? cameraShotAtBoundary(clock, cameraSourceTime(key))
+    : SHOTS_OUT.findIndex((shot) => Math.abs(shot.t - key.t) < SAME);
+};
+export const isHardCut = (i: number) =>
+  i > 0 && !!keys[i]?.cut && keys[i].__timing?.source !== 0 && boundaryOf(i) < 0;
+const deletableKey = (i: number) => movable(i) || (isHardCut(i) && !keys[i].locked);
+export const canDeleteCameraKey = (i: number) => deletableKey(i) || rollable(i);
+const cameraSourceTime = (key: CamKey) =>
+  key.__timing?.source ?? clockForTimeline("cam").sourceAt(key.t, key.cut ? "after" : "before");
+const sourceShotStarts = () => {
+  const starts = clockForTimeline("cam").cameraShotStarts;
+  return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
+};
+export const canToggleHardCut = (i: number) => {
+  const key = keys[i];
+  if (!key || key.locked || !(key.cut ? isHardCut(i) : movable(i))) return false;
+  const t = cameraSourceTime(key);
+  if (sourceShotStarts().some((start) => Math.abs(start - t) < SAME)) return false;
+  return (doc.source ?? []).filter((row) => Math.abs(row.t - t) < 1e-7).length === 1;
+};
+export const setHardCut = (i: number, cut: boolean) => {
+  if (!canToggleHardCut(i) || !!keys[i].cut === cut) return;
+  const { id, t } = keys[i];
+  const sourceTime = cameraSourceTime(keys[i]);
+  if (
+    !preserveRailPositions([i - 1, i], () =>
+      edit((rows) => {
+        if (cut) {
+          rows[i].cut = true;
+          rows[i].tailId = false;
+        } else {
+          delete rows[i].cut;
+          delete rows[i].tailId;
+        }
+      }),
+    )
+  )
+    return;
+  const matches = (key: CamKey) =>
+    id ? key.id === id : Math.abs(cameraSourceTime(key) - sourceTime) < 1e-7;
+  const here = keys.findIndex((key) => matches(key) && Math.abs(key.t - t) < SAME);
+  const next = here >= 0 ? here : keys.findIndex(matches);
+  setKey(next >= 0 ? next : null);
+  say(`Hard cut ${cut ? "on" : "off"}. Ctrl+Z to undo`);
+};
+
+export const retimable = (i: number) => deletableKey(i);
 export const setKey = (i: number | null) => {
   set(transitionSelection({ kind: "camKey", index: i }, get().side));
   S.dirty = true;
@@ -298,13 +348,15 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
   );
 };
 export const removeCamKeys = (is: number[]) => {
-  const ok = is.filter(movable).sort((a, b) => b - a);
+  const ok = [...new Set(is.filter(deletableKey))].sort((a, b) => b - a);
   if (!ok.length) return;
   if (
-    !preserveRailPositions(ok, () =>
-      edit((ks) => {
-        for (const i of ok) ks.splice(i, 1);
-      }),
+    !preserveRailPositions(
+      ok.flatMap((i) => (isHardCut(i) ? [i - 1, i] : [i])),
+      () =>
+        edit((ks) => {
+          for (const i of ok) ks.splice(i, 1);
+        }),
     )
   )
     return;
@@ -333,14 +385,35 @@ export const simplifyCameraKeys = (picked: number[]) => {
 
 export const nearestKey = (t: number) =>
   keys.reduce((best, k, i) => (Math.abs(k.t - t) < Math.abs(keys[best].t - t) ? i : best), 0);
-export const retime = (i: number, t: number) => {
-  const id = keys[i]?.id;
+const retimedTime = (i: number, t: number) => {
   const [a, b] = room(i);
   const next = r3(Math.max(a, Math.min(b, t)));
-  edit((ks) => {
+  if (!isHardCut(i)) return next;
+  const key = keys[i];
+  const clock = clockForTimeline("cam");
+  const picture = clock.cameraPicture ?? clock;
+  const to = clock.sourceAt(next);
+  const from = cameraSourceTime(key);
+  if (
+    (!clock.cameraRateAt?.(next) && !canPlaceCameraCut(picture, next)) ||
+    sourceShotStarts().some(
+      (at) => at >= Math.min(from, to) - SAME && at <= Math.max(from, to) + SAME,
+    )
+  )
+    return key.t;
+  return next;
+};
+export const retime = (i: number, t: number, apply: typeof edit = edit) => {
+  if (!retimable(i)) return keys[i]?.t ?? t;
+  const id = keys[i].id;
+  const next = retimedTime(i, t);
+  if (next === keys[i].t) return next;
+  apply((ks) => {
     ks[i].t = next;
+    if (ks[i].cut) ks[i].tailId = false;
   });
-  selectPlacement(id, next);
+  if (apply === edit) selectPlacement(id, next);
+  return next;
 };
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
@@ -660,20 +733,20 @@ export const pasteKeyAttrs = (from: CamKey, to: number[], what: CameraFieldGroup
   });
 export const removeKey = (i: number) => {
   if (keys[i]?.locked) return say("Unlock this camera keyframe first");
-  if (keys[i]?.cut && get().shots) {
+  if (shotOfCut(i) > 0 && get().shots) {
     mergeShot(i);
     return;
   }
-  if (!movable(i)) {
+  if (!deletableKey(i)) {
     say(
       i === 0
         ? "The film's first keyframe can't be deleted"
-        : "Deleting a cut merges two shots. Ask the AI in a note",
+        : "This camera keyframe marks a shot boundary",
     );
     return;
   }
   if (
-    !preserveRailPositions([i], () =>
+    !preserveRailPositions(isHardCut(i) ? [i - 1, i] : [i], () =>
       edit((ks) => {
         ks.splice(i, 1);
       }),
@@ -725,11 +798,10 @@ export const sourceCameraSegment = (index: number) => {
   const key = keys[index],
     track = doc.source ?? [];
   if (!key) return null;
-  const clock = clockForTimeline("cam");
   const at = track.findIndex((candidate) =>
     key.id
       ? candidate.id === key.id
-      : candidate.t === (key.__timing?.source ?? clock.sourceAt(key.t, "before")),
+      : Math.abs(candidate.t - cameraSourceTime(key)) < 1e-7 && !!candidate.cut === !!key.cut,
   );
   return cameraSegmentAt(track, at);
 };
@@ -779,13 +851,14 @@ const railAtKey = (i: number) =>
 const preserveRailPositions = (indices: number[], change: () => void) => {
   const track = doc.source ?? [];
   const positions = new Map<CamKey, number>();
-  const visited = new Set<number>();
+  const visited = new Set<CamKey>();
   for (const i of indices) {
     if (!keys[i]) continue;
     const shot = shotIndex(cameraKeyFrameTime(i));
-    if (visited.has(shot) || !SHOTS_OUT[shot]?.camera?.rail) continue;
-    visited.add(shot);
+    if (!SHOTS_OUT[shot]?.camera?.rail) continue;
     const active = sourceCameraSegment(i)?.active ?? [];
+    if (!active.length || visited.has(active[0])) continue;
+    visited.add(active[0]);
     active.forEach((key, index) => {
       if (index === 0 && key.locked) return;
       if (key.railU === undefined) positions.set(key, cameraRailU(key, index, active.length));
@@ -975,13 +1048,16 @@ export const easeKeyIndex = (i: number) => {
   const k = keys[i];
   if (!k) return -1;
   if (k.cut) {
+    if (isHardCut(i)) return -1;
     const tail = tailOf(i);
     return tail > 0 && !keys[tail].cut ? tail : -1;
   }
   return i > 0 ? i : -1;
 };
-export const shotOfCut = (i: number) =>
-  keys[i]?.cut ? SHOTS_OUT.findIndex((s) => Math.abs(s.t - keys[i].t) < SAME) : -1;
+export const shotOfCut = (i: number) => {
+  const shot = boundaryOf(i);
+  return shot >= 0 && Math.abs(SHOTS_OUT[shot].t - keys[i].t) < SAME ? shot : -1;
+};
 export const rollable = (i: number) =>
   get().shots && shotOfCut(i) > 0 && !keys[i]?.locked && !keys[tailOf(i)]?.locked;
 export const rollRoom = (i: number): [number, number] => {

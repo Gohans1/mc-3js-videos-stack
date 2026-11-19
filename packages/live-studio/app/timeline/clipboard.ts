@@ -90,7 +90,11 @@ export const copy = () => {
   return true;
 };
 export const cut = () => {
-  if (copy()) deleteSelected();
+  if (!copy()) return;
+  const selection = picked();
+  const cam = selection.cam.filter(movable);
+  if (cam.length !== selection.cam.length) pickAcross({ ...selection, cam });
+  deleteSelected();
 };
 // Each kind's paste picks what it pasted and drops the rest of the pick: what they each picked is gathered and picked together
 export const paste = () => {

@@ -9,6 +9,7 @@ export interface CameraSpan {
 
 export interface CameraClock extends TimingClock {
   cameraPicture?: TimingClock;
+  cameraShotStarts?: readonly number[];
   cameraSpans?: readonly CameraSpan[];
   cameraOutputsAt?: (t: number, edge: "before" | "after") => number[];
   cameraRateAt?: (t: number) => number | undefined;
@@ -20,3 +21,4 @@ export function compileCameraClock(
 ): CameraClock;
 
 export function canPlaceCameraCut(picture: TimingClock, at: number): boolean;
+export function cameraShotAtBoundary(clock: CameraClock, time: number): number;

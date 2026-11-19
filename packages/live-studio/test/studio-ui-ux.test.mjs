@@ -71,6 +71,7 @@ import { Transport } from "/shell/Transport.tsx";
 import { useStudioHotkeys } from "/shell/useStudioHotkeys.ts";
 import { TimelinePanel } from "/timeline/TimelinePanel.tsx";
 import { SpeedCurve } from "/timeline/SpeedCurve.tsx";
+import { cut, paste } from "/timeline/clipboard.ts";
 import { attachTimeline, drawTimelineActivity, drawTimelines, marks } from "/timeline/timeline.ts";
 import { setTiming } from "../src/timing-state.mjs";
 
@@ -364,9 +365,10 @@ window.__UX_TEST__ = {
   camPostCount: () => camPosts,
   shotsData: () => shotsDoc.data ?? shotsData,
   setAutoSave,
-  loadShots: async () => {
+  loadShots: async (next = [{ t: 0, name: "Intro" }]) => {
     await flushDocs();
-    shotsData = [{ t: 0, name: "Intro" }];
+    shotsData = next;
+    setFilmSource({ DURATION: 10, SHOTS: next, SHOTS_OUT: next, applyEdit() {} });
     shotsVer += 1;
     await loadShots();
   },
@@ -381,6 +383,8 @@ window.__UX_TEST__ = {
   setKey,
   undo,
   redo,
+  cut,
+  paste,
   matchAllInShot,
   freeDoc,
   readFocusUiState,
@@ -1127,6 +1131,9 @@ test("Stage mouse controls pin/draw notes on right-click/drag, select elements o
 });
 
 test("Split cut keyframe edits closing tail ease instead of showing first-keyframe dead end", async () => {
+  await page.evaluate(
+    `window.__UX_TEST__.loadShots([{ t: 0, name: "Intro" }, { t: 3, name: "Second" }])`,
+  );
   await page.evaluate(`window.__UX_TEST__.setCamData([
     { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
     { t: 2.999, p: [2, 2, 6], l: [0, 1, 0], fov: 50 },
@@ -1159,6 +1166,28 @@ test("Split cut keyframe edits closing tail ease instead of showing first-keyfra
   await waitUntil(
     `document.body.textContent.includes('Nothing eases into the first keyframe of a shot')`,
   );
+  await page.evaluate("window.__UX_TEST__.loadShots()");
+});
+
+test("cutting a mixed camera selection preserves the hard cut excluded from the clipboard", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 3, p: [2, 2, 6], l: [0, 1, 0], cut: true },
+      { t: 6, p: [4, 2, 6], l: [0, 1, 0] },
+    ]);
+    u.set({ camKey: null, camPicks: [1, 2] });
+    u.cut();
+    u.S.t = 7;
+    u.paste();
+  })()`);
+  const rows = await page.evaluate("window.__UX_TEST__.camKeys().map(({t, cut}) => [t, !!cut])");
+  expect(rows).toEqual([
+    [0, false],
+    [3, true],
+    [7, false],
+  ]);
 });
 
 test("Free camera exposes FOV, Roll, Sway settings in CamPanel and Settings and preserves Adjust grades", async () => {

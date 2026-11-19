@@ -33,8 +33,10 @@ import { addFreeze } from "../timeline/timing";
 import { animOf, clearAnims, pickShot, shotSpan, type Slot, SLOT_NAMES } from "./anim";
 import {
   applyEasyEase,
+  canDeleteCameraKey,
   canMatchCameraKey,
   holdAfter,
+  isHardCut,
   keys,
   movable,
   removeKey,
@@ -42,6 +44,7 @@ import {
   setCameraKeyMatchSpeed,
   setKey,
   setKeyLocked,
+  shotOfCut,
   splitShot,
 } from "./cam";
 import { SHOT_NAME_ID } from "./CamPanel";
@@ -64,10 +67,12 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
   const [shot, setShot] = useState(-1);
   const [keyIndex, setKeyIndex] = useState(-1);
   useStudio((s) => s.camRev);
+  useStudio((s) => s.shotsRev);
   const key = keys[keyIndex];
+  const hardCut = isHardCut(keyIndex);
   const canMatch = canMatchCameraKey(keyIndex);
   const [a, b] = shot >= 0 ? shotSpan(shot) : [0, DURATION];
-  const cut = shot > 0 ? keys.findIndex((k) => k.cut && Math.abs(k.t - a) < SAME) : -1;
+  const cut = shot > 0 ? keys.findIndex((_, i) => shotOfCut(i) === shot) : -1;
   const inside = S.t > a + SAME * 3 && S.t < b - SAME * 3,
     anim = shot >= 0 && Object.keys(animOf(shot)).length > 0;
   return (
@@ -88,7 +93,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
       >
         <canvas
           ref={bind("camrow")}
-          aria-label="Camera track: one block per shot holding its camera keyframes (diamonds, or circles when matching speed). Click a block to pick the shot, click a keyframe to edit it, drag it to retime, drag the handles on a shot's bottom bands to trim its In or Out animation, drag the gap between two shots to move the cut, right-click a shot for more. The yellow shape is the camera's speed"
+          aria-label="Camera track: diamonds are keyframes, circles match speed, and double bars are hard cuts within a shot. Click a shot or keyframe to edit it. Drag to retime movable keyframes or roll shot boundaries. Right-click for more. The yellow shape is camera speed"
           className="block h-12 w-full touch-none"
           onDragOver={(e) => {
             if (e.dataTransfer.types.includes(TRANSITION_DRAG) && cutAtPointer(e) > 0) {
@@ -111,7 +116,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
           <>
             <ContextMenuGroup>
               <ContextMenuLabel>
-                {key.cut ? "Camera cut" : "Camera keyframe " + (keyIndex + 1)}
+                {hardCut ? "Hard cut" : key.cut ? "Shot cut" : "Camera keyframe " + (keyIndex + 1)}
               </ContextMenuLabel>
             </ContextMenuGroup>
             <ContextMenuItem onClick={() => seekCameraKey(keyIndex)}>
@@ -153,10 +158,14 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
               {key.locked ? "Unlock keyframe" : "Lock keyframe"}
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={key.locked || (!movable(keyIndex) && !(key.cut && data))}
+              disabled={!canDeleteCameraKey(keyIndex)}
               onClick={() => removeKey(keyIndex)}
             >
-              {key.cut ? "Delete cut and merge shots" : "Delete keyframe"}
+              {hardCut
+                ? "Delete hard cut"
+                : key.cut
+                  ? "Delete cut and merge shots"
+                  : "Delete keyframe"}
             </ContextMenuItem>
           </>
         ) : shot < 0 || !SHOTS_OUT[shot] ? (
@@ -197,7 +206,7 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
             <ContextMenuItem disabled={!timing} onClick={addFreeze}>
               Freeze at playhead
             </ContextMenuItem>
-            <ContextMenuItem disabled={!data || cut < 0} onClick={() => removeKey(cut)}>
+            <ContextMenuItem disabled={!canDeleteCameraKey(cut)} onClick={() => removeKey(cut)}>
               Merge with shot before
             </ContextMenuItem>
             <ContextMenuItem

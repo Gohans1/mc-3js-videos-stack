@@ -40,18 +40,23 @@ export const canPlaceCameraCut = (picture, at) => {
   );
 };
 
+export const cameraShotAtBoundary = (clock, time) =>
+  clock.cameraShotStarts?.findIndex((start) => Math.abs(start - time) < 0.5 / 30) ?? -1;
+
 export const compileCameraClock = (picture, shots) => {
+  const cameraShotStarts = shots.map((shot) => shot.t);
   const spans = shots.flatMap((shot, i) =>
     shot.cameraClock === "output"
       ? shotRanges(picture, shot.t, shots[i + 1]?.t ?? picture.sourceDuration)
       : [],
   );
-  if (!spans.length) return picture;
+  if (!spans.length) return { ...picture, cameraShotStarts };
   const ordered = spans.sort((a, b) => a.from - b.from);
   const atOutput = (t, edge) => ordered.find((span) => inside(t, span.from, span.to, edge));
   const rateOf = (span) => (span.sourceTo - span.sourceFrom) / (span.to - span.from);
   return {
     ...picture,
+    cameraShotStarts,
     cameraPicture: picture,
     cameraSpans: ordered,
     visible: (t) =>

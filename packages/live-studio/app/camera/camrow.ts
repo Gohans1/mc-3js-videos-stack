@@ -76,11 +76,13 @@ import {
   canMatchCameraKey,
   groupRoom,
   holds,
+  isHardCut,
   keys,
   movable,
   preview,
   previewRoll,
   restore,
+  retimable,
   retime,
   rollable,
   rollCut,
@@ -458,8 +460,14 @@ const traceKeyMarker = (
   y: number,
   r: number,
   matched: boolean,
+  hardCut: boolean,
 ) => {
   g.beginPath();
+  if (hardCut) {
+    g.rect(x - r, y - r, r - 1, r * 2);
+    g.rect(x + 1, y - r, r - 1, r * 2);
+    return;
+  }
   if (matched) {
     g.arc(x, y, r - 0.5, 0, Math.PI * 2);
     return;
@@ -482,8 +490,9 @@ const drawDiamonds = (
     if (insideOutputFreeze(i) !== overFreeze) return;
     const x = xs[i];
     if (x < -REACH || x > w + REACH) return;
+    const hardCut = isHardCut(i);
     const matched = !!k.matchSpeed && canMatchCameraKey(i);
-    traceKeyMarker(g, x, y, r, matched);
+    traceKeyMarker(g, x, y, r, matched, hardCut);
     const fill = k.color
       ? cameraKeyColors[k.color]
       : k.cut || i === 0
@@ -498,7 +507,10 @@ const drawDiamonds = (
     if (picked.has(i)) {
       g.strokeStyle = tone("pick");
       g.lineWidth = 2;
-      traceKeyMarker(g, x, y, r + 3, matched);
+      if (hardCut) {
+        g.beginPath();
+        g.rect(x - r - 3, y - r - 3, 2 * (r + 3), 2 * (r + 3));
+      } else traceKeyMarker(g, x, y, r + 3, matched, false);
       g.closePath();
       g.stroke();
     }
@@ -676,7 +688,7 @@ const keyAt = (x: number, touch: boolean) => {
   let best = -1,
     d = reach;
   xs.forEach((kx, i) => {
-    const e = Math.abs(kx - x) - (rollable(i) ? 0.6 : movable(i) ? 0.5 : 0);
+    const e = Math.abs(kx - x) - (rollable(i) ? 0.6 : retimable(i) ? 0.5 : 0);
     if (e <= d) {
       d = e;
       best = i;
@@ -925,7 +937,7 @@ export const attachCamRow = () => {
           ? picks().filter(movable)
           : [i];
     if (group.length === 1 && !along) setKey(i);
-    if (movable(i) || rollable(i))
+    if (retimable(i) || rollable(i))
       drag = {
         i,
         group,
@@ -935,7 +947,7 @@ export const attachCamRow = () => {
         now: keys[i].t,
         snap: snapshot(),
         shots: shotsDoc.snapshot(),
-        roll: !movable(i),
+        roll: rollable(i),
         moved: false,
         magnet: makeSnapper(),
       };
@@ -944,7 +956,9 @@ export const attachCamRow = () => {
       say(
         i === 0
           ? "The film's first keyframe stays at 0"
-          : "This film keeps its shots in code (no shotsTimeline). Ask the AI to move the cut",
+          : keys[i].locked
+            ? "Unlock this camera keyframe first"
+            : "This shot boundary can't be moved here",
       );
     }
   });
@@ -1142,15 +1156,13 @@ export const attachCamRow = () => {
     }
     const [lo, hi] = drag.roll ? rollRoom(i) : room(i),
       t = Math.max(lo, Math.min(hi, to));
-    drag.now = r3(t);
-    if (drag.roll) previewRoll(i, t);
-    else
-      preview((ks) => {
-        ks[i].t = Math.round(t * 1000) / 1000;
-      });
-    snapLine(snap.target === null ? null : snappedTo([t], [snap.target]));
+    if (drag.roll) {
+      drag.now = r3(t);
+      previewRoll(i, t);
+    } else drag.now = retime(i, t, preview);
+    snapLine(snap.target === null ? null : snappedTo([drag.now], [snap.target]));
     say(
-      `${drag.roll ? "Cut" : "Keyframe"} ${stamp(drag.t)} → ${stamp(t)}${noSnap(e) ? "" : " (Shift: no snapping)"}`,
+      `${drag.roll ? "Cut" : "Keyframe"} ${stamp(drag.t)} → ${stamp(drag.now)}${noSnap(e) ? "" : " (Shift: no snapping)"}`,
       1500,
     );
   });

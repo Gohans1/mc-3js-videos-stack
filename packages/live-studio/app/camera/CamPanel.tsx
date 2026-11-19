@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 
 import { FieldRow, KeyNav, Reset, SaveStatus, Section, Segmented } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
@@ -42,21 +43,24 @@ import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
+  canDeleteCameraKey,
+  canToggleHardCut,
   edit,
   holdAfter,
   initialKeyTime,
+  isHardCut,
   keys,
-  movable,
   removeCamKeys,
   removeKey,
   resetLens,
+  retimable,
   retime,
   rollable,
   rollCut,
   room,
+  setHardCut,
   setKey,
   setKeyLocked,
-  shotOfCut,
   shownKey,
   simplifyCameraKeys,
   splitShot,
@@ -181,7 +185,7 @@ function ShotSection({ shot }: { shot: number }) {
 // The key's time: a key moves inside its shot, a cut moves with its shot's start (a roll edit)
 function TimeField({ i }: { i: number }) {
   const k = keys[i],
-    canMove = movable(i),
+    canMove = retimable(i),
     canRoll = rollable(i);
   if (!canMove && !canRoll)
     return (
@@ -235,13 +239,15 @@ function KeySection() {
     const nav = cameraKeyNavigation(keys, S.t, get().camKey, SAME);
     return `${get().camRev}:${i}:${nav.prev}:${nav.next}:${!!k && Math.abs(k.t - S.t) < SAME ? 1 : 0}`;
   });
-  const free = useStudio((s) => s.free),
-    shots = useStudio((s) => s.shots);
+  const free = useStudio((s) => s.free);
+  useStudio((s) => s.shotsRev);
+  useStudio((s) => s.shots);
   const i = shownKey(S.t),
     k = keys[i],
     nav = cameraKeyNavigation(keys, S.t, get().camKey, SAME);
   const here = !!k && Math.abs(k.t - S.t) < SAME,
-    cut = !!k?.cut;
+    hardCut = isHardCut(i),
+    shotCut = !!k?.cut && !hardCut;
   const go = (index: number | null) => {
     if (index === null) return;
     const key = keys[index];
@@ -250,7 +256,12 @@ function KeySection() {
     seekExact(beforeCut ? key.t - 1e-6 : key.t);
     setKey(index);
   };
-  const canDelete = !!k && !k.locked && (movable(i) || (cut && !!shots && shotOfCut(i) > 0));
+  const canDelete = canDeleteCameraKey(i);
+  const deleteLabel = hardCut
+    ? "Delete hard cut"
+    : shotCut
+      ? "Delete cut and merge shots"
+      : "Delete keyframe";
   return (
     <Section
       title="Keyframe"
@@ -296,9 +307,8 @@ function KeySection() {
                 ? "Add a keyframe here with the free camera's view (Shift+K)"
                 : "Add a keyframe here, holding the picture as it is"
             }
-            removeTip={
-              cut ? "Delete this cut: merges the shot with the one before" : "Delete this keyframe"
-            }
+            removeTip={deleteLabel}
+            removeDisabled={!canDelete}
           />
         </>
       }
@@ -313,7 +323,13 @@ function KeySection() {
           <div className="flex items-center gap-2">
             <p className="text-ui min-w-0 flex-1">
               <span className="font-medium">
-                {cut ? "Cut" : i === 0 ? "Start" : `Keyframe ${i + 1} of ${keys.length}`}
+                {hardCut
+                  ? "Hard cut"
+                  : i === 0
+                    ? "Start"
+                    : shotCut
+                      ? "Shot cut"
+                      : `Keyframe ${i + 1} of ${keys.length}`}
               </span>
               {!here && (
                 <span className="text-muted-foreground">
@@ -325,19 +341,19 @@ function KeySection() {
             <Tip
               label={
                 canDelete
-                  ? cut
-                    ? "Delete this cut: merges the shot with the one before (Delete)"
-                    : "Delete keyframe (Delete)"
-                  : i === 0
-                    ? "The film's first keyframe can't be deleted"
-                    : "Deleting a cut merges two shots. Ask the AI in a note"
+                  ? `${deleteLabel} (Delete)`
+                  : k.locked
+                    ? "Unlock this camera keyframe first"
+                    : i === 0
+                      ? "The film's first keyframe can't be deleted"
+                      : "This shot boundary can't be deleted here"
               }
             >
               <Button
                 variant="remove"
                 size="icon"
-                aria-label={cut ? "Delete cut and merge shots" : "Delete keyframe"}
-                aria-disabled={!canDelete}
+                aria-label={deleteLabel}
+                disabled={!canDelete}
                 className="pointer-coarse:size-10"
                 onClick={() => removeKey(i)}
               >
@@ -346,6 +362,21 @@ function KeySection() {
             </Tip>
           </div>
           <TimeField i={i} />
+          {i > 0 && !shotCut && (
+            <FieldRow label="Hard cut">
+              <Switch
+                aria-label="Hard cut"
+                checked={hardCut}
+                disabled={!canToggleHardCut(i)}
+                onCheckedChange={(checked) => setHardCut(i, checked)}
+              />
+            </FieldRow>
+          )}
+          {hardCut && !k.locked && !canToggleHardCut(i) && (
+            <p className="text-ui text-muted-foreground">
+              Two keys share this time. Move one before turning off Hard cut.
+            </p>
+          )}
           {k.reason && <p className="text-muted-foreground text-xs">{k.reason}</p>}
           <CameraOptics index={i} section="basic" />
           <CameraFraming index={i} section="basic" />
@@ -386,7 +417,8 @@ function PicksSection({ picks }: { picks: number[] }) {
         </Tip>
       </div>
       <p className="text-ui text-muted-foreground">
-        Drag one on the Camera track to move them all. Click one to pick it alone, Esc to let go.
+        Drag a regular keyframe to move the selected regular keys together. Drag a hard cut to move
+        it on its own. Esc clears the selection.
       </p>
       {(
         [

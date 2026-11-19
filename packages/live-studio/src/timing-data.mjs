@@ -1,6 +1,7 @@
+import { cameraShotAtBoundary } from "./camera-clock.mjs";
 import { isTornByReorder, remapOutputTime, startsOnHold, timebaseClock } from "./layer-timing.mjs";
 import { equalJson } from "./merge-edits.mjs";
-import { clipTiming, playRanges } from "./timing.mjs";
+import { clipTiming, frameAt, playRanges } from "./timing.mjs";
 
 const overlaySpan = (clock, basis, a, b) => {
   const forward = basis ? (t, edge) => remapOutputTime(basis, clock, t, edge) : clock.outputAt;
@@ -28,14 +29,27 @@ const outgoingCameraKeys = (rows) =>
       return prev && !prev.cut && prev.t === key.t ? [prev.id ?? prev] : [];
     }),
   );
-const cameraEdge = (key, clock, outgoing, inverse = false) => {
-  if (!clock.cameraPicture) return !key.cut && key.t > 0 ? "before" : "after";
-  return key.cut || outgoing.has(key.id ?? key) || (!inverse && !clock.visible(key.t))
+const isShotCut = (key, clock, source = key.t) =>
+  !!key.cut && (!clock.cameraShotStarts?.length || cameraShotAtBoundary(clock, source) >= 0);
+const cameraEdge = (key, clock, outgoing, shotCut, inverse = false) => {
+  if (shotCut && clock.cameraShotStarts?.length) return "before";
+  if (!clock.cameraPicture) {
+    if (!key.cut) return key.t > 0 ? "before" : "after";
+    // A scene-clock cut is visible on the held frame only if the Freeze actually samples it.
+    if (
+      !shotCut &&
+      !inverse &&
+      Math.abs(frameAt(clock, clock.outputAt(key.t, "before")) - key.t) < 1e-8
+    )
+      return "before";
+    return "after";
+  }
+  return shotCut || outgoing.has(key.id ?? key) || (!inverse && !clock.visible(key.t))
     ? "before"
     : "after";
 };
-const cameraPositions = (key, clock, edge) => {
-  if (key.cut) {
+const cameraPositions = (key, clock, edge, shotCut) => {
+  if (shotCut) {
     const cut = (clock.cameraPicture ?? clock).outputAt(key.t, edge);
     const images = clock.cameraOutputsAt?.(key.t, "after") ?? [];
     return [cut, ...images.filter((t) => Math.abs(t - cut) > 1e-9)].sort((a, b) => a - b);
@@ -55,9 +69,16 @@ const projectCameraRows = (rows, clock) => {
   return rows
     .flatMap((key, index) => {
       if (!cameraVisible(key, clock)) return [];
-      const positions = cameraPositions(key, clock, cameraEdge(key, clock, outgoing));
+      const shotCut = isShotCut(key, clock);
+      const positions = cameraPositions(
+        key,
+        clock,
+        cameraEdge(key, clock, outgoing, shotCut),
+        shotCut,
+      );
       const alias = positions.length > 1 ? (key.id ?? index) : undefined;
-      const track = clock.placements || clock.cameraRateAt;
+      const track =
+        clock.placements || clock.cameraRateAt || (key.cut && clock.cameraShotStarts?.length);
       return positions.map((t) =>
         track ? { ...key, t, __timing: cameraMeta(key, t, alias) } : { ...key, t },
       );
@@ -71,23 +92,29 @@ const unprojectCameraRows = (rows, clock, previous, previousClock) => {
   const outgoing = outgoingCameraKeys(rows);
   for (const [i, key] of (previous ?? []).entries()) {
     if (!cameraVisible(key, previousClock)) continue;
+    const shotCut = isShotCut(key, previousClock);
     const count = cameraPositions(
       key,
       previousClock,
-      cameraEdge(key, previousClock, oldOutgoing),
+      cameraEdge(key, previousClock, oldOutgoing, shotCut),
+      shotCut,
     ).length;
     if (count > 1) aliases.set(key.id ?? i, { key, count, seen: 0, best: null });
   }
   const result = [];
   for (const key of rows) {
     const { __timing: meta, ...fields } = key;
-    const edge = cameraEdge(key, clock, outgoing, true);
-    const basis = key.cut ? (clock.cameraPicture ?? clock) : clock;
+    const picture = clock.cameraPicture ?? clock;
+    const shotCut = meta
+      ? isShotCut(key, previousClock, meta.source)
+      : isShotCut(key, clock, picture.sourceAt(key.t, "before"));
+    const edge = cameraEdge(key, clock, outgoing, shotCut, true);
+    const basis = shotCut ? picture : clock;
     const moved = !meta || Math.abs(key.t - meta.output) >= 1e-9;
     const samePlacement =
       !moved &&
       (clock === previousClock ||
-        cameraPositions({ ...key, t: meta.source }, clock, edge).some(
+        cameraPositions({ ...key, t: meta.source }, clock, edge, shotCut).some(
           (t) => Math.abs(t - key.t) < 1e-9,
         ));
     const candidate = { ...fields, t: samePlacement ? meta.source : basis.sourceAt(key.t, edge) };

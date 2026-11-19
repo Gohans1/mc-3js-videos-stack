@@ -533,6 +533,7 @@ export function KeyNav({
   onToggle,
   addTip,
   removeTip,
+  removeDisabled,
 }: {
   what: string;
   prev: boolean;
@@ -543,6 +544,7 @@ export function KeyNav({
   onToggle: () => void;
   addTip?: string;
   removeTip?: string;
+  removeDisabled?: boolean;
 }) {
   return (
     <span className="flex flex-none items-center">
@@ -570,6 +572,7 @@ export function KeyNav({
           size="icon"
           className={cn(iconBtn, "w-5")}
           aria-label={here ? `Delete ${what} keyframe` : `Add ${what} keyframe`}
+          disabled={here && removeDisabled}
           onClick={onToggle}
         >
           <Diamond className={cn("size-3.5", here && "fill-current")} />
