@@ -542,7 +542,7 @@ const frame = async () => {
       }
     }
     // The scopes read the frame on screen: the final-quality one when it shows (only when drawn now), else the draft
-    const painted = finalNow ? S.el.final : S.el.final.hidden ? S.el.canvas : null;
+    const painted = !S.el.shutter.hidden ? S.el.shutter : finalNow ? S.el.final : S.el.final.hidden ? S.el.canvas : null;
     measureScopes(painted);
     drawPreviewMonitor(painted);
     followNotes();

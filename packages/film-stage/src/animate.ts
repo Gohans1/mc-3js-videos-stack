@@ -7,6 +7,7 @@
 // camera's right axis, optics scales only the lens state it writes (0 keeps the picture sharp); absent keeps the tuned effect.
 // Returns how black the frame should be (0..1) and writes optical post-processing state onto `c.optics`.
 import { shake, type ShakeOpts } from "film-kit/shake";
+import { clampFov } from "film-kit/lens";
 import * as THREE from "three";
 
 import { EASES } from "./camera-meta";
@@ -33,7 +34,7 @@ const frame = (c) => {
   return dist;
 };
 const deg = (x) => (x * Math.PI) / 180;
-const lens = (fov) => THREE.MathUtils.clamp(fov, 5, 120);
+const lens = clampFov;
 const logZoom = (c, a) => {
   c.fov = lens(c.fov * Math.exp(-a));
 };

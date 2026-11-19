@@ -1,10 +1,9 @@
+import type { Shot } from "film/scene";
+
 import { S } from "./state";
 import { get, set } from "./store";
 
-export interface FilmShot {
-  t: number;
-  [key: string]: unknown;
-}
+export type FilmShot = Shot;
 
 export interface FilmMetaSource {
   readonly DURATION: number;

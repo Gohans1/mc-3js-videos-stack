@@ -5,6 +5,8 @@ declare module "film/scene" {
 
   export interface Shot {
     t: number;
+    camera?: import("film-stage/camera").CameraRig;
+    shutter?: import("../src/shutter").Shutter;
     [key: string]: unknown;
   }
   export interface FreeCam {
@@ -26,7 +28,7 @@ declare module "film/scene" {
     look?: string;
     impulse?: string;
   }
-  export interface CameraPathTime { world: number; camera: number; }
+  export interface CameraPathTime { world: number; camera: number; worldAtCamera?: (t: number) => number; }
   export interface CameraPathPose { p: THREE.Vector3; l: THREE.Vector3; fov: number; base?: { p: THREE.Vector3; l: THREE.Vector3 }; }
   export interface Tools {
     scene: THREE.Scene;
@@ -41,6 +43,9 @@ declare module "film/scene" {
     materials?: [THREE.Material, string][];
     optics?: OpticsTelemetry;
     cameraClock?: true;
+    cameraRig?: true;
+    cameraGroups?: readonly string[];
+    apertureSampling?: true;
     sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];
     sampleCameraTrack?: (times: readonly CameraPathTime[]) => (import("./camera/camera-edit").CameraView & { p: [number, number, number]; l: [number, number, number] })[];
     cameraSample?: () => import("./camera/camera-edit").CameraView;
@@ -136,9 +141,12 @@ declare module "film/scene" {
     flip?: boolean;
     optics?: boolean;
   }
+  export interface FrameOptions {
+    aperture?: import("../src/shutter").ApertureSample;
+  }
   export interface Draw {
-    (t: number): void;
-    renderFrame?: (t: number) => Promise<void>;
+    (t: number, options?: FrameOptions): void;
+    renderFrame?: (t: number, options?: FrameOptions) => Promise<void>;
     prepareFrame?: (t: number) => Promise<void>;
       needsPreparation?: (t: number) => boolean;
     disposeOpenFilm?: () => void;

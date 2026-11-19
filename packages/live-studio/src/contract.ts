@@ -229,6 +229,9 @@ export const Tools = z.looseObject({
   optics: OpticsTelemetry.optional(),
   cameraSample: fn.optional(),
   resizePreview: fn.optional(),
+  cameraRig: z.literal(true).optional(),
+  cameraGroups: z.array(z.string()).optional(),
+  apertureSampling: z.literal(true).optional(),
   sampleCameraPath: fn.optional(),
   sampleCameraTrack: fn.optional(),
   cameraClock: z.literal(true).optional(),
@@ -627,6 +630,7 @@ const CamKey = z.looseObject({
   easeChannels: z.object({ position: Ease.optional(), aim: Ease.optional(), lens: Ease.optional(), dof: Ease.optional(), roll: Ease.optional(), shake: Ease.optional() }).optional(),
   fov: z.number().positive().optional(),
   mm: z.number().positive().optional(),
+  dollyZoomScale: z.number().positive().optional(),
   focus: FocusTarget.nullish(),
   fstop: z.number().nonnegative().optional(),
   handheld: Handheld.optional(),
@@ -817,10 +821,33 @@ const ShotHit = z.looseObject({
     .optional(),
   seed: z.number().optional(),
 });
+const Vec3 = z.tuple([z.number(), z.number(), z.number()]);
+const Offset2 = z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1)]);
+const CameraRig = z.object({
+  look: z.enum(["target", "one-node", "tangent"]).optional(),
+  position: Vec3.optional(),
+  lead: z.number().min(-2).max(2).optional(),
+  bank: z.number().min(-5).max(5).optional(),
+  up: Vec3.optional(),
+  frameOffset: Offset2.optional(),
+  lensShift: Offset2.optional(),
+  fovAxis: z.object({ mode: z.enum(["horizontal", "vertical"]), aspect: z.number().positive() }).optional(),
+  near: z.number().positive().optional(),
+  far: z.number().positive().optional(),
+  hideGroups: z.array(z.string().min(1)).optional(),
+}).refine((rig) => rig.near === undefined || rig.far === undefined || rig.far > rig.near, "far must exceed near");
+const Shutter = z.object({
+  angle: z.number().min(0).max(360).optional(),
+  timing: z.enum(["open", "center", "close"]).optional(),
+  phase: z.number().min(-1).max(1).optional(),
+  apertureSamples: z.number().int().min(1).max(32).optional(),
+});
 const ShotRow = z.looseObject({
   id: z.string().min(1).optional(),
   t: secs,
   cameraClock: z.enum(["scene", "output"]).optional(),
+  camera: CameraRig.optional(),
+  shutter: Shutter.optional(),
   continuityAxis: z.tuple([z.tuple([z.number(), z.number(), z.number()]), z.tuple([z.number(), z.number(), z.number()])]).optional(),
   name: z.string().optional(),
   anim: Anim.optional(),

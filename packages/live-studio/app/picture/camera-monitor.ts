@@ -1,4 +1,5 @@
 import { hfovOf, mmOf, PAN_SECONDS } from "film-kit/lens";
+import { lensAspect } from "film-stage/camera";
 import { EDIT } from "film/edit";
 import type { CameraPathPose } from "film/scene";
 import { Vector3 } from "three";
@@ -32,7 +33,11 @@ export const panStats = (i: number, t: number) => {
   const aspect = S.tools?.camera.aspect ?? 16 / 9;
   const speed = (forward(a).angleTo(forward(b)) * DEG) / (to - from);
   const fullWidth = speed > 1e-6 ? hfovOf((a.fov + b.fov) / 2, aspect) / speed : Infinity;
-  return { speed, fullWidth, mm: mmOf((a.fov + b.fov) / 2, aspect) };
+  return {
+    speed,
+    fullWidth,
+    mm: mmOf((a.fov + b.fov) / 2, lensAspect(aspect, shot.camera?.fovAxis)),
+  };
 };
 
 export const cutWarnings = (i: number) => {

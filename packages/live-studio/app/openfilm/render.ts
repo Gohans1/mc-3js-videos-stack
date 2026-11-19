@@ -4,7 +4,7 @@ import {
   type OpenFilmTimeline,
   registerOpenFilm,
 } from "film-stage/openfilm";
-import type { Draw } from "film/scene";
+import type { Draw, FrameOptions } from "film/scene";
 
 import { overlayTime } from "../../src/layer-timing.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
@@ -46,7 +46,7 @@ export function withOpenFilm(
     prepareFrame?: (t: number) => Promise<void>;
     renderFrame?: (t: number) => void | Promise<void>;
   };
-  const drawFrame = asyncDraw.renderFrame?.bind(draw) ?? ((t: number) => Promise.resolve(draw(t)));
+  const drawFrame = asyncDraw.renderFrame?.bind(draw) ?? ((t: number, options?: FrameOptions) => Promise.resolve(draw(t, options)));
   const changed = (data: OpenFilmTimeline) => {
     timeline = data;
   };
@@ -54,7 +54,7 @@ export function withOpenFilm(
   let queue = Promise.resolve();
   return Object.assign(draw, {
     inspectOpenFilm: () => layers?.inspect() ?? [],
-    renderFrame(t: number) {
+    renderFrame(t: number, options?: FrameOptions) {
       const render = async () => {
         if (hasTransitions()) {
           if (!recipes.length) {
@@ -62,11 +62,11 @@ export function withOpenFilm(
             registerOpenFilm(recipes);
           }
           if (asyncDraw.needsPreparation?.(t) ?? true) {
-            await drawFrame(t);
+            await drawFrame(t, options);
             await asyncDraw.prepareFrame?.(t);
           }
         }
-        await drawFrame(t);
+        await drawFrame(t, options);
         if (timeline.items.length) {
           if (!renderer)
             throw new Error("OpenFilm requires draw.tools.renderer (Three.js WebGLRenderer)");

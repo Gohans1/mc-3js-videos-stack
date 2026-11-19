@@ -2,7 +2,7 @@
 import { configure, createScene, prepareAssets } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
-import { cameraAt, EASES, mmOf, resolveFocusDistance } from "film-stage/camera";
+import { apertureOffset, applyCameraRig, cameraAt, EASES, lensAspect, mmOf, orientCamera, projectCamera, resolveFocusDistance } from "film-stage/camera";
 import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
@@ -94,13 +94,19 @@ export async function buildScene(canvas, W, H, draft = false) {
   // prepared once, with block-model-renderer's cross-call cache: a createScene handed raw zips unpacks the 5 MB jar again
   // and decodes every texture again on each call
   const sources = await prepareAssets([pack, picked, jar], { cache: true });
-  const world = await createScene(sources, buildWorld(), { lighting: "scene", animate: false });
-  world.group.scale.setScalar(S);
-  world.group.position.set(0.5, 0.5, 0.5); // block-model-renderer centres blocks on whole numbers; a Minecraft block spans x..x+1
-  world.group.traverse((o) => {
-    if (o.isMesh) o.castShadow = o.receiveShadow = true;
-  });
-  scene.add(world.group);
+  const blocks = buildWorld();
+  const roofLevel = ROOM.top + 1;
+  const [world, roof] = await Promise.all([
+    createScene(sources, blocks.filter((b) => b.pos[1] !== roofLevel), { lighting: "scene", animate: false }),
+    createScene(sources, blocks.filter((b) => b.pos[1] === roofLevel), { lighting: "scene", animate: false }),
+  ]);
+  for (const { group } of [world, roof]) {
+    group.scale.setScalar(S);
+    group.position.set(0.5, 0.5, 0.5);
+    group.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; });
+    scene.add(group);
+  }
+  const cameraGroups = { Roof: roof.group };
 
   // Steve's skin comes out of the same zip
   const SKIN = "assets/minecraft/textures/entity/player/wide/steve.png";
@@ -209,6 +215,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const opticsTelemetry = {};
   const sceneObjects = [
     [world.group, "room"],
+    [roof.group, "Roof"],
     [steve.g, "Steve"],
   ];
   const focusBox = new THREE.Box3();
@@ -231,7 +238,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     const fallbackFocus = Math.max(0.05, camera.position.distanceTo(lookAt));
     const rawFocusM = resolvedFocus.distance ?? (effectiveFstop > 0 ? fallbackFocus : undefined);
     const focusM = rawFocusM !== undefined ? Math.max(0.05, rawFocusM) : undefined;
-    const renderedMm = Math.round(mmOf(camera.fov, W / H) * 10) / 10;
+    const lock = shotEntry?.camera?.fovAxis;
+    const renderedMm = Math.round(mmOf(camera.fov, lensAspect(W / H, lock)) * 10) / 10;
     Object.assign(opticsTelemetry, {
       shot,
       shotName: [shotEntry?.size, shotEntry?.what ?? shotEntry?.name].filter(Boolean).join(" · "),
@@ -282,13 +290,13 @@ export async function buildScene(canvas, W, H, draft = false) {
     const field = Array.isArray(anchor.eye) && !anchor.target ? "eye" : "offset";
     return { ...anchor, [field]: offset.toArray(), fallback: point };
   };
-  const sampleTrack = (t) =>
-    cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor });
+  const sampleTrack = (t, rig) =>
+    cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor, fovAxis: rig?.fovAxis });
   let clocks,
     editTime = 0,
     worldTime = 0;
   const cameraSample = () => {
-    const cam = sampleTrack(editTime);
+    const cam = sampleTrack(editTime, SHOTS_OUT[Math.max(0, shotAt(worldTime))]?.camera);
     const focus =
       cam.focus && typeof cam.focus === "object" && "u" in cam.focus
         ? resolveFocusDistance(cam.focus, cam.base.p, resolveFocusTarget).distance
@@ -300,21 +308,37 @@ export async function buildScene(canvas, W, H, draft = false) {
     placed.draw(t);
     scene.updateMatrixWorld();
   };
-  const sampleCameraFrames = (times, sample) => {
-    if (!EDIT.cam.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l))) {
-      return times.map(({ camera }) => sample(sampleTrack(camera), camera));
-    }
+  const hasAnchors = () => EDIT.cam.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l));
+  const riggedTrack = (world, time, i, worldAtCamera) => {
+    const rig = SHOTS_OUT[i]?.camera;
+    const cam = sampleTrack(time, rig);
+    const bounds = [SHOTS_OUT[i]?.t ?? 0, SHOTS_OUT[i + 1]?.t ?? DURATION];
+    const clock = worldAtCamera ?? (SHOTS_OUT[i]?.cameraClock === "output" ? () => world : (next) => next);
+    const movingAnchor = (rig?.lead || rig?.bank || rig?.look === "tangent") && hasAnchors();
     try {
-      return times.map(({ world, camera }) => {
-        poseScene(world);
-        return sample(sampleTrack(camera), camera);
+      applyCameraRig(cam, time, bounds, rig, (at) => {
+        if (movingAnchor) poseScene(clock(at));
+        return sampleTrack(at, rig);
+      });
+    } finally {
+      if (movingAnchor) poseScene(world);
+    }
+    return cam;
+  };
+  const sampleCameraFrames = (times, sample) => {
+    if (!hasAnchors()) return times.map((time) => sample(time));
+    try {
+      return times.map((time) => {
+        poseScene(time.world);
+        return sample(time);
       });
     } finally {
       poseScene(worldTime);
     }
   };
-  const sampleCameraTrack = (times) => sampleCameraFrames(times, (cam) => cam.sample);
-  const sampleCameraPath = (times) => sampleCameraFrames(times, (cam, camera) => {
+  const sampleCameraTrack = (times) => sampleCameraFrames(times, ({ world, camera }) => sampleTrack(camera, SHOTS_OUT[Math.max(0, shotAt(world))]?.camera).sample);
+  const sampleCameraPath = (times) => sampleCameraFrames(times, ({ world, camera, worldAtCamera }) => {
+    const cam = riggedTrack(world, camera, Math.max(0, shotAt(world)), worldAtCamera);
     animate(cam, camera, SHOTS_OUT, DURATION, anims);
     return { p: cam.p, l: cam.l, fov: cam.fov, base: cam.base };
   });
@@ -325,7 +349,11 @@ export async function buildScene(canvas, W, H, draft = false) {
     poseScene(t);
     const trackTime = clocks?.camera ?? t;
     const cameraTime = view === undefined ? trackTime : viewTime(SHOTS_OUT, DURATION, view, trackTime);
-    const cam = sampleTrack(cameraTime);
+    const shot = Math.max(0, view ?? shotAt(t));
+    const shotEntry = SHOTS_OUT[shot];
+    const rig = shotEntry?.camera;
+    const cam = riggedTrack(t, cameraTime, shot, activeView ? clocks?.worldAtCamera : undefined);
+    for (const [name, group] of Object.entries(cameraGroups)) group.visible = !rig?.hideGroups?.includes(name);
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
@@ -335,11 +363,8 @@ export async function buildScene(canvas, W, H, draft = false) {
       camera.position.copy(free.p);
       lookAt.copy(free.l);
     }
-    camera.up.set(0, 1, 0);
-    camera.lookAt(lookAt);
-    if (!scouting) camera.rotateZ(cam.roll);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
+    orientCamera(camera, lookAt, scouting ? 0 : cam.roll, scouting ? undefined : rig);
+    projectCamera(camera, W, H, scouting ? undefined : rig);
     head.copy(camera.position);
     Object.assign(now, { cam });
 
@@ -352,8 +377,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     hemi.intensity = EDIT.light.fill;
     key.intensity = EDIT.light.key;
     tone.saturation = EDIT.look.saturation;
-    const shot = Math.max(0, view ?? shotAt(t));
-    const shotEntry = SHOTS_OUT[shot];
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
     const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
     const activeLayerLook =
@@ -372,8 +395,13 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { optics: opticsTelemetry });
     renderer.clear();
     if (clocks?.pictureVisible !== false || scouting) {
+      const pupil = clocks?.aperture;
+      if (pupil) {
+        const offset = apertureOffset(camera, pupil, renderedMm, effectiveFstop, focusM ?? fallbackFocus);
+        projectCamera(camera, W, H, rig, offset);
+      }
       dof.update({
-        fstop: effectiveFstop,
+        fstop: pupil ? 0 : effectiveFstop,
         focusDistance: focusM ?? fallbackFocus,
         mm: renderedMm,
         widthPx: W * renderer.getPixelRatio(),
@@ -510,6 +538,9 @@ export async function buildScene(canvas, W, H, draft = false) {
     sampleCameraPath,
     sampleCameraTrack,
     cameraClock: true,
+    cameraRig: true,
+    apertureSampling: true,
+    cameraGroups: Object.keys(cameraGroups),
     moveCameraAnchor,
     resolveCameraAnchor,
     cameraAnchors: [

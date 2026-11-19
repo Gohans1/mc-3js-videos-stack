@@ -5,6 +5,8 @@ import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
 import { chunksOf } from "../src/frame";
+import { apertureSamples, shutterBounds, shutterTimes } from "../src/shutter";
+import { timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
@@ -198,12 +200,17 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     ctx.restore();
   };
 
-  // SAMPLES sub-frames over a 180-degree shutter (half a frame), averaged as light (render/accum.ts)
+  // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
   const draw = async (frame, samples) => {
     const t = frame / FPS;
     ctx.globalAlpha = 1;
-    if (samples === 1) {
+    const i = shotAt(t) - 1;
+    const shutter = SHOTS[i]?.shutter;
+    const [from, to] = shutterBounds(t, SHOTS[i]?.t ?? 0, SHOTS[i + 1]?.t ?? DURATION, timingClock.segments);
+    const times = shutterTimes(t, FPS, samples, from, to, shutter);
+    const pupils = apertureSamples(!cfg.draft && render.tools?.apertureSampling ? shutter?.apertureSamples ?? 1 : 1, frame);
+    if (times.length === 1 && pupils.length === 1) {
       if (render.renderFrame) await render.renderFrame(t);
       else render(t);
       ctx.drawImage(canvas, 0, 0);
@@ -218,16 +225,17 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
             )
           : makeAccumulator(cfg.W, cfg.H);
         log(
-          `motion blur: ${samples} sub-frames a frame, averaged ${gl ? "in the film's own WebGL context" : "in a context of its own (the film shares no draw.tools.renderer: slower)"}`,
+          `camera samples: averaged ${gl ? "in the film's own WebGL context" : "in a context of its own (the film shares no draw.tools.renderer: slower)"}`,
         );
       }
       acc.reset();
-      for (let i = 0; i < samples; i++) {
-        const ts = (frame + (i / samples) * 0.5) / FPS;
-        const at = shotAt(ts) === shotAt(t) ? ts : t;
-        if (render.renderFrame) await render.renderFrame(at);
-        else render(at);
-        acc.add(canvas);
+      for (const at of times) {
+        for (const aperture of pupils) {
+          const options = aperture ? { aperture } : undefined;
+          if (render.renderFrame) await render.renderFrame(at, options);
+          else render(at, options);
+          acc.add(canvas);
+        }
       }
       ctx.drawImage(acc.resolve(), 0, 0);
     }

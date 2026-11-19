@@ -67,6 +67,7 @@ export const CAM_KEYS = [
   "easeChannels",
   "fov",
   "mm",
+  "dollyZoomScale",
   "focus",
   "fstop",
   "handheld",
@@ -76,7 +77,7 @@ export const CAM_KEYS = [
   "motion",
   "reversePath",
 ];
-export const SHOT_KEYS = ["id", "t", "cameraClock", "continuityAxis", "name", "anim", "transition", "adjust", "hits"];
+export const SHOT_KEYS = ["id", "t", "cameraClock", "camera", "shutter", "continuityAxis", "name", "anim", "transition", "adjust", "hits"];
 export const SHOT_SLOT_KEYS = [
   ...["in", "out", "combo"].flatMap((s) =>
     ["fx", "len", "k", "curve", "flip", "optics", "seam"].map((k) => `anim.${s}.${k}`),

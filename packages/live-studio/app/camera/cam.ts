@@ -1,5 +1,6 @@
+import { hfovOf, vfovOf } from "film-kit/lens";
 import type { CameraChannel, CameraMotion } from "film-stage/camera";
-import { cameraKeyOptics } from "film-stage/camera";
+import { cameraKeyOptics, lensAspect } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
@@ -13,6 +14,7 @@ import { clockForTimeline } from "../../src/timing-state.mjs";
 import { lightEdit } from "../activity/activity";
 import { together } from "../core/doc";
 import type { Ease } from "../core/ease";
+import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
@@ -43,6 +45,7 @@ export interface CamKey {
   l: Point;
   fov?: number;
   mm?: number;
+  dollyZoomScale?: number;
   fstop?: number;
   focus?: unknown;
   handheld?: unknown;
@@ -113,7 +116,7 @@ export const opticsOfKey = (i: number) => {
     key?.id === undefined
       ? rows.findIndex((row) => row.t === (key?.__timing?.source ?? key?.t))
       : rows.findIndex((row) => row.id === key.id);
-  return cameraKeyOptics(rows, at, S.tools?.camera?.aspect || 16 / 9);
+  return cameraKeyOptics(rows, at, S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(key?.t ?? 0));
 };
 export const loadCam = async () => {
   set({ cam: !!(await doc.load()) });
@@ -245,11 +248,24 @@ export const retime = (i: number, t: number) => {
 };
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
+export const cameraAxisAt = (time: number) => SHOTS_OUT[shotIndex(time)]?.camera?.fovAxis;
+export const lensAspectAt = (time: number) =>
+  lensAspect(S.tools?.camera.aspect || 16 / 9, cameraAxisAt(time));
+const fovForStorage = (fov: number, t: number) => {
+  const aspect = S.tools?.camera.aspect || 16 / 9;
+  const axis = cameraAxisAt(t);
+  return axis?.mode === "horizontal" ? vfovOf(hfovOf(fov, aspect), axis.aspect) : fov;
+};
 export const writeLens = (key: CamKey, field: LensField, value: number | undefined) => {
+  if (field === "fov" || field === "mm") delete key.dollyZoomScale;
   if (field === "fov" && value !== undefined) delete key.mm;
   if (field === "mm" && value !== undefined) delete key.fov;
   if (value === undefined) delete key[field];
-  else key[field] = field === "roll" ? Math.round(value * 1e4) / 1e4 : r3(value);
+  else
+    key[field] =
+      field === "roll"
+        ? Math.round(value * 1e4) / 1e4
+        : r3(field === "fov" ? fovForStorage(value, key.t) : value);
 };
 export const setLens = (i: number, field: LensField, v: number | undefined) =>
   edit((ks) => {
@@ -259,6 +275,7 @@ export const resetLens = (i: number) =>
   edit((ks) => {
     copyCameraFields({}, ks[i], ["lens", "dof", "shake"]);
     delete ks[i].roll;
+    delete ks[i].dollyZoomScale;
   });
 export const setEase = (i: number, ease: Ease | undefined) =>
   edit((ks) => {
@@ -388,7 +405,10 @@ const viewFromFree = (): CameraView => {
 };
 const withFraming = (key: CamKey, view: CameraView) => {
   const tools = S.tools!;
-  return replaceCameraFraming(key, view, tools.camera.aspect, tools.moveCameraAnchor);
+  const aspect = lensAspectAt(key.t);
+  const saved = replaceCameraFraming(key, view, aspect, tools.moveCameraAnchor);
+  if (saved && key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, key.t));
+  return saved;
 };
 const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: CamKey) => {
   const previous: Partial<CamKey> = before ?? {};

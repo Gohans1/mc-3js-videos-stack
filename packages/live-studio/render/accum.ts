@@ -65,6 +65,7 @@ export const makeAccumulator = (
       gl.compileShader(s);
       if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)!);
       gl.attachShader(p, s);
+      gl.deleteShader(s);
     }
     gl.linkProgram(p);
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)!);
@@ -104,6 +105,15 @@ export const makeAccumulator = (
     });
   };
   return {
+    dispose() {
+      for (const { t, fb } of [pic, ...sums]) {
+        gl.deleteTexture(t);
+        gl.deleteFramebuffer(fb);
+      }
+      gl.deleteProgram(add);
+      gl.deleteProgram(resolve);
+      after();
+    },
     reset() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, sums[cur]!.fb);
       gl.colorMask(true, true, true, true);

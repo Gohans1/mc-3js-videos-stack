@@ -1,3 +1,4 @@
+import { clampFov } from "film-kit/lens";
 import { cameraAt, type CameraChannel, mmOf, resolveCameraPoint } from "film-stage/camera";
 import { EDIT } from "film/edit";
 import type { Vector3 } from "three";
@@ -13,6 +14,7 @@ import {
   type CamKey,
   edit,
   keys,
+  lensAspectAt,
   movable,
   opticsOfKey,
   type Point,
@@ -113,8 +115,8 @@ const sampleGraphViews = (times: number[], track: CamKey[]) => {
 
 const writeGraphOptics = (key: CamKey, channel: CameraChannel, value: number) => {
   if (channel === "lens") {
-    const angle = Math.max(0.1, Math.min(179, value));
-    if (key.mm !== undefined) writeLens(key, "mm", mmOf(angle, S.tools?.camera.aspect || 16 / 9));
+    const angle = clampFov(value);
+    if (key.mm !== undefined) writeLens(key, "mm", mmOf(angle, lensAspectAt(key.t)));
     else writeLens(key, "fov", angle);
   } else if (channel === "dof") writeLens(key, "fstop", Math.max(0, value));
   else if (channel === "roll") writeLens(key, "roll", (value * Math.PI) / 180);

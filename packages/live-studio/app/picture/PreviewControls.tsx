@@ -75,6 +75,9 @@ export function PreviewControls() {
           <div className="grid grid-cols-2 gap-y-2 text-xs">
             {check("Mirror horizontal", p.mirror, (mirror) => changePreview({ mirror }))}
             {check("Half resolution on play", p.reduced, (reduced) => changePreview({ reduced }))}
+            {check("Shutter preview (4 samples)", p.motionBlur, (motionBlur) =>
+              changePreview({ motionBlur }),
+            )}
             {check("Clean feed", p.clean, (clean) => changePreview({ clean }))}
             {check("Horizon and camera HUD", p.horizon, (horizon) => changePreview({ horizon }))}
             {free &&

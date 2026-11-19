@@ -1,3 +1,4 @@
+import { SHOT_SIZES, type ShotSize } from "film-kit/lens";
 import { PRIME_LENSES } from "film-stage/camera";
 import { useEffect, useState } from "react";
 
@@ -12,15 +13,20 @@ import {
 
 import { FieldRow, Section, ValueBox } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
+import { shotIndex } from "../core/film";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { showError, useStudio } from "../core/store";
 import { seekExact, setPlaying } from "../playback/transport";
 import { cameraKeyFrameTime, keys } from "./cam";
 import {
+  addVertigo,
   cameraCoordinates,
+  cameraFitTargets,
   cancelCameraPick,
   changeCameraCoordinate,
   copyRelativeCamera,
+  fitCameraBox,
   nudgeCamera,
   pasteRelativeCamera,
   selectCameraAnchor,
@@ -37,11 +43,16 @@ const nudgeAxes = [
 ] as const;
 
 export function CameraFraming({ index: i }: { index: number }) {
+  useStudio((s) => s.ready);
+  useStudio((s) => s.shotsRev);
   const key = keys[i];
   const pick = useStudio((state) => state.cameraPick);
   const [amount, setAmount] = useState(0.1);
+  const [fit, setFit] = useState<string[]>([]);
   const disabled = !!key.locked;
+  const tripod = SHOTS_OUT[shotIndex(key.t)]?.camera?.look === "one-node";
   const candidates = S.tools?.cameraAnchors ?? [];
+  const fitItems = [...cameraFitTargets().keys()];
   const anchorItems = [
     { value: "world", label: "World" },
     ...candidates.map(({ target, label }) => ({ value: target, label })),
@@ -150,7 +161,7 @@ export function CameraFraming({ index: i }: { index: number }) {
           Pick focus point
         </Button>
       </div>
-      <FieldRow label="Move step">
+      <FieldRow label={tripod ? "Tripod move step" : "Move step"}>
         <ValueBox
           name="Camera move step"
           min={0.001}
@@ -208,7 +219,45 @@ export function CameraFraming({ index: i }: { index: number }) {
           </SelectContent>
         </Select>
       </FieldRow>
+      {fitItems.length > 0 && (
+        <Section title="Fit box" closed>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Fit subjects">
+            {fitItems.map((name) => (
+              <Button
+                key={name}
+                size="sm"
+                variant={fit.includes(name) ? "default" : "quiet"}
+                aria-pressed={fit.includes(name)}
+                disabled={disabled}
+                onClick={() =>
+                  setFit((old) =>
+                    old.includes(name) ? old.filter((n) => n !== name) : [...old, name],
+                  )
+                }
+              >
+                {name}
+              </Button>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Shot size">
+            {(Object.keys(SHOT_SIZES) as ShotSize[]).map((size) => (
+              <Button
+                key={size}
+                size="sm"
+                variant="secondary"
+                disabled={disabled || !fit.length}
+                onClick={() => fitCameraBox(i, fit, size)}
+              >
+                {size}
+              </Button>
+            ))}
+          </div>
+        </Section>
+      )}
       <div className="flex flex-wrap gap-1.5">
+        <Button variant="secondary" size="sm" disabled={disabled} onClick={() => addVertigo(i)}>
+          Add Vertigo
+        </Button>
         <Button
           variant="secondary"
           size="sm"

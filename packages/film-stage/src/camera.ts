@@ -3,14 +3,16 @@
 // point, lens and how much the head sways. A key with cut: true starts a new path. On top ride a slow wave (the "breathing" float the
 // dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
-import { fovOf, mmOf } from "film-kit/lens";
+import { clampFov, fovOf, mmOf } from "film-kit/lens";
 export { dofParams, dollyZoom, PRIME_LENSES } from "film-kit/lens";
 import * as THREE from "three";
 
 import { easeOf, lmix } from "./camera-meta";
 import { compileCameraPath, type ResolveCameraAnchor } from "./camera-path";
+import { type FovAxis, lensAspect, rigFov } from "./camera-rig";
 
 export * from "./camera-meta";
+export * from "./camera-rig";
 export {
   CAMERA_MOTIONS,
   resolveCameraPoint,
@@ -170,8 +172,8 @@ const sameFocus = (a: FocusTargetSpec | undefined, b: FocusTargetSpec | undefine
   return !!ao && !!bo && ao[0] === bo[0] && ao[1] === bo[1] && ao[2] === bo[2];
 };
 
-const carryAt = (ks, idx, aspect, start = 0) => {
-  let fov = 70,
+const carryAt = (ks, idx, aspect, start = 0, axis?: FovAxis) => {
+  let fov = rigFov(70, undefined, aspect, axis),
     fstop = 0,
     focus: FocusTargetSpec | undefined,
     mm: number | undefined,
@@ -180,10 +182,10 @@ const carryAt = (ks, idx, aspect, start = 0) => {
     const k = ks[m];
     if (k.mm != null) {
       mm = k.mm;
-      fov = fovOf(mm, aspect);
+      fov = rigFov(0, mm, aspect, axis);
     } else if (k.fov != null) {
       mm = undefined;
-      fov = k.fov;
+      fov = rigFov(k.fov, undefined, aspect, axis);
     }
     if (k.fstop != null) fstop = Math.max(0, k.fstop);
     if (k.focus !== undefined) focus = k.focus;
@@ -208,9 +210,14 @@ type OpticsKey = Partial<{
   wave: number;
 }>;
 
-export const cameraKeyOptics = (keys: readonly OpticsKey[], index: number, aspect = 16 / 9) => {
+export const cameraKeyOptics = (
+  keys: readonly OpticsKey[],
+  index: number,
+  aspect = 16 / 9,
+  axis?: FovAxis,
+) => {
   const start = keys.findLastIndex((key, i) => i <= index && key.cut);
-  const { hh, ...lens } = carryAt(keys, index, aspect, Math.max(0, start));
+  const { hh, ...lens } = carryAt(keys, index, aspect, Math.max(0, start), axis);
   const key = keys[index];
   return {
     ...lens,
@@ -298,7 +305,11 @@ const blendHandheld = (from: HandheldConfig[], to: HandheldConfig[], u: number) 
   );
 };
 
-export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: ResolveCameraAnchor }) {
+export function cameraAt(
+  t,
+  keys,
+  opts?: { aspect?: number; resolveAnchor?: ResolveCameraAnchor; fovAxis?: FovAxis },
+) {
   const aspect = opts?.aspect ?? 16 / 9;
   const segs = segments(keys);
   let s = segs[0];
@@ -325,14 +336,21 @@ export function cameraAt(t, keys, opts?: { aspect?: number; resolveAnchor?: Reso
   const distance = path.distanceAt(idx, timeFraction(ks, t, idx));
 
   const span = spanAt(ks, t);
-  const c0 = carryAt(ks, span.i, aspect);
-  const c1 = span.j === span.i ? c0 : carryAt(ks, span.j, aspect);
+  const c0 = carryAt(ks, span.i, aspect, 0, opts?.fovAxis);
+  const c1 = span.j === span.i ? c0 : carryAt(ks, span.j, aspect, 0, opts?.fovAxis);
   const lensU = channelProgress(ks, t, span, "lens");
   const dofU = channelProgress(ks, t, span, "dof");
   const shakeU = channelProgress(ks, t, span, "shake");
   const rollU = channelProgress(ks, t, span, "roll");
-  const fov = c0.fov === c1.fov ? c0.fov : lmix(c0.fov, c1.fov, lensU);
-  const mm = mmOf(fov, aspect);
+  const dollyZoomScale = span.i === span.j ? undefined : ks[span.j].dollyZoomScale;
+  const fov = clampFov(
+    dollyZoomScale !== undefined
+      ? (2 * Math.atan(dollyZoomScale / Math.max(0.01, p.distanceTo(l))) * 180) / Math.PI
+      : c0.fov === c1.fov
+        ? c0.fov
+        : lmix(c0.fov, c1.fov, lensU),
+  );
+  const mm = mmOf(fov, lensAspect(aspect, opts?.fovAxis));
 
   // Interpolate aperture radius (1/fstop) so fading from sharp (0) to shallow DOF avoids passing near f/0.1.
   const a0 = c0.fstop > 0 ? 1 / c0.fstop : 0;

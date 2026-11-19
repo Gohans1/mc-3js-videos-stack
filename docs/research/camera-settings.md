@@ -234,3 +234,15 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Kiểm tra bố cục | Khung có thể chồng nhau, viền tối, 35/50/85 mm, tỷ lệ vàng, thước kéo và safe EBU R95. Clean Feed ẩn công cụ trong ảnh. |
 | HUD | Hiện cân bằng, giới hạn nét một điểm ảnh, hyperfocal, tốc độ lia và cảnh báo góc cắt. Có Copy INSPECT và lựa chọn phát 0,25×. |
 | Vòng review | Kéo chữ 40 px khi bật gương lưu đúng −81,79 px theo khung nguồn. Chrome xác nhận đổi 0,25× khi thiếu audio giữ playhead tiến và HUD đo lia 6,4°/s ở neo động. |
+
+| Ghi chú đợt 8 | Chi tiết |
+| --- | --- |
+| Rig | Camera theo hướng 2-node, tại chỗ 1-node hoặc tiếp tuyến. Có ngắm trước theo t, banking, up-vector, dịch bố cục và lens shift. |
+| Quang học theo shot | Khóa trục FOV khi đổi tỉ lệ, chỉnh near/far, ẩn nhóm mái. Dải FOV dùng chung giữa Free Cam, keyframe và animation. |
+| Bố cục | Fit Box tính giới hạn nhiều đối tượng trong hướng nhìn. Vertigo thêm key tương ứng và giữ cỡ chủ thể cả đoạn. |
+| Shutter | Góc 0–360°, pha và Open/Center/Close. Chia mẫu đều trong đoạn còn lại sau khi kẹp ở cut. |
+| DOF | Preview dùng bốn mẫu khi dừng. Xuất cuối có thể tích lũy thêm mẫu khẩu độ và giữ nét trên mặt phẳng lấy nét. |
+| Chrome | Lens shift 20% tạo view offset 96 px trên khung 960 px. 1-node giữ vị trí qua hai mốc, Clip far 450 m và ẩn nhóm hoạt động. |
+| Kiểm chứng sau review | Fit Box chứa đủ chủ thể với Lens Shift 80%. FOV dọc 46° ở khung 9:16 hiện 23,9 mm ở cả HUD và ô nhập. |
+| Đồng hồ và 1-node | Lookahead lấy thời gian thế giới từ đoạn xuất đang chạy. Truck dịch chân máy 1 m ở 1-node và giữ nguyên cam.json. |
+| Xuất kiểm tra | Poster 1920×1080 dùng 4 mốc shutter × 4 mẫu khẩu độ. Cả 16 lượt đã đến hàm draw(t). |

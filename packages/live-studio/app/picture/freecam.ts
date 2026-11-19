@@ -1,5 +1,6 @@
 // The free camera: looking around the scene without changing the film. Held like a camera: turning stays where you stand,
 // because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
+import { clampFov } from "film-kit/lens";
 import * as THREE from "three";
 
 import { S, wake } from "../core/state";
@@ -219,7 +220,7 @@ export const setFov = (d: number) => {
   const f = S.tools?.free;
   if (!f?.on || get().freeLocked) return;
   rememberFreeView();
-  f.fov = Math.max(0.1, Math.min(179, f.fov + d));
+  f.fov = clampFov(f.fov + d);
   S.viewMoved = true;
   say(`FOV ${f.fov}°`);
 };

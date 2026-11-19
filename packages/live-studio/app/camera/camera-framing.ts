@@ -1,25 +1,31 @@
-import { dollyZoom, fovOf } from "film-stage/camera";
-import { Vector3 } from "three";
+import { mmOf, SHOT_SIZES, type ShotSize } from "film-kit/lens";
+import { dollyZoom, fitBoxFrame, rigFov } from "film-stage/camera";
+import { Box3, Vector3 } from "three";
 
 import { clockForTimeline } from "../../src/timing-state.mjs";
-import { DURATION } from "../core/filmMeta";
+import { together } from "../core/doc";
+import { shotIndex } from "../core/film";
+import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
 import { r3, SAME } from "../core/time";
 import { readSceneFrame } from "../picture/render";
 import {
+  cameraAxisAt,
   cameraKeyFrameTime,
   cameraKeyIsAnchored,
   type CamKey,
   edit,
   editCameraKeyInScene,
   keys,
+  lensAspectAt,
   opticsOfKey,
   pasteCamKeys,
   type Point,
   vectorPoint,
   writeLens,
 } from "./cam";
+import { shotsDoc } from "./shots";
 import type { CameraPick } from "./slice";
 
 type PointField = "p" | "l";
@@ -140,6 +146,15 @@ export const nudgeCamera = (i: number, axis: "right" | "up" | "forward", amount:
       l = resolveKeyPoint(key, "l");
     if (!p || !l) return unavailable();
     const delta = cameraBasis(p, l, key.roll)[axis].multiplyScalar(amount);
+    const shot = shotIndex(key.t);
+    const rig = shotsDoc.data?.[shot]?.camera;
+    if (rig?.look === "one-node" && rig.position) {
+      const position = vectorPoint(new Vector3(...rig.position).add(delta));
+      shotsDoc.edit((rows) => {
+        rows[shot].camera = { ...rows[shot].camera, position };
+      });
+      return;
+    }
     const position = storedPoint(key.p, p.add(delta)),
       aim = storedPoint(key.l, l.add(delta));
     if (!position || !aim) return say("This film cannot move the camera anchor");
@@ -151,12 +166,14 @@ export const nudgeCamera = (i: number, axis: "right" | "up" | "forward", amount:
 
 export const swapCameraLens = (i: number, mm: number) =>
   editCameraKeyInScene(i, cameraKeyIsAnchored(keys[i]), (i, key) => {
+    if (SHOTS_OUT[shotIndex(key.t)]?.camera?.look === "one-node")
+      return say("Swap lens needs camera travel. Choose 2-node to hold subject size");
     const p = resolveKeyPoint(key, "p"),
       l = resolveKeyPoint(key, "l");
     if (!p || !l) return unavailable();
     const from = p.distanceTo(l);
     if (from < 1e-6) return say("Set an aim point away from the camera before swapping lenses");
-    const fov = fovOf(mm, S.tools?.camera.aspect || 16 / 9);
+    const fov = rigFov(0, mm, S.tools?.camera.aspect || 16 / 9, cameraAxisAt(key.t));
     const distance = dollyZoom(from, opticsOfKey(i).fov, fov);
     const position = storedPoint(key.p, p.sub(l).setLength(distance).add(l));
     if (!position) return say("This film cannot move the camera anchor");
@@ -172,6 +189,104 @@ const endOfOccurrence = (key: CamKey) => {
     clockForTimeline("cam").cameraSpans?.find((span) => key.t >= span.from && key.t < span.to)
       ?.to ?? DURATION;
   return Math.min(shotEnd, occurrenceEnd);
+};
+
+export const cameraFitTargets = () => {
+  const targets = new Map<string, import("three").Object3D[]>();
+  for (const [object, name] of S.tools?.objects ?? []) targets.set(name, [object]);
+  for (const target of S.tools?.targets ?? []) targets.set(target.title, target.objects);
+  return targets;
+};
+
+export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
+  editCameraKeyInScene(i, true, (i, key) => {
+    const p = resolveKeyPoint(key, "p"),
+      aim = resolveKeyPoint(key, "l");
+    if (!p || !aim) return unavailable();
+    const candidates = cameraFitTargets();
+    const box = new Box3();
+    for (const name of targets)
+      for (const object of candidates.get(name) ?? []) box.expandByObject(object, true);
+    if (box.isEmpty()) return say("Select at least one visible subject for Fit box");
+    const shot = shotIndex(key.t);
+    const rig = SHOTS_OUT[shot]?.camera;
+    if (rig?.look === "tangent" || rig?.lead || rig?.bank)
+      return say(
+        "Fit box needs a fixed aim. Turn off Along path, Lookahead and Auto-banking to fit subjects",
+      );
+    const fitted = fitBoxFrame(box, cameraBasis(p, aim, key.roll).forward, {
+      aspect: S.tools?.camera.aspect ?? 16 / 9,
+      fov: opticsOfKey(i).fov,
+      roll: key.roll,
+      fill: SHOT_SIZES[size],
+      rig,
+    });
+    if (!fitted) return say("Increase Clip far to fit these subjects");
+    const nextP = storedPoint(key.p, fitted.p);
+    const nextL = storedPoint(key.l, fitted.l);
+    if (!nextP || !nextL) return say("This film cannot move the camera anchor");
+    together(() => {
+      edit((rows) => {
+        rows[i].p = nextP;
+        rows[i].l = nextL;
+      });
+      if (shotsDoc.data?.[shot])
+        shotsDoc.edit((rows) => {
+          rows[shot].size = size;
+          if (rows[shot].camera?.look === "one-node")
+            rows[shot].camera!.position = vectorPoint(fitted.p);
+        });
+    });
+  });
+
+export const addVertigo = (i: number) => {
+  const key = keys[i];
+  if (!key || key.locked) return;
+  const rig = SHOTS_OUT[shotIndex(key.t)]?.camera;
+  if (rig?.look && rig.look !== "target") return say("Vertigo needs the 2-node aim mode");
+  const end = Math.min(endOfOccurrence(key), keys[i + 1]?.t ?? Infinity);
+  const time = r3(Math.min(key.t + 1, end - SAME * 2));
+  if (time <= key.t + SAME * 2) return say("Leave room after this camera key for Vertigo");
+  editCameraKeyInScene(i, cameraKeyIsAnchored(key), (at, active) => {
+    const p = resolveKeyPoint(active, "p"),
+      aim = resolveKeyPoint(active, "l");
+    if (!p || !aim) return unavailable();
+    const vector = p.sub(aim),
+      distance = vector.length();
+    if (distance < 0.01) return say("Set an aim point away from the camera before adding Vertigo");
+    const aspect = S.tools?.camera.aspect ?? 16 / 9;
+    const optics = opticsOfKey(at);
+    const mm = (optics.mm ?? mmOf(optics.fov, lensAspectAt(active.t))) < 50 ? 50 : 24;
+    const toFov = rigFov(0, mm, aspect, cameraAxisAt(time));
+    const offset = vector.setLength(dollyZoom(distance, optics.fov, toFov));
+    const save = () => {
+      if (
+        !keys.some((k) => k.id === active.id && k.t === active.t && !k.locked) ||
+        keys.some((k) => Math.abs(k.t - time) < SAME)
+      )
+        return;
+      const target = resolveKeyPoint(active, "l");
+      if (!target) return unavailable();
+      const position = storedPoint(active.p, target.add(offset));
+      if (!position) return say("This film cannot move the camera anchor");
+      const next: CamKey = {
+        ...structuredClone(active),
+        t: 0,
+        p: position,
+        motion: "linear",
+        ease: "linear",
+        mm,
+        dollyZoomScale: distance * Math.tan((optics.fov * Math.PI) / 360),
+      };
+      delete next.fov;
+      delete next.easeChannels;
+      delete next.reversePath;
+      pasteCamKeys([next], time);
+      say("Vertigo key added at " + time.toFixed(3) + "s");
+    };
+    if (cameraKeyIsAnchored(active)) void readSceneFrame(time, save).catch(showError);
+    else save();
+  });
 };
 
 type WorldKey = CamKey & { p: [number, number, number]; l: [number, number, number] };

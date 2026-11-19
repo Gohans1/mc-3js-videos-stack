@@ -61,6 +61,7 @@ import {
 import { cameraKeyNavigation } from "./camera-edit";
 import { CameraFraming } from "./CameraFraming";
 import { CameraOptics } from "./CameraOptics";
+import { CameraShotSettings } from "./CameraShotSettings";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -409,6 +410,7 @@ export function CamPanel() {
     >
       <Saved />
       <ShotSection shot={shownShot()} />
+      <CameraShotSettings shot={shownShot()} />
       {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
       <Section title="Keyframe easing">
         <Suspense fallback={null}>

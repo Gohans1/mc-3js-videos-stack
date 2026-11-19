@@ -1,0 +1,247 @@
+import { type CameraRig } from "film-stage/camera";
+
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+
+import { type Shutter } from "../../src/shutter";
+import { FieldRow, Section, Segmented, ValueBox } from "../components/inspector";
+import { shotEnd } from "../core/film";
+import { SHOTS_OUT } from "../core/filmMeta";
+import { S } from "../core/state";
+import { showError, useStudio } from "../core/store";
+import { readSceneFrame } from "../picture/render";
+import { vectorPoint } from "./cam";
+import { shotsDoc } from "./shots";
+
+const SETUPS = [
+  { id: "target", title: "2-node" },
+  { id: "one-node", title: "1-node" },
+  { id: "tangent", title: "Along path" },
+] as const;
+const AXES = [
+  { id: "native", title: "Native" },
+  { id: "horizontal", title: "Horizontal" },
+  { id: "vertical", title: "Vertical" },
+] as const;
+const SHUTTER = [
+  { id: "open", title: "Open" },
+  { id: "center", title: "Center" },
+  { id: "close", title: "Close" },
+] as const;
+
+export function CameraShotSettings({ shot }: { shot: number }) {
+  const editable = useStudio((s) => s.shots);
+  useStudio((s) => s.shotsRev);
+  useStudio((s) => s.ready);
+  const row = shotsDoc.data?.[shot];
+  if (!editable || !row) return null;
+  const rig = row.camera ?? {},
+    shutter = row.shutter ?? {};
+  const camera = (part: Partial<CameraRig>) =>
+    shotsDoc.edit((rows) => {
+      if (rows[shot]?.id === row.id) rows[shot].camera = { ...rows[shot].camera, ...part };
+    });
+  const updateShutter = (part: Partial<Shutter>) =>
+    shotsDoc.edit((rows) => {
+      if (rows[shot]?.id === row.id) rows[shot].shutter = { ...rows[shot].shutter, ...part };
+    });
+  const orientation = (look: NonNullable<CameraRig["look"]>) => {
+    if (look !== "one-node") return camera({ look, position: undefined });
+    const t = Math.min(Math.max(S.t, SHOTS_OUT[shot]?.t ?? 0), shotEnd(shot) - 0.001);
+    void readSceneFrame(t, () => {
+      const source = S.tools?.camera;
+      const clean = S.tools?.cameraSample?.().p;
+      if (source) camera({ look, position: Array.isArray(clean) ? clean : vectorPoint(source.position) });
+    }).catch(showError);
+  };
+  const setAxis = (mode: "native" | "horizontal" | "vertical") =>
+    camera({
+      fovAxis: mode === "native" ? undefined : { mode, aspect: S.tools?.camera.aspect || 16 / 9 },
+    });
+  const offset = (id: "lensShift" | "frameOffset", axis: number, v: number) => {
+    const next = [...(rig[id] ?? [0, 0])] as [number, number];
+    next[axis] = v / 100;
+    camera({ [id]: next });
+  };
+  const far = rig.far ?? 500,
+    near = rig.near ?? 0.02;
+  return (
+    <>
+      {S.tools?.cameraRig && (
+        <Section title="Camera rig" closed>
+          <Segmented
+            label="Aim mode"
+            items={[...SETUPS]}
+            value={rig.look ?? "target"}
+            onChange={orientation}
+          />
+          <FieldRow label="Lookahead">
+            <ValueBox
+              name="Aim lookahead"
+              value={rig.lead ?? 0}
+              min={-2}
+              max={2}
+              step={0.05}
+              digits={2}
+              unit="s"
+              onSave={(lead) => camera({ lead })}
+            />
+          </FieldRow>
+          <FieldRow label="Auto-banking">
+            <ValueBox
+              name="Auto banking"
+              value={rig.bank ?? 0}
+              min={-5}
+              max={5}
+              step={0.1}
+              digits={1}
+              unit="×"
+              onSave={(bank) => camera({ bank })}
+            />
+          </FieldRow>
+          <FieldRow label="Up vector">
+            {(["X", "Y", "Z"] as const).map((axis, i) => (
+              <ValueBox
+                key={axis}
+                name={"Up vector " + axis}
+                value={(rig.up ?? [0, 1, 0])[i]}
+                min={-1}
+                max={1}
+                step={0.1}
+                digits={2}
+                onSave={(value) => {
+                  const up = [...(rig.up ?? [0, 1, 0])] as [number, number, number];
+                  up[i] = value;
+                  camera({ up });
+                }}
+              />
+            ))}
+          </FieldRow>
+          {(
+            [
+              { id: "frameOffset", label: "Frame offset" },
+              { id: "lensShift", label: "Lens shift" },
+            ] as const
+          ).map(({ id, label }) => (
+            <FieldRow key={id} label={label}>
+              {(["X", "Y"] as const).map((axis, i) => (
+                <ValueBox
+                  key={axis}
+                  name={label + " " + axis}
+                  value={(rig[id]?.[i] ?? 0) * 100}
+                  min={-100}
+                  max={100}
+                  step={1}
+                  digits={1}
+                  unit="%"
+                  onSave={(v) => offset(id, i, v)}
+                />
+              ))}
+            </FieldRow>
+          ))}
+          <Segmented
+            label="FOV axis lock"
+            items={[...AXES]}
+            value={rig.fovAxis?.mode ?? "native"}
+            onChange={setAxis}
+          />
+          <FieldRow label="Clip near / far">
+            <ValueBox
+              name="Clip near"
+              value={near}
+              min={0.001}
+              max={far - 0.01}
+              step={0.01}
+              digits={3}
+              unit="m"
+              onSave={(near) => camera({ near })}
+            />
+            <ValueBox
+              name="Clip far"
+              value={far}
+              min={near + 0.01}
+              max={10000}
+              step={10}
+              digits={2}
+              unit="m"
+              onSave={(far) => camera({ far })}
+            />
+          </FieldRow>
+          {S.tools.cameraGroups?.map((group) => {
+            const hiding = rig.hideGroups ?? [];
+            return (
+              <label key={group} className="flex items-center gap-2 text-xs">
+                <Checkbox
+                  aria-label={"Hide " + group}
+                  checked={hiding.includes(group)}
+                  onCheckedChange={(on) =>
+                    camera({
+                      hideGroups: on ? [...hiding, group] : hiding.filter((name) => name !== group),
+                    })
+                  }
+                />
+                Hide {group}
+              </label>
+            );
+          })}
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() =>
+              shotsDoc.edit((rows) => {
+                delete rows[shot].camera;
+              })
+            }
+          >
+            Reset camera rig
+          </Button>
+        </Section>
+      )}
+      <Section title="Shutter" closed>
+        <FieldRow label="Shutter angle">
+          <ValueBox
+            name="Shutter angle"
+            value={shutter.angle ?? 180}
+            min={0}
+            max={360}
+            step={5}
+            digits={0}
+            unit="°"
+            onSave={(angle) => updateShutter({ angle })}
+          />
+        </FieldRow>
+        <Segmented
+          label="Shutter timing"
+          items={[...SHUTTER]}
+          value={shutter.timing ?? "open"}
+          onChange={(timing) => updateShutter({ timing })}
+        />
+        <FieldRow label="Shutter phase">
+          <ValueBox
+            name="Shutter phase"
+            value={shutter.phase ?? 0}
+            min={-1}
+            max={1}
+            step={0.05}
+            digits={2}
+            unit="fr"
+            onSave={(phase) => updateShutter({ phase })}
+          />
+        </FieldRow>
+        {S.tools?.apertureSampling && (
+          <FieldRow label="Final DOF samples">
+            <ValueBox
+              name="Final aperture samples"
+              value={shutter.apertureSamples ?? 1}
+              min={1}
+              max={32}
+              step={1}
+              digits={0}
+              onSave={(apertureSamples) => updateShutter({ apertureSamples })}
+            />
+          </FieldRow>
+        )}
+      </Section>
+    </>
+  );
+}

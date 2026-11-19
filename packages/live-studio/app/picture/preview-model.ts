@@ -15,6 +15,7 @@ export const initialPreview = {
   panY: 0,
   mirror: false,
   reduced: true,
+  motionBlur: false,
   clean: false,
   horizon: false,
   layers: "off" as (typeof PREVIEW_LAYERS)[number],

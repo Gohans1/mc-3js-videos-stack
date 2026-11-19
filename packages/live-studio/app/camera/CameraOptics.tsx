@@ -1,3 +1,4 @@
+import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 import { fovOf, mmOf, PRIME_LENSES, SHAKES } from "film-stage/camera";
 
 import { Button } from "@/components/ui/button";
@@ -11,12 +12,12 @@ import {
 
 import { FieldRow, SliderRow, ValueBox } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
-import { S } from "../core/state";
-import { say } from "../core/store";
+import { say, useStudio } from "../core/store";
 import { focusLabel } from "../timeline/cam-attributes";
 import {
   edit,
   keys,
+  lensAspectAt,
   type LensField,
   opticsOfKey,
   preview,
@@ -40,9 +41,10 @@ const shakeItems = [
 ];
 
 export function CameraOptics({ index: i }: { index: number }) {
+  useStudio((s) => s.ready);
   const key = keys[i];
   const optics = opticsOfKey(i);
-  const aspect = S.tools?.camera.aspect || 16 / 9;
+  const aspect = lensAspectAt(key.t);
   const mm = optics.mm ?? mmOf(optics.fov, aspect);
   const disabled = !!key.locked;
   const field = (name: LensField, scale = 1) => ({
@@ -53,7 +55,7 @@ export function CameraOptics({ index: i }: { index: number }) {
   });
   const applyMm = (value: number) => {
     const fov = fovOf(value, aspect);
-    if (!(fov >= 0.1 && fov < 180))
+    if (!(fov >= MIN_FOV && fov <= MAX_FOV))
       return say("Enter a positive focal length that gives a usable field of view");
     setLens(i, "mm", value);
   };
@@ -67,8 +69,8 @@ export function CameraOptics({ index: i }: { index: number }) {
       <SliderRow
         label="FOV"
         value={optics.fov}
-        min={0.1}
-        max={179}
+        min={MIN_FOV}
+        max={MAX_FOV}
         step={0.1}
         digits={1}
         unit="°"

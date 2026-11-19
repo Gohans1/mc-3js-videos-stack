@@ -70,6 +70,9 @@ export const PRIME_LENSES = [
 ] as const;
 export const PRIMES = PRIME_LENSES.map((p) => p.mm);
 
+export const MIN_FOV = 0.1;
+export const MAX_FOV = 179;
+export const clampFov = (v: number) => Math.max(MIN_FOV, Math.min(MAX_FOV, v));
 const rad = Math.PI / 180;
 
 // vertical fov (degrees) of a lens on an image of this aspect (width / height)
@@ -79,6 +82,8 @@ export const mmOf = (fov: number, aspect = 16 / 9) =>
   SENSOR / 2 / aspect / Math.tan((fov * rad) / 2);
 export const hfovOf = (fov: number, aspect = 16 / 9) =>
   (2 * Math.atan(Math.tan((fov * rad) / 2) * aspect)) / rad;
+export const vfovOf = (horizontal: number, aspect = 16 / 9) =>
+  (2 * Math.atan(Math.tan((horizontal * rad) / 2) / aspect)) / rad;
 export const nearestPrime = (mm: number) =>
   PRIMES.reduce((a, b) => (Math.abs(Math.log(b / mm)) < Math.abs(Math.log(a / mm)) ? b : a));
 

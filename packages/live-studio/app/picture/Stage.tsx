@@ -147,6 +147,14 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
               )}
             />
             <canvas
+              ref={bind("shutter")}
+              hidden
+              className={cn(
+                "pointer-events-none absolute inset-0 block size-full",
+                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+              )}
+            />
+            <canvas
               ref={bind("inspection")}
               hidden={!preview || clean || preview.layers === "off"}
               className="pointer-events-none absolute inset-0 size-full [image-rendering:pixelated]"

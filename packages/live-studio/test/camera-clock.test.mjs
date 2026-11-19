@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { canPlaceCameraCut } from "../src/camera-clock.mjs";
 import { cameraSpeed } from "../src/camera-speed.mjs";
 import { mapTimeline } from "../src/timing-data.mjs";
-import { clockForTimeline, setTiming, timedDraw } from "../src/timing-state.mjs";
+import { cameraTimesAt, clockForTimeline, setTiming, timedDraw } from "../src/timing-state.mjs";
 
 test("a shot's output clock keeps moving through freezes while the actor stays fixed", () => {
   const timing = { freezes: [{ at: 2, duration: 3 }] };
@@ -237,6 +237,21 @@ test("a new key on the exit of a detached Freeze belongs to the frame that resum
         .map(({ t }) => t),
       [6],
     );
+  } finally {
+    setTiming({}, 8, []);
+  }
+});
+
+test("camera lookahead follows the active output occurrence through freeze and movement", () => {
+  setTiming({ freezes: [{ at: 0, duration: 1 }] }, 8, [{ t: 0, cameraClock: "output" }, { t: 4 }]);
+  try {
+    const first = cameraTimesAt(0);
+    const second = cameraTimesAt(1 / 30);
+    assert.equal(first.worldAtCamera(first.camera + 0.25), 0);
+    assert.equal(second.worldAtCamera(second.camera + 0.25), 0);
+    const moving = cameraTimesAt(1.25);
+    assert.ok(Math.abs(moving.worldAtCamera(moving.camera + 0.25) - 0.5625) < 1e-8);
+    assert.ok(moving.worldAtCamera(8) < 4);
   } finally {
     setTiming({}, 8, []);
   }

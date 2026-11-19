@@ -82,21 +82,33 @@ export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 
 export const cameraTimesAt = (t) => {
-  const world = frameAt(timingClock, t);
+  const picture = timingClock;
+  const world = frameAt(picture, t);
+  const span = cameraClock.cameraSpans?.find((s) => t >= s.from && t < s.to);
+  if (!span) return { world, camera: world };
+  const rate = (span.sourceTo - span.sourceFrom) / (span.to - span.from);
+  const camera = span.sourceFrom + (t - span.from) * rate;
   return {
     world,
-    camera: cameraClock.cameraRateAt?.(t) === undefined ? world : cameraClock.sourceAt(t),
+    camera,
+    worldAtCamera: (time) => {
+      const mapped = rate > 0 ? t + (time - camera) / rate : t;
+      const last = Math.max(span.from, span.to - 1e-6);
+      return frameAt(picture, Math.max(span.from, Math.min(last, mapped)));
+    },
   };
 };
 
 export const timedDraw = (draw) => {
   const asyncFrame = draw.renderFrame?.bind(draw);
-  const at = (t, render) => {
-    const { world: frame, camera } = cameraTimesAt(t);
+  const at = (t, render, options) => {
+    const { world: frame, camera, worldAtCamera } = cameraTimesAt(t);
     const layers = layerClock.sourceAt(t);
     const adjustment = clockForTimeline("adjustment");
     return render(frame, {
+      ...options,
       camera,
+      worldAtCamera,
       layers,
       adjustments: adjustment.sourceAt(t),
       textTime: (item) => overlayTime(layerClock, t, item),
@@ -108,8 +120,8 @@ export const timedDraw = (draw) => {
       velocity: velocityAt(timing.velocity, frame),
     });
   };
-  const out = Object.assign((t) => at(t, draw), draw);
-  if (asyncFrame) out.renderFrame = (t) => at(t, asyncFrame);
+  const out = Object.assign((t, options) => at(t, draw, options), draw);
+  if (asyncFrame) out.renderFrame = (t, options) => at(t, asyncFrame, options);
   if (draw.describe) out.describe = (t) => draw.describe(frameAt(timingClock, t));
   if (draw.prepareFrame) out.prepareFrame = (t) => draw.prepareFrame(frameAt(timingClock, t));
   if (draw.needsPreparation)

@@ -29,6 +29,7 @@ export interface Elements {
   canvas: HTMLCanvasElement;
   final: HTMLCanvasElement;
   inspection: HTMLCanvasElement;
+  shutter: HTMLCanvasElement;
   horizon: HTMLElement;
   audio: HTMLAudioElement;
   clock: HTMLElement;
