@@ -1,5 +1,5 @@
 // The studio for one film; HELP below
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
   existsSync,
@@ -7,6 +7,7 @@ import {
   openSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -64,6 +65,17 @@ export const readStudioInfo = (file) => {
   }
 };
 
+const writeStudioInfo = (file, info) => {
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    writeFileSync(tmp, JSON.stringify(info));
+    renameSync(tmp, file);
+  } catch (e) {
+    rmSync(tmp, { force: true });
+    throw e;
+  }
+};
+
 export const tailscaleHostsForPort = (raw, port) => {
   let parsed = raw;
   if (typeof raw === "string") {
@@ -79,7 +91,7 @@ export const tailscaleHostsForPort = (raw, port) => {
     .filter(([, w]) =>
       Object.values(w?.Handlers ?? {}).some(
         (h) =>
-          /^https?:\/\/(127\.0\.0\.1|localhost):(\d+)\/?$/.exec(h?.Proxy ?? "")?.[2] ===
+          /^https?:\/\/(127\.0\.0\.1|localhost|\[::1\]):(\d+)\/?$/i.exec(h?.Proxy ?? "")?.[2] ===
           String(port),
       ),
     )
@@ -91,7 +103,47 @@ export const tailscaleHostsForPort = (raw, port) => {
 // (Fetch Metadata): another site may link to the studio, nothing more. Origin covers the browsers that don't say
 export const isKnownHost = (host, hosts = []) => {
   const n = (host ?? "").replace(/:\d+$/, "").toLowerCase();
-  return n === "localhost" || n === "[::1]" || /^\d+\.\d+\.\d+\.\d+$/.test(n) || hosts.includes(n);
+  if (n === "localhost" || n === "[::1]" || /^\d+\.\d+\.\d+\.\d+$/.test(n)) return true;
+  const allowed = typeof hosts === "function" ? hosts() : hosts;
+  return allowed.includes(n);
+};
+
+export const isStudioProcessCmdline = (cmdline, expectedPort) => {
+  if (typeof cmdline !== "string" || !cmdline.trim()) return false;
+  const trimmed = cmdline.trim();
+  if (/^"?(?:[^"\s]*[\\/])?(?:powershell|pwsh|cmd)(?:\.exe)?(?:"|\s|$)/i.test(trimmed))
+    return false;
+  if (!/(?:^|[\s"'\\/])live\.mjs(?=$|[\s"'])/i.test(trimmed)) return false;
+  if (/(?:^|\s)--(?:stop|status|detach)(?=\s|$)/.test(trimmed)) return false;
+  const m = /(?:^|[\s"'\\/])live\.mjs["']?\s+(\d{1,5})(?=$|\s)/i.exec(trimmed);
+  if (m && Number.isInteger(expectedPort)) return Number(m[1]) === expectedPort;
+  return true;
+};
+
+const readProcessCmdline = (pid) => {
+  if (!Number.isInteger(pid) || pid <= 0) return { ok: true, cmdline: null };
+  if (process.platform === "win32") {
+    const r = spawnSync(
+      "powershell.exe",
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-Command",
+        `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction SilentlyContinue).CommandLine`,
+      ],
+      { encoding: "utf8", timeout: 5000, windowsHide: true },
+    );
+    if (r.error || r.status !== 0) return { ok: false, cmdline: null };
+    const line = (r.stdout ?? "").trim();
+    return { ok: true, cmdline: line || null };
+  }
+  const r = spawnSync("ps", ["-p", String(pid), "-o", "args="], {
+    encoding: "utf8",
+    timeout: 5000,
+  });
+  if (r.error) return { ok: false, cmdline: null };
+  const line = (r.stdout ?? "").trim();
+  return { ok: true, cmdline: r.status === 0 && line ? line : null };
 };
 
 const isPidAlive = (pid) => {
@@ -106,12 +158,32 @@ const isPidAlive = (pid) => {
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-const probeStudio = async (port, { allowBuildError = false } = {}) => {
+const probeStudio = async (port, project) => {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/film.json`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return { ok: false, otherProject: null };
+    const meta = await res.json();
+    if (!meta || typeof meta !== "object") return { ok: false, otherProject: null };
+    if (sameProjectPath(meta.project, project) && meta.port === port) {
+      return { ok: true, meta, otherProject: null };
+    }
+    return {
+      ok: false,
+      otherProject: typeof meta.project === "string" ? meta.project : null,
+    };
+  } catch {
+    return { ok: false, otherProject: null };
+  }
+};
+
+const probeRootStatus = async (port) => {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/`, { signal: AbortSignal.timeout(1500) });
-    return res.ok || (allowBuildError && res.status === 503);
+    return res.status;
   } catch {
-    return false;
+    return 0;
   }
 };
 
@@ -208,7 +280,7 @@ async function runStatus(project, studioJson, studioLog) {
     sameProjectPath(info.project, project) &&
     Number.isInteger(info.port) &&
     (!Number.isInteger(info.pid) || isPidAlive(info.pid)) &&
-    (await probeStudio(info.port, { allowBuildError: true }));
+    (await probeStudio(info.port, project)).ok;
   if (!running) {
     console.log(`studio is not running (${project})`);
     process.exit(1);
@@ -246,6 +318,36 @@ async function runStop(project, studioJson) {
     console.log(`studio is not running (cleared stale pid ${info.pid})`);
     process.exit(0);
   }
+  const proc = readProcessCmdline(info.pid);
+  if (!proc.ok) {
+    console.error(`could not verify studio process pid ${info.pid}: refusing to stop`);
+    process.exit(1);
+  }
+  if (!proc.cmdline) {
+    if (readStudioInfo(studioJson)?.pid === info.pid) rmSync(studioJson, { force: true });
+    console.log(`studio is not running (cleared stale pid ${info.pid})`);
+    process.exit(0);
+  }
+  const probe = Number.isInteger(info.port)
+    ? await probeStudio(info.port, project)
+    : { ok: false, otherProject: null };
+  if (!isStudioProcessCmdline(proc.cmdline, info.port)) {
+    if (!probe.ok) {
+      if (readStudioInfo(studioJson)?.pid === info.pid) rmSync(studioJson, { force: true });
+      console.log(
+        `studio is not running (pid ${info.pid} is not a studio process; cleared stale studio.json)`,
+      );
+      process.exit(0);
+    }
+    console.error(`pid ${info.pid} is not a studio process: refusing to stop it`);
+    process.exit(1);
+  }
+  if (probe.otherProject && !sameProjectPath(probe.otherProject, project)) {
+    console.error(
+      `port ${info.port} is serving another film (${probe.otherProject}): refusing to stop pid ${info.pid}`,
+    );
+    process.exit(1);
+  }
   const stopped = await terminatePid(info.pid);
   if (!stopped) {
     console.error(`could not stop studio pid ${info.pid}`);
@@ -263,7 +365,7 @@ async function runDetach(project, work, studioJson, studioLog, portArg, port, la
     sameProjectPath(existing.project, project) &&
     Number.isInteger(existing.port) &&
     (!Number.isInteger(existing.pid) || isPidAlive(existing.pid)) &&
-    (await probeStudio(existing.port, { allowBuildError: true }))
+    (await probeStudio(existing.port, project)).ok
   ) {
     console.error(
       `this film's studio already runs at http://localhost:${existing.port}${existing.pid ? ` (pid ${existing.pid})` : ""}: use that one, or stop it first (bun run studio --stop)`,
@@ -319,10 +421,13 @@ async function runDetach(project, work, studioJson, studioLog, portArg, port, la
       info.pid === child.pid &&
       info.port === port &&
       sameProjectPath(info.project, project) &&
-      (await probeStudio(port))
+      (await probeStudio(port, project)).ok
     ) {
+      const rootStatus = await probeRootStatus(port);
       child.unref();
       console.log(`live at http://localhost:${port}`);
+      if (rootStatus === 503)
+        console.log(`note: film has a build error (studio is watching; see ${studioLog})`);
       for (const url of info.tailscale ?? []) console.log(`creator's link: ${url}`);
       console.log(`pid: ${info.pid}`);
       console.log(`log: ${studioLog}`);
@@ -332,6 +437,7 @@ async function runDetach(project, work, studioJson, studioLog, portArg, port, la
   }
 
   if (child.pid && isPidAlive(child.pid)) await terminatePid(child.pid);
+  if (readStudioInfo(studioJson)?.pid === child.pid) rmSync(studioJson, { force: true });
   console.error(`studio did not become ready within ${DETACH_TIMEOUT_MS / 1000}s`);
   const tail = logTail(studioLog);
   if (tail) console.error(tail);
@@ -399,11 +505,7 @@ async function main() {
       existing &&
       existing.port !== PORT &&
       (!Number.isInteger(existing.pid) || isPidAlive(existing.pid)) &&
-      (
-        await fetch(`http://127.0.0.1:${existing.port}/api/notes`, {
-          signal: AbortSignal.timeout(1500),
-        })
-      ).ok
+      (await probeStudio(existing.port, film.PROJECT)).ok
     ) {
       console.error(
         `this film's studio already runs at http://localhost:${existing.port}: use that one, or stop it first`,
@@ -561,7 +663,7 @@ async function main() {
     async fetch(req, server) {
       server.timeout(req, 0);
       const host = req.headers.get("host");
-      if (!isKnownHost(host, film.hosts) || fromElsewhere(req, host))
+      if (!isKnownHost(host, () => film.hosts) || fromElsewhere(req, host))
         return new Response(null, { status: 403 });
       try {
         decodeURI(new URL(req.url).pathname);
@@ -588,15 +690,12 @@ async function main() {
   }
   console.log(`live at http://localhost:${PORT}`);
   const tailscale = await tailscaleLink(film, PORT);
-  writeFileSync(
-    studioJsonPath,
-    JSON.stringify({
-      port: PORT,
-      project: film.PROJECT,
-      pid: process.pid,
-      ...(tailscale.length ? { tailscale } : {}),
-    }),
-  ); // where note.mjs done, --status, and --stop find the studio that owns this film
+  writeStudioInfo(studioJsonPath, {
+    port: PORT,
+    project: film.PROJECT,
+    pid: process.pid,
+    ...(tailscale.length ? { tailscale } : {}),
+  }); // where note.mjs done, --status, and --stop find the studio that owns this film
   if (LAN)
     for (const nets of Object.values(networkInterfaces()))
       for (const n of nets)

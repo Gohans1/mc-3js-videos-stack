@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   existsSync,
   mkdirSync,
@@ -9,6 +9,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -20,7 +21,7 @@ import * as THREE from "three";
 import { openFilm, STUDIO } from "../src/film.mjs";
 import { compileLayerTiming } from "../src/layer-timing.mjs";
 import { LINKAGE_DEFAULTS, recordLinkage, timingPlan } from "../src/linkage.mjs";
-import { tailscaleHostsForPort } from "../src/live.mjs";
+import { isKnownHost, isStudioProcessCmdline, tailscaleHostsForPort } from "../src/live.mjs";
 import { noteDetailFormat } from "../src/note-detail.mjs";
 
 const withBrowserGlobals = (t) => {
@@ -157,7 +158,7 @@ test("film.mjs re-reads .live_hosts on create/edit/delete without restart and su
   assert.deepEqual(film.hosts, ["auto.tail.ts.net"]);
 });
 
-test("tailscaleHostsForPort extracts only tailnet hosts proxying the exact local port", () => {
+test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate hosts and studio processes", () => {
   const status = {
     Web: {
       "my-pc.tail123.ts.net:8443": {
@@ -167,7 +168,10 @@ test("tailscaleHostsForPort extracts only tailnet hosts proxying the exact local
         Handlers: { "/": { Proxy: "http://127.0.0.1:4322" } },
       },
       "local-name.tail123.ts.net:443": {
-        Handlers: { "/sub": { Proxy: "https://localhost:4321/" } },
+        Handlers: { "/sub": { Proxy: "HTTP://LOCALHOST:4321/" } },
+      },
+      "ipv6-loopback.tail123.ts.net:443": {
+        Handlers: { "/": { Proxy: "http://[::1]:4321" } },
       },
       "remote-proxy.tail123.ts.net:443": {
         Handlers: { "/": { Proxy: "http://10.0.0.5:4321" } },
@@ -177,9 +181,39 @@ test("tailscaleHostsForPort extracts only tailnet hosts proxying the exact local
   assert.deepEqual(tailscaleHostsForPort(status, 4321), [
     "my-pc.tail123.ts.net:8443",
     "local-name.tail123.ts.net:443",
+    "ipv6-loopback.tail123.ts.net:443",
   ]);
   assert.deepEqual(tailscaleHostsForPort(status, 9999), []);
   assert.deepEqual(tailscaleHostsForPort("not json", 4321), []);
+
+  // Local hosts short-circuit before invoking lazy host lookup thunk
+  const neverCalled = () => {
+    throw new Error("should not read hosts for local request");
+  };
+  assert.equal(isKnownHost("localhost:4321", neverCalled), true);
+  assert.equal(isKnownHost("127.0.0.1:4321", neverCalled), true);
+  assert.equal(isKnownHost("[::1]:4321", neverCalled), true);
+  let calls = 0;
+  const readHosts = () => {
+    calls += 1;
+    return ["phone.ts.net"];
+  };
+  assert.equal(isKnownHost("phone.ts.net:4321", readHosts), true);
+  assert.equal(isKnownHost("other.ts.net:4321", readHosts), false);
+  assert.equal(calls, 2);
+
+  // Studio cmdline verification rejects recycled/unrelated processes and CLI control flags
+  assert.equal(
+    isStudioProcessCmdline("bun W:/repo/packages/live-studio/src/live.mjs 4321", 4321),
+    true,
+  );
+  assert.equal(isStudioProcessCmdline("bun ../src/live.mjs", 4321), true);
+  assert.equal(isStudioProcessCmdline('powershell.exe -Command "bun live.mjs 4321"', 4321), false);
+  assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --stop", 4321), false);
+  assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --status", 4321), false);
+  assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --detach", 4321), false);
+  assert.equal(isStudioProcessCmdline("bun live.mjs 4322", 4321), false);
+  assert.equal(isStudioProcessCmdline("notepad.exe", 4321), false);
 });
 
 test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop work end-to-end safely", async (t) => {
@@ -299,9 +333,118 @@ test("live.mjs --detach prints log tail and exits 1 when child exits early", asy
   assert.match(`${res.stdout}\n${res.stderr}`, /exited early|failed|already in use|EADDRINUSE/i);
 });
 
-test("app/index.html provides an inline Flexoki dark loading shell and keeps the module-error fallback", () => {
+test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-studio HTTP servers", async (t) => {
+  const dir = makeTempDemoFilm("live-safety-");
+  const benign = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  const otherServer = createHttpServer((_req, res) => {
+    res.writeHead(200, { "content-type": "text/plain" });
+    res.end("not studio");
+  });
+  await new Promise((done) => otherServer.listen(0, "127.0.0.1", done));
+  const otherPort = otherServer.address().port;
+  const unusedPort = await freePort();
+
+  t.after(() => {
+    try {
+      benign.kill();
+    } catch {}
+    otherServer.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const studioJsonPath = join(dir, "renders/live/studio.json");
+  mkdirSync(dirname(studioJsonPath), { recursive: true });
+
+  // --status must fail when another non-studio HTTP server answers 200 on info.port
+  writeFileSync(studioJsonPath, JSON.stringify({ port: otherPort, project: dir, pid: benign.pid }));
+  const fakeStatus = spawnSync(process.execPath, [LIVE_SCRIPT, String(otherPort), "--status"], {
+    cwd: STUDIO,
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+    timeout: 15000,
+  });
+  assert.equal(
+    fakeStatus.status,
+    1,
+    `status should reject non-studio server:\n${fakeStatus.stdout}`,
+  );
+
+  // --stop must NOT kill a recycled PID whose OS command line is not live.mjs, and clears stale studio.json
+  writeFileSync(
+    studioJsonPath,
+    JSON.stringify({ port: unusedPort, project: dir, pid: benign.pid }),
+  );
+  const stopRecycled = spawnSync(process.execPath, [LIVE_SCRIPT, String(unusedPort), "--stop"], {
+    cwd: STUDIO,
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+    timeout: 15000,
+  });
+  assert.equal(
+    stopRecycled.status,
+    0,
+    `stop recycled pid failed:\nstdout: ${stopRecycled.stdout}\nstderr: ${stopRecycled.stderr}`,
+  );
+  assert.equal(existsSync(studioJsonPath), false, "stale studio.json should be cleared");
+  assert.equal(benign.exitCode, null, "non-studio process must still be alive");
+  assert.doesNotThrow(() => process.kill(benign.pid, 0));
+});
+
+test("live.mjs --detach returns promptly when the film has an initial Vite build error", async (t) => {
+  const dir = makeTempDemoFilm("live-build-err-");
+  writeFileSync(join(dir, "src/scene.ts"), "export const broken = ;\n");
+  const port = await freePort();
+  let pid = null;
+
+  t.after(() => {
+    if (pid) {
+      try {
+        process.kill(pid, "SIGTERM");
+      } catch {}
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const runLive = (...args) =>
+    spawnSync(process.execPath, [LIVE_SCRIPT, String(port), ...args], {
+      cwd: STUDIO,
+      env: { ...process.env, LIVE_PROJECT: dir },
+      encoding: "utf8",
+      timeout: 30000,
+    });
+
+  const t0 = Date.now();
+  const detach = runLive("--detach");
+  const elapsed = Date.now() - t0;
+  assert.equal(
+    detach.status,
+    0,
+    `detach on syntax-error film failed:\nstdout: ${detach.stdout}\nstderr: ${detach.stderr}`,
+  );
+  assert.ok(elapsed < 25000, `detach should not wait for 30s timeout (took ${elapsed}ms)`);
+  assert.match(detach.stdout, new RegExp(`http://localhost:${port}`));
+  assert.match(detach.stdout, /build error/i);
+  assert.match(detach.stdout, /pid:\s*\d+/);
+  assert.match(detach.stdout, /studio\.log/);
+
+  const info = JSON.parse(readFileSync(join(dir, "renders/live/studio.json"), "utf8"));
+  pid = info.pid;
+
+  const status = runLive("--status");
+  assert.equal(status.status, 0, status.stderr);
+
+  const stop = runLive("--stop");
+  assert.equal(stop.status, 0, stop.stderr);
+  pid = null;
+});
+
+test("app/index.html provides an inline Flexoki dark loading shell and hides it when showFailure renders <pre>", () => {
   const html = readFileSync(INDEX_HTML, "utf8");
   assert.match(html, /<style>[\s\S]*#100F0F[\s\S]*#CECDC3[\s\S]*<\/style>/i);
+  assert.match(html, /body:has\(#root \+ pre\)\s*\.studio-boot\s*\{[\s\S]*display:\s*none/i);
   assert.match(html, /<div id="root">[\s\S]*Loading Studio…[\s\S]*<\/div>/);
   assert.match(html, /Couldn’t load the studio\. Check your connection, then reload\./);
 });
@@ -344,6 +487,18 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
       3.0,
       new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.4, depthWrite: false }),
     );
+    const negativeOpacity = makePlane(
+      "negative_opacity",
+      2.9,
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: -0.1, depthWrite: true }),
+    );
+    const matInvisible = makePlane(
+      "mat_invisible",
+      2.85,
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    const meshInvisible = makePlane("mesh_invisible", 2.8, new THREE.MeshBasicMaterial());
+    meshInvisible.visible = false;
     const selfNoPick = makePlane("self_no_pick", 2.75, new THREE.MeshBasicMaterial());
     selfNoPick.userData.noPick = true;
     const noPickGroup = new THREE.Group();
@@ -368,15 +523,31 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
       new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
     ]);
 
+    // Multi-material box whose struck top (+Y, index 2) face is non-pickable while side/bottom faces are opaque
+    // Note: BoxGeometry ray hits top face (+Y, index 2) AND bottom face (-Y, index 3); make BOTH horizontal faces non-pickable
+    // so only the 4 vertical side faces (0, 1, 4, 5) are visible/opaque!
+    const invisibleTopBottomMulti = makeMultiBox("invisible_top_bottom_multi", 1.5, [
+      new THREE.MeshBasicMaterial({ color: 0x334455 }),
+      new THREE.MeshBasicMaterial({ color: 0x334455 }),
+      new THREE.MeshBasicMaterial({ colorWrite: false }),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0 }),
+      new THREE.MeshBasicMaterial({ color: 0x334455 }),
+      new THREE.MeshBasicMaterial({ color: 0x334455 }),
+    ]);
+
     const realFloor = makePlane("real_floor", 0, new THREE.MeshBasicMaterial({ color: 0x888888 }));
 
     scene.add(
       shadowCeiling,
       zeroOpacity,
       ghostOverlay,
+      negativeOpacity,
+      matInvisible,
+      meshInvisible,
       selfNoPick,
       noPickGroup,
       allInvisibleMulti,
+      invisibleTopBottomMulti,
       realFloor,
     );
     scene.updateMatrixWorld(true);
@@ -387,11 +558,12 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     assert.equal(hit.what, "real_floor");
     assert.deepEqual(hit.world, [0, 0, 0]);
 
-    // A multi-material mesh with at least ONE visible material MUST still be pickable
+    // A multi-material mesh whose struck face (+Y, index 2) is visible MUST be pickable and identify via that face's material
+    const topFaceMat = new THREE.MeshBasicMaterial({ color: 0x22aa44 });
     const mixedMulti = makeMultiBox("mixed_multi", 1.0, [
       new THREE.MeshBasicMaterial({ colorWrite: false }),
       new THREE.MeshBasicMaterial({ colorWrite: false }),
-      new THREE.MeshBasicMaterial({ color: 0x22aa44 }),
+      topFaceMat,
       new THREE.MeshBasicMaterial({ colorWrite: false }),
       new THREE.MeshBasicMaterial({ colorWrite: false }),
       new THREE.MeshBasicMaterial({ colorWrite: false }),
@@ -401,14 +573,12 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     S.tools = {
       scene,
       camera,
-      objects: [
-        [realFloor, "real_floor"],
-        [mixedMulti, "mixed_multi"],
-      ],
+      objects: [[realFloor, "real_floor"]],
+      materials: [[topFaceMat, "green_top_face"]],
     };
 
     const mixedHit = lookAtClick(0.5, 0.5);
-    assert.equal(mixedHit.what, "mixed_multi");
+    assert.equal(mixedHit.what, "green_top_face");
     assert.deepEqual(mixedHit.world, [0, 1.1, 0]);
 
     // lookOnPlane intersects horizontal plane y = 2.0 along camera ray
@@ -732,6 +902,18 @@ test("notes.mjs prints (local film) instead of parent-repo git hash for gitignor
   assert.ok(ignoredOut.includes("Film now: (local film)."), ignoredOut);
   assert.ok(!ignoredOut.includes(commitHash), `should not leak parent hash:\n${ignoredOut}`);
 
+  // Untracked local film folder inside parent repo (not in .gitignore) also prints (local film)
+  const untrackedFilm = join(repo, "local-films/untracked-film");
+  mkdirSync(join(untrackedFilm, "notes"), { recursive: true });
+  writeFileSync(join(untrackedFilm, "notes/notes.jsonl"), `${sampleNote}\n`);
+  const untrackedOut = execFileSync(process.execPath, [NOTES_SCRIPT], {
+    cwd: untrackedFilm,
+    encoding: "utf8",
+    env: { ...process.env, MC_LESSONS: join(repo, "no-lessons") },
+  });
+  assert.ok(untrackedOut.includes("Film now: (local film)."), untrackedOut);
+  assert.ok(!untrackedOut.includes(commitHash), `should not leak parent hash:\n${untrackedOut}`);
+
   // Tracked folder in the same repo still prints the git describe hash
   const trackedOut = execFileSync(process.execPath, [NOTES_SCRIPT], {
     cwd: join(repo, "tracked"),
@@ -747,9 +929,10 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
   const s20 = timingPlan({ speeds: [{ from: 0, to: 10, rate: 2.0 }] });
   const s05 = timingPlan({ speeds: [{ from: 0, to: 10, rate: 0.5 }] });
 
-  // 1. Strict identity no-op leaves timing clean
+  // 1. Strict identity no-op (including explicit undefined optional keys) leaves timing clean
   const noop = {};
   recordLinkage(noop, flat, flat, true, LINKAGE_DEFAULTS);
+  recordLinkage(noop, {}, { speeds: undefined, main: undefined }, true, LINKAGE_DEFAULTS);
   assert.equal(noop.layerKinds, undefined);
 
   // 2. Repeated pure-speed edits fold cleanly without unbounded changes arrays, and reset removes dead layerKinds

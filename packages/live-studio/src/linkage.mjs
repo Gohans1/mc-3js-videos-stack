@@ -12,14 +12,19 @@ export const LINKAGE_KINDS = Object.keys(LINKAGE_DEFAULTS);
 export const timingPlan = ({ speeds = [], freezes = [], cuts = [], gaps = [], main }) =>
   structuredClone({ speeds, freezes, cuts, gaps, ...(main && { main }) });
 
-const canonicalPlan = (p = {}) => ({
-  ...p,
-  speeds: p.speeds ?? [],
-  freezes: p.freezes ?? [],
-  cuts: p.cuts ?? [],
-  gaps: p.gaps ?? [],
-  ...(p.main ? { main: p.main } : {}),
-});
+const canonicalPlan = (p = {}) => {
+  const out = {
+    speeds: p.speeds ?? [],
+    freezes: p.freezes ?? [],
+    cuts: p.cuts ?? [],
+    gaps: p.gaps ?? [],
+  };
+  if (p.main) out.main = p.main;
+  for (const [k, v] of Object.entries(p)) {
+    if (v !== undefined && !(k in out)) out[k] = v;
+  }
+  return out;
+};
 const equalPlan = (a, b) => equalJson(canonicalPlan(a), canonicalPlan(b));
 // Pure speed plans (no freezes, cuts, gaps, or main-track clips) are strictly bijective and visibility-preserving,
 // so consecutive transitions fold algebraically without altering compileLayerTiming output.

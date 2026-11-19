@@ -1,6 +1,6 @@
 // The creator's notes for the AI about to act on them; HELP below
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 import { cliArgs, needFilm, numberArg } from "./src/cli.mjs";
@@ -59,6 +59,20 @@ const SORT = {
   newest: { label: "newest first", cmp: (a, b) => byNumber(b, a) },
 };
 
+const canonicalDir = (p) => {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+};
+
+const sameDir = (a, b) => {
+  const ca = canonicalDir(a),
+    cb = canonicalDir(b);
+  return process.platform === "win32" ? ca.toLowerCase() === cb.toLowerCase() : ca === cb;
+};
+
 const filmNow = () => {
   try {
     const ignored = spawnSync("git", ["check-ignore", "-q", "."], {
@@ -66,6 +80,20 @@ const filmNow = () => {
       windowsHide: true,
     });
     if (ignored.status === 0) return "(local film)";
+    const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+      cwd: ROOT,
+      encoding: "utf8",
+      windowsHide: true,
+    });
+    if (top.status !== 0 || !(top.stdout ?? "").trim()) return "(not in git)";
+    if (!sameDir(top.stdout.trim(), ROOT)) {
+      const tracked = spawnSync("git", ["ls-files", "--", "."], {
+        cwd: ROOT,
+        encoding: "utf8",
+        windowsHide: true,
+      });
+      if (tracked.status === 0 && !(tracked.stdout ?? "").trim()) return "(local film)";
+    }
     const r = spawnSync("git", ["describe", "--tags", "--always", "--dirty"], {
       cwd: ROOT,
       encoding: "utf8",

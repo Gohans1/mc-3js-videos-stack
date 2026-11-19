@@ -28,13 +28,25 @@ const firstMaterial = (o: THREE.Object3D) => materialsOf(o)[0];
 const materialPickable = (m: THREE.Material | null | undefined) => {
   if (!m) return true;
   if (m.visible === false || m.colorWrite === false) return false;
-  if (m.transparent && (m.opacity === 0 || !m.depthWrite)) return false;
+  if (m.transparent && (m.opacity <= 0 || !m.depthWrite)) return false;
   return true;
 };
-const meshPickable = (o: THREE.Object3D) => {
-  if (!(o as THREE.Mesh).isMesh || !shown(o)) return false;
-  const mats = materialsOf(o);
-  return mats.length === 0 || mats.some(materialPickable);
+const hitMaterial = (h: THREE.Intersection) => {
+  const mat = (h.object as THREE.Mesh).material;
+  if (!Array.isArray(mat)) return mat;
+  const idx = h.face?.materialIndex;
+  return typeof idx === "number" && idx >= 0 && idx < mat.length ? mat[idx] : mat[0];
+};
+const hitPickable = (h: THREE.Intersection) => {
+  if (!(h.object as THREE.Mesh).isMesh || !shown(h.object)) return false;
+  const mat = (h.object as THREE.Mesh).material;
+  if (Array.isArray(mat)) {
+    if (mat.length === 0) return true;
+    const idx = h.face?.materialIndex;
+    if (typeof idx === "number" && idx >= 0 && idx < mat.length) return materialPickable(mat[idx]);
+    return mat.some(materialPickable);
+  }
+  return materialPickable(mat);
 };
 const whatIs = (hit: THREE.Intersection) => {
   const tools = S.tools!;
@@ -56,7 +68,9 @@ const whatIs = (hit: THREE.Intersection) => {
     return part ? `character, ${part}` : "character";
   }
   if (found) return found[1];
-  const byMat = (tools.materials ?? []).find(([mat]) => mat === firstMaterial(hit.object));
+  const byMat = (tools.materials ?? []).find(
+    ([mat]) => mat === (hitMaterial(hit) ?? firstMaterial(hit.object)),
+  );
   if (byMat) return byMat[1];
   const n = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : null;
   if (n && n.y > 0.7) return "top of an object";
@@ -66,7 +80,7 @@ const round3 = (v: number) => +v.toFixed(3) || 0;
 export const lookAtClick = (x: number, y: number) => {
   const tools = S.tools!;
   ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), tools.camera);
-  const hit = ray.intersectObjects(tools.scene.children, true).find((h) => meshPickable(h.object));
+  const hit = ray.intersectObjects(tools.scene.children, true).find(hitPickable);
   if (!hit) return { what: "empty space" };
   return {
     what: whatIs(hit),

@@ -175,7 +175,14 @@ export const openFilm = (projectDir, { send, activity }) => {
   let fileHosts = [];
   const runtimeHosts = new Set();
   const readFileHosts = () => {
-    const st = statSync(HOSTS_FILE, { throwIfNoEntry: false });
+    let st;
+    try {
+      st = statSync(HOSTS_FILE, { throwIfNoEntry: false });
+    } catch {
+      fileHosts = [];
+      hostsStamp = "";
+      return fileHosts;
+    }
     const stamp = st?.isFile() ? `${st.mtimeMs}:${st.ctimeMs}:${st.size}` : "missing";
     if (stamp !== hostsStamp) {
       hostsStamp = stamp;
