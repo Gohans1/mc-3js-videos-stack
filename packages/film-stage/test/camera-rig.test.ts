@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { hfovOf } from "film-kit/lens";
+import * as THREE from "three";
 import { Box3, PerspectiveCamera, Vector3 } from "three";
 
 import {
@@ -91,4 +92,86 @@ test("Fit Box contains a group in the active offset projection", () => {
         expect(Math.abs(out.x)).toBeLessThanOrEqual(0.7500001);
         expect(Math.abs(out.y - 0.2)).toBeLessThanOrEqual(0.7500001);
       }
+});
+
+test("orthographic shots keep subject width when its depth changes and fit a shifted frame", () => {
+  const view = Object.assign(new THREE.OrthographicCamera(), { fov: 42, aspect: 16 / 9 });
+  const rig = {
+    projection: "orthographic",
+    orthographicDepth: 6,
+    lensShift: [0.4, -0.1],
+    frameOffset: [0.1, 0.15],
+  } as const;
+  const params = {
+    ...rig,
+    lensShift: [...rig.lensShift] as [number, number],
+    frameOffset: [...rig.frameOffset] as [number, number],
+  };
+  const box = new THREE.Box3(new THREE.Vector3(-3, -1.5, -10), new THREE.Vector3(3, 1.5, -3));
+  const forward = new THREE.Vector3(0, 0, -1);
+  const result = fitBoxFrame(box, forward, { fov: 42, aspect: 16 / 9, fill: 0.7, rig: params })!;
+  expect(result.fov).toBeGreaterThan(0);
+  view.position.copy(result.p);
+  view.fov = result.fov!;
+  orientCamera(view, result.l, 0, params);
+  projectCamera(view, 1920, 1080, params);
+  for (const x of [box.min.x, box.max.x])
+    for (const y of [box.min.y, box.max.y]) {
+      const near = new THREE.Vector3(x, y, box.max.z).project(view);
+      const far = new THREE.Vector3(x, y, box.min.z).project(view);
+      expect(near.x).toBeCloseTo(far.x, 9);
+      expect(near.y).toBeCloseTo(far.y, 9);
+      expect(Math.abs(near.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(near.y)).toBeLessThanOrEqual(1);
+      expect(Math.abs(near.z)).toBeLessThan(1);
+      expect(Math.abs(far.z)).toBeLessThan(1);
+    }
+});
+
+test("authored relative Bézier handles change travel through a Smooth span", () => {
+  const first = { t: 0, p: [0, 0, 5], l: [0, 0, 0], wave: 0 };
+  const second = { t: 2, p: [2, 0, 5], l: [2, 0, 0], motion: "smooth", ease: "linear" };
+  expect(cameraAt(1, [first, second]).base.p.y).toBe(0);
+  const arc = [
+    { ...first, outHandle: [0, 3, 0] },
+    { ...second, inHandle: [0, 3, 0] },
+  ];
+  const middle = cameraAt(1, arc).base.p;
+  expect(middle.distanceTo(new THREE.Vector3(1, 2.25, 5))).toBeLessThan(1e-5);
+  expect(cameraAt(2, arc).base.p.toArray()).toEqual([2, 0, 5]);
+});
+
+test("rail u constrains the path while hold and cuts retain their authored endpoints", () => {
+  const rail: [number, number, number][] = [
+    [0, 0, 5],
+    [0, 0, 0],
+    [5, 0, 0],
+  ];
+  const keys = [
+    { t: 0, p: [10, 0, 7], l: [0, 0, 0], railU: 0, wave: 0 },
+    { t: 2, p: [12, 0, 7], l: [2, 0, 0], railU: 1, motion: "linear", ease: "linear" },
+    { t: 3, p: [14, 0, 7], l: [2, 0, 0], cut: true },
+  ];
+  expect(cameraAt(1, keys, { rail }).base.p.distanceTo(new THREE.Vector3())).toBeLessThan(1e-5);
+  expect(cameraAt(2, keys, { rail }).base.p.distanceTo(new THREE.Vector3(5, 0, 0))).toBeLessThan(
+    1e-6,
+  );
+  expect(cameraAt(3, keys).base.p.toArray()).toEqual([14, 0, 7]);
+  const railEnd = cameraAt(2.5, keys, { rail, extrapolation: "linear" });
+  expect(railEnd.base.p.distanceTo(new THREE.Vector3(5, 0, 0))).toBeLessThan(1e-6);
+  expect(railEnd.sample.railU).toBe(1);
+  const hold = [keys[0], { ...keys[1], motion: "hold" }, keys[2]];
+  expect(cameraAt(1, hold, { rail }).base.p.toArray()).toEqual(rail[0]);
+});
+
+test("linear extrapolation extends the source span only until the next cut", () => {
+  const keys = [
+    { t: 0, p: [0, 0, 5], l: [0, 0, 0], wave: 0 },
+    { t: 2, p: [2, 0, 5], l: [2, 0, 0], motion: "linear", ease: "linear" },
+    { t: 4, p: [10, 0, 5], l: [10, 0, 0], wave: 0, cut: true },
+  ];
+  expect(cameraAt(3, keys).base.p.x).toBe(2);
+  expect(cameraAt(3, keys, { extrapolation: "linear" }).base.p.x).toBe(3);
+  expect(cameraAt(3, keys, { extrapolation: "linear" }).base.l.x).toBe(3);
+  expect(cameraAt(4, keys, { extrapolation: "linear" }).base.p.x).toBe(10);
 });

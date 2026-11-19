@@ -64,6 +64,9 @@ export const CAM_KEYS = [
   "locked",
   "muted",
   "color",
+  "inHandle",
+  "outHandle",
+  "railU",
   "reason",
   "ease",
   "easeChannels",
@@ -84,7 +87,7 @@ export const SHOT_SLOT_KEYS = [
   ...["in", "out", "combo"].flatMap((s) =>
     ["fx", "len", "k", "delay", "curve", "flip", "optics", "seam"].map((k) => `anim.${s}.${k}`),
   ),
-  ...["fx", "len", "ease", "feather", "flip", "props"].map((k) => `transition.${k}`),
+  ...["params", "fx", "len", "ease", "feather", "flip", "props"].map((k) => `transition.${k}`),
 ];
 export const ADJUSTMENT_KEYS = ["id", "name", "from", "to", "track", "grade", "timebase"];
 export const TEXT_KEYS = [

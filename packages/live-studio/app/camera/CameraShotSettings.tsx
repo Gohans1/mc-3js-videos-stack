@@ -1,4 +1,4 @@
-import { type CameraRig } from "film-stage/camera";
+import { type CameraRig, ORTHOGRAPHIC_DEPTH } from "film-stage/camera";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,6 +18,7 @@ import { S } from "../core/state";
 import { showError, useStudio } from "../core/store";
 import { readSceneFrame } from "../picture/render";
 import { vectorPoint } from "./cam";
+import { buildCameraRail } from "./camera-rail-edit";
 import {
   applyCameraRecipe,
   beatsToCameraHits,
@@ -59,6 +60,7 @@ export function CameraShotSettings({ shot }: { shot: number }) {
       if (rows[shot]?.id === row.id) rows[shot].shutter = { ...rows[shot].shutter, ...part };
     });
   const orientation = (look: NonNullable<CameraRig["look"]>) => {
+    if (look === "one-node" && rig.rail) return;
     if (look !== "one-node") return camera({ look, position: undefined });
     const t = Math.min(Math.max(S.t, SHOTS_OUT[shot]?.t ?? 0), shotEnd(shot) - 0.001);
     void readSceneFrame(t, () => {
@@ -108,9 +110,64 @@ export function CameraShotSettings({ shot }: { shot: number }) {
       </Section>
       {S.tools?.cameraRig && (
         <Section title="Camera rig" closed>
+          {S.tools.cameraProjection && (
+            <>
+              <Segmented
+                label="Projection"
+                items={[
+                  { id: "perspective", title: "Perspective" },
+                  { id: "orthographic", title: "Orthographic" },
+                ]}
+                value={rig.projection ?? "perspective"}
+                onChange={(projection: CameraRig["projection"]) => camera({ projection })}
+              />
+              {rig.projection === "orthographic" && (
+                <FieldRow label="Orthographic reference distance">
+                  <ValueBox
+                    name="Orthographic reference distance"
+                    value={rig.orthographicDepth ?? ORTHOGRAPHIC_DEPTH}
+                    min={0.1}
+                    step={0.1}
+                    digits={1}
+                    unit="m"
+                    onSave={(orthographicDepth) => camera({ orthographicDepth })}
+                  />
+                </FieldRow>
+              )}
+            </>
+          )}
+          {S.tools.cameraRails && (
+            <>
+              <Segmented
+                label="Path ends"
+                items={[
+                  { id: "hold", title: "Hold" },
+                  { id: "linear", title: "Linear extrapolation" },
+                ]}
+                value={rig.extrapolation ?? "hold"}
+                onChange={(extrapolation: CameraRig["extrapolation"]) => camera({ extrapolation })}
+              />
+              <FieldRow label="Camera rail">
+                {rig.rail ? (
+                  <Button variant="quiet" size="sm" onClick={() => camera({ rail: undefined })}>
+                    Remove rail
+                  </Button>
+                ) : (
+                  <Button
+                    variant="quiet"
+                    size="sm"
+                    disabled={rig.look === "one-node"}
+                    onClick={() => buildCameraRail(shot)}
+                  >
+                    Build rail from keys
+                  </Button>
+                )}
+              </FieldRow>
+            </>
+          )}
           <Segmented
             label="Aim mode"
-            items={[...SETUPS]}
+            items={rig.rail ? SETUPS.filter(({ id }) => id !== "one-node") : [...SETUPS]}
             value={rig.look ?? "target"}
             onChange={orientation}
           />

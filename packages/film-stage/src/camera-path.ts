@@ -1,5 +1,5 @@
 import { arcInto } from "film-kit/arc";
-import { CubicBezierCurve3, Curve, LineCurve3, Vector3 } from "three";
+import { CatmullRomCurve3, CubicBezierCurve3, Curve, LineCurve3, Vector3 } from "three";
 
 import { easeOf } from "./camera-meta";
 
@@ -14,6 +14,9 @@ interface PathKey {
   l: CameraPoint;
   motion?: CameraMotion;
   reversePath?: boolean;
+  railU?: number;
+  inHandle?: readonly [number, number, number];
+  outHandle?: readonly [number, number, number];
   ease?: unknown;
   easeChannels?: { position?: unknown };
 }
@@ -33,7 +36,7 @@ export const resolveCameraPoint = (point: CameraPoint, resolve?: ResolveCameraAn
 const controlOffset = (direction: Vector3, chord: Vector3) =>
   direction.dot(chord) > 0 ? direction.setLength(chord.length() / 3) : direction.set(0, 0, 0);
 
-const smoothCurve = (points: Vector3[], i: number) => {
+export const defaultCameraHandles = (points: Vector3[], i: number) => {
   const a = points[i],
     b = points[i + 1];
   const before = points[i - 1],
@@ -41,10 +44,22 @@ const smoothCurve = (points: Vector3[], i: number) => {
   const chord = b.clone().sub(a);
   const from = before?.equals(a) ? new Vector3() : b.clone().sub(before ?? a);
   const to = after?.equals(b) ? new Vector3() : (after ?? b).clone().sub(a);
+  return { out: controlOffset(from, chord), in: controlOffset(to, chord).negate() };
+};
+
+const smoothCurve = (
+  points: Vector3[],
+  i: number,
+  from?: PathKey["outHandle"],
+  to?: PathKey["inHandle"],
+) => {
+  const a = points[i],
+    b = points[i + 1];
+  const offsets = defaultCameraHandles(points, i);
   return new CubicBezierCurve3(
     a,
-    a.clone().add(controlOffset(from, chord)),
-    b.clone().sub(controlOffset(to, chord)),
+    a.clone().add(from ? new Vector3(...from) : offsets.out),
+    b.clone().add(to ? new Vector3(...to) : offsets.in),
     b,
   );
 };
@@ -101,8 +116,48 @@ const pointAtProgress = (curve: Curve<Vector3>, progress: number, length: number
   return curve.getPoint(end).addScaledVector(curve.getTangent(end), (progress - end) * length);
 };
 
-export const compileCameraPath = (keys: PathKey[], resolve?: ResolveCameraAnchor) => {
-  const positions = keys.map((key) => resolveCameraPoint(key.p, resolve));
+class RailSpan extends Curve<Vector3> {
+  constructor(
+    private readonly rail: CatmullRomCurve3,
+    private readonly from: number,
+    private readonly to: number,
+  ) {
+    super();
+  }
+  getPoint(t: number, target = new Vector3()) {
+    return this.rail.getPointAt(
+      Math.max(0, Math.min(1, this.from + (this.to - this.from) * t)),
+      target,
+    );
+  }
+  getLength() {
+    return this.rail.getLength() * Math.abs(this.to - this.from);
+  }
+}
+
+const rails = new WeakMap<readonly (readonly [number, number, number])[], CatmullRomCurve3>();
+export const makeCameraRail = (points: readonly (readonly [number, number, number])[]) => {
+  const existing = rails.get(points);
+  if (existing) return existing;
+  const rail = new CatmullRomCurve3(points.map((point) => new Vector3(...point)));
+  rail.arcLengthDivisions = Math.max(SAMPLES_PER_SPAN, (points.length - 1) * SAMPLES_PER_SPAN);
+  rails.set(points, rail);
+  return rail;
+};
+
+export const cameraRailU = (key: Pick<PathKey, "railU">, index: number, count: number) =>
+  Math.max(0, Math.min(1, key.railU ?? index / Math.max(1, count - 1)));
+
+export const compileCameraPath = (
+  keys: PathKey[],
+  resolve?: ResolveCameraAnchor,
+  points?: readonly (readonly [number, number, number])[],
+) => {
+  const rail = points && points.length > 1 ? makeCameraRail(points) : null;
+  const u = rail ? keys.map((key, i) => cameraRailU(key, i, keys.length)) : [];
+  const positions = keys.map((key, i) =>
+    rail ? rail.getPointAt(u[i]) : resolveCameraPoint(key.p, resolve),
+  );
   const targets = keys.map((key) => resolveCameraPoint(key.l, resolve));
   let total = 0;
   const spans = keys.slice(1).map((key, i) => {
@@ -111,13 +166,14 @@ export const compileCameraPath = (keys: PathKey[], resolve?: ResolveCameraAnchor
       b = positions[i + 1];
     const from = targets[i],
       to = targets[i + 1];
-    const position =
-      mode === "orbit"
+    const position = rail
+      ? new RailSpan(rail, u[i], u[i + 1])
+      : mode === "orbit"
         ? key.reversePath
           ? new OrbitCurve(b, a, to, from, true)
           : new OrbitCurve(a, b, from, to)
-        : mode === "smooth" && !a.equals(b)
-          ? smoothCurve(positions, i)
+        : mode === "smooth" && (!a.equals(b) || keys[i].outHandle || key.inHandle)
+          ? smoothCurve(positions, i, keys[i].outHandle, key.inHandle)
           : new LineCurve3(a, b);
     const look =
       mode === "smooth" && !from.equals(to) ? smoothCurve(targets, i) : new LineCurve3(from, to);
@@ -150,9 +206,17 @@ export const compileCameraPath = (keys: PathKey[], resolve?: ResolveCameraAnchor
       return { p: span.position.getPoint(t), l: span.look.getPoint(t) };
     }
     return {
-      p: pointAtProgress(span.position, u, span.length),
+      p:
+        span.position instanceof RailSpan
+          ? span.position.getPoint(u)
+          : pointAtProgress(span.position, u, span.length),
       l: pointAtProgress(span.look, u, span.look.getLength()),
     };
   };
-  return { pose, distanceAt };
+  const railAt = (i: number, progress: number) => {
+    if (!rail) return undefined;
+    if (i < 0) return u.at(-1);
+    return Math.max(0, Math.min(1, u[i] + (u[i + 1] - u[i]) * progress));
+  };
+  return { pose, distanceAt, railAt };
 };

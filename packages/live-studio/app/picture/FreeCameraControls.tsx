@@ -12,7 +12,12 @@ import {
 
 import { Button } from "@/components/ui/button";
 
-import { avoidCameraWall, toggleCameraPath } from "../camera/campath";
+import {
+  avoidCameraWall,
+  cameraPathHandles,
+  chooseCameraPathHandle,
+  toggleCameraPath,
+} from "../camera/campath";
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
@@ -25,6 +30,8 @@ export function FreeCameraControls() {
   const look = useStudio((s) => s.freeLook);
   const path = useStudio((s) => s.cameraPath);
   const key = useStudio((s) => s.camKey);
+  useStudio((s) => s.camRev);
+  useStudio((s) => s.shotsRev);
   if (!active) return null;
   return (
     <div
@@ -78,6 +85,20 @@ export function FreeCameraControls() {
           <Route />
         </Button>
       </Tip>
+      {path &&
+        cameraPathHandles(key).map((field) => (
+          <Button
+            key={field}
+            size="sm"
+            variant="quiet"
+            aria-label={
+              field === "inHandle" ? "Edit incoming Bézier handle" : "Edit outgoing Bézier handle"
+            }
+            onClick={() => chooseCameraPathHandle(field)}
+          >
+            {field === "inHandle" ? "In" : "Out"}
+          </Button>
+        ))}
       {path && (
         <Tip label="Move the selected camera key clear of a wall">
           <Button

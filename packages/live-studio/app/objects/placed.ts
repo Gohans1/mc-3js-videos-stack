@@ -6,7 +6,6 @@ import type { Tools } from "film/scene";
 // undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
-import { picturePoint } from "../picture/preview-state";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -27,6 +26,7 @@ import {
   sameKey,
 } from "../keys/keys";
 import type { KeyRef } from "../keys/slice";
+import { picturePoint } from "../picture/preview-state";
 import { setPlaying } from "../playback/transport";
 import { path, showPath } from "./path";
 import { addObject, placedData, setTransform, titleOf, tools } from "./placed-data";
@@ -344,7 +344,10 @@ export const selectTarget = (target: SceneTarget | null, additive = false) => {
 export const drawGizmo = (sceneTools = S.tools) => {
   if (!sceneTools) return;
   const { clean, mirror } = get().preview;
-  if (gizmo) gizmo.enabled = !clean && !mirror;
+  if (gizmo) {
+    gizmo.enabled = !clean && !mirror;
+    gizmo.camera = sceneTools.camera;
+  }
   if (clean || mirror) return;
   if (!gizmo?.dragging && get().keyPicks.length) attach(false);
   const all = targets(sceneTools),

@@ -18,6 +18,7 @@ export const initialPreview = {
   motionBlur: false,
   clean: false,
   horizon: false,
+  minimap: false,
   layers: "off" as (typeof PREVIEW_LAYERS)[number],
   debug: "off" as (typeof PREVIEW_DEBUG)[number],
   zebra: 95,

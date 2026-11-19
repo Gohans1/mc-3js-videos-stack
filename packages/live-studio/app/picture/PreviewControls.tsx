@@ -80,6 +80,7 @@ export function PreviewControls() {
             )}
             {check("Clean feed", p.clean, (clean) => changePreview({ clean }))}
             {check("Horizon and camera HUD", p.horizon, (horizon) => changePreview({ horizon }))}
+            {check("Camera minimap", p.minimap, (minimap) => changePreview({ minimap }))}
             {free &&
               check("Split film view", split, (on) => setPref("filmView", on ? "split" : "m"))}
           </div>

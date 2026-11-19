@@ -15,6 +15,9 @@ export * from "./camera-meta";
 export * from "./camera-rig";
 export {
   CAMERA_MOTIONS,
+  cameraRailU,
+  defaultCameraHandles,
+  makeCameraRail,
   resolveCameraPoint,
   type CameraMotion,
   type ResolveCameraAnchor,
@@ -40,6 +43,7 @@ const segments = (keys) => {
     ks,
     dynamic: ks.some((key) => !Array.isArray(key.p) || !Array.isArray(key.l)),
     path: null,
+    rail: undefined,
   }));
   curves.set(keys, built);
   return built;
@@ -317,7 +321,13 @@ const blendHandheld = (from: HandheldConfig[], to: HandheldConfig[], u: number) 
 export function cameraAt(
   t,
   keys,
-  opts?: { aspect?: number; resolveAnchor?: ResolveCameraAnchor; fovAxis?: FovAxis },
+  opts?: {
+    aspect?: number;
+    resolveAnchor?: ResolveCameraAnchor;
+    fovAxis?: FovAxis;
+    rail?: readonly (readonly [number, number, number])[];
+    extrapolation?: "hold" | "linear";
+  },
 ) {
   const aspect = opts?.aspect ?? 16 / 9;
   const segs = segments(keys);
@@ -333,15 +343,38 @@ export function cameraAt(
     s = segs[lo];
   }
   const ks = s.ks;
+  if (s.rail !== opts?.rail) {
+    s.rail = opts?.rail;
+    s.path = null;
+  }
   const path = s.dynamic
-    ? compileCameraPath(ks, opts?.resolveAnchor)
-    : (s.path ??= compileCameraPath(ks));
+    ? compileCameraPath(ks, opts?.resolveAnchor, opts?.rail)
+    : (s.path ??= compileCameraPath(ks, undefined, opts?.rail));
   const idx = spanIndex(ks, t);
   const u = progressAt(ks, t, idx, "position");
   const lookU = progressAt(ks, t, idx, "aim");
   const pose = path.pose(idx, u);
   const p = pose.p,
     l = lookU === u ? pose.l : path.pose(idx, lookU).l;
+  let railU = path.railAt(idx, u);
+  const last = ks.length - 1;
+  const edge = t < ks[0].t ? 0 : t > ks[last].t ? last : -1;
+  if (opts?.extrapolation === "linear" && last > 0 && edge >= 0) {
+    const step = edge === 0 ? 0 : last - 1;
+    const dt = ks[step + 1].t - ks[step].t;
+    if (dt > 0 && ks[step + 1].motion !== "hold") {
+      const start = path.pose(step, 0),
+        end = path.pose(step, 1);
+      const offset = (t - ks[edge].t) / dt;
+      if (railU === undefined) p.addScaledVector(end.p.sub(start.p), offset);
+      else {
+        const progress = (edge === 0 ? 0 : 1) + offset;
+        p.copy(path.pose(step, progress).p);
+        railU = path.railAt(step, progress);
+      }
+      l.addScaledVector(end.l.sub(start.l), offset);
+    }
+  }
   const distance = path.distanceAt(idx, timeFraction(ks, t, idx));
 
   const span = spanAt(ks, t);
@@ -428,6 +461,7 @@ export function cameraAt(
           ? mm
           : undefined;
   const sample = {
+    ...(railU !== undefined && { railU }),
     p: base.p.toArray(),
     l: base.l.toArray(),
     fov,

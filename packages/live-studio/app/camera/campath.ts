@@ -1,4 +1,4 @@
-import { cameraAt, resolveCameraPoint } from "film-stage/camera";
+import { cameraAt, defaultCameraHandles, resolveCameraPoint } from "film-stage/camera";
 import { EDIT } from "film/edit";
 import type { CameraPathPose } from "film/scene";
 import * as THREE from "three";
@@ -6,6 +6,7 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 
 import { gap } from "../../checks/contact.mjs";
 import { cameraTimesAt, clockForTimeline } from "../../src/timing-state.mjs";
+import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -22,30 +23,34 @@ import {
   restore,
   setKey,
   snapshot,
+  sourceCameraSegment,
   vectorPoint,
 } from "./cam";
 
-type Field = "p" | "l";
+type Handle = "inHandle" | "outHandle";
+type Field = "p" | "l" | Handle;
+const isHandle = (field: Field): field is Handle => field === "inHandle" || field === "outHandle";
 type Marker = { index: number; field: Field; point: THREE.Vector3 };
 type TracePoint = { t: number; p: THREE.Vector3; contact: ReturnType<typeof gap> };
 const AHEAD = new THREE.Color(0x68c6a2);
 const BEHIND = new THREE.Color(0xcb796f);
 const BLOCKED = new THREE.Color(0xff4d39);
-const POINT_COLORS = { p: 0xfff0d1, l: 0x8bd0ef };
+const POINT_COLORS = { p: 0xfff0d1, l: 0x8bd0ef, inHandle: 0xe6aaff, outHandle: 0xffb887 };
 
 const overlay = new THREE.Scene();
 const traces = new THREE.Group();
 overlay.add(traces);
 const ghost = new THREE.PerspectiveCamera(50, 16 / 9, 0.05, 0.7);
-const frustum = new THREE.CameraHelper(ghost);
-frustum.setColors(
-  new THREE.Color(0xec8b49),
-  new THREE.Color(0xec8b49),
-  new THREE.Color(0xfffcf0),
-  new THREE.Color(0xec8b49),
-  new THREE.Color(0xec8b49),
-);
-overlay.add(frustum);
+const parallelGhost = new THREE.OrthographicCamera();
+const makeFrustum = (camera: THREE.Camera) => {
+  const helper = new THREE.CameraHelper(camera);
+  const amber = new THREE.Color(0xec8b49);
+  helper.setColors(amber, amber, new THREE.Color(0xfffcf0), amber, amber);
+  overlay.add(helper);
+  return helper;
+};
+const frustum = makeFrustum(ghost);
+const parallelFrustum = makeFrustum(parallelGhost);
 const proxy = new THREE.Object3D();
 overlay.add(proxy);
 const rayPositions = new THREE.BufferAttribute(new Float32Array(6), 3);
@@ -56,6 +61,21 @@ const guide = new THREE.Line(
 );
 guide.frustumCulled = false;
 overlay.add(guide);
+const handleLines = new THREE.Group();
+overlay.add(handleLines);
+const handleDots = new THREE.PointsMaterial({
+  size: 9,
+  sizeAttenuation: false,
+  depthTest: false,
+  vertexColors: true,
+});
+const handleInk = new THREE.LineBasicMaterial({
+  transparent: true,
+  opacity: 0.8,
+  depthTest: false,
+  vertexColors: true,
+});
+let tangents: Marker[] = [];
 
 let marks: Marker[] = [];
 let trace: TracePoint[] = [];
@@ -63,6 +83,7 @@ let paint: THREE.BufferAttribute | null = null;
 let line: THREE.Line | null = null;
 let built = "";
 let shownKey = -1;
+let handleCache = "";
 let shownField: Field = "p";
 let gizmo: TransformControls | null = null;
 let drag: { index: number; field: Field; snap: string; point: THREE.Vector3 } | null = null;
@@ -157,9 +178,89 @@ const rebuild = (start: number, end: number, windowStart: number) => {
     );
 };
 
+const rigForKey = (index: number) => SHOTS_OUT[shotIndex(cameraKeyFrameTime(index))]?.camera;
+export const cameraPathHandles = (index: number | null): Handle[] => {
+  if (index === null || !keys[index] || keys[index].locked || keys[index].muted) return [];
+  const rig = rigForKey(index);
+  if (rig?.rail || rig?.look === "one-node") return [];
+  const context = sourceCameraSegment(index);
+  if (!context || context.at < 0) return [];
+  const { active, at } = context,
+    out: Handle[] = [];
+  if (at > 0 && (active[at].motion ?? "smooth") === "smooth") out.push("inHandle");
+  if (active[at + 1] && (active[at + 1].motion ?? "smooth") === "smooth") out.push("outHandle");
+  return out;
+};
+export const chooseCameraPathHandle = (field: Handle) => {
+  const { camKey } = get();
+  if (camKey === null || !cameraPathHandles(camKey).includes(field)) return;
+  shownKey = camKey;
+  shownField = field;
+  seekExact(cameraKeyFrameTime(camKey));
+  S.dirty = true;
+};
+
+const rebuildHandles = (index: number | null) => {
+  tangents = [];
+  for (const child of handleLines.children) (child as THREE.Line).geometry.dispose();
+  handleLines.clear();
+  if (
+    index === null ||
+    !S.tools ||
+    !keys[index] ||
+    Math.abs(cameraKeyFrameTime(index) - S.t) >= SAME
+  )
+    return;
+  const fields = cameraPathHandles(index);
+  if (!fields.length) return;
+  const context = sourceCameraSegment(index);
+  if (!context) return;
+  const { active, at } = context;
+  const resolve = S.tools.resolveCameraAnchor;
+  const positions = active.map((key) => resolveCameraPoint(key.p, resolve));
+  const p = positions[at];
+  const key = active[at];
+  const vertices: THREE.Vector3[] = [],
+    positionsColor: number[] = [],
+    dotColor: number[] = [];
+  for (const field of fields) {
+    const stored = key[field];
+    const offset = stored
+      ? new THREE.Vector3(...stored)
+      : field === "inHandle"
+        ? defaultCameraHandles(positions, at - 1).in
+        : defaultCameraHandles(positions, at).out;
+    const pos = p.clone().add(offset);
+    tangents.push({ index, field, point: pos });
+    vertices.push(p, pos);
+    const rgb = new THREE.Color(POINT_COLORS[field]).toArray();
+    positionsColor.push(...rgb, ...rgb);
+    dotColor.push(...rgb);
+  }
+  const geometry = points(vertices).setAttribute(
+    "color",
+    new THREE.Float32BufferAttribute(positionsColor, 3),
+  );
+  const dotGeometry = points(tangents.map((mark) => mark.point)).setAttribute(
+    "color",
+    new THREE.Float32BufferAttribute(dotColor, 3),
+  );
+  handleLines.add(
+    new THREE.LineSegments(geometry, handleInk),
+    new THREE.Points(dotGeometry, handleDots),
+  );
+};
+
 const writePoint = (index: number, field: Field, point: THREE.Vector3, apply: typeof edit) => {
   const key = keys[index];
-  if (!key || key.locked) return false;
+  if (!key || key.locked || (field === "p" && rigForKey(index)?.rail)) return false;
+  if (isHandle(field)) {
+    const offset = point.clone().sub(resolveCameraPoint(key.p, S.tools?.resolveCameraAnchor));
+    apply((rows) => {
+      rows[index][field] = vectorPoint(offset);
+    });
+    return true;
+  }
   const vec = vectorPoint(point);
   const old = key[field];
   const value = Array.isArray(old) ? vec : S.tools?.moveCameraAnchor?.(old, vec);
@@ -220,7 +321,7 @@ export const pickCameraPath = (x: number, y: number) => {
   if (!camera) return false;
   let best: Marker | null = null;
   let distance = 11;
-  for (const mark of marks) {
+  for (const mark of [...tangents, ...marks]) {
     const screen = mark.point.clone().project(camera);
     if (screen.z < -1 || screen.z > 1) continue;
     const pixels = Math.hypot(
@@ -232,6 +333,7 @@ export const pickCameraPath = (x: number, y: number) => {
     distance = pixels;
   }
   if (!best) return false;
+  shownKey = best.index;
   shownField = best.field;
   setKey(best.index);
   seekExact(cameraKeyFrameTime(best.index));
@@ -241,6 +343,7 @@ export const avoidCameraWall = () => {
   const i = get().camKey;
   const key = i === null ? null : keys[i];
   if (!key || i === null || key.locked) return say("Pick an unlocked camera position key");
+  if (rigForKey(i)?.rail) return say("Set this key’s rail position to move it clear of a wall");
   if (Math.abs(key.t - S.t) >= SAME)
     return say("Go to the camera keyframe before moving it away from the wall");
   const p = resolveCameraPoint(key.p, S.tools!.resolveCameraAnchor);
@@ -291,22 +394,46 @@ export const drawCamPath = () => {
   });
   if (paint) paint.needsUpdate = true;
   if (line) line.visible = trace.length > 1;
-  ghost.position.copy(filmCam.position);
-  ghost.quaternion.copy(filmCam.quaternion);
-  ghost.fov = filmCam.fov;
-  ghost.aspect = filmCam.aspect;
-  ghost.far = THREE.MathUtils.clamp((filmCam.focus || 0.7) + filmCam.focusRange / 2, 0.2, 20);
-  ghost.near = filmCam.focusRange
-    ? THREE.MathUtils.clamp(filmCam.focus - filmCam.focusRange / 2, 0.05, ghost.far - 0.05)
+  const parallel = filmCam.parallel;
+  const guideCamera = parallel ? parallelGhost : ghost;
+  const helper = parallel ? parallelFrustum : frustum;
+  guideCamera.position.copy(filmCam.position);
+  guideCamera.quaternion.copy(filmCam.quaternion);
+  if (parallel) Object.assign(parallelGhost, parallel);
+  else {
+    ghost.fov = filmCam.fov;
+    ghost.aspect = filmCam.aspect;
+  }
+  const view = filmCam.view;
+  if (view)
+    guideCamera.setViewOffset(
+      view.fullWidth,
+      view.fullHeight,
+      view.offsetX,
+      view.offsetY,
+      view.width,
+      view.height,
+    );
+  else guideCamera.clearViewOffset();
+  guideCamera.far = THREE.MathUtils.clamp((filmCam.focus || 0.7) + filmCam.focusRange / 2, 0.2, 20);
+  guideCamera.near = filmCam.focusRange
+    ? THREE.MathUtils.clamp(filmCam.focus - filmCam.focusRange / 2, 0.05, guideCamera.far - 0.05)
     : 0.05;
-  ghost.updateProjectionMatrix();
-  ghost.updateMatrixWorld();
-  frustum.update();
-  frustum.visible = tools.camera.position.distanceTo(ghost.position) > 0.3;
+  guideCamera.updateProjectionMatrix();
+  guideCamera.updateMatrixWorld();
+  helper.update();
+  const visible = tools.camera.position.distanceTo(guideCamera.position) > 0.3;
+  frustum.visible = visible && !parallel;
+  parallelFrustum.visible = visible && !!parallel;
   rayPositions.setXYZ(0, filmCam.position.x, filmCam.position.y, filmCam.position.z);
   rayPositions.setXYZ(1, filmCam.aim.x, filmCam.aim.y, filmCam.aim.z);
   rayPositions.needsUpdate = true;
   const index = state.camKey;
+  const handleKey = [index, state.camRev, state.shotsRev, state.timingRev, S.t, !!drag].join("|");
+  if (handleKey !== handleCache) {
+    rebuildHandles(index);
+    handleCache = handleKey;
+  }
   if (!drag) {
     const key = index === null ? null : keys[index];
     if (
@@ -317,10 +444,20 @@ export const drawCamPath = () => {
       !state.object &&
       !state.keyPicks.length
     ) {
+      if (shownKey !== index && isHandle(shownField)) shownField = "p";
       shownKey = index;
-      proxy.position.copy(resolveCameraPoint(key[shownField], tools.resolveCameraAnchor));
+      const tangent = isHandle(shownField)
+        ? tangents.find((mark) => mark.field === shownField)
+        : null;
+      if (isHandle(shownField) && !tangent) shownField = "p";
+      if (shownField === "p" && rigForKey(index)?.rail) shownField = "l";
+      const point =
+        tangent?.point ??
+        resolveCameraPoint(key[shownField === "l" ? "l" : "p"], tools.resolveCameraAnchor);
+      proxy.position.copy(point);
       proxy.updateMatrixWorld(true);
       const controls = gizmoFor();
+      controls.camera = tools.camera;
       controls.setTranslationSnap(state.snap ? 1 / 16 : null);
       if (!controls.object) controls.attach(proxy);
     } else if (gizmo?.object) gizmo.detach();

@@ -2,7 +2,7 @@
 import { configure, createScene, prepareAssets } from "block-model-renderer";
 import { unzipSync } from "fflate";
 import { animate, ANIMS } from "film-stage/animate";
-import { apertureOffset, applyCameraRig, cameraAt, EASES, lensAspect, mmOf, orientCamera, projectCamera, resolveFocusDistance } from "film-stage/camera";
+import { apertureOffset, applyCameraRig, cameraAt, EASES, lensAspect, mmOf, orientCamera, orthographicCamera, projectCamera, resolveFocusDistance } from "film-stage/camera";
 import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
 import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
@@ -80,8 +80,10 @@ export async function buildScene(canvas, W, H, draft = false) {
   renderer.shadowMap.type = THREE.PCFShadowMap;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
-  const camera = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
-  scene.add(camera);
+  const perspective = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
+  const parallel = orthographicCamera(60, W / H);
+  let camera = perspective;
+  scene.add(perspective, parallel);
 
   // client.jar without its Java code (scripts/mc/slim_jar.mjs), then the props and the picks stacked above it
   const jarFile = await fetch("mc/client_assets.zip");
@@ -144,15 +146,20 @@ export async function buildScene(canvas, W, H, draft = false) {
   const anims = ANIMS;
   await titles.ready;
   composer.addPass(new RenderPass(scene, camera));
-  const ao = new N8AOPostPass(scene, camera, W, H);
-  Object.assign(ao.configuration, {
-    aoRadius: 1.0,
-    distanceFalloff: 1.0,
-    intensity: 2.0,
-    halfRes: draft,
-  });
-  ao.outputTargetInternal.texture.type = THREE.HalfFloatType; // 8-bit would band dark stone
+  const ambientOcclusion = (view) => {
+    const ao = new N8AOPostPass(scene, view, W, H);
+    Object.assign(ao.configuration, {
+      aoRadius: 1.0,
+      distanceFalloff: 1.0,
+      intensity: 2.0,
+      halfRes: draft,
+    });
+    ao.outputTargetInternal.texture.type = THREE.HalfFloatType;
+    return ao;
+  };
+  const ao = ambientOcclusion(perspective);
   composer.addPass(ao);
+  let parallelAO, composerCamera = perspective, passCount = -1;
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const dof = makeDof(composer, camera, { draft });
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
@@ -291,7 +298,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     return { ...anchor, [field]: offset.toArray(), fallback: point };
   };
   const sampleTrack = (t, rig) =>
-    cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor, fovAxis: rig?.fovAxis });
+    cameraAt(t, EDIT.cam, { aspect: W / H, resolveAnchor: resolveCameraAnchor, fovAxis: rig?.fovAxis, rail: rig?.rail, extrapolation: rig?.extrapolation });
   let clocks,
     editTime = 0,
     worldTime = 0;
@@ -355,6 +362,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     const cam = riggedTrack(t, cameraTime, shot, activeView ? clocks?.worldAtCamera : undefined);
     for (const [name, group] of Object.entries(cameraGroups)) group.visible = !rig?.hideGroups?.includes(name);
     const animBlack = animate(cam, cameraTime, SHOTS_OUT, DURATION, anims);
+    camera = rig?.projection === "orthographic" ? parallel : perspective;
     camera.position.copy(cam.p);
     lookAt.copy(cam.l);
     camera.fov = cam.fov;
@@ -364,7 +372,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       lookAt.copy(free.l);
     }
     orientCamera(camera, lookAt, scouting ? 0 : cam.roll, scouting ? undefined : rig);
-    projectCamera(camera, W, H, scouting ? undefined : rig);
+    projectCamera(camera, W, H, scouting ? { orthographicDepth: rig?.orthographicDepth } : rig);
     head.copy(camera.position);
     Object.assign(now, { cam });
 
@@ -395,7 +403,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { optics: opticsTelemetry });
     renderer.clear();
     if (clocks?.pictureVisible !== false || scouting) {
-      const pupil = clocks?.aperture;
+      const pupil = camera === perspective && clocks?.aperture;
       if (pupil) {
         const offset = apertureOffset(camera, pupil, renderedMm, effectiveFstop, focusM ?? fallbackFocus);
         projectCamera(camera, W, H, rig, offset);
@@ -407,6 +415,17 @@ export async function buildScene(canvas, W, H, draft = false) {
         widthPx: W * renderer.getPixelRatio(),
       });
       adjust(shot, shotEntry?.adjust, t, scouting);
+      if (camera === parallel && !parallelAO) {
+        parallelAO = ambientOcclusion(parallel);
+        composer.addPass(parallelAO, composer.passes.indexOf(ao) + 1);
+      }
+      ao.enabled = camera === perspective;
+      if (parallelAO) parallelAO.enabled = camera === parallel;
+      if (composerCamera !== camera || passCount !== composer.passes.length) {
+        composer.setMainCamera(camera);
+        composerCamera = camera;
+        passCount = composer.passes.length;
+      }
       composer.render(0);
       if (!scouting) velocityEffect(clocks?.velocity ?? null, cam.optics);
       if (!scouting) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
@@ -519,7 +538,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     titles,
     clips,
     scene,
-    camera,
+    get camera() { return camera; },
     free,
     head,
     look: lookAt,
@@ -539,6 +558,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     sampleCameraTrack,
     cameraClock: true,
     cameraRig: true,
+    cameraProjection: true,
+    cameraRails: true,
     apertureSampling: true,
     cameraGroups: Object.keys(cameraGroups),
     moveCameraAnchor,

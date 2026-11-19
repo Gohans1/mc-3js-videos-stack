@@ -172,7 +172,8 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | 7 | Preview, HUD, Guides, so góc và Shotlist | Qua review và kiểm thử |
 | 8 | Rig theo shot, chỉnh khung, shutter và khẩu độ khi xuất | Qua review và kiểm thử |
 | 9 | Beat, Animation, nhãn key, chỉnh nhiều key và Take | Qua review và kiểm thử |
-| 10 | Tay nắm 3D, đường ray, ngoại suy, chiếu song song và bản đồ | Chờ |
+| 10 | Tay nắm 3D, đường ray, ngoại suy, chiếu song song và bản đồ | Qua điều kiện review và kiểm thử |
+| 11 | Nối vận tốc qua keyframe chung | Đã tái hiện và đối chiếu Premiere |
 
 | Ghi chú đợt 1 | Chi tiết |
 | --- | --- |
@@ -259,3 +260,21 @@ https://pmndrs.github.io/postprocessing/public/docs/class/src/effects/DepthOfFie
 | Rung tay | DeSync đổi pha theo giây. Tối đa bốn lớp chuyển động, kết quả cố định khi tua lại. |
 | Qua review | Dải Animation và tay kéo khớp đồng hồ camera trong Freeze. Beat đi trước 45 ms ngay khi lời thoại và cảnh cùng tua. |
 | Simplify sau review | Xét thời gian nguồn và key còn hoạt động để giữ tiếp tuyến đoạn Smooth. Chọn lại trước khi chỉnh hàng loạt sau khi xóa. |
+
+| Ghi chú đợt 10 | Chi tiết |
+| --- | --- |
+| Bézier | Hai tay nắm 3D lưu độ lệch so với key trong cam.json. Chrome kéo tay nắm ra và giữ nguyên vị trí key. |
+| Rail | Dựng ray từ key, lưu điểm trên ray trong shots.json và u của từng key trong cam.json. Chèn key giữa ray giữ nguyên góc tại khung đó. |
+| Ngoại suy | Giữ hoặc kéo dài đoạn cuối đến cut tiếp theo. Với ray, u vẫn trong khoảng 0–1. |
+| Chiếu song song | Phim mẫu đổi camera và cập nhật các pass hậu kỳ theo shot. Bề rộng ảnh giống nhau ở độ sâu 2 m và 5 m. |
+| Bản đồ | Nhìn từ trên theo trục thế giới, có hướng ngắm của máy quay và Film Cam khi bay tự do. Clean Feed ẩn bản đồ. |
+| Xuất kiểm tra | Chrome xuất phim mẫu 1920×1080 tại giây 2, dùng tám mẫu thời gian. Đã mở ảnh kiểm tra. |
+| Rail sau review | Khi thiếu u, ô nhập dùng cùng vị trí với engine. Graph khóa chỉnh tọa độ gốc khi ray chi phối và cập nhật ngay khi bỏ ray. |
+| Khung ngắm sau review | Free Cam vẽ khung song song theo phép chiếu và lens shift của Film Cam. |
+| Fit Box tại cut | Chrome chỉnh cỡ MS và FOV 48,42° cho key cuối của shot cũ tại 5,999999 giây. Shot mới giữ dữ liệu cũ. |
+| Time Reverse | Reviewer 1 phát hiện mất u ngầm sau khi đảo key. Chrome xác nhận đảo đúng hai đầu và Undo phục hồi giá trị ngầm. |
+| Equalize | Reviewer 2 phát hiện khoảng cách thẳng bỏ sót đoạn ray vòng 16,61 m. Chrome xác nhận tính theo cung dời điểm giữa đến 2,595 giây và Undo phục hồi dữ liệu. |
+
+| Ghi chú đợt 11 | Chi tiết |
+| --- | --- |
+| Tái hiện | Đường thẳng qua key chung giữ đúng vị trí nhưng tốc độ đổi từ 10 m/s xuống 4 m/s khi hai đoạn dùng Linear và Smooth. |

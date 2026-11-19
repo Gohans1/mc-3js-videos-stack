@@ -274,8 +274,8 @@ test("a shot's animation welcomes Cinetic curves, Bezier tuples and seam toggle 
         ShotsTimeline,
         shots({
           in: { fx: "rush", len: 1, curve: "whip", flip: true, optics: 0.5, seam: false },
-          out: { fx: "carryLaunch", len: 0.45, curve: [0.2, 0, 0, 1] },
-          combo: { fx: "push", k: 2 },
+          out: { fx: "carryLaunch", len: 0.45, curve: [0.2, 0, 0, 1], k: 0 },
+          combo: { fx: "push", k: -1, delay: 0.45 },
         }),
       ],
     }),
@@ -296,8 +296,8 @@ test("a shot's animation welcomes Cinetic curves, Bezier tuples and seam toggle 
     { fx: "rush", seam: "no" },
     { fx: "rush", optics: 1.5 },
     { fx: "rush", optics: -0.1 },
-    { fx: "push", k: 0 },
-    { fx: "push", k: -1 },
+    { fx: "push", k: "strong" },
+    { fx: "push", delay: "late" },
   ]) {
     assert.equal(ShotsTimeline.safeParse([{ t: 0 }, { t: 4, anim: { in: bad } }]).success, false);
   }

@@ -33,6 +33,7 @@ import {
   equalizeGraphKeys,
   graphFalloff,
   type GraphSample,
+  graphUsesRail,
   plotCameraGraph,
   reverseGraphKeys,
   scaleGraphTiming,
@@ -67,6 +68,9 @@ const number = (n: number) => n.toLocaleString(undefined, { maximumFractionDigit
 
 export function CameraGraph({ index }: { index: number }) {
   const revision = useStudio((s) => s.camRev);
+  useStudio((s) => s.shotsRev);
+  useStudio((s) => s.timingRev);
+  useStudio((s) => s.keysRev);
   useStudio((s) => s.camPicks);
   const [channel, setChannel] = useState<CameraChannel>("position");
   const [axis, setAxis] = useState("0");
@@ -117,10 +121,9 @@ export function CameraGraph({ index }: { index: number }) {
   );
   const selected = selectionInGraph(indices);
   const group = contiguousPicks(selected);
-  const data = useMemo(
-    () => plotCameraGraph(indices, mode, channel, Number(axis)),
-    [indices, mode, channel, axis],
-  );
+  const railPosition = graphUsesRail(selected, channel);
+  const painting = brush && mode === "value" && !railPosition;
+  const data = plotCameraGraph(indices, mode, channel, Number(axis));
   const ghost =
     buffer?.channel === channel && buffer.axis === axis && buffer.mode === mode ? buffer.data : [];
   const start = keys[indices[0]]?.t ?? 0,
@@ -200,7 +203,7 @@ export function CameraGraph({ index }: { index: number }) {
           className="bg-backdrop w-full touch-none rounded select-none"
           aria-label={titles[channel] + " " + mode + " graph"}
           onPointerDown={(event) => {
-            if (!brush || mode !== "value" || !selected.length || event.button !== 0) return;
+            if (!painting || !selected.length || event.button !== 0) return;
             const rect = event.currentTarget.getBoundingClientRect();
             const px = ((event.clientX - rect.left) / rect.width) * W;
             const p = Math.max(0, Math.min(1, (px - LEFT) / (RIGHT - LEFT)));
@@ -271,7 +274,7 @@ export function CameraGraph({ index }: { index: number }) {
                     : "fill-foreground stroke-background"
                 }
                 onClick={(event) => {
-                  if (brush && mode === "value") return;
+                  if (painting) return;
                   if (!event.shiftKey) seekCameraKey(i);
                   else
                     pickCamKeys(
@@ -357,6 +360,7 @@ export function CameraGraph({ index }: { index: number }) {
             <Button
               variant="quiet"
               size="sm"
+              disabled={railPosition}
               onClick={() => scaleGraphValues(selected, channel, Number(axis), valueScale / 100)}
             >
               Apply value
@@ -369,8 +373,8 @@ export function CameraGraph({ index }: { index: number }) {
           <Button
             variant={brush ? "default" : "quiet"}
             size="sm"
-            aria-pressed={brush}
-            disabled={!selected.length}
+            aria-pressed={painting}
+            disabled={!selected.length || railPosition}
             onClick={() => setBrush(!brush)}
           >
             Brush
@@ -385,6 +389,9 @@ export function CameraGraph({ index }: { index: number }) {
             unit="s"
           />
         </FieldRow>
+      )}
+      {railPosition && (
+        <p className="text-muted-foreground text-xs">Edit Rail position in Framing.</p>
       )}
       {movable(index) && (
         <>

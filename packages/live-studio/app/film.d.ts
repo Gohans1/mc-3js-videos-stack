@@ -32,7 +32,7 @@ declare module "film/scene" {
   export interface CameraPathPose { p: THREE.Vector3; l: THREE.Vector3; fov: number; base?: { p: THREE.Vector3; l: THREE.Vector3 }; }
   export interface Tools {
     scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
+    camera: import("film-stage/camera").RigCamera;
     look: THREE.Vector3;
     free: FreeCam;
     home?: { p: [number, number, number]; l: [number, number, number]; fov?: number }; // where the first free camera after a reload starts
@@ -44,6 +44,8 @@ declare module "film/scene" {
     optics?: OpticsTelemetry;
     cameraClock?: true;
     cameraRig?: true;
+    cameraProjection?: true;
+    cameraRails?: true;
     cameraGroups?: readonly string[];
     apertureSampling?: true;
     sampleCameraPath?: (times: readonly CameraPathTime[]) => CameraPathPose[];

@@ -13,7 +13,7 @@ import { FieldRow, Section } from "../components/inspector";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { say, useStudio } from "../core/store";
-import { type CamKey, edit, keys, snapshot, takeCamera } from "./cam";
+import { type CamKey, edit, keys, setCameraKeyMuted, snapshot, takeCamera } from "./cam";
 import { cameraKeyColors } from "./camera-key-style";
 
 const labels = [
@@ -60,11 +60,7 @@ export function CameraKeyStyle({ index }: { index: number }) {
         variant={key.muted ? "default" : "quiet"}
         aria-pressed={!!key.muted}
         disabled={index === 0 || !!key.cut || !!key.locked}
-        onClick={() =>
-          edit((rows) => {
-            rows[index].muted = key.muted ? undefined : true;
-          })
-        }
+        onClick={() => setCameraKeyMuted(index, !key.muted)}
       >
         Mute key
       </Button>

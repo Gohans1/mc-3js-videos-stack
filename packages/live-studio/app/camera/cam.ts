@@ -1,6 +1,6 @@
 import { hfovOf, vfovOf } from "film-kit/lens";
 import type { CameraChannel, CameraMotion } from "film-stage/camera";
-import { cameraKeyOptics, lensAspect } from "film-stage/camera";
+import { cameraKeyOptics, cameraRailU, lensAspect } from "film-stage/camera";
 import { EDIT, toSource } from "film/edit";
 
 import { canPlaceCameraCut } from "../../src/camera-clock.mjs";
@@ -59,6 +59,9 @@ export interface CamKey {
   locked?: boolean;
   muted?: boolean;
   color?: "amber" | "blue" | "green" | "pink";
+  inHandle?: [number, number, number];
+  outHandle?: [number, number, number];
+  railU?: number;
   reason?: string;
   ease?: Ease;
   easeChannels?: Partial<Record<CameraChannel, Ease>>;
@@ -132,7 +135,12 @@ export const opticsOfKey = (i: number) => {
     key?.id === undefined
       ? rows.findIndex((row) => row.t === (key?.__timing?.source ?? key?.t))
       : rows.findIndex((row) => row.id === key.id);
-  return cameraKeyOptics(rows, at, S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(key?.t ?? 0));
+  return cameraKeyOptics(
+    rows,
+    at,
+    S.tools?.camera?.aspect || 16 / 9,
+    cameraAxisAt(key ? cameraKeyFrameTime(i) : 0),
+  );
 };
 export const loadCam = async () => {
   set({ cam: !!(await doc.load()) });
@@ -217,23 +225,29 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
     );
     return;
   }
-  edit((ks) => {
-    for (const k of ok) {
-      delete k.cut;
-      delete k.tailId;
-      delete k.__timing;
-      delete k.locked;
-      delete k.reason;
-      const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
-      if (on > 0) {
-        const target = ks[on];
-        ks[on] = { ...k, id: target.id ?? newRowId(), __timing: target.__timing };
-        continue;
-      }
-      const i = ks.findIndex((x) => x.t > k.t);
-      ks.splice(i < 0 ? ks.length : i, 0, { ...k, id: newRowId() });
-    }
-  });
+  const recipients = ok.map((key) => keys.findLastIndex((candidate) => candidate.t <= key.t));
+  if (
+    !preserveRailPositions(recipients, () =>
+      edit((ks) => {
+        for (const k of ok) {
+          delete k.cut;
+          delete k.tailId;
+          delete k.__timing;
+          delete k.locked;
+          delete k.reason;
+          const on = ks.findIndex((x, i) => i > 0 && Math.abs(x.t - k.t) < SAME);
+          if (on > 0) {
+            const target = ks[on];
+            ks[on] = { ...k, id: target.id ?? newRowId(), __timing: target.__timing };
+            continue;
+          }
+          const i = ks.findIndex((x) => x.t > k.t);
+          ks.splice(i < 0 ? ks.length : i, 0, { ...k, id: newRowId() });
+        }
+      }),
+    )
+  )
+    return;
   pickCamKeys(
     ok.map((k) => keys.findIndex((x, i) => i > 0 && !x.cut && Math.abs(x.t - k.t) < 1e-6)),
   );
@@ -244,9 +258,14 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
 export const removeCamKeys = (is: number[]) => {
   const ok = is.filter(movable).sort((a, b) => b - a);
   if (!ok.length) return;
-  edit((ks) => {
-    for (const i of ok) ks.splice(i, 1);
-  });
+  if (
+    !preserveRailPositions(ok, () =>
+      edit((ks) => {
+        for (const i of ok) ks.splice(i, 1);
+      }),
+    )
+  )
+    return;
   setKey(null);
   say(`${ok.length} keyframes deleted. Ctrl+Z to undo`);
 };
@@ -255,11 +274,13 @@ export const simplifyCameraKeys = (picked: number[]) => {
   const rows = doc.source ?? [];
   const clock = clockForTimeline("cam");
   const selected = new Set(
-    picked.filter(movable).map((i) => {
-      const key = keys[i];
-      if (key.id) return key.id;
-      return key.__timing?.source ?? clock.sourceAt(key.t, "before");
-    }),
+    picked
+      .filter((i) => movable(i) && !railAtKey(i))
+      .map((i) => {
+        const key = keys[i];
+        if (key.id) return key.id;
+        return key.__timing?.source ?? clock.sourceAt(key.t, "before");
+      }),
   );
   const removed: number[] = [];
   const equalData = (key: (typeof keys)[number]) => {
@@ -348,7 +369,12 @@ const fovForStorage = (fov: number, t: number) => {
   const axis = cameraAxisAt(t);
   return axis?.mode === "horizontal" ? vfovOf(hfovOf(fov, aspect), axis.aspect) : fov;
 };
-export const writeLens = (key: CamKey, field: LensField, value: number | undefined) => {
+export const writeLens = (
+  key: CamKey,
+  field: LensField,
+  value: number | undefined,
+  frame = key.t,
+) => {
   if (field === "fov" || field === "mm") delete key.dollyZoomScale;
   if (field === "fov" && value !== undefined) delete key.mm;
   if (field === "mm" && value !== undefined) delete key.fov;
@@ -357,11 +383,11 @@ export const writeLens = (key: CamKey, field: LensField, value: number | undefin
     key[field] =
       field === "roll"
         ? Math.round(value * 1e4) / 1e4
-        : r3(field === "fov" ? fovForStorage(value, key.t) : value);
+        : r3(field === "fov" ? fovForStorage(value, frame) : value);
 };
 export const setLens = (i: number, field: LensField, v: number | undefined) =>
   edit((ks) => {
-    writeLens(ks[i], field, v);
+    writeLens(ks[i], field, v, cameraKeyFrameTime(i));
   });
 export const resetLens = (i: number) =>
   edit((ks) => {
@@ -427,9 +453,14 @@ export const removeKey = (i: number) => {
     );
     return;
   }
-  edit((ks) => {
-    ks.splice(i, 1);
-  });
+  if (
+    !preserveRailPositions([i], () =>
+      edit((ks) => {
+        ks.splice(i, 1);
+      }),
+    )
+  )
+    return;
   setKey(null);
   say(`Keyframe deleted. Ctrl+Z to undo`);
 };
@@ -444,18 +475,24 @@ export const holdAfter = (i: number, secs = 1) => {
     return;
   }
   const id = newRowId();
-  edit((ks) => {
-    const {
-      ease: _,
-      cut: __,
-      tailId: _tail,
-      __timing: _timing,
-      locked: _lock,
-      reason: _reason,
-      ...pose
-    } = structuredClone(ks[i]);
-    ks.splice(i + 1, 0, { ...pose, id, t, motion: "hold" });
-  });
+  const railU = railAtKey(i) ? railPositionForKey(i) : k.railU;
+  if (
+    !preserveRailPositions([i], () =>
+      edit((ks) => {
+        const {
+          ease: _,
+          cut: __,
+          tailId: _tail,
+          __timing: _timing,
+          locked: _lock,
+          reason: _reason,
+          ...pose
+        } = structuredClone(ks[i]);
+        ks.splice(i + 1, 0, { ...pose, id, t, railU, motion: "hold" });
+      }),
+    )
+  )
+    return;
   selectPlacement(id, t);
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
 };
@@ -474,6 +511,80 @@ export const cameraKeyFrameTime = (i: number) => {
   const key = keys[i];
   return !key.cut && keys[i + 1]?.cut && keys[i + 1].t === key.t ? key.t - 1e-6 : key.t;
 };
+export const sourceCameraSegment = (index: number) => {
+  const key = keys[index],
+    track = doc.source ?? [];
+  const clock = clockForTimeline("cam");
+  const at = track.findIndex((candidate) =>
+    key.id
+      ? candidate.id === key.id
+      : candidate.t === (key.__timing?.source ?? clock.sourceAt(key.t, "before")),
+  );
+  if (at < 0) return null;
+  const start = Math.max(
+    0,
+    track.findLastIndex((candidate, i) => i <= at && !!candidate.cut),
+  );
+  const next = track.findIndex((candidate, i) => i > at && !!candidate.cut);
+  const active = track
+    .slice(start, next < 0 ? undefined : next)
+    .filter((candidate, i) => i === 0 || !candidate.muted);
+  return { active, at: active.indexOf(track[at]) };
+};
+
+export const railPositionForKey = (i: number) => {
+  const segment = sourceCameraSegment(i);
+  return segment && segment.at >= 0
+    ? cameraRailU(keys[i], segment.at, segment.active.length)
+    : keys[i].railU;
+};
+
+const railAtKey = (i: number) =>
+  keys[i] && SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail;
+
+const preserveRailPositions = (indices: number[], change: () => void) => {
+  const track = doc.source ?? [];
+  const positions = new Map<CamKey, number>();
+  const visited = new Set<number>();
+  for (const i of indices) {
+    if (!keys[i]) continue;
+    const shot = shotIndex(cameraKeyFrameTime(i));
+    if (visited.has(shot) || !SHOTS_OUT[shot]?.camera?.rail) continue;
+    visited.add(shot);
+    const active = sourceCameraSegment(i)?.active ?? [];
+    active.forEach((key, index) => {
+      if (index === 0 && key.locked) return;
+      if (key.railU === undefined) positions.set(key, cameraRailU(key, index, active.length));
+    });
+  }
+  if (!positions.size) {
+    change();
+    return true;
+  }
+  if ([...positions.keys()].some((key) => key.locked)) {
+    say("Unlock camera keys with an inherited rail position before changing the shot’s keys");
+    return false;
+  }
+  const values = track.map((row) => positions.get(row));
+  together(() => {
+    doc.editSource((rows) =>
+      rows.forEach((row, index) => {
+        const u = values[index];
+        if (u !== undefined) row.railU = u;
+      }),
+    );
+    change();
+  });
+  return true;
+};
+
+export const setCameraKeyMuted = (i: number, muted: boolean) =>
+  preserveRailPositions([i], () =>
+    edit((rows) => {
+      rows[i].muted = muted || undefined;
+    }),
+  );
+
 export const cameraKeyIsAnchored = (key?: CamKey) =>
   !!key && (!Array.isArray(key.p) || !Array.isArray(key.l));
 
@@ -514,6 +625,9 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     __timing: _timing,
     locked: _locked,
     muted: _muted,
+    inHandle: _incoming,
+    outHandle: _outgoing,
+    railU: _rail,
     reason: _reason,
     ...fields
   } = structuredClone(previous);
@@ -539,7 +653,7 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
   const i = next < 0 ? keys.length : next;
   const key = capturedKey(t, view, keys[i - 1], keys[i]);
   if (!key || (free && !withFraming(key, free))) return anchorUnavailable();
-  edit((ks) => ks.splice(i, 0, key));
+  if (!preserveRailPositions([i - 1], () => edit((ks) => ks.splice(i, 0, key)))) return;
   selectPlacement(key.id, t);
   say(`Camera keyframe added at ${stamp(t)}. Ctrl+Z to undo`);
 };
@@ -551,6 +665,8 @@ export const saveView = (only?: number) => {
   const t = r3(S.t),
     view = viewFromFree();
   const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
+  if (SHOTS_OUT[shotIndex(at >= 0 ? cameraKeyFrameTime(at) : t)]?.camera?.rail)
+    return say("The rail sets camera position. Remove it to use a free camera view");
   if (at >= 0) {
     if (keys[at].locked) return say("Unlock this camera keyframe first");
     editCameraKeyInScene(at, cameraKeyIsAnchored(keys[at]), (i, current) => {
@@ -719,32 +835,37 @@ export const splitShot = () => {
   start.cut = true;
   start.tailId = tail?.id ?? false;
   const splitSource = r3(toSource(t));
-  together(() =>
-    applyShotAndCamera(
-      () =>
-        shotsDoc.edit((sh) => {
-          const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
-          const { before, after } = splitShotHits(hits, splitSource);
-          setHits(sh[s], before);
-          sh.splice(s + 1, 0, {
-            ...structuredClone(rest),
-            ...(after ? { hits: after } : {}),
-            id: newRowId(),
-            t: splitSource,
-            name: secondName(name ?? `Shot ${s}`, sh),
-          });
-        }),
-      edit,
-      (ks, usePictureCut) => {
-        if (usePictureCut) {
-          start.t = SHOTS_OUT[s + 1].t;
-          if (reuseKey) ks[at - 1].t = start.t;
-          if (tail) tail.t = Math.min(tail.t, start.t);
-        }
-        ks.splice(at, 0, ...(tail ? [tail, start] : [start]));
-      },
-    ),
-  );
+  if (
+    !preserveRailPositions([at - 1], () =>
+      together(() =>
+        applyShotAndCamera(
+          () =>
+            shotsDoc.edit((sh) => {
+              const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
+              const { before, after } = splitShotHits(hits, splitSource);
+              setHits(sh[s], before);
+              sh.splice(s + 1, 0, {
+                ...structuredClone(rest),
+                ...(after ? { hits: after } : {}),
+                id: newRowId(),
+                t: splitSource,
+                name: secondName(name ?? `Shot ${s}`, sh),
+              });
+            }),
+          edit,
+          (ks, usePictureCut) => {
+            if (usePictureCut) {
+              start.t = SHOTS_OUT[s + 1].t;
+              if (reuseKey) ks[at - 1].t = start.t;
+              if (tail) tail.t = Math.min(tail.t, start.t);
+            }
+            ks.splice(at, 0, ...(tail ? [tail, start] : [start]));
+          },
+        ),
+      ),
+    )
+  )
+    return;
   selectPlacement(start.id, start.t);
   const word = speechAtCut(start.t);
   if (word)
@@ -762,21 +883,26 @@ const mergeShot = (i: number) => {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
     return;
   }
-  together(() =>
-    applyShotAndCamera(
-      () =>
-        shotsDoc.edit((sh) => {
-          const removed = sh[s];
-          if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
-          sh.splice(s, 1);
-        }),
-      edit,
-      (ks) => {
-        ks.splice(i, 1);
-        if (tail >= 0) ks.splice(tail, 1);
-      },
-    ),
-  );
+  if (
+    !preserveRailPositions([i - 1, i], () =>
+      together(() =>
+        applyShotAndCamera(
+          () =>
+            shotsDoc.edit((sh) => {
+              const removed = sh[s];
+              if (s > 0) setHits(sh[s - 1], mergeShotHits(sh[s - 1].hits, removed?.hits));
+              sh.splice(s, 1);
+            }),
+          edit,
+          (ks) => {
+            ks.splice(i, 1);
+            if (tail >= 0) ks.splice(tail, 1);
+          },
+        ),
+      ),
+    )
+  )
+    return;
   set(transitionSelection({ kind: "clearShots" }, get().side));
   say(`Shots ${s - 1} and ${s} merged. Ctrl+Z to undo`);
 };

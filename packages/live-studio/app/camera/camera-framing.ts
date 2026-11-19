@@ -166,7 +166,10 @@ export const nudgeCamera = (i: number, axis: "right" | "up" | "forward", amount:
 
 export const swapCameraLens = (i: number, mm: number) =>
   editCameraKeyInScene(i, cameraKeyIsAnchored(keys[i]), (i, key) => {
-    if (SHOTS_OUT[shotIndex(key.t)]?.camera?.look === "one-node")
+    const rig = SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera;
+    if (rig?.projection === "orthographic" || rig?.rail)
+      return say("Swap lens needs perspective and an editable camera position");
+    if (rig?.look === "one-node")
       return say("Swap lens needs camera travel. Choose 2-node to hold subject size");
     const p = resolveKeyPoint(key, "p"),
       l = resolveKeyPoint(key, "l");
@@ -208,8 +211,10 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
     for (const name of targets)
       for (const object of candidates.get(name) ?? []) box.expandByObject(object, true);
     if (box.isEmpty()) return say("Select at least one visible subject for Fit box");
-    const shot = shotIndex(key.t);
+    const frame = cameraKeyFrameTime(i);
+    const shot = shotIndex(frame);
     const rig = SHOTS_OUT[shot]?.camera;
+    if (rig?.rail) return say("Remove the rail to fit subjects from a new camera position");
     if (rig?.look === "tangent" || rig?.lead || rig?.bank)
       return say(
         "Fit box needs a fixed aim. Turn off Along path, Lookahead and Auto-banking to fit subjects",
@@ -221,7 +226,12 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
       fill: SHOT_SIZES[size],
       rig,
     });
-    if (!fitted) return say("Increase Clip far to fit these subjects");
+    if (!fitted)
+      return say(
+        rig?.projection === "orthographic"
+          ? "Increase Clip far or the orthographic reference distance"
+          : "Increase Clip far to fit these subjects",
+      );
     const nextP = storedPoint(key.p, fitted.p);
     const nextL = storedPoint(key.l, fitted.l);
     if (!nextP || !nextL) return say("This film cannot move the camera anchor");
@@ -229,6 +239,7 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
       edit((rows) => {
         rows[i].p = nextP;
         rows[i].l = nextL;
+        if (fitted.fov !== undefined) writeLens(rows[i], "fov", fitted.fov, frame);
       });
       if (shotsDoc.data?.[shot])
         shotsDoc.edit((rows) => {
@@ -243,6 +254,8 @@ export const addVertigo = (i: number) => {
   const key = keys[i];
   if (!key || key.locked) return;
   const rig = SHOTS_OUT[shotIndex(key.t)]?.camera;
+  if (rig?.projection === "orthographic" || rig?.rail)
+    return say("Vertigo needs perspective and an editable camera position");
   if (rig?.look && rig.look !== "target") return say("Vertigo needs the 2-node aim mode");
   const end = Math.min(endOfOccurrence(key), keys[i + 1]?.t ?? Infinity);
   const time = r3(Math.min(key.t + 1, end - SAME * 2));
@@ -295,6 +308,8 @@ let relativeCamera: { keys: WorldKey[]; p: Vector3; basis: ReturnType<typeof cam
 export const copyRelativeCamera = async (i: number) => {
   const first = keys[i];
   if (!first) return;
+  if (SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail)
+    return say("Copy relative needs an editable camera position");
   const end = endOfOccurrence(first);
   const moves = [];
   for (let at = i; at < keys.length; at++) {
@@ -348,6 +363,8 @@ const TURN = 2 * Math.PI;
 export const pasteRelativeCamera = (i: number) => {
   const copied = relativeCamera;
   if (!copied) return say("Copy a relative camera move first");
+  if (keys[i] && SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail)
+    return say("Remove the rail before pasting a relative camera move");
   editCameraKeyInScene(i, cameraKeyIsAnchored(keys[i]), (_, key) => {
     const origin = resolveKeyPoint(key, "p");
     const aim = resolveKeyPoint(key, "l");
@@ -383,7 +400,13 @@ export const pasteRelativeCamera = (i: number) => {
         point.every(Number.isFinite)
           ? { ...focus, point: vectorPoint(transform([point[0], point[1], point[2]])) }
           : focus;
-      poses.push({ row: { ...row, roll: relativeRoll, focus: relativeFocus }, p: wp, l: wl });
+      const inHandle = row.inHandle && vectorPoint(rotate(worldPoint(row.inHandle)));
+      const outHandle = row.outHandle && vectorPoint(rotate(worldPoint(row.outHandle)));
+      poses.push({
+        row: { ...row, roll: relativeRoll, focus: relativeFocus, inHandle, outHandle },
+        p: wp,
+        l: wl,
+      });
     }
     void saveRelativeMoves(key, poses).catch(showError);
   });

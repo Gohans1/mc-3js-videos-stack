@@ -17,6 +17,8 @@ export const filmCam = {
   focusRange: 0,
   fov: 50,
   aspect: 16 / 9,
+  parallel: null as Pick<THREE.OrthographicCamera, "left" | "right" | "top" | "bottom"> | null,
+  view: null as THREE.PerspectiveCamera["view"],
   rev: 0,
 };
 let stale = true;
@@ -50,11 +52,15 @@ export const drawFilmView = async (full?: Draw) => {
   filmCam.focus = optics?.focusM ?? cam.position.distanceTo(look);
   filmCam.focusRange =
     optics?.fstop && optics.fstop > 0
-      ? dofParams({ mm: optics.mm, fstop: optics.fstop, focus: filmCam.focus })
-          .focusRange
+      ? dofParams({ mm: optics.mm, fstop: optics.fstop, focus: filmCam.focus }).focusRange
       : 0;
   filmCam.fov = cam.fov;
   filmCam.aspect = cam.aspect;
+  filmCam.parallel =
+    "isOrthographicCamera" in cam
+      ? { left: cam.left, right: cam.right, top: cam.top, bottom: cam.bottom }
+      : null;
+  filmCam.view = cam.view?.enabled ? { ...cam.view } : null;
   filmCam.rev++;
   if (!shown) return;
   // Read in the same task as the draw: the WebGL canvas keeps the frame until the browser shows it

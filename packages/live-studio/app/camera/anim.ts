@@ -26,7 +26,7 @@ import {
   syncPairedOption,
   tidyAnimSet,
 } from "./anim-math";
-import { keys } from "./cam";
+import { cameraKeyFrameTime, keys } from "./cam";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type Slot = "in" | "out" | "combo";
@@ -86,7 +86,9 @@ export const metricsOf = (i: number, clock = clockOf(i)) => {
 // The shot the Camera and Animation tabs show: the block picked on the camera row, else the picked key's, else the playhead's
 export const shownShot = () => {
   const { shotPick: s, camKey: k } = get();
-  return s !== null && SHOTS_OUT[s] ? s : shotIndex(k !== null && keys[k] ? keys[k].t : S.t);
+  return s !== null && SHOTS_OUT[s]
+    ? s
+    : shotIndex(k !== null && keys[k] ? cameraKeyFrameTime(k) : S.t);
 };
 // A shot block clicked on the camera row: its details show, in the Animation tab if that is open, else the Camera tab
 export const pickShot = (i: number | null, side?: Side) => {

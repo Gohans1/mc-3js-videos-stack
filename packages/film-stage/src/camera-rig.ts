@@ -1,10 +1,21 @@
 import { clampFov, fovOf, hfovOf, vfovOf } from "film-kit/lens";
-import { type Box3, PerspectiveCamera, Vector3 } from "three";
+import { type Box3, OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
 
 export type Vec3 = [number, number, number];
 export type Offset = [number, number];
 export type FovAxis = { mode: "horizontal" | "vertical"; aspect: number };
+export const ORTHOGRAPHIC_DEPTH = 10;
+export type RigCamera = PerspectiveCamera | (OrthographicCamera & { fov: number; aspect: number });
+
+export const orthographicCamera = (
+  fov: number,
+  aspect: number,
+): Extract<RigCamera, OrthographicCamera> =>
+  Object.assign(new OrthographicCamera(-aspect, aspect, 1, -1), { fov, aspect });
+
 export interface CameraRig {
+  projection?: "perspective" | "orthographic";
+  orthographicDepth?: number;
   look?: "target" | "one-node" | "tangent";
   position?: Vec3;
   lead?: number;
@@ -16,6 +27,8 @@ export interface CameraRig {
   near?: number;
   far?: number;
   hideGroups?: string[];
+  rail?: Vec3[];
+  extrapolation?: "hold" | "linear";
 }
 type CameraOrientation = { p: Vector3; l: Vector3; roll: number };
 type Sample = (t: number) => Pick<CameraOrientation, "p" | "l">;
@@ -69,12 +82,7 @@ export function applyCameraRig(
   }
 }
 
-export function orientCamera(
-  camera: PerspectiveCamera,
-  look: Vector3,
-  roll: number,
-  rig?: CameraRig,
-) {
+export function orientCamera(camera: RigCamera, look: Vector3, roll: number, rig?: CameraRig) {
   camera.up.fromArray(rig?.up ?? [0, 1, 0]).normalize();
   const direction = look.clone().sub(camera.position).normalize();
   if (!camera.up.lengthSq() || Math.abs(direction.dot(camera.up)) > 0.999999) {
@@ -83,6 +91,7 @@ export function orientCamera(
   }
   camera.lookAt(look);
   camera.rotateZ(roll);
+  if ("isOrthographicCamera" in camera) return;
   const [x, y] = rig?.frameOffset ?? [0, 0];
   const tanV = Math.tan((camera.fov * Math.PI) / 360);
   camera.rotateY(Math.atan(x * tanV * camera.aspect));
@@ -107,7 +116,7 @@ export function apertureOffset(
 }
 
 export function projectCamera(
-  camera: PerspectiveCamera,
+  camera: RigCamera,
   w: number,
   h: number,
   rig?: CameraRig,
@@ -115,7 +124,18 @@ export function projectCamera(
 ) {
   camera.near = rig?.near ?? 0.02;
   camera.far = Math.max(camera.near + 0.01, rig?.far ?? 500);
-  const [x, y] = rig?.lensShift ?? [0, 0];
+  let [x, y] = rig?.lensShift ?? [0, 0];
+  if ("isOrthographicCamera" in camera) {
+    const halfHeight =
+      (rig?.orthographicDepth ?? ORTHOGRAPHIC_DEPTH) * Math.tan((camera.fov * Math.PI) / 360);
+    camera.aspect = w / h;
+    camera.right = halfHeight * camera.aspect;
+    camera.left = -camera.right;
+    camera.top = halfHeight;
+    camera.bottom = -halfHeight;
+    x -= rig?.frameOffset?.[0] ?? 0;
+    y += rig?.frameOffset?.[1] ?? 0;
+  }
   const [dx, dy] = pupil ?? [0, 0];
   if (x || y || dx || dy) camera.setViewOffset(w, h, ((x + dx) * w) / 2, ((y + dy) * h) / 2, w, h);
   else camera.clearViewOffset();
@@ -133,10 +153,11 @@ export function fitBoxFrame(
     fill,
     rig,
   }: { fov: number; aspect: number; roll?: number; fill: number; rig?: CameraRig },
-) {
+): { p: Vector3; l: Vector3; fov?: number } | null {
   const center = box.getCenter(new Vector3());
   const direction = forward.clone().normalize();
-  const view = new PerspectiveCamera(fov, aspect);
+  const parallel = rig?.projection === "orthographic";
+  const view = parallel ? orthographicCamera(fov, aspect) : new PerspectiveCamera(fov, aspect);
   view.position.copy(center).sub(direction);
   orientCamera(view, center, roll, rig);
   projectCamera(view, aspect, 1, rig);
@@ -147,19 +168,45 @@ export function fitBoxFrame(
   const x = Math.max(-margin, Math.min(margin, offsetX)) + m[8];
   const y = Math.max(-margin, Math.min(margin, offsetY)) + m[9];
   let distance = 0,
-    back = 0;
+    back = 0,
+    extentOrtho = 0;
   for (const px of [box.min.x, box.max.x]) {
     for (const py of [box.min.y, box.max.y]) {
       for (const pz of [box.min.z, box.max.z]) {
         const v = new Vector3(px, py, pz).sub(center).applyQuaternion(q);
-        const extent =
-          Math.max(Math.abs(m[0] * v.x + x * v.z), Math.abs(m[5] * v.y + y * v.z)) / fill;
-        distance = Math.max(distance, v.z + Math.max(extent, view.near + 0.001));
+        if (parallel) {
+          extentOrtho = Math.max(
+            extentOrtho,
+            Math.max(Math.abs(v.x) / aspect, Math.abs(v.y)) / fill,
+          );
+          distance = Math.max(distance, v.z + view.near + 0.001);
+        } else {
+          const extent =
+            Math.max(Math.abs(m[0] * v.x + x * v.z), Math.abs(m[5] * v.y + y * v.z)) / fill;
+          distance = Math.max(distance, v.z + Math.max(extent, view.near + 0.001));
+        }
         back = Math.max(back, -v.z);
       }
     }
   }
   if (distance + back > view.far) return null;
+  if (parallel) {
+    const reference = rig?.orthographicDepth ?? ORTHOGRAPHIC_DEPTH;
+    const fitFov = clampFov((Math.atan(extentOrtho / reference) * 360) / Math.PI);
+    if (reference * Math.tan((fitFov * Math.PI) / 360) < extentOrtho - 1e-6) return null;
+    view.fov = fitFov;
+    projectCamera(view, aspect, 1, rig);
+    distance = Math.max(distance, Math.min(reference, view.far - back - 0.001));
+    const wantedX = Math.max(-margin, Math.min(margin, offsetX));
+    const wantedY = Math.max(-margin, Math.min(margin, offsetY));
+    const ray = new Vector3(
+      (wantedX - m[12]) / m[0],
+      (wantedY - m[13]) / m[5],
+      -distance,
+    ).applyQuaternion(view.quaternion);
+    const p = center.sub(ray);
+    return { p, l: p.clone().addScaledVector(direction, distance), fov: fitFov };
+  }
   const ray = new Vector3(x / m[0], y / m[5], -1)
     .multiplyScalar(distance)
     .applyQuaternion(view.quaternion);

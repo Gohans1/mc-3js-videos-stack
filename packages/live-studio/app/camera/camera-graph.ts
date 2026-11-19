@@ -1,10 +1,18 @@
 import { clampFov } from "film-kit/lens";
-import { cameraAt, type CameraChannel, mmOf, resolveCameraPoint } from "film-stage/camera";
+import {
+  cameraAt,
+  type CameraChannel,
+  makeCameraRail,
+  mmOf,
+  resolveCameraPoint,
+} from "film-stage/camera";
 import { EDIT } from "film/edit";
 import type { Vector3 } from "three";
 
 import { cameraTimesAt, timingClock } from "../../src/timing-state.mjs";
 import { type Ease } from "../core/ease";
+import { shotIndex } from "../core/film";
+import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, showError } from "../core/store";
 import { r3, SAME } from "../core/time";
@@ -18,6 +26,7 @@ import {
   movable,
   opticsOfKey,
   type Point,
+  railPositionForKey,
   room,
   writeLens,
 } from "./cam";
@@ -106,8 +115,13 @@ const sampleGraphViews = (times: number[], track: CamKey[]) => {
     : times.map((t) => ({ world: t, camera: t }));
   return (
     tools?.sampleCameraTrack?.(clockTimes) ??
-    clockTimes.map(({ camera }) => {
-      const options = { aspect: tools?.camera.aspect, resolveAnchor: tools?.resolveCameraAnchor };
+    clockTimes.map(({ camera }, i) => {
+      const rig = SHOTS_OUT[shotIndex(times[i])]?.camera;
+      const options = {
+        aspect: tools?.camera.aspect,
+        resolveAnchor: tools?.resolveCameraAnchor,
+        rail: rig?.look === "one-node" ? undefined : rig?.rail,
+      };
       return cameraAt(camera, track, options).sample;
     })
   );
@@ -125,6 +139,9 @@ const writeGraphOptics = (key: CamKey, channel: CameraChannel, value: number) =>
 const spatialField = (channel: CameraChannel) =>
   channel === "position" ? "p" : channel === "aim" ? "l" : null;
 const cameraAxes = ["x", "y", "z"] as const;
+const graphRail = (i: number) => SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail;
+export const graphUsesRail = (indices: number[], channel: CameraChannel) =>
+  channel === "position" && indices.some(graphRail);
 const transformGraphValues = (
   indices: number[],
   channel: CameraChannel,
@@ -132,6 +149,8 @@ const transformGraphValues = (
   transform: (value: number, j: number, first: number) => number,
 ) => {
   if (!indices.length) return;
+  if (graphUsesRail(indices, channel))
+    return say("Edit Rail position in the keyframe’s Framing controls");
   const field = spatialField(channel);
   if (!field) {
     const values = indices.map((i) => graphOpticsValue(i, channel));
@@ -252,6 +271,7 @@ export const reverseGraphKeys = (picked: number[]) => {
   const first = picked[0],
     last = picked.at(-1)!;
   const optics = picked.map(opticsOfKey);
+  const railPositions = picked.map((i) => (graphRail(i) ? railPositionForKey(i) : undefined));
   const prior = opticsOfKey(first - 1);
   const following = keys[last + 1];
   const next = following && !following.cut ? structuredClone(following) : null;
@@ -267,14 +287,19 @@ export const reverseGraphKeys = (picked: number[]) => {
     const start = original[0].t,
       end = original.at(-1)!.t;
     picked.forEach((i, j) => {
-      const key = original[original.length - 1 - j];
+      const source = original.length - 1 - j;
+      const key = original[source];
       const incoming = j === 0 ? original[0] : original[original.length - j];
       const reversed = j > 0 && (incoming.motion === "hold" || incoming.motion === "orbit");
+      if (key.railU === undefined && railPositions[source] !== undefined)
+        key.railU = railPositions[source];
       keepOptics(key, optics[optics.length - 1 - j], j === 0 ? prior : optics[optics.length - j]);
       rows[i] = {
         ...key,
         t: r3(start + end - key.t),
         motion: incoming.motion,
+        inHandle: key.outHandle,
+        outHandle: key.inHandle,
         reversePath: reversed ? !incoming.reversePath || undefined : incoming.reversePath,
         ease: j === 0 ? incoming.ease : reverseEase(incoming.ease),
         easeChannels:
@@ -297,8 +322,20 @@ export const equalizeGraphKeys = (picked: number[]) => {
   const first = keys[picked[0]].t,
     duration = keys[picked.at(-1)!].t - first;
   if (duration <= 0) return;
-  const points = picked.map((i) => resolveCameraPoint(keys[i].p, S.tools?.resolveCameraAnchor));
-  const distance = points.slice(1).map((p, i) => p.distanceTo(points[i]));
+  const rails = picked.map(graphRail);
+  const samples = rails.some(Boolean)
+    ? sampleGraphViews(picked.map(cameraKeyFrameTime), EDIT.cam as CamKey[])
+    : undefined;
+  const positions = picked.map((i, j) => samples?.[j].p ?? keys[i].p);
+  const points = positions.map((p) => resolveCameraPoint(p, S.tools?.resolveCameraAnchor));
+  const distance = points.slice(1).map((p, i) => {
+    const rail = rails[i];
+    const from = samples?.[i].railU,
+      to = samples?.[i + 1].railU;
+    return rail && rail === rails[i + 1] && from !== undefined && to !== undefined
+      ? Math.abs(to - from) * makeCameraRail(rail).getLength()
+      : p.distanceTo(points[i]);
+  });
   const total = distance.reduce((sum, d) => sum + d, 0);
   const available = Math.max(0, duration - SAME * distance.length);
   if (available <= 0) return;

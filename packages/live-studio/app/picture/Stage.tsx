@@ -225,6 +225,12 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           <FilmView bind={bind} phone={phone} />
         </div>
         {!phone && !clean && <FreeCameraControls />}
+        <canvas
+          ref={bind("minimap")}
+          hidden={!preview?.minimap || clean}
+          aria-label="Camera minimap, top view with world axes"
+          className="bg-scrim-strong border-border pointer-events-none absolute top-24 right-3 z-4 size-28 rounded-lg border"
+        />
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
           <div

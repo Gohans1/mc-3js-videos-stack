@@ -31,6 +31,7 @@ export interface Elements {
   inspection: HTMLCanvasElement;
   shutter: HTMLCanvasElement;
   horizon: HTMLElement;
+  minimap: HTMLCanvasElement;
   audio: HTMLAudioElement;
   clock: HTMLElement;
   hud: HTMLElement;

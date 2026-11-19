@@ -3,7 +3,7 @@ import { mmOf } from "film-stage/camera";
 import type { CamKey, Point } from "./cam";
 
 const keyFields = {
-  framing: ["p", "l", "roll", "motion", "reversePath"],
+  framing: ["p", "l", "roll", "motion", "reversePath", "inHandle", "outHandle"],
   lens: ["fov", "mm"],
   dof: ["fstop", "focus"],
   shake: ["handheld", "wave", "bob"],
@@ -57,6 +57,7 @@ export const copyCameraFields = (from: Partial<CamKey>, to: CamKey, groups: Came
 
 export type CameraView = Pick<CamKey, "p" | "l"> & {
   fov: number;
+  railU?: number;
   mm?: number;
   roll?: number;
   wave?: number;

@@ -16,6 +16,7 @@ import { drawGizmo } from "../objects/placed";
 import { drawPageSelection } from "../openfilm/onpicture";
 import { setPlaying } from "../playback/transport";
 import { drawTextSel } from "../text/onpicture";
+import { drawCameraMap } from "./camera-map";
 import { drawFilmView } from "./filmcam";
 import { frameSize } from "./frame";
 import { nightVision } from "./nightvision";
@@ -44,6 +45,7 @@ const renderShutter = async (
   renderAt: (t: number) => Promise<void>,
 ) => {
   const layer = S.el.shutter;
+  if (!layer) return renderAt(t);
   layer.hidden = true;
   const preview = get().preview;
   if (!film || !preview.motionBlur || preview.clean || S.playing || S.tools?.free.on || t !== S.t)
@@ -104,6 +106,7 @@ const draw = async (x: number, screen = true) => {
   }
   if (screen && x === S.t) {
     drawCamPath();
+    drawCameraMap();
     drawGizmo();
     if (!get().preview.clean) {
       drawTextSel();

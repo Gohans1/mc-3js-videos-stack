@@ -18,7 +18,7 @@ import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { showError, useStudio } from "../core/store";
 import { seekExact, setPlaying } from "../playback/transport";
-import { cameraKeyFrameTime, keys } from "./cam";
+import { cameraKeyFrameTime, edit, keys, railPositionForKey } from "./cam";
 import {
   addVertigo,
   cameraCoordinates,
@@ -50,7 +50,11 @@ export function CameraFraming({ index: i }: { index: number }) {
   const [amount, setAmount] = useState(0.1);
   const [fit, setFit] = useState<string[]>([]);
   const disabled = !!key.locked;
-  const tripod = SHOTS_OUT[shotIndex(key.t)]?.camera?.look === "one-node";
+  const rig = SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera;
+  const tripod = rig?.look === "one-node";
+  const onRail = !!rig?.rail;
+  const parallel = rig?.projection === "orthographic";
+  const railU = onRail ? (railPositionForKey(i) ?? 0) : 0;
   const candidates = S.tools?.cameraAnchors ?? [];
   const fitItems = [...cameraFitTargets().keys()];
   const anchorItems = [
@@ -69,7 +73,25 @@ export function CameraFraming({ index: i }: { index: number }) {
   };
   return (
     <Section title="Framing">
-      {(["p", "l"] as const).map((field) => {
+      {onRail && (
+        <FieldRow label="Rail position">
+          <ValueBox
+            name="Rail position"
+            value={railU}
+            disabled={disabled || key.muted}
+            min={0}
+            max={1}
+            step={0.01}
+            digits={3}
+            onSave={(railU) =>
+              edit((rows) => {
+                rows[i].railU = railU;
+              })
+            }
+          />
+        </FieldRow>
+      )}
+      {(onRail ? (["l"] as const) : (["p", "l"] as const)).map((field) => {
         const title = field === "p" ? "Position" : "Aim";
         const point = key[field];
         const anchored = !Array.isArray(point);
@@ -171,7 +193,7 @@ export function CameraFraming({ index: i }: { index: number }) {
           unit="m"
           value={amount}
           onSave={setAmount}
-          disabled={disabled}
+          disabled={disabled || onRail}
         />
       </FieldRow>
       <div className="grid grid-cols-3 gap-1.5">
@@ -182,7 +204,7 @@ export function CameraFraming({ index: i }: { index: number }) {
               variant="secondary"
               size="sm"
               aria-label={title + " negative"}
-              disabled={disabled}
+              disabled={disabled || onRail}
               onClick={() => nudgeCamera(i, id, -amount)}
             >
               −
@@ -191,7 +213,7 @@ export function CameraFraming({ index: i }: { index: number }) {
               variant="secondary"
               size="sm"
               aria-label={title + " positive"}
-              disabled={disabled}
+              disabled={disabled || onRail}
               onClick={() => nudgeCamera(i, id, amount)}
             >
               +
@@ -202,7 +224,7 @@ export function CameraFraming({ index: i }: { index: number }) {
       <FieldRow label="Swap lens">
         <Select<number>
           value={null}
-          disabled={disabled}
+          disabled={disabled || onRail || parallel}
           onValueChange={(value) => {
             if (value !== null) swapCameraLens(i, value);
           }}
@@ -219,7 +241,7 @@ export function CameraFraming({ index: i }: { index: number }) {
           </SelectContent>
         </Select>
       </FieldRow>
-      {fitItems.length > 0 && (
+      {fitItems.length > 0 && !onRail && (
         <Section title="Fit box" closed>
           <div className="flex flex-wrap gap-1" role="group" aria-label="Fit subjects">
             {fitItems.map((name) => (
@@ -255,7 +277,12 @@ export function CameraFraming({ index: i }: { index: number }) {
         </Section>
       )}
       <div className="flex flex-wrap gap-1.5">
-        <Button variant="secondary" size="sm" disabled={disabled} onClick={() => addVertigo(i)}>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={disabled || onRail || parallel}
+          onClick={() => addVertigo(i)}
+        >
           Add Vertigo
         </Button>
         <Button
