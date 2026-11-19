@@ -1,4 +1,4 @@
-import { hfovOf, vfovOf } from "film-kit/lens";
+import { hfovOf, mmOf, vfovOf } from "film-kit/lens";
 import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/camera";
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, fromSource, toSource } from "film/edit";
@@ -53,7 +53,16 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
-import { cameraTimeInSpan, mergeShotOptics, redirectOpticsContext, remapOpticsSpan, splitOpticsContext } from "./camera-optics-track";
+import {
+  cameraTimeInSpan,
+  canKeyOpticsHere,
+  editOpticsLane,
+  mergeShotOptics,
+  putOpticsKey,
+  redirectOpticsContext,
+  remapOpticsSpan,
+  splitOpticsContext,
+} from "./camera-optics-track";
 import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
@@ -1083,7 +1092,10 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
   const next = keys.findIndex((k) => k.t > t);
   const i = next < 0 ? keys.length : next;
   const key = capturedKey(t, view, keys[i - 1], keys[i]);
-  if (!key || (free && !withFraming(key, free))) return anchorUnavailable();
+  if (!key || (free && !withFraming(key, free))) {
+    anchorUnavailable();
+    return false;
+  }
   const subdivision = free ? null : neutralSubdivision(i, t, view);
   const check = !free && !subdivision && i > 0 && keys[i] && !keys[i].cut;
   if (subdivision) Object.assign(key, subdivision.left);
@@ -1095,11 +1107,12 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
       }),
     )
   )
-    return;
+    return false;
   selectPlacement(key.id, t);
   say(
     `Camera keyframe added at ${stamp(t)}. ${check ? "Check the camera motion on both sides. " : ""}Ctrl+Z to undo`,
   );
+  return true;
 };
 const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
   const t = r3(S.t);
@@ -1110,21 +1123,42 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
     return say("The rail sets camera position. Remove it to apply this framing");
   if (pinned && rig?.look === "one-node")
     return say("Switch to 2-node to apply the pinned camera position");
-  if (pinned && at < 0 && !cameraTimeMatchesSource(t))
+  if (pinned && (!canKeyOpticsHere() || (at < 0 && !cameraTimeMatchesSource(t))))
     return say("Move the playhead to a playing frame to apply this framing");
+
+  const outgoing = at >= 0 ? keys[at] : keys.find((key) => key.t > t);
+  if (pinned && outgoing?.dollyZoomScale !== undefined && (at >= 0 || !outgoing.cut))
+    return say("This frame is in a Dolly Zoom. Apply the pin outside that span");
+
+  const applyLens = (time: number, owner: number) => {
+    if (!pinned || !S.tools?.cameraOpticsSample) return;
+    const row = shotsDoc.data?.[owner];
+    if (!row || !Object.keys(row.optics?.focalLength ?? {}).length) return;
+    const mm = mmOf(view.fov, cameraLensAspect(owner));
+    editOpticsLane(row, "focalLength", (records) => putOpticsKey(records, time, mm));
+  };
+
   if (at >= 0) {
     if (keys[at].locked) return say("Unlock this camera keyframe first");
     editCameraKeyInScene(at, cameraKeyIsAnchored(keys[at]), (i, current) => {
       const next = structuredClone(current);
-      if (!withFraming(next, view, cameraKeyShotIndex(i))) return anchorUnavailable();
-      edit((ks) => {
-        ks[i] = next;
+      const owner = cameraKeyShotIndex(i);
+      const source = authoredKeyTime(current);
+      if (!withFraming(next, view, owner)) return anchorUnavailable();
+      together(() => {
+        edit((ks) => {
+          ks[i] = next;
+        });
+        applyLens(source, owner);
       });
       selectPlacement(next.id, next.t);
       say("Camera keyframe updated at " + stamp(next.t));
     });
   } else {
-    insertKey(t, drawnView(t), view);
+    const source = get().timing ? cameraTimesAt(t).camera : t;
+    together(() => {
+      if (insertKey(t, drawnView(), view)) applyLens(source, shot);
+    });
   }
 };
 export const saveView = (only?: number) => {

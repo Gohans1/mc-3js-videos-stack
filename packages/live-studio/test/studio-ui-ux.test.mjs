@@ -441,7 +441,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane, opticsOutputsAt,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane, opticsOutputsAt, applyPinnedFraming,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -2291,10 +2291,14 @@ test("pinned camera angles reopen their own Free Cam pose and lens at the same t
   }
 });
 
-test("a pinned angle applies framing to another key without seeking back or overwriting focus", async () => {
+test("a pinned angle applies pose and the active lens at the playhead in one Undo", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
-    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 3 }]);
+    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 3, optics: {
+      focalLength: { lens: { t: 3, value: 80 }, later: { t: 6, value: 75 } },
+      focus: { mid: { t: 3, value: 4 } },
+    } }]);
+    u.S.tools.cameraOpticsSample = () => ({ mm: 80, focus: 4 });
     await u.setCamData([
       { id: "a0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
       { id: "b0", t: 3, cut: true, p: [2, 2, 8], l: [0, 1, 0], focus: 4, fstop: 2.8, wave: 0.3 },
@@ -2304,6 +2308,11 @@ test("a pinned angle applies framing to another key without seeking back or over
     u.set({ compareGrid: true, pinnedAngles: [null, null, null, null] });
   })()`);
   const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
+  const beforeOptics = await page.evaluate("window.__UX_TEST__.shotsData()[1].optics");
+  const lensAt = (t) => page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    return u.cameraAt(${t}, u.sourceCamKeys(), { optics: u.shotsData()[1].optics }).fov;
+  })()`);
   const pin = `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Pin A')`;
   const apply = `document.querySelector('button[aria-label="Apply angle A framing here"]')`;
   try {
@@ -2329,12 +2338,65 @@ test("a pinned angle applies framing to another key without seeking back or over
       id: "b0", t: 3, cut: true, p: [7, 2, 6], l: [1, 1, 0], fov: 42,
       roll: 0.2, focus: 4, fstop: 2.8, wave: 0.3,
     });
+    expect(await lensAt(3)).toBeCloseTo(42, 6);
+    const updatedOptics = await page.evaluate("window.__UX_TEST__.shotsData()[1].optics");
+    expect(updatedOptics.focus).toEqual(beforeOptics.focus);
+    expect(updatedOptics.focalLength.later).toEqual(beforeOptics.focalLength.later);
     await page.evaluate("window.__UX_TEST__.undo()");
     await waitUntil("window.__UX_TEST__.sourceCamKeys()[1]?.p[0] === 2");
     expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+    expect(await page.evaluate("window.__UX_TEST__.shotsData()[1].optics")).toEqual(beforeOptics);
+
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.seekExact(4);
+      u.set({ compareGrid: true });
+    })()`);
+    await waitUntil(apply);
+    await page.evaluate(`(${apply}).click()`);
+    await waitUntil("window.__UX_TEST__.sourceCamKeys()[2]?.t === 4");
+    expect(await lensAt(4)).toBeCloseTo(42, 6);
+    expect(await page.evaluate("window.__UX_TEST__.S.t")).toBe(4);
+    await page.evaluate("window.__UX_TEST__.undo()");
+    expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+    expect(await page.evaluate("window.__UX_TEST__.shotsData()[1].optics")).toEqual(beforeOptics);
   } finally {
-    await page.evaluate("window.__UX_TEST__.set({ compareGrid: false, pinnedAngles: [null, null, null, null] })");
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      delete u.S.tools.cameraOpticsSample;
+      u.set({ compareGrid: false, pinnedAngles: [null, null, null, null] });
+    })()`);
   }
+});
+
+test("applying a pin leaves Dolly Zoom and a blank gap untouched", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const prior = u.get().timing;
+    try {
+      await u.loadShots([{ t: 0, name: "Intro" }]);
+      await u.setCamData([
+        { t: 0, p: [0, 2, 8], l: [0, 1, 0], fov: 40 },
+        { t: 4, p: [0, 2, 3], l: [0, 1, 0], dollyZoomScale: 2 },
+      ]);
+      const pin = { p: [3, 2, 6], l: [1, 1, 0], fov: 42 };
+      const before = JSON.stringify(u.sourceCamKeys());
+      u.seekExact(4);
+      u.applyPinnedFraming(pin);
+      const dolly = u.get().status;
+      u.set({ timing: true, camKey: null });
+      u.refreshProjection({ gaps: [{ from: 6, to: 7 }] });
+      u.seekExact(6.5);
+      u.applyPinnedFraming(pin);
+      return { same: before === JSON.stringify(u.sourceCamKeys()), dolly, gap: u.get().status };
+    } finally {
+      u.set({ timing: prior });
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(result.same).toBe(true);
+  expect(result.dolly).toContain("Dolly Zoom");
+  expect(result.gap).toContain("playing frame");
 });
 
 test("pin capture keeps the Final frame pose and skips a preview that moved during render", async () => {

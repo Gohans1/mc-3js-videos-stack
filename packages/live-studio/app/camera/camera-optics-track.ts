@@ -1,4 +1,9 @@
-import { type CameraOpticsKey, type CameraOpticsTracks, opticsKeys } from "film-stage/camera";
+import {
+  type CameraOpticsKey,
+  type CameraOpticsTrack,
+  type CameraOpticsTracks,
+  opticsKeys,
+} from "film-stage/camera";
 
 import type { CameraSpan } from "../../src/camera-clock.mjs";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
@@ -41,6 +46,12 @@ export const opticsOutputsAt = (shot: number, time: number) => {
 
 export const findOpticsKey = <T extends { t: number }>(track: readonly T[], time: number) =>
   track.findLast((key) => key.t === time) ?? track.findLast((key) => Math.abs(key.t - time) < EPS);
+
+export function putOpticsKey<T>(records: CameraOpticsTrack<T>, time: number, value: T) {
+  const key = findOpticsKey(opticsKeys(records), time);
+  const { contextOf: _context, ...current } = records[key?.id ?? ""] ?? {};
+  records[key?.id ?? crypto.randomUUID()] = { ...current, t: time, value };
+}
 
 export function editOpticsLane<K extends OpticsLane>(
   shot: ShotIdentity,
@@ -163,15 +174,9 @@ export function applyOpticsFocusPick(
   if (get().cameraPick !== pick) return;
   if (!hit.world) return say("Click a visible surface or press Esc to cancel");
   const point = hit.world;
-  editOpticsLane(pick, "focus", (records) => {
-    const key = findOpticsKey(opticsKeys(records), pick.time);
-    const { contextOf: _context, ...current } = records[key?.id ?? ""] ?? {};
-    records[key?.id ?? crypto.randomUUID()] = {
-      ...current,
-      t: pick.time,
-      value: { point, label: hit.what },
-    };
-  });
+  editOpticsLane(pick, "focus", (records) =>
+    putOpticsKey(records, pick.time, { point, label: hit.what }),
+  );
   cancelCameraPick();
   say("Focus key updated");
 }
