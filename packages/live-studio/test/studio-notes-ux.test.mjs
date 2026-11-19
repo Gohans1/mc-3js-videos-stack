@@ -135,7 +135,7 @@ test("film.mjs re-reads .live_hosts on create/edit/delete without restart and su
   const film = openFilm(dir, { send() {} });
   t.after(() => {
     film.stop();
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   assert.deepEqual(film.hosts, []);
@@ -290,7 +290,7 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
         process.kill(recordedPid, "SIGTERM");
       } catch {}
     }
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
     rmSync(otherDir, { recursive: true, force: true });
   });
 
@@ -421,7 +421,7 @@ test("live.mjs --detach prints log tail and exits 1 when child exits early", asy
   await new Promise((resolveListen) => blocker.listen(0, "127.0.0.1", resolveListen));
   t.after(() => {
     blocker.close();
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
   const busyPort = blocker.address().port;
 
@@ -454,7 +454,7 @@ test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-
       benign.kill();
     } catch {}
     otherServer.close();
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   const studioJsonPath = join(dir, "renders/live/studio.json");
@@ -519,7 +519,7 @@ test("live.mjs --detach returns promptly when the film has an initial Vite build
         process.kill(pid, "SIGTERM");
       } catch {}
     }
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   const runLive = (...args) =>
