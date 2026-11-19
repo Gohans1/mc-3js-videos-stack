@@ -1123,6 +1123,12 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
     return say("The rail sets camera position. Remove it to apply this framing");
   if (pinned && rig?.look === "one-node")
     return say("Switch to 2-node to apply the pinned camera position");
+  if (pinned && rig?.look === "tangent")
+    return say("Along path sets the camera aim. Switch to 2-node to apply this framing");
+  if (pinned && rig?.lead)
+    return say("Set Lookahead to zero to apply the pinned camera aim");
+  if (pinned && rig?.bank)
+    return say("Set Auto-banking to zero to apply the pinned camera roll");
   if (pinned && (!canKeyOpticsHere() || (at < 0 && !cameraTimeMatchesSource(t))))
     return say("Move the playhead to a playing frame to apply this framing");
 

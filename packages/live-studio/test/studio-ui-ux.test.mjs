@@ -2406,6 +2406,39 @@ test("applying a pin leaves Dolly Zoom spans, muted keys, and a blank gap untouc
   expect(result.gap).toContain("playing frame");
 });
 
+test("applying a pin preserves rigs that drive camera aim or roll", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const tools = u.S.tools;
+    const previousRig = tools.cameraRig;
+    try {
+      tools.cameraRig = true;
+      await u.setCamData([
+        { t: 0, p: [0, 2, 8], l: [0, 1, 0] },
+        { t: 3, p: [4, 2, 6], l: [4, 1, 0] },
+      ]);
+      const before = JSON.stringify(u.sourceCamKeys());
+      const notices = [];
+      for (const camera of [{ look: "tangent" }, { lead: 0.5 }, { bank: 1 }]) {
+        await u.loadShots([{ t: 0, name: "Intro", camera }]);
+        u.seekExact(1);
+        u.applyPinnedFraming({ p: [3, 2, 6], l: [1, 1, 0], fov: 42, roll: 0.4 });
+        notices.push(u.get().status);
+      }
+      return { unchanged: before === JSON.stringify(u.sourceCamKeys()), notices };
+    } finally {
+      tools.cameraRig = previousRig;
+      await u.loadShots();
+    }
+  })()`);
+  expect(result.unchanged).toBe(true);
+  expect(result.notices).toEqual([
+    expect.stringContaining("Along path"),
+    expect.stringContaining("Lookahead"),
+    expect.stringContaining("Auto-banking"),
+  ]);
+});
+
 test("pin capture keeps the Final frame pose and skips a preview that moved during render", async () => {
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
