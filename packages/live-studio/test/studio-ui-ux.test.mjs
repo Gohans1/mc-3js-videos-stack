@@ -110,6 +110,7 @@ globalThis.fetch = async (input, init) => {
     const saved = {};
     for (const { name, data } of files) {
       if (name === "cam") {
+        camPosts += 1;
         camData = data;
         versions.cam = "v" + ++camVer;
       } else if (name === "shots") {
@@ -2369,7 +2370,7 @@ test("a pinned angle applies pose and the active lens at the playhead in one Und
   }
 });
 
-test("applying a pin leaves Dolly Zoom and a blank gap untouched", async () => {
+test("applying a pin leaves Dolly Zoom spans, muted keys, and a blank gap untouched", async () => {
   const result = await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
     const prior = u.get().timing;
@@ -2377,25 +2378,31 @@ test("applying a pin leaves Dolly Zoom and a blank gap untouched", async () => {
       await u.loadShots([{ t: 0, name: "Intro" }]);
       await u.setCamData([
         { t: 0, p: [0, 2, 8], l: [0, 1, 0], fov: 40 },
+        { t: 2, p: [0, 2, 6], l: [0, 1, 0], muted: true },
         { t: 4, p: [0, 2, 3], l: [0, 1, 0], dollyZoomScale: 2 },
       ]);
       const pin = { p: [3, 2, 6], l: [1, 1, 0], fov: 42 };
       const before = JSON.stringify(u.sourceCamKeys());
-      u.seekExact(4);
-      u.applyPinnedFraming(pin);
-      const dolly = u.get().status;
+      const [start, interior, muted, end] = [0, 1, 2, 4].map((time) => {
+        u.seekExact(time);
+        u.applyPinnedFraming(pin);
+        return u.get().status;
+      });
       u.set({ timing: true, camKey: null });
       u.refreshProjection({ gaps: [{ from: 6, to: 7 }] });
       u.seekExact(6.5);
       u.applyPinnedFraming(pin);
-      return { same: before === JSON.stringify(u.sourceCamKeys()), dolly, gap: u.get().status };
+      return { same: before === JSON.stringify(u.sourceCamKeys()), start, interior, muted, end, gap: u.get().status };
     } finally {
       u.set({ timing: prior });
       u.refreshProjection({});
     }
   })()`);
   expect(result.same).toBe(true);
-  expect(result.dolly).toContain("Dolly Zoom");
+  expect(result.start).toContain("Dolly Zoom");
+  expect(result.interior).toContain("Dolly Zoom");
+  expect(result.muted).toContain("Unmute");
+  expect(result.end).toContain("Dolly Zoom");
   expect(result.gap).toContain("playing frame");
 });
 
@@ -2643,13 +2650,17 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     el.blur();
   })()`;
+  const revertButton = 'button[aria-label="Revert pending changes"]';
+  const confirmButton = 'button[aria-label="Confirm pending changes"]';
+  const readyButton = (selector) =>
+    `document.querySelector('[role="group"]:not([inert]) ${selector}:enabled')`;
   try {
     await page.evaluate("window.__UX_TEST__.loadCameraFixture()");
     await waitUntil(`document.querySelector('input[aria-label="Focal length (mm)"]')`);
     const postsBefore = await page.evaluate("window.__UX_TEST__.camPostCount()");
 
     await page.evaluate(setFocal(85));
-    await waitUntil(`document.querySelector('button[aria-label="Revert pending changes"]')`);
+    await waitUntil(readyButton(revertButton));
 
     const draftState = await page.evaluate(`(() => ({
       mm: window.__UX_TEST__.camKeys()[1].mm,
@@ -2663,10 +2674,10 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     expect(draftState.hasConfirm).toBe(true);
 
     // Revert restores original FOV 50 without writing to server
-    await page.evaluate(
-      `document.querySelector('button[aria-label="Revert pending changes"]').click()`,
+    await page.evaluate(`document.querySelector('${revertButton}').click()`);
+    await waitUntil(
+      `!document.querySelector('${revertButton}') && window.__UX_TEST__.get().status.startsWith("Reverted ")`,
     );
-    await waitUntil(`!document.querySelector('button[aria-label="Revert pending changes"]')`);
     const afterRevert = await page.evaluate(`({
       mm: window.__UX_TEST__.camKeys()[1].mm ?? null,
       fov: window.__UX_TEST__.camKeys()[1].fov,
@@ -2674,16 +2685,16 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     })`);
     expect(afterRevert).toEqual({ mm: null, fov: 50, posts: postsBefore });
 
-    // Edit again and Confirm writes to /api/cam and clears PendingChangesBar
+    // Confirm persists the edit and clears the pending bar.
     await page.evaluate(setFocal(50));
-    await waitUntil(`document.querySelector('button[aria-label="Confirm pending changes"]')`);
-    await page.evaluate(
-      `document.querySelector('button[aria-label="Confirm pending changes"]').click()`,
-    );
+    await waitUntil(readyButton(confirmButton));
+    await page.evaluate(`document.querySelector('${confirmButton}').click()`);
     await waitUntil(
-      `!document.querySelector('button[aria-label="Confirm pending changes"]') && window.__UX_TEST__.camPostCount() > ${postsBefore}`,
+      `!document.querySelector('${confirmButton}') && window.__UX_TEST__.camPostCount() > ${postsBefore}`,
     );
     expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].mm")).toBe(50);
+    const saved = await page.evaluate(`(async () => (await (await fetch("/api/cam")).json()).data)()`);
+    expect(saved[1].mm).toBe(50);
   } finally {
     await page.evaluate("window.__UX_TEST__.setAutoSave(true)");
   }

@@ -1126,9 +1126,22 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
   if (pinned && (!canKeyOpticsHere() || (at < 0 && !cameraTimeMatchesSource(t))))
     return say("Move the playhead to a playing frame to apply this framing");
 
-  const outgoing = at >= 0 ? keys[at] : keys.find((key) => key.t > t);
-  if (pinned && outgoing?.dollyZoomScale !== undefined && (at >= 0 || !outgoing.cut))
-    return say("This frame is in a Dolly Zoom. Apply the pin outside that span");
+  const source = get().timing ? cameraTimesAt(t).camera : t;
+  if (pinned) {
+    const track = doc.source ?? [];
+    const segment = at >= 0
+      ? sourceCameraSegment(at)
+      : cameraSegmentAt(track, track.findLastIndex((key) => key.t <= source));
+    if (at >= 0 && segment?.at === -1)
+      return say("Unmute this camera keyframe before applying the pin");
+    if (segment) {
+      const { active, at: index } = segment;
+      const incoming = at >= 0 && index > 0 ? active[index] : undefined;
+      const outgoing = at >= 0 ? active[index + 1] : active.find((key) => key.t > source);
+      if (incoming?.dollyZoomScale !== undefined || outgoing?.dollyZoomScale !== undefined)
+        return say("This frame is in a Dolly Zoom. Apply the pin outside that span");
+    }
+  }
 
   const applyLens = (time: number, owner: number) => {
     if (!pinned || !S.tools?.cameraOpticsSample) return;
@@ -1155,7 +1168,6 @@ const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
       say("Camera keyframe updated at " + stamp(next.t));
     });
   } else {
-    const source = get().timing ? cameraTimesAt(t).camera : t;
     together(() => {
       if (insertKey(t, drawnView(), view)) applyLens(source, shot);
     });
