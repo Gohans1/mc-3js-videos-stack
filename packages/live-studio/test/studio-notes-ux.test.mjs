@@ -357,7 +357,7 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   assert.equal(allowed.status, 200);
   const html = await allowed.text();
   assert.match(html, /#100F0F/i);
-  assert.match(html, /Loading Studio/);
+  assert.match(html, /Starting Studio/);
 
   // --stop refuses to terminate a PID whose studio.json belongs to a different film
   mkdirSync(join(otherDir, "renders/live"), { recursive: true });
