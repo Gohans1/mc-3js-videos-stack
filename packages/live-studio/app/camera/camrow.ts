@@ -1,4 +1,3 @@
-import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { EDIT } from "film/edit";
 
 import { cameraSpeed } from "../../src/camera-speed.mjs";
@@ -11,6 +10,7 @@ import {
   moveFreeze,
   playRanges,
 } from "../../src/timing.mjs";
+import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
 import { easeFn } from "../core/ease";
@@ -153,6 +153,21 @@ const shotAtX = (x: number, w: number) => {
     : shotIndex(t);
 };
 
+const spanPeakSpeed = (x0: number, x1: number, from: number, to: number, ease: CamKey["ease"]) => {
+  const f = easeFn(ease, DEFAULT_EASE);
+  if (!f) return 0;
+  const n = Math.max(8, Math.min(48, Math.round(x1 - x0))),
+    { a, v } = view(),
+    w = S.el.camrow.clientWidth,
+    clock = get().timing ? timingClock : null;
+  let peak = 0;
+  for (let j = 0; j <= n; j++) {
+    const t = a + ((x0 + Math.min(j / n, 1 - 1e-7) * (x1 - x0)) / w) * v;
+    peak = Math.max(peak, cameraSpeed(clock, from, to, f, t));
+  }
+  return peak;
+};
+
 const drawSpeed = (
   g: CanvasRenderingContext2D,
   x0: number,
@@ -162,6 +177,7 @@ const drawSpeed = (
   ease: CamKey["ease"],
   top: number,
   floor: number,
+  sharedPeak?: number,
 ) => {
   const f = easeFn(ease, DEFAULT_EASE);
   if (!f) return;
@@ -173,7 +189,7 @@ const drawSpeed = (
     const t = a + ((x0 + Math.min(j / n, 1 - 1e-7) * (x1 - x0)) / w) * v;
     speed.push(cameraSpeed(get().timing ? timingClock : null, from, to, f, t));
   }
-  const peak = Math.max(1e-6, ...speed),
+  const peak = Math.max(1e-6, sharedPeak ?? 0, ...speed),
     y = (s: number) => floor - (s / peak) * (floor - top);
   g.beginPath();
   g.moveTo(x0, floor);
@@ -281,11 +297,13 @@ const drawBlock = (
     g.fillStyle = tone("clip-video-text");
     g.fillText(`${label ? `Speed ${label} · ` : ""}${(e - s).toFixed(1)}s`, left + nw + 14, mid);
   }
-  // The camera's speed between this shot's keys
+  // The camera's speed between this shot's keys (one shared peak per shot so matched junction speeds visually meet).
   const top = y0 + HEAD + 3,
     foot = y1 - FOOT - BAND,
     floor = foot - 2;
   const sourceKeys = EDIT.cam as CamKey[];
+  const activeSpans: { a: number; b: number; k0: CamKey; k1: CamKey; hold: boolean }[] = [];
+  let shotPeak = 1e-6;
   for (let k = 1; k < sourceKeys.length; k++) {
     const k0 = sourceKeys[k - 1],
       k1 = sourceKeys[k];
@@ -293,7 +311,12 @@ const drawBlock = (
     const a = X(timingClock.outputAt(Math.max(k0.t, rawFrom))),
       b = X(timingClock.outputAt(Math.min(k1.t, rawTo), "before"));
     if (b < 0 || a > w) continue;
-    if (holds(k0, k1)) {
+    const hold = holds(k0, k1);
+    activeSpans.push({ a, b, k0, k1, hold });
+    if (!hold) shotPeak = Math.max(shotPeak, spanPeakSpeed(a, b, k0.t, k1.t, k1.ease));
+  }
+  for (const { a, b, k0, k1, hold } of activeSpans) {
+    if (hold) {
       g.fillStyle = tone("muted-foreground");
       g.fillRect(Math.max(cx0, a), floor - 1, Math.min(cx1, b) - Math.max(cx0, a), 1);
       if (b - a > 70) {
@@ -303,7 +326,7 @@ const drawBlock = (
       }
       continue;
     }
-    drawSpeed(g, a, b, k0.t, k1.t, k1.ease, top, floor);
+    drawSpeed(g, a, b, k0.t, k1.t, k1.ease, top, floor, shotPeak);
   }
   // In, Out, Combo at the foot of the block, mapped across timing speed and freezes
   const an = animOf(i),
@@ -425,7 +448,14 @@ export const drawCamRow = () => {
     g.stroke();
     const sourceStart = shotsDoc.data?.[i]?.t;
     if (sourceStart !== undefined)
-      paintActivityMark(g, "transition", String(sourceStart), left + 2, TRANSITION_TOP + 2, right - left - 4);
+      paintActivityMark(
+        g,
+        "transition",
+        String(sourceStart),
+        left + 2,
+        TRANSITION_TOP + 2,
+        right - left - 4,
+      );
     if (on && right - left > 18) {
       g.fillStyle = tone("pick");
       g.fillRect(left + 3, cy - 5, 2, 10);

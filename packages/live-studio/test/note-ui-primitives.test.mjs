@@ -336,6 +336,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
   let noteViewsMod;
   let metaMod;
   let inkBarMod;
+  let pinToolsMod;
   let gridMod;
   let insightMod;
   let reviewMod;
@@ -576,6 +577,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       noteViewsMod,
       metaMod,
       inkBarMod,
+      pinToolsMod,
       gridMod,
       insightMod,
       reviewMod,
@@ -594,6 +596,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       server.ssrLoadModule("/notes/note-views-model.ts"),
       server.ssrLoadModule("/notes/note-card-meta.ts"),
       server.ssrLoadModule("/notes/InkBar.tsx"),
+      server.ssrLoadModule("/notes/PinTools.tsx"),
       server.ssrLoadModule("/notes/NoteGridViews.tsx"),
       server.ssrLoadModule("/notes/NoteInsightViews.tsx"),
       server.ssrLoadModule("/notes/ReviewRoom.tsx"),
@@ -1230,6 +1233,31 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       const inkHtml = renderHtml(createElement(inkBarMod.InkBar));
       assert.match(inkHtml, /role="toolbar"[^>]*aria-label="Draw"/);
       assert.match(inkHtml, /aria-label="Undo last stroke"/);
+      assert.doesNotMatch(inkHtml, />Cancel</);
+      assert.doesNotMatch(inkHtml, />Add note</);
+    });
+
+    const pinCompose = {
+      kind: "create",
+      t: 2,
+      shot: 0,
+      shotName: "Intro",
+      pin: { x: 0.5, y: 0.5, what: "furniture" },
+      resume: false,
+    };
+    withStore({ compose: pinCompose, draft: "", ink: null, inkSaid: "", refs: [] }, () => {
+      const pinHtml = renderHtml(createElement(pinToolsMod.PinDrawToolbar, { hasPin: true }));
+      assert.match(pinHtml, /role="toolbar"/);
+      assert.match(pinHtml, /aria-label="Note tools"/);
+      const stageHtml = renderHtml(createElement(composeMod.Compose, { stage: true }));
+      assert.match(stageHtml, />Cancel</);
+      assert.match(stageHtml, /<button[^>]*disabled[^>]*>[\s\S]*Add note[\s\S]*<\/button>/);
+    });
+
+    withStore({ compose: pinCompose, draft: "Move chair", ink: "pen", inkSaid: "" }, () => {
+      const inkComposeHtml = renderHtml(createElement(inkBarMod.InkBar));
+      assert.match(inkComposeHtml, />Cancel</);
+      assert.match(inkComposeHtml, />Add note</);
     });
   });
 

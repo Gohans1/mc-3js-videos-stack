@@ -1,4 +1,3 @@
-import { useLitAny } from "../activity/activity";
 import { useLayoutEffect } from "react";
 
 // The timeline canvases share one time axis and scroll container; overlays sit above the main Camera track.
@@ -6,6 +5,7 @@ import { useLayoutEffect } from "react";
 // runs the whole height so every row shares one time axis. At the right, the master meter (sound/AudioMeter.tsx)
 import { cn } from "@/lib/utils";
 
+import { useLitAny } from "../activity/activity";
 import { CameraTrack } from "../camera/CameraTrack";
 import { LayerTrack } from "../camera/LayerTrack";
 import { Splitter, useStoredSize } from "../components/Splitter";
@@ -13,6 +13,7 @@ import { sanitizeStoredSize } from "../components/splitter-layout";
 import type { Bind } from "../core/state";
 import { useStudio } from "../core/store";
 import { KeyHeads } from "../keys/KeyHeads";
+import { OpenFilmTrack } from "../openfilm/Track";
 import { AudioMeter } from "../sound/AudioMeter";
 import { ClipMenu } from "../sound/ClipMenu";
 import { TrackHeads } from "../sound/TrackHeads";
@@ -20,7 +21,6 @@ import { TextHeads } from "../text/TextHeads";
 import { ROW_MAX, ROW_MIN, rowLayout, RULER_H, setRowLayout } from "./rows";
 import { drawTimelines, invalidateRects } from "./timeline";
 import { TimelineBar } from "./TimelineBar";
-import { OpenFilmTrack } from "../openfilm/Track";
 
 const clampRowHeight = (v: number | null, min: number, max: number) => {
   const s = sanitizeStoredSize(v, min, false);
@@ -95,7 +95,7 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
     <div
       ref={bind("timeline")}
       className={cn(
-        "bg-background upright:mt-0 sideways:mt-0 relative col-[1/-1] row-start-3 mt-1.5 h-[min(var(--edit-h,max(20rem,42dvh)),var(--edit-max,calc(100dvh-220px)))] min-h-0 min-w-0 overflow-hidden rounded-lg select-none in-data-edit-folded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1] in-data-cli-expanded:hidden in-data-cli-side:col-[1]",
+        "bg-background upright:mt-0 sideways:mt-0 relative col-[1/-1] row-start-3 mt-1.5 h-[min(var(--edit-h,max(20rem,42dvh)),var(--edit-max,calc(100dvh-220px)))] min-h-0 min-w-0 overflow-hidden rounded-lg select-none in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-edit-folded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1]",
         "upright:h-auto upright:flex-none upright:overflow-visible upright:rounded-none upright:in-data-inspector-active:hidden sideways:col-[1] sideways:h-auto sideways:rounded-none",
       )}
     >
@@ -130,7 +130,10 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
             />
           </div>
           <div className={cn("col-span-2 mt-1 grid grid-cols-subgrid", !cam && "hidden")}>
-            <span data-ai-lit={cameraLit || undefined} className="border-track-line bg-track-head text-ui text-label self-stretch border-e ps-1.5 leading-12 font-medium">
+            <span
+              data-ai-lit={cameraLit || undefined}
+              className="border-track-line bg-track-head text-ui text-label self-stretch border-e ps-1.5 leading-12 font-medium"
+            >
               Camera
             </span>
             <CameraTrack bind={bind} shown={cam} />
@@ -198,6 +201,13 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
         </div>
         <AudioMeter />
       </div>
+      {/* Continuous AI spans overlay in front of all track rows and row gaps, below playhead */}
+      <div
+        ref={bind("ai")}
+        aria-hidden
+        hidden
+        className="pointer-events-none absolute left-0 z-1 overflow-hidden"
+      />
       {/* Continuous playhead down the rows, bridging row gaps and empty bottom space (timeline.ts) */}
       <div
         ref={bind("playhead")}

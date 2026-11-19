@@ -4,6 +4,7 @@ export interface OpticsSummaryKey {
   fstop?: number;
   focus?: unknown;
   handheld?: unknown;
+  bob?: number;
   roll?: number;
   wave?: number;
 }
@@ -59,6 +60,7 @@ export function formatOpticsAttributes(k: OpticsSummaryKey): string {
     handheld !== null ? `handheld ${handheld}` : null,
     k.roll ? `roll ${Math.round((k.roll * 1800) / Math.PI) / 10}°` : "no roll",
     k.wave !== undefined ? `sway ${k.wave}×` : "the film's sway",
+    k.bob !== undefined ? `bob ${k.bob}×` : null,
   ]
     .filter((x): x is string => x !== null)
     .join(", ");

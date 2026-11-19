@@ -34,12 +34,15 @@ import { Empty as UiEmpty, EmptyDescription, EmptyHeader } from "@/components/ui
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
+import { noteState } from "../../src/note-state.mjs";
+import { EASE_OUT, prefersReduced } from "../components/Motion";
 import { Tip } from "../components/Tip";
 import { PHONE } from "../core/device";
 import { set, useDialogModal, useStudio } from "../core/store";
 import { rangeText, stamp } from "../core/time";
 import { frameSize } from "../picture/frame";
 import { inkWords } from "./ink";
+import { NoteExitingContext, type NoteMotionKind, usePlayNoteExit } from "./note-action-motion";
 import { noteActionTarget, noteRangePill, pinShortLabel } from "./note-card-meta";
 import {
   formatShortDate,
@@ -152,8 +155,29 @@ export function NoteCardStatus({
   dense?: boolean;
 }) {
   const label = noteStatusLabel(state, asking, needsWork);
+  const badgeRef = useRef<HTMLSpanElement>(null);
+  const toneKey = `${state}:${asking}:${needsWork}`;
+  const prevTone = useRef(toneKey);
+
+  useLayoutEffect(() => {
+    if (prevTone.current === toneKey) return;
+    prevTone.current = toneKey;
+    const el = badgeRef.current;
+    if (!el || typeof el.animate !== "function") return;
+    const a = prefersReduced()
+      ? el.animate([{ opacity: 0.4 }, { opacity: 1 }], { duration: 100, easing: EASE_OUT })
+      : el.animate(
+          [
+            { opacity: 0.4, transform: "scale(0.92)" },
+            { opacity: 1, transform: "scale(1)" },
+          ],
+          { duration: 180, easing: EASE_OUT },
+        );
+    return () => a.cancel();
+  }, [toneKey]);
+
   return (
-    <span className="inline-flex shrink-0 items-center gap-1">
+    <span ref={badgeRef} className="inline-flex shrink-0 items-center gap-1">
       <NoteStatusGlyph state={state} asking={asking} needsWork={needsWork} />
       <span
         className={cn(
@@ -356,7 +380,7 @@ export function NoteTimeChip({
       aria-label={`Jump to ${target}`}
       onClick={(e) => {
         e.stopPropagation();
-        goToNote(note);
+        goToNote(note, undefined, "before");
       }}
       className={cn(
         "text-label hover:bg-tint hover:text-primary-text hover:border-primary/45 focus-visible:ring-ring border-hairline bg-surface-subtle inline-flex shrink-0 cursor-pointer items-center justify-center rounded border font-mono leading-none font-medium tracking-tight tabular-nums transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none",
@@ -746,10 +770,12 @@ export function AskCallout({
 export function FixCallout({
   fix,
   state,
+  note,
   compact = false,
 }: {
   fix: Fix;
   state: NoteState;
+  note?: Note;
   compact?: boolean;
 }) {
   const dateLabel = formatShortDate(fix.at);
@@ -776,6 +802,23 @@ export function FixCallout({
         : state === "check"
           ? "text-warn-text"
           : "text-ok-text";
+  const hasCustomAfter = Boolean(fix.cam || typeof fix.t === "number");
+  const afterJump =
+    note && hasCustomAfter ? (
+      <Button
+        type="button"
+        variant="lit"
+        size="xs"
+        className="ms-1"
+        onClick={(e) => {
+          e.stopPropagation();
+          goToNote(note, undefined, "after");
+        }}
+      >
+        <Crosshair aria-hidden data-icon="inline-start" />
+        After view
+      </Button>
+    ) : null;
   if (compact) {
     return (
       <p className="text-ui mt-1 max-w-[65ch] leading-normal text-pretty wrap-anywhere select-text">
@@ -789,6 +832,12 @@ export function FixCallout({
             </span>
           </>
         )}
+        {fix.noAfterReason && (
+          <span className="text-muted-foreground mt-0.5 block text-xs">
+            No after image: {fix.noAfterReason}
+          </span>
+        )}
+        {afterJump}
       </p>
     );
   }
@@ -814,6 +863,12 @@ export function FixCallout({
             </span>
           </>
         )}
+        {fix.noAfterReason && (
+          <span className="text-muted-foreground mt-0.5 block text-xs">
+            No after image: {fix.noAfterReason}
+          </span>
+        )}
+        {afterJump}
       </AlertDescription>
     </Alert>
   );
@@ -834,7 +889,7 @@ export function NoteFollowups({
     <>
       <NoteHistoryDisclosure note={note} state={state} prior={prior} />
       {activeAsk && <AskCallout ask={activeAsk} compact={compact} />}
-      {activeFix && <FixCallout fix={activeFix} state={state} compact={compact} />}
+      {activeFix && <FixCallout fix={activeFix} state={state} note={note} compact={compact} />}
       <LearnedCallout note={note} compact={compact} />
     </>
   );
@@ -942,6 +997,150 @@ export function NoteTags({
 }
 
 // Compact frame thumbnail; hovering opens a floating full-detail frame preview.
+function NotePreviewTile({
+  src,
+  alt,
+  ariaLabel,
+  badge,
+  subBadge,
+  crop,
+  cropWhat,
+  width,
+  height,
+  portrait,
+  onClick,
+}: {
+  src: string;
+  alt: string;
+  ariaLabel: string;
+  badge?: string;
+  subBadge?: string | null;
+  crop?: string | null;
+  cropWhat?: string;
+  width: number;
+  height: number;
+  portrait: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className="bg-backdrop hover:ring-primary/80 focus-visible:ring-ring note-image-outline relative block w-full cursor-pointer overflow-hidden rounded-lg text-start transition-shadow outline-none hover:ring-2 focus-visible:ring-2 motion-reduce:transition-none"
+    >
+      <img
+        src={src}
+        width={width}
+        height={height}
+        alt={alt}
+        className={cn("block", portrait ? "mx-auto max-h-80 w-auto" : "h-auto w-full")}
+      />
+      {crop && (
+        <img
+          src={crop}
+          width={480}
+          height={480}
+          alt={cropWhat ? `Pinned detail: ${cropWhat}` : "Pinned detail"}
+          className="border-primary/75 bg-backdrop note-image-outline pointer-events-none absolute bottom-1.5 left-1.5 size-12 rounded-md border object-cover shadow-md"
+        />
+      )}
+      {badge && (
+        <Badge variant="frame" className="pointer-events-none absolute top-1.5 left-1.5">
+          {badge}
+        </Badge>
+      )}
+      {subBadge && (
+        <Badge variant="snapshot" className="pointer-events-none absolute top-1.5 right-1.5">
+          {subBadge}
+        </Badge>
+      )}
+    </button>
+  );
+}
+
+export function BeforeAfterPair({
+  note,
+  t,
+  media,
+  compact = false,
+  mutedDone = false,
+  className,
+}: {
+  note: Note;
+  t: number;
+  media: ReturnType<typeof noteMedia>;
+  compact?: boolean;
+  mutedDone?: boolean;
+  className?: string;
+}) {
+  if (!media.after) return null;
+  const hasBefore = Boolean(media.thumb);
+  const afterLabel =
+    media.afterTime !== null && Math.abs(media.afterTime - t) >= 0.01
+      ? `After (${stamp(media.afterTime)})`
+      : "After";
+  return (
+    <div
+      className={cn(
+        "grid gap-1",
+        hasBefore ? "grid-cols-2" : "grid-cols-1",
+        compact ? "h-full w-full" : "w-full",
+        className,
+      )}
+    >
+      {media.thumb && (
+        <button
+          type="button"
+          aria-label={`Jump to before frame at ${stamp(t)}${note.freeCam ? " in free cam" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            goToNote(note, undefined, "before");
+          }}
+          className="bg-backdrop hover:ring-primary/80 focus-visible:ring-ring relative block size-full cursor-pointer overflow-hidden text-start outline-none hover:ring-2 focus-visible:ring-2 focus-visible:ring-inset"
+        >
+          <img
+            src={media.thumb}
+            loading="lazy"
+            decoding="async"
+            alt={`Before frame at ${stamp(t)}`}
+            className={cn(
+              "note-image-outline block size-full object-cover",
+              mutedDone && "opacity-75 group-hover/card:opacity-100",
+            )}
+          />
+          <span className="text-picture bg-scrim-strong text-tag pointer-events-none absolute top-1 left-1 rounded px-1 py-0.5 leading-none font-medium">
+            Before
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        aria-label={`Jump to after frame${media.afterCam ? " in custom camera" : ""}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          goToNote(note, undefined, "after");
+        }}
+        className="bg-backdrop hover:ring-primary/80 focus-visible:ring-ring relative block size-full cursor-pointer overflow-hidden text-start outline-none hover:ring-2 focus-visible:ring-2 focus-visible:ring-inset"
+      >
+        <img
+          src={media.after}
+          loading="lazy"
+          decoding="async"
+          alt={`After proof at ${stamp(media.afterTime ?? t)}`}
+          className="note-image-outline block size-full object-cover"
+        />
+        <span className="text-picture bg-scrim-strong text-tag pointer-events-none absolute top-1 left-1 rounded px-1 py-0.5 leading-none font-medium">
+          {afterLabel}
+        </span>
+      </button>
+    </div>
+  );
+}
+
 export function NoteThumb({
   note,
   t,
@@ -958,11 +1157,21 @@ export function NoteThumb({
   muted?: boolean;
 }) {
   const media = noteMedia(note);
-  if (!media.thumb) return null;
+  const cover = media.thumb ?? media.after;
+  if (!cover) return null;
+  const hasBoth = Boolean(media.thumb && media.after);
+  const hasAfterTarget = Boolean(media.afterCam || media.afterTime !== null);
+  const usesAfterOnThumbClick =
+    noteState(note) !== "open" && (hasAfterTarget || (!media.thumb && !!media.after));
   const [w, h] = frameSize(960);
   const portrait = h > w;
   const pinName = pinShortLabel(note.pin?.what);
   const timeText = stamp(t);
+  const afterSubBadge = media.afterCam
+    ? "Custom cam"
+    : media.afterTime !== null && Math.abs(media.afterTime - t) >= 0.01
+      ? stamp(media.afterTime)
+      : null;
   return (
     <PreviewCard.Root>
       <PreviewCard.Trigger
@@ -971,7 +1180,7 @@ export function NoteThumb({
         render={
           <button
             type="button"
-            aria-label={`Preview frame at ${timeText} (click to jump)`}
+            aria-label={`Preview frame at ${timeText}${hasBoth ? " (Before and After; click to jump" : " (click to jump"}${usesAfterOnThumbClick && media.afterCam ? " to custom camera" : note.freeCam ? " in free cam" : ""})`}
             onClick={(e) => {
               e.stopPropagation();
               goToNote(note);
@@ -995,14 +1204,25 @@ export function NoteThumb({
         }
       >
         <img
-          src={media.thumb}
+          src={cover}
           loading="lazy"
           decoding="async"
           width={w}
           height={h}
           alt=""
-          className={cn("note-image-outline block size-full", dense && portrait ? "object-contain" : "object-cover")}
+          className={cn(
+            "note-image-outline block size-full",
+            dense && portrait ? "object-contain" : "object-cover",
+          )}
         />
+        {hasBoth && (
+          <span
+            aria-hidden
+            className="text-picture bg-scrim-strong text-tag pointer-events-none absolute bottom-1 left-1 rounded-sm px-1 py-px leading-none font-semibold"
+          >
+            B/A
+          </span>
+        )}
         <span
           aria-hidden
           className="text-picture/85 group-hover/thumb:text-primary-text bg-scrim group-hover/thumb:bg-scrim-strong pointer-events-none absolute right-1 bottom-1 flex size-4 items-center justify-center rounded-sm transition-colors duration-150 motion-reduce:transition-none"
@@ -1021,31 +1241,72 @@ export function NoteThumb({
           <PreviewCard.Popup
             data-note-preview={note.id}
             className={cn(
-              "font-md bg-popover text-popover-foreground shadow-float ring-hairline-strong max-w-sm origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1",
-              portrait ? "w-60" : "w-96",
+              "font-md bg-popover text-popover-foreground shadow-float ring-hairline-strong origin-(--transform-origin) overflow-hidden rounded-xl p-1.5 ring-1",
+              hasBoth
+                ? cn("max-w-[min(92vw,42rem)]", portrait ? "w-[26rem]" : "w-[40rem]")
+                : cn("max-w-sm", portrait ? "w-60" : "w-96"),
             )}
           >
-            <div className="bg-backdrop relative overflow-hidden rounded-lg note-image-outline">
-              <img
+            {hasBoth && media.thumb && media.after ? (
+              <div className="grid grid-cols-2 gap-1.5">
+                <NotePreviewTile
+                  src={media.thumb}
+                  alt={`Before frame at ${timeText}`}
+                  ariaLabel={`Jump to before frame at ${timeText}${note.freeCam ? " in free cam" : ""}`}
+                  badge="Before"
+                  crop={note.pin ? media.crop : null}
+                  cropWhat={note.pin?.what}
+                  width={w}
+                  height={h}
+                  portrait={portrait}
+                  onClick={() => goToNote(note, undefined, "before")}
+                />
+                <NotePreviewTile
+                  src={media.after}
+                  alt={`After proof frame at ${stamp(media.afterTime ?? t)}`}
+                  ariaLabel={`Jump to after frame${media.afterCam ? " in custom camera" : ""}`}
+                  badge="After"
+                  subBadge={afterSubBadge}
+                  width={w}
+                  height={h}
+                  portrait={portrait}
+                  onClick={() => goToNote(note, undefined, "after")}
+                />
+              </div>
+            ) : media.thumb ? (
+              <NotePreviewTile
                 src={media.thumb}
+                alt={`Frame at ${timeText}`}
+                ariaLabel={`Jump to preview frame at ${timeText}${note.freeCam ? " in free cam" : ""}`}
+                badge={media.noAfterReason ? "Before" : undefined}
+                crop={note.pin ? media.crop : null}
+                cropWhat={note.pin?.what}
                 width={w}
                 height={h}
-                alt={`Frame at ${timeText}`}
-                className={cn("block", portrait ? "mx-auto max-h-80 w-auto" : "h-auto w-full")}
+                portrait={portrait}
+                onClick={() => goToNote(note, undefined, "before")}
               />
-              {note.pin && media.crop && (
-                <img
-                  src={media.crop}
-                  width={480}
-                  height={480}
-                  alt={`Pinned detail: ${note.pin.what}`}
-                  className="border-primary/75 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-14 rounded-md border object-cover shadow-md note-image-outline"
+            ) : (
+              media.after && (
+                <NotePreviewTile
+                  src={media.after}
+                  alt={`After proof frame at ${stamp(media.afterTime ?? t)}`}
+                  ariaLabel={`Jump to after frame${media.afterCam ? " in custom camera" : ""}`}
+                  badge="After"
+                  subBadge={afterSubBadge}
+                  width={w}
+                  height={h}
+                  portrait={portrait}
+                  onClick={() => goToNote(note, undefined, "after")}
                 />
-              )}
-            </div>
+              )
+            )}
             <div className="text-ui mt-1.5 flex items-center gap-1.5 px-1 pb-0.5">
               <span className="text-primary-text font-mono font-semibold tabular-nums">
                 {timeText}
+                {media.afterTime !== null && Math.abs(media.afterTime - t) >= 0.01
+                  ? ` -> ${stamp(media.afterTime)}`
+                  : ""}
               </span>
               <span className="text-label min-w-0 flex-1 truncate" title={shotFull}>
                 {shotFull}
@@ -1056,6 +1317,11 @@ export function NoteThumb({
                 </Badge>
               )}
             </div>
+            {media.noAfterReason && (
+              <p className="text-muted-foreground px-1 pb-0.5 text-xs leading-snug text-pretty">
+                No after image: {media.noAfterReason}
+              </p>
+            )}
           </PreviewCard.Popup>
         </PreviewCard.Positioner>
       </PreviewCard.Portal>
@@ -1571,6 +1837,48 @@ export function ActiveFilterChips({
       <Button variant="link" size="sm" onClick={clearNoteFilters} className="ms-1">
         Reset all
       </Button>
+    </div>
+  );
+}
+
+/** Returns a stable signature of active note filters so exit ghosts clear whenever filter scope changes. */
+export function useNoteFilterScopeKey() {
+  const status = useStudio((s) => s.noteStatus);
+  const scope = useStudio((s) => s.noteScope);
+  const shot = useStudio((s) => s.noteShot);
+  const facets = useStudio((s) => s.noteFacets);
+  const q = useStudio((s) => s.noteSearch);
+  return `${status}|${scope}|${shot ?? ""}|${facets.join(",")}|${q}`;
+}
+
+/** Plays an interruptible exit transition for a departing note while hiding duplicate accessibility/tracking hooks. */
+export function NoteExitSlot({
+  id,
+  kind,
+  collapseHeight = true,
+  className,
+  children,
+}: {
+  id: string;
+  kind: NoteMotionKind;
+  collapseHeight?: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  usePlayNoteExit(wrapRef, cardRef, kind, collapseHeight);
+  return (
+    <div
+      ref={wrapRef}
+      aria-hidden="true"
+      inert
+      data-exiting-note={id}
+      className={cn("pointer-events-none select-none", className)}
+    >
+      <div ref={cardRef}>
+        <NoteExitingContext.Provider value={true}>{children}</NoteExitingContext.Provider>
+      </div>
     </div>
   );
 }

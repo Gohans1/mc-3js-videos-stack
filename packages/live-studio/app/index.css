@@ -112,6 +112,7 @@
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
+  --color-control-border: var(--control-border);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
@@ -255,6 +256,9 @@
   --destructive: var(--fx-red-200); /* >=4.7:1 AA text on card/background and destructive/20 */
   --destructive-foreground: var(--fx-black); /* 9.09:1 AA on destructive */
   --border: var(--fx-base-800);
+  --control-border: var(
+    --fx-base-600
+  ); /* >=3.3:1 visible button/toolbar chrome border on --background */
   /* >=3.4:1 UI control border across backdrop, background, card & raised-3 */
   --input: var(--fx-base-500);
   --ring: var(--fx-blue-300);
@@ -281,7 +285,7 @@
   --raised-3: var(--fx-base-850);
   --raised-4: var(--fx-base-800);
   --accent-hover: var(--fx-cyan-300);
-  --tint: var(--fx-blue-950); /* active toggle well */
+  --tint: var(--fx-blue-850); /* active toggle well */
   --tint-hover: var(--fx-black);
   --ok: var(--fx-green-400);
   --ok-text: var(--fx-green-300);
@@ -430,12 +434,13 @@
   background-color: var(--slider-fill);
 }
 
-[data-voice-playground] :is(
-  [data-slot="button"],
-  [data-slot="input"],
-  [data-slot="textarea"],
-  [data-slot="select-trigger"]
-):focus-visible {
+[data-voice-playground]
+  :is(
+    [data-slot="button"],
+    [data-slot="input"],
+    [data-slot="textarea"],
+    [data-slot="select-trigger"]
+  ):focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
   --tw-ring-color: transparent;

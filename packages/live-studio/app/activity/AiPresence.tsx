@@ -177,14 +177,14 @@ function Presence({ className }: { className?: string }) {
             className={cn(live ? "text-ai-text" : "text-muted-foreground")}
           />
           {!live && !last && (
-            <span className="text-muted-foreground @max-[560px]:hidden">AI idle</span>
+            <span className="text-muted-foreground @max-[480px]:hidden">AI idle</span>
           )}
           {last && <Outcome key={`o${last.id}`} level={last.level} />}
           {last && (
             <span
               key={last.id}
               className={cn(
-                "motion-safe:animate-in motion-safe:fade-in-0 min-w-0 truncate duration-500 @max-[760px]:hidden",
+                "motion-safe:animate-in motion-safe:fade-in-0 min-w-0 truncate duration-500 @max-[480px]:hidden",
                 live ? "text-foreground" : "text-muted-foreground",
               )}
             >
@@ -196,7 +196,7 @@ function Presence({ className }: { className?: string }) {
       <PopoverContent
         variant="flush"
         side="top"
-        align="start"
+        align="center"
         sideOffset={8}
         className="max-h-[min(480px,var(--available-height))] w-[min(420px,calc(100vw-24px))]"
       >

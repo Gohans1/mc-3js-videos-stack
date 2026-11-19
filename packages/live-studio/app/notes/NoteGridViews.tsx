@@ -57,8 +57,10 @@ import { useVirtualTable, VirtualList } from "../components/VirtualList";
 import { PHONE } from "../core/device";
 import { get, say, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { useExitedNotes, useNoteMotion } from "./note-action-motion";
 import { noteActionTarget, noteShotTitle } from "./note-card-meta";
 import {
+  BeforeAfterPair,
   Empty,
   ExpandableNoteText,
   formatShortDate,
@@ -66,6 +68,7 @@ import {
   InlineFeedbackBox,
   NoteCardActions,
   NoteCardStatus,
+  NoteExitSlot,
   NoteFollowups,
   NoteNumber,
   NoteOpenButton,
@@ -76,6 +79,7 @@ import {
   NoteThumb,
   NoteTimeChip,
   openNoteRow,
+  useNoteFilterScopeKey,
 } from "./note-parts";
 import {
   boardTransition,
@@ -239,11 +243,13 @@ function BoardCard({
       }>)
     : [];
   const nNum = noteNum(n.id);
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLDivElement>(n.id, state);
   return (
     <Card
+      ref={cardRef}
       size="sm"
       tone={asking ? "ai" : state}
-      data-note={n.id}
+      data-note={noteAttr}
       data-ai-lit={lit || undefined}
       draggable={draggable}
       onDragStart={(e) => {
@@ -368,6 +374,72 @@ const BOARD_COL_CLS =
   "w-[84%] min-w-[min(14rem,100%)] @[480px]:w-72 @[860px]:w-auto @[860px]:min-w-[min(15rem,100%)] @[860px]:flex-1";
 
 type BoardDropId = "check" | "asking" | "open" | "done";
+
+function BoardColumnList({
+  items,
+  scopeKey,
+  ariaLabel,
+  emptyText,
+  draggable,
+  showStatus = false,
+  replyId,
+  setReplyId,
+  onDragStartNote,
+  onDragEndNote,
+}: {
+  items: readonly PlacedWithState[];
+  scopeKey: string;
+  ariaLabel: string;
+  emptyText?: string;
+  draggable: boolean;
+  showStatus?: boolean;
+  replyId: string | null;
+  setReplyId: (id: string | null) => void;
+  onDragStartNote: (item: PlacedWithState) => void;
+  onDragEndNote: () => void;
+}) {
+  const animated = useExitedNotes(items, (it) => it.n.id, scopeKey);
+  if (animated.length === 0 && emptyText) {
+    return (
+      <div className="min-h-0 flex-1 p-2">
+        <Empty>{emptyText}</Empty>
+      </div>
+    );
+  }
+  return (
+    <VirtualList
+      items={animated}
+      getKey={(entry) => entry.key}
+      estimateSize={120}
+      gap={8}
+      overscan={4}
+      data-arrow-scroll
+      role="list"
+      ariaLabel={ariaLabel}
+      className="min-h-0 flex-1 p-2"
+      renderItem={(entry) => {
+        const card = (
+          <BoardCard
+            item={entry.item}
+            draggable={draggable && !entry.exiting}
+            showStatus={showStatus}
+            replyId={replyId}
+            setReplyId={setReplyId}
+            onDragStartNote={onDragStartNote}
+            onDragEndNote={onDragEndNote}
+          />
+        );
+        return entry.exiting ? (
+          <NoteExitSlot id={entry.id} kind={entry.kind}>
+            {card}
+          </NoteExitSlot>
+        ) : (
+          card
+        );
+      }}
+    />
+  );
+}
 
 export function NoteBoardView({
   items,
@@ -641,44 +713,28 @@ export function NoteBoardView({
                       </span>
                     </div>
                   </header>
-                  {col.items.length === 0 ? (
-                    <div className="min-h-0 flex-1 p-2">
-                      <Empty>
-                        {col.id === "asking"
-                          ? "AI questions appear here"
-                          : col.id === "check"
-                            ? "AI fixes waiting review land here"
-                            : col.id === "open"
-                              ? "Nothing waiting to fix"
-                              : "Approved notes land here"}
-                      </Empty>
-                    </div>
-                  ) : (
-                    <VirtualList
-                      items={col.items}
-                      getKey={(it) => it.n.id}
-                      estimateSize={120}
-                      gap={8}
-                      overscan={4}
-                      data-arrow-scroll
-                      role="list"
-                      ariaLabel={`${col.label} notes`}
-                      className="min-h-0 flex-1 p-2"
-                      renderItem={(item) => (
-                        <BoardCard
-                          item={item}
-                          draggable
-                          replyId={replyId}
-                          setReplyId={setReplyId}
-                          onDragStartNote={setDragging}
-                          onDragEndNote={() => {
-                            setDragging(null);
-                            setDropCol(null);
-                          }}
-                        />
-                      )}
-                    />
-                  )}
+                  <BoardColumnList
+                    items={col.items}
+                    scopeKey={`board|${statusFilter}|${col.id}`}
+                    ariaLabel={`${col.label} notes`}
+                    emptyText={
+                      col.id === "asking"
+                        ? "AI questions appear here"
+                        : col.id === "check"
+                          ? "AI fixes waiting review land here"
+                          : col.id === "open"
+                            ? "Nothing waiting to fix"
+                            : "Approved notes land here"
+                    }
+                    draggable
+                    replyId={replyId}
+                    setReplyId={setReplyId}
+                    onDragStartNote={setDragging}
+                    onDragEndNote={() => {
+                      setDragging(null);
+                      setDropCol(null);
+                    }}
+                  />
                 </section>
               );
             })
@@ -718,30 +774,19 @@ export function NoteBoardView({
                     {col.items.length}
                   </span>
                 </header>
-                <VirtualList
+                <BoardColumnList
                   items={col.items}
-                  getKey={(it) => it.n.id}
-                  estimateSize={120}
-                  gap={8}
-                  overscan={4}
-                  data-arrow-scroll
-                  role="list"
+                  scopeKey={`board-shot|${statusFilter}|${col.shot}`}
                   ariaLabel={`${col.title} notes`}
-                  className="min-h-0 flex-1 p-2"
-                  renderItem={(item) => (
-                    <BoardCard
-                      item={item}
-                      draggable={false}
-                      showStatus
-                      replyId={replyId}
-                      setReplyId={setReplyId}
-                      onDragStartNote={setDragging}
-                      onDragEndNote={() => {
-                        setDragging(null);
-                        setDropCol(null);
-                      }}
-                    />
-                  )}
+                  draggable={false}
+                  showStatus
+                  replyId={replyId}
+                  setReplyId={setReplyId}
+                  onDragStartNote={setDragging}
+                  onDragEndNote={() => {
+                    setDragging(null);
+                    setDropCol(null);
+                  }}
                 />
               </section>
             ))
@@ -903,14 +948,18 @@ function NoteTableRow({
   const statusText = noteStatusLabel(state, asking, needsWork);
   const statusToneClass = noteStatusTextClass(state, asking, needsWork);
   const target = noteActionTarget(noteNum(n.id), stamp(t));
+  const { ref: rowMotionRef, noteAttr } = useNoteMotion<HTMLTableRowElement>(n.id, state);
 
   return (
     <TableRow
       tone={asking ? "ai" : state}
       data-index={index}
-      data-note={n.id}
+      data-note={noteAttr}
       data-ai-lit={lit || undefined}
-      ref={measureRow}
+      ref={(el) => {
+        rowMotionRef.current = el;
+        measureRow(el);
+      }}
       {...focusProps}
     >
       <TableCell className="align-middle whitespace-nowrap">
@@ -1263,10 +1312,12 @@ function NoteListRow({
   const { firstLine, extraLines } = splitNoteHeadline(n.text);
   const statusText = noteStatusLabel(state, asking, needsWork);
   const target = noteActionTarget(noteNum(n.id), stamp(t));
+  const { ref: rowRef, noteAttr } = useNoteMotion<HTMLDivElement>(n.id, state);
 
   return (
     <div
-      data-note={n.id}
+      ref={rowRef}
+      data-note={noteAttr}
       data-tone={asking ? "ai" : state}
       data-ai-lit={lit || undefined}
       className={cn(
@@ -1411,6 +1462,7 @@ function NoteListRow({
 export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
   const [grouped, setGrouped] = useState(true);
   const [replyId, setReplyId] = useState<string | null>(null);
+  const filterKey = useNoteFilterScopeKey();
 
   const flatRows = useMemo<FlatListRow[]>(() => {
     if (!grouped) {
@@ -1451,6 +1503,11 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
     }
     return rows;
   }, [grouped, items]);
+  const displayRows = useExitedNotes(
+    flatRows,
+    (r) => r.key,
+    `${grouped ? "list|grouped" : "list|flat"}|${filterKey}`,
+  );
 
   return (
     <div className="@container/list flex min-h-0 flex-1 flex-col px-3 pb-2.5">
@@ -1472,9 +1529,9 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
 
       <div className="bg-backdrop/55 border-hairline flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
         <VirtualList
-          items={flatRows}
-          getKey={(r) => r.key}
-          estimateSize={(i) => (flatRows[i]?.kind === "head" ? 34 : 58)}
+          items={displayRows}
+          getKey={(entry) => entry.key}
+          estimateSize={(i) => (displayRows[i]?.item.kind === "head" ? 34 : 58)}
           gap={0}
           overscan={8}
           data-arrow-scroll
@@ -1482,7 +1539,8 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
           ariaLabel="Notes list"
           className="scroll-fade min-h-0 flex-1"
           listClassName="pb-6"
-          renderItem={(row) => {
+          renderItem={(entry) => {
+            const row = entry.item;
             if (row.kind === "head") {
               return (
                 <div className="border-hairline-subtle bg-surface-subtle flex h-8.5 items-center justify-between gap-2 border-b px-3">
@@ -1503,13 +1561,20 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
                 </div>
               );
             }
-            return (
+            const node = (
               <NoteListRow
                 item={row.item}
                 grouped={grouped}
                 replyId={replyId}
                 setReplyId={setReplyId}
               />
+            );
+            return entry.exiting ? (
+              <NoteExitSlot id={entry.id} kind={entry.kind}>
+                {node}
+              </NoteExitSlot>
+            ) : (
+              node
             );
           }}
         />
@@ -1537,12 +1602,14 @@ function GalleryCard({
   const created = formatShortDate(n.at);
   const asking = isNoteAsking(n, state);
   const needsWork = isCreatorNeedsWork(n, state);
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLDivElement>(n.id, state);
 
   return (
     <Card
+      ref={cardRef}
       size="sm"
       tone={asking ? "ai" : state}
-      data-note={n.id}
+      data-note={noteAttr}
       data-ai-lit={lit || undefined}
       className="flex h-full flex-col"
     >
@@ -1550,39 +1617,48 @@ function GalleryCard({
         data-slot="card-media"
         className="bg-backdrop border-hairline-subtle relative aspect-video w-full overflow-hidden border-b"
       >
-        <button
-          type="button"
-          aria-label={`Jump to frame ${noteActionTarget(noteNum(n.id), stamp(t))}`}
-          onClick={() => goToNote(n)}
-          className="focus-visible:ring-ring block size-full cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
-        >
-          {showImage ? (
-            <img
-              src={cover}
-              loading="lazy"
-              decoding="async"
-              alt={`Frame at ${stamp(t)}`}
-              onError={() => setFailedCover(cover)}
-              className={cn(
-                "note-image-outline block size-full object-cover transition-opacity duration-150 motion-reduce:transition-none",
-                state === "done" && "opacity-75 group-hover/card:opacity-100",
-              )}
-            />
-          ) : (
-            <span className="text-label flex size-full flex-col items-center justify-center gap-1 px-2 text-center text-xs">
-              <Camera aria-hidden className="size-4 opacity-60" />
-              <span>No frame snapshot</span>
-            </span>
-          )}
-        </button>
-        {n.pin && media.crop && showImage && (
+        {media.after ? (
+          <BeforeAfterPair note={n} t={t} media={media} compact mutedDone={state === "done"} />
+        ) : (
+          <button
+            type="button"
+            aria-label={`Jump to frame ${noteActionTarget(noteNum(n.id), stamp(t))}`}
+            onClick={() => goToNote(n)}
+            className="focus-visible:ring-ring block size-full cursor-pointer text-start outline-none focus-visible:ring-2 focus-visible:ring-inset"
+          >
+            {showImage ? (
+              <img
+                src={cover}
+                loading="lazy"
+                decoding="async"
+                alt={`Frame at ${stamp(t)}`}
+                onError={() => setFailedCover(cover)}
+                className={cn(
+                  "note-image-outline block size-full object-cover transition-opacity duration-150 motion-reduce:transition-none",
+                  state === "done" && "opacity-75 group-hover/card:opacity-100",
+                )}
+              />
+            ) : (
+              <span className="text-label flex size-full flex-col items-center justify-center gap-1 px-2 text-center text-xs">
+                <Camera aria-hidden className="size-4 opacity-60" />
+                <span>No frame snapshot</span>
+              </span>
+            )}
+          </button>
+        )}
+        {n.pin && media.crop && showImage && !media.after && (
           <img
             src={media.crop}
             alt={`Pin: ${n.pin.what}`}
-            className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-1.5 left-1.5 size-10 rounded-md border object-cover shadow-md note-image-outline"
+            className="border-primary/80 bg-backdrop note-image-outline pointer-events-none absolute bottom-1.5 left-1.5 size-10 rounded-md border object-cover shadow-md"
           />
         )}
-        <span className="text-picture bg-scrim-strong pointer-events-none absolute top-1.5 left-1.5 rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums">
+        <span
+          className={cn(
+            "text-picture bg-scrim-strong pointer-events-none absolute left-1.5 rounded-md px-1.5 py-0.5 font-mono text-xs font-semibold tabular-nums",
+            media.after ? "bottom-1.5" : "top-1.5",
+          )}
+        >
           {stamp(t)}
         </span>
       </div>
@@ -1650,6 +1726,7 @@ function GalleryCard({
 
 export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }) {
   const [replyId, setReplyId] = useState<string | null>(null);
+  const filterKey = useNoteFilterScopeKey();
   const hostRef = useRef<HTMLDivElement>(null);
   const [cols, setCols] = useState(() =>
     typeof window !== "undefined" && window.innerWidth < 390 ? 1 : 2,
@@ -1671,7 +1748,8 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
     return () => ro.disconnect();
   }, []);
 
-  const rows = useMemo(() => chunkRows(items, cols), [items, cols]);
+  const animatedItems = useExitedNotes(items, (it) => it.n.id, `gallery|${cols}|${filterKey}`);
+  const rows = useMemo(() => chunkRows(animatedItems, cols), [animatedItems, cols]);
   const gridCls =
     cols === 3
       ? "grid grid-cols-3 items-stretch gap-2.5"
@@ -1683,7 +1761,7 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
     <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
       <VirtualList
         items={rows}
-        getKey={(row) => row.map((it) => it.n.id).join(":")}
+        getKey={(row) => row.map((entry) => entry.key).join(":")}
         estimateSize={255}
         gap={10}
         overscan={4}
@@ -1693,9 +1771,26 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
         className="scroll-fade min-h-0 flex-1 px-3 pb-6"
         renderItem={(row) => (
           <div className={gridCls}>
-            {row.map((item) => (
-              <GalleryCard key={item.n.id} item={item} replyId={replyId} setReplyId={setReplyId} />
-            ))}
+            {row.map((entry) =>
+              entry.exiting ? (
+                <NoteExitSlot
+                  key={entry.key}
+                  id={entry.id}
+                  kind={entry.kind}
+                  collapseHeight={false}
+                  className="h-full"
+                >
+                  <GalleryCard item={entry.item} replyId={replyId} setReplyId={setReplyId} />
+                </NoteExitSlot>
+              ) : (
+                <GalleryCard
+                  key={entry.key}
+                  item={entry.item}
+                  replyId={replyId}
+                  setReplyId={setReplyId}
+                />
+              ),
+            )}
           </div>
         )}
       />

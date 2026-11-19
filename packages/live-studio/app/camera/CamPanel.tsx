@@ -2,8 +2,8 @@
 // the camera row or on the playhead, with CapCut's ◁◇▷ (◇ keys the picture as it is) and its lens as slider rows. How the
 // camera gets into a key is Keyframe easing (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
 // step (Ctrl+Z), shared with the sound
-import { fovOf } from "film-stage/camera";
-import { AudioLines, Hourglass, Scissors, Trash2, Video } from "lucide-react";
+import { fovOf, mmOf, PRIME_LENSES } from "film-stage/camera";
+import { AudioLines, Hourglass, Scissors, Trash2 } from "lucide-react";
 import { lazy, Suspense } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -42,12 +42,14 @@ function PlayheadStamp() {
   return <span className="tabular-nums">{stamp(S.t)}</span>;
 }
 import { keyNav } from "../keys/keynav";
+import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { seek } from "../playback/transport";
 import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
   holdAfter,
+  initialKeyTime,
   keyAt,
   keys,
   movable,
@@ -55,11 +57,13 @@ import {
   removeCamKeys,
   removeKey,
   resetLens,
+  resetLensField,
   restore,
   retime,
   rollable,
   rollCut,
-  saveView,
+  room,
+  setFocalLength,
   setKey,
   setLens,
   shotOfCut,
@@ -67,6 +71,7 @@ import {
   snapshot,
   splitShot,
 } from "./cam";
+import { CamKeyExtraSections, ShotHitsSection } from "./CamKeySections";
 import { renameShot } from "./shots";
 
 const CameraEasePanel = lazy(() =>
@@ -172,6 +177,7 @@ function ShotSection({ shot }: { shot: number }) {
           </DropdownMenu>
         </FieldRow>
       )}
+      {shots && <ShotHitsSection shot={shot} />}
     </Section>
   );
 }
@@ -187,8 +193,26 @@ function TimeField({ i }: { i: number }) {
         <span className="text-ui tabular-nums">{stamp(k.t)}</span>
       </FieldRow>
     );
+  const baseT = initialKeyTime(i),
+    [lo, hi] = canRoll ? [0, Infinity] : room(i),
+    canResetTime =
+      baseT !== undefined && Math.abs(baseT - k.t) > 1e-4 && baseT >= lo && baseT <= hi;
   return (
-    <FieldRow label={canRoll ? "Cut at" : "Time"}>
+    <FieldRow
+      label={canRoll ? "Cut at" : "Time"}
+      nav={
+        <Reset
+          compact
+          label={
+            baseT !== undefined ? `Reset Time to ${baseT.toFixed(3)}s` : "Reset Time to default"
+          }
+          disabled={!canResetTime}
+          onClick={() => {
+            if (baseT !== undefined) (canRoll ? rollCut : retime)(i, baseT);
+          }}
+        />
+      }
+    >
       <span className="w-28">
         <NumberField
           size="sm"
@@ -209,6 +233,7 @@ function TimeField({ i }: { i: number }) {
 
 const DEG = 180 / Math.PI;
 function KeySection() {
+  useStudio((s) => s.camKey);
   useFrameKey(() => {
     const i = shownKey(S.t);
     const k = keys[i];
@@ -236,156 +261,197 @@ function KeySection() {
       }),
     save: (v: number) => setLens(i, field, v / scale),
   });
+  const aspect = S.tools?.camera?.aspect || 16 / 9;
+  const displayFov =
+    k?.fov ?? (typeof k?.mm === "number" ? Math.round(fovOf(k.mm, aspect) * 10) / 10 : 70);
+  const displayMm =
+    typeof k?.mm === "number" ? k.mm : Math.round(mmOf(displayFov, aspect) * 10) / 10;
   return (
-    <Section
-      title="Keyframe"
-      right={
-        <>
-          {k && (
-            <Reset
-              label="Reset FOV, roll and sway to the film's own"
-              disabled={
-                k.fov === undefined &&
-                k.mm === undefined &&
-                k.roll === undefined &&
-                k.wave === undefined
-              }
-              onClick={() => resetLens(i)}
-            />
-          )}
-          <KeyNav
-            what="camera"
-            prev={nav.prev !== null}
-            next={nav.next !== null}
-            here={here}
-            onPrev={() => go(nav.prev)}
-            onNext={() => go(nav.next)}
-            onToggle={() => (here ? removeKey(i) : addKeyHere())}
-            addTip={
-              free
-                ? "Add a keyframe here with the free camera's view (Shift+K)"
-                : "Add a keyframe here, holding the picture as it is"
-            }
-            removeTip={
-              cut ? "Delete this cut: merges the shot with the one before" : "Delete this keyframe"
-            }
-          />
-        </>
-      }
-    >
-      {!k ? (
-        <p className="text-ui text-muted-foreground">
-          No keyframe on the playhead. Click ◇ to key the picture as it is, or a diamond on the
-          Camera track.
-        </p>
-      ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <p className="text-ui min-w-0 flex-1">
-              <span className="font-medium">
-                {cut ? "Cut" : i === 0 ? "Start" : `Keyframe ${i + 1} of ${keys.length}`}
-              </span>
-              {!here && (
-                <span className="text-muted-foreground">
-                  {" "}
-                  · picked, the playhead is at <PlayheadStamp />
-                </span>
-              )}
-            </p>
-            <Tip
-              label={
-                canDelete
-                  ? cut
-                    ? "Delete this cut: merges the shot with the one before (Delete)"
-                    : "Delete keyframe (Delete)"
-                  : i === 0
-                    ? "The film's first keyframe can't be deleted"
-                    : "Deleting a cut merges two shots. Ask the AI in a note"
-              }
-            >
-              <Button
-                variant="remove"
-                size="icon"
-                aria-label={cut ? "Delete cut and merge shots" : "Delete keyframe"}
-                aria-disabled={!canDelete}
-                className="pointer-coarse:size-10"
-                onClick={() => removeKey(i)}
-              >
-                <Trash2 />
-              </Button>
-            </Tip>
-          </div>
-          <TimeField i={i} />
-          <SliderRow
-            label="FOV"
-            value={
-              k.fov ??
-              (typeof k.mm === "number"
-                ? Math.round(fovOf(k.mm, S.tools?.camera?.aspect || 16 / 9) * 10) / 10
-                : 70)
-            }
-            min={10}
-            max={120}
-            step={1}
-            digits={0}
-            unit="°"
-            doc={camDoc}
-            {...lens("fov", 1)}
-          />
-          {/* stored in radians, as film-stage turns the picture */}
-          <SliderRow
-            label="Roll"
-            value={Math.round(((k.roll as number | undefined) ?? 0) * DEG * 10) / 10}
-            min={-45}
-            max={45}
-            step={0.5}
-            digits={1}
-            unit="°"
-            origin={0}
-            doc={camDoc}
-            {...lens("roll", DEG)}
-          />
-          <SliderRow
-            label="Sway"
-            value={(k.wave as number | undefined) ?? 1}
-            min={0}
-            max={3}
-            step={0.05}
-            digits={2}
-            unit="×"
-            doc={camDoc}
-            {...lens("wave", 1)}
-            hint="The film's slow drift: 0 holds still, 1 is its own"
-          />
-          <div className="flex flex-wrap gap-1.5">
-            <Tip
-              label={
+    <>
+      <Section
+        title="Keyframe"
+        right={
+          <>
+            {k && (
+              <Reset
+                label="Reset FOV, roll and sway to the film's own"
+                disabled={
+                  k.fov === undefined &&
+                  k.mm === undefined &&
+                  k.roll === undefined &&
+                  k.wave === undefined
+                }
+                onClick={() => resetLens(i)}
+              />
+            )}
+            <KeyNav
+              what="camera"
+              prev={nav.prev !== null}
+              next={nav.next !== null}
+              here={here}
+              onPrev={() => go(nav.prev)}
+              onNext={() => go(nav.next)}
+              onToggle={() => (here ? removeKey(i) : addKeyHere())}
+              addTip={
                 free
-                  ? "Replace this keyframe's framing with the free camera's"
-                  : "Turn on Free camera (F) first"
+                  ? "Add a keyframe here with the free camera's view (Shift+K)"
+                  : "Add a keyframe here, holding the picture as it is"
               }
-            >
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8"
-                aria-disabled={!free}
-                onClick={() => saveView(i)}
+              removeTip={
+                cut
+                  ? "Delete this cut: merges the shot with the one before"
+                  : "Delete this keyframe"
+              }
+            />
+          </>
+        }
+      >
+        {!k ? (
+          <p className="text-ui text-muted-foreground">
+            No keyframe on the playhead. Click ◇ to key the picture as it is, or a diamond on the
+            Camera track.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <p className="text-ui min-w-0 flex-1">
+                <span className="font-medium">
+                  {cut ? "Cut" : i === 0 ? "Start" : `Keyframe ${i + 1} of ${keys.length}`}
+                </span>
+                {!here && (
+                  <span className="text-muted-foreground">
+                    {" "}
+                    · picked, the playhead is at <PlayheadStamp />
+                  </span>
+                )}
+              </p>
+              <Tip
+                label={
+                  canDelete
+                    ? cut
+                      ? "Delete this cut: merges the shot with the one before (Delete)"
+                      : "Delete keyframe (Delete)"
+                    : i === 0
+                      ? "The film's first keyframe can't be deleted"
+                      : "Deleting a cut merges two shots. Ask the AI in a note"
+                }
               >
-                <Video data-icon="inline-start" />
-                Use free camera view
-              </Button>
-            </Tip>
-            <Tip label="Adds a copy of this keyframe 1 s later, so the camera stays still. Drag the copy to hold longer">
-              <Button variant="secondary" size="sm" className="h-8" onClick={() => holdAfter(i)}>
-                <Hourglass data-icon="inline-start" />
-                Hold 1 s
-              </Button>
-            </Tip>
-          </div>
-        </>
-      )}
-    </Section>
+                <Button
+                  variant="remove"
+                  size="icon"
+                  aria-label={cut ? "Delete cut and merge shots" : "Delete keyframe"}
+                  aria-disabled={!canDelete}
+                  className="pointer-coarse:size-10"
+                  onClick={() => removeKey(i)}
+                >
+                  <Trash2 />
+                </Button>
+              </Tip>
+            </div>
+            <TimeField i={i} />
+            <SliderRow
+              label="Focal"
+              value={displayMm}
+              min={10}
+              max={200}
+              step={1}
+              digits={0}
+              unit="mm"
+              doc={camDoc}
+              reset={{
+                label: "Reset focal length and FOV to default",
+                disabled: k.fov === undefined && k.mm === undefined,
+                onClick: () => resetLensField(i, "fov"),
+              }}
+              preview={(v) =>
+                preview((ks) => {
+                  if (!ks[i]) return;
+                  delete ks[i].fov;
+                  ks[i].mm = Math.round(Math.max(5, v) * 1000) / 1000;
+                })
+              }
+              save={(v) => setFocalLength(i, v)}
+            />
+            <FieldRow label="Primes">
+              <div role="group" aria-label="Cinema prime lenses" className="flex flex-wrap gap-1">
+                {PRIME_LENSES.map((p) => (
+                  <Tip key={p.id} label={`${p.title} — ${p.tip}`}>
+                    <Button
+                      variant="choice"
+                      size="xs"
+                      aria-pressed={typeof k.mm === "number" && Math.abs(k.mm - p.mm) < 0.2}
+                      onClick={() => setFocalLength(i, p.mm)}
+                    >
+                      {p.mm}mm
+                    </Button>
+                  </Tip>
+                ))}
+              </div>
+            </FieldRow>
+            <SliderRow
+              label="FOV"
+              value={displayFov}
+              min={10}
+              max={120}
+              step={1}
+              digits={0}
+              unit="°"
+              doc={camDoc}
+              reset={{
+                label: "Reset FOV to default",
+                disabled: k.fov === undefined && k.mm === undefined,
+                onClick: () => resetLensField(i, "fov"),
+              }}
+              {...lens("fov", 1)}
+            />
+            {/* stored in radians, as film-stage turns the picture */}
+            <SliderRow
+              label="Roll"
+              value={Math.round(((k.roll as number | undefined) ?? 0) * DEG * 10) / 10}
+              min={-45}
+              max={45}
+              step={0.5}
+              digits={1}
+              unit="°"
+              origin={0}
+              doc={camDoc}
+              reset={{
+                label: "Reset Roll to default",
+                disabled: k.roll === undefined,
+                onClick: () => resetLensField(i, "roll"),
+              }}
+              {...lens("roll", DEG)}
+            />
+            <SliderRow
+              label="Sway"
+              value={(k.wave as number | undefined) ?? 1}
+              min={0}
+              max={3}
+              step={0.05}
+              digits={2}
+              unit="×"
+              doc={camDoc}
+              reset={{
+                label: "Reset Sway to default",
+                disabled: k.wave === undefined,
+                onClick: () => resetLensField(i, "wave"),
+              }}
+              {...lens("wave", 1)}
+              hint="The film's slow drift: 0 holds still, 1 is its own"
+            />
+            <div className="flex flex-wrap gap-1.5">
+              <Tip label="Adds a copy of this keyframe 1 s later, so the camera stays still. Drag the copy to hold longer">
+                <Button variant="secondary" size="sm" className="h-8" onClick={() => holdAfter(i)}>
+                  <Hourglass data-icon="inline-start" />
+                  Hold 1 s
+                </Button>
+              </Tip>
+            </div>
+          </>
+        )}
+      </Section>
+      {k && <CamKeyExtraSections keyIndex={i} k={k} />}
+    </>
   );
 }
 
@@ -422,6 +488,7 @@ export function CamPanel() {
   useStudio((s) => s.camRev);
   useStudio((s) => s.shotPick);
   const picks = useStudio((s) => s.camPicks);
+  const free = useStudio((s) => s.free);
   useFrameKey(() => shownShot());
   if (!keys.length) return null;
   return (
@@ -430,9 +497,14 @@ export function CamPanel() {
       className="scroll-fade flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain pb-3 *:shrink-0"
     >
       <Saved />
+      {free && (
+        <Section title="Free camera">
+          <FreeCamLensFields />
+        </Section>
+      )}
       <ShotSection shot={shownShot()} />
       {picks.length > 1 ? <PicksSection picks={picks} /> : <KeySection />}
-      <Section title="Keyframe easing" closed>
+      <Section title="Keyframe easing">
         <Suspense fallback={null}>
           <CameraEasePanel />
         </Suspense>

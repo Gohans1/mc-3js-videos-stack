@@ -1,23 +1,25 @@
 // The camera keys' and shots' part of the page state (core/store.ts)
+import type { SaveState } from "../core/doc";
+
 export interface CameraSlice {
   timing: boolean;
   timingRev: number;
-  timingSaved: "busy" | "fail" | null;
+  timingSaved: SaveState;
   freezePick: number | null;
   layers: boolean;
   layersRev: number;
   layerPicks: string[];
-  layersSaved: "busy" | "fail" | null;
+  layersSaved: SaveState;
   cam: boolean; // the film names its camera keys (package.json "live-studio".camTimeline): the camera row and tab show
   camKey: number | null; // the key picked on the camera row, by its place in the file
   camPicks: number[]; // several keys picked at once (two or more; camKey is null then)
   shotPick: number | null; // the shot block picked on the camera row (its place in SHOTS_OUT), the Animation tab's shot
   shotPicks: number[];
   animSlot: "in" | "out" | "combo"; // the Animation tab's open part
-  camSaved: "busy" | "fail" | null;
+  camSaved: SaveState;
   camRev: number;
   shots: boolean; // the film keeps its shots as data (package.json "live-studio".shotsTimeline): a cut can be moved
-  shotsSaved: "busy" | "fail" | null;
+  shotsSaved: SaveState;
   shotsRev: number;
 }
 export const cameraSlice: CameraSlice = {

@@ -11,7 +11,13 @@ export const STATES = ["open", "check", "done"];
 export const noteState = (n) => (STATES.includes(n.state) ? n.state : n.done ? "done" : "open");
 // a line of notes.jsonl that is a note: #N counts only these, so every CLI numbers them alike
 export const wholeNote = (n) =>
-  n !== null && typeof n === "object" && "id" in n && "t" in n && "text" in n && "shot" in n && "time" in n;
+  n !== null &&
+  typeof n === "object" &&
+  "id" in n &&
+  "t" in n &&
+  "text" in n &&
+  "shot" in n &&
+  "time" in n;
 
 const to = (n, state) => {
   n.state = state;
@@ -19,12 +25,38 @@ const to = (n, state) => {
 };
 const lastFix = (n) => n.fixes?.at(-1);
 
+const cleanFixCam = (cam) => {
+  if (!cam || typeof cam !== "object" || !Array.isArray(cam.p) || !Array.isArray(cam.l))
+    return null;
+  if (cam.p.length < 3 || cam.l.length < 3) return null;
+  const p = cam.p.slice(0, 3).map(Number);
+  const l = cam.l.slice(0, 3).map(Number);
+  if (!p.every(Number.isFinite) || !l.every(Number.isFinite)) return null;
+  const out = { p, l };
+  if (typeof cam.fov === "number" && Number.isFinite(cam.fov) && cam.fov >= 10 && cam.fov <= 120)
+    out.fov = +cam.fov.toFixed(2);
+  if (typeof cam.roll === "number" && Number.isFinite(cam.roll)) out.roll = +cam.roll.toFixed(4);
+  if (typeof cam.wave === "number" && Number.isFinite(cam.wave) && cam.wave >= 0)
+    out.wave = +cam.wave.toFixed(3);
+  return out;
+};
+
 const STEPS = {
   fix: (n, fix, at) => {
     if (typeof fix?.what !== "string" || !fix.what.trim()) return "a fix says what changed";
     if (noteState(n) === "done")
       return "this note is done, closed by the creator: it is yours again only when they reopen it";
-    n.fixes = [...(n.fixes ?? []), { ...fix, at }];
+    const entry = { what: fix.what, at };
+    if (fix.checkpoint !== undefined) entry.checkpoint = fix.checkpoint;
+    if (fix.ask) entry.ask = true;
+    if (typeof fix.after === "string" && fix.after.trim()) entry.after = fix.after.trim();
+    if (typeof fix.noAfterReason === "string" && fix.noAfterReason.trim())
+      entry.noAfterReason = fix.noAfterReason.trim();
+    if (typeof fix.t === "number" && Number.isFinite(fix.t) && fix.t >= 0)
+      entry.t = +fix.t.toFixed(3);
+    const cam = cleanFixCam(fix.cam);
+    if (cam) entry.cam = cam;
+    n.fixes = [...(n.fixes ?? []), entry];
     to(n, "check");
   },
   // a page loaded before states sends done:false for Reopen; an old film script done:true for "fixed"
@@ -85,6 +117,10 @@ export const noteThread = (n, { rewordings = false } = {}) => [
       at: f.at ?? "",
       ask: !!f.ask,
       checkpoint: f.checkpoint,
+      ...(f.after ? { after: f.after } : {}),
+      ...(f.noAfterReason ? { noAfterReason: f.noAfterReason } : {}),
+      ...(typeof f.t === "number" ? { t: f.t } : {}),
+      ...(f.cam ? { cam: f.cam } : {}),
     })),
     ...(n.asks ?? []).map((a) => ({ by: "creator", text: a.text, at: a.at })),
     ...(rewordings

@@ -28,6 +28,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
+import { AiPresence } from "../activity/AiPresence";
 import { saveView } from "../camera/cam";
 import { Tip } from "../components/Tip";
 import { engine } from "../core/engine";
@@ -45,10 +46,12 @@ import { set, setPref, useStudio } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { setInk } from "../notes/ink";
 import { noteMarks, openNote, originOf, returnFromNote } from "../notes/notes";
+import { ClipExport } from "../picture/ClipExport";
 import { SnapshotButtons } from "../picture/Compare";
 import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback/transport";
 import { skimSound } from "../sound/skim";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
+import { PendingChangesBar } from "./PendingChangesBar";
 
 const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
 
@@ -247,7 +250,7 @@ export function Transport() {
     full = useFullscreen();
   return (
     // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
-    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2 in-data-cli-expanded:hidden">
+    <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2">
       {review && <ReviewScrubBar />}
       <div className="flex min-w-0 items-center gap-1.5 px-3 py-1 @max-[380px]:gap-1 @max-[380px]:px-2">
         <Button
@@ -263,7 +266,7 @@ export function Transport() {
         <Button
           size="md"
           className="upright:flex-1 sideways:flex-1"
-          onClick={(e) => openNote(null, true, originOf(e.currentTarget))}
+          onClick={(e) => openNote(null, true, originOf(e.currentTarget), { x: 0.5, y: 0.88 })}
           aria-label="Add note"
         >
           <Pencil data-icon="inline-start" />
@@ -272,7 +275,7 @@ export function Transport() {
         {canReturnFromNote && (
           <Tip label="Back to previous frame">
             <Button
-              variant="quiet"
+              variant="toolbar"
               size="icon"
               aria-label="Back to previous frame"
               onClick={returnFromNote}
@@ -281,9 +284,9 @@ export function Transport() {
             </Button>
           </Tip>
         )}
-        <Tip label="Draw on the picture (D): pen, arrow, box, or a path across seconds">
+        <Tip label="Draw on the picture (G): pen, arrow, box, or a path across seconds">
           <Button
-            variant="quiet"
+            variant="toolbar"
             size="md"
             className={cn(!ink && "@max-[330px]:hidden")}
             aria-label="Draw"
@@ -295,9 +298,9 @@ export function Transport() {
           </Button>
         </Tip>
         {/* Walking the camera needs a mouse and keys, as in Settings */}
-        <Tip label="Free camera (F): drag to look, W A S D to fly, Space up, Shift down">
+        <Tip label="Free camera (F): left-drag to look, Shift+left-drag to orbit, middle-drag to pan, left-click to select, right-click or drag for notes, W A S D to fly, Space up, Shift down">
           <Button
-            variant="quiet"
+            variant="toolbar"
             size="md"
             className={cn("pointer-coarse:hidden", !free && "@max-[520px]:hidden")}
             aria-label="Free camera"
@@ -311,7 +314,7 @@ export function Transport() {
         {free && (
           <Tip label="Night vision: light up this view and clear the fog to find your way. The film's own light stays as it is">
             <Button
-              variant="quiet"
+              variant="toolbar"
               size="md"
               className="@max-[640px]:hidden pointer-coarse:hidden"
               aria-label="Night vision"
@@ -326,7 +329,7 @@ export function Transport() {
         {free && cam && (
           <Tip label="Add a camera keyframe at the playhead from this view (Shift+K)">
             <Button
-              variant="quiet"
+              variant="toolbar"
               size="md"
               className="@max-[640px]:hidden pointer-coarse:hidden"
               aria-label="Add keyframe from view"
@@ -337,13 +340,18 @@ export function Transport() {
             </Button>
           </Tip>
         )}
-        <div className="upright:ml-0 sideways:ml-0 ml-auto flex flex-none items-center gap-0.5">
+        <div className="upright:hidden sideways:hidden flex min-w-0 flex-1 items-center justify-center gap-1.5 px-1 @max-[560px]:justify-end">
+          <PendingChangesBar />
+          <AiPresence className="max-w-full min-w-0" />
+        </div>
+        <div className="upright:ml-0 sideways:ml-0 ms-auto flex flex-none items-center gap-0.5">
+          <ClipExport className="@max-[420px]:hidden pointer-coarse:hidden" />
           <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
           <Tip
             label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
           >
             <Button
-              variant="quiet"
+              variant="toolbar"
               size="icon-lg"
               className={cn(square, "@max-[360px]:hidden")}
               aria-label="Guides"
@@ -356,7 +364,7 @@ export function Transport() {
           {canFullscreen() && (
             <Tip label={full ? "Leave full screen (Esc)" : "Full screen preview (Ctrl+Shift+F)"}>
               <Button
-                variant="quiet"
+                variant="toolbar"
                 size="icon-lg"
                 className={square}
                 aria-label={full ? "Leave full screen" : "Full screen preview"}
@@ -368,7 +376,7 @@ export function Transport() {
           )}
           <Tip label="Mute">
             <Button
-              variant="quiet"
+              variant="toolbar"
               size="icon-lg"
               className={cn(square, "pointer-coarse:@max-[384px]:hidden")}
               aria-label="Mute"
@@ -400,7 +408,7 @@ export function Transport() {
           <PopoverTrigger
             render={
               <Button
-                variant="quiet"
+                variant="toolbar"
                 size="icon-lg"
                 className={square}
                 title="Settings"

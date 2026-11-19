@@ -634,19 +634,18 @@ describe("normalizeStoredCompose and isComposeDirty", () => {
 });
 
 describe("stepViewport", () => {
-  test("preserves pending_click across implicit lostpointercapture between pointerup and click in Free Camera", () => {
+  test("touch tap without drag arms pending_click across implicit lostpointercapture", () => {
     const down = stepViewport(IDLE_VIEWPORT_GESTURE, {
       type: "press",
       id: 1,
-      pointerType: "mouse",
+      pointerType: "touch",
       button: 0,
       x: 200,
       y: 150,
       free: true,
       shiftKey: false,
     });
-    assert.equal(down.capture, true);
-    assert.equal(down.gesture.kind, "cam_drag");
+    assert.equal(down.gesture.kind, "tap_press");
 
     const up = stepViewport(down.gesture, { type: "windowUp", id: 1, x: 201, y: 150, buttons: 0 });
     assert.deepEqual(up.gesture, { kind: "pending_click", x: 200, y: 150 });
@@ -656,78 +655,99 @@ describe("stepViewport", () => {
     assert.deepEqual(lostCapture.gesture, { kind: "pending_click", x: 200, y: 150 });
   });
 
-  test("does not arm pending_click after a round-trip Free Camera drag returning within 4px of start", () => {
-    let g = stepViewport(IDLE_VIEWPORT_GESTURE, {
-      type: "press",
-      id: 1,
-      pointerType: "mouse",
-      button: 0,
-      x: 100,
-      y: 100,
-      free: true,
-      shiftKey: false,
-    }).gesture;
-    g = stepViewport(g, { type: "move", id: 1, x: 140, y: 100, canWake: true }).gesture;
-    const roundTripUp = stepViewport(g, { type: "windowUp", id: 1, x: 101, y: 100, buttons: 0 });
-    assert.deepEqual(roundTripUp.gesture, IDLE_VIEWPORT_GESTURE);
-    assert.equal(roundTripUp.armClickAt, null);
-  });
-
-  test("does not arm pending_click on right-button slide release in Free Camera", () => {
-    const slide = stepViewport(IDLE_VIEWPORT_GESTURE, {
+  test("left press without drag resolves to idle while left-drag enters cam_drag look/orbit", () => {
+    const leftDown = stepViewport(IDLE_VIEWPORT_GESTURE, {
       type: "press",
       id: 2,
       pointerType: "mouse",
-      button: 2,
+      button: 0,
+      x: 100,
+      y: 100,
+      free: false,
+      shiftKey: false,
+    });
+    assert.equal(leftDown.gesture.kind, "left_press");
+
+    const quickUp = stepViewport(leftDown.gesture, {
+      type: "windowUp",
+      id: 2,
+      x: 100,
+      y: 100,
+      buttons: 0,
+    });
+    assert.deepEqual(quickUp.gesture, IDLE_VIEWPORT_GESTURE);
+    assert.equal(quickUp.armClickAt, null);
+
+    const dragged = stepViewport(leftDown.gesture, {
+      type: "move",
+      id: 2,
+      x: 140,
+      y: 100,
+      canWake: true,
+    });
+    assert.equal(dragged.capture, true);
+    assert.equal(dragged.gesture.kind, "cam_drag");
+    if (dragged.gesture.kind === "cam_drag") {
+      assert.equal(dragged.gesture.mode, "look");
+      assert.equal(dragged.gesture.moved, true);
+    }
+  });
+
+  test("uses Shift+left-drag for orbit and middle-drag for slide in Free Camera", () => {
+    const orbitDown = stepViewport(IDLE_VIEWPORT_GESTURE, {
+      type: "press",
+      id: 3,
+      pointerType: "mouse",
+      button: 0,
+      x: 100,
+      y: 100,
+      free: true,
+      shiftKey: true,
+    });
+    const orbitMove = stepViewport(orbitDown.gesture, {
+      type: "move",
+      id: 3,
+      x: 112,
+      y: 100,
+      canWake: true,
+    });
+    assert.equal(orbitMove.gesture.kind, "cam_drag");
+    if (orbitMove.gesture.kind === "cam_drag") assert.equal(orbitMove.gesture.mode, "orbit");
+
+    const slide = stepViewport(IDLE_VIEWPORT_GESTURE, {
+      type: "press",
+      id: 4,
+      pointerType: "mouse",
+      button: 1,
       x: 100,
       y: 100,
       free: true,
       shiftKey: false,
-    }).gesture;
-    const slideUp = stepViewport(slide, { type: "windowUp", id: 2, x: 100, y: 100, buttons: 0 });
-    assert.deepEqual(slideUp.gesture, IDLE_VIEWPORT_GESTURE);
-    assert.equal(slideUp.armClickAt, null);
+    });
+    assert.equal(slide.gesture.kind, "cam_drag");
+    if (slide.gesture.kind === "cam_drag") assert.equal(slide.gesture.mode, "slide");
   });
 
-  test("transitions right_press into sketching once pointer moves beyond 4px", () => {
-    const rawEvent = { pointerId: 7 };
-    const right = stepViewport(IDLE_VIEWPORT_GESTURE, {
-      type: "press",
-      id: 7,
-      pointerType: "mouse",
-      button: 2,
-      x: 50,
-      y: 50,
-      free: false,
-      shiftKey: false,
-      raw: rawEvent,
-    }).gesture;
-    const sketchStep = stepViewport(right, { type: "move", id: 7, x: 60, y: 50, canWake: true });
-    assert.deepEqual(sketchStep.gesture, { kind: "sketching", id: 7 });
-    assert.equal(sketchStep.startSketchFrom, rawEvent);
-    assert.equal(sketchStep.capture, true);
-  });
-
-  test("wakes Free Camera from wake_press into orbit cam_drag when Shift-dragged beyond 4px", () => {
-    const wake = stepViewport(IDLE_VIEWPORT_GESTURE, {
-      type: "press",
-      id: 8,
-      pointerType: "mouse",
-      button: 0,
-      x: 50,
-      y: 50,
-      free: false,
-      shiftKey: true,
-    }).gesture;
-    const dragStep = stepViewport(wake, { type: "move", id: 8, x: 60, y: 50, canWake: true });
-    assert.equal(dragStep.gesture.kind, "cam_drag");
-    if (dragStep.gesture.kind === "cam_drag") {
-      assert.equal(dragStep.gesture.mode, "orbit");
-      assert.equal(dragStep.gesture.woke, true);
-      assert.equal(dragStep.gesture.moved, true);
+  test("right-drag beyond 4px transitions right_press into sketching both by default and in Free Camera without waking or moving camera", () => {
+    for (const free of [false, true]) {
+      const rawEvent = { pointerId: 7 };
+      const right = stepViewport(IDLE_VIEWPORT_GESTURE, {
+        type: "press",
+        id: 7,
+        pointerType: "mouse",
+        button: 2,
+        x: 50,
+        y: 50,
+        free,
+        shiftKey: free,
+        raw: rawEvent,
+      }).gesture;
+      assert.equal(right.kind, "right_press");
+      const sketchStep = stepViewport(right, { type: "move", id: 7, x: 60, y: 50, canWake: true });
+      assert.deepEqual(sketchStep.gesture, { kind: "sketching", id: 7 });
+      assert.equal(sketchStep.startSketchFrom, rawEvent);
+      assert.equal(sketchStep.capture, true);
     }
-    assert.equal(dragStep.wokeFree, true);
-    assert.equal(dragStep.capture, true);
   });
 
   test("recovers to idle on off-canvas pointercancel or blur and drops active sketch", () => {
@@ -765,7 +785,7 @@ describe("stepViewport", () => {
     });
   });
 
-  test("updates cam_drag x and y purely on move without mutating previous gesture", () => {
+  test("updates cam_drag x and y purely on left-drag move without mutating previous gesture", () => {
     const down = stepViewport(IDLE_VIEWPORT_GESTURE, {
       type: "press",
       id: 1,
@@ -776,30 +796,26 @@ describe("stepViewport", () => {
       free: true,
       shiftKey: false,
     }).gesture;
-    const moved = stepViewport(down, {
+    const dragged = stepViewport(down, {
       type: "move",
       id: 1,
       x: 140,
       y: 120,
       canWake: true,
     }).gesture;
-    assert.equal(down.kind, "cam_drag");
-    if (down.kind === "cam_drag") {
-      assert.equal(down.x, 100);
-      assert.equal(down.y, 100);
-    }
-    assert.equal(moved.kind, "cam_drag");
-    if (moved.kind === "cam_drag") {
-      assert.equal(moved.x, 140);
-      assert.equal(moved.y, 120);
-      assert.equal(moved.startX, 100);
-      assert.equal(moved.startY, 100);
-      assert.equal(moved.moved, true);
+    assert.equal(down.kind, "left_press");
+    assert.equal(dragged.kind, "cam_drag");
+    if (dragged.kind === "cam_drag") {
+      assert.equal(dragged.x, 140);
+      assert.equal(dragged.y, 120);
+      assert.equal(dragged.startX, 100);
+      assert.equal(dragged.startY, 100);
+      assert.equal(dragged.moved, true);
     }
   });
 
   test("supersedes stale mouse presses when a new press arrives", () => {
-    const staleWake = stepViewport(IDLE_VIEWPORT_GESTURE, {
+    const staleLeft = stepViewport(IDLE_VIEWPORT_GESTURE, {
       type: "press",
       id: 1,
       pointerType: "mouse",
@@ -809,7 +825,7 @@ describe("stepViewport", () => {
       free: false,
       shiftKey: false,
     }).gesture;
-    const freshWake = stepViewport(staleWake, {
+    const freshLeft = stepViewport(staleLeft, {
       type: "press",
       id: 1,
       pointerType: "mouse",
@@ -819,8 +835,8 @@ describe("stepViewport", () => {
       free: false,
       shiftKey: true,
     }).gesture;
-    assert.equal(freshWake.kind, "wake_press");
-    if (freshWake.kind === "wake_press") assert.equal(freshWake.x, 300);
+    assert.equal(freshLeft.kind, "left_press");
+    if (freshLeft.kind === "left_press") assert.equal(freshLeft.x, 300);
   });
 
   test("ignores chorded button releases while right button stays held during sketching", () => {
@@ -830,16 +846,45 @@ describe("stepViewport", () => {
       { gesture: sketching, dropSketch: false, armClickAt: null },
     );
     assert.deepEqual(
+      stepViewport(sketching, { type: "windowUp", id: 1, x: 120, y: 120, buttons: 1 }),
+      { gesture: IDLE_VIEWPORT_GESTURE, dropSketch: true, armClickAt: null },
+    );
+    assert.deepEqual(
       stepViewport(sketching, { type: "windowUp", id: 1, x: 120, y: 120, buttons: 0 }),
       { gesture: IDLE_VIEWPORT_GESTURE, dropSketch: true, armClickAt: null },
     );
+    const camLook = {
+      kind: "cam_drag",
+      id: 1,
+      startX: 10,
+      startY: 20,
+      x: 30,
+      y: 25,
+      mode: "look",
+      tap: false,
+      moved: true,
+    };
+    assert.deepEqual(stepViewport(camLook, { type: "windowUp", id: 1, x: 30, y: 25, buttons: 1 }), {
+      gesture: camLook,
+      dropSketch: false,
+      armClickAt: null,
+    });
+    assert.deepEqual(stepViewport(camLook, { type: "windowUp", id: 1, x: 30, y: 25, buttons: 0 }), {
+      gesture: IDLE_VIEWPORT_GESTURE,
+      dropSketch: false,
+      armClickAt: null,
+    });
   });
 });
 
 describe("stepInk", () => {
-  test("ignores presses when tool is null or middle button is pressed", () => {
+  test("ignores presses when tool is null or non-draw mouse buttons are pressed", () => {
     assert.deepEqual(
-      stepInk(IDLE_INK_GESTURE, { type: "down", id: 1, button: 0, tool: null, x: 10, y: 10 }),
+      stepInk(IDLE_INK_GESTURE, { type: "down", id: 1, button: 2, tool: null, x: 10, y: 10 }),
+      { gesture: IDLE_INK_GESTURE, effect: "none" },
+    );
+    assert.deepEqual(
+      stepInk(IDLE_INK_GESTURE, { type: "down", id: 1, button: 0, tool: "pen", x: 10, y: 10 }),
       { gesture: IDLE_INK_GESTURE, effect: "none" },
     );
     assert.deepEqual(
@@ -848,21 +893,25 @@ describe("stepInk", () => {
     );
   });
 
-  test("draws and ends a left-button pen stroke while ignoring chorded secondary releases", () => {
+  test("draws and ends a right-button pen stroke while ignoring chorded secondary releases", () => {
     const down = stepInk(IDLE_INK_GESTURE, {
       type: "down",
       id: 1,
-      button: 0,
+      button: 2,
+      pointerType: "mouse",
       tool: "pen",
       x: 10,
       y: 10,
     });
-    assert.deepEqual(down, { gesture: { kind: "drawing", id: 1 }, effect: "start_stroke" });
+    assert.deepEqual(down, {
+      gesture: { kind: "drawing", id: 1, mask: 2 },
+      effect: "start_stroke",
+    });
     assert.deepEqual(stepInk(down.gesture, { type: "move", id: 1, x: 18, y: 14 }), {
       gesture: down.gesture,
       effect: "move_stroke",
     });
-    assert.deepEqual(stepInk(down.gesture, { type: "up", id: 1, buttons: 1, tool: "pen" }), {
+    assert.deepEqual(stepInk(down.gesture, { type: "up", id: 1, buttons: 2, tool: "pen" }), {
       gesture: down.gesture,
       effect: "none",
     });
@@ -872,16 +921,40 @@ describe("stepInk", () => {
     });
   });
 
-  test("commits path_press on release only when path tool is still active", () => {
+  test("supports touch left-button stroke when drawing on mobile", () => {
+    const down = stepInk(IDLE_INK_GESTURE, {
+      type: "down",
+      id: 4,
+      button: 0,
+      pointerType: "touch",
+      tool: "pen",
+      x: 10,
+      y: 10,
+    });
+    assert.deepEqual(down, {
+      gesture: { kind: "drawing", id: 4, mask: 1 },
+      effect: "start_stroke",
+    });
+    assert.deepEqual(stepInk(down.gesture, { type: "up", id: 4, buttons: 0, tool: "pen" }), {
+      gesture: IDLE_INK_GESTURE,
+      effect: "end_stroke",
+    });
+  });
+
+  test("commits path_press on right-button release only when path tool is still active", () => {
     const down = stepInk(IDLE_INK_GESTURE, {
       type: "down",
       id: 2,
-      button: 0,
+      button: 2,
+      pointerType: "mouse",
       tool: "path",
       x: 10,
       y: 10,
     });
-    assert.deepEqual(down, { gesture: { kind: "path_press", id: 2 }, effect: "start_path" });
+    assert.deepEqual(down, {
+      gesture: { kind: "path_press", id: 2, mask: 2 },
+      effect: "start_path",
+    });
     assert.deepEqual(stepInk(down.gesture, { type: "up", id: 2, buttons: 0, tool: "path" }), {
       gesture: IDLE_INK_GESTURE,
       effect: "commit_path",
@@ -892,48 +965,8 @@ describe("stepInk", () => {
     });
   });
 
-  test("keeps stationary right_press silent on release and starts/ends sketch once dragged past 4px", () => {
-    const raw = { clientX: 10, clientY: 10 };
-    const right = stepInk(IDLE_INK_GESTURE, {
-      type: "down",
-      id: 3,
-      button: 2,
-      tool: "pen",
-      x: 10,
-      y: 10,
-      raw,
-    }).gesture;
-    assert.deepEqual(stepInk(right, { type: "move", id: 3, x: 13, y: 10 }), {
-      gesture: right,
-      effect: "none",
-    });
-    assert.deepEqual(stepInk(right, { type: "up", id: 3, buttons: 0, tool: "pen" }), {
-      gesture: IDLE_INK_GESTURE,
-      effect: "none",
-    });
-
-    const moved = stepInk(right, { type: "move", id: 3, x: 20, y: 10 });
-    assert.deepEqual(moved, {
-      gesture: { kind: "sketching", id: 3 },
-      effect: "start_sketch",
-      from: raw,
-    });
-    assert.deepEqual(stepInk(moved.gesture, { type: "move", id: 3, x: 25, y: 12 }), {
-      gesture: moved.gesture,
-      effect: "move_stroke",
-    });
-    assert.deepEqual(stepInk(moved.gesture, { type: "up", id: 3, buttons: 2, tool: "pen" }), {
-      gesture: moved.gesture,
-      effect: "none",
-    });
-    assert.deepEqual(stepInk(moved.gesture, { type: "up", id: 3, buttons: 0, tool: "pen" }), {
-      gesture: IDLE_INK_GESTURE,
-      effect: "end_stroke",
-    });
-  });
-
   test("ignores mismatched pointerIds and drops active strokes on cancel, blur, or reset", () => {
-    const drawing = { kind: "drawing", id: 5 };
+    const drawing = { kind: "drawing", id: 5, mask: 2 };
     assert.deepEqual(stepInk(drawing, { type: "cancel", id: 9 }), {
       gesture: drawing,
       effect: "none",

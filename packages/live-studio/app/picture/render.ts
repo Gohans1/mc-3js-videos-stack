@@ -66,7 +66,12 @@ export const buildFinal = () => {
 export const drawFinalFrame = async () => {
   const fr = S.finalRender!,
     free = S.tools!.free;
-  Object.assign(fr.tools.free, { on: free.on, fov: free.fov });
+  Object.assign(fr.tools.free, {
+    on: free.on,
+    fov: free.fov,
+    roll: free.roll ?? 0,
+    wave: free.wave ?? 0,
+  });
   fr.tools.free.p.copy(free.p);
   fr.tools.free.l.copy(free.l);
   if (fr.renderFrame) await fr.renderFrame(S.t);

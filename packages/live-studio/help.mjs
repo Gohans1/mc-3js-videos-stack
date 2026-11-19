@@ -83,7 +83,7 @@ const GROUPS = [
     "The creator's notes",
     {
       notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
-      note: "answer one: bun run note done (waits for the creator's check), ask, learned, or restore a deleted note (--help)",
+      note: 'answer one: bun run note done (requires --after <img> or --no-after "<reason>", optional --cam/--t custom view), ask, learned, or restore (--help)',
     },
   ],
   [

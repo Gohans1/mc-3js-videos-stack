@@ -351,17 +351,19 @@ export function Reset({
   label,
   onClick,
   disabled,
+  compact,
 }: {
   label: string;
   onClick: () => void;
   disabled?: boolean;
+  compact?: boolean;
 }) {
   return (
     <Tip label={label}>
       <Button
         variant="quiet"
-        size="icon"
-        className={iconBtn}
+        size={compact ? "icon-xs" : "icon"}
+        className={compact ? "size-5 pointer-coarse:size-9" : iconBtn}
         aria-label={label}
         disabled={disabled}
         onClick={onClick}
@@ -550,6 +552,7 @@ export function SliderRow({
   preview,
   save,
   nav,
+  reset,
   disabled,
   hint,
   origin,
@@ -569,6 +572,7 @@ export function SliderRow({
   preview: (v: number) => void;
   save: (v: number) => void;
   nav?: ReactNode;
+  reset?: { label: string; disabled?: boolean; onClick: () => void };
   disabled?: boolean;
   hint?: ReactNode;
   compact?: boolean;
@@ -604,9 +608,14 @@ export function SliderRow({
   };
   return (
     <div className={cn("flex flex-col", compact ? "gap-0" : "gap-1")}>
-      <span className={cn("text-foreground/90", compact ? "text-xs leading-4" : "text-ui")}>
-        {label}
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <span className={cn("text-foreground/90", compact ? "text-xs leading-4" : "text-ui")}>
+          {label}
+        </span>
+        {reset && (
+          <Reset compact label={reset.label} disabled={reset.disabled} onClick={reset.onClick} />
+        )}
+      </div>
       <div className="flex items-center gap-2">
         <div className={cn("flex min-w-0 flex-1 items-center pe-1", compact ? "h-6" : "h-7")}>
           <Slider
@@ -671,7 +680,9 @@ export function Footer({ children }: { children: ReactNode }) {
   );
 }
 
-export type SaveState = "busy" | "fail" | null;
+import type { SaveState } from "../core/doc";
+
+export type { SaveState };
 
 export function SaveStatus({
   state,
@@ -688,14 +699,21 @@ export function SaveStatus({
   hideWhenIdle?: boolean;
   className?: string;
 }) {
-  if (hideWhenIdle && state !== "busy" && state !== "fail") return null;
-  const text = state === "busy" ? "Saving…" : state === "fail" ? failText : idleText;
+  if (hideWhenIdle && state !== "busy" && state !== "fail" && state !== "pending") return null;
+  const text =
+    state === "busy"
+      ? "Saving…"
+      : state === "fail"
+        ? failText
+        : state === "pending"
+          ? "Unconfirmed (preview only)"
+          : idleText;
   return (
     <span
       role="status"
       className={cn(
         "text-xs",
-        state === "fail"
+        state === "fail" || state === "pending"
           ? "text-warn-text font-semibold"
           : state === "busy" || idleTone === "muted"
             ? "text-muted-foreground"

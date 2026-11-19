@@ -11,13 +11,14 @@ import type { Mark, Pin } from "./slice";
 const withSnapshotSource = async <T>(
   at: number,
   read: (from: HTMLCanvasElement | null) => T,
+  matchFinal = true,
 ): Promise<T> => {
   const finalEl = engine.finalCanvas();
   const source = pickSnapshotSource({
     at,
     playhead: S.t,
     finalAt: S.finalAt,
-    hasFinal: !!finalEl,
+    hasFinal: !!finalEl && matchFinal,
     hasRender: !!S.render,
   });
   if (!source) return read(null);
@@ -28,30 +29,39 @@ const withSnapshotSource = async <T>(
   });
   return result;
 };
-export const snapshot = (pin: Pin | null | undefined, at: number, marks: Mark[] = []) =>
-  withSnapshotSource(at, (from) => {
-    if (!from) return null;
-    const c = document.createElement("canvas"),
-      [w, h] = frameSize(960);
-    c.width = w;
-    c.height = h;
-    const g = c.getContext("2d")!;
-    g.drawImage(from, 0, 0, w, h);
-    for (const m of marks) drawMark(g, m, at, w, h, tone("ink"));
-    if (pin) {
-      g.strokeStyle = tone("primary");
-      g.lineWidth = 3;
-      g.beginPath();
-      g.arc(pin.x * w, pin.y * h, 14, 0, 7);
-      g.stroke();
-      g.strokeStyle = tone("stage");
-      g.lineWidth = 1;
-      g.beginPath();
-      g.arc(pin.x * w, pin.y * h, 16, 0, 7);
-      g.stroke();
-    }
-    return c.toDataURL("image/jpeg", 0.85);
-  });
+export const snapshot = (
+  pin: Pin | null | undefined,
+  at: number,
+  marks: Mark[] = [],
+  matchFinal = true,
+) =>
+  withSnapshotSource(
+    at,
+    (from) => {
+      if (!from) return null;
+      const c = document.createElement("canvas"),
+        [w, h] = frameSize(960);
+      c.width = w;
+      c.height = h;
+      const g = c.getContext("2d")!;
+      g.drawImage(from, 0, 0, w, h);
+      for (const m of marks) drawMark(g, m, at, w, h, tone("ink"));
+      if (pin) {
+        g.strokeStyle = tone("primary");
+        g.lineWidth = 3;
+        g.beginPath();
+        g.arc(pin.x * w, pin.y * h, 14, 0, 7);
+        g.stroke();
+        g.strokeStyle = tone("stage");
+        g.lineWidth = 1;
+        g.beginPath();
+        g.arc(pin.x * w, pin.y * h, 16, 0, 7);
+        g.stroke();
+      }
+      return c.toDataURL("image/jpeg", 0.85);
+    },
+    matchFinal,
+  );
 export const pinCrop = (pin: Pin, at: number) =>
   withSnapshotSource(at, (from) => {
     if (!from) return null;

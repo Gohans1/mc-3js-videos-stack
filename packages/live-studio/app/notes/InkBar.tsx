@@ -1,17 +1,19 @@
 // The drawing tools, over the picture's bottom left while one is in hand. A stroke opens the note it belongs to; strokes at other
 // seconds join the same note until Xong, so "here at 1:10, then here at 1:12" is one note
-import { ArrowUpRight, Pencil, Route, Square, Undo2, X } from "lucide-react";
+import { ArrowUpRight, Pencil, Route, Send, Square, Undo2, X } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
 import { useStudio } from "../core/store";
 import { clearInk, INK_KEYS, setInk, undoInk } from "./ink";
 import { modKeyLabel } from "./note-card-meta";
-import { type InkKind } from "./slice";
+import { cancelNote, saveNote } from "./notes";
+import { type InkKind, isComposeDirty } from "./slice";
 
 export const TOOLS: [InkKind, string, ReactNode, string][] = [
   ["pen", "Pen", <Pencil key="icon" aria-hidden data-icon="inline-start" />, "Draw freely"],
@@ -41,15 +43,50 @@ export const ToolKey = ({ id }: { id: InkKind }) => (
   </Kbd>
 );
 
+export function StageNoteActions({ className }: { className?: string }) {
+  const compose = useStudio((s) => s.compose),
+    draft = useStudio((s) => s.draft),
+    drawn = useStudio((s) => !!s.inkSaid),
+    hasRefs = useStudio((s) => s.refs.length > 0),
+    saving = useStudio((s) => s.noteSaving);
+  if (!compose) return null;
+  const isEdit = compose.kind === "edit";
+  const dirty = isComposeDirty(compose, draft, drawn || hasRefs);
+  return (
+    <div className={cn("flex items-center gap-1", className)}>
+      <Button
+        variant="tool"
+        size="md"
+        className="h-9 pointer-coarse:h-11"
+        title="Discard this note (Esc)"
+        onClick={cancelNote}
+      >
+        Cancel
+      </Button>
+      <Button
+        size="md"
+        className="h-9 pointer-coarse:h-11"
+        disabled={saving || !dirty}
+        title={isEdit ? "Save note" : "Add note"}
+        onClick={saveNote}
+      >
+        <Send aria-hidden data-icon="inline-start" />
+        {saving ? "Saving…" : isEdit ? "Save" : "Add note"}
+      </Button>
+    </div>
+  );
+}
+
 export function InkBar() {
   const ink = useStudio((s) => s.ink),
-    drawn = useStudio((s) => !!s.inkSaid);
+    drawn = useStudio((s) => !!s.inkSaid),
+    composeOpen = useStudio((s) => s.compose !== null);
   if (!ink) return null;
   return (
     <div
       role="toolbar"
       aria-label="Draw"
-      className="shadow-float upright:bottom-7.5 upright:left-1.5 sideways:bottom-7.5 bg-scrim-strong pointer-events-auto absolute bottom-11 left-2.5 z-6 flex items-center gap-0.5 rounded-xl p-1"
+      className="shadow-float upright:bottom-7.5 upright:left-1.5 sideways:bottom-7.5 bg-scrim-strong pointer-events-auto absolute bottom-11 left-2.5 z-9 flex max-w-[calc(100%-1.25rem)] flex-wrap items-center gap-0.5 rounded-xl p-1 backdrop-blur-md"
     >
       {TOOLS.map(([id, name, icon, help]) => (
         <Button
@@ -90,7 +127,7 @@ export function InkBar() {
           Clear
         </Button>
       </Tip>
-      <Tip label="Stop drawing (D)">
+      <Tip label="Stop drawing (G)">
         <Button
           variant="tool"
           size="icon-lg"
@@ -101,6 +138,15 @@ export function InkBar() {
           <X aria-hidden />
         </Button>
       </Tip>
+      {composeOpen && (
+        <>
+          <Separator
+            orientation="vertical"
+            className="mx-1 h-5 data-vertical:self-center @max-[560px]:hidden"
+          />
+          <StageNoteActions className="ms-auto" />
+        </>
+      )}
     </div>
   );
 }

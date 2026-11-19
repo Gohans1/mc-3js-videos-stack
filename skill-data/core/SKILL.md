@@ -67,13 +67,13 @@ bun run at <heard-second> converts clocks and names the active files and rows. T
 
 ## Answer feedback and deliver
 
-| Task                             | Action                                                                                          |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Read and locate a note           | bun run notes; bun run notes 3; bun run at '#3'                                                 |
-| Report a verified fix            | Inspect the new result, then bun run note done 3 "what changed"; the creator approves in Studio |
-| Ask about a note                 | bun run note ask 3 "your question"                                                              |
-| Keep a requested lesson          | bun run skills get core --ref notes                                                             |
-| Produce the final when requested | bun run render final; bun run mix renders/final_video.mp4; bun run deliver                      |
+| Task                             | Action                                                                                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Read and locate a note           | bun run notes; bun run notes 3; bun run at '#3'                                                                                                                                      |
+| Report a verified fix            | Capture proof first, then bun run note done 3 "what changed" --after <imgPath> [--cam ... --t ...] (or --no-after "<reason>" when non-visual); custom After framing allowed if moved |
+| Ask about a note                 | bun run note ask 3 "your question"                                                                                                                                                   |
+| Keep a requested lesson          | bun run skills get core --ref notes                                                                                                                                                  |
+| Produce the final when requested | bun run render final; bun run mix renders/final_video.mp4; bun run deliver                                                                                                           |
 
 Never edit notes/notes.jsonl by hand. The final is renders/final.mp4; passing technical checks does not replace viewing/listening or mean it was uploaded.
 

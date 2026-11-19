@@ -2,6 +2,7 @@
 // because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
 import * as THREE from "three";
 
+import type { FreeView } from "../core/engine";
 import { S, wake } from "../core/state";
 import { get, say, set } from "../core/store";
 import { createFlight } from "./flight";
@@ -55,6 +56,44 @@ export const flyCam = (forward: number, right: number, up: number) => {
 // The first free camera after a page load starts at the film's home spot (tools.home), so a reload never leaves the
 // creator wherever the playhead happened to be; later ones start from the shot's own camera, and so does one a drag on the
 // picture turns on (here), which must turn the view seen
+export const FREE_LENS_DEFAULTS = { fov: 60, roll: 0, wave: 0 } as const;
+
+let customFreeFov = false;
+
+export const defaultFreeFov = () =>
+  S.tools?.home?.fov ?? S.tools?.camera?.fov ?? FREE_LENS_DEFAULTS.fov;
+
+export const setFreeFov = (fov: number, resetCustom = false) => {
+  const v = Math.round(Math.max(10, Math.min(120, fov)) * 10) / 10;
+  customFreeFov = !resetCustom;
+  const f = S.tools?.free;
+  if (f) f.fov = v;
+  set({ freeFov: v });
+  S.viewMoved = true;
+  wake("render");
+};
+
+export const resetFreeFov = () => setFreeFov(defaultFreeFov(), true);
+
+export const setFreeRoll = (rad: number) => {
+  const maxRad = Math.PI / 4;
+  const v = Math.round(Math.max(-maxRad, Math.min(maxRad, rad)) * 1e4) / 1e4;
+  const f = S.tools?.free;
+  if (f) f.roll = v;
+  set({ freeRoll: v });
+  S.viewMoved = true;
+  wake("render");
+};
+
+export const setFreeWave = (wave: number) => {
+  const v = Math.round(Math.max(0, Math.min(3, wave)) * 100) / 100;
+  const f = S.tools?.free;
+  if (f) f.wave = v;
+  set({ freeWave: v });
+  S.viewMoved = true;
+  wake("render");
+};
+
 let homed = false;
 export const setFree = (on: boolean, here = false) => {
   const tools = S.tools;
@@ -64,21 +103,52 @@ export const setFree = (on: boolean, here = false) => {
   if (on && home) {
     f.p.set(...home.p);
     f.l.set(...home.l);
-    f.fov = home.fov ?? tools.camera.fov;
+    f.fov = customFreeFov ? get().freeFov : (home.fov ?? tools.camera.fov);
   } else if (on) {
     f.p.copy(tools.camera.position);
     f.l.copy(tools.look);
-    f.fov = tools.camera.fov;
+    f.fov = customFreeFov ? get().freeFov : tools.camera.fov;
   }
+  f.roll ??= get().freeRoll;
+  f.wave ??= get().freeWave;
   if (on) homed = true;
   f.on = on;
-  set({ free: on });
+  set({ free: on, freeFov: f.fov, freeRoll: f.roll ?? 0, freeWave: f.wave ?? 0 });
   S.dirty = true;
 };
+
+export const flyFree = (view: FreeView) => {
+  const tools = S.tools;
+  if (!tools) return;
+  const f = tools.free;
+  f.p.set(view.p[0], view.p[1], view.p[2]);
+  f.l.set(view.l[0], view.l[1], view.l[2]);
+  const fov =
+    typeof view.fov === "number" && Number.isFinite(view.fov)
+      ? Math.round(Math.max(10, Math.min(120, view.fov)) * 10) / 10
+      : f.fov || defaultFreeFov();
+  const maxRad = Math.PI / 4;
+  const roll =
+    typeof view.roll === "number" && Number.isFinite(view.roll)
+      ? Math.round(Math.max(-maxRad, Math.min(maxRad, view.roll)) * 1e4) / 1e4
+      : 0;
+  const wave =
+    typeof view.wave === "number" && Number.isFinite(view.wave)
+      ? Math.round(Math.max(0, Math.min(3, view.wave)) * 100) / 100
+      : 0;
+  f.fov = fov;
+  f.roll = roll;
+  f.wave = wave;
+  homed = true;
+  f.on = true;
+  set({ free: true, freeFov: fov, freeRoll: roll, freeWave: wave });
+  S.viewMoved = true;
+  S.dirty = true;
+};
+
 export const setFov = (d: number) => {
   const f = S.tools?.free;
   if (!f?.on) return;
-  f.fov = Math.max(8, Math.min(100, f.fov + d));
-  S.viewMoved = true;
+  setFreeFov(f.fov + d);
   say(`FOV ${f.fov}°`);
 };

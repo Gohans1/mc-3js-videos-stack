@@ -1,4 +1,5 @@
 // The notes' part of the page state (core/store.ts): the notes, the one being written and what is drawn on it
+import type { NoteFreeView } from "./note-card-meta";
 import type { NoteView } from "./note-views-model";
 
 export interface Pin {
@@ -12,6 +13,16 @@ export interface Fix {
   checkpoint?: string;
   at: string;
   ask?: boolean; // a question from the AI, not a fix: it wants an answer, not an approval
+  after?: string; // saved proof frame path (notes/img/<id>_fix<N>.<ext>) when AI fixed a visual issue
+  noAfterReason?: string; // explanation recorded when --no-after was passed instead of an image
+  t?: number; // optional custom heard second when the fixed target moved in time
+  cam?: {
+    p: number[];
+    l: number[];
+    fov?: number;
+    roll?: number;
+    wave?: number;
+  };
 }
 // Where a note stands (src/note-state.mjs, which decides every change): to fix, waiting for the creator's check, approved
 export type NoteState = "open" | "check" | "done";
@@ -56,12 +67,17 @@ export interface RefPic {
   url: string;
 }
 // The note being written: either a fresh note on a moment/pin ("create") or editing an existing note's text ("edit")
+export interface StageAnchor {
+  x: number;
+  y: number;
+}
 export interface ComposeCreate {
   kind: "create";
   t: number;
   shot: number;
   shotName: string;
   pin: Pin | null;
+  anchor?: StageAnchor;
   resume: boolean;
   wasPlaying?: boolean;
   spoken?: string;
@@ -113,6 +129,19 @@ const normalizePin = (raw: unknown): Pin | null => {
   };
 };
 
+const normalizeAnchor = (raw: unknown): StageAnchor | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const a = raw as Record<string, unknown>;
+  if (
+    typeof a.x !== "number" ||
+    !Number.isFinite(a.x) ||
+    typeof a.y !== "number" ||
+    !Number.isFinite(a.y)
+  )
+    return undefined;
+  return { x: Math.min(1, Math.max(0, a.x)), y: Math.min(1, Math.max(0, a.y)) };
+};
+
 export const normalizeStoredCompose = (raw: unknown): Compose | null => {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
@@ -138,12 +167,15 @@ export const normalizeStoredCompose = (raw: unknown): Compose | null => {
       resume: false,
     };
   }
+  const pin = normalizePin(c.pin);
+  const anchor = normalizeAnchor(c.anchor) ?? (pin ? { x: pin.x, y: pin.y } : undefined);
   return {
     kind: "create",
     t: c.t,
     shot: c.shot,
     shotName: typeof c.shotName === "string" ? c.shotName : "",
-    pin: normalizePin(c.pin),
+    pin,
+    ...(anchor ? { anchor } : {}),
     resume: false,
     ...(typeof c.wasPlaying === "boolean" ? { wasPlaying: c.wasPlaying } : {}),
     ...(typeof c.spoken === "string" ? { spoken: c.spoken } : {}),
@@ -173,7 +205,12 @@ export type NoteFacet =
 export type NoteSort = "film" | "activity" | "newest" | "oldest";
 
 export interface NotesSlice {
-  noteReturn: { at: number; clock: import("../../src/timing.mjs").TimingClock } | null;
+  noteReturn: {
+    at: number;
+    clock: import("../../src/timing.mjs").TimingClock;
+    free?: boolean;
+    view?: NoteFreeView;
+  } | null;
   reviewTarget: string | null;
   notes: Note[];
   noteSearch: string;
@@ -191,6 +228,7 @@ export interface NotesSlice {
   refs: RefPic[]; // the note being written's pasted pictures
   nearNote: string | null;
   ink: InkKind | null; // the drawing tool in hand, null when a tap on the picture pins a note
+  inkDrawing: boolean;
   inkSaid: string; // what is drawn on the note being written ("" when nothing): "3 strokes across 2 moments: 0:54 → 0:56"
   review: boolean; // the Review room (ReviewRoom.tsx) in place of the timeline and the panels
   reviewTab: ReviewTab;
@@ -215,6 +253,7 @@ export const notesSlice: NotesSlice = {
   refs: [],
   nearNote: null,
   ink: null,
+  inkDrawing: false,
   inkSaid: "",
   review: false,
   reviewTab: "check",

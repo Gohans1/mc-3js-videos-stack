@@ -29,8 +29,10 @@ import { useCoarsePointer } from "../core/device";
 import { DURATION } from "../core/filmMeta";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { useExitedNotes, useNoteMotion } from "./note-action-motion";
 import { noteActionTarget, noteShotTitle } from "./note-card-meta";
 import {
+  BeforeAfterPair,
   Empty,
   ExpandableNoteText,
   formatShortDate,
@@ -39,6 +41,7 @@ import {
   NoteCardActions,
   NoteCardHeader,
   NoteCardStatus,
+  NoteExitSlot,
   NoteFollowups,
   NoteNumber,
   NoteOpenButton,
@@ -48,6 +51,7 @@ import {
   NoteThumb,
   NoteTimeChip,
   openNoteRow,
+  useNoteFilterScopeKey,
 } from "./note-parts";
 import {
   buildCalendarMonth,
@@ -866,9 +870,16 @@ function FeedCard({
   const lastAiIdx = replies.findLastIndex((m) => m.by === "ai");
   const created = formatShortDate(n.at);
   const target = noteActionTarget(noteNum(n.id), stamp(t));
+  const { ref: cardRef, noteAttr } = useNoteMotion<HTMLDivElement>(n.id, state);
 
   return (
-    <Card size="sm" tone={asking ? "ai" : state} data-note={n.id} data-ai-lit={lit || undefined}>
+    <Card
+      ref={cardRef}
+      size="sm"
+      tone={asking ? "ai" : state}
+      data-note={noteAttr}
+      data-ai-lit={lit || undefined}
+    >
       <CardContent>
         <NoteCardHeader
           note={n}
@@ -910,39 +921,50 @@ function FeedCard({
         </div>
         <NoteTags note={n} />
 
-        {media.thumb && (
-          <button
-            type="button"
-            aria-label={`Jump to frame ${target}`}
-            onClick={() => goToNote(n)}
-            className="bg-backdrop border-hairline hover:border-primary/50 focus-visible:ring-ring relative mt-2 inline-flex aspect-video max-h-24 w-auto max-w-full cursor-pointer overflow-hidden rounded-lg border transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none"
+        {media.after ? (
+          <div
+            className={cn(
+              "bg-backdrop border-hairline mt-2 inline-flex max-h-24 w-auto max-w-full overflow-hidden rounded-lg border",
+              media.thumb ? "aspect-[32/9]" : "aspect-video",
+            )}
           >
-            {showThumb ? (
-              <img
-                src={media.thumb}
-                loading="lazy"
-                decoding="async"
-                alt={`Frame at ${stamp(t)}`}
-                onError={() => setFailedThumb(media.thumb)}
-                className={cn(
-                  "note-image-outline block size-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
-                  state === "done" && "opacity-75 group-hover/card:opacity-100",
-                )}
-              />
-            ) : (
-              <span className="text-label flex size-full flex-col items-center justify-center gap-1 text-xs">
-                <Camera aria-hidden className="size-4 opacity-60" />
-                <span>Frame unavailable ({stamp(t)})</span>
-              </span>
-            )}
-            {n.pin && media.crop && showThumb && (
-              <img
-                src={media.crop}
-                alt={`Pin: ${n.pin.what}`}
-                className="border-primary/80 bg-backdrop pointer-events-none absolute bottom-2 left-2 size-9 rounded-md border object-cover shadow-md note-image-outline"
-              />
-            )}
-          </button>
+            <BeforeAfterPair note={n} t={t} media={media} compact mutedDone={state === "done"} />
+          </div>
+        ) : (
+          media.thumb && (
+            <button
+              type="button"
+              aria-label={`Jump to frame ${target}`}
+              onClick={() => goToNote(n)}
+              className="bg-backdrop border-hairline hover:border-primary/50 focus-visible:ring-ring relative mt-2 inline-flex aspect-video max-h-24 w-auto max-w-full cursor-pointer overflow-hidden rounded-lg border transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none"
+            >
+              {showThumb ? (
+                <img
+                  src={media.thumb}
+                  loading="lazy"
+                  decoding="async"
+                  alt={`Frame at ${stamp(t)}`}
+                  onError={() => setFailedThumb(media.thumb)}
+                  className={cn(
+                    "note-image-outline block size-full object-contain transition-opacity duration-150 motion-reduce:transition-none",
+                    state === "done" && "opacity-75 group-hover/card:opacity-100",
+                  )}
+                />
+              ) : (
+                <span className="text-label flex size-full flex-col items-center justify-center gap-1 text-xs">
+                  <Camera aria-hidden className="size-4 opacity-60" />
+                  <span>Frame unavailable ({stamp(t)})</span>
+                </span>
+              )}
+              {n.pin && media.crop && showThumb && (
+                <img
+                  src={media.crop}
+                  alt={`Pin: ${n.pin.what}`}
+                  className="border-primary/80 bg-backdrop note-image-outline pointer-events-none absolute bottom-2 left-2 size-9 rounded-md border object-cover shadow-md"
+                />
+              )}
+            </button>
+          )
         )}
 
         {replies.length > 0 && (
@@ -1017,6 +1039,11 @@ function FeedCard({
                   >
                     {m.text}
                   </p>
+                  {"noAfterReason" in m && m.noAfterReason && (
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                      No after image: {m.noAfterReason}
+                    </p>
+                  )}
                 </li>
               );
             })}
@@ -1042,6 +1069,7 @@ function FeedCard({
 
 export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
   const sort = useStudio((s) => s.noteSort);
+  const filterKey = useNoteFilterScopeKey();
   const [replyId, setReplyId] = useState<string | null>(null);
   const feedSort = sort === "film" ? "film" : "activity";
 
@@ -1057,6 +1085,7 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
     );
     return [...active, ...done];
   }, [items, feedSort]);
+  const displayFeed = useExitedNotes(ordered, (it) => it.n.id, `feed|${feedSort}|${filterKey}`);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-2">
@@ -1073,8 +1102,8 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
       </div>
 
       <VirtualList
-        items={ordered}
-        getKey={(it) => it.n.id}
+        items={displayFeed}
+        getKey={(entry) => entry.key}
         estimateSize={175}
         gap={10}
         overscan={5}
@@ -1083,14 +1112,24 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
         ariaLabel="Activity feed"
         className="scroll-fade min-h-0 flex-1"
         listClassName="pb-6"
-        renderItem={(item) => (
-          <FeedCard
-            item={item}
-            replying={replyId === item.n.id}
-            onToggleReply={() => setReplyId(replyId === item.n.id ? null : item.n.id)}
-            onDoneReply={() => setReplyId(null)}
-          />
-        )}
+        renderItem={(entry) => {
+          const item = entry.item;
+          const node = (
+            <FeedCard
+              item={item}
+              replying={replyId === item.n.id}
+              onToggleReply={() => setReplyId(replyId === item.n.id ? null : item.n.id)}
+              onDoneReply={() => setReplyId(null)}
+            />
+          );
+          return entry.exiting ? (
+            <NoteExitSlot id={entry.id} kind={entry.kind}>
+              {node}
+            </NoteExitSlot>
+          ) : (
+            node
+          );
+        }}
       />
     </div>
   );

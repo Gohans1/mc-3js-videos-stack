@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-import { sampleSpeedCurve, smoothSpeedCurve } from "../../src/speed-curve.mjs";
+import { hasSpeedCuts, sampleSpeedCurve, smoothSpeedCurve } from "../../src/speed-curve.mjs";
 import { timing, timingClock } from "../../src/timing-state.mjs";
 import { freezesOf } from "../../src/timing.mjs";
 import { shownShot } from "../camera/anim";
@@ -263,31 +263,36 @@ function TimingSpeedPanel() {
           </Section>
         )}
         {tab === "curve" && (
-          <>
-            <ul aria-label="Speed curves" className="grid grid-cols-4 gap-x-2.5 gap-y-3 px-3 py-2">
+          <Section
+            title="Curve"
+            right={<Reset label="Reset speed curve" onClick={() => setShotSpeed(shot, null)} />}
+          >
+            <ul aria-label="Speed curves" className="grid grid-cols-4 gap-x-2.5 gap-y-3 py-1">
               {[
                 { title: "None", curve: null },
                 { title: "Custom", curve: curve ?? flat },
                 ...presets,
               ].map((p) => {
+                const isCut = hasSpeedCuts(speed);
                 const selected =
                   p.title === "None"
                     ? !speed || !!shotVelocity(shot)
                     : p.title === "Custom"
-                      ? !!curve && !matched
-                      : matched === p.title;
+                      ? !!curve && (!matched || isCut)
+                      : matched === p.title && !isCut;
                 return (
                   <li key={p.title} className="flex min-w-0 flex-col items-center gap-1">
                     <button
                       type="button"
                       aria-label={`Speed curve ${p.title}`}
                       aria-pressed={selected}
-                      onClick={() =>
+                      onClick={() => {
+                        if (p.title === "Custom" && speed?.curve) return;
                         setShotSpeed(
                           shot,
                           p.curve ? smoothSpeedCurve(structuredClone(p.curve)) : null,
-                        )
-                      }
+                        );
+                      }}
                       className="bg-raised-2 text-warn-text hover:ring-border focus-visible:ring-ring aria-pressed:ring-primary relative grid aspect-square w-full place-items-center overflow-hidden rounded-md ring-2 ring-transparent outline-none"
                     >
                       {p.title === "None" ? (
@@ -304,7 +309,7 @@ function TimingSpeedPanel() {
               })}
             </ul>
             {curve && (
-              <div className="bg-curve-bg mx-3 my-3 overflow-hidden rounded-md">
+              <div className="bg-curve-bg my-2 overflow-hidden rounded-md">
                 <p className="text-ui flex justify-between border-b px-3 py-2 tabular-nums">
                   <span>Duration</span>
                   <span>
@@ -315,14 +320,15 @@ function TimingSpeedPanel() {
                   key={shot}
                   value={curve}
                   handles={speed?.handles}
+                  cuts={speed?.cuts}
                   playhead={(timingClock.sourceAt(S.t) - from) / (to - from)}
                   doc={timingDoc}
-                  preview={(value) => setShotSpeed(shot, smoothSpeedCurve(value), true)}
-                  save={(value) => setShotSpeed(shot, smoothSpeedCurve(value))}
+                  preview={(next) => setShotSpeed(shot, next, true)}
+                  save={(next) => setShotSpeed(shot, next)}
                 />
               </div>
             )}
-          </>
+          </Section>
         )}
         {tab === "velocity" && <VelocityPanel key={shot} shot={shot} />}
       </TabStage>

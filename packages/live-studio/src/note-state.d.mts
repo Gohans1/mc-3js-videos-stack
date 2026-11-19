@@ -1,7 +1,26 @@
 import type { Note, NoteState } from "../app/notes/slice";
 
+export interface FixCam {
+  p: number[];
+  l: number[];
+  fov?: number;
+  roll?: number;
+  wave?: number;
+}
+
 export type NoteChange =
-  | { fix: { what: string; ask?: boolean; checkpoint?: string } }
+  | {
+      fix: {
+        what: string;
+        ask?: boolean;
+        checkpoint?: string;
+        after?: string;
+        afterData?: string;
+        noAfterReason?: string;
+        t?: number;
+        cam?: FixCam;
+      };
+    }
   | { done: boolean }
   | { approve: true }
   | { again: string }
@@ -14,6 +33,10 @@ export interface ThreadLine {
   at: string;
   ask?: boolean;
   checkpoint?: string;
+  after?: string;
+  noAfterReason?: string;
+  t?: number;
+  cam?: FixCam;
   reworded?: boolean;
 }
 export const WORD_NEAR: number;
