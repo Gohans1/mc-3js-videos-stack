@@ -12,18 +12,20 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
   return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
 }
 
+const POPUP_MOTION =
+  "transition-[opacity,scale] duration-160 ease-studio-out data-starting-style:opacity-0 data-starting-style:scale-[0.96] data-ending-style:opacity-0 data-ending-style:scale-[0.96] data-ending-style:duration-120 motion-reduce:transition-opacity motion-reduce:duration-100 motion-reduce:data-starting-style:scale-100 motion-reduce:data-ending-style:duration-100 motion-reduce:data-ending-style:scale-100";
+
 // flush: a panel that lays itself out (Settings), with no padding or gap of the popover's own
 const popoverContentVariants = cva(
-  "bg-popover text-ui/normal text-popover-foreground ring-foreground/10 data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 z-50 flex w-72 origin-(--transform-origin) flex-col rounded-lg border border-transparent shadow-md ring-1 outline-hidden duration-100 forced-colors:border-[CanvasText]",
+  "bg-popover text-ui/normal text-popover-foreground ring-foreground/10 z-50 flex w-72 origin-(--transform-origin) flex-col rounded-lg border border-transparent shadow-md ring-1 outline-hidden forced-colors:border-[CanvasText]",
   {
     variants: {
       variant: { default: "gap-4 p-2.5", flush: "gap-0 overflow-hidden p-0" },
       motion: {
-        default: "data-open:animate-in data-closed:animate-out motion-reduce:animate-none",
+        default: POPUP_MOTION,
         instant: "transition-none",
         none: "transition-none",
-        anchored:
-          "transition-[opacity,scale] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-ending-style:duration-120 data-starting-style:scale-[0.97] data-starting-style:opacity-0 motion-reduce:transition-opacity motion-reduce:duration-100 motion-reduce:data-ending-style:scale-100 motion-reduce:data-ending-style:duration-100 motion-reduce:data-starting-style:scale-100",
+        anchored: POPUP_MOTION,
       },
     },
     defaultVariants: { variant: "default", motion: "default" },

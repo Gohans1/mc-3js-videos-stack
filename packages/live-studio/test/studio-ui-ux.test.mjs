@@ -860,14 +860,14 @@ test("Transport places AiPresence in its middle slot and ClipExport 360p/540p MP
     `document.body.textContent.includes('360p') && document.body.textContent.includes('540p')`,
   );
   const dialogState = await page.evaluate(`(() => ({
-    hasFrom: Boolean(document.querySelector('input[aria-label="Export from (s)"]')),
-    hasTo: Boolean(document.querySelector('input[aria-label="Export to (s)"]')),
+    hasStart: Boolean(document.querySelector('input[aria-label="Export start (s)"]')),
+    hasEnd: Boolean(document.querySelector('input[aria-label="Export end (s)"]')),
     has360: Boolean([...document.querySelectorAll('button')].find(b => b.textContent.includes('360p'))),
     has540: Boolean([...document.querySelectorAll('button')].find(b => b.textContent.includes('540p'))),
   }))()`);
-  expect(dialogState).toEqual({ hasFrom: true, hasTo: true, has360: true, has540: true });
+  expect(dialogState).toEqual({ hasStart: true, hasEnd: true, has360: true, has540: true });
   await page.press("Escape");
-  await waitUntil(`!document.querySelector('input[aria-label="Export from (s)"]')`);
+  await waitUntil(`!document.querySelector('input[aria-label="Export start (s)"]')`);
 });
 
 test("FilmView PiP stays strictly inside player bounds on 9:16 Large preset so controls never clip off-screen", async () => {
