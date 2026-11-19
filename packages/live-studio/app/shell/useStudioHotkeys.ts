@@ -24,12 +24,14 @@ import {
   stepReview,
 } from "../notes/notes";
 import { chooseInGroup } from "../options/options";
+import { DIRECTOR_EYE_HOTKEYS, nextGuideMode, nextValueCheckMode } from "../picture/director-eye";
 import {
   jumpShot,
   nudgeVolume,
   seek,
   setPlaying,
   shuttleOn,
+  toggleMute,
   togglePlay,
 } from "../playback/transport";
 import { allClips, locked, setClips } from "../sound/sound";
@@ -99,9 +101,11 @@ const REVIEW_KEYS = new Set([
   "L",
   "G",
   "Shift+G",
+  "Mod+;",
   "Mod+Shift+F",
   "Mod+ArrowUp",
   "Mod+ArrowDown",
+  ...Object.values(DIRECTOR_EYE_HOTKEYS),
 ]);
 
 export function useStudioHotkeys() {
@@ -109,6 +113,7 @@ export function useStudioHotkeys() {
   const composeOpen = useStudio((s) => s.compose !== null);
   const pickFocus = useStudio((s) => s.pickFocus !== null);
   const ink = useStudio((s) => s.ink),
+    blindAudio = useStudio((s) => s.blindAudio),
     picks = useStudio((s) => s.clips.length),
     sound = useStudio((s) => s.sound);
   const camKey = useStudio((s) => s.camKey),
@@ -156,6 +161,11 @@ export function useStudioHotkeys() {
       hotkey: "Escape",
       callback: () => setInk(null),
       options: { enabled: !settingsOpen && !pickFocus && !composeOpen && !!ink },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => set({ blindAudio: false }),
+      options: { enabled: !settingsOpen && !pickFocus && !composeOpen && !ink && blindAudio },
     },
   ];
   const keys: UseHotkeyDefinition[] = [
@@ -259,6 +269,33 @@ export function useStudioHotkeys() {
     { hotkey: "-", callback: zoomKey(-1) },
     { hotkey: "Shift+Z", callback: zoomToFit },
     { hotkey: "Mod+;", callback: fresh(() => setPref("guides", !get().guides)) },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.guideMode,
+      callback: fresh(() => {
+        setPref("guideMode", nextGuideMode(get().guideMode));
+        if (!get().guides) setPref("guides", true);
+      }),
+    },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.valueCheck,
+      callback: fresh(() => set({ valueCheck: nextValueCheckMode(get().valueCheck) })),
+    },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.ghost,
+      callback: fresh(() => set({ ghost: !get().ghost })),
+    },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.mute,
+      callback: fresh(toggleMute),
+    },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.blindAudio,
+      callback: fresh(() => set({ blindAudio: !get().blindAudio })),
+    },
+    {
+      hotkey: DIRECTOR_EYE_HOTKEYS.colorScript,
+      callback: fresh(() => set({ colorScript: !get().colorScript })),
+    },
     { hotkey: "Mod+Shift+F", callback: fresh(toggleFullscreen) },
     // ---- The studio's own
     {
@@ -303,7 +340,9 @@ export function useStudioHotkeys() {
     {
       hotkey: "Escape",
       callback: () => setBlade(false),
-      options: { enabled: !settingsOpen && !ink && !pickFocus && !composeOpen && blade },
+      options: {
+        enabled: !settingsOpen && !ink && !blindAudio && !pickFocus && !composeOpen && blade,
+      },
     },
     {
       hotkey: "Escape",
@@ -312,7 +351,8 @@ export function useStudioHotkeys() {
         S.dirty = true;
       },
       options: {
-        enabled: !settingsOpen && !ink && !pickFocus && !composeOpen && !blade && hasPick,
+        enabled:
+          !settingsOpen && !ink && !blindAudio && !pickFocus && !composeOpen && !blade && hasPick,
       },
     },
     // 1 to 4 pick a drawing tool while the tools are on screen, else every digit picks an alternative
@@ -332,7 +372,7 @@ export function useStudioHotkeys() {
     {
       hotkey: "Escape",
       callback: () => setReview(false),
-      options: { enabled: !settingsOpen && !ink && !pickFocus && !composeOpen },
+      options: { enabled: !settingsOpen && !ink && !blindAudio && !pickFocus && !composeOpen },
     },
     { hotkey: "ArrowUp", callback: () => void stepReview(-1) },
     { hotkey: "ArrowDown", callback: () => void stepReview(1) },

@@ -42,6 +42,27 @@ export const render = (x: number, readFrame?: () => void) => {
   return next;
 };
 
+// Off-playhead film-camera capture for GhostOverlay & ColorScript: suspends free cam only for this draw and restores S.t when paused.
+export const renderFilmFrame = (x: number, readFrame?: () => void) => {
+  const next = drawing.then(async () => {
+    const free = S.tools?.free;
+    const wasFree = Boolean(free?.on);
+    if (free && wasFree) free.on = false;
+    try {
+      if (S.render?.renderFrame) await S.render.renderFrame(x);
+      else S.render?.(x);
+      readFrame?.();
+    } finally {
+      if (free && wasFree) free.on = true;
+      if (!S.playing && (x !== S.t || wasFree)) {
+        await draw(S.t);
+      }
+    }
+  });
+  drawing = next.catch(() => {});
+  return next;
+};
+
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
 // The final renderer is built the first time Final quality or Export still frame asks for it, once however often they ask
 let building: Promise<void> | null = null;

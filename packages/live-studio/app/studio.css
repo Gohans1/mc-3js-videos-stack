@@ -546,7 +546,6 @@
     border-start-end-radius: 6px;
     border-end-end-radius: 6px;
   }
-
 }
 
 .tl-lane {
@@ -576,4 +575,16 @@
   [data-inspector-scroll-cue] {
     visibility: visible;
   }
+}
+
+[data-value-check="bw"] {
+  filter: url("#director-eye-rec709");
+}
+
+[data-value-check="silhouette"] {
+  filter: url("#director-eye-silhouette");
+}
+
+.ghost-overlay-img {
+  opacity: var(--ghost-opacity, 0.35);
 }

@@ -50,7 +50,7 @@ function Controls() {
       role="group"
       aria-label="Full screen playback"
       className={cn(
-        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-10 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
+        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-20 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
         visibility === "hidden" && "pointer-events-none opacity-0",
       )}
     >

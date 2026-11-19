@@ -17,6 +17,7 @@ export interface FreeView {
 
 export interface StudioEngine {
   render: (t: number, readFrame?: () => void) => Promise<void>;
+  renderFilmFrame: (t: number, readFrame?: () => void) => Promise<void>;
   finalCanvas: () => HTMLCanvasElement | null;
   setFinal: (on: boolean) => Promise<void> | void;
   setFree: (on: boolean, here?: boolean) => void;
@@ -38,6 +39,7 @@ export const engine: StudioEngine = {
   render: async (_t, readFrame) => {
     readFrame?.();
   },
+  renderFilmFrame: async (t, readFrame) => engine.render(t, readFrame),
   finalCanvas: () => null,
   setFinal: () => {},
   setFree: () => {},

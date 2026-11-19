@@ -1,5 +1,6 @@
 import { LINKAGE_DEFAULTS, LINKAGE_KINDS, type LinkageSettings } from "../../src/linkage.mjs";
 import { NOTE_VIEWS } from "../notes/note-views-model";
+import { GHOST_OPACITY, GUIDE_MODES } from "../picture/director-eye";
 // What this browser remembers between visits, each setting once: its store field, the localStorage key it is kept under (old
 // spellings kept, so nobody loses a setting) and its default. The store starts from readPrefs; every change goes through
 // setPref (core/store.ts)
@@ -32,6 +33,9 @@ const PREFS = {
   captions: flag("captions", true),
   tryOn: flag("tryNow", true),
   guides: flag("guides", false),
+  guideMode: oneOf("guideMode", GUIDE_MODES, "thirds"),
+  guideSafe: flag("guideSafe", true),
+  ghostOpacity: within("ghostOpacity", GHOST_OPACITY.min, GHOST_OPACITY.max, GHOST_OPACITY.default),
   magnet: flag("timelineSnap", true),
   linkage: flag("timelineLinkage", true),
   linkageKinds: {

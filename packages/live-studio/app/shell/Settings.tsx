@@ -33,6 +33,14 @@ import { set, setPref, useStudio } from "../core/store";
 import { FPS, rangeText } from "../core/time";
 import { copyAll } from "../notes/notes";
 import { choose, pinPick, setGain, whereNext } from "../options/options";
+import {
+  clampGhostOpacity,
+  GHOST_OPACITY,
+  GUIDE_MODES,
+  type GuideMode,
+  VALUE_CHECK_MODES,
+  type ValueCheckMode,
+} from "../picture/director-eye";
 import { frameSize, setRatio } from "../picture/frame";
 import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { exportStill } from "../picture/still";
@@ -445,7 +453,42 @@ const KEYS: [ReactNode, ReactNode][] = [
       <Kbd>Ctrl</Kbd>
       <Kbd>;</Kbd>
     </>,
-    "guides: thirds and safe areas",
+    "guides: framing grid and safe areas (Alt+; switches Thirds / Phi / Diagonals / All)",
+  ],
+  [
+    <>
+      <Kbd>Shift</Kbd>
+      <Kbd>V</Kbd>
+    </>,
+    "value check: cycle Normal / B&W (Rec.709) / High-contrast silhouette (viewport only)",
+  ],
+  [
+    <>
+      <Kbd>Shift</Kbd>
+      <Kbd>O</Kbd>
+    </>,
+    "cut-boundary ghost: overlay previous shot's outgoing frame to align match cuts",
+  ],
+  [
+    <>
+      <Kbd>Alt</Kbd>
+      <Kbd>M</Kbd>
+    </>,
+    "mute test: silence audio for picture-only review (preserves volume)",
+  ],
+  [
+    <>
+      <Kbd>Shift</Kbd>
+      <Kbd>H</Kbd>
+    </>,
+    "blind audio test: hide picture to listen to audio alone (Esc exits)",
+  ],
+  [
+    <>
+      <Kbd>Shift</Kbd>
+      <Kbd>C</Kbd>
+    </>,
+    "color script strip: shot thumbnails, dominant palettes, luminance & pacing",
   ],
   [
     <>
@@ -516,6 +559,13 @@ export function Settings() {
       contract: x.contract,
       captions: x.captions,
       guides: x.guides,
+      guideMode: x.guideMode,
+      guideSafe: x.guideSafe,
+      valueCheck: x.valueCheck,
+      ghost: x.ghost,
+      ghostOpacity: x.ghostOpacity,
+      blindAudio: x.blindAudio,
+      colorScript: x.colorScript,
       tryOn: x.tryOn,
       free: x.free,
       flySpeed: x.flySpeed,
@@ -618,8 +668,121 @@ export function Settings() {
             keys={["Ctrl", ";"]}
             checked={s.guides}
             onChange={(on) => setPref("guides", on)}
-            help="Over the picture: the thirds, the middle, and the safe areas that text and action stay inside. On a 9:16 film the shaded edges are what the YouTube Shorts and TikTok buttons and captions cover. Kept in this browser."
+            help="Over the picture: Thirds, Golden Ratio (38.2%), Baroque/Sinister diagonals, and SMPTE/Shorts safe areas. Alt+; cycles layout. Kept in this browser."
           />
+          <Row>
+            <span className="flex items-center gap-1.5 text-sm whitespace-nowrap">
+              Guide layout <Keys keys={["Alt", ";"]} />
+            </span>
+            <ToggleGroup
+              value={[s.guideMode]}
+              onValueChange={(v: string[]) => {
+                if (!v[0]) return;
+                setPref("guideMode", v[0] as GuideMode);
+                if (!s.guides) setPref("guides", true);
+              }}
+              aria-label="Guide layout"
+              spacing={0.5}
+              variant="segment"
+              size="sm"
+            >
+              {GUIDE_MODES.map((m) => (
+                <ToggleGroupItem key={m} value={m} className="pointer-coarse:h-10">
+                  {m === "thirds"
+                    ? "Thirds"
+                    : m === "phi"
+                      ? "Phi"
+                      : m === "diagonals"
+                        ? "Diag"
+                        : "All"}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Row>
+          <SwitchRow
+            id="guide-safe"
+            label="Safe zones in guides"
+            checked={s.guideSafe}
+            onChange={(on) => setPref("guideSafe", on)}
+            help="Include 93% action / 90% title safe boxes (16:9) or Shorts/TikTok safe zone (9:16) inside framing guides."
+          />
+          <div className="upright:hidden sideways:hidden contents">
+            <Row>
+              <span className="flex items-center gap-1.5 text-sm whitespace-nowrap">
+                Value check <Keys keys={["Shift", "V"]} />
+                <HelpTip label="Value check">
+                  Checks Rec.709 grayscale values or high-contrast figure-ground silhouette on the
+                  viewport only. Film grades and final renders never change.
+                </HelpTip>
+              </span>
+              <ToggleGroup
+                value={[s.valueCheck]}
+                onValueChange={(v: string[]) => {
+                  if (v[0]) set({ valueCheck: v[0] as ValueCheckMode });
+                }}
+                aria-label="Value check mode"
+                spacing={0.5}
+                variant="segment"
+                size="sm"
+              >
+                {VALUE_CHECK_MODES.map((m) => (
+                  <ToggleGroupItem key={m} value={m}>
+                    {m === "off" ? "Off" : m === "bw" ? "B&W" : "Silhouette"}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+            </Row>
+            <SwitchRow
+              id="cut-ghost"
+              label="Cut-boundary ghost"
+              keys={["Shift", "O"]}
+              checked={s.ghost}
+              onChange={(on) => set({ ghost: on })}
+              help="Overlays the previous shot's outgoing frame on top of the current shot to align eye-trace and match cuts."
+            />
+            {s.ghost && (
+              <Row>
+                <span className="text-sm whitespace-nowrap">Ghost opacity</span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="flex h-9 min-w-0 flex-1 items-center">
+                    <Slider
+                      min={GHOST_OPACITY.min}
+                      max={GHOST_OPACITY.max}
+                      step={GHOST_OPACITY.step}
+                      value={s.ghostOpacity}
+                      onValueChange={(v: number | readonly number[]) =>
+                        setPref(
+                          "ghostOpacity",
+                          clampGhostOpacity(typeof v === "number" ? v : v[0]!),
+                        )
+                      }
+                      aria-label="Settings ghost opacity"
+                      format={{ style: "percent" }}
+                    />
+                  </span>
+                  <span className="text-muted-foreground min-w-[4ch] text-end text-sm tabular-nums">
+                    {Math.round(s.ghostOpacity * 100)}%
+                  </span>
+                </span>
+              </Row>
+            )}
+            <SwitchRow
+              id="color-script"
+              label="Color script strip"
+              keys={["Shift", "C"]}
+              checked={s.colorScript}
+              onChange={(on) => set({ colorScript: on })}
+              help="Horizontal storyboard strip under the picture with shot thumbnails, dominant 4-color palettes, Rec.709 luminance and pacing highlights."
+            />
+            <SwitchRow
+              id="blind-audio"
+              label="Blind audio test"
+              keys={["Shift", "H"]}
+              checked={s.blindAudio}
+              onChange={(on) => set({ blindAudio: on })}
+              help="Curtains the picture while playback continues so you can judge pacing, dialogue and mix with eyes closed. Esc exits."
+            />
+          </div>
           {/* CapCut's Player menu > Color oscilloscope: a strip under the picture, too big for a phone (picture/Oscilloscope.tsx) */}
           <div className="upright:hidden sideways:hidden contents">
             <SwitchRow

@@ -12,15 +12,21 @@ import { InkBar } from "../notes/InkBar";
 import { OptionChips } from "../options/OptionChips";
 import { reloadNow } from "../playback/transport";
 import { FullscreenTransport } from "../shell/FullscreenTransport";
+import { BlindAudioCurtain } from "./BlindAudioCurtain";
+import { ColorScriptStrip } from "./ColorScript";
 import { CompareOverlay } from "./Compare";
+import { valueCheckLabel } from "./director-eye";
 import { FilmView } from "./FilmView";
+import { GhostHud, GhostOverlay } from "./GhostOverlay";
 import { Guides } from "./Guides";
 import { Oscilloscope } from "./Oscilloscope";
 
 function Badges() {
   const free = useStudio((s) => s.free),
     final = useStudio((s) => s.final),
-    night = useStudio((s) => s.nightVision);
+    night = useStudio((s) => s.nightVision),
+    valueCheck = useStudio((s) => s.valueCheck),
+    muted = useStudio((s) => s.muted);
   const contract = useStudio((s) => s.contract.length),
     status = useStudio((s) => s.status),
     newBuild = useStudio((s) => s.newBuild);
@@ -39,6 +45,20 @@ function Badges() {
       {final && (
         <Badge variant="alarm" render={<b />}>
           FINAL QUALITY
+        </Badge>
+      )}
+      {valueCheck !== "off" && (
+        <Badge
+          variant="check"
+          render={<b />}
+          title="Viewport value check only — film grade and renders are unchanged"
+        >
+          {valueCheckLabel(valueCheck)}
+        </Badge>
+      )}
+      {muted && (
+        <Badge variant="check" render={<b />} title="Audio muted for picture-only review (Alt+M)">
+          MUTED
         </Badge>
       )}
       {contract > 0 && (
@@ -70,6 +90,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
     error = useStudio((s) => s.error);
   const ink = useStudio((s) => s.ink);
   const pickFocus = useStudio((s) => s.pickFocus !== null);
+  const valueCheck = useStudio((s) => s.valueCheck);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
@@ -80,25 +101,54 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2"
       }
     >
+      {!phone && (
+        <svg aria-hidden className="pointer-events-none absolute size-0 overflow-hidden">
+          <defs>
+            <filter id="director-eye-rec709" colorInterpolationFilters="sRGB">
+              <feColorMatrix
+                type="matrix"
+                values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
+              />
+            </filter>
+            <filter id="director-eye-silhouette" colorInterpolationFilters="sRGB">
+              <feColorMatrix
+                type="matrix"
+                values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
+              />
+              <feComponentTransfer>
+                <feFuncR type="linear" slope={3.6} intercept={-1.3} />
+                <feFuncG type="linear" slope={3.6} intercept={-1.3} />
+                <feFuncB type="linear" slope={3.6} intercept={-1.3} />
+              </feComponentTransfer>
+            </filter>
+          </defs>
+        </svg>
+      )}
       <div
         ref={bind("view")}
         className="@container relative flex min-h-0 w-full flex-1 items-center justify-center"
       >
         {/* The frame itself and what is pinned or drawn on it */}
         <div ref={bind("stage")} className="bg-stage @container relative overflow-hidden">
-          <canvas
-            ref={bind("canvas")}
-            className={
-              pickFocus
-                ? "absolute inset-0 block size-full cursor-crosshair touch-none"
-                : "absolute inset-0 block size-full cursor-default touch-none"
-            }
-          />
-          <canvas
-            ref={bind("final")}
-            hidden
-            className="pointer-events-none absolute inset-0 block size-full"
-          />
+          <div
+            data-value-check={!phone && valueCheck !== "off" ? valueCheck : undefined}
+            className="absolute inset-0"
+          >
+            <canvas
+              ref={bind("canvas")}
+              className={
+                pickFocus
+                  ? "absolute inset-0 block size-full cursor-crosshair touch-none"
+                  : "absolute inset-0 block size-full cursor-default touch-none"
+              }
+            />
+            <canvas
+              ref={bind("final")}
+              hidden
+              className="pointer-events-none absolute inset-0 block size-full"
+            />
+            {!phone && <GhostOverlay />}
+          </div>
           <Guides />
           <CompareOverlay />
           {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
@@ -147,6 +197,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         <div hidden={phone} className="contents">
           <OptionChips ref={bind("chips")} />
           <FilmView bind={bind} />
+          <GhostHud />
+          <BlindAudioCurtain />
         </div>
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
@@ -159,6 +211,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         )}
       </div>
       <div hidden={phone} className="contents">
+        <ColorScriptStrip />
         <Oscilloscope bind={bind} />
       </div>
       {error && (

@@ -196,26 +196,44 @@ document.addEventListener("pointerdown", keepSound);
 // A level of 0 counts as muted, and unmuting goes back to the last level that was heard
 let heardLevel = 1;
 const showVolume = () => {
-  const a = S.el.audio;
-  set({ muted: a.muted, volume: a.volume });
-  syncMonitorGain();
+  const a = S.el?.audio;
+  if (a) {
+    set({ muted: a.muted, volume: a.volume });
+    syncMonitorGain();
+  } else {
+    set({ muted: get().muted, volume: heardLevel });
+  }
   stored.set("volume", String(heardLevel));
 };
 export const setVolume = (v: number) => {
-  const a = S.el.audio;
+  const a = S.el?.audio;
   v = Math.max(0, Math.min(1, Math.round(v * 20) / 20));
-  a.muted = v === 0;
-  if (v) {
-    a.volume = v;
-    heardLevel = v;
+  if (v) heardLevel = v;
+  if (a) {
+    a.muted = v === 0;
+    if (v) a.volume = v;
+    showVolume();
+  } else {
+    set({ muted: v === 0, volume: v || heardLevel });
+    stored.set("volume", String(heardLevel));
   }
-  showVolume();
 };
 export const toggleMute = () => {
-  if (S.el.audio.muted) setVolume(heardLevel);
+  const a = S.el?.audio;
+  if (a) {
+    if (a.muted) setVolume(heardLevel);
+    else {
+      if (a.volume > 0) heardLevel = a.volume;
+      a.muted = true;
+      showVolume();
+    }
+    return;
+  }
+  if (get().muted) setVolume(heardLevel);
   else {
-    S.el.audio.muted = true;
-    showVolume();
+    const cur = get().volume;
+    if (cur > 0) heardLevel = cur;
+    set({ muted: true });
   }
 };
 // The level heard on the last visit
@@ -224,8 +242,10 @@ export const restoreVolume = () => {
   if (v > 0 && v <= 1) setVolume(v);
 };
 export const nudgeVolume = (up: boolean) => {
-  const a = S.el.audio;
-  setVolume((a.muted ? (up ? heardLevel - 0.1 : 0) : a.volume) + (up ? 0.1 : -0.1));
+  const a = S.el?.audio;
+  const muted = a ? a.muted : get().muted;
+  const vol = a ? a.volume : get().volume;
+  setVolume((muted ? (up ? heardLevel - 0.1 : 0) : vol) + (up ? 0.1 : -0.1));
 };
 
 // One frame's playhead while playing. The sound is the clock, so picture and voice can't drift; slow frames are skipped, never

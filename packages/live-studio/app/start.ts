@@ -58,7 +58,7 @@ import { flight, fly, flyFree, setFov, setFree } from "./picture/freecam";
 import { formatOpticsHud } from "./picture/hud";
 import { lookAtClick } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
-import { drawFinal, finalCanvas, render, setFinal } from "./picture/render";
+import { drawFinal, finalCanvas, render, renderFilmFrame, setFinal } from "./picture/render";
 import { measureScopes } from "./picture/scopes";
 import {
   loadMix,
@@ -91,6 +91,7 @@ import { loadTiming } from "./timeline/timing";
 
 registerEngine({
   render,
+  renderFilmFrame,
   finalCanvas,
   setFinal,
   setFree,
