@@ -285,6 +285,109 @@ def _cam_source_time(t_film: float) -> float:
     return sf + dist
 
 
+SCENE_SAMPLE_HZ = 30
+SCENE_SAMPLE_PREFIX = "SPATIAL-SAMPLES "
+
+
+def _render_scene_samples(request: str):
+    renderer = Path(__file__).resolve().parents[2] / "packages/live-studio"
+    bun = shutil.which("bun")
+    if not bun:
+        raise RuntimeError("Bun is required to sample a film's named scene targets")
+    # A soundtrack export uses the film's own stage, independent of any manual frame-render options.
+    ignored = {"AT", "LIST", "CHECK", "CHUNKS", "SPAN", "INSPECT", "CROP", "COMPARE", "RES", "SAMPLES", "LIVE_PROJECT"}
+    env = {name: value for name, value in os.environ.items() if name not in ignored}
+    env["ENTRY"] = str(renderer / "render/spatial-samples.ts")
+    env["CHECK"] = "spatial-samples"
+    env["LAB_SPATIAL"] = request
+    try:
+        run = subprocess.run(
+            [bun, str(renderer / "render.mjs"), "stills"],
+            cwd=ROOT, env=env, capture_output=True, encoding="utf8", errors="replace", timeout=120,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise RuntimeError("named scene target render exceeded 120 seconds") from e
+    payload = next((line.removeprefix(SCENE_SAMPLE_PREFIX) for line in run.stdout.split("\n")
+                    if line.startswith(SCENE_SAMPLE_PREFIX)), None)
+    if run.returncode or payload is None:
+        detail = next((line for line in run.stderr.splitlines() if line.strip()), "no scene samples returned")
+        raise RuntimeError(detail)
+    return json.loads(payload)
+
+
+def _runtime_spatial_samples(beds, sfx, end, *, include_options=False):
+    from spatial import placed_at
+
+    pending, required = {}, set()
+    placed_data = None
+    for row in (*beds, *sfx):
+        spec = row.get("spatial") or {}
+        target = spec.get("target")
+        if not target:
+            continue
+        if placed_data is None:
+            _, placed_data = _scene_spatial_data()
+        if placed_at(placed_data, target, 0.0, None) is not None:
+            continue
+        if "from" in row:
+            start, stop = row["from"], row["to"]
+        else:
+            start = row["at"]
+            length = _sfx_length(row)
+            if include_options and len(options(row)) > 1:
+                length = max(length, _sfx_options_length(row))
+            stop = start + length
+        start, stop = max(0.0, start), min(stop, end)
+        if stop <= start:
+            continue
+        pending.setdefault(target, []).append([math.floor(start * SCENE_SAMPLE_HZ), math.ceil(stop * SCENE_SAMPLE_HZ)])
+        if spec.get("at") is None:
+            required.add(target)
+    if not pending:
+        return {}, {}
+
+    for name, ranges in pending.items():
+        merged = []
+        for first, last in sorted(ranges):
+            if merged and first <= merged[-1][1] + 1:
+                merged[-1][1] = max(merged[-1][1], last)
+            else:
+                merged.append([first, last])
+        pending[name] = merged
+    names = ", ".join(sorted(required or pending))
+    try:
+        if not (ROOT / "src/scene.ts").is_file():
+            raise RuntimeError("src/scene.ts is missing")
+        samples = _render_scene_samples(json.dumps(pending, ensure_ascii=True, separators=(",", ":")))
+    except (OSError, ValueError, RuntimeError) as e:
+        detail = f"cannot resolve spatial scene targets ({names}): {e}"
+        if required:
+            raise SystemExit(detail) from e
+        print(f"Warning: {detail}; using authored XYZ fallback.", file=sys.stderr)
+        return {}, {}
+    missing = sorted(name for name in required if not samples["positions"].get(name))
+    if missing:
+        raise SystemExit(
+            f"spatial target not found: {', '.join(missing)} (check the scene name or add spatial.at)"
+        )
+    return samples["positions"], samples["cameras"]
+
+
+def _interpolate_scene_samples(positions, cameras, t):
+    at = t * SCENE_SAMPLE_HZ
+    first = math.floor(at)
+    left, right, amount = str(first), str(math.ceil(at)), at - first
+
+    def blend(a, b):
+        return [x + (y - x) * amount for x, y in zip(a, b)]
+
+    p0, p1 = positions.get(left), positions.get(right)
+    c0, c1 = cameras.get(left), cameras.get(right)
+    position = blend(p0, p1) if p0 is not None and p1 is not None else p0 if p0 is not None else p1
+    pose = {key: blend(c0[key], c1[key]) for key in ("p", "l", "up")} if c0 and c1 else c0 or c1
+    return position, pose
+
+
 def _is_safe_rel_ir_path(space: str) -> bool:
     if not space or "\0" in space or space.startswith("/") or space.startswith("\\"):
         return False
@@ -550,6 +653,26 @@ def as_option(e, name, gain=1.0):
         if e.get("_auto_length"):
             out.pop("length", None)
     return out
+
+
+def _sfx_length(row):
+    available = seconds(row["name"]) - (row.get("start") or 0)
+    if available <= 0:
+        return 0.0
+    length = row.get("length")
+    return length if length is not None else available / (row.get("rate") or 1)
+
+
+def _sfx_options_length(row):
+    length = row.get("length")
+    if length is not None and not row.get("_auto_length"):
+        return length
+    rate = row.get("rate") or 1
+    longest = max(
+        (seconds(name) - ((row.get("start") or 0) if name == row["name"] else 0)) / rate
+        for name in options(row)
+    )
+    return max(length, longest) if length is not None else longest
 
 
 def unfit():
@@ -928,17 +1051,18 @@ def publish(outputs, scratch):
         raise
 
 
-def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None, source_bindings=None):
+def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False, end=None, source_bindings=None, scene_samples=None):
     with tempfile.TemporaryDirectory(prefix="studio-mix-clips-") as folder:
-        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder), source_bindings)
+        _build(out, beds, sfx, voice, span, master, float_output, end, Path(folder), source_bindings, scene_samples)
 
 
-def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings):
+def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings, scene_samples):
     from ir import resolve_clip_reverb
     from spatial import is_spatial_active
 
     inputs, chains = [], []
     end = END if end is None else end
+    scene_positions, scene_cameras = scene_samples if scene_samples is not None else _runtime_spatial_samples(beds, sfx, end)
 
     def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None, reverb_spec=None, spatial_spec=None):
         if length is not None and length <= 0:
@@ -1004,7 +1128,18 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
             buf = raw_buf.astype(np.float32)
             if spatial_on:
                 cam_keys, placed_data = _scene_spatial_data()
-                buf = apply_spatial_audio(buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time)
+                track = scene_positions.get(spatial_spec.get("target"))
+
+                def scene_sample(t):
+                    return _interpolate_scene_samples(track, scene_cameras, min(max(t, 0.0), end))
+
+                try:
+                    buf = apply_spatial_audio(
+                        buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time,
+                        scene_sample_fn=scene_sample if track is not None else None,
+                    )
+                except ValueError as e:
+                    raise SystemExit(str(e)) from e
             if reverb_spec is not None:
                 ir_l, ir_r, ir_path = _resolve_ir_buffers(reverb_spec["space"])
                 if source_bindings is not None and ir_path is not None:
@@ -1115,7 +1250,9 @@ def studio(out):
             groups.setdefault(e["name"], []).append((kind, e))
     alternatives = {name: list(dict.fromkeys(o for _, e in group for o in options(e))) for name, group in groups.items()}
     tried = lambda e: len(alternatives[e["name"]]) > 1
-    build(out, [b for b in A["beds"] if not tried(b)], [s for s in A["sfx"] if not tried(s)])
+    scene_samples = _runtime_spatial_samples(A["beds"], A["sfx"], END, include_options=True)
+    build(out, [b for b in A["beds"] if not tried(b)], [s for s in A["sfx"] if not tried(s)],
+          scene_samples=scene_samples)
     vault_sources = {}
     for v in VAULTS:
         if (v / "SOURCES.json").exists():
@@ -1135,20 +1272,14 @@ def studio(out):
             if kind == "bed":
                 spans.append((float(e["from"]), float(e["to"])))
             else:  # a one-shot without a length rings as long as its longest option
-                def _opt_end(s):
-                    rate = float(s.get("rate") or 1)
-                    if s.get("length") is not None and not s.get("_auto_length"):
-                        return float(s["at"]) + float(s["length"])
-                    longest = max((seconds(o) - (float(s.get("start") or 0) if o == s["name"] else 0.0)) / rate for o in options(s))
-                    cur = float(s["length"]) if s.get("length") is not None else longest
-                    return float(s["at"]) + max(cur, longest)
-                spans.append((float(e["at"]), _opt_end(e)))
+                spans.append((float(e["at"]), float(e["at"] + _sfx_options_length(e))))
         span = (min(a for a, _ in spans), max(b for _, b in spans))
         (safe_stems / name).mkdir(parents=True, exist_ok=True)
         opts = []
         for o in alternatives[name]:
             one = [(kind, as_option(e, o if o in options(e) else e["name"])) for kind, e in group]
-            build(safe_stems / name / f"{o}.webm", [e for kind, e in one if kind == "bed"], [e for kind, e in one if kind == "sfx"], voice=False, span=span)
+            build(safe_stems / name / f"{o}.webm", [e for kind, e in one if kind == "bed"],
+                  [e for kind, e in one if kind == "sfx"], voice=False, span=span, scene_samples=scene_samples)
             opts.append({"id": o, "title": sources.get(o, {}).get("title", o), "files": [f"/agent/stems/{name}/{o}.webm"], "source": sources.get(o, {}).get("url", "")})
         kinds = "/".join(dict.fromkeys(kind for kind, _ in group))
         trials[name] = {"title": f"{name.replace('_', ' ')} ({kinds})", "kind": "stem", "from": span[0], "to": span[1], "options": opts}

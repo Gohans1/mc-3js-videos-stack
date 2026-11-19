@@ -27,7 +27,7 @@ import { compareVariants, warmSearchTokens } from "./library-view";
 import { measureFinal } from "./meter";
 import { forgetSounds, replan, setLive } from "./mixer";
 import { type AudioProcessing, retime, retimedLength, sourceRoom, trimSource } from "./retime";
-import { sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
+import { prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
 import { type ClipRef } from "./slice";
 import type { SpatialSpec } from "./spatial";
 import {
@@ -370,6 +370,7 @@ export const loadSound = async (opts?: {
         narrationLines(S.voiceBase, doc.source, seconds(lanes?.narration ?? ""), true),
         clockForTimeline("voice"),
       ),
+    prepareTargets: prepareSceneTargets,
     camPose: sceneCameraPoseAt,
     targetPos: sceneTargetAt,
   });

@@ -60,16 +60,27 @@ export interface CutAdjustResult {
   blockedBy?: "neighbour" | "source" | "cut";
 }
 
+function closestCut(times: readonly number[], edge: number, eligible: (cut: number) => boolean) {
+  let best: number | undefined;
+  let distance = 0.12;
+  for (const t of times) {
+    const next = Math.abs(t - edge);
+    if (next > distance || !eligible(t)) continue;
+    distance = next;
+    best = t;
+  }
+  return best;
+}
+
 export function computeJCutStart(bounds: CutAdjustBounds): CutAdjustResult {
   const lead = bounds.leadSec ?? DEFAULT_JL_CUT_SEC;
-  const nearCut = bounds.cutTimes.find((t) => Math.abs(t - bounds.from) <= 0.12);
-  if (nearCut === undefined || nearCut >= bounds.to - EPS)
-    return { target: bounds.from, changed: false, blockedBy: "cut" };
+  const nearCut = closestCut(bounds.cutTimes, bounds.from, (t) => t < bounds.to - EPS);
+  if (nearCut === undefined) return { target: bounds.from, changed: false, blockedBy: "cut" };
   const desired = nearCut - lead;
   const floorByNeighbour = Math.max(0, bounds.prevEnd);
   const floorBySource = Math.max(0, bounds.minFrom);
   const hardFloor = Math.max(floorByNeighbour, floorBySource);
-  const clamped = Math.min(bounds.to - bounds.minLength, Math.max(hardFloor, desired));
+  const clamped = Math.max(hardFloor, Math.min(bounds.to - bounds.minLength, desired));
   if (bounds.from - clamped <= EPS || clamped >= nearCut - EPS) {
     return {
       target: bounds.from,
@@ -82,14 +93,13 @@ export function computeJCutStart(bounds: CutAdjustBounds): CutAdjustResult {
 
 export function computeLCutEnd(bounds: CutAdjustBounds): CutAdjustResult {
   const trail = bounds.trailSec ?? DEFAULT_JL_CUT_SEC;
-  const nearCut = bounds.cutTimes.find((t) => Math.abs(t - bounds.to) <= 0.12);
-  if (nearCut === undefined || nearCut <= bounds.from + EPS)
-    return { target: bounds.to, changed: false, blockedBy: "cut" };
+  const nearCut = closestCut(bounds.cutTimes, bounds.to, (t) => t > bounds.from + EPS);
+  if (nearCut === undefined) return { target: bounds.to, changed: false, blockedBy: "cut" };
   const desired = nearCut + trail;
   const ceilByNeighbour = bounds.nextStart;
   const ceilBySource = bounds.maxTo;
   const hardCeil = Math.min(ceilByNeighbour, ceilBySource);
-  const clamped = Math.max(bounds.from + bounds.minLength, Math.min(hardCeil, desired));
+  const clamped = Math.min(hardCeil, Math.max(bounds.from + bounds.minLength, desired));
   if (clamped - bounds.to <= EPS || clamped <= nearCut + EPS) {
     return {
       target: bounds.to,

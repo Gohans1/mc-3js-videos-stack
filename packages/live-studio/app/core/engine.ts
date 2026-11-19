@@ -16,6 +16,7 @@ export interface FreeView {
 }
 
 export interface StudioEngine {
+  buildAudioScene?: typeof import("film/scene").buildScene;
   render: (t: number, readFrame?: () => void) => Promise<void>;
   finalCanvas: () => HTMLCanvasElement | null;
   setFinal: (on: boolean) => Promise<void> | void;

@@ -272,6 +272,36 @@ describe("J-Cut / L-Cut helpers (jlcut.ts)", () => {
     expect(computeLCutEnd({ ...bounds, cutTimes: [6.1], maxTo: 6.05 }).changed).toBe(false);
   });
 
+  test("uses the closest picture cut when several are near a short audio edge", () => {
+    const bounds = {
+      from: 5,
+      to: 6,
+      prevEnd: 0,
+      nextStart: 10,
+      minFrom: 4.95,
+      maxTo: 6.05,
+      minLength: 1 / 30,
+      cutTimes: [4.9, 5, 5.9, 6, 6.1],
+    };
+    expect(computeJCutStart(bounds)).toEqual({ target: 4.95, changed: true });
+    expect(computeLCutEnd(bounds)).toEqual({ target: 6.05, changed: true });
+  });
+
+  test("extending a sub-frame clip respects the same-track neighbours", () => {
+    const bounds = {
+      from: 4.03,
+      to: 4.04,
+      prevEnd: 4.02,
+      nextStart: 4.05,
+      minFrom: 3.8,
+      maxTo: 4.2,
+      minLength: 1 / 30,
+      cutTimes: [4.025, 4.045],
+    };
+    expect(computeJCutStart(bounds)).toEqual({ target: 4.02, changed: true });
+    expect(computeLCutEnd(bounds)).toEqual({ target: 4.05, changed: true });
+  });
+
   test("computeJCutStart and computeLCutEnd clamp cleanly against neighbours and source room", () => {
     // Source trimIn allows going back from 4.0 to 3.4 (clamped by sourceRoom, not 3.25)
     const j = computeJCutStart({
@@ -838,9 +868,9 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(mod.sceneSpatial.sceneCameraPoseAt(1.0, { offline: true }).p[0]).toBeCloseTo(1, 4);
         // Placed object at t=0.5 matches mc-assets/src/placed-math.ts poseAt arriving-key ease ("inOut")
         const placedAtHalf = poseAt(mod.filmStub.EDIT.objects.hero.keys, 0.5);
-        mod.state.S.tools.objects = new Map([[mod.state.S.tools.camera, "preview-only"]]);
-        expect(mod.sceneSpatial.availableSpatialTargets()).toEqual(["hero"]);
-        expect(mod.sceneSpatial.sceneTargetAt("preview-only", 1.0)).toBeNull();
+        mod.state.S.tools.objects = [[mod.state.S.tools.camera, "preview-only"]];
+        expect(mod.sceneSpatial.availableSpatialTargets()).toEqual(["hero", "preview-only"]);
+        expect(mod.sceneSpatial.sceneTargetAt("preview-only", 1.0)).toEqual([99, 99, 99]);
         const sceneAtHalf = mod.sceneSpatial.sceneTargetAt("hero", 1.0);
         expect(sceneAtHalf?.[0]).toBeCloseTo(placedAtHalf.at.x, 5);
         mod.store.set({ timing: false });

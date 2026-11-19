@@ -370,8 +370,8 @@ def camera_at(keys: Sequence[Mapping], t: float, placed_data: Any = None) -> dic
 
 def placed_at(
     placed_data: Any, target: str, t: float,
-    fallback: tuple[float, float, float] = (0.0, 0.0, 0.0)
-) -> tuple[float, float, float]:
+    fallback: tuple[float, float, float] | None = (0.0, 0.0, 0.0),
+) -> tuple[float, float, float] | None:
     if not placed_data or not target:
         return fallback
     entry = None
@@ -431,16 +431,17 @@ def placed_at(
 
 
 def resolve_source_position(
-    spec: Mapping, t: float, placed_data: Any = None
+    spec: Mapping, t: float, placed_data: Any = None,
+    scene_position: Sequence[float] | None = None,
 ) -> tuple[float, float, float]:
-    target = spec.get("target")
-    at = spec.get("at")
-    base = (float(at[0]), float(at[1]), float(at[2])) if at is not None else (0.0, 0.0, 0.0)
-    if isinstance(target, str) and target:
-        base = placed_at(placed_data, target, t, base)
+    target, at = spec.get("target"), spec.get("at")
+    base = placed_at(placed_data, target, t, None) if target else None
+    position = base if base is not None else scene_position if scene_position is not None else at
+    origin = (0.0, 0.0, 0.0)
+    base = (float(position[0]), float(position[1]), float(position[2])) if position is not None else origin
     off = spec.get("offset")
     if isinstance(off, (list, tuple)) and len(off) >= 3:
-        return (base[0] + float(off[0]), base[1] + float(off[1]), base[2] + float(off[2]))
+        return _add(base, (float(off[0]), float(off[1]), float(off[2])))
     return base
 
 
@@ -547,6 +548,7 @@ def apply_spatial_audio(
     placed_data: Any = None,
     source_time_fn: Callable[[float], float] | None = None,
     block_size: int = 128,
+    scene_sample_fn: Callable[[float], tuple[Sequence[float] | None, Mapping | None]] | None = None,
 ) -> np.ndarray:
     import numpy as np
     from scipy import signal
@@ -560,9 +562,11 @@ def apply_spatial_audio(
 
     def sample_at(t_film: float) -> dict[str, float]:
         t_pic = source_time_fn(t_film) if source_time_fn is not None else t_film
-        pose = camera_at(cam_keys, t_pic, placed_data)
-        src = resolve_source_position(spec, t_pic, placed_data)
-        return compute_spatial_params(pose, src, spec)
+        pos, pose = scene_sample_fn(t_film) if scene_sample_fn is not None else (None, None)
+        if scene_sample_fn is not None and pos is None and spec.get("at") is None:
+            raise ValueError(f"spatial target {spec['target']!r} is unavailable at {t_film:.3f}s")
+        src = resolve_source_position(spec, t_pic, placed_data, pos)
+        return compute_spatial_params(pose or camera_at(cam_keys, t_pic, placed_data), src, spec)
 
     bounds = list(range(0, n, block_size))
     params = [sample_at(start_time + idx / sample_rate) for idx in bounds]

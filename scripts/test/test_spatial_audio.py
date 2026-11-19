@@ -384,6 +384,79 @@ class TestMixPyEndToEnd(unittest.TestCase):
             self.assertGreater(rms(2.65, 3.00, 0), rms(2.65, 3.00, 1) * 2.0)
             self.assertGreater(rms(4.00, 4.35, 1), rms(4.00, 4.35, 0) * 2.0)
 
+    def test_mix_tracks_named_scene_actor_through_retimed_frames(self) -> None:
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        chrome = next(
+            (p for p in [
+                os.environ.get("CHROME"),
+                str(Path(REPO_ROOT) / "vault/tools/chrome-headless-shell/chrome-headless-shell.exe"),
+                *(str(Path(os.environ.get(k, "")) / "Google/Chrome/Application/chrome.exe")
+                  for k in ("ProgramFiles", "ProgramFiles(x86)")),
+                shutil.which("chromium"),
+                shutil.which("google-chrome"),
+            ] if p and Path(p).is_file()),
+            None,
+        )
+        if chrome is None:
+            self.skipTest("a Chrome binary is required to sample film scene anchors")
+        sample_rate = 48000
+        with tempfile.TemporaryDirectory(prefix="mix-scene-anchor-") as folder:
+            root = Path(folder)
+            timeline = root / "src/timeline"
+            timeline.mkdir(parents=True)
+            (root / "package.json").write_text(json.dumps({
+                "name": "scene-anchor",
+                "live-studio": {"chrome": chrome, "soundVault": False, "timingTimeline": "src/timeline/timing.json"},
+            }), encoding="utf8")
+            (root / "src/edit.json").write_text('{"end":2}', encoding="utf8")
+            (timeline / "timing.json").write_text('{"speeds":[{"from":0,"to":0.8,"rate":2}]}', encoding="utf8")
+            (root / "src/scene.ts").write_text("""
+import { Object3D, PerspectiveCamera, Scene } from "three";
+export const DURATION = 2;
+export const SHOTS = [{ t: 0 }];
+export const SHOTS_OUT = SHOTS;
+export function buildScene() {
+  const scene = new Scene();
+  const actor = new Object3D();
+  const camera = new PerspectiveCamera();
+  camera.position.set(0, 1.6, 5);
+  camera.lookAt(0, 1.6, 0);
+  scene.add(actor);
+  const draw = (t) => { actor.position.set(12 * (t - 1), 1.6, 5); };
+  return Object.assign(draw, { tools: { scene, camera, objects: [[actor, "Elon"]] } });
+}
+""", encoding="utf8")
+            samples = 0.25 * np.sin(2 * np.pi * 440 * np.arange(2 * sample_rate) / sample_rate)
+            self._write_wav(str(root / "sound/sfx/tone.wav"), np.column_stack((samples, samples)), sample_rate)
+            (timeline / "audio.json").write_text(json.dumps({
+                "beds": [],
+                "sfx": [{"at": 0, "name": "tone", "gain": -6,
+                         "spatial": {"target": "elon", "refDistance": 4}}],
+            }), encoding="utf8")
+            still = root / "renders/still_0.jpg"
+            still.parent.mkdir()
+            still.write_bytes(b"an existing render")
+            run = subprocess.run(
+                [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                cwd=root, capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(run.returncode, 0, msg=run.stderr + "\n" + run.stdout)
+            self.assertEqual(still.read_bytes(), b"an existing render")
+            rate, out = self._read_wav_f32(str(root / "sound/out.wav"))
+            self.assertEqual(rate, sample_rate)
+            self.assertTrue(np.all(np.isfinite(out)))
+
+            def power(start: float, end: float) -> np.ndarray:
+                return np.mean(out[int(start * rate):int(end * rate)] ** 2, axis=0)
+
+            left, right = power(0.15, 0.35)
+            self.assertGreater(left, right * 4, "the scene actor begins on the left")
+            left, right = power(0.72, 0.90)
+            self.assertGreater(right, left * 4, "Speed moves the actor right before the source-time crossing")
+
     def test_mix_py_custom_ir_occlusion_and_path_traversal_guard(self) -> None:
         import tempfile
 

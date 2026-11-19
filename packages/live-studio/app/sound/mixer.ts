@@ -45,7 +45,7 @@ import {
   processSpec,
   retainProcessed,
 } from "./processed";
-import { pictureTimeAt } from "./scene-spatial";
+import { pictureTimeAt, type SceneTargetSampler, type SceneTargetSpan } from "./scene-spatial";
 import { type ClipRef } from "./slice";
 import type { Lanes, LibraryItem } from "./sound";
 import {
@@ -63,6 +63,10 @@ interface Source {
   span: (c: ClipRef) => [number, number];
   voice: () => { s: number; e: number }[];
   camPose?: (t: number, opts?: { offline?: boolean }) => CameraPose;
+  prepareTargets?: (
+    spans: readonly SceneTargetSpan[],
+    signal?: AbortSignal,
+  ) => Promise<SceneTargetSampler | undefined>;
   targetPos?: (name: string, t: number, opts?: { offline?: boolean }) => Vec3 | null;
 }
 interface Clip {
@@ -563,6 +567,7 @@ const play = (
   at: number,
   w: Pick<Window, "speed" | "when" | "ctxAt">,
   offline?: boolean,
+  sampled?: SceneTargetSampler,
 ): Voice | null => {
   const u0 = at - c.t0;
   if (!c.loop && c.start + u0 >= s.buf.duration) return null;
@@ -629,12 +634,16 @@ const play = (
     const isOffline =
       offline ?? (typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext);
     const sampleSpatial = (tFilm: number) => {
-      const cam = source!.camPose!(tFilm, { offline: isOffline });
+      const sample = spSpec.target ? sampled?.(spSpec.target, tFilm) : undefined;
+      const cam = sample?.camera ?? source!.camPose!(tFilm, { offline: isOffline });
       const rawSrc = spSpec.target
-        ? (source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
-          spSpec.at ?? [0, 0, 0])
-        : (spSpec.at ?? [0, 0, 0]);
-      return computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec);
+        ? (sample?.at ??
+          source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
+          spSpec.at)
+        : spSpec.at;
+      return rawSrc
+        ? computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec)
+        : { cutoffHz: 20000, gain: 1, pan: 0 };
     };
     const lpf = ctx.createBiquadFilter();
     lpf.type = "lowpass";
@@ -973,6 +982,22 @@ export const setLive = (live_: boolean, src: Source) => {
   }
 };
 
+const sampleNamedTargets = (all: Clip[], from: number, to: number, signal?: AbortSignal) =>
+  source?.prepareTargets?.(
+    all.flatMap((clip) => {
+      if (!clip.spatial?.target || clip.t0 >= to || clip.t1 <= from) return [];
+      return [
+        {
+          name: clip.spatial.target,
+          from: Math.max(clip.t0, from),
+          to: Math.min(clip.t1, to),
+          fallback: !!clip.spatial.at,
+        },
+      ];
+    }),
+    signal,
+  );
+
 const SPAN_SAMPLE_RATE = 48000;
 
 const renderLanesSpan = async (
@@ -981,6 +1006,7 @@ const renderLanesSpan = async (
   to: number,
   frames: number,
   voice?: AudioBuffer | null,
+  signal?: AbortSignal,
 ): Promise<AudioBuffer | null> => {
   await preloadSources(l);
   const all = clips(l).filter((c) => c.t0 < to);
@@ -1015,6 +1041,7 @@ const renderLanesSpan = async (
   const st = stage(ctx, ctx.destination);
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
+  const sampled = await sampleNamedTargets(all, start, to, signal);
   const voiceStart = Math.max(0, start);
   if (voice && voiceStart < voice.duration) {
     const v = ctx.createBufferSource();
@@ -1029,7 +1056,8 @@ const renderLanesSpan = async (
   };
   all.forEach((c, i) => {
     const sample = loaded[i];
-    if (sample && c.t1 > start) play(ctx, st.bus, c, sample, Math.max(start, c.t0), w, true);
+    if (sample && c.t1 > start)
+      play(ctx, st.bus, c, sample, Math.max(start, c.t0), w, true, sampled);
   });
   const rendered = await ctx.startRendering();
   if (!preroll) return rendered;
@@ -1083,6 +1111,7 @@ export const renderFilm = async (
     st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
   await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
+  const sampled = await sampleNamedTargets(all, 0, DURATION);
   if (voice) {
     const v = ctx.createBufferSource();
     v.buffer = voice;
@@ -1092,21 +1121,25 @@ export const renderFilm = async (
   const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
   all.forEach((c, i) => {
     const s = loaded[i];
-    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true);
+    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true, sampled);
   });
   await ctx.startRendering();
   return l;
 };
 
 // Render stereo [from, to] audio segment for direct in-browser low-res MP4 clip export.
-export const renderAudioSpan = async (from: number, to: number): Promise<AudioBuffer | null> => {
+export const renderAudioSpan = async (
+  from: number,
+  to: number,
+  signal?: AbortSignal,
+): Promise<AudioBuffer | null> => {
   const dur = Math.max(0, to - from);
   if (dur <= 1e-3) return null;
   const frames = Math.max(1, Math.round(dur * SPAN_SAMPLE_RATE)),
     voice = await mixBuffer(),
     l = source?.lanes();
   if (on && l) {
-    const rendered = await renderLanesSpan(l, from, to, frames, voice);
+    const rendered = await renderLanesSpan(l, from, to, frames, voice, signal);
     if (rendered) return rendered;
   }
   if (!voice) return null;

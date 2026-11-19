@@ -2,10 +2,19 @@ import { cameraAt, type FocusTargetSpec } from "film-stage/camera";
 import { easeOf } from "film-stage/camera-meta";
 import { EDIT } from "film/edit";
 
+import {
+  sceneSpatialCamera,
+  sceneSpatialNames,
+  sceneSpatialPosition,
+} from "../../render/spatial-position";
+import { sizeOf } from "../../src/frame";
 import { timingClock } from "../../src/timing-state.mjs";
 import { frameAt } from "../../src/timing.mjs";
+import { engine } from "../core/engine";
+import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get } from "../core/store";
+import { FPS } from "../core/time";
 import type { CameraPose, Vec3 } from "./spatial";
 
 interface SceneKey {
@@ -95,10 +104,102 @@ export const pictureTimeAt = (filmTime: number): number => {
   }
 };
 
-export const sceneTargetAt = (name: string, filmTime: number): Vec3 | null => {
-  const keys = getPlaced()[name]?.keys;
-  return keys?.length ? interpolatePlaced(keys, pictureTimeAt(filmTime)) : null;
+const placedKeys = (name: string) => getPlaced()[name]?.keys;
+
+export const sceneTargetAt = (
+  name: string,
+  filmTime: number,
+  opts?: { offline?: boolean },
+): Vec3 | null => {
+  const keys = placedKeys(name);
+  if (keys?.length) return interpolatePlaced(keys, pictureTimeAt(filmTime));
+  return opts?.offline ? null : sceneSpatialPosition(S.tools, name);
 };
+
+export interface SceneTargetSpan {
+  name: string;
+  from: number;
+  to: number;
+  fallback: boolean;
+}
+
+type SpatialFrame = { camera: CameraPose | null; positions: Map<string, Vec3> };
+export type SceneTargetSampler = (name: string, t: number) => { at?: Vec3; camera?: CameraPose };
+
+export async function prepareSceneTargets(
+  spans: readonly SceneTargetSpan[],
+  signal?: AbortSignal,
+): Promise<SceneTargetSampler | undefined> {
+  const frames = new Map<number, Set<string>>();
+  const required = new Set<string>();
+  for (const { name, from, to, fallback } of spans) {
+    if (placedKeys(name)?.length) continue;
+    if (!fallback) required.add(name);
+    for (let frame = Math.floor(from * FPS); frame <= Math.ceil(to * FPS); frame++) {
+      const names = frames.get(frame) ?? new Set<string>();
+      names.add(name);
+      frames.set(frame, names);
+    }
+  }
+  if (!frames.size) return;
+  const unresolved = () =>
+    new Error(
+      `Couldn't resolve spatial target ${[...required].join(", ")}. Use a scene object name or set spatial.at.`,
+    );
+  if (!engine.buildAudioScene) {
+    if (required.size) throw unresolved();
+    return;
+  }
+
+  signal?.throwIfAborted();
+  const canvas = document.createElement("canvas");
+  const [w, h] = sizeOf(get().ratio, 320);
+  const deadline = performance.now() + 120_000;
+  const samples = new Map<number, SpatialFrame>();
+  const draw = await engine.buildAudioScene(canvas, w, h, true);
+  try {
+    for (const variant of draw.variants ?? []) {
+      const current = S.render?.variants?.find((item) => item.id === variant.id);
+      if (current?.pick) variant.set(current.pick.id);
+    }
+    for (const [frame, names] of [...frames].sort(([a], [b]) => a - b)) {
+      signal?.throwIfAborted();
+      if (performance.now() >= deadline)
+        throw new Error("Spatial target sampling exceeded two minutes. Export a shorter span.");
+      const t = Math.min(frame / FPS, DURATION || Infinity);
+      if (draw.renderFrame) await draw.renderFrame(t);
+      else draw(t);
+      const positions = new Map<string, Vec3>();
+      for (const name of names) {
+        const at = sceneSpatialPosition(draw.tools, name);
+        if (at) {
+          positions.set(name, at);
+          required.delete(name);
+        }
+      }
+      samples.set(frame, { positions, camera: sceneSpatialCamera(draw.tools) });
+      if (frame % 8 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+  } finally {
+    draw.disposeOpenFilm?.();
+    draw.tools?.renderer?.dispose();
+    draw.tools?.renderer?.forceContextLoss();
+  }
+  if (required.size) throw unresolved();
+  return (name, t) => {
+    const frame = t * FPS;
+    const first = samples.get(Math.floor(frame));
+    const last = samples.get(Math.ceil(frame));
+    const a = first?.positions.get(name);
+    const b = last?.positions.get(name);
+    const k = frame - Math.floor(frame);
+    const at: Vec3 | undefined =
+      a && b
+        ? [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]
+        : (a ?? b);
+    return at ? { at, camera: first?.camera ?? last?.camera ?? undefined } : {};
+  };
+}
 
 export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }): CameraPose => {
   if (!opts?.offline && Math.abs(filmTime - S.t) < 0.04 && S.tools?.camera && !S.tools.free?.on) {
@@ -142,5 +243,9 @@ export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }
   return { p: [0, 1.6, 5], l: [0, 1.6, 0], roll: 0 };
 };
 
-export const availableSpatialTargets = (): string[] =>
-  Object.entries(getPlaced()).flatMap(([name, entry]) => (entry?.keys?.length ? [name] : []));
+export const availableSpatialTargets = (): string[] => [
+  ...new Set([
+    ...Object.entries(getPlaced()).flatMap(([name, entry]) => (entry?.keys?.length ? [name] : [])),
+    ...sceneSpatialNames(S.tools),
+  ]),
+];
