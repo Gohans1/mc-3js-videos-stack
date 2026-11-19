@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 
 import { FieldRow, KeyNav, Reset, SaveStatus, Section, Segmented } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
@@ -43,8 +42,9 @@ import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
+  canConvertHardCut,
   canDeleteCameraKey,
-  canToggleHardCut,
+  convertHardCutToKeyframe,
   edit,
   holdAfter,
   initialKeyTime,
@@ -58,7 +58,6 @@ import {
   rollable,
   rollCut,
   room,
-  setHardCut,
   setKey,
   setKeyLocked,
   shownKey,
@@ -362,19 +361,19 @@ function KeySection() {
             </Tip>
           </div>
           <TimeField i={i} />
-          {i > 0 && !shotCut && (
-            <FieldRow label="Hard cut">
-              <Switch
-                aria-label="Hard cut"
-                checked={hardCut}
-                disabled={!canToggleHardCut(i)}
-                onCheckedChange={(checked) => setHardCut(i, checked)}
-              />
-            </FieldRow>
+          {hardCut && (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!canConvertHardCut(i)}
+              onClick={() => convertHardCutToKeyframe(i)}
+            >
+              Convert to regular keyframe
+            </Button>
           )}
-          {hardCut && !k.locked && !canToggleHardCut(i) && (
+          {hardCut && !k.locked && !canConvertHardCut(i) && (
             <p className="text-ui text-muted-foreground">
-              Two keys share this time. Move one before turning off Hard cut.
+              Two keys share this time. Move one before converting this cut.
             </p>
           )}
           {k.reason && <p className="text-muted-foreground text-xs">{k.reason}</p>}

@@ -9,9 +9,9 @@ import { useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { useFrameKey } from "../core/useFrameKey";
 import {
+  canConvertHardCut,
   canMatchAllInShot,
   canMatchCameraKey,
-  canToggleHardCut,
   DEFAULT_EASE,
   easeKeyIndex,
   edit,
@@ -66,8 +66,8 @@ function CameraKeyEase({ index: i, rawIndex: rawIdx }: { index: number; rawIndex
         {!rawKey
           ? "Click a diamond on the Camera track, or put the playhead on one: this sets how the camera travels into it."
           : hardCut
-            ? canToggleHardCut(rawIdx)
-              ? "The camera jumps instantly here. Turn off Hard cut to ease into this key, or pick the next key to edit the move after it."
+            ? canConvertHardCut(rawIdx)
+              ? "The camera jumps instantly here. Convert it to a regular keyframe to ease into it, or pick the next key to edit the move after the cut."
               : "The camera jumps instantly here. Pick the next keyframe to edit the move after the cut."
             : rawKey.cut
               ? "No closing keyframe before this cut to ease into. Pick a keyframe inside a shot."

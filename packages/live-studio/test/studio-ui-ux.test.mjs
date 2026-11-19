@@ -1169,6 +1169,35 @@ test("Split cut keyframe edits closing tail ease instead of showing first-keyfra
   await page.evaluate("window.__UX_TEST__.loadShots()");
 });
 
+test("the inspector converts an existing hard cut to a regular keyframe and Undo restores it", async () => {
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+    { t: 3, p: [2, 2, 6], l: [0, 1, 0], cut: true },
+    { t: 6, p: [4, 2, 6], l: [0, 1, 0] },
+  ], 2)`);
+  await waitUntil(`document.body.textContent.includes('Into keyframe 3')`);
+  const convert = `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Convert to regular keyframe')`;
+  expect(
+    await page.evaluate(
+      `Boolean(${convert}) || Boolean(document.querySelector('[aria-label="Hard cut"]'))`,
+    ),
+  ).toBe(false);
+
+  await page.evaluate("window.__UX_TEST__.setKey(1)");
+  await waitUntil(convert);
+  await page.evaluate(`(${convert}).click()`);
+  await waitUntil(`document.body.textContent.includes('Into keyframe 2')`);
+  expect(await page.evaluate("window.__UX_TEST__.camKeys()[1]")).toEqual({
+    t: 3,
+    p: [2, 2, 6],
+    l: [0, 1, 0],
+  });
+
+  await page.evaluate("window.__UX_TEST__.undo()");
+  await waitUntil(convert);
+  expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].cut")).toBe(true);
+});
+
 test("cutting a mixed camera selection preserves the hard cut excluded from the clipboard", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;

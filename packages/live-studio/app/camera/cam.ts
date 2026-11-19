@@ -217,27 +217,21 @@ const sourceShotStarts = () => {
   const starts = clockForTimeline("cam").cameraShotStarts;
   return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
 };
-export const canToggleHardCut = (i: number) => {
-  const key = keys[i];
-  if (!key || key.locked || !(key.cut ? isHardCut(i) : movable(i))) return false;
-  const t = cameraSourceTime(key);
+export const canConvertHardCut = (i: number) => {
+  if (!isHardCut(i) || keys[i].locked) return false;
+  const t = cameraSourceTime(keys[i]);
   if (sourceShotStarts().some((start) => Math.abs(start - t) < SAME)) return false;
   return (doc.source ?? []).filter((row) => Math.abs(row.t - t) < 1e-7).length === 1;
 };
-export const setHardCut = (i: number, cut: boolean) => {
-  if (!canToggleHardCut(i) || !!keys[i].cut === cut) return;
+export const convertHardCutToKeyframe = (i: number) => {
+  if (!canConvertHardCut(i)) return;
   const { id, t } = keys[i];
   const sourceTime = cameraSourceTime(keys[i]);
   if (
     !preserveRailPositions([i - 1, i], () =>
       edit((rows) => {
-        if (cut) {
-          rows[i].cut = true;
-          rows[i].tailId = false;
-        } else {
-          delete rows[i].cut;
-          delete rows[i].tailId;
-        }
+        delete rows[i].cut;
+        delete rows[i].tailId;
       }),
     )
   )
@@ -247,7 +241,7 @@ export const setHardCut = (i: number, cut: boolean) => {
   const here = keys.findIndex((key) => matches(key) && Math.abs(key.t - t) < SAME);
   const next = here >= 0 ? here : keys.findIndex(matches);
   setKey(next >= 0 ? next : null);
-  say(`Hard cut ${cut ? "on" : "off"}. Ctrl+Z to undo`);
+  say("Converted to a regular keyframe. Ctrl+Z to undo");
 };
 
 export const retimable = (i: number) => deletableKey(i);

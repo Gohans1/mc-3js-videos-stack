@@ -21,7 +21,7 @@ The studio, `bun run check` and every render read a film through this contract. 
 
 Word and mouth timestamps index native audio samples; narration clips place them on the scene clock, then Speed/Freeze produces heard seconds. voice.warp moves narrative anchors, never stretches sample timings.
 
-Trong cam.json, cut: true tại ranh shot đi cùng dòng shot tương ứng. Cut nằm giữa shot là đổi góc tức thời theo đồng hồ camera và chỉnh bằng công tắc Hard cut trong Studio.
+Dùng Split để tạo ranh shot. Cut nội bộ trong cam.json đổi góc tức thời theo đồng hồ camera và có thể chuyển về keyframe thường bằng Convert to regular keyframe.
 
 To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never shift every key by hand. `bun run at <heard second>` converts between the clocks.
 
