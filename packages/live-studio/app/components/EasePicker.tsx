@@ -8,6 +8,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Callout } from "@/components/ui/callout";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 import {
   type Bezier,
@@ -27,9 +28,11 @@ import { useStudio } from "../core/store";
 import { ownEase } from "../own/builtins";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { tone } from "../timeline/canvas";
-import { Reset } from "./inspector";
+import { Reset, revealInScrollContainer } from "./inspector";
 import { NumberField } from "./NumberField";
 import { Tip } from "./Tip";
+
+let customCurvePickAt = 0;
 
 // What each of film-stage's named eases does (formulas in film-stage/src/camera.ts EASES; titles in core/ease.ts). smooth is
 // 60% smoothstep + 40% linear, so it never comes to a full stop at a keyframe; inout does
@@ -149,7 +152,7 @@ function Tile({
             aria-pressed={on}
             aria-label={`${title}: ${tip}${own ? `, ${FILM_MADE}` : ""}`}
             onClick={onPick}
-            className="text-foreground/80 hover:ring-border focus-visible:ring-ring aria-pressed:text-primary-text aria-pressed:ring-primary relative block size-full overflow-hidden rounded-md ring-2 ring-transparent outline-none"
+            className="text-foreground/85 studio-press studio-ease-tile ring-hairline focus-visible:ring-ring aria-pressed:text-primary-text aria-pressed:ring-primary relative block size-full cursor-pointer overflow-hidden rounded-md ring-1 outline-none focus-visible:ring-2 aria-pressed:ring-2"
           >
             {f ? (
               <Graph f={f} />
@@ -162,28 +165,27 @@ function Tile({
           </button>
         </Tip>
         {onCustomize && customizeLabel && (
-          <div className="pointer-events-none absolute top-1 right-1 z-1 opacity-80 transition-opacity group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
+          <div className="pointer-events-auto absolute top-1 right-1 z-1 opacity-85 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100">
             <Tip label={customizeLabel}>
-              <Button
+              <button
                 type="button"
-                variant="favorite-tile"
-                size="icon-xs"
                 aria-label={customizeLabel}
                 onClick={onCustomize}
+                className="studio-press studio-ease-customize border-hairline-strong bg-backdrop/85 text-label focus-visible:ring-ring flex size-6 cursor-pointer items-center justify-center rounded-full border outline-none focus-visible:ring-2 pointer-coarse:size-10 [&_svg]:pointer-events-none [&_svg]:size-3"
               >
                 {customizeMode === "edit" ? <Pencil /> : <SlidersHorizontal />}
-              </Button>
+              </button>
             </Tip>
           </div>
         )}
       </div>
       <span
+        title={title}
         translate={mono ? "no" : undefined}
-        className={
-          on
-            ? "text-primary-text w-full truncate text-center text-xs"
-            : "text-foreground/85 w-full truncate text-center text-xs"
-        }
+        className={cn(
+          "text-ui w-full truncate text-center leading-snug transition-colors duration-150",
+          on ? "text-primary-text font-medium" : "text-label group-hover:text-foreground",
+        )}
       >
         {title}
       </span>
@@ -232,7 +234,7 @@ function BezierCurveFields({
           return (
             <div key={n} className="flex flex-col gap-0.5">
               <div className="flex items-center justify-between gap-0.5">
-                <span className="text-muted-foreground text-xs">{n}</span>
+                <span className="text-label text-ui font-mono font-medium">{n}</span>
                 <Reset
                   compact
                   label={`Reset ${n} to ${def}`}
@@ -293,7 +295,9 @@ export function EaseTiles({
   useStudio((s) => s.ready);
   const templates = useStudio((s) => s.easeTemplates);
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
+  const [draftRevealSeq, setDraftRevealSeq] = useState(0);
   const [saving, setSaving] = useState(false);
+  const draftRef = useRef<HTMLDivElement>(null);
 
   const list = names ?? easeNames();
   const curve = Array.isArray(value) ? value : null,
@@ -304,6 +308,7 @@ export function EaseTiles({
     : (value ?? fallback);
   const pick = (id: string) => {
     if (id === now) return;
+    if (id === "custom") customCurvePickAt = performance.now();
     const c = CURVES.find((x) => x.id === id),
       v = c
         ? c.v
@@ -319,6 +324,7 @@ export function EaseTiles({
 
   const openClone = (sourceTitle: string, sourceEase: Ease | undefined) => {
     const baseCurve = easeToBezier(sourceEase, fallback);
+    setDraftRevealSeq((s) => s + 1);
     setDraft({
       mode: "create",
       sourceTitle,
@@ -330,6 +336,7 @@ export function EaseTiles({
 
   const nameId = useId();
   const openEditTemplate = (tpl: EaseTemplate) => {
+    setDraftRevealSeq((s) => s + 1);
     setDraft({
       mode: "edit",
       templateId: tpl.id,
@@ -339,6 +346,11 @@ export function EaseTiles({
       baseCurve: [...tpl.curve] as Bezier,
     });
   };
+
+  useEffect(() => {
+    if (!draft || draftRevealSeq === 0) return;
+    return revealInScrollContainer(draftRef.current, { pulseEl: draftRef.current });
+  }, [draft, draftRevealSeq]);
 
   const applyDraft = async () => {
     if (!draft || saving || !draft.name.trim()) return;
@@ -373,15 +385,15 @@ export function EaseTiles({
   return (
     <>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-muted-foreground text-xs">
+        <span className="text-label text-ui font-medium tabular-nums">
           {templates.length
             ? `${templates.length} custom template${templates.length > 1 ? "s" : ""}`
             : "Presets"}
         </span>
         <Tip label="Create a reusable keyframe easing template from the current curve without altering any built-in preset">
           <Button
-            variant="subtle"
-            size="sm"
+            variant="secondary"
+            size="md"
             onClick={() => openClone(easeTitle(value, fallback), value ?? fallback)}
           >
             <Plus data-icon="inline-start" aria-hidden />
@@ -449,28 +461,29 @@ export function EaseTiles({
       )}
       {draft && (
         <div
+          ref={draftRef}
           aria-label={draft.mode === "edit" ? "Edit easing template" : "New easing template"}
-          className="bg-card border-hairline mt-1 flex flex-col gap-2.5 rounded-lg border p-2.5"
+          className="studio-panel-enter bg-card border-hairline mt-1 flex flex-col gap-2.5 rounded-lg border p-3"
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
-              <p className="text-ui font-medium">
+              <p className="text-heading-foreground text-sm leading-snug font-semibold">
                 {draft.mode === "edit" ? "Edit template" : `New template from ${draft.sourceTitle}`}
               </p>
-              <p className="text-muted-foreground text-xs">
+              <p className="text-label text-ui leading-normal text-pretty">
                 {draft.mode === "edit"
                   ? "Saves into your reusable templates."
                   : "Original preset stays unchanged."}
               </p>
             </div>
           </div>
-          <div className="flex flex-col gap-1 text-xs">
-            <label htmlFor={nameId} className="text-muted-foreground">
+          <div className="flex flex-col gap-1">
+            <label htmlFor={nameId} className="text-label text-ui font-medium">
               Template name
             </label>
             <Input
               id={nameId}
-              size="sm"
+              size="md"
               aria-label="Template name"
               value={draft.name}
               spellCheck={false}
@@ -550,7 +563,18 @@ export function CurveEditor({
   doc: { snapshot: () => string; restore: (s: string) => void };
   onSave: (v: Bezier) => void;
 }) {
+  const editorRef = useRef<HTMLDivElement>(null);
   const drag = useRef<CurveDrag>({ kind: "idle" });
+  useEffect(() => {
+    if (customCurvePickAt > 0 && performance.now() - customCurvePickAt < 600) {
+      customCurvePickAt = 0;
+      const section = editorRef.current?.closest("section") ?? editorRef.current;
+      return revealInScrollContainer(section, {
+        anchorEl: section,
+        pulseEl: editorRef.current,
+      });
+    }
+  }, []);
   const finish = useCallback((saveDrag: boolean) => {
     const active = drag.current;
     if (active.kind !== "dragging") return;
@@ -596,14 +620,16 @@ export function CurveEditor({
     );
   };
   return (
-    <BezierCurveFields
-      value={value}
-      defaultValue={defaultValue}
-      onHandleDrag={(next) => {
-        begin(next);
-        preview(next);
-      }}
-      onCommit={onSave}
-    />
+    <div ref={editorRef} className="flex flex-col gap-3 rounded-lg">
+      <BezierCurveFields
+        value={value}
+        defaultValue={defaultValue}
+        onHandleDrag={(next) => {
+          begin(next);
+          preview(next);
+        }}
+        onCommit={onSave}
+      />
+    </div>
   );
 }

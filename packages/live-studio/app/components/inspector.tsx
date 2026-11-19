@@ -1,3 +1,4 @@
+import { Collapsible as CollapsiblePrimitive } from "@base-ui/react/collapsible";
 import {
   ChevronDown,
   ChevronLeft,
@@ -20,13 +21,140 @@ import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 // CapCut's right-panel parts, so every details tab is laid out the same way: Segmented (the bar under the tabs: Basic | Voice
-// changer, In | Out | Combo), Section (a header with an optional checkbox, the title and its ▲, then reset and ◁◇▷ on the right,
+// changer, In | Out | Combo), Section (a header with an optional checkbox, the title and its chevron, then reset and ◁◇▷ on the right,
 // over a thin line), SliderRow (the label, then on one line the slider, the value box, its ▲▼ and ◁◇▷), FieldRow (the label on
 // the left, boxes after it), KeyNav (◁◇▷), Reset and Footer (buttons at the bottom right)
 import { cn } from "@/lib/utils";
 
+import { prefersReduced } from "./Motion";
 import { NumberField } from "./NumberField";
 import { Tip } from "./Tip";
+
+const REVEAL_MARGIN_BOTTOM = 12;
+const REVEAL_MARGIN_TOP = 8;
+
+/** Briefly pulses an inset Flexoki primary wash when a user expands an off-fold panel or editor. */
+export function pulseRevealSurface(el: HTMLElement | null): () => void {
+  if (!el || prefersReduced()) return () => {};
+  el.removeAttribute("data-reveal-pulse");
+  void el.offsetWidth;
+  el.setAttribute("data-reveal-pulse", "true");
+  const clear = () => el.removeAttribute("data-reveal-pulse");
+  el.addEventListener("animationend", clear, { once: true });
+  const timer = window.setTimeout(clear, 350);
+  return () => {
+    window.clearTimeout(timer);
+    el.removeEventListener("animationend", clear);
+    el.removeAttribute("data-reveal-pulse");
+  };
+}
+
+function findScrollParent(el: HTMLElement, missingH = 0): HTMLElement | null {
+  let cur = el.parentElement;
+  while (cur && cur !== document.documentElement) {
+    const { overflowY } = getComputedStyle(cur);
+    if (
+      (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") &&
+      cur.clientHeight > 0 &&
+      cur.scrollHeight + missingH > cur.clientHeight + 1
+    ) {
+      return cur;
+    }
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
+function computeRevealScrollDelta(
+  scroller: HTMLElement,
+  targetBottom: number,
+  anchorTop: number,
+): number {
+  const sr = scroller.getBoundingClientRect();
+  if (anchorTop < sr.top + REVEAL_MARGIN_TOP) {
+    return anchorTop - (sr.top + REVEAL_MARGIN_TOP);
+  }
+  const overflowBottom = targetBottom + REVEAL_MARGIN_BOTTOM - sr.bottom;
+  if (overflowBottom > 1) {
+    const maxDown = Math.max(0, anchorTop - (sr.top + REVEAL_MARGIN_TOP));
+    return Math.min(overflowBottom, maxDown);
+  }
+  return 0;
+}
+
+/** Scrolls the nearest scrollable ancestor so a user-expanded panel enters view while keeping its header visible. */
+export function revealInScrollContainer(
+  targetEl: HTMLElement | null,
+  opts?: {
+    anchorEl?: HTMLElement | null;
+    measureEl?: HTMLElement | null;
+    pulseEl?: HTMLElement | null;
+  },
+): () => void {
+  if (!targetEl) return () => {};
+  const stopPulse = opts?.pulseEl ? pulseRevealSurface(opts.pulseEl) : () => {};
+  let cancelled = false;
+  let timer = 0;
+  let scrollerRef: HTMLElement | null = null;
+  let onHeightEnd: ((e: TransitionEvent) => void) | null = null;
+  const cancelScroll = () => {
+    cancelled = true;
+    if (timer) window.clearTimeout(timer);
+    if (onHeightEnd) targetEl.removeEventListener("transitionend", onHeightEnd);
+  };
+
+  const raf = requestAnimationFrame(() => {
+    if (cancelled) return;
+    const rect = targetEl.getBoundingClientRect();
+    const fullH = opts?.measureEl ? opts.measureEl.offsetHeight : rect.height;
+    const missingH = Math.max(0, fullH - rect.height);
+    const scroller = findScrollParent(targetEl, missingH);
+    if (!scroller) return;
+    scrollerRef = scroller;
+    scroller.addEventListener("wheel", cancelScroll, { passive: true, once: true });
+    scroller.addEventListener("pointerdown", cancelScroll, { passive: true, once: true });
+    scroller.addEventListener("touchstart", cancelScroll, { passive: true, once: true });
+
+    const anchorTop = (opts?.anchorEl ?? targetEl).getBoundingClientRect().top;
+    const delta = computeRevealScrollDelta(scroller, rect.top + fullH, anchorTop);
+    if (Math.abs(delta) <= 1) return;
+
+    const behavior: ScrollBehavior = prefersReduced() ? "instant" : "smooth";
+    const maxScrollRoom = Math.max(
+      0,
+      scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
+    );
+    if (delta < 0 || maxScrollRoom >= delta - 1 || missingH <= 1) {
+      scroller.scrollBy({ top: delta, behavior });
+      return;
+    }
+    // Near the bottom edge while height animates from 0, wait for the expanded height so scrollBy isn't clamped.
+    const settle = () => {
+      if (cancelled) return;
+      cancelScroll();
+      const settledRect = targetEl.getBoundingClientRect();
+      const settledAnchorTop = (opts?.anchorEl ?? targetEl).getBoundingClientRect().top;
+      const remaining = computeRevealScrollDelta(scroller, settledRect.bottom, settledAnchorTop);
+      if (Math.abs(remaining) > 1) scroller.scrollBy({ top: remaining, behavior });
+    };
+    onHeightEnd = (e: TransitionEvent) => {
+      if (e.target === targetEl && e.propertyName === "height") settle();
+    };
+    targetEl.addEventListener("transitionend", onHeightEnd);
+    timer = window.setTimeout(settle, 220);
+  });
+
+  return () => {
+    cancelAnimationFrame(raf);
+    cancelScroll();
+    if (scrollerRef) {
+      scrollerRef.removeEventListener("wheel", cancelScroll);
+      scrollerRef.removeEventListener("pointerdown", cancelScroll);
+      scrollerRef.removeEventListener("touchstart", cancelScroll);
+    }
+    stopPulse();
+  };
+}
 
 // vertical: CapCut's column of a library's sections down its left edge (Music, Sound effects, Favorites)
 export function Segmented<T extends string>({
@@ -160,12 +288,12 @@ export function Segmented<T extends string>({
           }}
           tabIndex={value === x.id ? 0 : -1}
           className={cn(
-            "text-ui text-muted-foreground not-aria-checked:hover:text-foreground focus-visible:ring-ring studio-press relative z-1 flex items-center gap-1.5 outline-none focus-visible:ring-2",
+            "text-ui text-label not-aria-checked:hover:text-heading-foreground focus-visible:ring-ring studio-press relative z-1 flex cursor-pointer items-center gap-1.5 outline-none focus-visible:ring-2",
             vertical
-              ? "aria-checked:text-primary-text h-8 min-w-0 justify-start rounded-md px-2.5 pointer-coarse:h-10"
+              ? "aria-checked:text-primary-text h-8.5 min-w-0 justify-start rounded-md px-2.5 text-sm pointer-coarse:h-10"
               : fit
-                ? "aria-checked:text-foreground min-w-0 flex-auto justify-center truncate rounded-sm px-1 text-xs aria-checked:font-semibold pointer-coarse:h-10"
-                : "aria-checked:text-foreground shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold pointer-coarse:h-10",
+                ? "aria-checked:text-heading-foreground text-ui min-w-0 flex-auto justify-center truncate rounded-sm px-1.5 aria-checked:font-semibold pointer-coarse:h-10"
+                : "aria-checked:text-heading-foreground shrink-0 justify-center rounded-sm px-2.5 aria-checked:font-semibold pointer-coarse:h-10",
             tone === "accent" && "aria-checked:text-primary-text",
             size === "comfortable" && "min-h-9 flex-1 text-sm pointer-coarse:min-h-11",
           )}
@@ -303,45 +431,64 @@ export function Section({
   closed?: boolean;
   className?: string;
 }) {
-  const [open, setOpen] = useState(!closed),
-    id = useId();
+  const [open, setOpen] = useState(!closed);
+  const id = useId();
+  const headerRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const userOpenedRef = useRef(false);
+
+  const handleOpenChange = (next: boolean) => {
+    if (next && !open) userOpenedRef.current = true;
+    setOpen(next);
+  };
+
+  useEffect(() => {
+    if (!open || !userOpenedRef.current) return;
+    userOpenedRef.current = false;
+    return revealInScrollContainer(panelRef.current, {
+      anchorEl: headerRef.current,
+      measureEl: innerRef.current,
+      pulseEl: innerRef.current,
+    });
+  }, [open]);
+
   return (
-    <section
-      aria-label={title}
-      className={cn("flex flex-col gap-3 border-b px-3 py-3.5 last:border-b-0", className)}
-    >
-      <div className="flex min-h-7 items-center gap-2">
-        {onCheck && (
-          <Checkbox
-            checked={!!on}
-            disabled={disabled}
-            onCheckedChange={onCheck}
-            aria-label={`${title} on`}
-          />
-        )}
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen(!open)}
-          className="text-ui text-foreground focus-visible:ring-ring flex min-h-6 min-w-0 items-center gap-1 rounded-sm font-semibold outline-none focus-visible:ring-2 pointer-coarse:min-h-10"
-        >
-          <span className="truncate">{title}</span>
-          {open ? (
-            <ChevronUp aria-hidden className="text-muted-foreground size-3.5" />
-          ) : (
-            <ChevronDown aria-hidden className="text-muted-foreground size-3.5" />
+    <CollapsiblePrimitive.Root open={open} onOpenChange={handleOpenChange}>
+      <section
+        aria-label={title}
+        className={cn("flex flex-col border-b px-3 py-3.5 last:border-b-0", className)}
+      >
+        <div ref={headerRef} className="flex min-h-7 items-center gap-2">
+          {onCheck && (
+            <Checkbox
+              checked={!!on}
+              disabled={disabled}
+              onCheckedChange={onCheck}
+              aria-label={`${title} on`}
+            />
           )}
-        </button>
-        <span className="flex-1" />
-        {right}
-      </div>
-      {open && children !== undefined && (
-        <div id={id} className="flex flex-col gap-3">
-          {children}
+          <CollapsiblePrimitive.Trigger className="studio-press studio-section-trigger text-heading-foreground focus-visible:ring-ring -mx-1.5 flex min-h-7 min-w-0 flex-1 items-center justify-start gap-1.5 rounded-md px-1.5 py-1 text-start text-sm leading-snug font-semibold outline-none focus-visible:ring-2 pointer-coarse:min-h-10">
+            <span className="truncate">{title}</span>
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                "text-label ease-studio-out size-4 shrink-0 transition-transform duration-180 motion-reduce:transition-none",
+                open && "rotate-180",
+              )}
+            />
+          </CollapsiblePrimitive.Trigger>
+          {right}
         </div>
-      )}
-    </section>
+        {children !== undefined && (
+          <CollapsiblePrimitive.Panel id={id} ref={panelRef} className="studio-section-panel">
+            <div ref={innerRef} className="-mx-1 flex flex-col gap-3 rounded-lg px-1 pt-3 pb-0.5">
+              {children}
+            </div>
+          </CollapsiblePrimitive.Panel>
+        )}
+      </section>
+    </CollapsiblePrimitive.Root>
   );
 }
 
@@ -482,7 +629,7 @@ export function ValueBox({
     <span
       className={cn("flex flex-none items-center", disabled && "pointer-events-none opacity-50")}
     >
-      <span className={cn("relative", compact ? "w-14" : "w-[4.5rem]")}>
+      <span className={cn("relative", compact ? "w-15" : "w-[4.75rem]")}>
         <NumberField
           variant="value"
           size={compact ? (unit ? "xsUnit" : "xs") : unit ? "smUnit" : "sm"}
@@ -501,7 +648,10 @@ export function ValueBox({
         {unit && (
           <span
             aria-hidden
-            className="text-muted-foreground pointer-events-none absolute inset-y-0 end-2 flex items-center text-xs"
+            className={cn(
+              "text-label pointer-events-none absolute inset-y-0 end-2 flex items-center tabular-nums",
+              compact ? "text-xs" : "text-ui",
+            )}
           >
             {unit}
           </span>
@@ -515,8 +665,8 @@ export function ValueBox({
           aria-label={`${name} up`}
           onClick={() => bump(1)}
           className={cn(
-            "text-muted-foreground hover:text-foreground flex w-4 items-center justify-center",
-            compact ? "h-3" : "h-3.5",
+            "text-label hover:bg-surface-subtle hover:text-heading-foreground flex cursor-pointer items-center justify-center rounded-xs transition-colors duration-150",
+            compact ? "h-3 w-4" : "h-3.5 w-4",
           )}
         >
           <ChevronUp className="size-3" />
@@ -528,8 +678,8 @@ export function ValueBox({
           aria-label={`${name} down`}
           onClick={() => bump(-1)}
           className={cn(
-            "text-muted-foreground hover:text-foreground flex w-4 items-center justify-center",
-            compact ? "h-3" : "h-3.5",
+            "text-label hover:bg-surface-subtle hover:text-heading-foreground flex cursor-pointer items-center justify-center rounded-xs transition-colors duration-150",
+            compact ? "h-3 w-4" : "h-3.5 w-4",
           )}
         >
           <ChevronDown className="size-3" />
@@ -612,9 +762,14 @@ export function SliderRow({
     save(v);
   };
   return (
-    <div className={cn("flex flex-col", compact ? "gap-0" : "gap-1")}>
+    <div className={cn("flex flex-col", compact ? "gap-0.5" : "gap-1.5")}>
       <div className="flex items-center justify-between gap-2">
-        <span className={cn("text-foreground/90", compact ? "text-xs leading-4" : "text-ui")}>
+        <span
+          className={cn(
+            "text-foreground/95 leading-snug font-medium",
+            compact ? "text-ui" : "text-sm",
+          )}
+        >
           {label}
         </span>
         {reset && (
@@ -655,7 +810,7 @@ export function SliderRow({
         />
         {nav}
       </div>
-      {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      {hint && <p className="text-label text-ui leading-normal text-pretty">{hint}</p>}
     </div>
   );
 }
@@ -671,8 +826,10 @@ export function FieldRow({
   nav?: ReactNode;
 }) {
   return (
-    <div className="flex min-h-7 items-center gap-2">
-      <span className="text-ui text-foreground/90 w-16 flex-none">{label}</span>
+    <div className="flex min-h-8 items-center gap-2">
+      <span className="text-foreground/95 w-24 flex-none text-sm leading-snug font-medium">
+        {label}
+      </span>
       <div className="flex min-w-0 flex-1 items-center gap-1.5">{children}</div>
       {nav}
     </div>
@@ -719,12 +876,12 @@ export function SaveStatus({
     <span
       role="status"
       className={cn(
-        "text-xs",
+        "text-ui leading-snug tabular-nums",
         state === "fail" || state === "pending"
           ? "text-warn-text font-semibold"
           : state === "busy" || idleTone === "muted"
-            ? "text-muted-foreground"
-            : "text-ok-text",
+            ? "text-label font-medium"
+            : "text-ok-text font-medium",
         className,
       )}
     >
@@ -743,9 +900,14 @@ export function EmptyCard({
   className?: string;
 }) {
   return (
-    <div className={cn("bg-card text-ui rounded-xl p-3", className)}>
-      <p className="font-medium">{title}</p>
-      <div className="text-muted-foreground">{children}</div>
+    <div
+      className={cn(
+        "bg-card border-hairline-subtle flex flex-col gap-1 rounded-xl border p-3.5",
+        className,
+      )}
+    >
+      <p className="text-heading-foreground text-sm leading-snug font-semibold">{title}</p>
+      <div className="text-label text-ui leading-normal text-pretty">{children}</div>
     </div>
   );
 }
