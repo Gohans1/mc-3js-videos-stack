@@ -63,12 +63,12 @@ type CoreTab = (typeof CORE_TABS)[number];
 
 // CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
-  "relative flex h-10 upright:h-9 flex-none items-center gap-1.5 rounded-sm text-ui font-medium text-foreground/65 outline-none transition-colors duration-150 not-data-active:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] pointer-coarse:h-11";
+  "relative flex h-10 upright:h-9 flex-none cursor-pointer items-center gap-1.5 rounded-sm px-1.5 text-sm font-semibold text-label outline-none transition-colors duration-150 not-data-active:hover:bg-surface-subtle not-data-active:hover:text-heading-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] motion-reduce:transition-none pointer-coarse:h-11";
 const coreTab =
-  "px-2.5 upright:px-2 not-data-active:hover:text-foreground data-active:bg-tint data-active:text-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
+  "px-2.5 upright:px-2 not-data-active:hover:text-heading-foreground data-active:bg-tint data-active:text-heading-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
 const isCore = (id: string): id is CoreTab => CORE_TABS.some((value) => value === id);
 const tabs =
-  "relative flex flex-none items-center gap-4 overflow-x-auto bg-card px-3 upright:gap-2 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
+  "relative flex flex-none items-center gap-2.5 overflow-x-auto bg-card px-3 upright:gap-1.5 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
 function TabUnderline({ inset = false, instant = false }: { inset?: boolean; instant?: boolean }) {
@@ -398,7 +398,7 @@ function Details() {
   return (
     <aside
       aria-label="Details"
-      className="bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:hidden in-data-review:hidden in-data-side-folded:hidden"
+      className="font-md bg-background col-start-3 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:hidden in-data-review:hidden in-data-side-folded:hidden"
     >
       <Tabs.Root
         value={value}
@@ -615,7 +615,7 @@ export function Side({
   return (
     <aside
       aria-label="Side panels"
-      className="sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-lessons-focused:col-[1/-1] in-data-lessons-focused:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
+      className="font-md sideways:row-span-3 bg-background upright:flex-1 upright:rounded-none sideways:rounded-none col-start-2 row-span-2 row-start-1 flex min-h-0 min-w-0 flex-col overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg in-data-cli-expanded:col-[1/-1] in-data-cli-expanded:row-[1/-1] in-data-cli-side:row-span-3 in-data-lessons-focused:col-[1/-1] in-data-lessons-focused:row-[1/-1] in-data-review:hidden in-data-side-folded:hidden in-data-[cli-expanded=library]:hidden"
     >
       <Tabs.Root
         value={value}

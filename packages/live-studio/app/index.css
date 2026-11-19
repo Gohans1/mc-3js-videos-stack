@@ -250,7 +250,11 @@
   --secondary-hover: color-mix(in oklab, var(--secondary), var(--foreground) 5%);
   --secondary-foreground: var(--fx-base-200);
   --muted: var(--fx-base-850);
-  --muted-foreground: var(--fx-base-400); /* >=4.6:1 AA across card & muted */
+  --muted-foreground: color-mix(
+    in oklab,
+    var(--fx-base-400) 65%,
+    var(--fx-base-300)
+  ); /* >=4.7:1 AA across card, muted & primary/12 */
   --accent: var(--fx-base-850);
   --accent-foreground: var(--fx-base-200);
   --destructive: var(--fx-red-200); /* >=4.7:1 AA text on card/background and destructive/20 */

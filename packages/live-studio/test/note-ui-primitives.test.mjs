@@ -343,6 +343,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
   let refSketchMod;
   let refsMod;
   let toastMod;
+  let inspectorMod;
   const savedGlobals = new Map();
 
   const installDomGlobals = () => {
@@ -584,6 +585,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       refSketchMod,
       refsMod,
       toastMod,
+      inspectorMod,
     ] = await Promise.all([
       server.ssrLoadModule("/core/store.ts"),
       server.ssrLoadModule("/components/ui/button.tsx"),
@@ -603,6 +605,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       server.ssrLoadModule("/notes/RefSketch.tsx"),
       server.ssrLoadModule("/notes/refs.ts"),
       server.ssrLoadModule("/components/ui/toast.tsx"),
+      server.ssrLoadModule("/components/inspector.tsx"),
     ]);
   }, 60000);
 
@@ -1318,5 +1321,38 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
     assert.equal(metaMod.noteActionTarget(null, "00:04.000"), "at 00:04.000");
     assert.equal(metaMod.modKeyLabel(), expectedMod);
     assert.equal(notePartsMod.noteStatusLabel("open", false, true), "Needs work");
+  });
+
+  test("Inspector Section, FieldRow, and EmptyCard expose foldable trigger affordances and readable scale", () => {
+    const openHtml = renderHtml(
+      createElement(
+        inspectorMod.Section,
+        { title: "Coordinates" },
+        createElement(
+          inspectorMod.FieldRow,
+          { label: "Position" },
+          createElement("span", null, "0"),
+        ),
+      ),
+    );
+    assert.match(openHtml, /aria-expanded="true"/);
+    assert.match(openHtml, /aria-controls="[^"]+"/);
+    assert.match(openHtml, /studio-press studio-section-trigger/);
+    assert.match(openHtml, /text-sm/);
+    assert.match(openHtml, /rotate-180/);
+    assert.match(openHtml, />Position</);
+
+    const closedHtml = renderHtml(
+      createElement(inspectorMod.Section, { title: "Shutter", closed: true }, "Hidden body"),
+    );
+    assert.match(closedHtml, /aria-expanded="false"/);
+    assert.doesNotMatch(closedHtml, /rotate-180/);
+    assert.doesNotMatch(closedHtml, /Hidden body/);
+
+    const emptyHtml = renderHtml(
+      createElement(inspectorMod.EmptyCard, { title: "No keyframe picked" }, "Click a diamond."),
+    );
+    assert.match(emptyHtml, /text-heading-foreground text-sm/);
+    assert.match(emptyHtml, /text-label text-ui/);
   });
 });
