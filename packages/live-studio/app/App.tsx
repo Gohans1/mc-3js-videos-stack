@@ -22,7 +22,6 @@ import type { Bind, Elements } from "./core/state";
 import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
 import { lessonTrailKey, useLessons } from "./lessons/lessons";
-import { LESSONS_LIBRARY_WIDTH } from "./lessons/tree";
 import { Stage } from "./picture/Stage";
 
 const ReviewRoom = lazy(() =>
@@ -74,7 +73,6 @@ export function App() {
     [rawReviewW, setReviewW] = useStoredSize("studio.reviewWidth");
   const sideW = sanitizeStoredSize(rawSideW, SIDE_MIN),
     libW = sanitizeStoredSize(rawLibW, LIB_MIN),
-    lessonsLibW = sanitizeStoredSize(rawLessonsW, LIB_MIN),
     lessonsSideW = sanitizeStoredSize(rawLessonsW, SIDE_MIN),
     editH = sanitizeStoredSize(rawEditH, EDIT_MIN),
     reviewW = sanitizeStoredSize(rawReviewW, REVIEW_MIN, false);
@@ -101,8 +99,6 @@ export function App() {
   const lessonsInLibrary = showLibrary && lib === "lessons";
   const lessonsWideSide =
     showSideOnRight && desktop && side === "lessons" && lessonDeckTargetW !== null;
-  // Keep Stage geometry stable across the Deck trail, Reader and Inspector.
-  const effRawLibW = lessonsInLibrary ? (lessonsLibW ?? LESSONS_LIBRARY_WIDTH) : libW;
   const effRawSideW =
     lessonsWideSide && lessonDeckTargetW !== null
       ? lessonsSideW === null
@@ -136,7 +132,7 @@ export function App() {
     vw,
     vh,
     wideAttr,
-    rawLibW: effRawLibW,
+    rawLibW: libW,
     rawSideW: effRawSideW,
     rawEditH: editH,
     rawReviewW: reviewW,
@@ -165,7 +161,7 @@ export function App() {
           vw,
           vh,
           wideAttr,
-          rawLibW: effRawLibW,
+          rawLibW: libW,
           rawSideW: sideLatch.paneW,
           rawEditH: editH,
           rawReviewW: reviewW,
@@ -248,7 +244,7 @@ export function App() {
               className="pointer-events-none relative z-30 col-start-1 row-[1/-1] in-data-cli-expanded:hidden in-data-review:hidden"
             >
               <Splitter
-                key={lessonsInLibrary ? "lessons" : "library"}
+                key="library"
                 label="Library width"
                 across={false}
                 before
@@ -256,7 +252,7 @@ export function App() {
                 measure={() => libCell.current?.offsetWidth ?? desiredLibPx}
                 min={() => LIB_MIN}
                 max={() => bounds.libMax}
-                set={lessonsInLibrary ? setLessonsW : setLibW}
+                set={setLibW}
                 resizeOnRelease={lessonsInLibrary}
                 className="pointer-events-auto -right-[7px]"
               />
