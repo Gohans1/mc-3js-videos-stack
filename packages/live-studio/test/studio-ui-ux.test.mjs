@@ -25,7 +25,7 @@ import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
 import { refreshTimedDocs } from "/core/timed-doc.ts";
-import { addKeyHere, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
+import { addKeyHere, cameraKeySampleTime, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
 import { shownShot } from "/camera/anim.ts";
 import { camLine } from "/camera/camline.ts";
 import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
@@ -439,7 +439,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -1087,10 +1087,12 @@ test("editing a cut key uses its source shot rig while Freeze displays the outgo
   expect(result.fov).toBeCloseTo(50, 2);
 });
 
-test("1-node aim samples the selected shot after Freeze and respects partial rig support", async () => {
+for (const mode of ["Freeze", "Speed"]) {
+test(`1-node aim samples the selected shot across ${mode} and respects partial rig support`, async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__, tools = u.S.tools;
     const original = [tools.cameraRig, tools.cameraRails, tools.cameraSample, u.S.render, u.get().timing, u.get().ready];
+    const boundary = ${mode === "Freeze" ? 4 : 0.9};
     let rendered = 0;
     window.__restoreRigSample = () => {
       [tools.cameraRig, tools.cameraRails, tools.cameraSample, u.S.render] = original;
@@ -1104,15 +1106,17 @@ test("1-node aim samples the selected shot after Freeze and respects partial rig
     u.S.render = Object.assign((time) => { rendered = time; }, { eases: u.S.render.eases });
     await u.loadShots([
       { id: "a", t: 0 },
-      { id: "b", t: 4, camera: { rail: [[0, 2, 6], [2, 2, 6]] } },
+      { id: "b", t: boundary, camera: { rail: [[0, 2, 6], [2, 2, 6]] } },
     ]);
     await u.setCamData([
       { id: "a0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
-      { id: "b0", t: 4, p: [4, 2, 6], l: [0, 1, 0], cut: true },
+      { id: "b0", t: boundary, p: [4, 2, 6], l: [0, 1, 0], cut: true },
     ]);
     u.set({ timing: true, ready: true, shotPick: 1 });
-    u.refreshProjection({ freezes: [{ at: 4, frame: 2, duration: 2 }] });
-    u.S.t = 4;
+    u.refreshProjection(${mode === "Freeze"
+      ? '{ freezes: [{ at: 4, frame: 2, duration: 2 }] }'
+      : '{ speeds: [{ from: 0, to: 10, rate: 1.2 }] }'});
+    u.S.t = ${mode === "Freeze" ? 4 : 0.1};
   })()`);
   const button = (label) => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '${label}')`;
   try {
@@ -1124,12 +1128,21 @@ test("1-node aim samples the selected shot after Freeze and respects partial rig
     await page.evaluate(`(${button("1-node")}).click()`);
     await waitUntil(`window.__UX_TEST__.shotsData()[1].camera.look === "one-node"`);
     const rig = await page.evaluate("window.__UX_TEST__.shotsData()[1].camera");
-    expect(rig.position).toEqual([4, 2, 6]);
+    const boundary = mode === "Freeze" ? 4 : 0.9;
+    expect(rig.position[0]).toBeCloseTo(boundary, 5);
+    expect(rig.position.slice(1)).toEqual([2, 6]);
+    const sampled = await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      const i = u.camKeys().findIndex(k => k.id === "b0");
+      return u.cameraTimesAt(u.cameraKeySampleTime(i)).world;
+    })()`);
+    expect(sampled).toBeGreaterThanOrEqual(boundary);
     expect(rig.rail).toEqual([[0, 2, 6], [2, 2, 6]]);
   } finally {
     await page.evaluate("window.__restoreRigSample()");
   }
 });
+}
 
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {
   await page.evaluate(`(async () => {

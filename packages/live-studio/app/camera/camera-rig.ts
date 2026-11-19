@@ -18,13 +18,21 @@ export const visibleCameraShotFrame = (shot: number, time: number): number | und
   const start = SHOTS_OUT[shot]?.t;
   if (start === undefined) return undefined;
   if (!get().timing) return Math.max(start, Math.min(time, shotEnd(shot) - 1e-6));
-  if (cameraShotIndex(time) === shot && frameVisible(timingClock, time)) return time;
+  const showsShot = (frame: number) =>
+    frameVisible(timingClock, frame) && cameraShotIndex(frame) === shot;
+  if (showsShot(time)) return time;
 
   const starts = clockForTimeline("cam").cameraShotStarts;
   const from = starts?.[shot];
   if (from === undefined) return undefined;
   const to = starts?.[shot + 1] ?? timingClock.sourceDuration;
-  const play = playRanges(timingClock, from, to)[0]?.from;
+  let play: number | undefined;
+  for (const range of playRanges(timingClock, from, to)) {
+    // Speed conversion can round the first output instant back across the source cut.
+    const interior = range.from + Math.min(1e-6, (range.to - range.from) / 2);
+    play = [range.from, interior].find(showsShot);
+    if (play !== undefined) break;
+  }
   const hold = timingClock.segments.find((segment) => {
     if (segment.kind !== "freeze" || segment.blank) return false;
     const world = segment.frame ?? segment.sourceFrom;

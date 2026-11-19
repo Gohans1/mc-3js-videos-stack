@@ -52,7 +52,7 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
-import { activeCameraRig, cameraShotIndex } from "./camera-rig";
+import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type { HandheldSpec };
@@ -242,9 +242,13 @@ const sourceShotStarts = () => {
   const starts = clockForTimeline("cam").cameraShotStarts;
   return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
 };
+const authoredKeyTime = (key: CamKey) =>
+  (key.id ? doc.source?.find((source) => source.id === key.id)?.t : undefined) ??
+  (get().timing ? cameraSourceTime(key) : key.t);
+
 export const cameraKeyShotIndex = (index: number) => {
   const key = keys[index];
-  const source = get().timing ? cameraSourceTime(key) : key.t;
+  const source = authoredKeyTime(key);
   const closes = !key.cut && (doc.source ?? []).some((row) => row.cut && row.t === source);
   const shot = sourceShotStarts().findLastIndex((start) => (closes ? start < source : start <= source));
   return Math.max(0, shot);
@@ -826,9 +830,11 @@ export const cameraKeyFrameTime = (i: number) => {
 };
 export const cameraKeySampleTime = (i: number) => {
   const marker = cameraKeyFrameTime(i);
-  if (!get().timing || !keys[i].cut || cameraShotIndex(marker) === cameraKeyShotIndex(i))
-    return marker;
-  return timingClock.outputAt(cameraSourceTime(keys[i]), "after");
+  if (!get().timing) return marker;
+  const shot = cameraKeyShotIndex(i);
+  if (cameraShotIndex(marker) === shot) return marker;
+  const after = timingClock.outputAt(authoredKeyTime(keys[i]), "after");
+  return visibleCameraShotFrame(shot, after) ?? marker;
 };
 
 export const sourceCameraSegment = (index: number) => {
