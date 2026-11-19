@@ -61,6 +61,11 @@ const SORT = {
 
 const filmNow = () => {
   try {
+    const ignored = spawnSync("git", ["check-ignore", "-q", "."], {
+      cwd: ROOT,
+      windowsHide: true,
+    });
+    if (ignored.status === 0) return "(local film)";
     const r = spawnSync("git", ["describe", "--tags", "--always", "--dirty"], {
       cwd: ROOT,
       encoding: "utf8",

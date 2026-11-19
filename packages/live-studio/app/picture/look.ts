@@ -17,10 +17,25 @@ const BONE_PARTS: [RegExp, string][] = [
   [/Spine|Hips/, "body"],
 ];
 const shown = (o: THREE.Object3D | null) => {
-  for (let c = o; c; c = c.parent) if (!c.visible) return false;
+  for (let c = o; c; c = c.parent) if (!c.visible || c.userData?.noPick === true) return false;
   return true;
 };
-const firstMaterial = (o: THREE.Object3D) => [(o as THREE.Mesh).material].flat()[0];
+const materialsOf = (o: THREE.Object3D): THREE.Material[] => {
+  const mat = (o as THREE.Mesh).material;
+  return Array.isArray(mat) ? mat : mat ? [mat] : [];
+};
+const firstMaterial = (o: THREE.Object3D) => materialsOf(o)[0];
+const materialPickable = (m: THREE.Material | null | undefined) => {
+  if (!m) return true;
+  if (m.visible === false || m.colorWrite === false) return false;
+  if (m.transparent && (m.opacity === 0 || !m.depthWrite)) return false;
+  return true;
+};
+const meshPickable = (o: THREE.Object3D) => {
+  if (!(o as THREE.Mesh).isMesh || !shown(o)) return false;
+  const mats = materialsOf(o);
+  return mats.length === 0 || mats.some(materialPickable);
+};
 const whatIs = (hit: THREE.Intersection) => {
   const tools = S.tools!;
   let found: [THREE.Object3D, string] | null = null;
@@ -47,17 +62,25 @@ const whatIs = (hit: THREE.Intersection) => {
   if (n && n.y > 0.7) return "top of an object";
   return hit.object.name || "unnamed object";
 };
+const round3 = (v: number) => +v.toFixed(3) || 0;
 export const lookAtClick = (x: number, y: number) => {
   const tools = S.tools!;
   ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), tools.camera);
-  const hit = ray.intersectObjects(tools.scene.children, true).find((h) => {
-    if (!(h.object as THREE.Mesh).isMesh || !shown(h.object)) return false;
-    const m = firstMaterial(h.object);
-    return !m || !(m.transparent && !m.depthWrite);
-  });
+  const hit = ray.intersectObjects(tools.scene.children, true).find((h) => meshPickable(h.object));
   if (!hit) return { what: "empty space" };
   return {
     what: whatIs(hit),
-    world: hit.point.toArray().map((v) => +v.toFixed(3)) as [number, number, number],
+    world: hit.point.toArray().map(round3) as [number, number, number],
   };
+};
+export const lookOnPlane = (x: number, y: number, planeY = 0): [number, number, number] | null => {
+  const camera = S.tools?.camera;
+  if (!camera) return null;
+  ray.setFromCamera(new THREE.Vector2(x * 2 - 1, 1 - y * 2), camera);
+  const target = new THREE.Vector3();
+  if (!ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY), target))
+    return null;
+  if (!Number.isFinite(target.x) || !Number.isFinite(target.y) || !Number.isFinite(target.z))
+    return null;
+  return target.toArray().map(round3) as [number, number, number];
 };

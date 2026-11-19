@@ -6,6 +6,27 @@
     <meta name="theme-color" content="#100F0F" />
     <title>Studio</title>
     <link rel="icon" href="data:," />
+    <style>
+      @layer base {
+        html,
+        body {
+          margin: 0;
+          background: #100f0f;
+          color: #cecdc3;
+          color-scheme: dark;
+        }
+      }
+      .studio-boot {
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        font:
+          14px/1.4 system-ui,
+          -apple-system,
+          sans-serif;
+        color: #878580;
+      }
+    </style>
     <script>
       // A phone on a bad line can miss the page's own code: say so, instead of a blank page
       addEventListener(
@@ -20,7 +41,7 @@
     </script>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div class="studio-boot">Loading Studio…</div></div>
     <script type="module" src="/main.tsx"></script>
   </body>
 </html>

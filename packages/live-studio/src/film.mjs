@@ -163,12 +163,40 @@ export const openFilm = (projectDir, { send, activity }) => {
   const CHOICES =
     [join(PROJECT, "choices.json"), join(PROJECT, "sound_choices.json")].find(existsSync) ??
     join(PROJECT, "choices.json");
-  // A machine's private name (Tailscale) has no place in the studio's public repo: the film lists the names it is reached by
+  // A machine's private name (Tailscale) has no place in the studio's public repo: the film lists the names it is reached by.
+  // Re-read .live_hosts whenever it appears, changes, or disappears, plus any host local tailscale serve proxies to this port.
   const HOSTS_FILE = join(PROJECT, ".live_hosts");
-  const hosts = (existsSync(HOSTS_FILE) ? readFileSync(HOSTS_FILE, "utf8") : "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((n) => n.toLowerCase());
+  const normHost = (name) =>
+    String(name ?? "")
+      .trim()
+      .replace(/:\d+$/, "")
+      .toLowerCase();
+  let hostsStamp = "";
+  let fileHosts = [];
+  const runtimeHosts = new Set();
+  const readFileHosts = () => {
+    const st = statSync(HOSTS_FILE, { throwIfNoEntry: false });
+    const stamp = st?.isFile() ? `${st.mtimeMs}:${st.ctimeMs}:${st.size}` : "missing";
+    if (stamp !== hostsStamp) {
+      hostsStamp = stamp;
+      if (stamp === "missing") {
+        fileHosts = [];
+      } else {
+        try {
+          fileHosts = readFileSync(HOSTS_FILE, "utf8").split(/\s+/).map(normHost).filter(Boolean);
+        } catch {
+          fileHosts = [];
+          hostsStamp = "";
+        }
+      }
+    }
+    return fileHosts;
+  };
+  const allowHost = (name) => {
+    const clean = normHost(name);
+    if (clean) runtimeHosts.add(clean);
+    return clean;
+  };
   const threeFrom = threeFromOf(PROJECT);
   // What sound.py reads, so a change to any of it remixes: package.json "live-studio": { "sound": [paths] }, files or folders.
   // Never list a folder the mix writes into, or every remix starts the next. Without the key: what films made before it mixed from
@@ -879,7 +907,10 @@ export const openFilm = (projectDir, { send, activity }) => {
     LITE,
     EDIT,
     VOICE_MAP,
-    hosts,
+    get hosts() {
+      return [...new Set([...readFileHosts(), ...runtimeHosts])];
+    },
+    allowHost,
     threeFrom,
     smallSfx,
     measureSound,

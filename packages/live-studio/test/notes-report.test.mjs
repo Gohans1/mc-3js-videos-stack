@@ -384,7 +384,7 @@ test("a note answered and waiting, that the creator asked to remember, still nam
   assert.ok(out.includes("lesson: lessons/hands.md, its headings by line:"), out);
 });
 
-test("a note in full names the lesson files Jev picked with every heading's line, marks the unsure, and says when none fits", async () => {
+test("a note in full names the lesson files Jev picked with every heading's line, marks the unsure, and stays quiet when none fits", async () => {
   const { lessonsFor } = await import("../src/lessons.mjs");
   const dir = film([
     note("a", 4, "2026-11-06T10:00:00Z", { text: "tay lệch" }),
@@ -434,7 +434,7 @@ test("a note in full names the lesson files Jev picked with every heading's line
       a.includes("read those files directly"),
     a,
   );
-  assert.ok(out("b").includes("lessons: Jev says none fits this note (all in lessons/)"));
+  assert.ok(!out("b").includes("lessons: Jev says none fits"), out("b"));
 });
 
 test("the index caps at 25 notes by default and summarizes hidden notes by reply and shot", () => {

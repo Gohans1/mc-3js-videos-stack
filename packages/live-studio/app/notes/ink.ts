@@ -7,6 +7,7 @@ import { SAME, stamp } from "../core/time";
 // 1:12": the AI reads it as a move between them). Every stroke belongs to the film second it was drawn on; strokes from other
 // seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
 // A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
+import { lookOnPlane } from "../picture/look";
 import { picturePoint } from "../picture/preview-state";
 import { tone } from "../timeline/canvas";
 import { IDLE_INK_GESTURE, type InkGesture, stepInk } from "./ink-gesture";
@@ -318,9 +319,103 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
 };
 
 // ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
-let hooks = {
-  look: (_x: number, _y: number): Hit => ({ what: "" }),
-  begin: (_origin?: ComposeOrigin, _anchor?: StageAnchor) => {},
+const pointSegmentDist = (p: [number, number], a: [number, number], b: [number, number]) => {
+  const dx = b[0] - a[0],
+    dy = b[1] - a[1],
+    lenSq = dx * dx + dy * dy;
+  if (lenSq <= 1e-12) return Math.hypot(p[0] - a[0], p[1] - a[1]);
+  const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / lenSq));
+  return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+};
+const rdpSimplify = (pts: [number, number][], eps: number): [number, number][] => {
+  if (pts.length <= 2) return pts.slice();
+  const a = pts[0],
+    b = pts[pts.length - 1];
+  let best = -1,
+    maxD = -1;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const d = pointSegmentDist(pts[i], a, b);
+    if (d > maxD) {
+      maxD = d;
+      best = i;
+    }
+  }
+  if (maxD <= eps || best < 0) return [a, b];
+  const left = rdpSimplify(pts.slice(0, best + 1), eps);
+  const right = rdpSimplify(pts.slice(best), eps);
+  return [...left.slice(0, -1), ...right];
+};
+export const simplifyPenPoints = (
+  pts: [number, number][],
+  epsilon = 0.015,
+  maxPts = 6,
+): [number, number][] => {
+  if (pts.length <= 2) return pts.slice();
+  const out = rdpSimplify(pts, epsilon);
+  const cap = Math.max(2, maxPts);
+  while (out.length > cap) {
+    let drop = 1,
+      minD = Infinity;
+    for (let i = 1; i < out.length - 1; i++) {
+      const d = pointSegmentDist(out[i], out[i - 1], out[i + 1]);
+      if (d < minD) {
+        minD = d;
+        drop = i;
+      }
+    }
+    out.splice(drop, 1);
+  }
+  return out;
+};
+type MarkWithKeyPts = Mark & { keyPts?: [number, number][] };
+export const markHits = (
+  m: MarkWithKeyPts,
+  ray: {
+    look: (x: number, y: number) => Hit | null | undefined;
+    plane?: (x: number, y: number, planeY: number) => [number, number, number] | null;
+  },
+) => {
+  const [p, q] = [m.pts[0], m.pts.at(-1)!];
+  if (m.kind === "pen") {
+    const keyPts = simplifyPenPoints(m.pts);
+    m.keyPts = keyPts;
+    m.hits = keyPts.map((pt) => ray.look(pt[0], pt[1]) ?? { what: "empty space" });
+    return;
+  }
+  if (m.kind === "box") {
+    const minX = Math.min(p[0], q[0]),
+      maxX = Math.max(p[0], q[0]),
+      minY = Math.min(p[1], q[1]),
+      maxY = Math.max(p[1], q[1]);
+    const center = ray.look((minX + maxX) / 2, (minY + maxY) / 2) ?? { what: "empty space" };
+    const planeY = Number.isFinite(center.world?.[1]) ? center.world![1] : 0;
+    const planeFn = ray.plane ?? lookOnPlane;
+    const corner = (x: number, y: number): Hit => {
+      const hit = ray.look(x, y);
+      if (hit?.world) return hit;
+      const world = planeFn(x, y, planeY);
+      return world ? { what: hit?.what || "empty space", world } : (hit ?? { what: "empty space" });
+    };
+    m.hits = [
+      center,
+      corner(minX, minY),
+      corner(maxX, minY),
+      corner(maxX, maxY),
+      corner(minX, maxY),
+    ];
+    return;
+  }
+  m.hits = [ray.look(...p) ?? { what: "empty space" }, ray.look(...q) ?? { what: "empty space" }];
+};
+let hooks: {
+  look: (x: number, y: number) => Hit;
+  plane?: (x: number, y: number, planeY: number) => [number, number, number] | null;
+  begin: (origin?: ComposeOrigin, anchor?: StageAnchor) => void;
+  pause: () => void;
+} = {
+  look: () => ({ what: "" }),
+  plane: lookOnPlane,
+  begin: () => {},
   pause: () => {},
 };
 let live: { mark: Mark; smart: boolean } | null = null;
@@ -391,11 +486,7 @@ const endStroke = () => {
     m.kind = kind;
     say(`${NAMES[kind]} · Ctrl+Z takes it back`, 2500);
   }
-  const [p, q] = [m.pts[0], m.pts.at(-1)!];
-  m.hits =
-    m.kind === "box"
-      ? [hooks.look((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)]
-      : [hooks.look(...p), hooks.look(...q)];
+  markHits(m, { look: hooks.look, plane: hooks.plane ?? lookOnPlane });
   keep();
   inkHooks.anchor({
     x: +Math.max(...xs).toFixed(4),
@@ -567,6 +658,6 @@ export const inkWords = (marks: Mark[]) =>
       if (m.kind === "path")
         return `path ${m.ts!.map((t, i) => `${stamp(t)} ${what(m.hits?.[i])}`).join(" → ")}`;
       const name = { pen: "pen stroke", arrow: "arrow", box: "box" }[m.kind];
-      return `${name} ${stamp(m.t)}: ${m.kind === "arrow" ? `${what(m.hits?.[0])} → ${what(m.hits?.[1])}` : m.kind === "box" ? what(m.hits?.[0]) : `${what(m.hits?.[0])} … ${what(m.hits?.[1])}`}`;
+      return `${name} ${stamp(m.t)}: ${m.kind === "arrow" ? `${what(m.hits?.[0])} → ${what(m.hits?.[1])}` : m.kind === "box" ? what(m.hits?.[0]) : `${what(m.hits?.[0])} … ${what(m.hits?.at(-1))}`}`;
     })
     .join("; ");
