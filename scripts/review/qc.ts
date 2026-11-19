@@ -11,9 +11,23 @@ import {
   analyzeKeyFileMotion,
   type CamTimelineKey,
 } from "../../packages/live-studio/src/camera-speed.mjs";
+import { TextTimeline } from "../../packages/live-studio/src/contract.ts";
+import { heardLength } from "../../packages/live-studio/src/film.mjs";
 import { ratioOf } from "../../packages/live-studio/src/frame.ts";
+import { isRead, readFaults, sizeFaults } from "../../packages/live-studio/src/readable.mjs";
+import { mapTimeline } from "../../packages/live-studio/src/timing-data.mjs";
+import { clockForTimeline } from "../../packages/live-studio/src/timing-state.mjs";
 
-const ALL_CHECKS = ["probe", "forensics", "sync", "audio", "look", "speed", "cam-motion"] as const;
+const ALL_CHECKS = [
+  "probe",
+  "forensics",
+  "sync",
+  "audio",
+  "look",
+  "speed",
+  "cam-motion",
+  "text",
+] as const;
 type CheckId = (typeof ALL_CHECKS)[number];
 type CheckStatus = "pass" | "warn" | "fail" | "skip";
 
@@ -412,16 +426,17 @@ function analyzeFilmMotion(opts: {
         error: `invalid camera timeline ${camPath}: key ${idx} must have finite numeric t`,
       };
     }
-    if (rec.p !== undefined && !isVec3(rec.p)) {
+    for (const field of ["p", "l"]) {
+      const point = rec[field];
+      if (
+        point === undefined ||
+        isVec3(point) ||
+        (point && typeof point === "object" && !Array.isArray(point))
+      )
+        continue;
       return {
         camFile: camPath,
-        error: `invalid camera timeline ${camPath}: key ${idx} field p must be [x,y,z] numbers`,
-      };
-    }
-    if (rec.l !== undefined && !isVec3(rec.l)) {
-      return {
-        camFile: camPath,
-        error: `invalid camera timeline ${camPath}: key ${idx} field l must be [x,y,z] numbers`,
+        error: `invalid camera timeline ${camPath}: key ${idx} field ${field} must be [x,y,z] or a scene point`,
       };
     }
   }
@@ -442,7 +457,8 @@ function analyzeFilmMotion(opts: {
       }
     : undefined;
 
-  const cam = analyzeCameraTimeline(camKeys, {
+  const motionKeys = canEvalThree ? camKeys : camKeys.map(({ p: _p, l: _l, ...key }) => key);
+  const cam = analyzeCameraTimeline(motionKeys, {
     from: opts.from,
     to: opts.to,
     aspect,
@@ -469,6 +485,9 @@ function analyzeFilmMotion(opts: {
   return {
     camFile: camPath,
     ...cam,
+    poseSource: canEvalThree ? "timeline" : "scene",
+    posPeak: canEvalThree ? cam.posPeak : null,
+    turnPeak: canEvalThree ? cam.turnPeak : null,
     keyFiles,
   };
 }
@@ -524,8 +543,15 @@ function runMotionCmd(argv: string[]): number {
     console.log(JSON.stringify(report, null, 2));
     return 0;
   }
+  const pos = report.posPeak;
+  const turn = report.turnPeak;
+  const pose =
+    pos && turn
+      ? `pos peak ${pos.v.toFixed(2)} m/s at ${pos.t.toFixed(2)}s (row ${pos.keyRow}) | turn peak ${turn.v.toFixed(1)} deg/s at ${turn.t.toFixed(2)}s (keys [${turn.span[0]}->${turn.span[1]}], row ${turn.keyRow})`
+      : "scene-dependent pose: use CHECK=motion:cam bun run render stills for position and turn";
+  const fov = report.fovPeak;
   console.log(
-    `cam-motion (${report.status.toUpperCase()}): pos peak ${report.posPeak.v.toFixed(2)} m/s at ${report.posPeak.t.toFixed(2)}s (row ${report.posPeak.keyRow}) | turn peak ${report.turnPeak.v.toFixed(1)} deg/s at ${report.turnPeak.t.toFixed(2)}s (keys [${report.turnPeak.span[0]}->${report.turnPeak.span[1]}], row ${report.turnPeak.keyRow}) | FOV peak ${report.fovPeak.v.toFixed(1)} deg/s at ${report.fovPeak.t.toFixed(2)}s (row ${report.fovPeak.keyRow})`,
+    `cam-motion (${report.status.toUpperCase()}): ${pose} | FOV peak ${fov.v.toFixed(1)} deg/s at ${fov.t.toFixed(2)}s (row ${fov.keyRow})`,
   );
   for (const f of report.faults) console.log(`  - ${f}`);
   for (const kf of report.keyFiles) {
@@ -729,6 +755,48 @@ function runFfmpegAudioCheck(videoPath: string, hasAudio: boolean): CheckResult 
   };
 }
 
+function runTextCheck(film: ReturnType<typeof discoverFilm>): CheckResult {
+  const conf = film?.pkg["live-studio"] as
+    { textTimeline?: string; timingTimeline?: string } | undefined;
+  const rel = conf?.textTimeline ?? "src/timeline/text.json";
+  if (!film || !existsSync(join(film.dir, rel))) {
+    return { id: "text", status: "skip", summary: "skipped: no film text timeline found" };
+  }
+  const { data: text } = TextTimeline.safeParse(readJson(join(film.dir, rel)));
+  if (!text) return { id: "text", status: "fail", summary: `invalid text timeline ${rel}` };
+
+  const ends = heardLength(film.dir, conf ?? {});
+  const clock = ends ? clockForTimeline("text") : null;
+  const heard = clock ? mapTimeline("text", text, clock, false, null, {}) : null;
+  const end = ends && clock ? Math.min(ends.layers, clock.duration) : Infinity;
+  const ratio = ratioOf(film.pkg);
+  let checked = 0;
+  const faults = text.items.flatMap((item, row) => {
+    if (!isRead(item, text.tracks)) return [];
+    const mapped = heard?.items?.[row];
+    if (heard && (!mapped || mapped.to <= mapped.from || mapped.from >= end)) return [];
+    checked++;
+    const messages = mapped ? readFaults(item, mapped, ratio, end, clock) : sizeFaults(item, ratio);
+    return messages.length
+      ? [
+          {
+            row,
+            from: mapped?.from ?? item.from,
+            to: Math.min(mapped?.to ?? item.to, end),
+            messages,
+          },
+        ]
+      : [];
+  });
+  return {
+    id: "text",
+    status: faults.length ? "warn" : "pass",
+    summary: `${faults.length}/${checked} title(s) with readability issues${clock ? "" : " (size only; film end missing)"}`,
+    metrics: { checked },
+    details: faults.length ? { timeline: rel, faults } : undefined,
+  };
+}
+
 function runUnifiedQc(argv: string[]): number {
   let checksList: CheckId[] = [...ALL_CHECKS];
   let strict = false;
@@ -815,6 +883,11 @@ function runUnifiedQc(argv: string[]): number {
     };
 
     for (const id of checksList) {
+      if (id === "text") {
+        results.push(runTextCheck(film));
+        continue;
+      }
+
       if (id === "cam-motion") {
         const m = analyzeFilmMotion({ filmDir: film?.dir ?? null, pkg: film?.pkg ?? null });
         if (!m) {
@@ -835,8 +908,11 @@ function runUnifiedQc(argv: string[]): number {
             status: m.status,
             summary: m.faults.length
               ? m.faults[0]
-              : `ok (pos ${m.posPeak.v.toFixed(2)} m/s, turn ${m.turnPeak.v.toFixed(1)} deg/s, FOV peak ${m.fovPeak.v.toFixed(1)} deg/s)`,
+              : m.posPeak && m.turnPeak
+                ? `ok (pos ${m.posPeak.v.toFixed(2)} m/s, turn ${m.turnPeak.v.toFixed(1)} deg/s, FOV peak ${m.fovPeak.v.toFixed(1)} deg/s)`
+                : `FOV peak ${m.fovPeak.v.toFixed(1)} deg/s (scene-dependent pose needs CHECK=motion:cam)`,
             metrics: {
+              poseSource: m.poseSource,
               posPeak: m.posPeak,
               turnPeak: m.turnPeak,
               fovPeak: m.fovPeak,
@@ -1011,7 +1087,7 @@ function runUnifiedQc(argv: string[]): number {
 
 export { findAutoVideo, selectPython };
 
-export function runQc(args: string[]): number {
+function runQc(args: string[]): number {
   if (["help", "-h", "--help"].includes(args[0])) {
     console.log(HELP);
     return 0;

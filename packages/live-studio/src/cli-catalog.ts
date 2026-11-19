@@ -3969,7 +3969,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--checks",
         label: "Checks",
         type: "string",
-        placeholder: "probe,forensics,sync,audio,look,speed,cam-motion",
+        placeholder: "probe,forensics,sync,audio,look,speed,cam-motion,text",
       },
       { key: "--strict", flag: "--strict", label: "Fail on warnings", type: "boolean" },
       { key: "--json", flag: "--json", label: "JSON report", type: "boolean" },

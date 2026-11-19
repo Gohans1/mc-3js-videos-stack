@@ -177,6 +177,74 @@ test("qc motion detects turn/FOV spikes with exact second and key row index with
   }
 });
 
+test("qc motion measures FOV and identifies scene-resolved camera points", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-motion-target-"));
+  try {
+    const cam = join(dir, "cam.json");
+    writeFileSync(
+      cam,
+      JSON.stringify([
+        { t: 0, p: [0, 1, 0], l: { target: "elon" }, fov: 70 },
+        { t: 1, p: [0, 1, 0], l: { target: "elon" }, fov: 25 },
+      ]),
+    );
+    const result = runQc(["motion", "--cam", cam, "--json"]);
+    expect(result.status).toBe(0);
+    const report = JSON.parse(result.stdout);
+    expect(report).toMatchObject({ poseSource: "scene", posPeak: null, turnPeak: null });
+    expect(report.fovPeak.v).toBeGreaterThan(40);
+    expect(report.fovPeak.span).toEqual([0, 1]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("qc text checks visible title size and actual reading time without a render", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-text-"));
+  try {
+    mkdirSync(join(dir, "src/timeline"), { recursive: true });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({
+        "live-studio": {
+          textTimeline: "src/timeline/text.json",
+          timingTimeline: "src/timeline/timing.json",
+        },
+      }),
+    );
+    writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 5 }));
+    writeFileSync(
+      join(dir, "src/timeline/timing.json"),
+      JSON.stringify({
+        speeds: [{ from: 0, to: 2, rate: 4 }],
+      }),
+    );
+    writeFileSync(
+      join(dir, "src/timeline/text.json"),
+      JSON.stringify({
+        items: [
+          { kind: "text", from: 0, to: 2, size: 28, text: "Read this caption" },
+          { kind: "text", from: 0, to: 2, size: 16, text: "A label", read: false },
+          { kind: "text", from: 2, to: 3, size: 56, text: "Next" },
+        ],
+      }),
+    );
+    const result = runQc(["--checks", "text", "--json", "--strict"], { cwd: dir });
+    expect(result.status).toBe(1);
+    const [check] = JSON.parse(result.stdout).checks;
+    expect(check).toMatchObject({ id: "text", status: "warn", metrics: { checked: 2 } });
+    expect(check.details.faults).toHaveLength(1);
+    const [fault] = check.details.faults;
+    expect(fault).toMatchObject({ row: 0, from: 0, to: 0.5 });
+    expect(fault.messages).toEqual([
+      expect.stringContaining("0.50 s"),
+      expect.stringContaining("size 28"),
+    ]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("qc full run auto-detects video, runs probe/cam-motion, and cleanly skips missing optional python checks", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-full-"));
   try {

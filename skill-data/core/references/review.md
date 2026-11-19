@@ -19,6 +19,7 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 | Buried voice, missing hits, and mono loss | Run bun run listen --at 12.4 to locate the stem and timeline row, then use earshot timeline or earshot measure on the MP4 to confirm the exported signal. Earshot's TRANSCRIPT section summarizes inferred audio events. |
 | Before and after an edit | Keep both files, extract frames at matching timestamps, and run media ffmpeg check -- NEW --compare OLD to measure changes. Use earshot ab when evaluating sound choices. |
 | QC một lệnh | bun run qc FILE --json tổng hợp đo hình, tiếng và đồng bộ. Dùng --strict để tính cảnh báo là lỗi. |
+| Chữ trên hình | bun run qc --checks text đo thời lượng thực và cỡ chữ trong timeline, kể cả khi chưa render MP4. |
 | Độ sáng và chênh pixel | bun run qc box IMAGE x,y,w,h đo màu và sáng trung bình. qc compare BEFORE AFTER --out PATH ghi ảnh đối chiếu. |
 | Dẫn mắt và nhịp hình | Trong Studio, Shift+V soi độ sáng, Shift+O chồng frame trước cut và Shift+C xem dải màu toàn phim. Ctrl+; bật guides, Alt+; đổi bố cục, Alt+M tắt tiếng và Shift+H nghe riêng audio. |
 | Delivery and technical checks | Run bun run deliver to validate the project's upload profile. Use media ffmpeg probe/check or media qc for specific streams, properties, or rules. |

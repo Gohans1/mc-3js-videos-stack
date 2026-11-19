@@ -37,6 +37,7 @@ test("FFmpeg native argv preserves its explicit option boundary without weakenin
 });
 
 test("QC exposes native inspection commands and render preserves evidence settings", () => {
+  /** @type {[Omit<import("../src/cli-catalog.ts").CliRunRequest, "commandId">, string[]][]} */
   const cases = [
     [
       {
@@ -530,6 +531,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
 
     // 4) Bidirectional disk entrypoint coverage across scripts/ and packages/
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
+      ["scripts/review/frame_metrics.py", "image-region and comparison worker spawned by qc"],
       ["scripts/review/sheet_view.py", "overview/frame extraction helper dispatched by sheet.py"],
       [
         "scripts/review/reference_inspect.py",
