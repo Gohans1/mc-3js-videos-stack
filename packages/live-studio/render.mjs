@@ -37,6 +37,7 @@ import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
 import { writeRenderEvidence } from "./src/video.mjs";
+import { parseViews } from "./src/views.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 import { writeVoiceMap } from "./src/voice-map.mjs";
 import { warp } from "./src/warp.mjs";
@@ -312,85 +313,15 @@ if (inspect && inspect.length !== 7) {
   console.error(`INSPECT takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
   process.exit(2);
 }
-const VIEW_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$/;
-const parseViews = (raw, projectDir) => {
-  const fail = (why) => {
-    console.error(`VIEWS: ${why}`);
+let views = null;
+if (env.VIEWS !== undefined) {
+  try {
+    views = parseViews(env.VIEWS, PROJECT);
+  } catch (e) {
+    console.error(`VIEWS: ${e.message}`);
     process.exit(2);
-  };
-  const validateEntry = (name, cam, seen, label) => {
-    if (typeof name !== "string" || !VIEW_NAME.test(name))
-      fail(
-        `invalid view name ${JSON.stringify(name)} (${label}): use 1-48 chars matching ^[A-Za-z0-9][A-Za-z0-9._-]{0,47}$`,
-      );
-    const key = name.toLowerCase();
-    if (seen.has(key)) fail(`duplicate view name ${JSON.stringify(name)}`);
-    seen.add(key);
-    if (!Array.isArray(cam) || cam.length !== 7)
-      fail(
-        `view ${JSON.stringify(name)} takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${Array.isArray(cam) ? cam.length : typeof cam}`,
-      );
-    for (let i = 0; i < 7; i++) {
-      if (typeof cam[i] !== "number" || !Number.isFinite(cam[i]))
-        fail(
-          `view ${JSON.stringify(name)} item ${i + 1} must be a finite number, got ${JSON.stringify(cam[i])}`,
-        );
-    }
-    if (!(cam[6] > 0 && cam[6] < 180))
-      fail(`view ${JSON.stringify(name)} fov must be between 0 and 180 (exclusive), got ${cam[6]}`);
-    return { name, cam };
-  };
-  const text = String(raw ?? "").trim();
-  if (!text)
-    fail('empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json');
-  const seen = new Set();
-  if (text.startsWith("@")) {
-    const fileSpec = text.slice(1).trim();
-    if (!fileSpec) fail("@ requires a JSON file path, e.g. VIEWS=@views.json");
-    const filePath = resolve(projectDir, fileSpec);
-    if (!statSync(filePath, { throwIfNoEntry: false })?.isFile())
-      fail(`file not found: ${fileSpec}`);
-    let data;
-    try {
-      data = JSON.parse(readFileSync(filePath, "utf8"));
-    } catch (e) {
-      fail(`${fileSpec} is not valid JSON (${e.message})`);
-    }
-    if (Array.isArray(data)) {
-      if (!data.length) fail(`${fileSpec} has no views`);
-      return data.map((item, idx) => {
-        if (!item || typeof item !== "object" || Array.isArray(item))
-          fail(`${fileSpec} item ${idx + 1} must be { "name": "...", "cam": [7 numbers] }`);
-        return validateEntry(item.name, item.cam, seen, `${fileSpec} item ${idx + 1}`);
-      });
-    }
-    if (data && typeof data === "object") {
-      const entries = Object.entries(data);
-      if (!entries.length) fail(`${fileSpec} has no views`);
-      return entries.map(([name, cam]) => validateEntry(name, cam, seen, fileSpec));
-    }
-    fail(`${fileSpec} must be a JSON object { name: [7 numbers] } or array [{ name, cam }]`);
   }
-  const trimmed = text.replace(/;\s*$/, "");
-  if (!trimmed)
-    fail('empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json');
-  return trimmed.split(";").map((rawPart, idx) => {
-    const part = rawPart.trim();
-    const colon = part.indexOf(":");
-    if (colon < 0)
-      fail(`item ${idx + 1} (${JSON.stringify(part)}) must be <name>:px,py,pz,lx,ly,lz,fov`);
-    const name = part.slice(0, colon).trim();
-    const coords = part
-      .slice(colon + 1)
-      .split(",")
-      .map((x) => {
-        const t = x.trim();
-        return t === "" ? NaN : Number(t);
-      });
-    return validateEntry(name, coords, seen, `item ${idx + 1}`);
-  });
-};
-const views = env.VIEWS !== undefined ? parseViews(env.VIEWS, PROJECT) : null;
+}
 let crop = null;
 if (env.CROP !== undefined) {
   try {

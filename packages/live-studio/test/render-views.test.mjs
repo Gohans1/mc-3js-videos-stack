@@ -1,4 +1,4 @@
-// Multi-angle batch VIEWS= rendering: CLI validation and real headless Chrome WebGL verification
+// Multi-angle batch VIEWS= rendering: pure parser unit tests, CLI validation, and real headless Chrome WebGL verification
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -17,6 +17,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { STUDIO } from "../src/film.mjs";
+import { parseViews } from "../src/views.mjs";
 
 const RENDER = fileURLToPath(new URL("../render.mjs", import.meta.url));
 
@@ -73,33 +74,122 @@ const sampleRgb = (imagePath, nx = 0.5, ny = 0.45) => {
   return { codec, w, h, rgb: [px.stdout[0], px.stdout[1], px.stdout[2]] };
 };
 
-const setupValidationFilm = (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "render-views-cli-"));
+test("parseViews parses inline specs and @json object/array files and enforces view names, duplicates, and camera bounds", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "views-parse-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  copyDemo(dir);
-  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const run = (args, env = {}) =>
-    spawnSync("bun", [RENDER, ...args], {
-      cwd: dir,
-      encoding: "utf8",
-      timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
-    });
-  return { dir, run };
-};
+
+  const maxName = `a${"b".repeat(47)}`;
+  assert.deepEqual(parseViews(`a:0,1,2,3,4,5,50;${maxName}:-1,0.5,3,0,0,0,179.5;`, dir), [
+    { name: "a", cam: [0, 1, 2, 3, 4, 5, 50] },
+    { name: maxName, cam: [-1, 0.5, 3, 0, 0, 0, 179.5] },
+  ]);
+
+  writeFileSync(
+    join(dir, "obj.json"),
+    JSON.stringify({ "cam.1_wide-top": [1, 2, 3, 4, 5, 6, 45] }),
+  );
+  assert.deepEqual(parseViews("@obj.json", dir), [
+    { name: "cam.1_wide-top", cam: [1, 2, 3, 4, 5, 6, 45] },
+  ]);
+
+  writeFileSync(
+    join(dir, "arr.json"),
+    JSON.stringify([{ name: "hero", cam: [0, 2, 5, 0, 1, 0, 35] }]),
+  );
+  assert.deepEqual(parseViews("@arr.json", dir), [{ name: "hero", cam: [0, 2, 5, 0, 1, 0, 35] }]);
+
+  for (const badSpec of [
+    "",
+    "   ",
+    ";",
+    "corner",
+    ":0,0,5,0,0,0,50",
+    "corner:0,0,5,0,0,0",
+    "corner:0,0,5,0,0,0,50,1",
+    "corner:0,0,,0,0,0,50",
+    "corner:0,0,NaN,0,0,0,50",
+    "corner:0,0,Infinity,0,0,0,50",
+    "corner:0,0,5,0,0,0,0",
+    "corner:0,0,5,0,0,0,-10",
+    "corner:0,0,5,0,0,0,180",
+    "corner:0,0,5,0,0,0,220",
+    "corner:0,0,5,0,0,0,50;;kitchen:1,0,5,0,0,0,50",
+  ]) {
+    assert.throws(() => parseViews(badSpec, dir), `expected throw for ${JSON.stringify(badSpec)}`);
+  }
+
+  for (const badName of [
+    "../escape",
+    "sub/view",
+    "sub\\view",
+    ".hidden",
+    "-dash",
+    "_under",
+    "bad space",
+    "a".repeat(49),
+  ]) {
+    assert.throws(() => parseViews(`${badName}:0,0,5,0,0,0,50`, dir), /invalid view name/i);
+  }
+
+  assert.throws(
+    () => parseViews("corner:0,0,5,0,0,0,50;corner:1,0,5,0,0,0,40", dir),
+    /duplicate view name/i,
+  );
+  assert.throws(
+    () => parseViews("corner:0,0,5,0,0,0,50;Corner:1,0,5,0,0,0,40", dir),
+    /duplicate view name/i,
+  );
+
+  assert.throws(() => parseViews("@", dir), /JSON file path/);
+  assert.throws(() => parseViews("@nope.json", dir), /file not found: nope\.json/);
+
+  writeFileSync(join(dir, "bad.json"), "{broken");
+  assert.throws(() => parseViews("@bad.json", dir), /not valid JSON/);
+
+  writeFileSync(join(dir, "empty.json"), "{}");
+  assert.throws(() => parseViews("@empty.json", dir), /has no views/);
+
+  writeFileSync(join(dir, "empty-arr.json"), "[]");
+  assert.throws(() => parseViews("@empty-arr.json", dir), /has no views/);
+
+  writeFileSync(
+    join(dir, "dup-arr.json"),
+    JSON.stringify([
+      { name: "cam1", cam: [0, 0, 5, 0, 0, 0, 50] },
+      { name: "cam1", cam: [1, 0, 5, 0, 0, 0, 50] },
+    ]),
+  );
+  assert.throws(() => parseViews("@dup-arr.json", dir), /duplicate view name/i);
+
+  writeFileSync(join(dir, "bad-fov.json"), JSON.stringify({ cam1: [0, 0, 5, 0, 0, 0, 180] }));
+  assert.throws(() => parseViews("@bad-fov.json", dir), /fov/);
+
+  writeFileSync(join(dir, "str-num.json"), JSON.stringify({ cam1: ["0", 0, 5, 0, 0, 0, 50] }));
+  assert.throws(() => parseViews("@str-num.json", dir), /finite number/);
+});
 
 test(
-  "VIEWS validation rejects combining with INSPECT, bad targets, bad names, duplicates, and bad numbers before Chrome boots",
-  { timeout: 60000 },
+  "render CLI enforces VIEWS exit-2 guards, target restrictions, typos, flags, and help before Chrome boots",
+  { timeout: 30000 },
   (t) => {
-    const { dir, run } = setupValidationFilm(t);
+    const dir = mkdtempSync(join(tmpdir(), "render-views-cli-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+    copyDemo(dir);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+    const run = (args, env = {}) =>
+      spawnSync("bun", [RENDER, ...args], {
+        cwd: dir,
+        encoding: "utf8",
+        timeout: 20000,
+        env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      });
 
     const combined = run(["stills"], {
       INSPECT: "0,0,5,0,0,0,50",
       VIEWS: "corner:0,0,5,0,0,0,50",
     });
     assert.equal(combined.status, 2, combined.stdout + combined.stderr);
-    assert.match(combined.stderr, /INSPECT.*VIEWS|VIEWS.*INSPECT/i);
+    assert.match(combined.stderr, /INSPECT and VIEWS cannot be used together/);
     assert.doesNotMatch(combined.stdout + combined.stderr, /built in/i);
 
     for (const target of ["clip", "final", "all"]) {
@@ -110,55 +200,15 @@ test(
 
     const captionsTarget = run(["captions"], { VIEWS: "corner:0,0,5,0,0,0,50" });
     assert.equal(captionsTarget.status, 2, captionsTarget.stderr);
-    assert.match(captionsTarget.stderr, /VIEWS/);
+    assert.match(captionsTarget.stderr, /VIEWS does nothing for render captions/);
 
-    for (const badSpec of [
-      "",
-      "   ",
-      ";",
-      "corner",
-      ":0,0,5,0,0,0,50",
-      "corner:0,0,5,0,0,0",
-      "corner:0,0,5,0,0,0,50,1",
-      "corner:0,0,,0,0,0,50",
-      "corner:0,0,NaN,0,0,0,50",
-      "corner:0,0,Infinity,0,0,0,50",
-      "corner:0,0,5,0,0,0,0",
-      "corner:0,0,5,0,0,0,-10",
-      "corner:0,0,5,0,0,0,180",
-      "corner:0,0,5,0,0,0,220",
-    ]) {
-      const res = run(["stills"], { VIEWS: badSpec });
-      assert.equal(res.status, 2, `spec ${JSON.stringify(badSpec)}: ${res.stdout}${res.stderr}`);
-      assert.match(res.stderr, /VIEWS/i);
-    }
+    const badInline = run(["stills"], { VIEWS: "../evil:0,0,5,0,0,0,50" });
+    assert.equal(badInline.status, 2, badInline.stderr);
+    assert.match(badInline.stderr, /VIEWS:.*invalid view name/);
 
-    for (const badName of [
-      "../escape",
-      "sub/view",
-      "sub\\view",
-      ".hidden",
-      "-dash",
-      "_under",
-      "bad space",
-      "a".repeat(49),
-    ]) {
-      const res = run(["stills"], { VIEWS: `${badName}:0,0,5,0,0,0,50` });
-      assert.equal(res.status, 2, `name ${JSON.stringify(badName)}: ${res.stdout}${res.stderr}`);
-      assert.match(res.stderr, /view name/i);
-    }
-
-    const dupExact = run(["stills"], {
-      VIEWS: "corner:0,0,5,0,0,0,50;corner:1,0,5,0,0,0,40",
-    });
-    assert.equal(dupExact.status, 2, dupExact.stderr);
-    assert.match(dupExact.stderr, /duplicate/i);
-
-    const dupCase = run(["stills"], {
-      VIEWS: "corner:0,0,5,0,0,0,50;Corner:1,0,5,0,0,0,40",
-    });
-    assert.equal(dupCase.status, 2, dupCase.stderr);
-    assert.match(dupCase.stderr, /duplicate/i);
+    const badJson = run(["stills"], { VIEWS: "@missing.json" });
+    assert.equal(badJson.status, 2, badJson.stderr);
+    assert.match(badJson.stderr, /VIEWS:.*missing\.json/);
 
     const typo = run(["stills"], { VIEW: "corner:0,0,5,0,0,0,50" });
     assert.equal(typo.status, 2, typo.stderr);
@@ -171,41 +221,6 @@ test(
     const help = run(["--help"]);
     assert.equal(help.status, 0);
     assert.match(help.stdout, /VIEWS=/);
-
-    // @json file validation errors
-    const emptyAt = run(["stills"], { VIEWS: "@" });
-    assert.equal(emptyAt.status, 2, emptyAt.stderr);
-
-    const missingFile = run(["stills"], { VIEWS: "@nope.json" });
-    assert.equal(missingFile.status, 2, missingFile.stderr);
-    assert.match(missingFile.stderr, /nope\.json/);
-
-    writeFileSync(join(dir, "bad.json"), "{broken");
-    const badJson = run(["stills"], { VIEWS: "@bad.json" });
-    assert.equal(badJson.status, 2, badJson.stderr);
-
-    writeFileSync(join(dir, "empty.json"), "{}");
-    assert.equal(run(["stills"], { VIEWS: "@empty.json" }).status, 2);
-
-    writeFileSync(join(dir, "empty-arr.json"), "[]");
-    assert.equal(run(["stills"], { VIEWS: "@empty-arr.json" }).status, 2);
-
-    writeFileSync(
-      join(dir, "dup-arr.json"),
-      JSON.stringify([
-        { name: "cam1", cam: [0, 0, 5, 0, 0, 0, 50] },
-        { name: "cam1", cam: [1, 0, 5, 0, 0, 0, 50] },
-      ]),
-    );
-    const dupArr = run(["stills"], { VIEWS: "@dup-arr.json" });
-    assert.equal(dupArr.status, 2, dupArr.stderr);
-    assert.match(dupArr.stderr, /duplicate/i);
-
-    writeFileSync(join(dir, "bad-fov.json"), JSON.stringify({ cam1: [0, 0, 5, 0, 0, 0, 180] }));
-    assert.equal(run(["stills"], { VIEWS: "@bad-fov.json" }).status, 2);
-
-    writeFileSync(join(dir, "str-num.json"), JSON.stringify({ cam1: ["0", 0, 5, 0, 0, 0, 50] }));
-    assert.equal(run(["stills"], { VIEWS: "@str-num.json" }).status, 2);
   },
 );
 

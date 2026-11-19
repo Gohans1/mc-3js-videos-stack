@@ -38,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -85,6 +86,37 @@ def load_caption_font(ImageFont, size=18):
         return ImageFont.load_default()
 
 
+def caption_labels(paths):
+    stems = [p.stem for p in paths]
+    counts = Counter(stems)
+    if all(c == 1 for c in counts.values()):
+        return stems
+    labels = [
+        p.stem if counts[p.stem] == 1 else (f"{p.parent.name}/{p.stem}" if p.parent.name else p.name)
+        for p in paths
+    ]
+    dup2 = Counter(labels)
+    if any(c > 1 for c in dup2.values()):
+        labels = [
+            (f"{p.parent.name}/{p.name}" if p.parent.name else p.name)
+            if counts[p.stem] > 1 and dup2[lbl] > 1
+            else lbl
+            for p, lbl in zip(paths, labels)
+        ]
+    dup3 = Counter(labels)
+    if any(c > 1 for c in dup3.values()):
+        seen = Counter()
+        disambiguated = []
+        for lbl in labels:
+            if dup3[lbl] > 1:
+                seen[lbl] += 1
+                disambiguated.append(f"{lbl} ({seen[lbl]})")
+            else:
+                disambiguated.append(lbl)
+        return disambiguated
+    return labels
+
+
 def build_image_sheet(paths, out_arg):
     cwd_root = Path.cwd().resolve()
     raw_out = out_arg if out_arg is not None else "renders/sheet_custom.jpg"
@@ -93,7 +125,10 @@ def build_image_sheet(paths, out_arg):
     out_path = Path(raw_out)
     if not out_path.is_absolute():
         out_path = cwd_root / out_path
-    resolved_out = out_path.resolve()
+    try:
+        resolved_out = out_path.resolve()
+    except OSError as e:
+        usage(f"invalid --out path {raw_out!r}: {e}")
     try:
         rel_out = resolved_out.relative_to(cwd_root)
     except ValueError:
@@ -120,22 +155,7 @@ def build_image_sheet(paths, out_arg):
     except ImportError as e:
         usage(f"Pillow (PIL) is required for image contact sheets: {e}", 1)
 
-    loaded = []
-    for p in img_paths:
-        try:
-            with Image.open(p) as im:
-                im = ImageOps.exif_transpose(im)
-                if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
-                    rgba = im.convert("RGBA")
-                    bg = Image.new("RGBA", rgba.size, (20, 20, 24, 255))
-                    im = Image.alpha_composite(bg, rgba).convert("RGB")
-                else:
-                    im = im.convert("RGB")
-                loaded.append((p, im))
-        except (OSError, ValueError) as e:
-            usage(f"could not read image {p}: {e}")
-
-    n = len(loaded)
+    n = len(img_paths)
     if n <= 3:
         cols = n
     elif n == 4:
@@ -148,36 +168,52 @@ def build_image_sheet(paths, out_arg):
         cols = min(6, math.ceil(math.sqrt(n)))
     rows = math.ceil(n / cols)
 
-    first_w, first_h = loaded[0][1].size
     tile_w = 640
-    tile_h = max(120, min(960, round(tile_w * first_h / max(1, first_w) / 2) * 2))
     caption_h = 34
     gap = 4
-    cell_h = tile_h + caption_h
-    sheet_w = cols * tile_w + (cols + 1) * gap
-    sheet_h = rows * cell_h + (rows + 1) * gap
-
-    canvas = Image.new("RGB", (sheet_w, sheet_h), (10, 10, 12))
-    draw = ImageDraw.Draw(canvas)
+    labels = caption_labels(img_paths)
     font = load_caption_font(ImageFont, 18)
 
-    for idx, (p, im) in enumerate(loaded):
+    canvas = None
+    draw = None
+    tile_h = 0
+    cell_h = 0
+    for idx, (p, raw_label) in enumerate(zip(img_paths, labels)):
+        try:
+            with Image.open(p) as opened:
+                im = ImageOps.exif_transpose(opened)
+                if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                    rgba = im.convert("RGBA")
+                    bg = Image.new("RGBA", rgba.size, (20, 20, 24, 255))
+                    im = Image.alpha_composite(bg, rgba).convert("RGB")
+                else:
+                    im = im.convert("RGB")
+                iw, ih = im.size
+                if canvas is None:
+                    tile_h = max(120, min(960, round(tile_w * ih / max(1, iw) / 2) * 2))
+                    cell_h = tile_h + caption_h
+                    sheet_w = cols * tile_w + (cols + 1) * gap
+                    sheet_h = rows * cell_h + (rows + 1) * gap
+                    canvas = Image.new("RGB", (sheet_w, sheet_h), (10, 10, 12))
+                    draw = ImageDraw.Draw(canvas)
+                scale = min(tile_w / max(1, iw), tile_h / max(1, ih))
+                nw = max(1, round(iw * scale))
+                nh = max(1, round(ih * scale))
+                resized = im.resize((nw, nh), Image.Resampling.LANCZOS)
+        except (OSError, ValueError) as e:
+            usage(f"could not read image {p}: {e}")
+
         col, row = idx % cols, idx // cols
         x0 = gap + col * (tile_w + gap)
         y0 = gap + row * (cell_h + gap)
         draw.rectangle([x0, y0, x0 + tile_w - 1, y0 + tile_h - 1], fill=(18, 18, 22))
-        iw, ih = im.size
-        scale = min(tile_w / max(1, iw), tile_h / max(1, ih))
-        nw = max(1, round(iw * scale))
-        nh = max(1, round(ih * scale))
-        resized = im.resize((nw, nh), Image.Resampling.LANCZOS)
         px = x0 + (tile_w - nw) // 2
         py = y0 + (tile_h - nh) // 2
         canvas.paste(resized, (px, py))
 
         cap_y0 = y0 + tile_h
         draw.rectangle([x0, cap_y0, x0 + tile_w - 1, cap_y0 + caption_h - 1], fill=(18, 18, 22))
-        label = p.stem
+        label = raw_label
         max_text_w = tile_w - 16
         if draw.textlength(label, font=font) > max_text_w:
             while len(label) > 1 and draw.textlength(label + "...", font=font) > max_text_w:
@@ -188,16 +224,19 @@ def build_image_sheet(paths, out_arg):
         ty = cap_y0 + (caption_h - text_h) // 2 - bbox[1]
         draw.text((x0 + 8, ty), label, fill=(240, 240, 240), font=font)
 
-    resolved_out.parent.mkdir(parents=True, exist_ok=True)
-    if out_ext in (".jpg", ".jpeg"):
-        canvas.save(resolved_out, format="JPEG", quality=92, optimize=True)
-    elif out_ext == ".png":
-        canvas.save(resolved_out, format="PNG")
-    else:
-        canvas.save(resolved_out, format="WEBP", quality=92)
     rel_display = rel_out.as_posix()
+    try:
+        resolved_out.parent.mkdir(parents=True, exist_ok=True)
+        if out_ext in (".jpg", ".jpeg"):
+            canvas.save(resolved_out, format="JPEG", quality=92, optimize=True)
+        elif out_ext == ".png":
+            canvas.save(resolved_out, format="PNG")
+        else:
+            canvas.save(resolved_out, format="WEBP", quality=92)
+    except OSError as e:
+        usage(f"could not write {rel_display}: {e}", 1)
     tell(Path.cwd(), f"Laid out {n} image{'s' if n != 1 else ''} to {rel_display}")
-    print(f"{rel_display}  {', '.join(p.stem for p in img_paths)}")
+    print(f"{rel_display}  {', '.join(labels)}")
     print(f"{n} {'picture' if n == 1 else 'pictures'} -> {rel_display}")
     print("next: open it to look")
 
@@ -236,10 +275,7 @@ while i < len(args):
     pos.append(a)
     i += 1
 
-is_image_list = bool(pos) and (
-    Path(pos[0]).suffix.lower() in IMAGE_EXTS
-    or (len(pos) > 1 and any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos))
-)
+is_image_list = any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos)
 if is_image_list:
     build_image_sheet(pos, out_arg)
     raise SystemExit
