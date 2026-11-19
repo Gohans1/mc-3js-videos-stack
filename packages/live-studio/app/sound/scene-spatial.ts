@@ -71,13 +71,25 @@ const interpolatePlaced = (
   return [p0[0] + (p1[0] - p0[0]) * u, p0[1] + (p1[1] - p0[1]) * u, p0[2] + (p1[2] - p0[2]) * u];
 };
 
+const inlinePoint = (obj: Record<string, unknown>): unknown[] | undefined => {
+  for (const key of ["eye", "at", "p", "pos"]) {
+    const value = obj[key];
+    if (Array.isArray(value) && value.length >= 3) return value;
+  }
+};
+
+const needsScenePoint = (point: unknown) =>
+  !!point &&
+  typeof point === "object" &&
+  !Array.isArray(point) &&
+  !inlinePoint(point as Record<string, unknown>);
+
 const extractPoint = (val: unknown, sourceTime: number): Vec3 => {
   if (Array.isArray(val)) return num3(val);
   if (val && typeof val === "object") {
     const obj = val as Record<string, unknown>;
-    for (const k of ["eye", "at", "p", "pos"]) {
-      if (Array.isArray(obj[k])) return num3(obj[k]);
-    }
+    const point = inlinePoint(obj);
+    if (point) return num3(point);
     const target = obj.target ?? obj.object;
     if (typeof target === "string" && target) {
       const placed = getPlaced()[target];
@@ -117,14 +129,17 @@ export const sceneTargetAt = (
 };
 
 export interface SceneTargetSpan {
-  name: string;
+  name?: string;
   from: number;
   to: number;
   fallback: boolean;
 }
 
 type SpatialFrame = { camera: CameraPose | null; positions: Map<string, Vec3> };
-export type SceneTargetSampler = (name: string, t: number) => { at?: Vec3; camera?: CameraPose };
+export type SceneTargetSampler = (
+  name: string | undefined,
+  t: number,
+) => { at?: Vec3; camera?: CameraPose };
 
 export async function prepareSceneTargets(
   spans: readonly SceneTargetSpan[],
@@ -132,12 +147,16 @@ export async function prepareSceneTargets(
 ): Promise<SceneTargetSampler | undefined> {
   const frames = new Map<number, Set<string>>();
   const required = new Set<string>();
+  const cameraInScene = getCamKeys().some(
+    (key) => needsScenePoint(key.p) || needsScenePoint(key.l),
+  );
   for (const { name, from, to, fallback } of spans) {
-    if (placedKeys(name)?.length) continue;
-    if (!fallback) required.add(name);
+    const runtime = name && !placedKeys(name)?.length ? name : undefined;
+    if (!runtime && !cameraInScene) continue;
+    if (runtime && !fallback) required.add(runtime);
     for (let frame = Math.floor(from * FPS); frame <= Math.ceil(to * FPS); frame++) {
       const names = frames.get(frame) ?? new Set<string>();
-      names.add(name);
+      if (runtime) names.add(runtime);
       frames.set(frame, names);
     }
   }
@@ -147,6 +166,7 @@ export async function prepareSceneTargets(
       `Couldn't resolve spatial target ${[...required].join(", ")}. Use a scene object name or set spatial.at.`,
     );
   if (!engine.buildAudioScene) {
+    if (cameraInScene) throw new Error("Couldn't sample the film camera for spatial audio.");
     if (required.size) throw unresolved();
     return;
   }
@@ -157,7 +177,7 @@ export async function prepareSceneTargets(
   const deadline = performance.now() + 120_000;
   const samples = new Map<number, SpatialFrame>();
   const draw = await engine.buildAudioScene(canvas, w, h, true).catch((error) => {
-    if (required.size) throw error;
+    if (required.size || cameraInScene) throw error;
     return null;
   });
   if (!draw) return;
@@ -172,7 +192,7 @@ export async function prepareSceneTargets(
         throw new Error("Spatial target sampling exceeded two minutes. Export a shorter span.");
       const t = Math.min(frame / FPS, DURATION || Infinity);
       if (draw.renderFrame) await draw.renderFrame(t);
-      else draw(t);
+      else await draw(t);
       const positions = new Map<string, Vec3>();
       for (const name of names) {
         const at = sceneSpatialPosition(draw.tools, name);
@@ -181,7 +201,11 @@ export async function prepareSceneTargets(
           required.delete(name);
         }
       }
-      samples.set(frame, { positions, camera: sceneSpatialCamera(draw.tools) });
+      const camera = sceneSpatialCamera(draw.tools);
+      if (!camera && cameraInScene) {
+        throw new Error(`Couldn't sample the film camera for spatial audio at ${t.toFixed(3)}s.`);
+      }
+      samples.set(frame, { positions, camera });
       if (frame % 8 === 0) await new Promise((resolve) => setTimeout(resolve, 0));
     }
   } finally {
@@ -194,8 +218,8 @@ export async function prepareSceneTargets(
     const frame = t * FPS;
     const first = samples.get(Math.floor(frame));
     const last = samples.get(Math.ceil(frame));
-    const a = first?.positions.get(name);
-    const b = last?.positions.get(name);
+    const a = name ? first?.positions.get(name) : undefined;
+    const b = name ? last?.positions.get(name) : undefined;
     const k = frame - Math.floor(frame);
     const interpolate = (start: Vec3, end: Vec3): Vec3 => [
       start[0] + (end[0] - start[0]) * k,

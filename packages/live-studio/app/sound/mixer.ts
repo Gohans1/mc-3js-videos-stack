@@ -634,7 +634,7 @@ const play = (
     const isOffline =
       offline ?? (typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext);
     const sampleSpatial = (tFilm: number) => {
-      const sample = spSpec.target ? sampled?.(spSpec.target, tFilm) : undefined;
+      const sample = sampled?.(spSpec.target, tFilm);
       const cam = sample?.camera ?? source!.camPose!(tFilm, { offline: isOffline });
       const rawSrc = spSpec.target
         ? (sample?.at ??
@@ -993,7 +993,7 @@ export const setLive = (live_: boolean, src: Source) => {
 const sampleNamedTargets = (all: Clip[], from: number, to: number, signal?: AbortSignal) =>
   source?.prepareTargets?.(
     all.flatMap((clip) => {
-      if (!clip.spatial?.target || clip.t0 >= to || clip.t1 <= from) return [];
+      if (!clip.spatial || clip.t0 >= to || clip.t1 <= from) return [];
       return [
         {
           name: clip.spatial.target,

@@ -463,6 +463,72 @@ export function buildScene() {
             left, right = power(0.72, 0.90)
             self.assertGreater(right, left * 4, "Speed moves the actor right before the source-time crossing")
 
+    def test_mix_uses_authored_scene_camera_for_every_spatial_anchor(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        chrome = self._headless_chrome()
+        sample_rate = 48000
+        with tempfile.TemporaryDirectory(prefix="mix-scene-camera-") as folder:
+            root = Path(folder)
+            timeline = root / "src/timeline"
+            timeline.mkdir(parents=True)
+            (root / "package.json").write_text(json.dumps({
+                "name": "scene-camera",
+                "live-studio": {"chrome": chrome, "soundVault": False, "camTimeline": "src/timeline/cam.json"},
+            }), encoding="utf8")
+            (root / "src/edit.json").write_text('{"end":1}', encoding="utf8")
+            (timeline / "cam.json").write_text(
+                json.dumps([{"t": 0, "p": [0, 1.6, 5], "l": {"target": "look"}}]), encoding="utf8",
+            )
+            point = [8, 1.6, 5]
+            (timeline / "placed.json").write_text(
+                json.dumps({"prop": {"keys": [{"t": 0, "at": point}]}}), encoding="utf8",
+            )
+            (root / "src/scene.ts").write_text("""
+import { Object3D, PerspectiveCamera, Scene } from "three";
+import keys from "./timeline/cam.json";
+export const DURATION = 1;
+export const SHOTS = [{ t: 0 }];
+export const SHOTS_OUT = SHOTS;
+export function buildScene() {
+  const scene = new Scene();
+  const camera = new PerspectiveCamera();
+  const actor = new Object3D();
+  actor.name = "look";
+  actor.position.set(8, 1.6, 5);
+  scene.add(actor);
+  const draw = () => {
+    camera.position.fromArray(keys[0].p);
+    camera.lookAt(scene.getObjectByName(keys[0].l.target).position);
+  };
+  return Object.assign(draw, { tools: { scene, camera } });
+}
+""", encoding="utf8")
+            tone = 0.2 * np.sin(2 * np.pi * 317 * np.arange(sample_rate) / sample_rate)
+            self._write_wav(str(root / "sound/sfx/tone.wav"), np.column_stack((tone, tone)), sample_rate)
+            anchors = [(0.0, {"at": point}), (0.35, {"target": "prop"}), (0.7, {"target": "look"})]
+            (timeline / "audio.json").write_text(json.dumps({
+                "beds": [],
+                "sfx": [
+                    {"at": start, "length": 0.25, "name": "tone", "gain": 0,
+                     "spatial": {**anchor, "refDistance": 10}}
+                    for start, anchor in anchors
+                ],
+            }), encoding="utf8")
+            run = subprocess.run(
+                [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                cwd=root, capture_output=True, text=True, timeout=120,
+            )
+            self.assertEqual(run.returncode, 0, msg=run.stderr + "\n" + run.stdout)
+            rate, out = self._read_wav_f32(str(root / "sound/out.wav"))
+            for start, anchor in anchors:
+                with self.subTest(anchor=anchor):
+                    segment = out[round((start + 0.04) * rate):round((start + 0.21) * rate)]
+                    left, right = np.mean(segment ** 2, axis=0)
+                    self.assertGreater(left, 0.001)
+                    self.assertAlmostEqual(float(left), float(right), places=5)
+
     def test_mix_resolves_named_anchor_until_the_exclusive_clip_end(self) -> None:
         import tempfile
         from pathlib import Path

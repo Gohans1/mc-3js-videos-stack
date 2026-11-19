@@ -16,6 +16,7 @@ async function withAudioPage(verify: (browser: Bun.WebView) => Promise<void>) {
     writeFileSync(
       entry,
       `
+import { EDIT } from "film/edit";
 import { S } from ${JSON.stringify(join(app, "core/state.ts"))};
 import { registerEngine } from ${JSON.stringify(join(app, "core/engine.ts"))};
 import { availableSpatialTargets, prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from ${JSON.stringify(join(app, "sound/scene-spatial.ts"))};
@@ -87,6 +88,27 @@ window.checkNamed = async (disappears = false, at, to = 1.5) => {
     first: [rms(0, 0.1, 0.35), rms(1, 0.1, 0.35)],
     last: [rms(0, 1.05, 1.4), rms(1, 1.05, 1.4)],
   };
+};
+window.checkSceneListener = async () => {
+  const target = [8, 1.6, 5];
+  EDIT.cam = [{t: 0, p: [0, 1.6, 5], l: {target: "look"}}];
+  EDIT.placed = { marked: { keys: [{ t: 0, at: target }] } };
+  registerEngine({ buildAudioScene: async () => {
+    const camera = new PerspectiveCamera();
+    camera.position.set(0, 1.6, 5);
+    camera.lookAt(...target);
+    return Object.assign(() => {}, { tools: {camera} });
+  } });
+  const measure = async (spatial) => {
+    const lanes = { beds: [], sfx: [{name: "tone", at: 0, length: 0.5, gain: 0, spatial}] };
+    setLive(true, {
+      lanes: () => lanes, library: () => [], span: () => [0, 0.5], voice: () => [],
+      camPose: sceneCameraPoseAt, targetPos: sceneTargetAt, prepareTargets: prepareSceneTargets,
+    });
+    const mix = await renderAudioSpan(0, 0.5);
+    return [0, 1].map(ch => mix.getChannelData(ch).reduce((sum, sample) => sum + sample * sample, 0));
+  };
+  return [await measure({ at: target }), await measure({ target: "marked" })];
 };`,
     );
     const [page, worklet] = await Promise.all([
@@ -207,5 +229,15 @@ test("named scene mixes fail on a missing anchor unless there is an XYZ fallback
     };
     expect(fallback.first[0]).toBeGreaterThan(fallback.first[1] * 2);
     expect(fallback.last[1]).toBeGreaterThan(fallback.last[0] * 2);
+  });
+}, 30000);
+
+test("world coordinates and placed anchors both use the scene-targeted listener", async () => {
+  await withAudioPage(async (browser) => {
+    const powers = (await browser.evaluate("window.checkSceneListener()")) as [number, number][];
+    for (const [left, right] of powers) {
+      expect(left).toBeGreaterThan(0.1);
+      expect(left / right).toBeCloseTo(1, 2);
+    }
   });
 }, 30000);

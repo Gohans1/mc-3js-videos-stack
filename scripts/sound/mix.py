@@ -229,6 +229,8 @@ PROJECTED_VOICE = LEGACY_TIMELINE = CAM_SEGMENTS = None
 
 @cache
 def _scene_spatial_data():
+    from spatial import camera_requires_scene
+
     cam_keys = []
     placed_data = {}
     cam_rel = CONFIG.get("camTimeline", "src/timeline/cam.json")
@@ -255,7 +257,7 @@ def _scene_spatial_data():
             raw_placed = _read_json(placed_path, placed_rel)
             if isinstance(raw_placed, dict):
                 placed_data = raw_placed
-    return cam_keys, placed_data
+    return cam_keys, placed_data, camera_requires_scene(cam_keys)
 
 
 def _cam_source_time(t_film: float) -> float:
@@ -315,19 +317,31 @@ def _render_scene_samples(request: str):
     return json.loads(payload)
 
 
+def _merge_scene_frame_ranges(ranges):
+    merged = []
+    for first, last in sorted(ranges):
+        if merged and first <= merged[-1][1] + 1:
+            merged[-1][1] = max(merged[-1][1], last)
+        else:
+            merged.append([first, last])
+    return merged
+
+
 def _runtime_spatial_samples(beds, sfx, end, *, include_options=False):
-    from spatial import placed_at
+    from spatial import is_spatial_active, placed_at
 
     pending, required = {}, set()
-    placed_data = None
+    camera_ranges = []
+    camera_required = None
     for row in (*beds, *sfx):
-        spec = row.get("spatial") or {}
-        target = spec.get("target")
-        if not target:
+        spec = row.get("spatial")
+        if not is_spatial_active(spec):
             continue
-        if placed_data is None:
-            _, placed_data = _scene_spatial_data()
-        if placed_at(placed_data, target, 0.0, None) is not None:
+        if camera_required is None:
+            _, placed_data, camera_required = _scene_spatial_data()
+        target = spec.get("target")
+        runtime_target = target and placed_at(placed_data, target, 0.0, None) is None
+        if not runtime_target and not camera_required:
             continue
         if "from" in row:
             start, stop = row["from"], row["to"]
@@ -340,28 +354,29 @@ def _runtime_spatial_samples(beds, sfx, end, *, include_options=False):
         start, stop = max(0.0, start), min(stop, end)
         if stop <= start:
             continue
-        pending.setdefault(target, []).append([math.floor(start * SCENE_SAMPLE_HZ), math.ceil(stop * SCENE_SAMPLE_HZ)])
-        if spec.get("at") is None:
-            required.add(target)
-    if not pending:
+        frames = [math.floor(start * SCENE_SAMPLE_HZ), math.ceil(stop * SCENE_SAMPLE_HZ)]
+        if runtime_target:
+            pending.setdefault(target, []).append(frames)
+            if spec.get("at") is None:
+                required.add(target)
+        else:
+            camera_ranges.append(frames)
+    if not pending and not camera_ranges:
         return {}, {}
 
-    for name, ranges in pending.items():
-        merged = []
-        for first, last in sorted(ranges):
-            if merged and first <= merged[-1][1] + 1:
-                merged[-1][1] = max(merged[-1][1], last)
-            else:
-                merged.append([first, last])
-        pending[name] = merged
-    names = ", ".join(sorted(required or pending))
+    request = {
+        "targets": {name: _merge_scene_frame_ranges(ranges) for name, ranges in pending.items()},
+        "camera": _merge_scene_frame_ranges(camera_ranges),
+    }
     try:
         if not (ROOT / "src/scene.ts").is_file():
             raise RuntimeError("src/scene.ts is missing")
-        samples = _render_scene_samples(json.dumps(pending, ensure_ascii=True, separators=(",", ":")))
+        samples = _render_scene_samples(json.dumps(request, ensure_ascii=True, separators=(",", ":")))
     except (OSError, ValueError, RuntimeError) as e:
-        detail = f"cannot resolve spatial scene targets ({names}): {e}"
-        if required:
+        names = ", ".join(sorted(required or pending))
+        subject = "spatial listener camera" if camera_required else f"spatial scene targets ({names})"
+        detail = f"cannot resolve {subject}: {e}"
+        if required or camera_required:
             raise SystemExit(detail) from e
         print(f"Warning: {detail}; using authored XYZ fallback.", file=sys.stderr)
         return {}, {}
@@ -1127,9 +1142,10 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
                 raw_buf = np.column_stack((raw_buf, raw_buf))
             buf = raw_buf.astype(np.float32)
             if spatial_on:
-                cam_keys, placed_data = _scene_spatial_data()
+                cam_keys, placed_data, camera_required = _scene_spatial_data()
                 track = scene_positions.get(spatial_spec.get("target"))
                 clip_end = min(at + length, end) if length is not None else end
+                use_scene = (camera_required or track is not None) and at < clip_end
                 end_frame = clip_end * SCENE_SAMPLE_HZ
                 nearest_frame = round(end_frame)
                 # Decimal sums such as 0.2 + 0.1 can land just above the cut frame.
@@ -1137,13 +1153,19 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
                     end_frame = nearest_frame
                 last_frame = math.nextafter(end_frame, -math.inf)
 
+                target_samples = track or {}
+
                 def scene_sample(t):
-                    return _interpolate_scene_samples(track, scene_cameras, t, last_frame)
+                    position, camera = _interpolate_scene_samples(target_samples, scene_cameras, t, last_frame)
+                    if camera_required and camera is None:
+                        raise ValueError(f"spatial listener camera is unavailable at {t:.3f}s")
+                    return position, camera
 
                 try:
                     buf = apply_spatial_audio(
                         buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time,
-                        scene_sample_fn=scene_sample if track is not None and at < clip_end else None,
+                        scene_sample_fn=scene_sample if use_scene else None,
+                        require_scene_position=track is not None,
                     )
                 except ValueError as e:
                     raise SystemExit(str(e)) from e

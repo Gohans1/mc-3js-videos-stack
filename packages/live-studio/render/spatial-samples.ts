@@ -6,7 +6,10 @@ import { sceneSpatialCamera, sceneSpatialPosition } from "./spatial-position";
 
 const SAMPLE_RATE = 30;
 const cfg = await config();
-const request: Record<string, [number, number][]> = JSON.parse(cfg.lab.spatial);
+type FrameRange = [number, number];
+const request: { targets: Record<string, FrameRange[]>; camera: FrameRange[] } = JSON.parse(
+  cfg.lab.spatial,
+);
 const gl = canvas() as HTMLCanvasElement;
 [gl.width, gl.height] = sizeOf(cfg.ratio, 320);
 const draw = await buildScene(gl, gl.width, gl.height, true);
@@ -17,7 +20,10 @@ for (const variant of draw.variants ?? []) {
 }
 
 const namesByFrame = new Map<number, Set<string>>();
-for (const [name, ranges] of Object.entries(request)) {
+for (const [first, last] of request.camera) {
+  for (let frame = first; frame <= last; frame++) namesByFrame.set(frame, new Set());
+}
+for (const [name, ranges] of Object.entries(request.targets)) {
   for (const [first, last] of ranges) {
     for (let frame = first; frame <= last; frame++) {
       if (!namesByFrame.has(frame)) namesByFrame.set(frame, new Set());
@@ -27,7 +33,7 @@ for (const [name, ranges] of Object.entries(request)) {
 }
 
 const positions: Record<string, Record<number, [number, number, number]>> = Object.fromEntries(
-  Object.keys(request).map((name) => [name, {}]),
+  Object.keys(request.targets).map((name) => [name, {}]),
 );
 const cameras: Record<number, ReturnType<typeof sceneSpatialCamera>> = {};
 const deadline = performance.now() + 90_000;

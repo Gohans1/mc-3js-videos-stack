@@ -252,14 +252,27 @@ def _catmull_centripetal(
     return (out[0], out[1], out[2])
 
 
+def _inline_vec3(val: Any) -> tuple[float, float, float] | None:
+    fields = ("eye", "at", "p", "pos")
+    points = (val.get(field) for field in fields) if isinstance(val, Mapping) else (val,)
+    for point in points:
+        if isinstance(point, (list, tuple)) and len(point) >= 3:
+            return (float(point[0]), float(point[1]), float(point[2]))
+    return None
+
+
+def camera_requires_scene(keys: Sequence[Mapping]) -> bool:
+    return any(
+        isinstance(point, Mapping) and _inline_vec3(point) is None
+        for key in keys for point in (key.get("p"), key.get("l"))
+    )
+
+
 def _extract_vec3(val: Any, placed_data: Any, t: float) -> tuple[float, float, float]:
-    if isinstance(val, (list, tuple)) and len(val) >= 3:
-        return (float(val[0]), float(val[1]), float(val[2]))
+    point = _inline_vec3(val)
+    if point is not None:
+        return point
     if isinstance(val, Mapping):
-        for k in ("eye", "at", "p", "pos"):
-            inner = val.get(k)
-            if isinstance(inner, (list, tuple)) and len(inner) >= 3:
-                return (float(inner[0]), float(inner[1]), float(inner[2]))
         target = val.get("target") or val.get("object")
         if isinstance(target, str) and placed_data is not None:
             pos = placed_at(placed_data, target, t)
@@ -549,6 +562,7 @@ def apply_spatial_audio(
     source_time_fn: Callable[[float], float] | None = None,
     block_size: int = 128,
     scene_sample_fn: Callable[[float], tuple[Sequence[float] | None, Mapping | None]] | None = None,
+    require_scene_position: bool = True,
 ) -> np.ndarray:
     import numpy as np
     from scipy import signal
@@ -563,7 +577,7 @@ def apply_spatial_audio(
     def sample_at(t_film: float) -> dict[str, float]:
         t_pic = source_time_fn(t_film) if source_time_fn is not None else t_film
         pos, pose = scene_sample_fn(t_film) if scene_sample_fn is not None else (None, None)
-        if scene_sample_fn is not None and pos is None and spec.get("at") is None:
+        if scene_sample_fn is not None and require_scene_position and pos is None and spec.get("at") is None:
             raise ValueError(f"spatial target {spec['target']!r} is unavailable at {t_film:.3f}s")
         src = resolve_source_position(spec, t_pic, placed_data, pos)
         return compute_spatial_params(pose or camera_at(cam_keys, t_pic, placed_data), src, spec)
