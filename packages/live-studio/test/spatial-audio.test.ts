@@ -21,7 +21,7 @@ import { createApi } from "../src/api.mjs";
 import { SOUND_KEYS } from "../src/contract-keys.ts";
 import { ReverbSpec, ShotSpace, SoundTimeline, SpatialSpec } from "../src/contract.ts";
 import { mapTimeline } from "../src/timing-data.mjs";
-import { compileTiming } from "../src/timing.mjs";
+import { compileTiming, frameAt } from "../src/timing.mjs";
 
 describe("IR synthesizer (ir.ts)", () => {
   test("produces identical deterministic 48kHz stereo buffers across repeated calls", () => {
@@ -212,24 +212,32 @@ describe("3D spatial audio math (spatial.ts)", () => {
     expect(isSpatialActive({ refDistance: 2 })).toBe(false);
   });
 
-  test("mapTimeline('sound') remaps acoustic spaces through timing clock cleanly", () => {
-    const clock = compileTiming({ speeds: [{ from: 0, to: 4, rate: 2 }] }, 6);
+  test("acoustic spaces stay in source coordinates across reordered picture sections", () => {
+    const clock = compileTiming(
+      {
+        main: [
+          { id: "b", kind: "clip", sourceFrom: 4, sourceTo: 8 },
+          { id: "g", kind: "gap", duration: 2 },
+          { id: "a", kind: "clip", sourceFrom: 0, sourceTo: 4 },
+        ],
+      },
+      8,
+    );
     const sourceAudio = {
       tracks: [],
       beds: [],
       sfx: [],
-      spaces: [
-        { from: 0, to: 4, space: "hall", wet: 0.3 },
-        { from: 4, to: 6, space: "cave", wet: 0.5 },
-      ],
+      spaces: [{ from: 2, to: 6, space: "hall", wet: 0.3 }],
     };
-    const outAudio = mapTimeline("sound", sourceAudio, clock, false);
-    expect(outAudio.spaces.map(({ __timing, ...rest }: any) => rest)).toEqual([
-      { from: 0, to: 2, space: "hall", wet: 0.3 },
-      { from: 2, to: 4, space: "cave", wet: 0.5 },
-    ]);
-    const restored = mapTimeline("sound", outAudio, clock, true, sourceAudio);
-    expect(restored.spaces).toEqual(sourceAudio.spaces);
+    const output = mapTimeline("sound", sourceAudio, clock);
+    for (const time of [1, 9]) {
+      expect(
+        resolveClipReverb(undefined, frameAt(clock, time), output.spaces, undefined)?.space,
+      ).toBe("hall");
+    }
+    expect(mapTimeline("sound", output, clock, true, sourceAudio).spaces).toEqual(
+      sourceAudio.spaces,
+    );
   });
 });
 
@@ -245,6 +253,23 @@ describe("J-Cut / L-Cut helpers (jlcut.ts)", () => {
     expect(lCut.cuts).toEqual([9]);
     expect(lCut.lTrail?.cut).toBe(9);
     expect(lCut.lTrail?.amount).toBeCloseTo(0.8, 6);
+  });
+
+  test("quick J/L cuts require an actual reachable picture cut", () => {
+    const bounds = {
+      from: 5,
+      to: 6,
+      prevEnd: 0,
+      nextStart: 10,
+      minFrom: 1,
+      maxTo: 10,
+      minLength: 1 / 30,
+      cutTimes: [2, 9],
+    };
+    expect(computeJCutStart(bounds).changed).toBe(false);
+    expect(computeLCutEnd(bounds).changed).toBe(false);
+    expect(computeJCutStart({ ...bounds, cutTimes: [4.9], minFrom: 4.95 }).changed).toBe(false);
+    expect(computeLCutEnd({ ...bounds, cutTimes: [6.1], maxTo: 6.05 }).changed).toBe(false);
   });
 
   test("computeJCutStart and computeLCutEnd clamp cleanly against neighbours and source room", () => {
@@ -813,6 +838,9 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(mod.sceneSpatial.sceneCameraPoseAt(1.0, { offline: true }).p[0]).toBeCloseTo(1, 4);
         // Placed object at t=0.5 matches mc-assets/src/placed-math.ts poseAt arriving-key ease ("inOut")
         const placedAtHalf = poseAt(mod.filmStub.EDIT.objects.hero.keys, 0.5);
+        mod.state.S.tools.objects = new Map([[mod.state.S.tools.camera, "preview-only"]]);
+        expect(mod.sceneSpatial.availableSpatialTargets()).toEqual(["hero"]);
+        expect(mod.sceneSpatial.sceneTargetAt("preview-only", 1.0)).toBeNull();
         const sceneAtHalf = mod.sceneSpatial.sceneTargetAt("hero", 1.0);
         expect(sceneAtHalf?.[0]).toBeCloseTo(placedAtHalf.at.x, 5);
         mod.store.set({ timing: false });
@@ -830,7 +858,12 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(wetZeroHtml).toContain("Pre-delay");
 
         // Verify J-Cut respects SHOTS_OUT cut times, looping beds, rate!=1, locked tracks & Undo/Redo
-        mod.filmMeta.syncFilmMeta({ SHOTS: [{ t: 0 }, { t: 6 }], SHOTS_OUT: [{ t: 0 }, { t: 4 }] });
+        mod.filmMeta.setFilmSource({
+          DURATION: 12,
+          SHOTS: [{ t: 0 }, { t: 6 }, { t: 9 }],
+          SHOTS_OUT: [{ t: 0 }, { t: 4 }, { t: 8 }],
+          applyEdit() {},
+        });
         const ref = { list: "sfx" as const, i: 0 };
         expect(mod.sound.lanes.sfx[0].at).toBe(4);
         const cutInfo = mod.sound.clipCutBounds(ref, 0.75);

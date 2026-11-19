@@ -1033,7 +1033,7 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         duck_db = float(b["duck"]) if b.get("duck") is not None else 0.0
         duck = duck_expr(b["from"], b["to"], duck_db) if duck_db and (A.get("narration") or has_voice) else None
         mid_t = 0.5 * (float(b["from"]) + float(b["to"]))
-        rev = resolve_clip_reverb(b.get("reverb"), mid_t, spaces, film_reverb)
+        rev = resolve_clip_reverb(b.get("reverb"), _cam_source_time(mid_t), spaces, film_reverb)
         add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])], reverb_spec=rev, spatial_spec=b.get("spatial"))
     for s in sfx:
         start_at = float(s.get("start") or 0)
@@ -1042,7 +1042,7 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         s_len = float(s["length"]) if s.get("length") is not None else None
         eff_len = s_len if s_len is not None else max(0.0, (seconds(s["name"]) - start_at) / float(s.get("rate") or 1.0))
         mid_t = float(s["at"]) + 0.5 * eff_len
-        rev = resolve_clip_reverb(s.get("reverb"), mid_t, spaces, film_reverb)
+        rev = resolve_clip_reverb(s.get("reverb"), _cam_source_time(mid_t), spaces, film_reverb)
         add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, s_len, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])], reverb_spec=rev, spatial_spec=s.get("spatial"))
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])

@@ -785,7 +785,9 @@ export const applyJCut = (c: ClipRef, leadSec = DEFAULT_JL_CUT_SEC) => {
     say(
       res?.blockedBy === "source"
         ? "Cannot lead in further: clip is already at audio start (trimIn = 0)"
-        : "Cannot lead in further: blocked by previous clip on this track",
+        : res?.blockedBy === "neighbour"
+          ? "Cannot lead in further: blocked by previous clip on this track"
+          : "Align the clip start with a picture cut to lead in",
     );
     return;
   }
@@ -801,7 +803,9 @@ export const applyLCut = (c: ClipRef, trailSec = DEFAULT_JL_CUT_SEC) => {
     say(
       res?.blockedBy === "source"
         ? "Cannot trail out further: clip reached audio end (trimOut = duration)"
-        : "Cannot trail out further: blocked by next clip on this track",
+        : res?.blockedBy === "neighbour"
+          ? "Cannot trail out further: blocked by next clip on this track"
+          : "Align the clip end with a picture cut to trail out",
     );
     return;
   }

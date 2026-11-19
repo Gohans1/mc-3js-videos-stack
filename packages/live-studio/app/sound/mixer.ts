@@ -10,6 +10,7 @@ import { getFile } from "../core/net";
 import { S, wake } from "../core/state";
 import { get, say } from "../core/store";
 import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
+import { ATTACK, RELEASE } from "./brickwall";
 import brickwall from "./brickwall.worklet.ts?worker&url";
 import {
   addModule,
@@ -32,6 +33,7 @@ import {
   normalizeStereoIr,
   resolveClipReverb,
   type ResolvedReverb,
+  SPACE_PRESETS,
 } from "./ir";
 import { loopSources } from "./loop";
 import {
@@ -43,6 +45,7 @@ import {
   processSpec,
   retainProcessed,
 } from "./processed";
+import { pictureTimeAt } from "./scene-spatial";
 import { type ClipRef } from "./slice";
 import type { Lanes, LibraryItem } from "./sound";
 import {
@@ -466,7 +469,12 @@ const clips = (l: Lanes, all = false): Clip[] => {
         duck: narrated ? ((b.duck as number | undefined) ?? 0) : 0,
         pan: b.pan ?? 0,
         filters: [...((b.filters as string[]) ?? []), ...(trackEq.get(b.track ?? "") ?? [])],
-        reverb: resolveClipReverb(b.reverb, 0.5 * (b.from + b.to), l.spaces, l.reverb),
+        reverb: resolveClipReverb(
+          b.reverb,
+          pictureTimeAt(0.5 * (b.from + b.to)),
+          l.spaces,
+          l.reverb,
+        ),
         spatial: isSpatialActive(b.spatial) ? b.spatial : undefined,
       });
   });
@@ -495,7 +503,7 @@ const clips = (l: Lanes, all = false): Clip[] => {
       duck: 0,
       pan: s.pan ?? 0,
       filters: [...((s.filters as string[]) ?? []), ...(trackEq.get(s.track ?? "") ?? [])],
-      reverb: resolveClipReverb(s.reverb, 0.5 * (s.at + t1), l.spaces, l.reverb),
+      reverb: resolveClipReverb(s.reverb, pictureTimeAt(0.5 * (s.at + t1)), l.spaces, l.reverb),
       spatial: isSpatialActive(s.spatial) ? s.spatial : undefined,
     });
   });
@@ -965,30 +973,79 @@ export const setLive = (live_: boolean, src: Source) => {
   }
 };
 
+const SPAN_SAMPLE_RATE = 48000;
+
+const renderLanesSpan = async (
+  l: Lanes,
+  from: number,
+  to: number,
+  frames: number,
+  voice?: AudioBuffer | null,
+): Promise<AudioBuffer | null> => {
+  await preloadSources(l);
+  const all = clips(l).filter((c) => c.t0 < to);
+  const loaded = await Promise.all(all.map(loadClip));
+  if (loaded.some((s) => !s)) return null;
+
+  const rate = SPAN_SAMPLE_RATE;
+  const preceding = all.filter((c) => c.t0 < from && c.reverb);
+  const decoder = preceding.some((c) => c.reverb && !isPresetSpace(c.reverb.space))
+    ? new OfflineAudioContext(2, 1, rate)
+    : null;
+  if (decoder) await preloadReverbIrs(l, decoder);
+  const customIrs = decoder ? irCtxBuffers.get(decoder) : undefined;
+
+  // The convolution and limiter need the input that can still affect the first exported sample.
+  let start = from;
+  for (const { t0, t1, reverb } of preceding) {
+    if (!reverb) continue;
+    const { space, preDelayMs } = reverb;
+    const response =
+      isPresetSpace(space) && space !== "dry"
+        ? SPACE_PRESETS[space].durationSec
+        : customIrs?.get(space)?.duration;
+    if (!response) continue;
+    const history = response + preDelayMs / 1000 + ATTACK + RELEASE;
+    if (t1 + history > from) start = Math.min(start, Math.max(t0, from - history));
+  }
+  const preroll = Math.ceil((from - start) * rate);
+  start = from - preroll / rate;
+  const ctx = new OfflineAudioContext(2, frames + preroll, rate);
+  if (customIrs) irCtxBuffers.set(ctx, customIrs);
+  const st = stage(ctx, ctx.destination);
+  st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
+  const voiceStart = Math.max(0, start);
+  if (voice && voiceStart < voice.duration) {
+    const v = ctx.createBufferSource();
+    v.buffer = voice;
+    v.connect(st.bus);
+    v.start(0, voiceStart, Math.min((frames + preroll) / rate, voice.duration - voiceStart));
+  }
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t - start,
+    when: (t: number) => Math.max(0, t - start),
+  };
+  all.forEach((c, i) => {
+    const sample = loaded[i];
+    if (sample && c.t1 > start) play(ctx, st.bus, c, sample, Math.max(start, c.t0), w, true);
+  });
+  const rendered = await ctx.startRendering();
+  if (!preroll) return rendered;
+  const out = ctx.createBuffer(2, frames, rate);
+  for (let c = 0; c < 2; c++)
+    out.getChannelData(c).set(rendered.getChannelData(c).subarray(preroll, preroll + frames));
+  return out;
+};
+
 // The lanes from..to as heard here, rendered offline: RMS per half second and the peak, to set against mix.py's own render
 window.__lanesRender = async (from: number, to: number) => {
   const l = source?.lanes();
-  if (!l) return null;
-  await preloadSources(l);
-  const all = clips(l),
-    loaded = await Promise.all(all.map(loadClip));
-  if (loaded.some((s) => !s)) return null;
-  const rate = 48000,
-    ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate),
-    st = stage(ctx, ctx.destination);
-  st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
-  const w = {
-    speed: 1,
-    ctxAt: (t: number) => t - from,
-    when: (t: number) => Math.max(0, t - from),
-  };
-  all.forEach((c, i) => {
-    const s = loaded[i];
-    if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w, true);
-  });
-  const out = await ctx.startRendering(),
-    hop = rate / 2,
+  if (!l || to <= from) return null;
+  const out = await renderLanesSpan(l, from, to, Math.ceil((to - from) * SPAN_SAMPLE_RATE));
+  if (!out) return null;
+  const hop = SPAN_SAMPLE_RATE / 2,
     rms: number[] = [];
   let peak = 0;
   for (let i = 0; i < out.length; i += hop) {
@@ -1045,36 +1102,12 @@ export const renderFilm = async (
 export const renderAudioSpan = async (from: number, to: number): Promise<AudioBuffer | null> => {
   const dur = Math.max(0, to - from);
   if (dur <= 1e-3) return null;
-  const rate = 48000,
-    frames = Math.max(1, Math.round(dur * rate)),
+  const frames = Math.max(1, Math.round(dur * SPAN_SAMPLE_RATE)),
     voice = await mixBuffer(),
     l = source?.lanes();
   if (on && l) {
-    await preloadSources(l);
-    const all = clips(l),
-      loaded = await Promise.all(all.map(loadClip));
-    if (!loaded.some((s) => !s)) {
-      const ctx = new OfflineAudioContext(2, frames, rate),
-        st = stage(ctx, ctx.destination);
-      st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-      await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
-      if (voice && from < voice.duration) {
-        const v = ctx.createBufferSource();
-        v.buffer = voice;
-        v.connect(st.bus);
-        v.start(0, Math.max(0, from), Math.min(dur, voice.duration - Math.max(0, from)));
-      }
-      const w = {
-        speed: 1,
-        ctxAt: (t: number) => t - from,
-        when: (t: number) => Math.max(0, t - from),
-      };
-      all.forEach((c, i) => {
-        const s = loaded[i];
-        if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w, true);
-      });
-      return ctx.startRendering();
-    }
+    const rendered = await renderLanesSpan(l, from, to, frames, voice);
+    if (rendered) return rendered;
   }
   if (!voice) return null;
   const startSample = Math.max(0, Math.floor(from * voice.sampleRate)),

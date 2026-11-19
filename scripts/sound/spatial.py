@@ -368,9 +368,12 @@ def camera_at(keys: Sequence[Mapping], t: float, placed_data: Any = None) -> dic
     return {"p": pos, "l": look, "roll": r1 + (r2 - r1) * u_roll}
 
 
-def placed_at(placed_data: Any, target: str, t: float) -> tuple[float, float, float]:
+def placed_at(
+    placed_data: Any, target: str, t: float,
+    fallback: tuple[float, float, float] = (0.0, 0.0, 0.0)
+) -> tuple[float, float, float]:
     if not placed_data or not target:
-        return (0.0, 0.0, 0.0)
+        return fallback
     entry = None
     if isinstance(placed_data, Mapping):
         if target in placed_data:
@@ -378,7 +381,7 @@ def placed_at(placed_data: Any, target: str, t: float) -> tuple[float, float, fl
         elif isinstance(placed_data.get("objects"), Mapping) and target in placed_data["objects"]:
             entry = placed_data["objects"][target]
     if entry is None:
-        return (0.0, 0.0, 0.0)
+        return fallback
 
     if isinstance(entry, (list, tuple)):
         if len(entry) == 3 and all(isinstance(v, (int, float)) for v in entry):
@@ -392,12 +395,12 @@ def placed_at(placed_data: Any, target: str, t: float) -> tuple[float, float, fl
                 v = entry.get(k)
                 if isinstance(v, (list, tuple)) and len(v) >= 3:
                     return (float(v[0]), float(v[1]), float(v[2]))
-            return (0.0, 0.0, 0.0)
+            return fallback
     else:
-        return (0.0, 0.0, 0.0)
+        return fallback
 
     if not keys:
-        return (0.0, 0.0, 0.0)
+        return fallback
     ordered = sorted(keys, key=lambda k: float(k.get("t", 0.0)))
 
     def key_vec(k: Mapping) -> tuple[float, float, float]:
@@ -431,12 +434,10 @@ def resolve_source_position(
     spec: Mapping, t: float, placed_data: Any = None
 ) -> tuple[float, float, float]:
     target = spec.get("target")
-    base = (0.0, 0.0, 0.0)
+    at = spec.get("at")
+    base = (float(at[0]), float(at[1]), float(at[2])) if at is not None else (0.0, 0.0, 0.0)
     if isinstance(target, str) and target:
-        base = placed_at(placed_data, target, t)
-    elif spec.get("at") is not None:
-        at = spec["at"]
-        base = (float(at[0]), float(at[1]), float(at[2]))
+        base = placed_at(placed_data, target, t, base)
     off = spec.get("offset")
     if isinstance(off, (list, tuple)) and len(off) >= 3:
         return (base[0] + float(off[0]), base[1] + float(off[1]), base[2] + float(off[2]))

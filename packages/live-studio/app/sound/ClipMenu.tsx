@@ -93,7 +93,9 @@ export function ClipMenu({ bind }: { bind: Bind }) {
                     ? `-${cutInfo.jCut.delta}s`
                     : cutInfo?.jCut.blockedBy === "source"
                       ? "trimIn=0"
-                      : "blocked"}
+                      : cutInfo?.jCut.blockedBy === "cut"
+                        ? "no cut"
+                        : "blocked"}
               </ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem
@@ -108,7 +110,9 @@ export function ClipMenu({ bind }: { bind: Bind }) {
                     ? `+${cutInfo.lCut.delta}s`
                     : cutInfo?.lCut.blockedBy === "source"
                       ? "at end"
-                      : "blocked"}
+                      : cutInfo?.lCut.blockedBy === "cut"
+                        ? "no cut"
+                        : "blocked"}
               </ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSeparator />

@@ -46,7 +46,6 @@ export const setTiming = (data, sourceDuration = timingClock.sourceDuration) => 
     layerClock = layerClocks.text;
     audioClock = {
       ...layerClocks.sfx,
-      spacesClock: () => layerClocks.cam ?? timingClock,
       forClip: (clip, list, data) =>
         layerClocks[
           clip._narration || clip.name === data.narration

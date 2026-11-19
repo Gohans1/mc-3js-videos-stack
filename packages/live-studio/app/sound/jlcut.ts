@@ -57,20 +57,20 @@ export interface CutAdjustBounds {
 export interface CutAdjustResult {
   target: number;
   changed: boolean;
-  blockedBy?: "neighbour" | "source";
+  blockedBy?: "neighbour" | "source" | "cut";
 }
 
 export function computeJCutStart(bounds: CutAdjustBounds): CutAdjustResult {
   const lead = bounds.leadSec ?? DEFAULT_JL_CUT_SEC;
-  // Find nearest cut at or just ahead/behind the clip's left edge so a clip aligned with a cut pulls leadSec before it.
   const nearCut = bounds.cutTimes.find((t) => Math.abs(t - bounds.from) <= 0.12);
-  const anchor = nearCut !== undefined ? Math.min(bounds.from, nearCut) : bounds.from;
-  const desired = anchor - lead;
+  if (nearCut === undefined || nearCut >= bounds.to - EPS)
+    return { target: bounds.from, changed: false, blockedBy: "cut" };
+  const desired = nearCut - lead;
   const floorByNeighbour = Math.max(0, bounds.prevEnd);
   const floorBySource = Math.max(0, bounds.minFrom);
   const hardFloor = Math.max(floorByNeighbour, floorBySource);
   const clamped = Math.min(bounds.to - bounds.minLength, Math.max(hardFloor, desired));
-  if (bounds.from - clamped <= EPS) {
+  if (bounds.from - clamped <= EPS || clamped >= nearCut - EPS) {
     return {
       target: bounds.from,
       changed: false,
@@ -83,13 +83,14 @@ export function computeJCutStart(bounds: CutAdjustBounds): CutAdjustResult {
 export function computeLCutEnd(bounds: CutAdjustBounds): CutAdjustResult {
   const trail = bounds.trailSec ?? DEFAULT_JL_CUT_SEC;
   const nearCut = bounds.cutTimes.find((t) => Math.abs(t - bounds.to) <= 0.12);
-  const anchor = nearCut !== undefined ? Math.max(bounds.to, nearCut) : bounds.to;
-  const desired = anchor + trail;
+  if (nearCut === undefined || nearCut <= bounds.from + EPS)
+    return { target: bounds.to, changed: false, blockedBy: "cut" };
+  const desired = nearCut + trail;
   const ceilByNeighbour = bounds.nextStart;
   const ceilBySource = bounds.maxTo;
   const hardCeil = Math.min(ceilByNeighbour, ceilBySource);
   const clamped = Math.max(bounds.from + bounds.minLength, Math.min(hardCeil, desired));
-  if (clamped - bounds.to <= EPS) {
+  if (clamped - bounds.to <= EPS || clamped <= nearCut + EPS) {
     return {
       target: bounds.to,
       changed: false,

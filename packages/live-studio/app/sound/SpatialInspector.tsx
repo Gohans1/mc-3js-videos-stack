@@ -11,15 +11,20 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { focusTargetNames } from "../camera/cam";
+import { timingClock } from "../../src/timing-state.mjs";
 import { FieldRow, Reset, Section, Segmented, SliderRow, ValueBox } from "../components/inspector";
 import { Tip } from "../components/Tip";
-import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
+import { DURATION, SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { FPS, r3 } from "../core/time";
 import { useFrame } from "../core/useFrame";
 import { defaultReverbParams, isPresetSpace, resolveClipReverb, REVERB_SPACES } from "./ir";
-import { availableSpatialTargets, sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
+import {
+  availableSpatialTargets,
+  pictureTimeAt,
+  sceneCameraPoseAt,
+  sceneTargetAt,
+} from "./scene-spatial";
 import type { ClipRef } from "./slice";
 import {
   type Bed,
@@ -64,7 +69,9 @@ const currentShotWindow = (t: number): [number, number] | null => {
   }
   const from = SHOTS[idx].t;
   const to =
-    idx + 1 < SHOTS.length ? SHOTS[idx + 1].t : Math.max(from + 1 / FPS, DURATION || from + 1);
+    idx + 1 < SHOTS.length
+      ? SHOTS[idx + 1].t
+      : Math.max(from + 1 / FPS, timingClock.sourceDuration || DURATION || from + 1);
   return [from, to];
 };
 
@@ -79,7 +86,7 @@ export function ReverbSection({
   from: number;
   to: number;
 }) {
-  const mid = 0.5 * (from + to);
+  const mid = pictureTimeAt(0.5 * (from + to));
   const inherited = resolveClipReverb(undefined, mid, lanes?.spaces, lanes?.reverb);
   const clipSpec = c.reverb;
   const isCustom = Boolean(clipSpec && !isPresetSpace(clipSpec.space));
@@ -316,10 +323,10 @@ export function ReverbSection({
 function SpatialReadout({ spec, mode }: { spec: SpatialSpec; mode: "world" | "target" }) {
   useFrame();
   const t = S.t;
-  const at = spec.at ?? [0, 1.6, 0];
+  const target = mode === "target" && spec.target ? sceneTargetAt(spec.target, t) : null;
+  const rawSrc = target ?? spec.at;
+  if (!rawSrc) return <p className="text-muted-foreground text-xs">Target unavailable</p>;
   const cam = sceneCameraPoseAt(t);
-  const rawSrc =
-    mode === "target" && spec.target ? (sceneTargetAt(spec.target, t) ?? [0, 0, 0]) : at;
   const sp = computeSpatialParams(cam, offsetPosition(rawSrc, spec.offset), spec);
   const panLabel =
     Math.abs(sp.pan) < 0.03
@@ -338,7 +345,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
   const spec = c.spatial ?? {};
   const mode: "off" | "world" | "target" = !active ? "off" : spec.target ? "target" : "world";
 
-  const targets = mode === "target" ? availableSpatialTargets(focusTargetNames()) : [];
+  const targets = availableSpatialTargets();
   const [customRequested, setCustomRequested] = useState(false);
   const [targetDraft, setTargetDraft] = useState<string | null>(null);
   const dragSnapRef = useRef<string | null>(null);
@@ -380,13 +387,14 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
       });
       return;
     }
-    const avail = availableSpatialTargets(focusTargetNames());
-    const first = spec.target ?? avail[0] ?? "steve";
-    setCustomRequested(!avail.includes(first));
+    const first = spec.target ?? targets[0];
+    if (!first) return;
+    setCustomRequested(!targets.includes(first));
     setTargetDraft(null);
     setClipSpatial(clip, {
       ...base,
       target: first,
+      at: spec.at,
       offset: spec.offset,
     });
   };
@@ -469,7 +477,9 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
         items={[
           { id: "off", title: "Off" },
           { id: "world", title: "World XYZ" },
-          { id: "target", title: "Target" },
+          ...(mode === "target" || targets.length
+            ? [{ id: "target" as const, title: "Target" }]
+            : []),
         ]}
       />
 
@@ -507,7 +517,6 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
                 setTargetDraft(null);
                 patchSpatial((s) => {
                   s.target = v;
-                  delete s.at;
                 }, true);
               }}
             >
@@ -527,7 +536,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
             <FieldRow label="Name">
               <Input
                 value={shownTarget}
-                placeholder="steve"
+                placeholder="Placed object name"
                 aria-label="Custom target name"
                 className="h-8"
                 onChange={(e) => setTargetDraft(e.target.value)}
@@ -536,7 +545,6 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
                   if (e.key === "Enter" && shownTarget.trim()) {
                     patchSpatial((s) => {
                       s.target = shownTarget.trim();
-                      delete s.at;
                     }, true);
                     setTargetDraft(null);
                     e.currentTarget.blur();
@@ -546,7 +554,6 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
                   if (shownTarget.trim()) {
                     patchSpatial((s) => {
                       s.target = shownTarget.trim();
-                      delete s.at;
                     }, true);
                   }
                   setTargetDraft(null);

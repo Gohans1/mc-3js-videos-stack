@@ -55,6 +55,10 @@ console.log(JSON.stringify(out));
                 self.assertAlmostEqual(float(py_l[i]), ts_info["samplesL"][k], places=5, msg=f"{space} L[{i}]")
                 self.assertAlmostEqual(float(py_r[i]), ts_info["samplesR"][k], places=5, msg=f"{space} R[{i}]")
 
+    def test_missing_spatial_target_uses_authored_world_fallback(self) -> None:
+        spec = {"target": "unavailable", "at": [10, 1, 0], "offset": [1, 2, 3]}
+        self.assertEqual(spatial.resolve_source_position(spec, 1.0, {}), (11.0, 3.0, 3.0))
+
     def test_spatial_params_parity_with_typescript(self) -> None:
         cases = [
             (

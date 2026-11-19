@@ -18,54 +18,6 @@ const soundSpan = (clock, a, b) => {
   return { from, to: clock.outputAt(b, "before"), torn: false };
 };
 
-const mapSoundSpaces = (spaces, clock, inverse, previousSpaces) => {
-  if (!Array.isArray(spaces)) return spaces;
-  const camClk = clock.spacesClock?.() ?? clock;
-  if (inverse) {
-    const restored = spaces.map((s) => {
-      const meta = s.__timing;
-      const from =
-        meta && Math.abs(s.from - meta.outputFrom) < 1e-9
-          ? meta.sourceFrom
-          : camClk.sourceAt(s.from, "after");
-      const to =
-        s.to !== undefined
-          ? meta && meta.outputTo !== undefined && Math.abs(s.to - meta.outputTo) < 1e-9
-            ? meta.sourceTo
-            : camClk.sourceAt(s.to, "before")
-          : undefined;
-      const next = { ...s, from, ...(to !== undefined ? { to } : {}) };
-      delete next.__timing;
-      return next;
-    });
-    if (Array.isArray(previousSpaces)) {
-      for (const prev of previousSpaces) {
-        if (
-          prev.to !== undefined &&
-          camClk.outputAt(prev.to, "before") <= camClk.outputAt(prev.from, "after") + 1e-9
-        ) {
-          restored.push(structuredClone(prev));
-        }
-      }
-      restored.sort((a, b) => a.from - b.from);
-    }
-    return restored;
-  }
-  return spaces
-    .map((s) => {
-      const from = camClk.outputAt(s.from, "after");
-      const to = s.to !== undefined ? camClk.outputAt(s.to, "before") : undefined;
-      if (to !== undefined && to <= from + 1e-9) return null;
-      return {
-        ...s,
-        from,
-        ...(to !== undefined ? { to } : {}),
-        __timing: { sourceFrom: s.from, sourceTo: s.to, outputFrom: from, outputTo: to },
-      };
-    })
-    .filter(Boolean);
-};
-
 export const mapTimeline = (
   name,
   data,
@@ -89,8 +41,6 @@ export const mapTimeline = (
             durations,
           )[list][0],
       );
-    if (Array.isArray(result.spaces))
-      result.spaces = mapSoundSpaces(result.spaces, clock, inverse, previous?.spaces);
     return result;
   }
   const out = structuredClone(data),
@@ -339,8 +289,6 @@ export const mapTimeline = (
           delete c.length;
       }
   }
-  if (name === "sound" && Array.isArray(out.spaces))
-    out.spaces = mapSoundSpaces(out.spaces, clock, inverse, previous?.spaces);
   return out;
 };
 

@@ -2,7 +2,7 @@ import { cameraAt, type FocusTargetSpec } from "film-stage/camera";
 import { easeOf } from "film-stage/camera-meta";
 import { EDIT } from "film/edit";
 
-import { clockForTimeline } from "../../src/timing-state.mjs";
+import { timingClock } from "../../src/timing-state.mjs";
 import { frameAt } from "../../src/timing.mjs";
 import { S } from "../core/state";
 import { get } from "../core/store";
@@ -89,49 +89,15 @@ const extractPoint = (val: unknown, sourceTime: number): Vec3 => {
 export const pictureTimeAt = (filmTime: number): number => {
   if (!get().timing) return filmTime;
   try {
-    return frameAt(clockForTimeline("cam"), filmTime);
+    return frameAt(timingClock, filmTime);
   } catch {
     return filmTime;
   }
 };
 
-const matrixWorldPos = (obj: unknown): Vec3 | null => {
-  const m = (obj as { matrixWorld?: { elements?: ArrayLike<number> } } | null)?.matrixWorld
-    ?.elements;
-  if (!m || m.length < 15) return null;
-  return [m[12], m[13], m[14]];
-};
-
-export const sceneTargetAt = (
-  name: string,
-  filmTime: number,
-  opts?: { offline?: boolean },
-): Vec3 | null => {
-  if (!name) return null;
-  const t = pictureTimeAt(filmTime);
-  const placed = getPlaced()[name];
-  if (placed?.keys?.length) {
-    return interpolatePlaced(placed.keys, t);
-  }
-  if (!opts?.offline && Math.abs(filmTime - S.t) < 0.08 && S.tools) {
-    if (S.tools.bones?.[name]) {
-      const p = matrixWorldPos(S.tools.bones[name]);
-      if (p) return p;
-    }
-    if (S.tools.objects) {
-      for (const [obj, label] of S.tools.objects) {
-        if (label === name) {
-          const p = matrixWorldPos(obj);
-          if (p) return p;
-        }
-        if (name.startsWith(`${label}.`) && S.tools.bones) {
-          const p = matrixWorldPos(S.tools.bones[name.slice(label.length + 1)]);
-          if (p) return p;
-        }
-      }
-    }
-  }
-  return null;
+export const sceneTargetAt = (name: string, filmTime: number): Vec3 | null => {
+  const keys = getPlaced()[name]?.keys;
+  return keys?.length ? interpolatePlaced(keys, pictureTimeAt(filmTime)) : null;
 };
 
 export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }): CameraPose => {
@@ -176,19 +142,5 @@ export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }
   return { p: [0, 1.6, 5], l: [0, 1.6, 0], roll: 0 };
 };
 
-export const availableSpatialTargets = (extraNames: readonly string[] = []): string[] => {
-  const names = new Set<string>(Object.keys(getPlaced()));
-  for (const name of extraNames) {
-    if (name && name !== "cam") names.add(name);
-  }
-  if (S.tools?.objects) {
-    for (const [, label] of S.tools.objects) {
-      if (label && label !== "cam") names.add(label);
-    }
-  }
-  for (const k of getCamKeys()) {
-    const foc = k.focus as FocusTargetSpec | undefined;
-    if (typeof foc === "string" && foc.trim()) names.add(foc.trim());
-  }
-  return [...names];
-};
+export const availableSpatialTargets = (): string[] =>
+  Object.entries(getPlaced()).flatMap(([name, entry]) => (entry?.keys?.length ? [name] : []));
