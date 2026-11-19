@@ -42,7 +42,8 @@ const median = (xs) => {
 };
 
 const lerp = (a, b, u) => a + (b - a) * u;
-const lerpVec3 = (a, b, u) => [lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)];
+const lerpVec3 = (a, b, u) =>
+  isVec3(a) && isVec3(b) ? [lerp(a[0], b[0], u), lerp(a[1], b[1], u), lerp(a[2], b[2], u)] : null;
 
 export function viewVectorAngleDeg(p1, l1, p2, l2) {
   if (!isVec3(p1) || !isVec3(l1) || !isVec3(p2) || !isVec3(l2)) return 0;
@@ -129,10 +130,10 @@ function sampleTimelinePoints(keys, { from, to, aspect, defaultFov, sampleRate, 
   for (let i = 0; i < keys.length - 1; i++) {
     const a = keys[i],
       b = keys[i + 1];
-    if (b.cut) continue;
+    if (!a || !b || b.cut) continue;
     const s0 = Math.max(a.t, minT),
       s1 = Math.min(b.t, maxT);
-    if (s1 <= s0 + 1e-6) continue;
+    if (!Number.isFinite(s0) || !Number.isFinite(s1) || s1 <= s0 + 1e-6) continue;
     const segKeys = spanSegs[i] ?? keys;
     const nextIsEqualCut = Boolean(keys[i + 2]?.cut && Math.abs(keys[i + 2].t - b.t) < 1e-6);
     const f0 = resolveKeyFov(keys, i, aspect, defaultFov);
@@ -474,7 +475,7 @@ function rotStepDeg(a, b) {
 
 const hasMotionField = (row) =>
   Boolean(
-    posOf(row) ||
+    isVec3(posOf(row)) ||
     typeof row?.yaw === "number" ||
     typeof row?.pitch === "number" ||
     typeof row?.roll === "number" ||

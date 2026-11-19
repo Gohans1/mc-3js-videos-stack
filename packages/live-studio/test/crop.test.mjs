@@ -8,6 +8,7 @@ import { computeCropView, parseCropRect, withCropViewOffset } from "../src/crop.
 test("parseCropRect validates normalized 0..1 rectangles and rejects invalid bounds", () => {
   assert.deepEqual(parseCropRect("0.25, 0.25, 0.5, 0.5"), { x: 0.25, y: 0.25, w: 0.5, h: 0.5 });
   assert.throws(() => parseCropRect("0.25,0.25,0.5"), /4 numbers/);
+  assert.throws(() => parseCropRect("0.25,,0.5,0.5"), /4 numbers/);
   assert.throws(() => parseCropRect("-0.1,0,0.5,0.5"), /x/);
   assert.throws(() => parseCropRect("0.8,0,0.5,0.5"), /within 0\.\.1/);
   assert.throws(() => parseCropRect("0,0,0,0.5"), /w/);

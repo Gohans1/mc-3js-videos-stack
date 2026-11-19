@@ -151,8 +151,8 @@ function candidatePythons(): string[][] {
     }
   };
 
-  const env = process.env.PYTHON || process.env.CINETIC_PYTHON;
-  if (env) pushCmd([env]);
+  if (process.env.PYTHON) pushCmd([process.env.PYTHON]);
+  if (process.env.CINETIC_PYTHON) pushCmd([process.env.CINETIC_PYTHON]);
 
   const venvRoots = [
     process.env.VIRTUAL_ENV,
@@ -393,6 +393,38 @@ function analyzeFilmMotion(opts: {
     };
   }
   const camKeys = (Array.isArray(parsed) ? parsed : objKeys) as CamTimelineKey[];
+  const isVec3 = (v: unknown): v is [number, number, number] =>
+    Array.isArray(v) &&
+    v.length === 3 &&
+    v.every((n) => typeof n === "number" && Number.isFinite(n));
+  for (let idx = 0; idx < camKeys.length; idx++) {
+    const k = camKeys[idx] as unknown;
+    if (!k || typeof k !== "object" || Array.isArray(k)) {
+      return {
+        camFile: camPath,
+        error: `invalid camera timeline ${camPath}: key ${idx} must be an object`,
+      };
+    }
+    const rec = k as Record<string, unknown>;
+    if (typeof rec.t !== "number" || !Number.isFinite(rec.t)) {
+      return {
+        camFile: camPath,
+        error: `invalid camera timeline ${camPath}: key ${idx} must have finite numeric t`,
+      };
+    }
+    if (rec.p !== undefined && !isVec3(rec.p)) {
+      return {
+        camFile: camPath,
+        error: `invalid camera timeline ${camPath}: key ${idx} field p must be [x,y,z] numbers`,
+      };
+    }
+    if (rec.l !== undefined && !isVec3(rec.l)) {
+      return {
+        camFile: camPath,
+        error: `invalid camera timeline ${camPath}: key ${idx} field l must be [x,y,z] numbers`,
+      };
+    }
+  }
   const aspect = opts.pkg && ratioOf(opts.pkg) === "9:16" ? 9 / 16 : 16 / 9;
 
   const canEvalThree =

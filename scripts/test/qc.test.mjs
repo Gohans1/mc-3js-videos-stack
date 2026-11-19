@@ -19,7 +19,7 @@ const runQc = (args, opts = {}) =>
     env: { ...process.env, ...opts.env },
   });
 
-const makePng = (outPath, _width, _height, drawScript) => {
+const makePng = (outPath, drawScript) => {
   const r = spawnSync(
     "python",
     [
@@ -56,8 +56,6 @@ test("qc box computes exact RGB, sRGB & linear Rec.709 luma, and contrast on syn
     // Left half black (0,0,0), right half mid-grey (128,128,128) in top; bottom-right white (255,255,255)
     makePng(
       imgPath,
-      100,
-      100,
       [
         "img = Image.new('RGB', (100, 100), (0, 0, 0))",
         "d = ImageDraw.Draw(img)",
@@ -96,11 +94,9 @@ test("qc compare reports exact changed-pixel percentage, deltas, and writes labe
     const before = join(dir, "before.png");
     const after = join(dir, "after.png");
     const out = join(dir, "diff.png");
-    makePng(before, 100, 100, "img = Image.new('RGB', (100, 100), (20, 40, 60))");
+    makePng(before, "img = Image.new('RGB', (100, 100), (20, 40, 60))");
     makePng(
       after,
-      100,
-      100,
       [
         "img = Image.new('RGB', (100, 100), (20, 40, 60))",
         "d = ImageDraw.Draw(img)",
@@ -387,8 +383,11 @@ test("qc box skips local .venv missing PIL", () => {
     );
     expect(mkVenv.status).toBe(0);
     const imgPath = join(dir, "px.png");
-    makePng(imgPath, 20, 20, "img = Image.new('RGB', (20, 20), (10, 20, 30))");
-    const boxRes = runQc(["box", imgPath, "0,0,10,10", "--json"], { cwd: dir });
+    makePng(imgPath, "img = Image.new('RGB', (20, 20), (10, 20, 30))");
+    const boxRes = runQc(["box", imgPath, "0,0,10,10", "--json"], {
+      cwd: dir,
+      env: { PYTHON: "", CINETIC_PYTHON: "", VIRTUAL_ENV: "" },
+    });
     expect(boxRes.status).toBe(0);
     expect(JSON.parse(boxRes.stdout).meanRgb).toEqual([10, 20, 30]);
   } finally {
@@ -396,7 +395,7 @@ test("qc box skips local .venv missing PIL", () => {
   }
 }, 20_000);
 
-test("qc sync runs against sound/mix.wav and public/audio/soundtrack.wav", () => {
+test("qc sync runs against sound/mix.wav", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-sync-"));
   try {
     mkdirSync(join(dir, "sound"), { recursive: true });
@@ -472,6 +471,19 @@ test("qc fails cleanly on malformed cam.json and resolves owning film on cross-f
     const badJson = JSON.parse(badUnified.stdout);
     expect(badJson.checks[0].status).toBe("fail");
     expect(badJson.checks[0].summary).toMatch(/invalid JSON/);
+
+    // Invalid key row types ([null, {}] and non-numeric t) also fail cleanly without crashing
+    for (const payload of [[null, {}], [{ t: "bad", p: [0, 0, 0] }]]) {
+      writeFileSync(join(filmA, "src/timeline/cam.json"), JSON.stringify(payload));
+      const badRowCmd = runQc(["motion"], { cwd: filmA, env: { LIVE_PROJECT: filmA } });
+      expect(badRowCmd.status).toBe(2);
+      const badRowQc = runQc(["--checks", "cam-motion", "--json"], {
+        cwd: filmA,
+        env: { LIVE_PROJECT: filmA },
+      });
+      expect(badRowQc.status).toBe(1);
+      expect(JSON.parse(badRowQc.stdout).checks[0].status).toBe("fail");
+    }
 
     // filmB has valid cam.json and draft.mp4; passing explicit filmB paths overrides LIVE_PROJECT=filmA
     writeFileSync(join(filmB, "package.json"), JSON.stringify({ "live-studio": {} }));

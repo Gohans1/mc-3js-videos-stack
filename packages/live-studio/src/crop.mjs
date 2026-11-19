@@ -4,7 +4,10 @@ export function parseCropRect(spec) {
   }
   const raw = String(spec ?? "").trim();
   if (!raw) throw new Error("Crop must be 4 numbers x,y,w,h (normalized 0..1)");
-  const parts = raw.split(",").map((s) => Number(s.trim()));
+  const parts = raw.split(",").map((s) => {
+    const t = s.trim();
+    return t === "" ? NaN : Number(t);
+  });
   if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) {
     throw new Error(
       `Crop must be 4 numbers x,y,w,h (normalized 0..1), got ${JSON.stringify(spec)}`,

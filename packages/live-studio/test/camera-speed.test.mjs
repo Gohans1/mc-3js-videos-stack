@@ -215,4 +215,22 @@ test("analyzeCameraTimeline measures short <1/30s substeps accurately and keyFil
     "src/timeline/shots.json",
   );
   assert.equal(nonSpatial.tracks.length, 0);
+
+  const stringAtTrack = analyzeKeyFileMotion(
+    [
+      { t: 0, at: "elon-head" },
+      { t: 2, at: "boss-head" },
+    ],
+    "src/timeline/focus.json",
+  );
+  assert.equal(stringAtTrack.tracks.length, 0);
+
+  // FOV-only keys without p/l never throw in lerpVec3/sampleTimelinePoints
+  const fovOnly = analyzeCameraTimeline([
+    { t: 0, fov: 60 },
+    { t: 1, fov: 30 },
+  ]);
+  assert.equal(fovOnly.posPeak.v, 0);
+  assert.equal(fovOnly.turnPeak.v, 0);
+  assert.ok(Math.abs(fovOnly.fovPeak.v - 30) < 1e-6);
 });
