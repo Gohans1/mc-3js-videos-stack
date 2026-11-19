@@ -61,9 +61,14 @@ function failUsage(msg: string): never {
   process.exit(2);
 }
 
-function takeFlagValue(argv: string[], i: number, flag: string): string {
+function takeFlagValue(
+  argv: string[],
+  i: number,
+  flag: string,
+  allowNegativeNumber = false,
+): string {
   const val = argv[i + 1];
-  if (val === undefined || val.startsWith("-")) {
+  if (val === undefined || (val.startsWith("-") && !(allowNegativeNumber && /^-\d/.test(val)))) {
     failUsage(`Missing value for ${flag}`);
   }
   return val;
@@ -91,10 +96,10 @@ function discoverFilm(cwd: string): { dir: string; pkg: Record<string, unknown> 
 function findAutoVideo(filmDir: string | null): string | null {
   const base = filmDir ?? process.cwd();
   const candidates = [
-    "renders/final_video.mp4",
     "renders/final.mp4",
-    "renders/draft_video.mp4",
     "renders/draft.mp4",
+    "renders/final_video.mp4",
+    "renders/draft_video.mp4",
   ];
   for (const rel of candidates) {
     const p = join(base, rel);
@@ -103,70 +108,124 @@ function findAutoVideo(filmDir: string | null): string | null {
   return null;
 }
 
-function getPython(): string[] | null {
-  const env = process.env.PYTHON || process.env.CINETIC_PYTHON;
+interface PyCaps {
+  cv2: boolean;
+  numpy: boolean;
+  pil: boolean;
+  scipy: boolean;
+  soundfile: boolean;
+  librosa: boolean;
+}
+type PyPkg = keyof PyCaps;
+interface PyEnv {
+  cmd: string[];
+  exe: string;
+  caps: PyCaps;
+}
+
+const pyProbeCache = new Map<string, PyEnv | null>();
+
+function candidatePythons(): string[][] {
   const win = process.platform === "win32";
-  const cands: string[][] = [];
-  if (env) cands.push([env]);
-  for (const dir of [
+  const seen = new Set<string>();
+  const out: string[][] = [];
+  const pushCmd = (cmd: string[]) => {
+    const norm =
+      cmd.length === 1 && (cmd[0].includes("/") || cmd[0].includes("\\")) ? [resolve(cmd[0])] : cmd;
+    const key = win ? norm.join("\0").toLowerCase() : norm.join("\0");
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(norm);
+    }
+  };
+
+  const env = process.env.PYTHON || process.env.CINETIC_PYTHON;
+  if (env) pushCmd([env]);
+
+  const venvRoots = [
     process.env.VIRTUAL_ENV,
     join(process.cwd(), ".venv"),
     join(process.cwd(), "venv"),
-  ]) {
+    join(ROOT, ".venv"),
+    join(ROOT, "venv"),
+  ];
+  for (const dir of venvRoots) {
     if (!dir) continue;
     const exe = join(dir, win ? "Scripts" : "bin", win ? "python.exe" : "python");
-    if (existsSync(exe)) cands.push([exe]);
+    if (existsSync(exe)) pushCmd([exe]);
   }
+
   const remembered = readJson<{ python?: string }>(
     join(process.env.CINETIC_HOME || join(homedir(), ".cinetic"), "tools.json"),
   );
-  if (remembered?.python && existsSync(remembered.python)) cands.push([remembered.python]);
-  if (win) cands.push(["python"], ["py", "-3"], ["python3"]);
-  else cands.push(["python3"], ["python"]);
+  if (remembered?.python && existsSync(remembered.python)) pushCmd([remembered.python]);
 
-  for (const cand of cands) {
-    const r = spawnSync(
-      cand[0],
-      [...cand.slice(1), "-c", "import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)"],
-      { encoding: "utf8", windowsHide: true, timeout: 5000 },
-    );
-    if (r.status === 0) return cand;
+  if (win) {
+    pushCmd(["python"]);
+    pushCmd(["py", "-3"]);
+    pushCmd(["python3"]);
+  } else {
+    pushCmd(["python3"]);
+    pushCmd(["python"]);
   }
-  return null;
+  return out;
 }
 
-function probePythonPackages(py: string[] | null): Record<string, boolean> {
-  const caps = {
-    cv2: false,
-    numpy: false,
-    pil: false,
-    scipy: false,
-    soundfile: false,
-    librosa: false,
-  };
-  if (!py) return caps;
+function probePythonCandidate(cmd: string[]): PyEnv | null {
+  const key = process.platform === "win32" ? cmd.join("\0").toLowerCase() : cmd.join("\0");
+  if (pyProbeCache.has(key)) return pyProbeCache.get(key) ?? null;
+
   const code =
-    "import importlib, json; pkgs=['cv2','numpy','PIL','scipy','soundfile','librosa']; " +
-    "print(json.dumps({p: importlib.util.find_spec(p) is not None for p in pkgs}))";
-  const r = spawnSync(py[0], [...py.slice(1), "-c", code], {
+    "import sys, importlib.util, json; " +
+    "pkgs=['cv2','numpy','PIL','scipy','soundfile','librosa']; " +
+    "print(json.dumps({'ok': sys.version_info >= (3, 10), 'exe': sys.executable, " +
+    "'caps': {p: importlib.util.find_spec(p) is not None for p in pkgs}}))";
+  const r = spawnSync(cmd[0], [...cmd.slice(1), "-c", code], {
     encoding: "utf8",
     windowsHide: true,
     timeout: 10_000,
   });
-  if (r.status !== 0) return caps;
-  try {
-    const parsed = JSON.parse(r.stdout.trim()) as Record<string, boolean>;
-    return {
-      cv2: Boolean(parsed.cv2),
-      numpy: Boolean(parsed.numpy),
-      pil: Boolean(parsed.PIL),
-      scipy: Boolean(parsed.scipy),
-      soundfile: Boolean(parsed.soundfile),
-      librosa: Boolean(parsed.librosa),
-    };
-  } catch {
-    return caps;
+  if (r.status !== 0) {
+    pyProbeCache.set(key, null);
+    return null;
   }
+  try {
+    const parsed = JSON.parse(r.stdout.trim()) as {
+      ok?: boolean;
+      exe?: string;
+      caps?: Record<string, boolean>;
+    };
+    if (!parsed.ok) {
+      pyProbeCache.set(key, null);
+      return null;
+    }
+    const env: PyEnv = {
+      cmd,
+      exe: parsed.exe || cmd[0],
+      caps: {
+        cv2: Boolean(parsed.caps?.cv2),
+        numpy: Boolean(parsed.caps?.numpy),
+        pil: Boolean(parsed.caps?.PIL),
+        scipy: Boolean(parsed.caps?.scipy),
+        soundfile: Boolean(parsed.caps?.soundfile),
+        librosa: Boolean(parsed.caps?.librosa),
+      },
+    };
+    pyProbeCache.set(key, env);
+    return env;
+  } catch {
+    pyProbeCache.set(key, null);
+    return null;
+  }
+}
+
+function selectPython(required: readonly PyPkg[] = []): PyEnv | null {
+  for (const cmd of candidatePythons()) {
+    const env = probePythonCandidate(cmd);
+    if (!env) continue;
+    if (required.every((p) => env.caps[p])) return env;
+  }
+  return null;
 }
 
 function runBox(argv: string[]): number {
@@ -188,20 +247,20 @@ function runBox(argv: string[]): number {
   const imgPath = resolve(imageArg);
   if (!existsSync(imgPath)) failUsage(`Image not found: ${imageArg}`);
 
-  const py = getPython();
+  const py = selectPython(["numpy", "pil"]);
   if (!py) {
     console.error("error: Python with numpy + Pillow is required for qc box");
     return 2;
   }
   const pyArgs = [
-    ...py.slice(1),
+    ...py.cmd.slice(1),
     FRAME_METRICS,
     "box",
     imgPath,
     rectArg,
     ...(norm ? ["--norm"] : []),
   ];
-  const r = spawnSync(py[0], pyArgs, { encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  const r = spawnSync(py.cmd[0], pyArgs, { encoding: "utf8", windowsHide: true, timeout: 30_000 });
   if (r.status !== 0) {
     if (r.stderr) process.stderr.write(r.stderr);
     return r.status === 1 ? 2 : (r.status ?? 2);
@@ -225,9 +284,12 @@ function runCompare(argv: string[]): number {
   const pos: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--out") outPath = takeFlagValue(argv, ++i - 1, "--out");
-    else if (a === "--threshold") {
-      const raw = takeFlagValue(argv, ++i - 1, "--threshold");
+    if (a === "--out") {
+      outPath = takeFlagValue(argv, i, "--out");
+      i++;
+    } else if (a === "--threshold") {
+      const raw = takeFlagValue(argv, i, "--threshold", true);
+      i++;
       threshold = Number(raw);
       if (!Number.isFinite(threshold) || threshold < 0 || threshold > 255) {
         failUsage(`--threshold must be in 0..255, got ${raw}`);
@@ -252,13 +314,13 @@ function runCompare(argv: string[]): number {
       ? resolve(outPath)
       : join(dirname(afterPath), `compare_${basename(afterPath, extname(afterPath))}.png`);
 
-  const py = getPython();
+  const py = selectPython(["numpy", "pil"]);
   if (!py) {
     console.error("error: Python with numpy + Pillow is required for qc compare");
     return 2;
   }
   const pyArgs = [
-    ...py.slice(1),
+    ...py.cmd.slice(1),
     FRAME_METRICS,
     "compare",
     beforePath,
@@ -268,7 +330,7 @@ function runCompare(argv: string[]): number {
     "--threshold",
     String(threshold),
   ];
-  const r = spawnSync(py[0], pyArgs, { encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  const r = spawnSync(py.cmd[0], pyArgs, { encoding: "utf8", windowsHide: true, timeout: 30_000 });
   if (r.status !== 0) {
     if (r.stderr) process.stderr.write(r.stderr);
     return r.status === 1 ? 2 : (r.status ?? 2);
@@ -356,13 +418,17 @@ function runMotionCmd(argv: string[]): number {
   let asJson = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    if (a === "--cam") camOverride = takeFlagValue(argv, ++i - 1, "--cam");
-    else if (a === "--from") {
-      from = Number(takeFlagValue(argv, ++i - 1, "--from"));
-      if (!Number.isFinite(from)) failUsage("--from must be a finite number");
+    if (a === "--cam") {
+      camOverride = takeFlagValue(argv, i, "--cam");
+      i++;
+    } else if (a === "--from") {
+      from = Number(takeFlagValue(argv, i, "--from", true));
+      i++;
+      if (!Number.isFinite(from) || from < 0) failUsage("--from must be a finite number >= 0");
     } else if (a === "--to") {
-      to = Number(takeFlagValue(argv, ++i - 1, "--to"));
-      if (!Number.isFinite(to)) failUsage("--to must be a finite number");
+      to = Number(takeFlagValue(argv, i, "--to", true));
+      i++;
+      if (!Number.isFinite(to) || to <= 0) failUsage("--to must be a finite number > 0");
     } else if (a === "--json") asJson = true;
     else if (a === "-h" || a === "--help") {
       console.log(HELP);
@@ -397,20 +463,35 @@ function runMotionCmd(argv: string[]): number {
     `cam-motion (${report.status.toUpperCase()}): pos peak ${report.posPeak.v.toFixed(2)} m/s at ${report.posPeak.t.toFixed(2)}s (row ${report.posPeak.keyRow}) | turn peak ${report.turnPeak.v.toFixed(1)} deg/s at ${report.turnPeak.t.toFixed(2)}s (keys [${report.turnPeak.span[0]}->${report.turnPeak.span[1]}], row ${report.turnPeak.keyRow}) | FOV peak ${report.fovPeak.v.toFixed(1)} deg/s at ${report.fovPeak.t.toFixed(2)}s (row ${report.fovPeak.keyRow})`,
   );
   for (const f of report.faults) console.log(`  - ${f}`);
+  for (const kf of report.keyFiles) {
+    for (const tr of kf.tracks as Array<{
+      path: string;
+      peakPos: { v: number; t: number; rowFrom: number; rowTo: number };
+      peakRot: { v: number; t: number; rowFrom: number; rowTo: number };
+    }>) {
+      console.log(
+        `  - ${kf.file}:${tr.path}: pos peak ${tr.peakPos.v.toFixed(2)} m/s at ${tr.peakPos.t.toFixed(2)}s (rows ${tr.peakPos.rowFrom}->${tr.peakPos.rowTo}), rot peak ${tr.peakRot.v.toFixed(1)} deg/s at ${tr.peakRot.t.toFixed(2)}s (rows ${tr.peakRot.rowFrom}->${tr.peakRot.rowTo})`,
+      );
+    }
+  }
   return 0;
 }
 
 function runProbeCheck(videoPath: string, py: string[] | null): CheckResult {
-  if (!py) return { id: "probe", status: "skip", summary: "skipped: python not found on PATH" };
-  const r = spawnSync(
-    py[0],
-    [...py.slice(1), join(CINETIC_SCRIPTS, "probe.py"), videoPath, "--quiet"],
-    {
-      encoding: "utf8",
-      windowsHide: true,
-      timeout: 30_000,
-    },
-  );
+  if (!py) return { id: "probe", status: "skip", summary: "skipped: python 3.10+ not found" };
+  const pictureOnly = /_video\.mp4$/i.test(videoPath);
+  const probeArgs = [
+    ...py.slice(1),
+    join(CINETIC_SCRIPTS, "probe.py"),
+    videoPath,
+    ...(pictureOnly ? ["--audio", "any"] : []),
+    "--quiet",
+  ];
+  const r = spawnSync(py[0], probeArgs, {
+    encoding: "utf8",
+    windowsHide: true,
+    timeout: 30_000,
+  });
   let parsed: {
     pass?: boolean;
     checks?: Array<{ name: string; ok: boolean; expected: unknown; actual: unknown }>;
@@ -446,19 +527,57 @@ function runProbeCheck(videoPath: string, py: string[] | null): CheckResult {
   };
 }
 
+export function countWarnings(data: Record<string, unknown> | null): number {
+  if (!data) return 0;
+  let count = 0;
+  if (typeof data.warnings === "number") count = Math.max(count, data.warnings);
+  else if (Array.isArray(data.warnings)) count = Math.max(count, data.warnings.length);
+  if (Array.isArray(data.flags)) {
+    const flagWarns = data.flags.filter(
+      (f) => (f as { severity?: string })?.severity === "warn",
+    ).length;
+    count = Math.max(count, flagWarns);
+  }
+  const framesObj = data.frames as Record<string, unknown> | undefined;
+  if (framesObj && Array.isArray(framesObj.warnings)) {
+    count = Math.max(count, framesObj.warnings.length);
+  }
+  return count;
+}
+
+export function summarizeFailure(data: Record<string, unknown> | null, fallback: string): string {
+  if (!data) return fallback;
+  const reasons: string[] = [];
+  if (typeof data.error === "string" && data.error) reasons.push(data.error);
+  if (Array.isArray(data.flags)) {
+    for (const fl of data.flags as Array<{ severity?: string; check?: string; note?: string }>) {
+      if (fl?.severity === "fail") {
+        reasons.push(fl.note || fl.check || "fail");
+        if (reasons.length >= 2) break;
+      }
+    }
+  }
+  const framesObj = data.frames as Record<string, unknown> | undefined;
+  if (reasons.length < 2 && framesObj && Array.isArray(framesObj.fails)) {
+    for (const msg of framesObj.fails) {
+      if (typeof msg === "string" && msg) {
+        reasons.push(msg);
+        if (reasons.length >= 2) break;
+      }
+    }
+  }
+  return reasons.length ? `failed: ${reasons.join("; ")}` : fallback;
+}
+
 function runJsonScriptCheck(
   id: CheckId,
   scriptName: string,
   py: string[],
   args: string[],
   tmpDir: string,
-  writeFlag: "--json" | "--pos" = "--json",
 ): CheckResult {
   const outFile = join(tmpDir, `${id}.json`);
-  const fullArgs =
-    writeFlag === "--json"
-      ? [...py.slice(1), join(CINETIC_SCRIPTS, scriptName), ...args, "--json", outFile]
-      : [...py.slice(1), join(CINETIC_SCRIPTS, scriptName), ...args, outFile];
+  const fullArgs = [...py.slice(1), join(CINETIC_SCRIPTS, scriptName), ...args, "--json", outFile];
   const r = spawnSync(py[0], fullArgs, { encoding: "utf8", windowsHide: true, timeout: 120_000 });
   const data = readJson<Record<string, unknown>>(outFile);
   if (!data && r.status !== 0) {
@@ -469,7 +588,7 @@ function runJsonScriptCheck(
     };
   }
   const pass = r.status === 0;
-  const warnings = Array.isArray(data?.warnings) ? data.warnings.length : 0;
+  const warnings = countWarnings(data);
   const status: CheckStatus = !pass ? "fail" : warnings > 0 ? "warn" : "pass";
   return {
     id,
@@ -478,7 +597,7 @@ function runJsonScriptCheck(
       ? warnings
         ? `passed with ${warnings} warning(s)`
         : "ok"
-      : `failed (${scriptName})`,
+      : summarizeFailure(data, `failed (${scriptName})`),
     metrics: data ?? undefined,
   };
 }
@@ -495,28 +614,47 @@ function runFfmpegAudioCheck(videoPath: string, hasAudio: boolean): CheckResult 
   if (r.error) {
     return { id: "audio", status: "skip", summary: "skipped: ffmpeg not found on PATH" };
   }
+  if (r.status !== 0) {
+    const firstErr =
+      (r.stderr || `ffmpeg exited ${r.status}`).trim().split("\n").at(-1) || "ffmpeg failed";
+    return { id: "audio", status: "fail", summary: firstErr };
+  }
   const text = r.stderr ?? "";
-  const iMatch = [...text.matchAll(/\bI:\s*(-?\d+(?:\.\d+)?)\s*LUFS/g)].at(-1);
+  const iMatch = [...text.matchAll(/\bI:\s*(-inf|-?\d+(?:\.\d+)?)\s*LUFS/gi)].at(-1);
   const lraMatch = [...text.matchAll(/\bLRA:\s*(-?\d+(?:\.\d+)?)\s*LU/g)].at(-1);
-  const tpMatch = [...text.matchAll(/Peak:\s*(-?\d+(?:\.\d+)?)\s*dBFS/g)].at(-1);
+  const tpMatch = [...text.matchAll(/Peak:\s*(-inf|-?\d+(?:\.\d+)?)\s*dBFS/gi)].at(-1);
   if (!iMatch) {
     return {
       id: "audio",
-      status: r.status === 0 ? "pass" : "skip",
-      summary: r.status === 0 ? "ffmpeg audio decode ok" : "skipped: ebur128 unavailable",
+      status: "warn",
+      summary: "ffmpeg audio decoded without ebur128 summary",
     };
   }
-  const lufs = Number(iMatch[1]);
+  const rawI = iMatch[1].toLowerCase();
   const lra = lraMatch ? Number(lraMatch[1]) : null;
-  const truePeak = tpMatch ? Number(tpMatch[1]) : null;
-  const clipped = truePeak !== null && truePeak > 0;
-  const loudWarn = !clipped && (lufs > -9 || lufs < -24 || (truePeak !== null && truePeak > -0.5));
+  const rawTp = tpMatch ? tpMatch[1].toLowerCase() : null;
+  const truePeak = rawTp === null ? null : rawTp === "-inf" ? -Infinity : Number(rawTp);
+  if (rawI === "-inf") {
+    return {
+      id: "audio",
+      status: "warn",
+      summary: "silent audio track (-inf LUFS)",
+      metrics: { lufs: null, lra, truePeakDbfs: Number.isFinite(truePeak) ? truePeak : null },
+    };
+  }
+  const lufs = Number(rawI);
+  const clipped = truePeak !== null && Number.isFinite(truePeak) && truePeak > 0;
+  const loudWarn =
+    !clipped &&
+    (lufs > -9 ||
+      lufs < -24 ||
+      (truePeak !== null && Number.isFinite(truePeak) && truePeak > -0.5));
   const status: CheckStatus = clipped ? "fail" : loudWarn ? "warn" : "pass";
   return {
     id: "audio",
     status,
-    summary: `${lufs.toFixed(1)} LUFS${truePeak !== null ? `, true peak ${truePeak.toFixed(2)} dBFS` : ""}${lra !== null ? `, LRA ${lra.toFixed(1)} LU` : ""}`,
-    metrics: { lufs, lra, truePeakDbfs: truePeak },
+    summary: `${lufs.toFixed(1)} LUFS${truePeak !== null && Number.isFinite(truePeak) ? `, true peak ${truePeak.toFixed(2)} dBFS` : ""}${lra !== null ? `, LRA ${lra.toFixed(1)} LU` : ""}`,
+    metrics: { lufs, lra, truePeakDbfs: Number.isFinite(truePeak) ? truePeak : null },
   };
 }
 
@@ -529,7 +667,8 @@ function runUnifiedQc(argv: string[]): number {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--checks") {
-      const raw = takeFlagValue(argv, ++i - 1, "--checks");
+      const raw = takeFlagValue(argv, i, "--checks");
+      i++;
       const items = raw
         .split(",")
         .map((s) => s.trim())
@@ -563,22 +702,42 @@ function runUnifiedQc(argv: string[]): number {
     videoPath = findAutoVideo(film?.dir ?? null);
   }
 
-  const needsPython = checksList.some((c) => c !== "cam-motion");
-  const py = needsPython ? getPython() : null;
-  const caps =
-    needsPython && py
-      ? probePythonPackages(py)
-      : { cv2: false, numpy: false, pil: false, scipy: false, soundfile: false, librosa: false };
-
   const baseDir = film?.dir ?? process.cwd();
   const cuesFile = join(baseDir, "out/cues.json");
   const hasCues = existsSync(cuesFile);
   const soundtrackWav = join(baseDir, "public/audio/soundtrack.wav");
+  const hasWav = existsSync(soundtrackWav);
   const tmpDir = mkdtempSync(join(tmpdir(), "cinetic-qc-"));
 
   try {
     const results: CheckResult[] = [];
     let probeFacts: Record<string, unknown> | undefined;
+    let audioCached: boolean | undefined;
+
+    const hasAudioStream = (vid: string): boolean => {
+      if (audioCached !== undefined) return audioCached;
+      if (probeFacts !== undefined) {
+        audioCached = Boolean(probeFacts.audio);
+        return audioCached;
+      }
+      const p = spawnSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "a:0",
+          "-show_entries",
+          "stream=index",
+          "-of",
+          "csv=p=0",
+          vid,
+        ],
+        { encoding: "utf8", windowsHide: true, timeout: 10_000 },
+      );
+      audioCached = p.status === 0 && p.stdout.trim().length > 0;
+      return audioCached;
+    };
 
     for (const id of checksList) {
       if (id === "cam-motion") {
@@ -619,32 +778,40 @@ function runUnifiedQc(argv: string[]): number {
       }
 
       if (id === "probe") {
-        const res = runProbeCheck(videoPath, py);
+        const py = selectPython([]);
+        const res = runProbeCheck(videoPath, py?.cmd ?? null);
         probeFacts = res.metrics;
         results.push(res);
       } else if (id === "forensics") {
-        if (!py || !caps.cv2 || !caps.numpy) {
+        const py = selectPython(["cv2", "numpy"]);
+        if (!py) {
           results.push({
             id,
             status: "skip",
-            summary: "skipped: missing optional Python package cv2 (opencv-python)",
+            summary: "skipped: missing optional Python package cv2 (opencv-python) + numpy",
           });
         } else {
+          const withAudio = hasAudioStream(videoPath);
           const args = [
             videoPath,
-            ...(probeFacts?.audio ? [] : ["--no-audio"]),
+            ...(withAudio ? [] : ["--no-audio"]),
             ...(hasCues ? ["--cues", cuesFile] : []),
           ];
-          results.push(runJsonScriptCheck(id, "forensics.py", py, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "forensics.py", py.cmd, args, tmpDir));
         }
       } else if (id === "sync") {
-        if (!py || !caps.numpy || !caps.soundfile || !caps.scipy) {
+        if (!hasAudioStream(videoPath)) {
+          results.push({ id, status: "skip", summary: "skipped: video has no audio stream" });
+          continue;
+        }
+        const py = selectPython(["numpy", "soundfile", "scipy"]);
+        if (!py) {
           results.push({
             id,
             status: "skip",
             summary: "skipped: missing optional Python audio deps (numpy/soundfile/scipy)",
           });
-        } else if (!hasCues && !existsSync(soundtrackWav)) {
+        } else if (!hasCues && !hasWav) {
           results.push({
             id,
             status: "skip",
@@ -652,63 +819,58 @@ function runUnifiedQc(argv: string[]): number {
           });
         } else {
           const args = hasCues
-            ? [videoPath, "--cues", cuesFile, "--quiet"]
+            ? hasWav
+              ? [videoPath, soundtrackWav, "--cues", cuesFile, "--quiet"]
+              : [videoPath, "--cues", cuesFile, "--quiet"]
             : [videoPath, soundtrackWav, "--no-frames", "--quiet"];
-          results.push(runJsonScriptCheck(id, "check-sync.py", py, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "check-sync.py", py.cmd, args, tmpDir));
         }
       } else if (id === "audio") {
-        if (hasCues && py && caps.numpy && caps.soundfile && caps.scipy && caps.librosa) {
+        const withAudio = hasAudioStream(videoPath);
+        if (!withAudio) {
+          results.push({ id, status: "skip", summary: "skipped: video has no audio stream" });
+          continue;
+        }
+        const pyAv = hasCues ? selectPython(["numpy", "soundfile", "scipy", "librosa"]) : null;
+        if (hasCues && pyAv) {
           results.push(
-            runJsonScriptCheck(id, "av-audit.py", py, [videoPath, "--cues", cuesFile], tmpDir),
+            runJsonScriptCheck(
+              id,
+              "av-audit.py",
+              pyAv.cmd,
+              [videoPath, "--cues", cuesFile],
+              tmpDir,
+            ),
           );
         } else {
-          const hasAudio =
-            probeFacts !== undefined
-              ? Boolean(probeFacts.audio)
-              : spawnSync(
-                  "ffprobe",
-                  [
-                    "-v",
-                    "error",
-                    "-select_streams",
-                    "a:0",
-                    "-show_entries",
-                    "stream=index",
-                    "-of",
-                    "csv=p=0",
-                    videoPath,
-                  ],
-                  {
-                    encoding: "utf8",
-                    windowsHide: true,
-                  },
-                ).stdout.trim().length > 0;
-          results.push(runFfmpegAudioCheck(videoPath, hasAudio));
+          results.push(runFfmpegAudioCheck(videoPath, withAudio));
         }
       } else if (id === "look") {
-        if (!py || !caps.cv2 || !caps.numpy) {
+        const py = selectPython(["cv2", "numpy"]);
+        if (!py) {
           results.push({
             id,
             status: "skip",
-            summary: "skipped: missing optional Python package cv2 (opencv-python)",
+            summary: "skipped: missing optional Python package cv2 (opencv-python) + numpy",
           });
         } else {
           const args = [videoPath, "--look", ...(hasCues ? ["--cues", cuesFile] : [])];
-          results.push(runJsonScriptCheck(id, "look-audit.py", py, args, tmpDir));
+          results.push(runJsonScriptCheck(id, "look-audit.py", py.cmd, args, tmpDir));
         }
       } else if (id === "speed") {
-        if (!py || !caps.cv2 || !caps.numpy) {
+        const py = selectPython(["cv2", "numpy", "scipy"]);
+        if (!py) {
           results.push({
             id,
             status: "skip",
-            summary: "skipped: missing optional Python package cv2 (opencv-python)",
+            summary: "skipped: missing optional Python deps (cv2/numpy/scipy)",
           });
         } else {
           const outFile = join(tmpDir, "speed.json");
           const args = [videoPath, outFile, ...(hasCues ? ["--cues", cuesFile] : []), "--quiet"];
           const r = spawnSync(
-            py[0],
-            [...py.slice(1), join(CINETIC_SCRIPTS, "measure-speed.py"), ...args],
+            py.cmd[0],
+            [...py.cmd.slice(1), join(CINETIC_SCRIPTS, "measure-speed.py"), ...args],
             {
               encoding: "utf8",
               windowsHide: true,
@@ -716,40 +878,63 @@ function runUnifiedQc(argv: string[]): number {
             },
           );
           const data = readJson<Record<string, unknown>>(outFile);
-          const tooFast = Boolean(data?.too_fast);
+          const tooFastCount = Array.isArray(data?.too_fast) ? data.too_fast.length : 0;
+          const ceilingCount = Array.isArray(data?.speed_ceiling) ? data.speed_ceiling.length : 0;
+          const paceWarnCount = Array.isArray(data?.pace_warnings) ? data.pace_warnings.length : 0;
+          const hasWarn = tooFastCount > 0 || ceilingCount > 0 || paceWarnCount > 0;
           results.push({
             id,
-            status: r.status !== 0 ? "fail" : tooFast ? "warn" : "pass",
-            summary: tooFast ? "motion speed exceeded ceiling" : "ok",
+            status: r.status !== 0 ? "fail" : hasWarn ? "warn" : "pass",
+            summary:
+              r.status !== 0
+                ? (r.stderr || r.stdout || `measure-speed.py exited ${r.status}`)
+                    .trim()
+                    .split("\n")[0]
+                : tooFastCount > 0
+                  ? `${tooFastCount} frame(s) exceeded blur speed threshold`
+                  : ceilingCount > 0 || paceWarnCount > 0
+                    ? `passed with ${Math.max(ceilingCount, paceWarnCount)} speed warning(s)`
+                    : "ok",
             metrics: data ?? undefined,
           });
         }
       }
     }
 
-    const ok = !results.some((c) => c.status === "fail" || (strict && c.status === "warn"));
+    const allSkipped = results.length > 0 && results.every((c) => c.status === "skip");
+    const ok =
+      !allSkipped && !results.some((c) => c.status === "fail" || (strict && c.status === "warn"));
     const report: QcReport = { ok, video: videoPath, film: film?.dir ?? null, checks: results };
 
     if (asJson) {
       console.log(JSON.stringify(report, null, 2));
+    } else if (allSkipped) {
+      console.log(`QC SKIP${videoPath ? ` (${basename(videoPath)})` : ""} — nothing checked`);
+      for (const c of results) {
+        console.log(`  [${c.status.toUpperCase().padEnd(4)}] ${c.id.padEnd(10)} ${c.summary}`);
+      }
     } else {
       console.log(`QC ${ok ? "PASS" : "FAIL"}${videoPath ? ` (${basename(videoPath)})` : ""}`);
       for (const c of results) {
         console.log(`  [${c.status.toUpperCase().padEnd(4)}] ${c.id.padEnd(10)} ${c.summary}`);
       }
     }
-    return ok ? 0 : 1;
+    return allSkipped ? 2 : ok ? 0 : 1;
   } finally {
     rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
-const args = process.argv.slice(2);
-if (args[0] === "help") {
-  console.log(HELP);
-  process.exit(0);
+export { findAutoVideo, selectPython };
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  if (args[0] === "help") {
+    console.log(HELP);
+    process.exit(0);
+  }
+  if (args[0] === "box") process.exit(runBox(args.slice(1)));
+  if (args[0] === "compare") process.exit(runCompare(args.slice(1)));
+  if (args[0] === "motion") process.exit(runMotionCmd(args.slice(1)));
+  process.exit(runUnifiedQc(args));
 }
-if (args[0] === "box") process.exit(runBox(args.slice(1)));
-if (args[0] === "compare") process.exit(runCompare(args.slice(1)));
-if (args[0] === "motion") process.exit(runMotionCmd(args.slice(1)));
-process.exit(runUnifiedQc(args));

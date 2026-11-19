@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { countWarnings, findAutoVideo, summarizeFailure } from "../review/qc.ts";
 import { mediaFixture } from "./media-fixture.mjs";
 
 const QC = fileURLToPath(new URL("../review/qc.ts", import.meta.url));
@@ -251,3 +252,195 @@ test("qc full run auto-detects video, runs probe/cam-motion, and cleanly skips m
     rmSync(dir, { recursive: true, force: true });
   }
 }, 15_000);
+
+test("qc --strict fails on warnings, bad video fails exit 1, and all-skipped exits 2", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-gates-"));
+  try {
+    // 1. All-skipped outside a film with no video -> exit 2 ("nothing done")
+    const emptyRes = runQc(["--checks", "forensics,cam-motion", "--json"], {
+      cwd: dir,
+      env: { LIVE_PROJECT: "" },
+    });
+    expect(emptyRes.status).toBe(2);
+    const emptyJson = JSON.parse(emptyRes.stdout);
+    expect(emptyJson.ok).toBe(false);
+    expect(emptyJson.checks.every((c) => c.status === "skip")).toBe(true);
+
+    // 2. --strict treats cam-motion warning as exit 1 (ok: false)
+    mkdirSync(join(dir, "src/timeline"), { recursive: true });
+    writeFileSync(join(dir, "src/scene.ts"), "export const DURATION = 10;");
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+    );
+    writeFileSync(
+      join(dir, "src/timeline/cam.json"),
+      JSON.stringify([
+        { t: 0, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+        { t: 4, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
+        { t: 5, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 },
+      ]),
+    );
+    const strictWarn = runQc(["--checks", "cam-motion", "--strict", "--json"], {
+      cwd: dir,
+      env: { LIVE_PROJECT: dir },
+    });
+    expect(strictWarn.status).toBe(1);
+    const strictJson = JSON.parse(strictWarn.stdout);
+    expect(strictJson.ok).toBe(false);
+    expect(strictJson.checks[0].status).toBe("warn");
+
+    // 3. Probe failure on untagged BT.601 / silent MP4 -> exit 1
+    const badMp4 = join(dir, "bad.mp4");
+    media(badMp4, [
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=s=320x180:r=30:d=1",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+    ]);
+    const failProbe = runQc([badMp4, "--checks", "probe", "--json"], {
+      cwd: dir,
+      env: { LIVE_PROJECT: dir },
+    });
+    expect(failProbe.status).toBe(1);
+    const failJson = JSON.parse(failProbe.stdout);
+    expect(failJson.ok).toBe(false);
+    expect(failJson.checks[0].status).toBe("fail");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 20_000);
+
+test("countWarnings, summarizeFailure, findAutoVideo priority, and picture-only probe", () => {
+  expect(countWarnings({ warnings: 3 })).toBe(3);
+  expect(
+    countWarnings({ flags: [{ severity: "fail" }, { severity: "warn" }, { severity: "warn" }] }),
+  ).toBe(2);
+  expect(countWarnings({ frames: { warnings: ["w1", "w2"] } })).toBe(2);
+  expect(countWarnings({ too_fast: [] })).toBe(0);
+  expect(
+    summarizeFailure(
+      {
+        flags: [
+          { severity: "warn", note: "w" },
+          { severity: "fail", note: "clipped peak" },
+        ],
+      },
+      "fb",
+    ),
+  ).toBe("failed: clipped peak");
+
+  const dir = mkdtempSync(join(tmpdir(), "qc-auto-"));
+  try {
+    mkdirSync(join(dir, "renders"), { recursive: true });
+    writeFileSync(join(dir, "renders/draft_video.mp4"), "x");
+    expect(findAutoVideo(dir)).toMatch(/draft_video\.mp4$/);
+    writeFileSync(join(dir, "renders/final_video.mp4"), "x");
+    expect(findAutoVideo(dir)).toMatch(/final_video\.mp4$/);
+    writeFileSync(join(dir, "renders/draft.mp4"), "x");
+    expect(findAutoVideo(dir)).toMatch(/draft\.mp4$/);
+    writeFileSync(join(dir, "renders/final.mp4"), "x");
+    expect(findAutoVideo(dir)).toMatch(/final\.mp4$/);
+
+    // Picture-only draft_video.mp4 uses --audio any for probe and skips audio/sync cleanly
+    rmSync(join(dir, "renders/draft.mp4"));
+    rmSync(join(dir, "renders/final.mp4"));
+    rmSync(join(dir, "renders/final_video.mp4"));
+    media(join(dir, "renders/draft_video.mp4"), [
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=s=320x180:r=30:d=1",
+      "-vf",
+      "scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+    ]);
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+    const picOnly = runQc(["--checks", "probe,audio,sync", "--json"], {
+      cwd: dir,
+      env: { LIVE_PROJECT: dir },
+    });
+    expect(picOnly.status).toBe(0);
+    const pj = JSON.parse(picOnly.stdout);
+    expect(pj.checks.find((c) => c.id === "probe").status).toBe("pass");
+    expect(pj.checks.find((c) => c.id === "audio").status).toBe("skip");
+    expect(pj.checks.find((c) => c.id === "sync").status).toBe("skip");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 15_000);
+
+test("qc box skips local .venv missing PIL and sync runs against soundtrack.wav", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-py-sync-"));
+  try {
+    // 1. Create a real empty .venv without PIL/numpy and verify qc box falls back to Python with PIL+numpy
+    const mkVenv = spawnSync(
+      "python",
+      ["-c", "import venv, sys; venv.create(sys.argv[1], with_pip=False)", join(dir, ".venv")],
+      {
+        encoding: "utf8",
+        timeout: 20_000,
+      },
+    );
+    expect(mkVenv.status).toBe(0);
+    const imgPath = join(dir, "px.png");
+    makePng(imgPath, 20, 20, "img = Image.new('RGB', (20, 20), (10, 20, 30))");
+    const boxRes = runQc(["box", imgPath, "0,0,10,10", "--json"], { cwd: dir });
+    expect(boxRes.status).toBe(0);
+    expect(JSON.parse(boxRes.stdout).meanRgb).toEqual([10, 20, 30]);
+
+    // 2. Verify check-sync.py runs (does not skip / does not fail importlib.util) when soundtrack.wav exists
+    mkdirSync(join(dir, "public/audio"), { recursive: true });
+    mkdirSync(join(dir, "renders"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+    const wav = join(dir, "public/audio/soundtrack.wav");
+    media(wav, [
+      "-f",
+      "lavfi",
+      "-i",
+      "anoisesrc=d=2:r=48000:color=pink:amplitude=0.15:seed=42",
+      "-ac",
+      "2",
+      "-ar",
+      "48000",
+    ]);
+    media(join(dir, "renders/draft.mp4"), [
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc2=s=320x180:r=30:d=2",
+      "-i",
+      wav,
+      "-vf",
+      "scale=out_color_matrix=bt709:out_range=tv,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "aac",
+      "-ac",
+      "2",
+      "-ar",
+      "48000",
+      "-shortest",
+    ]);
+    const syncRes = runQc(["--checks", "sync", "--json"], {
+      cwd: dir,
+      env: { LIVE_PROJECT: dir },
+    });
+    const sj = JSON.parse(syncRes.stdout);
+    expect(sj.checks[0].id).toBe("sync");
+    expect(sj.checks[0].status).not.toBe("skip");
+    expect(syncRes.status).toBe(0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);

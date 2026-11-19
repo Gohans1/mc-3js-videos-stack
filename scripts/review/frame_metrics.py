@@ -204,7 +204,7 @@ def main() -> int:
       out = cmd_box(args.image, args.rect, args.norm)
     else:
       out = cmd_compare(args.before, args.after, args.out, args.threshold)
-  except (FileNotFoundError, ValueError) as exc:
+  except (FileNotFoundError, ValueError, OSError) as exc:
     print(f"error: {exc}", file=sys.stderr)
     return 2
 
