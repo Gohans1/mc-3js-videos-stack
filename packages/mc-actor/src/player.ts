@@ -16,6 +16,23 @@ import { clamp01, smooth } from "./ease";
 import { updaterTo } from "./matrices";
 
 export const PX = 1.875 / 32; // one skin pixel at the size the game draws a player
+const uvBox = (ox, oy, w, h, d) => ({
+  top: [ox + d, oy, w, d],
+  bottom: [ox + d + w, oy, w, d],
+  right: [ox, oy + d, d, h],
+  front: [ox + d, oy + d, w, h],
+  left: [ox + d + w, oy + d, d, h],
+  back: [ox + d + w + d, oy + d, w, h],
+});
+// Standard 64x64 Steve skin UV rects ([x, y, w, h]) for each inner body part
+export const SKIN_UV = {
+  head: uvBox(0, 0, 8, 8, 8),
+  body: uvBox(16, 16, 8, 12, 4),
+  armR: uvBox(40, 16, 4, 12, 4),
+  armL: uvBox(32, 48, 4, 12, 4),
+  legR: uvBox(0, 16, 4, 12, 4),
+  legL: uvBox(16, 48, 4, 12, 4),
+};
 const D = Math.PI / 180;
 const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
 // GLTFLoader strips ":" from node names (PropertyBinding.sanitizeNodeName), so "Arm:Left:Upper" is "ArmLeftUpper"
@@ -397,7 +414,7 @@ const faceFrame = (root, head) => {
   return { px, localPx, up, right, add, box };
 };
 
-const makeFace = (root, head, skin) => {
+const makeFace = (root, head, skin, glow = 0.08) => {
   const { px, localPx, up, right, add } = faceFrame(root, head);
   const patch = skin.getImageData(8, 8, 8, 8).data;
   const pix = (x, y) => {
@@ -421,7 +438,9 @@ const makeFace = (root, head, skin) => {
       polygonOffsetFactor: -(k + 1),
       polygonOffsetUnits: -4 * (k + 1),
     });
-  const white = layer(flat("#f4f4f4", 0.25), 0),
+  // Keep near-white emissive restrained to skin glow (<= 0.08) so eyes/teeth never trip BloomEffect
+  const whiteGlow = Math.min(0.08, Math.max(0, Number.isFinite(glow) ? glow : 0.08));
+  const white = layer(flat("#f4f4f4", whiteGlow), 0),
     iris = layer(flat(irisCol, 0.12), 1),
     dark = layer(flat("#120d1c", 0), 2),
     lid = layer(flat(lidCol, 0.1), 3);
@@ -459,7 +478,7 @@ const makeFace = (root, head, skin) => {
   });
   // mouth: a dark opening with a strip of teeth along the top and the tongue along the bottom; corners lift for a smile
   const mouthMat = layer(flat(lipCol.clone().multiplyScalar(0.35), 0), 0),
-    teethMat = layer(flat("#efeee4", 0.2), 1),
+    teethMat = layer(flat("#efeee4", whiteGlow), 1),
     tongueMat = layer(flat("#b9534f", 0.1), 1);
   const plane = (mat) => add(new THREE.Mesh(new THREE.PlaneGeometry(px, px), mat), 0, 6, Z);
   const hole = plane(mouthMat),
@@ -560,24 +579,22 @@ export const FACES = [
   // the eyes cut out as black holes
   { id: "holes", title: "no eyes, black holes", colour: (x, y) => (EYE(x, y) ? 0.03 : null) },
   { id: "game", title: "game face (eyes, brows, mouth)" },
+  // the skin exactly as painted: for skins whose face carries the likeness (a 128 px HD skin's 16 x 16 face), which the
+  // game face's eyes would cover
+  { id: "skin", title: "the skin's own face, nothing over it" },
 ];
-// one skin canvas with face f painted on
-const paintFace = (src, f) => {
-  const c = document.createElement("canvas");
-  c.width = src.canvas.width;
-  c.height = src.canvas.height;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(src.canvas, 0, 0);
-  if (!f.colour) return c;
-  const d = src.getImageData(9, 11, 1, 1).data; // the cheek, face pixel (1, 3)
+// Paint face f's eye-row pixels onto ctx using the cheek tone sampled from immutable baseCtx
+const paintFacePixels = (ctx, baseCtx, f) => {
+  if (!f.colour) return;
+  const s = Math.max(1, Math.round(baseCtx.canvas.width / 64));
+  const d = baseCtx.getImageData(9 * s, 11 * s, 1, 1).data; // the cheek, face pixel (1, 3)
   for (let y = 0; y < 8; y++)
     for (let x = 0; x < 8; x++) {
       const k = f.colour(x, y);
       if (k == null) continue;
       ctx.fillStyle = `rgb(${(d[0] * k) | 0},${(d[1] * k) | 0},${(d[2] * k) | 0})`;
-      ctx.fillRect(8 + x, 8 + y, 1, 1);
+      ctx.fillRect((8 + x) * s, (8 + y) * s, s, s);
     }
-  return c;
 };
 
 // Skin UVs sampled inside their own triangle. Under MSAA (films render with multisampling 4 for N8AO) an edge pixel's
@@ -610,11 +627,15 @@ export async function makePlayer(
   if (!initMeta)
     throw new Error(`no face "${initialFace}" (FACES: ${FACES.map((f) => f.id).join(", ")})`);
   const img = typeof skinUrl === "string" ? await loadImage(skinUrl) : skinUrl;
+  const baseCanvas = document.createElement("canvas");
+  baseCanvas.width = img.width;
+  baseCanvas.height = img.height;
+  const baseCtx = baseCanvas.getContext("2d", { willReadFrequently: true });
+  baseCtx.drawImage(img, 0, 0);
   const canvas = document.createElement("canvas");
   canvas.width = img.width;
   canvas.height = img.height;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(img, 0, 0);
   const skinTex = (c) => {
     const t = new THREE.CanvasTexture(c);
     Object.assign(t, {
@@ -626,18 +647,31 @@ export async function makePlayer(
     });
     return t;
   };
-  let rawMap = null;
-  const getRawMap = () => (rawMap ??= skinTex(canvas));
-  const faceTex = {
-    [initialFace]: initMeta.colour ? skinTex(paintFace(ctx, initMeta)) : getRawMap(),
+  let faceId = initialFace;
+  let overlayFn = null;
+  let liveMap = skinTex(canvas);
+  const redrawSkin = () => {
+    const f = FACES.find((x) => x.id === faceId);
+    ctx.clearRect?.(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(baseCanvas, 0, 0);
+    if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+    if (overlayFn) {
+      ctx.save?.();
+      try {
+        overlayFn(ctx, canvas.width, canvas.height);
+      } finally {
+        ctx.restore?.();
+      }
+    }
+    liveMap.needsUpdate = true;
   };
-  const map = faceTex[initialFace];
+  redrawSkin();
   // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
   const look = {
-    map,
+    map: liveMap,
     roughness: 0.9,
     emissive: 0xffffff,
-    emissiveMap: map,
+    emissiveMap: liveMap,
     emissiveIntensity: glow,
   };
   const inner = centroidUv(new THREE.MeshStandardMaterial(look));
@@ -681,23 +715,45 @@ export async function makePlayer(
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
-  let gameFace = initialFace === "game" ? makeFace(rig, b.head, ctx) : null;
-  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, ctx));
-  let faceId = initialFace;
+  let gameFace = initialFace === "game" ? makeFace(rig, b.head, baseCtx, glow) : null;
+  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, baseCtx, glow));
   const setFace = (id) => {
     const f = FACES.find((x) => x.id === id);
     if (!f) throw new Error(`no face "${id}" (FACES: ${FACES.map((x) => x.id).join(", ")})`);
     faceId = id;
-    const tex = (faceTex[id] ??= f.colour ? skinTex(paintFace(ctx, f)) : getRawMap());
-    for (const m of [inner, outer]) {
-      m.map = m.emissiveMap = tex;
-      m.needsUpdate = true;
-    }
+    redrawSkin();
     if (id === "game" || f.hold || gameFace) {
       const gf = ensureGameFace();
       for (const o of gf.meshes) o.visible = id === "game" || !!f.hold; // the next face() call shuts what should be shut
       if (f.hold) gf(...f.hold);
     }
+  };
+  const setSkin = (imageOrCanvas) => {
+    if (!imageOrCanvas || !(imageOrCanvas.width > 0) || !(imageOrCanvas.height > 0)) {
+      throw new Error("setSkin requires an image or canvas with positive width and height");
+    }
+    const w = imageOrCanvas.width;
+    const h = imageOrCanvas.height;
+    baseCanvas.width = w;
+    baseCanvas.height = h;
+    baseCtx.clearRect?.(0, 0, w, h);
+    baseCtx.drawImage(imageOrCanvas, 0, 0);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      const prevMap = liveMap;
+      liveMap = skinTex(canvas);
+      for (const m of [inner, outer]) {
+        m.map = m.emissiveMap = liveMap;
+        m.needsUpdate = true;
+      }
+      prevMap.dispose();
+    }
+    redrawSkin();
+  };
+  const paintSkinOverlay = (drawFn) => {
+    overlayFn = typeof drawFn === "function" ? drawFn : null;
+    redrawSkin();
   };
   if (initMeta.hold) ensureGameFace()(...initMeta.hold);
   const face = (...a) => {
@@ -713,6 +769,20 @@ export async function makePlayer(
   handL.position.set(6 * PX, 12 * PX, 2 * PX);
   rig.add(handL);
   b.laL.attach(handL);
+  // handR / handL local axes (1:1 metres, attached to lower-arm bones):
+  //   -y = down the arm toward fingertips, +z = forward out of knuckles,
+  //   +x = character's left (inward/thumb-side on handR, outward on handL); pos in metres, rot in radians
+  const holdProp = (side, mesh, { pos, rot } = {}) => {
+    const parent = side === "L" ? handL : side === "R" ? hand : null;
+    if (!parent) throw new Error(`holdProp side must be "R" or "L", got ${JSON.stringify(side)}`);
+    const wrist = new THREE.Group();
+    wrist.name = `wrist${side}`;
+    if (pos) wrist.position.set(pos[0], pos[1], pos[2]);
+    if (rot) wrist.rotation.set(rot[0], rot[1], rot[2]);
+    if (mesh) wrist.add(mesh);
+    parent.add(wrist);
+    return wrist;
+  };
   // Two-bone arm IK and head aim, measured from the rest pose: shoulder pivot to elbow, elbow to the end of the hand
   const restAt = (bone) => bone.getWorldPosition(new THREE.Vector3());
   const ARM = Object.fromEntries(
@@ -998,7 +1068,9 @@ export async function makePlayer(
     updateBones,
     face,
     hand,
+    handR: hand,
     handL,
+    holdProp,
     armTo,
     legTo,
     soleAt,
@@ -1006,6 +1078,8 @@ export async function makePlayer(
     legReach: LEGS.L.L1 + LEGS.L.L2,
     headTo,
     skin: ctx,
+    setSkin,
+    paintSkinOverlay,
     red,
     setFace,
   };

@@ -10,7 +10,8 @@
     "./ink": "./src/ink.ts",
     "./screen": "./src/screen.ts",
     "./variants": "./src/variants.ts",
-    "./placed": "./src/placed.ts"
+    "./placed": "./src/placed.ts",
+    "./model": "./src/model.ts"
   },
   "dependencies": {
     "block-model-renderer": "catalog:",

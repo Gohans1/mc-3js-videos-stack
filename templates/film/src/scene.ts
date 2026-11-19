@@ -171,7 +171,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     godrays: { ...DEFAULT_LIGHTS.godrays, enabled: false },
   };
   const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026);
-  const roomKey = new THREE.SpotLight(0xfff0dc, 40, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
+  const roomKey = new THREE.SpotLight(0xfff0dc, 28, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
   roomKey.position.set(roomTarget[0], ROOM.top + 0.6, roomTarget[2]);
   roomKey.target.position.set(roomTarget[0], 0, roomTarget[2]);
   roomKey.castShadow = true;
@@ -214,7 +214,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   composer.addPass(
     new EffectPass(
       camera,
-      new BloomEffect({ intensity: 0.4, luminanceThreshold: 0.85, mipmapBlur: true }),
+      new BloomEffect({ intensity: 0.4, luminanceThreshold: 1.0, mipmapBlur: true }),
       tone,
       new VignetteEffect({ offset: 0.3, darkness: 0.45 }),
       new ToneMappingEffect({ mode: ToneMappingMode.AGX }),
@@ -490,9 +490,10 @@ export async function buildScene(canvas, W, H, draft = false) {
         godrays.update(inactiveRig.godrays);
         timelineLighting = false;
       }
+      // Fallback when src/timeline/lights.json is empty; roomKey is a SpotLight (candela, not DirectionalLight ~2-3).
       hemi.visible = roomKey.visible = true;
       hemi.intensity = EDIT.light?.fill ?? 0.6;
-      roomKey.intensity = EDIT.light?.key ?? 40;
+      roomKey.intensity = EDIT.light?.spot ?? EDIT.light?.key ?? 28;
     }
     tone.saturation = EDIT.look.saturation;
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;

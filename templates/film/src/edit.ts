@@ -3,7 +3,7 @@ import { setEdit } from "live-studio/edit";
 
 // The film's whole timeline is EDIT: src/edit.json holds what the studio reads (voice, beats) and the film's small settings;
 // Steve's keys, the camera keys, the props, the objects dropped in from the studio, the audio, the fades to black (fx.json) and the titles over the picture (text.json) each have their own file in src/timeline/ (write them with
-// scripts/timeline_fmt.ts). The ones package.json "live-studio" lists (camTimeline, soundTimeline, shotsTimeline, textTimeline, keyFiles) the
+// bun ../../scripts/timeline_fmt.ts). The ones package.json "live-studio" lists (camTimeline, soundTimeline, shotsTimeline, textTimeline, keyFiles) the
 // studio reads and writes itself, so a save shows at once; saving any other rebuilds the page, and its next reload shows it.
 import data from "./edit.json";
 import adjustments from "./timeline/adjust.json";
