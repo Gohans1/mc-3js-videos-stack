@@ -124,40 +124,28 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve,
   );
 
-  // Keyframed scene lighting + practicals (src/timeline/lights.json, falling back to edit.json light)
   const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
-  const rig = createLightingRig(scene, {
-    target: roomTarget,
-    distance: 18,
-    shadowExtent: 10,
-  });
-  const legacyLightsAt = (t) => {
-    const C = EDIT.light ?? { key: 40, fill: 0.6 };
-    const base = lightsAt(undefined, t);
-    return {
-      ...base,
-      target: roomTarget,
-      key: { ...base.key, intensity: Math.min(3.5, (C.key ?? 40) / 16), castShadow: false },
-      world: { ...base.world, ambientIntensity: C.fill ?? DEFAULT_LIGHTS.world.ambientIntensity },
-      practicals: [
-        {
-          id: "legacy-room-key",
-          name: "Room Key",
-          kind: "spot",
-          at: [ROOM.x1 / 2 + 0.5, ROOM.top + 0.6, ROOM.z1 / 2 + 0.5],
-          target: [ROOM.x1 / 2 + 0.5, 0, ROOM.z1 / 2 + 0.5],
-          color: "#fff0dc",
-          intensity: C.key ?? 40,
-          distance: 14,
-          decay: 1.2,
-          angle: 70,
-          penumbra: 0.7,
-        },
-      ],
-    };
+  const rig = createLightingRig(scene, { target: roomTarget, distance: 18, shadowExtent: 10 });
+  const inactiveRig = {
+    ...DEFAULT_LIGHTS,
+    key: { ...DEFAULT_LIGHTS.key, enabled: false },
+    fill: { ...DEFAULT_LIGHTS.fill, enabled: false },
+    rim: { ...DEFAULT_LIGHTS.rim, enabled: false },
+    world: { ...DEFAULT_LIGHTS.world, ambientIntensity: 0, background: null },
+    fog: { ...DEFAULT_LIGHTS.fog, mode: "none" },
+    practicals: [],
+    godrays: { ...DEFAULT_LIGHTS.godrays, enabled: false },
   };
-  const hasLightsKeys = (raw) =>
-    Array.isArray(raw) ? raw.length > 0 : Array.isArray(raw?.keys) && raw.keys.length > 0;
+  const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026);
+  const roomKey = new THREE.SpotLight(0xfff0dc, 40, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
+  roomKey.position.set(roomTarget[0], ROOM.top + 0.6, roomTarget[2]);
+  roomKey.target.position.set(roomTarget[0], 0, roomTarget[2]);
+  roomKey.castShadow = true;
+  roomKey.shadow.mapSize.set(2048, 2048);
+  roomKey.shadow.bias = -0.0008;
+  roomKey.shadow.radius = 3;
+  scene.add(hemi, roomKey, roomKey.target);
+  let timelineLighting = true;
 
   const composer = new EffectComposer(renderer, {
     frameBufferType: THREE.HalfFloatType,
@@ -324,9 +312,23 @@ export async function buildScene(canvas, W, H, draft = false) {
     steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
 
-    const lightsSample = hasLightsKeys(EDIT.lights) ? lightsAt(EDIT.lights, t) : legacyLightsAt(t);
-    applyLightingRig(rig, lightsSample, t);
-    godrays.update(lightsSample.godrays, lightsSample.key.color);
+    const lightKeys = Array.isArray(EDIT.lights) ? EDIT.lights : EDIT.lights?.keys;
+    if (lightKeys?.length) {
+      hemi.visible = roomKey.visible = false;
+      const lightsSample = lightsAt(EDIT.lights, t);
+      applyLightingRig(rig, lightsSample, t);
+      godrays.update(lightsSample.godrays, lightsSample.key.color);
+      timelineLighting = true;
+    } else {
+      if (timelineLighting) {
+        applyLightingRig(rig, inactiveRig);
+        godrays.update(inactiveRig.godrays);
+        timelineLighting = false;
+      }
+      hemi.visible = roomKey.visible = true;
+      hemi.intensity = EDIT.light?.fill ?? 0.6;
+      roomKey.intensity = EDIT.light?.key ?? 40;
+    }
     tone.saturation = EDIT.look.saturation;
     const shot = Math.max(0, view ?? shotAt(t));
     const shotEntry = SHOTS_OUT[shot];

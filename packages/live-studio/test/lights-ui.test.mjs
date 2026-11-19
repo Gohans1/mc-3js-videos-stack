@@ -20,6 +20,7 @@ import "/index.css";
 import { TooltipProvider } from "/components/ui/tooltip.tsx";
 import { setFilmSource } from "/core/filmMeta.ts";
 import { flushDocs, revertDocs, undo } from "/core/doc.ts";
+import { refreshTimedDocs } from "/core/timed-doc.ts";
 import { S } from "/core/state.ts";
 import { set } from "/core/store.ts";
 import { EDIT } from "film/edit";
@@ -82,7 +83,7 @@ window.testLights = {
   addKeyAt(t) { addLightKeyAt(t); },
   updateKey(idx, t) { updateLightKey(idx, t); },
   mutateIntensity(t, intensity) { mutateLightAt(t, (s) => { s.key.intensity = intensity; }); },
-  setTiming(t, dur) { setTiming(t, dur); },
+  setTiming(t, dur) { setTiming(t, dur); refreshTimedDocs(); },
   setState(patch) { set(patch); },
   setMode(mode) { setHarnessMode?.(mode); },
 };
@@ -318,7 +319,6 @@ test("ColorKelvinField skips unchanged focus+blur, supports Escape cancel, Enter
   await Bun.sleep(160);
   expect(serverState.posts).toBe(postsBeforeBlur);
 
-  // Partial #123 + Escape cancels cleanly without mutating key color; Space does not bubble to document
   const escapeCheck = await page.evaluate(`(() => {
     let bubbled = false;
     const onKey = () => { bubbled = true; };
@@ -328,15 +328,15 @@ test("ColorKelvinField skips unchanged focus+blur, supports Escape cancel, Enter
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     input.focus();
     input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    setter.call(input, '#123');
+    setter.call(input, '#123456');
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    const afterPartial = window.testLights.edit().keys[0]?.key?.color;
+    const afterInput = window.testLights.edit().keys[0]?.key?.color;
     input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     document.removeEventListener('keydown', onKey);
-    return { bubbled, before, afterPartial };
+    return { bubbled, before, afterInput };
   })()`);
   expect(escapeCheck.bubbled).toBe(false);
-  expect(escapeCheck.afterPartial).toBe(escapeCheck.before);
+  expect(escapeCheck.afterInput).toBe(escapeCheck.before);
   await waitUntil(
     `document.querySelector('input[aria-label="Key hex color"]')?.value === ${JSON.stringify(escapeCheck.before)}`,
   );
@@ -433,6 +433,27 @@ test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, 
   await page.evaluate(`window.testLights.undo()`);
   expect(await page.evaluate(`window.testLights.sampleAt(2).key.intensity`)).toBeCloseTo(6.2, 3);
   expect(await page.evaluate(`window.errors`)).toEqual([]);
+});
+
+test("editing a Freeze at a lighting cut changes the key shown in the frozen frame", async () => {
+  const keys = [
+    { id: "before", t: 4, key: { intensity: 3 } },
+    { id: "after", t: 4, cut: true, key: { intensity: 9 } },
+  ];
+  await page.evaluate(`window.testLights.resetServer(${JSON.stringify({ keys })})`);
+  await page.evaluate(`window.testLights.setTiming({ freezes: [{ at: 4, duration: 1 }] }, 10)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(4.5).key.intensity`)).toBe(9);
+
+  await page.evaluate(`window.testLights.mutateIntensity(4.5, 7)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(4.5).key.intensity`)).toBe(7);
+  expect(
+    await page.evaluate(
+      `window.testLights.edit().keys.map(({ id, t, key }) => [id, t, key.intensity])`,
+    ),
+  ).toEqual([
+    ["before", 4, 3],
+    ["after", 4, 7],
+  ]);
 });
 
 test("Side wide and narrow route lights-only cleanly when side is cam or transition", async () => {

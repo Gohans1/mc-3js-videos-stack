@@ -80,7 +80,8 @@ export function editTimeAt(t = S.t): number {
   const clock = clockForTimeline("lights");
   if (segmentAt(clock, t)?.kind === "freeze") {
     const src = frameAt(clock, t);
-    return clock.outputAt(src, src > 0 ? "before" : "after");
+    const cut = asDoc(lightsDoc.source).keys.some((key) => key.cut && key.t === src);
+    return clock.outputAt(src, src > 0 && !cut ? "before" : "after");
   }
   return t;
 }
@@ -153,9 +154,9 @@ function keyFromState(
 /** Add a lighting keyframe at `t` holding the current evaluated lighting state. */
 export function addLightKeyAt(t = S.t) {
   const editT = editTimeAt(t);
-  const existing = findLightKeyAt(editT);
+  const existing = findLightKeyAt(t);
   if (existing.exactIndex !== null) return;
-  const here = lightsSampleAt(editT);
+  const here = lightsSampleAt(t);
   const time = r3(editT);
   lightsDoc.edit((draft) => {
     const ks = [...asDoc(draft).keys, keyFromState(time, here)];
@@ -173,8 +174,8 @@ export function mutateLightAt(
 ) {
   const editT = editTimeAt(t);
   const run = keep ? lightsDoc.edit : lightsDoc.preview;
-  const nav = findLightKeyAt(editT);
-  const baseState = lightsSampleAt(editT);
+  const nav = findLightKeyAt(t);
+  const baseState = lightsSampleAt(t);
   const time = r3(editT);
 
   run((draft) => {
@@ -223,8 +224,8 @@ export function applyLightPresetAt(presetId: LightPresetId, t = S.t) {
   const preset = LIGHT_PRESETS[presetId];
   if (!preset) return;
   const editT = editTimeAt(t);
-  const nav = findLightKeyAt(editT);
-  const existing = lightsSampleAt(editT);
+  const nav = findLightKeyAt(t);
+  const existing = lightsSampleAt(t);
   const time = r3(editT);
   const mergedState: LightsState = {
     ...cloneLightsState(preset.state),

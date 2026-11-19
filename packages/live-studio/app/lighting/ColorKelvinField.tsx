@@ -14,7 +14,6 @@ interface ColorKelvinFieldProps {
 }
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-const HEX6_RE = /^#[0-9a-f]{6}$/i;
 
 function toFullHex(hex: string): string {
   const m = hex.trim().match(HEX_RE);
@@ -78,11 +77,7 @@ export function ColorKelvinField({
                 e.currentTarget.blur();
               }
             }}
-            onChange={(e) => {
-              const next = e.target.value;
-              setEditing(next);
-              if (HEX6_RE.test(next.trim())) onChange(next.trim().toLowerCase());
-            }}
+            onChange={(e) => setEditing(e.target.value)}
             onBlur={() => {
               if (cancelRef.current) {
                 cancelRef.current = false;
