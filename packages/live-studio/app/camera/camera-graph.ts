@@ -203,7 +203,7 @@ const transformGraphValues = (
 export const selectionInGraph = (indices: number[]) => {
   const s = get();
   const selection = s.camPicks.length ? s.camPicks : s.camKey === null ? [] : [s.camKey];
-  return indices.filter((i) => selection.includes(i) && movable(i));
+  return indices.filter((i) => selection.includes(i));
 };
 export const contiguousPicks = (picked: number[]) =>
   picked.length > 1 && picked.every((i, j) => i === picked[0] + j && movable(i));
@@ -288,21 +288,45 @@ export const reverseGraphKeys = (picked: number[]) => {
     if (next) rows[last + 1] = next;
   });
 };
-export const equalizeGraphKeys = (picked: number[]) => {
+export const equalizeGraphKeys = async (picked: number[]) => {
   if (!contiguousPicks(picked)) return;
   const first = keys[picked[0]].t,
     duration = keys[picked.at(-1)!].t - first;
   if (duration <= 0) return;
+  const rows = keys;
   const rails = picked.map(graphRail);
-  const samples = rails.some(Boolean)
-    ? sampleGraphViews(picked.map(cameraKeyFrameTime), EDIT.cam as CamKey[])
-    : undefined;
-  const positions = picked.map((i, j) => samples?.[j].p ?? keys[i].p);
-  const points = positions.map((p) => resolveCameraPoint(p, S.tools?.resolveCameraAnchor));
+  const times = picked.map(cameraKeyFrameTime);
+  const samples =
+    rails.some(Boolean) ||
+    (S.tools?.sampleCameraTrack && picked.some((i) => !Array.isArray(rows[i].p)))
+      ? sampleGraphViews(times, EDIT.cam as CamKey[])
+      : undefined;
+  const points: Vector3[] = [];
+  for (const [j, i] of picked.entries()) {
+    const key = rows[i];
+    const fixed = Array.isArray(key.p);
+    const sharedTime = rows[i - 1]?.t === key.t || rows[i + 1]?.t === key.t;
+    const sample =
+      rails[j] || (!fixed && !key.muted && !sharedTime && S.tools?.sampleCameraTrack)
+        ? samples?.[j]?.p
+        : undefined;
+    let point = Array.isArray(sample)
+      ? resolveCameraPoint(sample as [number, number, number])
+      : fixed
+        ? resolveKeyPoint(key, "p")
+        : null;
+    if (!point)
+      await readSceneFrame(times[j], () => {
+        point = resolveKeyPoint(key, "p");
+      });
+    if (!point) return say("A selected camera anchor could not be resolved");
+    points.push(point);
+  }
+  if (keys !== rows) return;
   const distance = points.slice(1).map((p, i) => {
     const rail = rails[i];
-    const from = samples?.[i].railU,
-      to = samples?.[i + 1].railU;
+    const from = samples?.[i]?.railU,
+      to = samples?.[i + 1]?.railU;
     return rail && rail === rails[i + 1] && from !== undefined && to !== undefined
       ? Math.abs(to - from) * makeCameraRail(rail).getLength()
       : p.distanceTo(points[i]);

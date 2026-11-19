@@ -926,6 +926,67 @@ test("SpeedPanel exposes EaseTiles, Custom curve, CameraGraph, and Match speed c
   ).toBe(true);
 });
 
+test("Camera Graph fits the selected range and restores the full shot without editing keys", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([0, 2, 4, 6, 8].map(t => ({ t, p: [t, 2, 6], l: [0, 1, 0] })), 2);
+    u.set({ camKey: null, camPicks: [1, 3] });
+  })()`);
+  const markers = `document.querySelectorAll('svg[aria-label="Position speed graph"] circle[role="button"]')`;
+  const fit = `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Fit selection')`;
+  await waitUntil(`${markers}.length === 5`);
+  const before = await page.evaluate("window.__UX_TEST__.camKeys()");
+  expect(await page.evaluate(`Boolean(${fit})`)).toBe(true);
+  await page.evaluate(`(${fit}).click()`);
+  await waitUntil(`(${fit}).getAttribute('aria-pressed') === 'true' && ${markers}.length === 3`);
+  expect(await page.evaluate(`[...${markers}].map(mark => mark.getAttribute('aria-label').split(' ')[2])`))
+    .toEqual(["2", "3", "4"]);
+  await page.evaluate(`(${fit}).click()`);
+  await waitUntil(`${markers}.length === 5`);
+  await page.evaluate("window.__UX_TEST__.setKey(2)");
+  await page.evaluate(`(${fit}).click()`);
+  await waitUntil(`${markers}.length === 3`);
+  await page.evaluate(`(${fit}).click()`);
+  await waitUntil(`${markers}.length === 5`);
+  expect(await page.evaluate("window.__UX_TEST__.camKeys()")).toEqual(before);
+});
+
+test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    const tools = u.S.tools;
+    tools.resolveCameraAnchor = point => tools.camera.position.clone().set(point.x, 2, 6);
+    tools.sampleCameraTrack = times => times.map(({ camera: t }) => ({
+      p: [t <= 1 ? 0 : (t - 1) * 5 / 3, 2, 6],
+      l: [0, 1, 0],
+      fov: 50,
+    }));
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 1, p: { target: "Mover", x: 0 }, l: [0, 1, 0] },
+      { t: 2, p: [4, 2, 6], l: [0, 1, 0], muted: true },
+      { t: 4, p: { target: "Mover", x: 2 }, l: [0, 1, 0] },
+    ], 1);
+    u.set({ camKey: null, camPicks: [1, 2, 3] });
+  })()`);
+  try {
+    const equalize = `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Equalize')`;
+    await waitUntil(`(${equalize})?.disabled === false`);
+    await page.evaluate(`(${equalize}).click()`);
+    await waitUntil("window.__UX_TEST__.camKeys()[2].t !== 2");
+    expect(await page.evaluate("window.__UX_TEST__.camKeys().slice(1).map(k => k.t)"))
+      .toEqual([1, 3.39, 4]);
+  } finally {
+    await page.evaluate(`(() => {
+      const tools = window.__UX_TEST__.S.tools;
+      delete tools.sampleCameraTrack;
+      delete tools.resolveCameraAnchor;
+    })()`);
+  }
+});
+
 test("CamPanel provides per-field Reset buttons for Time, FOV, Roll, and Sway independently", async () => {
   await page.evaluate("window.__UX_TEST__.loadCameraFixture()");
   await waitUntil(`document.querySelector('input[aria-label="FOV"]')`);

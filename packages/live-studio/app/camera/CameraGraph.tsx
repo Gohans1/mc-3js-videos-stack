@@ -15,7 +15,7 @@ import { CurveEditor } from "../components/EasePicker";
 import { FieldRow, Section, Segmented, ValueBox } from "../components/inspector";
 import { type Ease } from "../core/ease";
 import { S } from "../core/state";
-import { useStudio } from "../core/store";
+import { showError, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import {
   addKeyHere,
@@ -75,6 +75,7 @@ export function CameraGraph({ index }: { index: number }) {
   const [channel, setChannel] = useState<CameraChannel>("position");
   const [axis, setAxis] = useState("0");
   const [mode, setMode] = useState<Mode>("speed");
+  const [fitSelection, setFitSelection] = useState(false);
   const [buffer, setBuffer] = useState<{
     channel: CameraChannel;
     axis: string;
@@ -119,15 +120,28 @@ export function CameraGraph({ index }: { index: number }) {
         : Array.from({ length: Math.max(0, end - first) }, (_, i) => first + i),
     [rows, occurrence, first, end],
   );
-  const selected = selectionInGraph(indices);
+  const picked = selectionInGraph(indices);
+  const selected = picked.filter(movable);
   const group = contiguousPicks(selected);
   const railPosition = graphUsesRail(selected, channel);
   const painting = brush && mode === "value" && !railPosition;
-  const data = plotCameraGraph(indices, mode, channel, Number(axis));
-  const ghost =
-    buffer?.channel === channel && buffer.axis === axis && buffer.mode === mode ? buffer.data : [];
-  const start = keys[indices[0]]?.t ?? 0,
-    stop = keys[indices.at(-1) ?? -1]?.t ?? start;
+  const from = indices.indexOf(picked[0]);
+  const to = indices.indexOf(picked.at(-1)!);
+  const fitIndices =
+    from < 0
+      ? []
+      : from === to
+        ? indices.slice(Math.max(0, from - 1), to + 2)
+        : indices.slice(from, to + 1);
+  const canFit = fitIndices.length > 1 && keys[fitIndices[0]].t < keys[fitIndices.at(-1)!].t;
+  const focused = fitSelection && canFit;
+  const shown = focused ? fitIndices : indices;
+  const start = keys[shown[0]]?.t ?? 0;
+  const stop = keys[shown.at(-1) ?? -1]?.t ?? start;
+  const data = plotCameraGraph(shown, mode, channel, Number(axis));
+  const activeBuffer =
+    buffer?.channel === channel && buffer.axis === axis && buffer.mode === mode ? buffer : null;
+  const ghost = activeBuffer?.data.filter(({ t }) => t >= start && t <= stop) ?? [];
   let min = Infinity,
     max = -Infinity;
   for (const point of [...data, ...ghost]) {
@@ -256,7 +270,7 @@ export function CameraGraph({ index }: { index: number }) {
             />
           )}
           <polyline points={line(data)} className="stroke-primary fill-none" strokeWidth="1.5" />
-          {indices.map((i) => {
+          {shown.map((i) => {
             const t = keys[i].t;
             const value = data.find((sample) => sample.t === t)?.value ?? min;
             return (
@@ -269,7 +283,7 @@ export function CameraGraph({ index }: { index: number }) {
                 tabIndex={0}
                 aria-label={"Select keyframe " + (i + 1) + " at " + stamp(t)}
                 className={
-                  selected.includes(i)
+                  picked.includes(i)
                     ? "fill-primary stroke-foreground"
                     : "fill-foreground stroke-background"
                 }
@@ -278,7 +292,7 @@ export function CameraGraph({ index }: { index: number }) {
                   if (!event.shiftKey) seekCameraKey(i);
                   else
                     pickCamKeys(
-                      selected.includes(i) ? selected.filter((j) => j !== i) : [...selected, i],
+                      picked.includes(i) ? picked.filter((j) => j !== i) : [...picked, i],
                     );
                 }}
                 onKeyDown={(event) => {
@@ -298,12 +312,28 @@ export function CameraGraph({ index }: { index: number }) {
         <Button
           variant="secondary"
           size="sm"
-          disabled={!data.length}
-          onClick={() =>
-            ghost.length ? setBuffer(null) : setBuffer({ channel, axis, mode, data })
-          }
+          disabled={!canFit && !fitSelection}
+          aria-pressed={focused}
+          onClick={() => setFitSelection(!fitSelection)}
         >
-          {ghost.length ? "Clear buffer" : "Buffer ghost"}
+          Fit selection
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={!data.length && !activeBuffer}
+          onClick={() => {
+            if (activeBuffer) setBuffer(null);
+            else
+              setBuffer({
+                channel,
+                axis,
+                mode,
+                data: focused ? plotCameraGraph(indices, mode, channel, Number(axis)) : data,
+              });
+          }}
+        >
+          {activeBuffer ? "Clear buffer" : "Buffer ghost"}
         </Button>
         <Button variant="secondary" size="sm" onClick={addKeyHere}>
           Breakdown
@@ -320,7 +350,7 @@ export function CameraGraph({ index }: { index: number }) {
           variant="secondary"
           size="sm"
           disabled={!group || selected.length < 3}
-          onClick={() => equalizeGraphKeys(selected)}
+          onClick={() => void equalizeGraphKeys(selected).catch(showError)}
         >
           Equalize
         </Button>
