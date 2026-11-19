@@ -314,6 +314,7 @@ test("mapTimeline preserves cut/non-cut lights timestamps across freezes and rip
     target: [0, 1, 0],
     keys: [
       { id: "k0", t: 0, preset: "studio-three-point" },
+      { id: "k-hidden", t: 1.5, key: { intensity: 9 } },
       { id: "k-tail", t: 4, preset: "warm-hearth" },
       { id: "k-cut", t: 4, cut: true, preset: "noir-night" },
       { id: "k-end", t: 8, preset: "overcast-doc" },
@@ -322,18 +323,23 @@ test("mapTimeline preserves cut/non-cut lights timestamps across freezes and rip
 
   const shown = mapTimeline("lights", doc, clock);
   assert.deepEqual(shown.target, [0, 1, 0]);
+  assert.equal(
+    shown.keys.some((k) => k.id === "k-hidden"),
+    false,
+  );
   // Cut-end tail (t=4, !cut) stays BEFORE freeze at 3s, while cut key (t=4, cut) starts freeze hold or post-cut
   const tailShown = shown.keys.find((k) => k.id === "k-tail");
   const cutShown = shown.keys.find((k) => k.id === "k-cut");
   assert.ok(tailShown && cutShown);
   assert.ok(tailShown.t <= cutShown.t);
 
-  // Roundtrip inverse recovers original source timestamps and tiebreaker order cleanly
+  // Roundtrip inverse recovers original source timestamps, hidden cut-interior keys, and tiebreaker order cleanly
   const saved = mapTimeline("lights", shown, clock, true, doc);
   assert.deepEqual(
     saved.keys.map((k) => [k.id, k.t, !!k.cut]),
     [
       ["k0", 0, false],
+      ["k-hidden", 1.5, false],
       ["k-tail", 4, false],
       ["k-cut", 4, true],
       ["k-end", 8, false],

@@ -1,5 +1,5 @@
 import { KELVIN_CHIPS, kelvinToHex } from "film-stage/lights-meta";
-import { type CSSProperties, useState } from "react";
+import { type CSSProperties, useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
 
@@ -31,12 +31,17 @@ export function ColorKelvinField({
   showKelvin = true,
 }: ColorKelvinFieldProps) {
   const [editing, setEditing] = useState<string | null>(null);
+  const cancelRef = useRef(false);
   const displayed = editing ?? value;
   const pickerValue = toFullHex(value);
   const ariaScope = scope ?? label;
 
   const commit = (raw: string) => {
-    if (HEX_RE.test(raw)) onChange(toFullHex(raw));
+    const trimmed = raw.trim();
+    if (HEX_RE.test(trimmed)) {
+      const next = toFullHex(trimmed);
+      if (next !== pickerValue) onChange(next);
+    }
     setEditing(null);
   };
 
@@ -59,18 +64,33 @@ export function ColorKelvinField({
             size="sm"
             aria-label={`${ariaScope} hex color`}
             value={displayed}
-            onFocus={() => setEditing(value)}
+            onFocus={() => {
+              cancelRef.current = false;
+              setEditing(value);
+            }}
             onKeyDown={(e) => {
               e.stopPropagation();
-              if (e.key === "Enter") commit(displayed);
-              else if (e.key === "Escape") setEditing(null);
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              } else if (e.key === "Escape") {
+                cancelRef.current = true;
+                setEditing(null);
+                e.currentTarget.blur();
+              }
             }}
             onChange={(e) => {
               const next = e.target.value;
               setEditing(next);
               if (HEX6_RE.test(next.trim())) onChange(next.trim().toLowerCase());
             }}
-            onBlur={() => commit(displayed)}
+            onBlur={() => {
+              if (cancelRef.current) {
+                cancelRef.current = false;
+                setEditing(null);
+                return;
+              }
+              commit(displayed);
+            }}
           />
         </div>
         {showKelvin && (

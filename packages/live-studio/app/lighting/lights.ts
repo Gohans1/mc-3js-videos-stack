@@ -13,7 +13,7 @@ import {
 import { EDIT } from "film/edit";
 
 import { clockForTimeline } from "../../src/timing-state.mjs";
-import { frameAt } from "../../src/timing.mjs";
+import { frameAt, segmentAt } from "../../src/timing.mjs";
 import { lightEdit } from "../activity/activity";
 import { S } from "../core/state";
 import { get, invalidatePictures, say, set } from "../core/store";
@@ -32,7 +32,7 @@ function asDoc(data: LightsFile | null | undefined): LightsDoc {
 }
 
 function writeKeys(draft: LightsFile, keys: LightKey[]) {
-  const sorted = [...keys].sort((a, b) => a.t - b.t);
+  const sorted = [...keys].sort((a, b) => a.t - b.t || Number(!!a.cut) - Number(!!b.cut));
   if (Array.isArray(draft)) {
     draft.splice(0, draft.length, ...sorted);
   } else {
@@ -47,11 +47,10 @@ const changed = () => {
   S.dirty = true;
   S.finalAt = -1;
   invalidatePictures();
-  const { lightsRev, lightKey } = get();
+  const { lightsRev } = get();
   set({
     lights: data !== null,
     lightsRev: lightsRev + 1,
-    ...(lightKey !== null && !keysCache[lightKey] ? { lightKey: null } : {}),
   });
 };
 
@@ -60,10 +59,6 @@ export const lightsDoc = createTimedDoc<LightsFile>("lights", {
   changed,
   received: () => lightEdit("light"),
   saved: (lightsSaved) => set({ lightsSaved }),
-  replaced: () => {
-    const idx = findLightKeyAt(S.t).exactIndex;
-    set({ lightKey: idx });
-  },
 });
 
 export const { edit, preview, snapshot, restore } = lightsDoc;
@@ -80,14 +75,25 @@ export const lightsDocAdapter = {
   restore,
 };
 
+/** Resolve freeze interior playhead times to the frozen frame's anchor boundary so edits never stack duplicate keys. */
+export function editTimeAt(t = S.t): number {
+  const clock = clockForTimeline("lights");
+  if (segmentAt(clock, t)?.kind === "freeze") {
+    const src = frameAt(clock, t);
+    return clock.outputAt(src, src > 0 ? "before" : "after");
+  }
+  return t;
+}
+
 export function findLightKeyAt(t = S.t) {
+  const time = editTimeAt(t);
   const ks = keysCache;
   let exactIndex: number | null = null;
   let prev: number | null = null;
   let next: number | null = null;
 
   for (let i = 0; i < ks.length; i++) {
-    const dt = ks[i].t - t;
+    const dt = ks[i].t - time;
     if (Math.abs(dt) <= SAME) {
       exactIndex = i;
     } else if (dt < -SAME) {
@@ -108,7 +114,6 @@ export function lightsSampleAt(t = S.t): LightsState {
 
 export function goLightKey(index: number | null) {
   if (index === null || !keysCache[index]) return;
-  set({ lightKey: index });
   seek(keysCache[index].t);
 }
 
@@ -119,10 +124,19 @@ function keyFromState(
   clearPreset = false,
 ): LightKey {
   const clean = cloneLightsState(state);
+  const docTarget = asDoc(lightsDoc.data).target;
+  const sameDocTarget =
+    !!docTarget &&
+    !!clean.target &&
+    clean.target[0] === docTarget[0] &&
+    clean.target[1] === docTarget[1] &&
+    clean.target[2] === docTarget[2];
+  const keepTarget = !!clean.target && (prev?.target !== undefined || !sameDocTarget);
   const out: LightKey = {
     ...prev,
     id: prev?.id ?? crypto.randomUUID(),
     t: r3(t),
+    ...(keepTarget ? { target: clean.target } : {}),
     key: clean.key,
     fill: clean.fill,
     rim: clean.rim,
@@ -131,21 +145,22 @@ function keyFromState(
     practicals: clean.practicals,
     godrays: clean.godrays,
   };
+  if (!keepTarget) delete out.target;
   if (clearPreset) delete out.preset;
   return out;
 }
 
 /** Add a lighting keyframe at `t` holding the current evaluated lighting state. */
 export function addLightKeyAt(t = S.t) {
-  const existing = findLightKeyAt(t);
+  const editT = editTimeAt(t);
+  const existing = findLightKeyAt(editT);
   if (existing.exactIndex !== null) return;
-  const here = lightsSampleAt(t);
-  const time = r3(t);
+  const here = lightsSampleAt(editT);
+  const time = r3(editT);
   lightsDoc.edit((draft) => {
     const ks = [...asDoc(draft).keys, keyFromState(time, here)];
     writeKeys(draft, ks);
   });
-  set({ lightKey: findLightKeyAt(time).exactIndex });
   say(`Added lighting key at ${stamp(time)}`);
 }
 
@@ -156,10 +171,11 @@ export function mutateLightAt(
   keep = true,
   clearPreset = true,
 ) {
+  const editT = editTimeAt(t);
   const run = keep ? lightsDoc.edit : lightsDoc.preview;
-  const nav = findLightKeyAt(t);
-  const baseState = lightsSampleAt(t);
-  const time = r3(t);
+  const nav = findLightKeyAt(editT);
+  const baseState = lightsSampleAt(editT);
+  const time = r3(editT);
 
   run((draft) => {
     const ks = [...asDoc(draft).keys];
@@ -186,7 +202,6 @@ export function removeLightKeyAt(index: number | null) {
     ks.splice(index, 1);
     writeKeys(draft, ks);
   });
-  set({ lightKey: null });
   say(`Deleted lighting key at ${stamp(removedT)}`);
 }
 
@@ -198,7 +213,7 @@ export function updateLightKey(index: number | null, t = S.t) {
     const ks = [...asDoc(draft).keys];
     const targetKey = ks[index];
     if (!targetKey) return;
-    ks[index] = keyFromState(targetKey.t, here, targetKey);
+    ks[index] = keyFromState(targetKey.t, here, targetKey, true);
     writeKeys(draft, ks);
   });
   say(`Updated lighting key at ${stamp(keysCache[index]?.t ?? t)}`);
@@ -207,9 +222,10 @@ export function updateLightKey(index: number | null, t = S.t) {
 export function applyLightPresetAt(presetId: LightPresetId, t = S.t) {
   const preset = LIGHT_PRESETS[presetId];
   if (!preset) return;
-  const nav = findLightKeyAt(t);
-  const existing = lightsSampleAt(t);
-  const time = r3(t);
+  const editT = editTimeAt(t);
+  const nav = findLightKeyAt(editT);
+  const existing = lightsSampleAt(editT);
+  const time = r3(editT);
   const mergedState: LightsState = {
     ...cloneLightsState(preset.state),
     practicals: structuredClone(existing.practicals),
@@ -242,8 +258,9 @@ export function setLightCut(t: number, cut: boolean) {
 }
 
 export function addPractical(kind: "point" | "spot", t = S.t) {
-  const idx = (lightsSampleAt(t).practicals.length ?? 0) + 1;
-  const target = asDoc(lightsDoc.data).target ?? [0, 1.5, 0];
+  const sample = lightsSampleAt(t);
+  const idx = (sample.practicals.length ?? 0) + 1;
+  const target = sample.target ?? asDoc(lightsDoc.data).target ?? [0, 1.5, 0];
   const next: PracticalState = {
     id: `${kind}-${crypto.randomUUID().slice(0, 8)}`,
     name: `${kind === "spot" ? "Spot" : "Point"} ${idx}`,

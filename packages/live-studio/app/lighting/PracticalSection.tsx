@@ -1,6 +1,6 @@
 import type { PracticalFlickerConfig, PracticalState, Vec3 } from "film-stage/lights-meta";
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,7 @@ function PracticalNameInput({
   onCommit: (next: string) => void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const cancelRef = useRef(false);
   const commit = (raw: string) => {
     const trimmed = raw.trim();
     if (trimmed && trimmed !== value) onCommit(trimmed);
@@ -29,19 +30,29 @@ function PracticalNameInput({
       size="xs"
       aria-label={`Practical ${value} name`}
       value={draft ?? value}
-      onFocus={() => setDraft(value)}
+      onFocus={() => {
+        cancelRef.current = false;
+        setDraft(value);
+      }}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === "Enter") {
-          commit(draft ?? value);
           e.currentTarget.blur();
         } else if (e.key === "Escape") {
+          cancelRef.current = true;
           setDraft(null);
           e.currentTarget.blur();
         }
       }}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => commit(draft ?? value)}
+      onBlur={() => {
+        if (cancelRef.current) {
+          cancelRef.current = false;
+          setDraft(null);
+          return;
+        }
+        commit(draft ?? value);
+      }}
       className="flex-1"
     />
   );

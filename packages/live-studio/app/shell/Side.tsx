@@ -396,7 +396,8 @@ function Details() {
   };
   const picked = useStudio(groupOf),
     group = has[picked] ? picked : (Object.keys(has) as Group[]).find((g) => has[g])!;
-  const list = GROUPS[group],
+  const camTabs = cam ? GROUPS.cam : GROUPS.cam.filter((x) => x.id === "light");
+  const list = group === "cam" ? camTabs : GROUPS[group],
     defaultTab = group === "cam" && !cam && lights ? "light" : list[0].id,
     value = list.some((x) => x.id === side) ? side : defaultTab;
   return (
@@ -521,11 +522,12 @@ function TextTab() {
 // Narrow: the camera tab holds CapCut's three, Camera | Speed | Animation, under it
 function CameraTab() {
   const { cam, lights } = useParts();
+  const camTabs = cam ? GROUPS.cam : GROUPS.cam.filter((x) => x.id === "light");
   const layer = useStudio((s) => s.layerPicks.length > 0);
   const side = useStudio((s) => s.side),
     part = layer
       ? "adjust"
-      : side === "light" || side === "anim" || side === "speed" || side === "adjust"
+      : camTabs.some((x) => x.id === side)
         ? side
         : cam
           ? "cam"
@@ -534,18 +536,18 @@ function CameraTab() {
             : "cam";
   return (
     <>
-      {!layer && (
+      {!layer && camTabs.length > 1 && (
         <Segmented
           label="Camera part"
           className="mx-3 mb-2"
           value={part}
           onChange={(v) => set({ side: v })}
-          items={GROUPS.cam}
+          items={camTabs}
         />
       )}
       <TabStage
         activeKey={part}
-        order={GROUPS.cam.map((x) => x.id)}
+        order={camTabs.map((x) => x.id)}
         className="flex min-h-0 flex-1 flex-col"
       >
         <Suspense fallback={null}>
@@ -609,7 +611,15 @@ export function Side({
   const shown =
     isCore(raw) ||
     raw === "objects" ||
-    (raw === "sound" ? sound : raw === "text" ? text : raw === "keys" ? keys : cam || lights);
+    (raw === "sound"
+      ? sound
+      : raw === "text"
+        ? text
+        : raw === "keys"
+          ? keys
+          : raw === "cam"
+            ? cam || lights
+            : cam);
   const value = shown ? raw : "notes";
   const sideOrder: SideTab[] = [
     "notes",

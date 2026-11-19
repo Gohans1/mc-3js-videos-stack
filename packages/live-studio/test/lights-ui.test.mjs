@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,11 +19,19 @@ import { createRoot } from "react-dom/client";
 import "/index.css";
 import { TooltipProvider } from "/components/ui/tooltip.tsx";
 import { setFilmSource } from "/core/filmMeta.ts";
-import { undo } from "/core/doc.ts";
+import { flushDocs, revertDocs, undo } from "/core/doc.ts";
 import { S } from "/core/state.ts";
 import { set } from "/core/store.ts";
 import { EDIT } from "film/edit";
-import { loadLights, lightsSampleAt } from "/lighting/lights.ts";
+import {
+  addLightKeyAt,
+  editTimeAt,
+  findLightKeyAt,
+  lightsSampleAt,
+  loadLights,
+  mutateLightAt,
+  updateLightKey,
+} from "/lighting/lights.ts";
 import { LightPanel } from "/lighting/LightPanel.tsx";
 import { Side } from "/shell/Side.tsx";
 import { seek } from "/playback/transport.ts";
@@ -56,10 +64,24 @@ function Harness() {
 
 window.testLights = {
   async reload() { await loadLights(); },
+  async resetServer(doc) {
+    await flushDocs().catch(() => revertDocs());
+    await fetch("/__test_reset", { method: "POST", body: JSON.stringify(doc) });
+    setTiming({}, 10);
+    setHarnessMode?.("panel");
+    set({ ready: true, lights: true, cam: true, side: "light", layerPicks: [] });
+    await loadLights();
+    seek(0);
+  },
   seek(t) { seek(t); },
   undo() { undo(); },
   edit() { return EDIT.lights; },
   sampleAt(t) { return lightsSampleAt(t); },
+  editTimeAt(t) { return editTimeAt(t); },
+  findKeyAt(t) { return findLightKeyAt(t); },
+  addKeyAt(t) { addLightKeyAt(t); },
+  updateKey(idx, t) { updateLightKey(idx, t); },
+  mutateIntensity(t, intensity) { mutateLightAt(t, (s) => { s.key.intensity = intensity; }); },
   setTiming(t, dur) { setTiming(t, dur); },
   setState(patch) { set(patch); },
   setMode(mode) { setHarnessMode?.(mode); },
@@ -69,14 +91,25 @@ await loadLights();
 createRoot(view).render(<Harness />);
 `;
 
+const DEFAULT_DOC = () => ({
+  target: [3.5, 1.5, 3.5],
+  keys: [{ id: "k0", t: 0, preset: "studio-three-point" }],
+});
+
 let dir, vite, page;
 let serverState = {
   version: "v1",
-  data: {
-    target: [3.5, 1.5, 3.5],
-    keys: [{ id: "k0", t: 0, preset: "studio-three-point" }],
-  },
+  data: DEFAULT_DOC(),
   posts: 0,
+};
+
+const waitForPosts = async (above) => {
+  const end = Date.now() + 8000;
+  while (Date.now() < end) {
+    if (serverState.posts > above) return;
+    await Bun.sleep(25);
+  }
+  throw new Error(`Timed out waiting for serverState.posts > ${above} (got ${serverState.posts})`);
 };
 
 const waitUntil = async (expression) => {
@@ -125,6 +158,16 @@ beforeAll(async () => {
         },
         configureServer(server) {
           server.middlewares.use(async (req, res, next) => {
+            if (req.url === "/__test_reset" && req.method === "POST") {
+              const chunks = [];
+              for await (const ch of req) chunks.push(ch);
+              const nextDoc = JSON.parse(Buffer.concat(chunks).toString("utf8") || "null");
+              serverState.version = `v-reset-${Date.now()}`;
+              serverState.posts = 0;
+              serverState.data = nextDoc ?? DEFAULT_DOC();
+              res.end("ok");
+              return;
+            }
             if (req.url === "/api/lights") {
               if (req.method === "GET") {
                 res.setHeader("Content-Type", "application/json");
@@ -183,7 +226,14 @@ afterAll(async () => {
   if (dir) rmSync(dir, { recursive: true, force: true });
 });
 
-test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, godrays, and undo persist cleanly", async () => {
+beforeEach(async () => {
+  await page.evaluate(`window.testLights.resetServer(null)`);
+  await waitUntil(
+    `document.body.textContent.includes('Golden Hour') && window.testLights.edit().keys.length === 1`,
+  );
+});
+
+test("LightPanel presets, Kelvin quick-chips, practical intensity >= 100, and Fog save via /api/lights", async () => {
   const presets = [
     "Golden Hour",
     "Fluorescent Hall",
@@ -193,13 +243,12 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
     "Studio Three-Point",
   ];
   for (const label of presets) {
-    const hasLabel = await page.evaluate(
-      `document.body.textContent.includes(${JSON.stringify(label)})`,
-    );
-    expect(hasLabel).toBe(true);
+    expect(
+      await page.evaluate(`document.body.textContent.includes(${JSON.stringify(label)})`),
+    ).toBe(true);
   }
+  expect(await page.evaluate(`Boolean(document.querySelector('[data-arrow-scroll]'))`)).toBe(true);
 
-  // Click Golden Hour preset
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Golden Hour')).click()`,
   );
@@ -207,7 +256,7 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.godrays?.enabled`)).toBe(true);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.fog?.mode`)).toBe("exp2");
 
-  // Click 9000K quick-chip in Key light section -> clears stale preset tag while keeping values
+  // 9000K quick-chip clears stale preset tag while preserving edits
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('9000K')).click()`,
   );
@@ -216,46 +265,25 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   );
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
 
-  // Add a practical spot light (auto-opens collapsed Practicals section!) & set intensity 28 without clamping
+  // Adding a Spot practical keeps it across preset switch and exposes slider max >= 100
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Spot').click()`,
   );
   await waitUntil(`window.testLights.edit().keys[0]?.practicals?.length === 1`);
-  expect(await page.evaluate(`window.testLights.edit().keys[0].practicals[0].kind`)).toBe("spot");
-
-  // Re-applying a preset preserves placed practicals (does not wipe room lamps!)
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Noir Night')).click()`,
   );
   await waitUntil(`window.testLights.edit().keys[0]?.preset === 'noir-night'`);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.practicals?.length`)).toBe(1);
 
-  // Practical intensity slider inside the practical card allows >= 100 (e.g. templates/film 28)
   const spotIntensityMax = await page.evaluate(`(() => {
     const card = [...document.querySelectorAll('button')].find((b) => (b.getAttribute('aria-label') || '').startsWith('Remove '))?.closest('div.border');
-    if (!card) return 0;
-    const slider = card.querySelector('input[type="range"], [role="slider"]');
+    const slider = card?.querySelector('input[type="range"], [role="slider"]');
     return Number(slider?.getAttribute('aria-valuemax') || slider?.max || 0);
   })()`);
   expect(spotIntensityMax).toBeGreaterThanOrEqual(100);
 
-  // Seek to t=4 and add a second keyframe
-  await page.evaluate(`window.testLights.seek(4)`);
-  await waitUntil(`document.body.textContent.includes('1 key · @')`);
-  await page.evaluate(
-    `document.querySelector('button[title="Add lighting keyframe at playhead"]')?.click() ?? [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label')||'').includes('Add lighting')).click()`,
-  );
-  await waitUntil(`window.testLights.edit().keys.length === 2`);
-  expect(await page.evaluate(`window.testLights.edit().keys[1].t`)).toBeCloseTo(4, 2);
-
-  // Under timing freeze at t=2 (duration 3s), lightsSampleAt reads scene frame time instead of heard time
-  await page.evaluate(`window.testLights.setTiming({ freezes: [{ at: 2, duration: 3 }] }, 10)`);
-  const atFreezeStart = await page.evaluate(`window.testLights.sampleAt(2).key.intensity`);
-  const insideFreeze = await page.evaluate(`window.testLights.sampleAt(4).key.intensity`);
-  expect(insideFreeze).toBeCloseTo(atFreezeStart, 4);
-  await page.evaluate(`window.testLights.setTiming({}, 10)`);
-
-  // Open Fog section if collapsed, then switch Fog mode to Linear cleanly
+  // Switch Fog mode to Linear and poll /api/lights persistence deterministically
   await page.evaluate(
     `(() => { if (![...document.querySelectorAll('button,[role="tab"],[role="radio"]')].some((b) => b.textContent.trim() === 'Linear')) [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Fog')?.click(); })()`,
   );
@@ -265,54 +293,186 @@ test("LightPanel presets, Kelvin quick-chips, keyframe CRUD, fog, practicals, go
   await page.evaluate(
     `[...document.querySelectorAll('button,[role="tab"],[role="radio"]')].find((b) => b.textContent.trim() === 'Linear').click()`,
   );
-  await waitUntil(`window.testLights.edit().keys[1]?.fog?.mode === 'linear'`);
+  await waitUntil(`window.testLights.edit().keys[0]?.fog?.mode === 'linear'`);
+  await waitForPosts(0);
+  expect(serverState.posts).toBeGreaterThan(0);
+  expect(serverState.data.keys[0]?.fog?.mode).toBe("linear");
+  expect(await page.evaluate(`window.errors`)).toEqual([]);
+});
 
-  // Verify keyboard events inside inputs do not propagate to document hotkeys & typing #abc stays buffered until #abcdef
-  const hexResult = await page.evaluate(`(() => {
-    let hit = false;
-    const onKey = () => { hit = true; };
+test("ColorKelvinField skips unchanged focus+blur, supports Escape cancel, Enter commit, and stopPropagation", async () => {
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Golden Hour')).click()`,
+  );
+  await waitUntil(`window.testLights.edit().keys[0]?.preset === 'golden-hour'`);
+  await waitForPosts(0);
+  const postsBeforeBlur = serverState.posts;
+
+  // Focus & blur unchanged must NOT clear preset or schedule another save POST
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="Key hex color"]');
+    input.focus();
+    input.blur();
+  })()`);
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBe("golden-hour");
+  await Bun.sleep(160);
+  expect(serverState.posts).toBe(postsBeforeBlur);
+
+  // Partial #123 + Escape cancels cleanly without mutating key color; Space does not bubble to document
+  const escapeCheck = await page.evaluate(`(() => {
+    let bubbled = false;
+    const onKey = () => { bubbled = true; };
     document.addEventListener('keydown', onKey);
     const input = document.querySelector('input[aria-label="Key hex color"]');
-    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    document.removeEventListener('keydown', onKey);
-    const prevColor = window.testLights.edit().keys[1]?.key?.color;
+    const before = input.value;
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
     input.focus();
-    setter.call(input, '#abc');
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
+    setter.call(input, '#123');
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    const afterPartial = window.testLights.edit().keys[1]?.key?.color;
-    setter.call(input, '#abcdef');
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    const afterFull = window.testLights.edit().keys[1]?.key?.color;
-    return { hit, prevColor, afterPartial, afterFull };
+    const afterPartial = window.testLights.edit().keys[0]?.key?.color;
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    document.removeEventListener('keydown', onKey);
+    return { bubbled, before, afterPartial };
   })()`);
-  expect(hexResult.hit).toBe(false);
-  expect(hexResult.afterPartial).toBe(hexResult.prevColor);
-  expect(hexResult.afterFull).toBe("#abcdef");
-
-  // Wait for auto-save to hit /api/lights cleanly with schema validation
-  await waitUntil(`window.testLights.edit().keys.length === 2`);
-  await Bun.sleep(400);
-  expect(serverState.posts).toBeGreaterThan(0);
-  expect(serverState.data.keys).toHaveLength(2);
-
-  // Undo reverts cleanly without console errors
-  await page.evaluate(`window.testLights.undo()`);
-  await waitUntil(`window.testLights.edit().keys[1]?.key?.color !== '#abcdef'`);
-
-  // Side wide & narrow render LightPanel properly when lights: true and cam: false
-  await page.evaluate(
-    `(() => { window.testLights.setState({ cam: false, lights: true, side: 'notes' }); window.testLights.setMode('side-wide-lights-only'); })()`,
-  );
-  await waitUntil(`document.body.textContent.includes('Golden Hour')`);
-  await page.evaluate(`(() => { window.testLights.setMode('side-narrow-lights-only'); })()`);
+  expect(escapeCheck.bubbled).toBe(false);
+  expect(escapeCheck.afterPartial).toBe(escapeCheck.before);
   await waitUntil(
-    `[...document.querySelectorAll('[role="tab"]')].some((el) => el.textContent.trim() === 'Light')`,
+    `document.querySelector('input[aria-label="Key hex color"]')?.value === ${JSON.stringify(escapeCheck.before)}`,
   );
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBe("golden-hour");
+
+  // Trimmed 3-digit hex commits on Enter
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label="Key hex color"]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    input.focus();
+    setter.call(input, '  #AbC  ');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  })()`);
+  await waitUntil(`window.testLights.edit().keys[0]?.key?.color === '#aabbcc'`);
+  expect(await page.evaluate(`window.errors`)).toEqual([]);
+});
+
+test("PracticalNameInput Escape cancels draft without blur commit and Enter commits", async () => {
   await page.evaluate(
-    `[...document.querySelectorAll('[role="tab"]')].find((el) => el.textContent.trim() === 'Light').click()`,
+    `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Point').click()`,
+  );
+  await waitUntil(`window.testLights.edit().keys[0]?.practicals?.length === 1`);
+  const origName = await page.evaluate(`window.testLights.edit().keys[0].practicals[0].name`);
+
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label^="Practical "]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    input.focus();
+    setter.call(input, 'Should Cancel');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  })()`);
+  await waitUntil(
+    `document.querySelector('input[aria-label^="Practical "]')?.value === ${JSON.stringify(origName)}`,
+  );
+  expect(await page.evaluate(`window.testLights.edit().keys[0].practicals[0].name`)).toBe(origName);
+
+  await page.evaluate(`(() => {
+    const input = document.querySelector('input[aria-label^="Practical "]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    input.focus();
+    setter.call(input, 'Overhead Lamp');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  })()`);
+  await waitUntil(`window.testLights.edit().keys[0].practicals[0].name === 'Overhead Lamp'`);
+  expect(await page.evaluate(`window.errors`)).toEqual([]);
+});
+
+test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, updateLightKey preset clear, and undo", async () => {
+  // Load a doc with explicit per-key target & preset to test target preservation and updateLightKey
+  await page.evaluate(
+    `window.testLights.resetServer(${JSON.stringify({
+      target: [0, 1.5, 0],
+      keys: [{ id: "k0", t: 0, preset: "golden-hour", target: [5, 2, 1] }],
+    })})`,
+  );
+  await waitUntil(`window.testLights.edit().keys[0]?.target?.[0] === 5`);
+
+  await page.evaluate(`window.testLights.mutateIntensity(0, 7.5)`);
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.target`)).toEqual([5, 2, 1]);
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
+
+  // Re-apply preset then updateLightKey must clear preset
+  await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Noir Night')).click()`,
+  );
+  await waitUntil(`window.testLights.edit().keys[0]?.preset === 'noir-night'`);
+  await page.evaluate(`window.testLights.updateKey(0, 0)`);
+  expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
+
+  // Seek to t=4 and add second keyframe via UI
+  await page.evaluate(`window.testLights.seek(4)`);
+  await waitUntil(`document.body.textContent.includes('1 key · @')`);
+  await page.evaluate(
+    `document.querySelector('button[title="Add lighting keyframe at playhead"]')?.click() ?? [...document.querySelectorAll('button')].find(b => (b.getAttribute('aria-label')||'').includes('Add lighting')).click()`,
+  );
+  await waitUntil(`window.testLights.edit().keys.length === 2`);
+
+  // Under timing freeze [2..5] at frame t=2, edits at t=2.5 and t=4.2 deduplicate to one key at t=2
+  await page.evaluate(`window.testLights.setTiming({ freezes: [{ at: 2, duration: 3 }] }, 10)`);
+  expect(await page.evaluate(`window.testLights.sampleAt(4).key.intensity`)).toBeCloseTo(
+    await page.evaluate(`window.testLights.sampleAt(2).key.intensity`),
+    4,
+  );
+  await page.evaluate(`window.testLights.mutateIntensity(2.5, 6.2)`);
+  await page.evaluate(`window.testLights.mutateIntensity(4.2, 8.8)`);
+  expect(await page.evaluate(`window.testLights.edit().keys.length`)).toBe(3);
+  expect(await page.evaluate(`window.testLights.findKeyAt(4.2).exactIndex`)).not.toBeNull();
+  expect(await page.evaluate(`window.testLights.sampleAt(2).key.intensity`)).toBeCloseTo(8.8, 3);
+
+  // Undo reverts latest freeze edit cleanly
+  await page.evaluate(`window.testLights.undo()`);
+  expect(await page.evaluate(`window.testLights.sampleAt(2).key.intensity`)).toBeCloseTo(6.2, 3);
+  expect(await page.evaluate(`window.errors`)).toEqual([]);
+});
+
+test("Side wide and narrow route lights-only cleanly when side is cam or transition", async () => {
+  // Wide mode with side: "cam" and cam: false renders only Light tab (no Cam/Speed/Anim/Adjust)
+  await page.evaluate(
+    `(() => { window.testLights.setState({ cam: false, lights: true, side: 'cam' }); window.testLights.setMode('side-wide-lights-only'); })()`,
   );
   await waitUntil(`document.body.textContent.includes('Golden Hour')`);
+  const wideTabs = await page.evaluate(
+    `[...document.querySelectorAll('[role="tab"]')].map((el) => el.textContent.trim())`,
+  );
+  expect(wideTabs).toContain("Light");
+  expect(wideTabs).not.toContain("Cam");
+  expect(wideTabs).not.toContain("Speed");
 
+  // Wide mode with side: "transition" falls away from dead Transition tab cleanly
+  await page.evaluate(
+    `window.testLights.setState({ cam: false, lights: true, side: 'transition' })`,
+  );
+  await waitUntil(
+    `![...document.querySelectorAll('[role="tab"]')].some((el) => el.textContent.trim() === 'Transition')`,
+  );
+
+  // Narrow mode with side: "cam" hides Camera-part Segmented switcher and mounts LightPanel directly
+  await page.evaluate(
+    `(() => { window.testLights.setState({ cam: false, lights: true, side: 'cam' }); window.testLights.setMode('side-narrow-lights-only'); })()`,
+  );
+  await waitUntil(`document.body.textContent.includes('Golden Hour')`);
+  expect(await page.evaluate(`Boolean(document.querySelector('[aria-label="Camera part"]'))`)).toBe(
+    false,
+  );
+
+  // Narrow mode with side: "transition" falls back cleanly to Notes instead of falling through to LessonsPanel
+  await page.evaluate(
+    `window.testLights.setState({ cam: false, lights: true, side: 'transition' })`,
+  );
+  await waitUntil(`!document.body.textContent.includes('Golden Hour')`);
+  const narrowActive = await page.evaluate(
+    `document.querySelector('[aria-label="Panels"] [role="tab"][aria-selected="true"]')?.textContent?.trim() ?? ""`,
+  );
+  expect(narrowActive.startsWith("Notes")).toBe(true);
   expect(await page.evaluate(`window.errors`)).toEqual([]);
 });

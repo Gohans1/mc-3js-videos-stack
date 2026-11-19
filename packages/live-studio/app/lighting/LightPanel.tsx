@@ -93,7 +93,7 @@ export function LightPanel() {
   const activePreset = (currentKey?.preset ?? activeKey?.preset ?? "") as LightPresetId | "";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
+    <div data-arrow-scroll className="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 pb-4">
       <SaveStatus state={saved} hideWhenIdle className="block pb-1" />
 
       <div className="border-hairline mb-2 flex flex-col gap-2 border-b pb-2">
