@@ -155,10 +155,14 @@ const containsNestedTimed = (v: unknown, seen: WeakSet<object>): boolean => {
   if (!v || typeof v !== "object") return false;
   if (seen.has(v)) return false;
   seen.add(v);
-  if (Array.isArray(v)) {
-    return v.some((item) => isTimedKey(item) || containsNestedTimed(item, seen));
+  try {
+    if (Array.isArray(v)) {
+      return v.some((item) => isTimedKey(item) || containsNestedTimed(item, seen));
+    }
+    return Object.values(v).some((child) => isTimedKey(child) || containsNestedTimed(child, seen));
+  } finally {
+    seen.delete(v);
   }
-  return Object.values(v).some((child) => isTimedKey(child) || containsNestedTimed(child, seen));
 };
 
 /**
@@ -173,16 +177,20 @@ export const nestedTimedArrayPaths = (
   if (!v || typeof v !== "object") return [];
   if (seen.has(v)) return [];
   seen.add(v);
-  if (Array.isArray(v)) {
-    if (!v.length || v.every(isTimedKey)) return [];
-    const hasNested = v.some(
-      (item) =>
-        !!item &&
-        typeof item === "object" &&
-        !isTimedKey(item) &&
-        containsNestedTimed(item, new WeakSet<object>([v])),
-    );
-    return hasNested ? [path] : [];
+  try {
+    if (Array.isArray(v)) {
+      if (!v.length || v.every(isTimedKey)) return [];
+      const hasNested = v.some(
+        (item) =>
+          !!item &&
+          typeof item === "object" &&
+          !isTimedKey(item) &&
+          containsNestedTimed(item, seen),
+      );
+      return hasNested ? [path] : [];
+    }
+    return Object.entries(v).flatMap(([k, x]) => nestedTimedArrayPaths(x, [...path, k], seen));
+  } finally {
+    seen.delete(v);
   }
-  return Object.entries(v).flatMap(([k, x]) => nestedTimedArrayPaths(x, [...path, k], seen));
 };

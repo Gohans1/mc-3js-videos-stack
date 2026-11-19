@@ -5,6 +5,7 @@ import type {
   LoadModelArgs,
   ModelReference,
   ParseBlockstateArgs,
+  ParseItemDefinitionArgs,
   ResolvedModel,
 } from "block-model-renderer";
 import * as THREE from "three";
@@ -62,6 +63,11 @@ export interface ModelRendererApi {
     id: string,
     args?: ParseBlockstateArgs,
   ) => Promise<ModelReference[]>;
+  parseItemDefinition: (
+    assets: AssetsInput,
+    id: string,
+    args?: ParseItemDefinitionArgs,
+  ) => Promise<ModelReference[]>;
   resolveModelData: (assets: AssetsInput, model: ModelReference | string) => Promise<ResolvedModel>;
   loadModel: (
     scene: THREE.Object3D | null,
@@ -103,15 +109,23 @@ function normalizeBlockId(raw: string): string {
   return /^block:[^:]+:.+/.test(trimmed) ? trimmed.slice(6) : trimmed;
 }
 
-function normalizeItemModelRef(raw: string): string {
+function parseItemInput(raw: string): { ns: string; path: string; isExplicitPath: boolean } {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("itemModel requires a non-empty item id");
   const stripped = /^item:[^:]+:.+/.test(trimmed) ? trimmed.slice(5) : trimmed;
   const colon = stripped.indexOf(":");
   const ns = colon >= 0 ? stripped.slice(0, colon) : "minecraft";
   const path = colon >= 0 ? stripped.slice(colon + 1) : stripped;
-  const modelPath = path.includes("/") ? path : `item/${path}`;
-  return `${ns}:${modelPath}`;
+  if (!ns || !path)
+    throw new Error(`itemModel requires a valid item id, got ${JSON.stringify(raw)}`);
+  return { ns, path, isExplicitPath: path.includes("/") };
+}
+
+function isMissingSentinel(parts: ModelReference[]): boolean {
+  if (parts.length !== 1) return false;
+  const first = parts[0];
+  const model = typeof first === "string" ? first : first?.model;
+  return model === "block-model-renderer:missing" || model === "block-model-renderer:missing.json";
 }
 
 /**
@@ -138,6 +152,7 @@ export async function blockModel(
     lighting: opts.lighting ?? "scene",
     animate: opts.animate ?? false,
     display: opts.display ?? {},
+    block: { id: blockId, properties },
   };
   for (const part of parts) {
     const resolved = await bmr.resolveModelData(sources, part);
@@ -149,8 +164,9 @@ export async function blockModel(
 }
 
 /**
- * Loads a standalone Minecraft item (including extruded 3D builtin/generated sprites)
- * scaled by (1/16) * size inside a unit-scale holder Group.
+ * Loads a standalone Minecraft item (1.21.4+ item definitions, composite/special items,
+ * legacy mod models, and extruded 3D builtin/generated sprites) scaled by (1/16) * size
+ * inside a unit-scale holder Group.
  */
 export async function itemModel(
   sources: AssetsInput,
@@ -161,20 +177,34 @@ export async function itemModel(
   if (!Number.isFinite(size) || size <= 0) {
     throw new Error(`itemModel size must be a positive number, got ${size}`);
   }
-  const modelRef = normalizeItemModelRef(id);
+  const { ns, path, isExplicitPath } = parseItemInput(id);
   const bmr = opts.renderer ?? (await loadBmr());
-  const resolved = await bmr.resolveModelData(sources, { model: modelRef, type: "item" });
-  const loaded = await bmr.loadModel(null, sources, resolved, {
+  const loadArgs: LoadModelArgs = {
     lighting: opts.lighting ?? "scene",
     animate: opts.animate ?? false,
     display: opts.display ?? {},
-  });
+  };
+
+  const holderName = `${ns}:${path}`;
+  let parts: ModelReference[];
+  if (isExplicitPath) {
+    parts = [{ model: holderName, type: "item" }];
+  } else {
+    const parsed = await bmr.parseItemDefinition(sources, holderName, {
+      display: loadArgs.display,
+    });
+    parts = isMissingSentinel(parsed) ? [{ model: `${ns}:item/${path}`, type: "item" }] : parsed;
+  }
 
   const holder = new THREE.Group();
-  holder.name = modelRef;
+  holder.name = holderName;
   const inner = new THREE.Group();
   inner.scale.setScalar(BLOCK_SCALE * size);
-  inner.add(loaded);
+  for (const part of parts) {
+    const resolved = await bmr.resolveModelData(sources, part);
+    const loaded = await bmr.loadModel(null, sources, resolved, loadArgs);
+    inner.add(loaded);
+  }
   applyShadows(inner, opts.shadows ?? true);
   holder.add(inner);
   return holder;
@@ -242,9 +272,9 @@ function computeElementsBounds(
   let maxZ = -Infinity;
   let sawPoint = false;
 
-  const bsX = opts?.x ?? 0;
-  const bsY = opts?.y ?? 0;
-  const bsZ = opts?.z ?? 0;
+  const bsX = typeof opts?.x === "number" && Number.isFinite(opts.x) ? opts.x : 0;
+  const bsY = typeof opts?.y === "number" && Number.isFinite(opts.y) ? opts.y : 0;
+  const bsZ = typeof opts?.z === "number" && Number.isFinite(opts.z) ? opts.z : 0;
   const hasBlockRot = Boolean(bsX || bsY || bsZ);
 
   for (const el of elements) {
@@ -281,7 +311,7 @@ function computeElementsBounds(
         }
       }
       if (angle) {
-        const abs = Math.abs(angle);
+        const abs = Math.abs(angle) % 90;
         const eff = abs > 45 ? 90 - abs : abs;
         const cos = Math.cos(eff * DEG);
         if (Math.abs(cos) > 1e-6) rescaleFactor = 1 / cos;

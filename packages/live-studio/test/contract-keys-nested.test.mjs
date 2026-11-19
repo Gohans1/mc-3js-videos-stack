@@ -33,6 +33,12 @@ describe("nestedTimedArrayPaths", () => {
     };
     expect(nestedTimedArrayPaths(deeplyNested)).toEqual([["cast", "extras"], ["doors"]]);
 
+    // Mixed timed + non-timed array whose non-timed object holds nested timed keys
+    const mixed = {
+      entries: [{ t: 0 }, { id: "boss", moves: [{ t: 1 }] }],
+    };
+    expect(nestedTimedArrayPaths(mixed)).toEqual([["entries"]]);
+
     // Root-level array of actor objects
     const rootList = [{ id: "boss", moves: [{ t: 0 }] }];
     expect(nestedTimedArrayPaths(rootList)).toEqual([[]]);
@@ -60,9 +66,16 @@ describe("nestedTimedArrayPaths", () => {
     expect(nestedTimedArrayPaths(42)).toEqual([]);
   });
 
-  test("handles cyclic object graphs safely without throwing", () => {
+  test("preserves DAG shared references via backtracking and guards ancestor cycles cleanly", () => {
+    const shared = [{ id: "boss", moves: [{ t: 0 }] }];
+    expect(nestedTimedArrayPaths({ left: shared, right: shared })).toEqual([["left"], ["right"]]);
+
     const node = { id: "a" };
     node.self = node;
     expect(nestedTimedArrayPaths({ items: [node] })).toEqual([]);
+
+    const root = { items: [] };
+    root.items.push({ id: "back", parent: root });
+    expect(nestedTimedArrayPaths(root)).toEqual([]);
   });
 });

@@ -38,17 +38,22 @@ export function parseNewFilmArgs(argv: string[]): {
   name?: string;
   portArg?: string;
   ratio?: string;
+  duplicateRatio?: boolean;
 } {
   const words: string[] = [];
   let ratio: string | undefined;
+  let duplicateRatio = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--ratio") {
+      if (ratio !== undefined) duplicateRatio = true;
       ratio = argv[++i];
     } else {
       words.push(argv[i]!);
     }
   }
-  return { name: words[0], portArg: words[1], ratio };
+  return duplicateRatio
+    ? { name: words[0], portArg: words[1], ratio, duplicateRatio }
+    : { name: words[0], portArg: words[1], ratio };
 }
 
 /** Extracts a normalized lowercase hostname from `tailscale status --json` output, or null. */
@@ -57,7 +62,9 @@ export function parseTailscaleDnsName(jsonText: string): string | null {
     const parsed = JSON.parse(jsonText);
     const raw = typeof parsed?.Self?.DNSName === "string" ? parsed.Self.DNSName.trim() : "";
     const clean = raw.replace(/\.+$/, "").toLowerCase();
-    if (!clean || /\s/.test(clean)) return null;
+    if (!clean || !/^[a-z0-9.-]+$/.test(clean) || clean.startsWith(".") || clean.includes("..")) {
+      return null;
+    }
     return clean;
   } catch {
     return null;
@@ -87,7 +94,7 @@ export function detectTailscaleHost(runCmd: TailscaleRunner = spawnSync): string
 
 function main() {
   const argv = cliArgs(HELP, ["--ratio RATIO"], 2);
-  const { name, portArg, ratio: ratioArg } = parseNewFilmArgs(argv);
+  const { name, portArg, ratio: ratioArg, duplicateRatio } = parseNewFilmArgs(argv);
   if (
     !name ||
     !/^[a-z0-9][a-z0-9-]*$/.test(name) ||
@@ -100,6 +107,12 @@ function main() {
   }
   if (portArg !== undefined && !(/^\d+$/.test(portArg) && +portArg >= 1024 && +portArg <= 65535)) {
     console.error(`the studio port is a number from 1024 to 65535, got ${portArg}`);
+    process.exit(2);
+  }
+  if (duplicateRatio) {
+    console.error(
+      `--ratio was passed more than once; pass it once: --ratio ${VALID_RATIOS.join("|")}`,
+    );
     process.exit(2);
   }
   let ratio: FilmRatio | undefined;

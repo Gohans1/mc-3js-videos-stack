@@ -416,16 +416,23 @@ const faceFrame = (root, head) => {
 
 const makeFace = (root, head, skin, glow = 0.08) => {
   const { px, localPx, up, right, add } = faceFrame(root, head);
-  const patch = skin.getImageData(8, 8, 8, 8).data;
-  const pix = (x, y) => {
-    const i = (y * 8 + x) * 4;
-    return new THREE.Color(`rgb(${patch[i]},${patch[i + 1]},${patch[i + 2]})`);
+  const sampleFaceColors = (skinCtx) => {
+    const s = Math.max(1, Math.round(skinCtx.canvas.width / 64));
+    const patch = skinCtx.getImageData(8 * s, 8 * s, 8 * s, 8 * s).data;
+    const stride = 8 * s;
+    const pix = (x, y) => {
+      const i = (y * s * stride + x * s) * 4;
+      return new THREE.Color(`rgb(${patch[i]},${patch[i + 1]},${patch[i + 2]})`);
+    };
+    const skinCol = pix(1, 5);
+    return {
+      lidCol: skinCol.clone().multiplyScalar(0.9),
+      irisCol: pix(2, 4),
+      browCol: pix(3, 0).multiplyScalar(0.75),
+      mouthCol: pix(3, 6).multiplyScalar(0.35),
+    };
   };
-  const skinCol = pix(1, 5),
-    irisCol = pix(2, 4),
-    hairCol = pix(3, 0),
-    lipCol = pix(3, 6);
-  const lidCol = skinCol.clone().multiplyScalar(0.9);
+  const initCol = sampleFaceColors(skin);
   const at = (o, base, x, y) =>
     o.position
       .copy(base)
@@ -441,9 +448,9 @@ const makeFace = (root, head, skin, glow = 0.08) => {
   // Keep near-white emissive restrained to skin glow (<= 0.08) so eyes/teeth never trip BloomEffect
   const whiteGlow = Math.min(0.08, Math.max(0, Number.isFinite(glow) ? glow : 0.08));
   const white = layer(flat("#f4f4f4", whiteGlow), 0),
-    iris = layer(flat(irisCol, 0.12), 1),
+    iris = layer(flat(initCol.irisCol, 0.12), 1),
     dark = layer(flat("#120d1c", 0), 2),
-    lid = layer(flat(lidCol, 0.1), 3);
+    lid = layer(flat(initCol.lidCol, 0.1), 3);
   const W = 2,
     H = 1.25,
     Z = 0.06,
@@ -466,7 +473,7 @@ const makeFace = (root, head, skin, glow = 0.08) => {
     }
     return e;
   });
-  const browMat = flat(hairCol.clone().multiplyScalar(0.75), 0.2);
+  const browMat = flat(initCol.browCol, 0.2);
   const brows = [-1, 1].map((side) => {
     const m = add(
       new THREE.Mesh(new THREE.BoxGeometry(2.2 * px, 0.5 * px, 0.3 * px), browMat),
@@ -477,9 +484,20 @@ const makeFace = (root, head, skin, glow = 0.08) => {
     return { m, side, base: m.position.clone(), q: m.quaternion.clone() };
   });
   // mouth: a dark opening with a strip of teeth along the top and the tongue along the bottom; corners lift for a smile
-  const mouthMat = layer(flat(lipCol.clone().multiplyScalar(0.35), 0), 0),
+  const mouthMat = layer(flat(initCol.mouthCol, 0), 0),
     teethMat = layer(flat("#efeee4", whiteGlow), 1),
     tongueMat = layer(flat("#b9534f", 0.1), 1);
+  const recolor = (skinCtx) => {
+    const next = sampleFaceColors(skinCtx);
+    iris.color.copy(next.irisCol);
+    iris.emissive.copy(next.irisCol);
+    lid.color.copy(next.lidCol);
+    lid.emissive.copy(next.lidCol);
+    browMat.color.copy(next.browCol);
+    browMat.emissive.copy(next.browCol);
+    mouthMat.color.copy(next.mouthCol);
+    mouthMat.emissive.copy(next.mouthCol);
+  };
   const plane = (mat) => add(new THREE.Mesh(new THREE.PlaneGeometry(px, px), mat), 0, 6, Z);
   const hole = plane(mouthMat),
     teeth = plane(teethMat),
@@ -560,7 +578,7 @@ const makeFace = (root, head, skin, glow = 0.08) => {
       rect(corners[0], -cw, cy, cSize, cSize);
       rect(corners[1], cw, cy, cSize, cSize);
     },
-    { meshes },
+    { meshes, recolor },
   );
 };
 
@@ -652,9 +670,16 @@ export async function makePlayer(
   let liveMap = skinTex(canvas);
   const redrawSkin = () => {
     const f = FACES.find((x) => x.id === faceId);
-    ctx.clearRect?.(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(baseCanvas, 0, 0);
-    if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+    ctx.save?.();
+    try {
+      if ("globalAlpha" in ctx) ctx.globalAlpha = 1;
+      if ("globalCompositeOperation" in ctx) ctx.globalCompositeOperation = "source-over";
+      ctx.clearRect?.(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(baseCanvas, 0, 0);
+      if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+    } finally {
+      ctx.restore?.();
+    }
     if (overlayFn) {
       ctx.save?.();
       try {
@@ -734,10 +759,19 @@ export async function makePlayer(
     }
     const w = imageOrCanvas.width;
     const h = imageOrCanvas.height;
-    baseCanvas.width = w;
-    baseCanvas.height = h;
-    baseCtx.clearRect?.(0, 0, w, h);
-    baseCtx.drawImage(imageOrCanvas, 0, 0);
+    if (baseCanvas.width !== w || baseCanvas.height !== h) {
+      baseCanvas.width = w;
+      baseCanvas.height = h;
+    }
+    baseCtx.save?.();
+    try {
+      if ("globalAlpha" in baseCtx) baseCtx.globalAlpha = 1;
+      if ("globalCompositeOperation" in baseCtx) baseCtx.globalCompositeOperation = "source-over";
+      baseCtx.clearRect?.(0, 0, w, h);
+      baseCtx.drawImage(imageOrCanvas, 0, 0);
+    } finally {
+      baseCtx.restore?.();
+    }
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
@@ -750,6 +784,7 @@ export async function makePlayer(
       prevMap.dispose();
     }
     redrawSkin();
+    gameFace?.recolor(baseCtx);
   };
   const paintSkinOverlay = (drawFn) => {
     overlayFn = typeof drawFn === "function" ? drawFn : null;
@@ -769,17 +804,29 @@ export async function makePlayer(
   handL.position.set(6 * PX, 12 * PX, 2 * PX);
   rig.add(handL);
   b.laL.attach(handL);
-  // handR / handL local axes (1:1 metres, attached to lower-arm bones):
+  // handR / handL local axes (1:1 metres, attached to lower-arm bones; call holdProp during setup, not per-frame):
   //   -y = down the arm toward fingertips, +z = forward out of knuckles,
   //   +x = character's left (inward/thumb-side on handR, outward on handL); pos in metres, rot in radians
-  const holdProp = (side, mesh, { pos, rot } = {}) => {
+  const holdProp = (side, mesh, opts) => {
+    const { pos, rot } = opts ?? {};
     const parent = side === "L" ? handL : side === "R" ? hand : null;
     if (!parent) throw new Error(`holdProp side must be "R" or "L", got ${JSON.stringify(side)}`);
+    const prevParent = mesh?.parent;
     const wrist = new THREE.Group();
     wrist.name = `wrist${side}`;
     if (pos) wrist.position.set(pos[0], pos[1], pos[2]);
     if (rot) wrist.rotation.set(rot[0], rot[1], rot[2]);
-    if (mesh) wrist.add(mesh);
+    if (mesh) {
+      wrist.add(mesh);
+      if (
+        prevParent &&
+        (prevParent.parent === hand || prevParent.parent === handL) &&
+        (prevParent.name === "wristR" || prevParent.name === "wristL") &&
+        prevParent.children.length === 0
+      ) {
+        prevParent.removeFromParent();
+      }
+    }
     parent.add(wrist);
     return wrist;
   };

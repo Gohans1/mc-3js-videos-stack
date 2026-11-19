@@ -43,7 +43,8 @@ function makeFixture() {
     "packages/mc-assets/src/catalog.ts",
     "packages/mc-assets/src/picks-manifest.ts",
   ]) {
-    put(root, file, readFileSync(join(ROOT, file), "utf8"));
+    const src = join(ROOT, file);
+    if (existsSync(src)) put(root, file, readFileSync(src, "utf8"));
   }
   cpSync(join(ROOT, "packages/live-studio/demo"), join(root, "packages/live-studio/demo"), {
     recursive: true,
@@ -116,7 +117,7 @@ function runNewFilm(root, args, extraEnv = {}) {
 }
 
 describe("new_film helpers", () => {
-  test("parseNewFilmArgs extracts positional name/port and --ratio in any order", () => {
+  test("parseNewFilmArgs extracts positional name/port, --ratio in any order, and flags duplicates", () => {
     expect(parseNewFilmArgs(["short-one", "--ratio", "9:16"])).toEqual({
       name: "short-one",
       portArg: undefined,
@@ -137,6 +138,12 @@ describe("new_film helpers", () => {
       portArg: undefined,
       ratio: undefined,
     });
+    expect(parseNewFilmArgs(["dup", "--ratio", "4:3", "--ratio", "9:16"])).toEqual({
+      name: "dup",
+      portArg: undefined,
+      ratio: "9:16",
+      duplicateRatio: true,
+    });
   });
 
   test("validateRatio accepts only 16:9 and 9:16 matching contract.ts", () => {
@@ -147,14 +154,16 @@ describe("new_film helpers", () => {
     expect(validateRatio("")).toBeNull();
   });
 
-  test("parseTailscaleDnsName normalizes Self.DNSName and rejects invalid payloads", () => {
+  test("parseTailscaleDnsName normalizes Self.DNSName and rejects unsafe hostnames or invalid payloads", () => {
     expect(
       parseTailscaleDnsName(JSON.stringify({ Self: { DNSName: "Studio-PC.tail123.ts.net." } })),
     ).toBe("studio-pc.tail123.ts.net");
     expect(parseTailscaleDnsName(JSON.stringify({ Self: { DNSName: "my-box.ts.net" } }))).toBe(
       "my-box.ts.net",
     );
-    expect(parseTailscaleDnsName(JSON.stringify({ Self: { DNSName: "   " } }))).toBeNull();
+    for (const bad of ["   ", "foo/bar", "a;rm", ".leading.ts.net", "bad..host", "host\nline2"]) {
+      expect(parseTailscaleDnsName(JSON.stringify({ Self: { DNSName: bad } }))).toBeNull();
+    }
     expect(parseTailscaleDnsName(JSON.stringify({ Self: {} }))).toBeNull();
     expect(parseTailscaleDnsName("{not json")).toBeNull();
   });
@@ -181,7 +190,7 @@ describe("new_film helpers", () => {
 });
 
 describe("new_film CLI --ratio and .live_hosts seeding", () => {
-  test("--help documents --ratio and invalid --ratio exits 2 before copying", () => {
+  test("--help documents --ratio and invalid or duplicate --ratio exits 2 before copying", () => {
     const root = makeFixture();
     try {
       const help = runNewFilm(root, ["--help"]);
@@ -192,6 +201,11 @@ describe("new_film CLI --ratio and .live_hosts seeding", () => {
       expect(bad.status).toBe(2);
       expect(bad.stderr).toContain("--ratio");
       expect(existsSync(join(root, "films/bad-ratio"))).toBe(false);
+
+      const dup = runNewFilm(root, ["dup-ratio", "--ratio", "4:3", "--ratio", "9:16"]);
+      expect(dup.status).toBe(2);
+      expect(dup.stderr).toContain("--ratio");
+      expect(existsSync(join(root, "films/dup-ratio"))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
