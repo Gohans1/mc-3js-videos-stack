@@ -622,15 +622,24 @@ const setupQuadFilm = (t, chrome, tlHex = "0xdd2222") => {
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
   );
   const sceneFile = join(dir, "src/scene.ts");
+  const cameraModule = JSON.stringify(
+    resolve(STUDIO, "../film-stage/src/camera.ts").replaceAll("\\", "/"),
+  );
   const makeScene = (hex) => `import * as THREE from "three";
+import { orthographicCamera, projectCamera } from ${cameraModule};
 export const DURATION = 2, SHOTS_OUT = [{ t: 0, what: "quadrants" }];
 export function buildScene(canvas, W, H) {
   const renderer = new THREE.WebGLRenderer({ canvas, preserveDrawingBuffer: true });
   renderer.setSize(W, H, false);
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
-  camera.position.set(0, 0, 5);
-  camera.lookAt(0, 0, 0);
+  const perspective = new THREE.PerspectiveCamera(60, W / H, 0.1, 100);
+  const ortho = orthographicCamera(60, W / H);
+  for (const camera of [perspective, ortho]) {
+    camera.position.set(0, 0, 5);
+    camera.lookAt(0, 0, 0);
+    scene.add(camera);
+  }
+  let camera = perspective;
   const quad = (x, y, c) => {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(12, 12), new THREE.MeshBasicMaterial({ color: c }));
     m.position.set(x, y, 0);
@@ -640,7 +649,11 @@ export function buildScene(canvas, W, H) {
   quad(6, 6, 0x11dd33);
   quad(-6, -6, 0x1144ee);
   quad(6, -6, 0xeedd11);
-  return Object.assign(() => renderer.render(scene, camera), { tools: { camera } });
+  return Object.assign((t) => {
+    camera = t >= 1 ? ortho : perspective;
+    projectCamera(camera, W, H);
+    renderer.render(scene, camera);
+  }, { tools: { scene, get camera() { return camera; } } });
 }`;
   writeFileSync(sceneFile, makeScene(tlHex));
   const render = (args, env = {}) =>

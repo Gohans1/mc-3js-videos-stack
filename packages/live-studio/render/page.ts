@@ -4,7 +4,7 @@
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
-import { withCropViewOffset } from "../src/crop.mjs";
+import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
 import { apertureSamples, shutterBounds, shutterTimes } from "../src/shutter";
 import { timingClock } from "../src/timing-state.mjs";
@@ -208,9 +208,17 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     ctx.globalAlpha = 1;
     const i = shotAt(t) - 1;
     const shutter = SHOTS[i]?.shutter;
-    const [from, to] = shutterBounds(t, SHOTS[i]?.t ?? 0, SHOTS[i + 1]?.t ?? DURATION, timingClock.segments);
+    const [from, to] = shutterBounds(
+      t,
+      SHOTS[i]?.t ?? 0,
+      SHOTS[i + 1]?.t ?? DURATION,
+      timingClock.segments,
+    );
     const times = shutterTimes(t, FPS, samples, from, to, shutter);
-    const pupils = apertureSamples(!cfg.draft && render.tools?.apertureSampling ? shutter?.apertureSamples ?? 1 : 1, frame);
+    const pupils = apertureSamples(
+      !cfg.draft && render.tools?.apertureSampling ? (shutter?.apertureSamples ?? 1) : 1,
+      frame,
+    );
     if (times.length === 1 && pupils.length === 1) {
       if (render.renderFrame) await render.renderFrame(t);
       else render(t);
@@ -280,7 +288,13 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
       continue;
     }
-    const cropped = await withCropViewOffset(cam, cfg.W, cfg.H, cfg.crop, async (view) => {
+    const cameras = new Set<OffsettableCamera>([cam]);
+    render.tools?.scene?.traverse((object) => {
+      const candidate = object as unknown as Partial<OffsettableCamera>;
+      if (typeof candidate.setViewOffset === "function")
+        cameras.add(candidate as OffsettableCamera);
+    });
+    const cropped = await withCropViewOffset([...cameras], cfg.W, cfg.H, cfg.crop, async (view) => {
       const rendered = await draw(s.frame, cfg.stillSamples ?? 1);
       if (view.outWidth === cfg.W && view.outHeight === cfg.H) return rendered;
       const outCrop = document.createElement("canvas");

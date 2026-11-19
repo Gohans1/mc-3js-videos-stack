@@ -1,3 +1,5 @@
+import { setCameraRenderRegion } from "film-stage/camera";
+
 export function parseCropRect(spec) {
   if (typeof spec === "object" && spec !== null && !Array.isArray(spec)) {
     return validateCropRect(spec);
@@ -54,29 +56,11 @@ export function computeCropView(fullWidth, fullHeight, rect) {
 
 export function withCropViewOffset(camera, fullWidth, fullHeight, rect, fn) {
   const view = computeCropView(fullWidth, fullHeight, rect);
-  const canOffset = typeof camera?.setViewOffset === "function";
-  const prevView = camera?.view ? { ...camera.view } : null;
-
-  const restore = () => {
-    if (!canOffset) return;
-    if (prevView?.enabled) {
-      camera.setViewOffset(
-        prevView.fullWidth,
-        prevView.fullHeight,
-        prevView.offsetX,
-        prevView.offsetY,
-        prevView.width,
-        prevView.height,
-      );
-    } else if (typeof camera.clearViewOffset === "function") {
-      camera.clearViewOffset();
-    } else if (camera.view) {
-      camera.view.enabled = false;
-      camera.updateProjectionMatrix?.();
-    }
-  };
-
-  if (canOffset) {
+  const cameras = Array.isArray(camera) ? camera : [camera];
+  const offsets = cameras.filter((camera) => typeof camera?.setViewOffset === "function");
+  const restoreViews = offsets.map((camera) => {
+    const previous = camera.view ? { ...camera.view } : null;
+    const region = setCameraRenderRegion(camera, view);
     camera.setViewOffset(
       view.fullWidth,
       view.fullHeight,
@@ -85,17 +69,34 @@ export function withCropViewOffset(camera, fullWidth, fullHeight, rect, fn) {
       view.viewWidth,
       view.viewHeight,
     );
-  }
-
+    return () => {
+      setCameraRenderRegion(camera, region);
+      if (previous?.enabled) {
+        camera.setViewOffset(
+          previous.fullWidth,
+          previous.fullHeight,
+          previous.offsetX,
+          previous.offsetY,
+          previous.width,
+          previous.height,
+        );
+      } else {
+        if (camera.clearViewOffset) camera.clearViewOffset();
+        else if (camera.view) {
+          camera.view.enabled = false;
+          camera.updateProjectionMatrix?.();
+        }
+      }
+    };
+  });
+  const restore = () => restoreViews.forEach((reset) => reset());
   try {
     const result = fn(view);
-    if (result && typeof result.then === "function") {
-      return result.finally(restore);
-    }
+    if (result && typeof result.then === "function") return result.finally(restore);
     restore();
     return result;
-  } catch (err) {
+  } catch (error) {
     restore();
-    throw err;
+    throw error;
   }
 }

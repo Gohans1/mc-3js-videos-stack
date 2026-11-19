@@ -42,7 +42,7 @@ export interface OffsettableCamera {
 export function parseCropRect(spec: string | CropRect): CropRect;
 export function computeCropView(fullWidth: number, fullHeight: number, rect: CropRect): CropView;
 export function withCropViewOffset<T>(
-  camera: OffsettableCamera | null | undefined,
+  camera: OffsettableCamera | readonly OffsettableCamera[] | null | undefined,
   fullWidth: number,
   fullHeight: number,
   rect: CropRect,

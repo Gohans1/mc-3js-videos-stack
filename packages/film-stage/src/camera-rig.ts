@@ -115,6 +115,24 @@ export function apertureOffset(
   return [-x / (camera.aspect * scale), y / scale];
 }
 
+interface CameraRenderRegion {
+  fullWidth: number;
+  fullHeight: number;
+  offsetX: number;
+  offsetY: number;
+  viewWidth: number;
+  viewHeight: number;
+}
+
+const renderRegions = new WeakMap<object, CameraRenderRegion>();
+
+export function setCameraRenderRegion(camera: object, region: CameraRenderRegion | undefined) {
+  const previous = renderRegions.get(camera);
+  if (region) renderRegions.set(camera, region);
+  else renderRegions.delete(camera);
+  return previous;
+}
+
 export function projectCamera(
   camera: RigCamera,
   w: number,
@@ -137,7 +155,19 @@ export function projectCamera(
     y += rig?.frameOffset?.[1] ?? 0;
   }
   const [dx, dy] = pupil ?? [0, 0];
-  if (x || y || dx || dy) camera.setViewOffset(w, h, ((x + dx) * w) / 2, ((y + dy) * h) / 2, w, h);
+  const shiftX = ((x + dx) * w) / 2;
+  const shiftY = ((y + dy) * h) / 2;
+  const region = renderRegions.get(camera);
+  if (region) {
+    camera.setViewOffset(
+      region.fullWidth,
+      region.fullHeight,
+      region.offsetX + shiftX,
+      region.offsetY + shiftY,
+      region.viewWidth,
+      region.viewHeight,
+    );
+  } else if (shiftX || shiftY) camera.setViewOffset(w, h, shiftX, shiftY, w, h);
   else camera.clearViewOffset();
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
