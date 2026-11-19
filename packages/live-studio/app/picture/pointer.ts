@@ -29,7 +29,6 @@ import {
 import { IDLE_VIEWPORT_GESTURE, stepViewport, type ViewportGesture } from "./gesture";
 import { lookAtClick } from "./look";
 import { changePreview, picturePoint } from "./preview-state";
-import { render } from "./render";
 
 export const fit = () => {
   const r = (S.el.view.querySelector("[data-preview-pane]") ?? S.el.view).getBoundingClientRect(),
@@ -155,7 +154,7 @@ export const attachPicture = () => {
   const tappedAt = (x: number, y: number, e: MouseEvent) => {
     if (!S.render || Math.hypot(e.clientX - x, e.clientY - y) > 4) return null;
     if (S.playing) setPlaying(false);
-    void render(S.t);
+    void engine.render(S.t);
     return frac(e);
   };
   // A note box opened mid-flight takes no focus, or the W still held would type into it
@@ -211,21 +210,25 @@ export const attachPicture = () => {
     const pickFocus = get().pickFocus;
     if (pickFocus === null) return false;
     set({ pickFocus: null });
-    const hit = lookAtClick(at[0], at[1]);
-    const cam = S.tools?.camera;
-    if (hit.world && cam) {
-      const dist = Math.hypot(
-        hit.world[0] - cam.position.x,
-        hit.world[1] - cam.position.y,
-        hit.world[2] - cam.position.z,
-      );
-      const focusDist = Math.max(0.05, Math.round(dist * 100) / 100);
-      if (pickFocus === "free") setFreeFocus(focusDist);
-      else setFocus(pickFocus, focusDist);
-      say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
-    } else {
-      say("Nothing hit at that point to focus on");
-    }
+    const measure = () => {
+      const hit = lookAtClick(at[0], at[1]);
+      const cam = S.tools?.camera;
+      if (hit.world && cam) {
+        const dist = Math.hypot(
+          hit.world[0] - cam.position.x,
+          hit.world[1] - cam.position.y,
+          hit.world[2] - cam.position.z,
+        );
+        const focusDist = Math.max(0.05, Math.round(dist * 100) / 100);
+        if (pickFocus === "free") setFreeFocus(focusDist);
+        else setFocus(pickFocus, focusDist);
+        say(`Focus set to ${dist.toFixed(2)} m (${hit.what})`);
+      } else {
+        say("Nothing hit at that point to focus on");
+      }
+    };
+    if (pickFocus === "free") measure();
+    else void engine.render(S.t, measure);
     return true;
   };
   const handleCameraPick = (nx: number, ny: number) => {
@@ -233,7 +236,7 @@ export const attachPicture = () => {
     if (!pick) return false;
     const hit = lookAtClick(nx, ny);
     if (pick.target === "free") applyFreeCameraPick(pick, hit);
-    else void render(S.t, () => applyCameraPick(pick, hit));
+    else void engine.render(S.t, () => applyCameraPick(pick, hit));
     return true;
   };
   addEventListener("pointerup", (e) => {
@@ -349,7 +352,7 @@ export const attachPicture = () => {
       if (get().freeLocked) return;
       const [x, y] = frac(e),
         t = S.t;
-      void render(t, () => {
+      void engine.render(t, () => {
         const hit = lookAtClick(x, y);
         if (hit.world) setOrbitPivot(hit.world);
       });

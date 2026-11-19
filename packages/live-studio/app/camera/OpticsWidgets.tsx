@@ -18,43 +18,11 @@ import { Tip } from "../components/Tip";
 import { S } from "../core/state";
 import { focusLabel } from "../timeline/cam-attributes";
 import { focusTargetNames } from "./cam";
+import { type FocusUiState, readFocusUiState } from "./camera-edit";
+
+export { type FocusUiState, readFocusUiState };
 
 const AXES = ["X", "Y", "Z"] as const;
-
-export interface FocusUiState {
-  mode: "auto" | "meters" | "target";
-  meters: number;
-  target: string;
-  offset: [number, number, number];
-}
-
-export function readFocusUiState(raw: unknown): FocusUiState {
-  if (raw == null) return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
-  if (typeof raw === "number" && Number.isFinite(raw)) {
-    return { mode: "meters", meters: Math.max(0.05, raw), target: "", offset: [0, 0, 0] };
-  }
-  if (typeof raw === "string") {
-    return { mode: "target", meters: 3, target: raw, offset: [0, 0, 0] };
-  }
-  if (typeof raw === "object" && "target" in raw) {
-    const obj = raw as { target?: unknown; offset?: unknown };
-    const off =
-      Array.isArray(obj.offset) && obj.offset.length === 3
-        ? ([Number(obj.offset[0]) || 0, Number(obj.offset[1]) || 0, Number(obj.offset[2]) || 0] as [
-            number,
-            number,
-            number,
-          ])
-        : ([0, 0, 0] as [number, number, number]);
-    return {
-      mode: "target",
-      meters: 3,
-      target: typeof obj.target === "string" ? obj.target : "",
-      offset: off,
-    };
-  }
-  return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
-}
 
 export interface HandheldUiValue {
   kind?: string;
@@ -94,7 +62,7 @@ export function readHandheldUiValue(raw: unknown): HandheldUiValue | null {
 }
 
 const primeItems = [
-  { value: "custom", label: "Prime lenses" },
+  { value: "custom", label: "Primes" },
   ...PRIME_LENSES.map((lens) => ({ value: lens.id, label: lens.title })),
 ];
 
@@ -256,7 +224,7 @@ export function FocusControls({
           }}
         />
       </FieldRow>
-      {focusModeUi !== "target" && (
+      {focusModeUi !== "target" && focusModeUi !== "point" && (
         <FieldRow label="Focus distance">
           <NumberField
             name="Focus distance (m)"
@@ -284,6 +252,27 @@ export function FocusControls({
               {fromShotNote ? "Inherit" : "Auto"}
             </Button>
           )}
+        </FieldRow>
+      )}
+      {focusModeUi === "point" && focusState.point && (
+        <FieldRow label="Focus point">
+          <span className="bg-card border-hairline text-ui flex min-w-0 flex-1 items-center gap-1.5 rounded-md border px-2 py-1">
+            <span className="truncate font-medium">{focusState.label ?? "Surface"}</span>
+            <span className="text-muted-foreground truncate text-xs tabular-nums">
+              ({focusState.point.map((n) => +n.toFixed(2)).join(", ")})
+            </span>
+          </span>
+          <Button
+            size="sm"
+            variant="quiet"
+            disabled={disabled}
+            onClick={() => {
+              setCustomTargetKey(null);
+              onCommitFocus(undefined);
+            }}
+          >
+            {fromShotNote ? "Inherit" : "Auto"}
+          </Button>
         </FieldRow>
       )}
       {focusModeUi === "target" && (
@@ -391,6 +380,7 @@ export function FocusControls({
       </div>
       {effectiveFocus !== undefined &&
         focusModeUi !== "target" &&
+        focusModeUi !== "point" &&
         (typeof effectiveFocus !== "number" || authoredFocus === undefined) && (
           <p className="text-muted-foreground text-xs">
             {focusLabel(effectiveFocus)}

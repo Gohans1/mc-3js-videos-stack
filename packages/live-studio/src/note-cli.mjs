@@ -1,8 +1,10 @@
-// A note fixed, from the AI's side (note.mjs done): filed through the running studio, which owns notes.jsonl while it runs (two
-// writers would lose a note), or straight into the file when no studio is running
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
+
+// A note fixed, from the AI's side (note.mjs done): filed through the running studio, which owns notes.jsonl while it runs (two
+// writers would lose a note), or straight into the file when no studio is running
+import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
 import { noteState, wholeNote } from "./note-state.mjs";
 import { createNotes, deletedSaid, findNote, noteNumbers } from "./notes.mjs";
@@ -67,11 +69,11 @@ export const parseFixCam = (raw) => {
   if (Math.hypot(p[0] - l[0], p[1] - l[1], p[2] - l[2]) <= 1e-4)
     throw new Error("--cam position p and look-at l must differ");
   const fov = parts[6];
-  if (fov !== undefined && (fov < 10 || fov > 120))
-    throw new Error(`--cam fov must be in 10..120, got ${fov}`);
+  if (fov !== undefined && (fov < MIN_FOV || fov > MAX_FOV))
+    throw new Error(`--cam fov must be in ${MIN_FOV}..${MAX_FOV}, got ${fov}`);
   const roll = parts[7];
-  if (roll !== undefined && Math.abs(roll) > Math.PI / 4 + 1e-4)
-    throw new Error(`--cam roll (radians) must stay within +/-pi/4, got ${roll}`);
+  if (roll !== undefined && Math.abs(roll) > Math.PI + 1e-4)
+    throw new Error(`--cam roll (radians) must stay within +/-pi, got ${roll}`);
   return {
     p,
     l,

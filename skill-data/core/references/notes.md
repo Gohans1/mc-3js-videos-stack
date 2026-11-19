@@ -49,9 +49,9 @@ Timeline edits light their tab and the affected track or clip where Studio can i
 
 ## Lessons: what a note teaches
 
-Trong Lessons > AI Inspector, Note for AI hiển thị phần note gửi cho AI, Extracted lessons hiển thị nội dung trích từ Deck và More views mở payload Jev. Preview miễn phí, chọn lại file để khôi phục file đã loại tạm.
+In Lessons > AI Inspector, Note for AI shows the note payload sent to the AI, Extracted lessons shows snippets pulled from the deck, and More views opens the Jev payload. Preview is free, and re-selecting a file restores an excluded lesson file.
 
-Bật Jev calls rồi bấm Run Jev để gửi yêu cầu (tuyến trả phí có thể tính tiền). Save CLI settings lưu cấu hình vào notes/lessons-config.json, tắt Allow Jev from the notes CLI để CLI chỉ dùng cache.
+Enable Jev calls and click Run Jev to send the request (paid routes may incur charges). Save CLI settings writes the configuration to notes/lessons-config.json; turn off Allow Jev from the notes CLI so the CLI uses only cached picks.
 
 `bun run notes ID` names the files in both this film's `lessons/` and the repo root's `../../lessons/` (every film's, including nested `.md` subfolders) that Jev picks for the note's words and the creator's answers, each with its headings by line: open the lines you need. When the creator asks to remember a note (Remember: this film, or every film), keep the rule where it lasts: in code if it can be (a default, or a check that fails), else in the film's `src` or `lessons/<topic>.md` for this film, and `../../lessons/<topic>.md` for every film (nested `folder/file.md` names using letters, digits, `-` and `_` appear in the studio too). Jev reads paths, frontmatter and headings by default; Inspector controls which content is included. Then `bun run note learned ID "the rule, where"`; the creator sees it on the note.
 

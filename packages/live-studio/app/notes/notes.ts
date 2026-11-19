@@ -965,7 +965,11 @@ const sameFreeView = (a: FreeView | undefined, b: FreeView | undefined) => {
     a.l.every((v, idx) => near(v, b.l[idx] ?? Number.NaN)) &&
     (b.fov === undefined || near(a.fov ?? b.fov, b.fov)) &&
     near(a.roll ?? 0, b.roll ?? 0) &&
-    near(a.wave ?? 0, b.wave ?? 0)
+    near(a.wave ?? 0, b.wave ?? 0) &&
+    near(a.bob ?? 0, b.bob ?? 0) &&
+    near(a.fstop ?? 0, b.fstop ?? 0) &&
+    JSON.stringify(a.focus ?? null) === JSON.stringify(b.focus ?? null) &&
+    JSON.stringify(a.handheld ?? false) === JSON.stringify(b.handheld ?? false)
   );
 };
 
@@ -978,6 +982,10 @@ const readLiveFreeView = (): FreeView | undefined => {
     fov: f.fov,
     roll: f.roll ?? 0,
     wave: f.wave ?? 0,
+    bob: f.bob ?? 0,
+    fstop: f.fstop ?? 0,
+    ...(f.focus !== undefined ? { focus: structuredClone(f.focus) } : {}),
+    handheld: f.handheld !== undefined ? structuredClone(f.handheld) : false,
   };
 };
 
@@ -1096,6 +1104,10 @@ export const nowPicture = (n: Note): Promise<string | null> => {
               fov: f.fov,
               roll: f.roll ?? 0,
               wave: f.wave ?? 0,
+              bob: f.bob ?? 0,
+              fstop: f.fstop ?? 0,
+              focus: f.focus !== undefined ? structuredClone(f.focus) : undefined,
+              handheld: f.handheld !== undefined ? structuredClone(f.handheld) : undefined,
             }
           : null;
       let url: string | null = null;
@@ -1108,6 +1120,11 @@ export const nowPicture = (n: Note): Promise<string | null> => {
             if (wantView.fov !== undefined) f.fov = wantView.fov;
             f.roll = wantView.roll ?? 0;
             f.wave = wantView.wave ?? 0;
+            f.bob = wantView.bob ?? 0;
+            f.fstop = wantView.fstop ?? 0;
+            f.focus = wantView.focus !== undefined ? structuredClone(wantView.focus) : undefined;
+            f.handheld =
+              wantView.handheld !== undefined ? structuredClone(wantView.handheld) : false;
           } else {
             f.on = false;
           }
@@ -1122,6 +1139,10 @@ export const nowPicture = (n: Note): Promise<string | null> => {
           f.fov = saved.fov;
           f.roll = saved.roll;
           f.wave = saved.wave;
+          f.bob = saved.bob;
+          f.fstop = saved.fstop;
+          f.focus = saved.focus;
+          f.handheld = saved.handheld;
         }
         try {
           await engine.render(S.t);

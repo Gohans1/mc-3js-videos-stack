@@ -3,11 +3,16 @@ import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
 import { SliderRow } from "../components/inspector";
 import { S, wake } from "../core/state";
-import { set, useStudio } from "../core/store";
+import { get, set, useStudio } from "../core/store";
+import { useFrameKey } from "../core/useFrameKey";
 import {
   defaultFreeFov,
   FREE_LENS_DEFAULTS,
+  type FreeTouchedSnapshot,
+  getFreeTouchedSnapshot,
+  isCustomFreeFov,
   resetFreeFov,
+  restoreFreeTouchedState,
   setFreeFov,
   setFreeMm,
   setFreeRoll,
@@ -19,14 +24,16 @@ const DEG = 180 / Math.PI;
 export const freeDoc = {
   snapshot: () => {
     const f = S.tools?.free;
+    const fov = isCustomFreeFov() || f?.on ? (f?.fov ?? get().freeFov) : defaultFreeFov();
     return JSON.stringify({
-      fov: f?.fov ?? FREE_LENS_DEFAULTS.fov,
+      fov,
       roll: f?.roll ?? FREE_LENS_DEFAULTS.roll,
       wave: f?.wave ?? FREE_LENS_DEFAULTS.wave,
       bob: f?.bob ?? FREE_LENS_DEFAULTS.bob,
       fstop: f?.fstop ?? FREE_LENS_DEFAULTS.fstop,
       focus: f?.focus ?? FREE_LENS_DEFAULTS.focus,
       handheld: f?.handheld ?? FREE_LENS_DEFAULTS.handheld,
+      ...getFreeTouchedSnapshot(),
     });
   },
   restore: (snap: string) => {
@@ -39,7 +46,7 @@ export const freeDoc = {
         fstop?: number;
         focus?: unknown;
         handheld?: unknown;
-      };
+      } & Partial<FreeTouchedSnapshot>;
       const f = S.tools?.free;
       if (f) {
         f.fov = next.fov;
@@ -50,6 +57,7 @@ export const freeDoc = {
         f.focus = next.focus;
         f.handheld = next.handheld ?? FREE_LENS_DEFAULTS.handheld;
       }
+      restoreFreeTouchedState(next);
       set({
         freeFov: next.fov,
         freeRoll: next.roll,
@@ -68,9 +76,12 @@ export const freeDoc = {
 
 export function FreeCamFovSlider({ onAutoEnter }: { onAutoEnter?: () => void } = {}) {
   useStudio((s) => s.ready);
-  useStudio((s) => s.free);
-  const fov = useStudio((s) => s.freeFov);
+  const free = useStudio((s) => s.free);
+  useStudio((s) => s.freePoseRev);
+  const storeFov = useStudio((s) => s.freeFov);
+  useFrameKey(() => (S.tools?.free.on || isCustomFreeFov() ? "" : defaultFreeFov()));
   const defFov = defaultFreeFov();
+  const fov = !free && !isCustomFreeFov() ? defFov : storeFov;
   return (
     <SliderRow
       label="Free cam FOV"

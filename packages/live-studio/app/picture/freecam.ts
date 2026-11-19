@@ -17,6 +17,7 @@ import { S, wake } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { cameraSurfaces, EYE_HEIGHT, floorAt, walkPosition } from "./camera-collision";
 import { createFlight } from "./flight";
+import type { FreeTouched } from "./slice";
 
 export { applyFreeToKeyframe };
 
@@ -237,14 +238,32 @@ export const FREE_LENS_DEFAULTS = {
 
 let customFreeFov = false;
 let enteredFreeFov: number | null = null;
+let homed = false;
+
+export const isCustomFreeFov = () => customFreeFov;
+
+export type FreeTouchedSnapshot = {
+  customFreeFov: boolean;
+  freeTouched: FreeTouched;
+};
+
+export const getFreeTouchedSnapshot = (): FreeTouchedSnapshot => ({
+  customFreeFov,
+  freeTouched: { ...get().freeTouched },
+});
+
+export const restoreFreeTouchedState = (snap: Partial<FreeTouchedSnapshot>) => {
+  if (typeof snap.customFreeFov === "boolean") customFreeFov = snap.customFreeFov;
+  if (snap.freeTouched && typeof snap.freeTouched === "object")
+    set({ freeTouched: { ...snap.freeTouched } });
+};
 
 export const defaultFreeFov = () => {
   const raw =
-    S.tools?.home?.fov ??
     enteredFreeFov ??
-    (S.tools?.free.on
-      ? S.tools?.cameraSample?.()?.fov
-      : (S.tools?.cameraSample?.()?.fov ?? S.tools?.camera?.fov)) ??
+    (!homed ? S.tools?.home?.fov : undefined) ??
+    S.tools?.cameraSample?.()?.fov ??
+    (!S.tools?.free.on ? S.tools?.camera?.fov : undefined) ??
     FREE_LENS_DEFAULTS.fov;
   return Math.round(clampFov(raw) * 10) / 10;
 };
@@ -331,14 +350,10 @@ export const setFreePoseCoordinate = (field: "p" | "l", axis: 0 | 1 | 2, value: 
   touchFree(true);
 };
 
-export const startFreePick = (field: CameraPick["field"]) => {
+export const startFreePick = (field: "l" = "l") => {
   ensureFreeActive();
-  set({ cameraPick: { field, target: "free", t: S.t } });
-  say(
-    field === "l"
-      ? "Click a surface to aim the free camera. Esc cancels"
-      : "Click a surface to focus the free camera. Esc cancels",
-  );
+  set({ cameraPick: { field, target: "free", t: S.t }, pickFocus: null });
+  say("Click a surface to aim the free camera. Esc cancels");
 };
 
 export const applyFreeCameraPick = (
@@ -355,9 +370,6 @@ export const applyFreeCameraPick = (
     set({ freePoseRev: get().freePoseRev + 1 });
     touchFree(true);
     say("Aim updated");
-  } else {
-    setFreeFocus({ point: hit.world, label: hit.what });
-    say("Focus point updated");
   }
   cancelCameraPick();
 };
@@ -420,21 +432,20 @@ export const resetFreeLensAll = () => {
   touchFree(true);
 };
 
-let homed = false;
 export const setFree = (on: boolean, here = false) => {
   const tools = S.tools;
   if (!tools) return;
   const f = tools.free,
     home = !homed && !here && tools.home;
   const preserve = on && homed && get().freeLocked;
+  const filmFov = tools.cameraSample?.()?.fov ?? tools.camera.fov;
   if (on && !f.on) {
-    enteredFreeFov = tools.home?.fov ?? tools.cameraSample?.()?.fov ?? tools.camera.fov;
+    enteredFreeFov = (home ? tools.home?.fov : undefined) ?? filmFov;
   } else if (!on) {
     if (!tools.cameraSample && enteredFreeFov !== null && tools.camera)
       tools.camera.fov = enteredFreeFov;
     enteredFreeFov = null;
   }
-  const filmFov = tools.cameraSample?.()?.fov ?? tools.camera.fov;
   if (on && home && !preserve) {
     f.p.set(...home.p);
     f.l.set(...home.l);
@@ -479,7 +490,9 @@ export const flyFree = (view: FreeView) => {
   const tools = S.tools;
   if (!tools) return;
   const f = tools.free;
-  if (!f.on) enteredFreeFov = tools.home?.fov ?? tools.cameraSample?.()?.fov ?? tools.camera.fov;
+  if (!f.on)
+    enteredFreeFov =
+      (!homed ? tools.home?.fov : undefined) ?? tools.cameraSample?.()?.fov ?? tools.camera.fov;
   f.p.set(view.p[0], view.p[1], view.p[2]);
   f.l.set(view.l[0], view.l[1], view.l[2]);
   const fov =

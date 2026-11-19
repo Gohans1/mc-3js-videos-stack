@@ -18,6 +18,64 @@ export type HandheldSpec =
       octaves?: number;
     };
 
+export type FocusUiMode = "auto" | "meters" | "target" | "point";
+
+export interface FocusUiState {
+  mode: FocusUiMode;
+  meters: number;
+  target: string;
+  offset: [number, number, number];
+  point?: [number, number, number];
+  label?: string;
+}
+
+export function readFocusUiState(raw: unknown): FocusUiState {
+  if (raw == null) return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    return { mode: "meters", meters: Math.max(0.05, raw), target: "", offset: [0, 0, 0] };
+  }
+  if (typeof raw === "string") {
+    return { mode: "target", meters: 3, target: raw, offset: [0, 0, 0] };
+  }
+  if (typeof raw === "object" && "point" in raw) {
+    const obj = raw as { point?: unknown; label?: unknown };
+    const pt =
+      Array.isArray(obj.point) && obj.point.length === 3
+        ? ([Number(obj.point[0]) || 0, Number(obj.point[1]) || 0, Number(obj.point[2]) || 0] as [
+            number,
+            number,
+            number,
+          ])
+        : ([0, 0, 0] as [number, number, number]);
+    return {
+      mode: "point",
+      meters: 3,
+      target: "",
+      offset: [0, 0, 0],
+      point: pt,
+      label: typeof obj.label === "string" && obj.label.trim() ? obj.label.trim() : undefined,
+    };
+  }
+  if (typeof raw === "object" && "target" in raw) {
+    const obj = raw as { target?: unknown; offset?: unknown };
+    const off =
+      Array.isArray(obj.offset) && obj.offset.length === 3
+        ? ([Number(obj.offset[0]) || 0, Number(obj.offset[1]) || 0, Number(obj.offset[2]) || 0] as [
+            number,
+            number,
+            number,
+          ])
+        : ([0, 0, 0] as [number, number, number]);
+    return {
+      mode: "target",
+      meters: 3,
+      target: typeof obj.target === "string" ? obj.target : "",
+      offset: off,
+    };
+  }
+  return { mode: "auto", meters: 3, target: "", offset: [0, 0, 0] };
+}
+
 export function normalizeFocusSpec(focus: unknown): unknown {
   if (focus === undefined || focus === null) return undefined;
   if (typeof focus === "number") return Math.max(0.05, r3(focus));

@@ -1,3 +1,5 @@
+import { MAX_FOV, MIN_FOV } from "film-kit/lens";
+
 // A note's life, decided in this one place: the studio's server writes with it, the page shows a change with it before the server
 // has it, and the CLIs read the state with it.
 //   open  --AI: fix (or ask)-->            check   the AI says it is fixed, or asks something; the creator looks
@@ -33,9 +35,19 @@ const cleanFixCam = (cam) => {
   const l = cam.l.slice(0, 3).map(Number);
   if (!p.every(Number.isFinite) || !l.every(Number.isFinite)) return null;
   const out = { p, l };
-  if (typeof cam.fov === "number" && Number.isFinite(cam.fov) && cam.fov >= 10 && cam.fov <= 120)
+  if (
+    typeof cam.fov === "number" &&
+    Number.isFinite(cam.fov) &&
+    cam.fov >= MIN_FOV &&
+    cam.fov <= MAX_FOV
+  )
     out.fov = +cam.fov.toFixed(2);
-  if (typeof cam.roll === "number" && Number.isFinite(cam.roll)) out.roll = +cam.roll.toFixed(4);
+  if (
+    typeof cam.roll === "number" &&
+    Number.isFinite(cam.roll) &&
+    Math.abs(cam.roll) <= Math.PI + 1e-4
+  )
+    out.roll = +cam.roll.toFixed(4);
   if (typeof cam.wave === "number" && Number.isFinite(cam.wave) && cam.wave >= 0)
     out.wave = +cam.wave.toFixed(3);
   return out;

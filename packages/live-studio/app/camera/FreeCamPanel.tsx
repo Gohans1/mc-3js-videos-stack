@@ -8,7 +8,6 @@ import {
   PersonStanding,
   Plane,
   Redo2,
-  RotateCcw,
   Save,
   Undo2,
 } from "lucide-react";
@@ -22,6 +21,7 @@ import { engine } from "../core/engine";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
+import { useFrameKey } from "../core/useFrameKey";
 import {
   applyFreeToKeyframe,
   axisView,
@@ -29,6 +29,7 @@ import {
   ensureFreeActive,
   FREE_LENS_DEFAULTS,
   freeHistoryCounts,
+  isCustomFreeFov,
   resetFreeDof,
   resetFreeFeel,
   resetFreeFov,
@@ -81,16 +82,23 @@ export function FreeCamPanel() {
   const pick = useStudio((s) => s.cameraPick);
   const pickFocus = useStudio((s) => s.pickFocus === "free");
 
+  useFrameKey(() => {
+    const cam = S.tools?.free;
+    if (!cam?.on) return isCustomFreeFov() ? "off" : `off:${defaultFreeFov()}`;
+    return `${cam.p.x.toFixed(3)},${cam.p.y.toFixed(3)},${cam.p.z.toFixed(3)}|${cam.l.x.toFixed(3)},${cam.l.y.toFixed(3)},${cam.l.z.toFixed(3)}`;
+  });
+
   const defFov = defaultFreeFov();
+  const effectiveFov = !free && !isCustomFreeFov() ? defFov : fov;
   const aspect = S.tools?.camera?.aspect || 16 / 9;
-  const mm = mmOf(fov, aspect);
+  const mm = mmOf(effectiveFov, aspect);
   const history = freeHistoryCounts();
   const f = S.tools?.free;
   const pos = f?.p ? [f.p.x, f.p.y, f.p.z] : [0, 0, 0];
   const aim = f?.l ? [f.l.x, f.l.y, f.l.z] : [0, 0, 0];
 
   const isAllDefault =
-    Math.abs(fov - defFov) < 0.05 &&
+    Math.abs(effectiveFov - defFov) < 0.05 &&
     Math.abs(roll - FREE_LENS_DEFAULTS.roll) < 1e-3 &&
     Math.abs(wave - FREE_LENS_DEFAULTS.wave) < 1e-3 &&
     Math.abs(bob - FREE_LENS_DEFAULTS.bob) < 1e-3 &&
@@ -267,10 +275,6 @@ export function FreeCamPanel() {
               Apply to keyframe
             </Button>
           </Tip>
-          <Button size="sm" variant="quiet" disabled={isAllDefault} onClick={resetFreeLensAll}>
-            <RotateCcw data-icon="inline-start" aria-hidden />
-            Reset all
-          </Button>
         </div>
 
         <FreeCamFovSlider onAutoEnter={ensureFreeActive} />
@@ -282,7 +286,7 @@ export function FreeCamPanel() {
           }}
           reset={{
             label: "Reset free camera focal length to default",
-            disabled: Math.abs(fov - defFov) < 0.05,
+            disabled: Math.abs(effectiveFov - defFov) < 0.05,
             onClick: resetFreeFov,
           }}
         />
@@ -316,8 +320,12 @@ export function FreeCamPanel() {
           effectiveFocus={focus}
           pickingFocus={pickFocus}
           onTogglePickFocus={() => {
+            if (pickFocus) {
+              set({ pickFocus: null });
+              return;
+            }
             ensureFreeActive();
-            set({ pickFocus: pickFocus ? null : "free" });
+            set({ pickFocus: "free", cameraPick: null });
           }}
           onCommitFocus={(next) => {
             ensureFreeActive();

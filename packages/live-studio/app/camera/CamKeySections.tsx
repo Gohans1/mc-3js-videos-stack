@@ -1,5 +1,6 @@
 import { fromSource, toSource } from "film/edit";
 import { Activity, Trash2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 
@@ -14,6 +15,45 @@ import { addShotHit, removeShotHit, shotHitsOf, shotsDoc, updateShotHit } from "
 function LivePlayheadLabel() {
   useFrame();
   return <span className="tabular-nums">{stamp(S.t)}</span>;
+}
+
+function ImpactStrengthField({
+  shot,
+  hitIndex,
+  amount,
+}: {
+  shot: number;
+  hitIndex: number;
+  amount: number;
+}) {
+  const snapRef = useRef<string | null>(null);
+  const cancelPreview = () => {
+    if (snapRef.current !== null) {
+      shotsDoc.restore(snapRef.current);
+      snapRef.current = null;
+    }
+  };
+  useEffect(() => cancelPreview, []);
+  return (
+    <NumberField
+      name={`Impact ${hitIndex + 1} strength`}
+      size="xs"
+      value={amount}
+      min={0}
+      max={5}
+      step={0.05}
+      digits={2}
+      live={(v) => {
+        snapRef.current ??= shotsDoc.snapshot();
+        updateShotHit(shot, hitIndex, { amount: v }, shotsDoc.preview);
+      }}
+      onCancel={cancelPreview}
+      onSave={(v) => {
+        cancelPreview();
+        if (v !== undefined) updateShotHit(shot, hitIndex, { amount: v });
+      }}
+    />
+  );
 }
 
 export function ShotHitsSection({ shot }: { shot: number }) {
@@ -59,18 +99,7 @@ export function ShotHitsSection({ shot }: { shot: number }) {
             </div>
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground w-10 text-xs">Strength</span>
-              <NumberField
-                name={`Impact ${j + 1} strength`}
-                size="xs"
-                value={Number(h.amount ?? 0.6)}
-                min={0}
-                max={5}
-                step={0.05}
-                digits={2}
-                live={(v) => updateShotHit(shot, j, { amount: v }, shotsDoc.preview)}
-                onCancel={() => shotsDoc.restore(shotsDoc.snapshot())}
-                onSave={(v) => v !== undefined && updateShotHit(shot, j, { amount: v })}
-              />
+              <ImpactStrengthField shot={shot} hitIndex={j} amount={Number(h.amount ?? 0.6)} />
             </div>
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground w-10 text-xs">Decay</span>

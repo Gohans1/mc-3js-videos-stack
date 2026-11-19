@@ -206,6 +206,10 @@ export interface NoteFreeView {
   fov?: number;
   roll?: number;
   wave?: number;
+  bob?: number;
+  fstop?: number;
+  focus?: unknown;
+  handheld?: unknown;
 }
 
 const vec3Tuple = (raw: unknown): [number, number, number] | null => {
@@ -246,11 +250,21 @@ export const noteFreeView = (note: { freeCam?: boolean; cam?: unknown }): NoteFr
   const fovRaw = typeof world?.fov === "number" ? world.fov : lineNumber(line, "fov");
   const rollRaw = typeof world?.roll === "number" ? world.roll : lineNumber(line, "roll");
   const waveRaw = typeof world?.wave === "number" ? world.wave : lineNumber(line, "wave");
+  const bobRaw = typeof world?.bob === "number" ? world.bob : undefined;
+  const fstopRaw = typeof world?.fstop === "number" ? world.fstop : undefined;
   return {
     p,
     l,
     ...(typeof fovRaw === "number" && Number.isFinite(fovRaw) ? { fov: fovRaw } : {}),
     ...(typeof rollRaw === "number" && Number.isFinite(rollRaw) ? { roll: rollRaw } : {}),
     ...(typeof waveRaw === "number" && Number.isFinite(waveRaw) ? { wave: waveRaw } : {}),
+    ...(typeof bobRaw === "number" && Number.isFinite(bobRaw) ? { bob: bobRaw } : {}),
+    ...(typeof fstopRaw === "number" && Number.isFinite(fstopRaw) ? { fstop: fstopRaw } : {}),
+    ...(world && "focus" in world && world.focus !== undefined
+      ? { focus: structuredClone(world.focus) }
+      : {}),
+    ...(world && "handheld" in world && world.handheld !== undefined
+      ? { handheld: structuredClone(world.handheld) }
+      : {}),
   };
 };

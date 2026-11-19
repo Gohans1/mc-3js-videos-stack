@@ -13,6 +13,7 @@ import {
   createHoldCameraKey,
   joinableCameraKeysInShot,
   keyAtTime,
+  readFocusUiState,
   redundantLinearCameraKeys,
   replaceCameraFraming,
   reverseCameraKeyRange,
@@ -402,4 +403,12 @@ test("joinableCameraKeysInShot selects only unlocked non-hold interior keys in t
     joinableCameraKeysInShot([key(0, { id: "only0" }), key(1, { id: "only1" })], 1).length,
     0,
   );
+});
+
+test("readFocusUiState recognizes point focus specs instead of falling back to auto", () => {
+  const uiState = readFocusUiState({ point: [1, 2, 3], label: "Wall" });
+  assert.notEqual(uiState.mode, "auto");
+  assert.equal(uiState.mode, "point");
+  assert.deepEqual(uiState.point, [1, 2, 3]);
+  assert.equal(uiState.label, "Wall");
 });

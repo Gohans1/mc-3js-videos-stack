@@ -96,3 +96,24 @@ test("changed words reopen the note and keep the old ones on record", () => {
 test("a change the machine does not know is refused, not guessed at", () => {
   assert.equal(applyChange(note(), { frobnicate: 1 }, "t1").ok, false);
 });
+
+test("fix.cam keeps 0.1..179 fov and +/-pi roll and drops out-of-range values", () => {
+  const n = note();
+  assert.deepEqual(
+    applyChange(
+      n,
+      { fix: { what: "telephoto", cam: { p: [0, 1, 2], l: [0, 1, 0], fov: 8.6, roll: 1.5 } } },
+      "t1",
+    ),
+    { ok: true },
+  );
+  assert.deepEqual(n.fixes[0].cam, { p: [0, 1, 2], l: [0, 1, 0], fov: 8.6, roll: 1.5 });
+
+  const outOfRange = note({ id: "b" });
+  applyChange(
+    outOfRange,
+    { fix: { what: "bad bounds", cam: { p: [0, 1, 2], l: [0, 1, 0], fov: 0.05, roll: 3.5 } } },
+    "t1",
+  );
+  assert.deepEqual(outOfRange.fixes[0].cam, { p: [0, 1, 2], l: [0, 1, 0] });
+});

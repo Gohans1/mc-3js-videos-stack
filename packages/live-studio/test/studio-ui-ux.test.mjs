@@ -27,7 +27,9 @@ import { loadKeys as loadStudioKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
 import { CamPanel } from "/camera/CamPanel.tsx";
+import { readFocusUiState } from "/camera/OpticsWidgets.tsx";
 import { NoteThumb } from "/notes/note-parts.tsx";
+import { freeDoc } from "/picture/FreeCamLens.tsx";
 import { Stage } from "/picture/Stage.tsx";
 import { attachInk } from "/notes/ink.ts";
 import { cancelNote, ensureNote, goToNote, nowPicture, openNote, returnFromNote } from "/notes/notes.ts";
@@ -369,6 +371,8 @@ window.__UX_TEST__ = {
   undo,
   redo,
   matchAllInShot,
+  freeDoc,
+  readFocusUiState,
   freecam: {
     applyFreeToKeyframe,
     axisView,
@@ -548,6 +552,7 @@ beforeEach(async () => {
       uxSpeedCurve: null,
     });
     u.S.t = 0;
+    if (u.S.tools?.free) u.S.tools.free.on = false;
     u.setStageBox(760, 428);
     window.scrollTo(0, 0);
   })()`);
@@ -2377,4 +2382,316 @@ test("Pressing M on desktop opens floating StageNoteComposer anchored on the sta
   const anchor = await page.evaluate(`window.__UX_TEST__.get().compose?.anchor`);
   expect(anchor).toEqual({ x: 0.5, y: 0.88 });
   await page.evaluate(`window.__UX_TEST__.cancelNote()`);
+});
+
+test("Pre-entry Free Cam FOV syncs with film FOV, ignores stale home.fov after homed/here, removes duplicate Reset all, and freeDoc.restore clears touched flags", async () => {
+  await page.evaluate(`window.__UX_TEST__.loadCameraFixture()`);
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.resetFreeLensAll();
+    u.S.tools.home = { p: [0, 2, 6], l: [0, 1, 0], fov: 60 };
+    u.S.tools.camera.fov = 55;
+    u.freecam.setFree(false);
+    // Re-enter with here=true: must ignore home.fov (60) and use filmFov (55)
+    u.freecam.setFree(true, true);
+  })()`);
+  expect(await page.evaluate(`window.__UX_TEST__.S.tools.free.fov`)).toBe(55);
+  expect(await page.evaluate(`window.__UX_TEST__.freecam.defaultFreeFov()`)).toBe(55);
+
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.setFree(false);
+    u.S.tools.camera.fov = 55;
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().free === false && document.querySelector('[role="radiogroup"][aria-label="Camera workspace"] button[aria-checked="true"]')?.textContent?.trim() === 'Film cam'`,
+  );
+  await page.evaluate(`(() => {
+    const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
+    tab?.click();
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Enter Free camera'))`,
+  );
+
+  const preEntry = await page.evaluate(`(() => ({
+    defaultFov: window.__UX_TEST__.freecam.defaultFreeFov(),
+    fovInput: document.querySelector('input[aria-label="Free cam FOV"]')?.value,
+    resetFovDisabled: document.querySelector('button[aria-label="Reset free camera FOV to default"]')?.disabled,
+    resetFocalDisabled: document.querySelector('button[aria-label="Reset free camera focal length to default"]')?.disabled,
+    resetAllHeaderDisabled: document.querySelector('button[aria-label="Reset free camera lens and feel to default"]')?.disabled,
+    dupResetAllCount: [...document.querySelectorAll('button')].filter((b) => b.textContent?.trim() === 'Reset all').length,
+  }))()`);
+  expect(preEntry).toEqual({
+    defaultFov: 55,
+    fovInput: "55",
+    resetFovDisabled: true,
+    resetFocalDisabled: true,
+    resetAllHeaderDisabled: true,
+    dupResetAllCount: 0,
+  });
+
+  // freeDoc.snapshot/restore must restore customFreeFov and freeTouched cleanly after Escape cancel
+  const restored = await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    const snap = u.freeDoc.snapshot();
+    u.freecam.setFree(true);
+    u.freecam.setFreeFov(75);
+    u.freecam.setFreeFstop(2.8);
+    u.freeDoc.restore(snap);
+    return {
+      freeFov: u.get().freeFov,
+      freeTouched: u.get().freeTouched,
+      defaultFov: u.freecam.defaultFreeFov(),
+    };
+  })()`);
+  expect(restored.freeFov).toBe(55);
+  expect(restored.freeTouched).toEqual({});
+  expect(restored.defaultFov).toBe(55);
+
+  await page.evaluate(`(() => {
+    window.__UX_TEST__.freecam.resetFreeLensAll();
+    window.__UX_TEST__.freecam.setFree(false);
+    window.__UX_TEST__.S.tools.home = undefined;
+    window.__UX_TEST__.S.tools.camera.fov = 50;
+  })()`);
+});
+
+test("Film Cam has single Focus picker, renders point focus chip instead of Auto, seeks before focus pick, and mutually clears pickFocus/cameraPick", async () => {
+  await page.evaluate(`window.__UX_TEST__.setCamData([
+    { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+    { id: "k1", t: 3, p: [2, 2, 6], l: [0, 1, 0], fov: 50, focus: { point: [1, 2, 3], label: "Wall" } },
+  ], 1)`);
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.setFree(false);
+    u.S.t = 0;
+    u.S.playing = true;
+    u.set({ playing: true, pickFocus: null, cameraPick: null });
+  })()`);
+  await waitUntil(`document.querySelector('[aria-label="Focus mode"]')`);
+
+  const focusUi = await page.evaluate(`(() => ({
+    pointState: window.__UX_TEST__.readFocusUiState({ point: [1, 2, 3], label: "Wall" }),
+    autoChecked: [...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Auto')?.getAttribute('aria-checked'),
+    hasWallText: document.body.textContent?.includes('Wall'),
+    dupFocusBtnCount: [...document.querySelectorAll('button')].filter((b) => b.textContent?.includes('Pick focus point')).length,
+    focusBtnCount: [...document.querySelectorAll('button')].filter((b) => b.textContent?.includes('Pick focus on frame')).length,
+  }))()`);
+  expect(focusUi.pointState.mode).toBe("point");
+  expect(focusUi.autoChecked).toBe("false");
+  expect(focusUi.hasWallText).toBe(true);
+  expect(focusUi.dupFocusBtnCount).toBe(0);
+  expect(focusUi.focusBtnCount).toBe(1);
+
+  // Clicking Pick focus on frame pauses playback, seeks to keyframe time (t=3), and clears cameraPick
+  await page.evaluate(`(() => {
+    window.__UX_TEST__.set({ cameraPick: { field: "l", id: "k1", t: 3 } });
+    const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'));
+    btn?.click();
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().pickFocus === 1`);
+  const afterArmFocus = await page.evaluate(`({
+    t: window.__UX_TEST__.S.t,
+    playing: window.__UX_TEST__.S.playing,
+    cameraPick: window.__UX_TEST__.get().cameraPick,
+  })`);
+  expect(afterArmFocus.t).toBe(3);
+  expect(afterArmFocus.playing).toBe(false);
+  expect(afterArmFocus.cameraPick).toBeNull();
+
+  // Clicking Pick aim point clears pickFocus
+  await page.evaluate(`(() => {
+    const aimBtn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick aim point'));
+    aimBtn?.click();
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().cameraPick?.field === 'l'`);
+  expect(await page.evaluate(`window.__UX_TEST__.get().pickFocus`)).toBeNull();
+  await page.evaluate(`window.__UX_TEST__.set({ cameraPick: null, pickFocus: null })`);
+});
+
+test("nowPicture isolates live Free Cam fstop/focus/bob/handheld and returnFromNote restores them", async () => {
+  const res = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const origRender = u.S.render;
+    const canvas = u.S.el.canvas;
+    canvas.width = 160;
+    canvas.height = 90;
+    u.S.t = 1;
+    u.S.tools.free.on = true;
+    u.S.tools.free.p.set(5, 2, 6);
+    u.S.tools.free.l.set(5, 1, 0);
+    u.S.tools.free.fov = 50;
+    u.S.tools.free.roll = 0;
+    u.S.tools.free.wave = 0;
+    u.S.tools.free.fstop = 1.4;
+    u.S.tools.free.focus = 4.5;
+    u.S.tools.free.bob = 0.6;
+    u.S.tools.free.handheld = "HANDYCAM_RUN";
+    u.set({ free: true, freeFstop: 1.4, freeFocus: 4.5, freeBob: 0.6, freeHandheld: "HANDYCAM_RUN" });
+
+    u.S.render = Object.assign(async () => {
+      const g = canvas.getContext('2d');
+      const f = u.S.tools.free;
+      const r = f.on ? Math.min(255, Math.round((f.fstop ?? 0) * 80)) : 0;
+      const gr = f.on ? Math.min(255, Math.round((f.bob ?? 0) * 200)) : 200;
+      const b = f.on && f.handheld ? 220 : 20;
+      g.fillStyle = 'rgb(' + r + ',' + gr + ',' + b + ')';
+      g.fillRect(0, 0, 160, 90);
+    }, { eases: origRender.eases });
+
+    u.invalidatePictures();
+    const samePoseNote = {
+      id: "opticsIso",
+      at: "2026-11-18T10:00:00Z",
+      t: 1,
+      frame: 30,
+      shot: 0,
+      text: "Same pose, no extra optics",
+      done: false,
+      freeCam: true,
+      cam: { world: { p: [5, 2, 6], l: [5, 1, 0], fov: 50 } },
+      fixes: [{ what: "Check", at: "2026-11-18T10:05:00Z" }],
+    };
+    const imgNoOptics = await u.nowPicture(samePoseNote);
+    const liveAfterNowPic = {
+      fstop: u.S.tools.free.fstop,
+      focus: u.S.tools.free.focus,
+      bob: u.S.tools.free.bob,
+      handheld: u.S.tools.free.handheld,
+    };
+
+    // Baseline render when fstop=0, bob=0, handheld=false must match imgNoOptics
+    u.S.tools.free.fstop = 0;
+    u.S.tools.free.bob = 0;
+    u.S.tools.free.focus = undefined;
+    u.S.tools.free.handheld = false;
+    u.invalidatePictures();
+    const imgClean = await u.nowPicture(samePoseNote);
+
+    // Restore live optics, jump to normal note, then returnFromNote must preserve all 4 fields
+    u.S.tools.free.fstop = 1.4;
+    u.S.tools.free.focus = 4.5;
+    u.S.tools.free.bob = 0.6;
+    u.S.tools.free.handheld = "HANDYCAM_RUN";
+    u.goToNote({ id: "normal-opt", at: "2026-11-18T10:01:00Z", t: 4, frame: 120, shot: 0, text: "norm", done: false });
+    u.returnFromNote();
+    const afterReturn = {
+      toolFstop: u.S.tools.free.fstop,
+      toolFocus: u.S.tools.free.focus,
+      toolBob: u.S.tools.free.bob,
+      toolHandheld: u.S.tools.free.handheld,
+      storeFstop: u.get().freeFstop,
+      storeFocus: u.get().freeFocus,
+      storeBob: u.get().freeBob,
+      storeHandheld: u.get().freeHandheld,
+    };
+
+    u.S.render = origRender;
+    u.freecam.resetFreeLensAll();
+    u.freecam.setFree(false);
+    return { sameImg: imgNoOptics === imgClean, liveAfterNowPic, afterReturn };
+  })()`);
+
+  expect(res.sameImg).toBe(true);
+  expect(res.liveAfterNowPic).toEqual({
+    fstop: 1.4,
+    focus: 4.5,
+    bob: 0.6,
+    handheld: "HANDYCAM_RUN",
+  });
+  expect(res.afterReturn).toEqual({
+    toolFstop: 1.4,
+    toolFocus: 4.5,
+    toolBob: 0.6,
+    toolHandheld: "HANDYCAM_RUN",
+    storeFstop: 1.4,
+    storeFocus: 4.5,
+    storeBob: 0.6,
+    storeHandheld: "HANDYCAM_RUN",
+  });
+});
+
+test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, and flight", async () => {
+  await page.evaluate(`window.__UX_TEST__.loadCameraFixture()`);
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.attachAndDrawTimeline();
+    u.freecam.setFree(true);
+    const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
+    tab?.click();
+  })()`);
+  await waitUntil(`document.querySelector('button[aria-label="Free cam history back"]')`);
+  await page.evaluate(`(() => {
+    const adv = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Advanced');
+    if (adv?.getAttribute('aria-expanded') === 'false') adv.click();
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Free cam Position X"]')`);
+
+  // Ensure rememberFreeView baseline is already pushed so subsequent flyCam/moveCam does NOT bump freeHistoryRev
+  await page.evaluate(`window.__UX_TEST__.freecam.rememberFreeView()`);
+  await Bun.sleep(50);
+
+  const beforePos = await page.evaluate(`({
+    px: document.querySelector('input[aria-label="Free cam Position X"]')?.value,
+    lx: document.querySelector('input[aria-label="Free cam Aim X"]')?.value,
+  })`);
+
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.flyCam(0.5, 0.3, 0);
+  })()`);
+
+  await waitUntil(
+    `document.querySelector('input[aria-label="Free cam Position X"]')?.value !== ${JSON.stringify(beforePos.px)} && document.querySelector('input[aria-label="Free cam Aim X"]')?.value !== ${JSON.stringify(beforePos.lx)}`,
+  );
+  await page.evaluate(`window.__UX_TEST__.freecam.setFree(false)`);
+});
+
+test("ShotHitsSection Impact strength scrub + Escape reverts to pre-scrub value", async () => {
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.freecam.setFree(false);
+    u.loadShots();
+  })()`);
+  await page.evaluate(
+    `window.__UX_TEST__.setCamData([{ id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 }], 0)`,
+  );
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Add at'))`,
+  );
+  await page.evaluate(`(() => {
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Add at'))?.click();
+  })()`);
+  await waitUntil(
+    `document.querySelector('input[aria-label="Impact 1 strength"]')?.value === "0.6"`,
+  );
+
+  await page.evaluate(`(() => {
+    const inp = document.querySelector('input[aria-label="Impact 1 strength"]');
+    const origCap = inp.setPointerCapture;
+    const origHas = inp.hasPointerCapture;
+    const origRel = inp.releasePointerCapture;
+    inp.setPointerCapture = () => {};
+    inp.hasPointerCapture = () => false;
+    inp.releasePointerCapture = () => {};
+    const r = inp.getBoundingClientRect();
+    const x0 = r.left + r.width / 2, y0 = r.top + r.height / 2;
+    inp.dispatchEvent(new PointerEvent('pointerdown', { clientX: x0, clientY: y0, button: 0, buttons: 1, pointerId: 77, pointerType: 'mouse', bubbles: true }));
+    inp.dispatchEvent(new PointerEvent('pointermove', { clientX: x0 + 60, clientY: y0, button: 0, buttons: 1, pointerId: 77, pointerType: 'mouse', bubbles: true }));
+    window.__restoreInpCap = () => {
+      inp.setPointerCapture = origCap;
+      inp.hasPointerCapture = origHas;
+      inp.releasePointerCapture = origRel;
+    };
+  })()`);
+  await waitUntil(`window.__UX_TEST__.shotsData()[0]?.hits?.[0]?.amount > 0.65`);
+
+  await page.press("Escape");
+  await page.evaluate(`(() => { window.__restoreInpCap?.(); delete window.__restoreInpCap; })()`);
+  await waitUntil(`window.__UX_TEST__.shotsData()[0]?.hits?.[0]?.amount === 0.6`);
+  expect(
+    await page.evaluate(`document.querySelector('input[aria-label="Impact 1 strength"]')?.value`),
+  ).toBe("0.6");
+  await page.evaluate(`document.querySelector('button[aria-label="Delete impact 1"]')?.click()`);
 });

@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { SliderRow } from "../components/inspector";
 import { S } from "../core/state";
 import { say, set, useStudio } from "../core/store";
+import { seekExact, setPlaying } from "../playback/transport";
 import {
+  cameraKeyFrameTime,
   edit,
   keys,
   lensAspectAt,
@@ -144,7 +146,15 @@ export function CameraOptics({
         disabled={disabled}
         pickingFocus={pickingFocus}
         fromShotNote
-        onTogglePickFocus={() => set({ pickFocus: pickingFocus ? null : i })}
+        onTogglePickFocus={() => {
+          if (pickingFocus) {
+            set({ pickFocus: null });
+            return;
+          }
+          if (S.playing) setPlaying(false);
+          seekExact(cameraKeyFrameTime(i));
+          set({ pickFocus: i, cameraPick: null });
+        }}
         onCommitFocus={(next) => setFocus(i, next)}
         onPreviewFocus={(next) => setFocus(i, next, preview)}
         snapshotFn={snapshot}

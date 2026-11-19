@@ -69,7 +69,12 @@ export function CameraFraming({
   ];
   useEffect(() => () => cancelCameraPick(), [key.id, key.t]);
   const arm = (field: CameraPick["field"]) => {
-    if (pick?.field === field && pick.id === key.id && pick.t === key.t) {
+    if (
+      pick?.target !== "free" &&
+      pick?.field === field &&
+      pick.id === key.id &&
+      pick.t === key.t
+    ) {
       cancelCameraPick();
       return;
     }
@@ -224,22 +229,13 @@ export function CameraFraming({
     <Section title="Framing">
       <div className="flex flex-wrap gap-1.5">
         <Button
-          variant={pick?.field === "l" ? "default" : "secondary"}
+          variant={pick?.target !== "free" && pick?.field === "l" ? "default" : "secondary"}
           size="sm"
-          aria-pressed={pick?.field === "l"}
+          aria-pressed={pick?.target !== "free" && pick?.field === "l"}
           disabled={disabled}
           onClick={() => arm("l")}
         >
           Pick aim point
-        </Button>
-        <Button
-          variant={pick?.field === "focus" ? "default" : "secondary"}
-          size="sm"
-          aria-pressed={pick?.field === "focus"}
-          disabled={disabled}
-          onClick={() => arm("focus")}
-        >
-          Pick focus point
         </Button>
       </div>
       <FieldRow label={tripod ? "Tripod move step" : "Move step"}>

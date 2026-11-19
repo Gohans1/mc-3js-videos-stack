@@ -44,29 +44,29 @@ A Shorts film sets "ratio": "9:16" under "live-studio" in package.json: drafts a
 
 `bun run help` inside a film prints this film's own map (its timeline file names come from `package.json` `"live-studio"`). Shots count from 0 everywhere: notes, the studio, `bun run at`, the draft's strip.
 
-| File                                    | Holds                                                                                                                               | Clock          |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| `src/scene.ts`                          | The film's code: `buildScene` returns `draw(t)`, which must draw any `t` on its own                                                 | Scene          |
-| `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                                                            | Narration      |
-| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N                                                      | Narration      |
-| `src/timeline/cam.json`                 | Camera keys and cuts                                                                                                                | Scene          |
-| ID dòng camera                          | Giữ nguyên id khi sửa dòng cũ và dùng id mới cho dòng mới. Studio cấp id khi đọc dòng cũ.                                           | Camera và shot |
-| Đường camera                            | motion trên key sau chọn smooth, linear, hold hoặc orbit. Bước chân theo độ dài đường bay trong shot.                               | Camera         |
-| Neo camera                              | p và l có thể dùng target cùng offset. Thêm space local để lấy hệ trục của đối tượng.                                               | Camera         |
-| Ghi chú key camera                      | reason hiện lý do chọn góc máy, locked bảo vệ thao tác Studio. focus nhận mét, target hoặc point theo tọa độ cảnh.                  | Camera         |
-| Easing theo kênh                        | easeChannels nhận position, aim, lens, dof, roll hoặc shake. Kênh thiếu dùng easing chung của key.                                  | Camera         |
-| Nối vận tốc key                         | matchSpeed trên key giữa giữ liên tục vận tốc qua điểm nối cho vị trí, góc ngắm và kênh quang học.                                  | Camera         |
-| Thời gian camera                        | Đặt cameraClock output trên shot để camera chạy đều qua thời lượng xuất dù cảnh Freeze hoặc Speed Ramp.                             | Camera         |
-| Rig và shutter                          | shots.json nhận camera và shutter. Mẫu khẩu độ xuất cuối dùng frame options aperture, trên backend khai báo tools.apertureSampling. | Camera         |
-| `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                                                  | Scene          |
-| `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                                              | Scene          |
-| `src/timeline/openfilm.json`            | HTML/CSS/canvas effects, stickers and animated text; optional `openfilmTimeline` overrides this path                                | Layer timebase |
-| `src/timeline/timing.json`              | Speed, Freeze, velocity: what turns scene seconds into heard seconds                                                                | Scene          |
-| Key files (`"live-studio".keyFiles`)    | Keyed rows for characters, placed blocks/mobs (`placed.json`), and props                                                            | Scene          |
-| `pack/picks.json`, `src/props/`         | Cherry-picked mod/RP blocks & items (`picked.zip`); reusable TypeScript/GLB props                                                   |                |
-| `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)                                                              |                |
-| `notes/`                                | The creator's notes; read them with `bun run notes`                                                                                 |                |
-| `lessons/`                              | This film's lessons (`../../lessons/` for every film, nested `.md` ok); `bun run notes ID` picks both                               |                |
+| File                                    | Holds                                                                                                                                                 | Clock           |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| `src/scene.ts`                          | The film's code: `buildScene` returns `draw(t)`, which must draw any `t` on its own                                                                   | Scene           |
+| `src/edit.json`                         | Narration takes and script, `voice.warp`, beats, the film's own settings                                                                              | Narration       |
+| `src/timeline/shots.json`               | Shots: start `t`, name, framing, `transition` into it, `anim`; shot N is row N                                                                        | Narration       |
+| `src/timeline/cam.json`                 | Camera keys and cuts                                                                                                                                  | Scene           |
+| Camera row IDs                          | Preserve `id` when editing existing rows and mint a fresh `id` for new rows; Studio assigns missing IDs on load                                       | Camera and shot |
+| Camera paths                            | `motion` on the incoming key selects `smooth`, `linear`, `hold`, or `orbit`; step bob follows travel distance along the shot path                     | Camera          |
+| Camera anchors                          | `p` and `l` accept `{ target, offset }` with optional `space: "local"` to interpret offsets in the target's local frame                               | Camera          |
+| Camera key notes & focus                | `reason` records framing rationale and `locked` guards against Studio edits; `focus` accepts meters, a target spec, or a scene `{ point, label }`     | Camera          |
+| Per-channel easing                      | `easeChannels` overrides `position`, `aim`, `lens`, `dof`, `roll`, or `shake`; omitted channels fall back to the key's `ease`                         | Camera          |
+| Speed matching                          | `matchSpeed` on an interior key preserves velocity continuity across the join for position, aim, and optical channels                                 | Camera          |
+| Camera clock                            | Set `cameraClock: "output"` on a shot so camera flight runs smoothly through output duration across Freeze or Speed ramps                             | Camera          |
+| Rig & shutter                           | `shots.json` accepts `camera` rig and `shutter` settings; final aperture sampling uses frame `aperture` options with backend `tools.apertureSampling` | Camera          |
+| `src/timeline/audio.json`               | Beds, sound effects, the narration's place, gains, tracks, filters                                                                                    | Scene           |
+| `src/timeline/text.json`, `adjust.json` | On-screen text, colour and look layers                                                                                                                | Scene           |
+| `src/timeline/openfilm.json`            | HTML/CSS/canvas effects, stickers and animated text; optional `openfilmTimeline` overrides this path                                                  | Layer timebase  |
+| `src/timeline/timing.json`              | Speed, Freeze, velocity: what turns scene seconds into heard seconds                                                                                  | Scene           |
+| Key files (`"live-studio".keyFiles`)    | Keyed rows for characters, placed blocks/mobs (`placed.json`), and props                                                                              | Scene           |
+| `pack/picks.json`, `src/props/`         | Cherry-picked mod/RP blocks & items (`picked.zip`); reusable TypeScript/GLB props                                                                     |                 |
+| `renders/`                              | Everything render, sheet, framecheck and listen write (ignored by git)                                                                                |                 |
+| `notes/`                                | The creator's notes; read them with `bun run notes`                                                                                                   |                 |
+| `lessons/`                              | This film's lessons (`../../lessons/` for every film, nested `.md` ok); `bun run notes ID` picks both                                                 |                 |
 
 After every JSON edit run `bun run check`: the studio's own schemas, every sound name, misspelt keys, an off-target `lufs` or a runaway `drive`. The full contract: `bun run skills get core --ref contract`.
 

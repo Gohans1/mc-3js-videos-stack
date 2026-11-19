@@ -537,3 +537,35 @@ test("done and ask report newly created notes since reading that note, sorted cl
   assert.equal(repeatAskB.status, 0, repeatAskB.stderr);
   assert.equal(repeatAskB.stdout.includes("new note"), false, repeatAskB.stdout);
 });
+
+test("done --cam accepts 135mm prime fov (8.6) and +/-pi roll while rejecting out-of-range fov/roll", () => {
+  const dir = film([note("a", "x")]);
+  const pic = writePng(dir);
+
+  const prime = answer(
+    dir,
+    "done",
+    "1",
+    "tight 135mm shot",
+    "--after",
+    pic,
+    "--cam",
+    "1,2,3,4,5,6,8.6,1.5",
+  );
+  assert.equal(prime.status, 0, prime.stderr);
+  const [saved] = readNotes(dir);
+  assert.deepEqual(saved.fixes[0].cam, { p: [1, 2, 3], l: [4, 5, 6], fov: 8.6, roll: 1.5 });
+
+  assert.equal(
+    answer(dir, "done", "1", "too narrow", "--after", pic, "--cam", "1,2,3,4,5,6,0.05,0").status,
+    2,
+  );
+  assert.equal(
+    answer(dir, "done", "1", "too wide", "--after", pic, "--cam", "1,2,3,4,5,6,180,0").status,
+    2,
+  );
+  assert.equal(
+    answer(dir, "done", "1", "over-rolled", "--after", pic, "--cam", "1,2,3,4,5,6,50,3.2").status,
+    2,
+  );
+});

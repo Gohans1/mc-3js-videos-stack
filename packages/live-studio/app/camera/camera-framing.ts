@@ -91,7 +91,7 @@ export const changeCameraCoordinate = (i: number, field: PointField, axis: numbe
 export const startCameraPick = (i: number, field: CameraPick["field"]) => {
   const key = keys[i];
   if (!key || key.locked) return;
-  set({ cameraPick: { field, id: key.id, t: key.t } });
+  set({ cameraPick: { field, id: key.id, t: key.t }, pickFocus: null });
   say(
     field === "l"
       ? "Click a surface to aim the camera. Esc cancels"
