@@ -25,7 +25,7 @@ import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
 import { refreshTimedDocs } from "/core/timed-doc.ts";
-import { addKeyHere, cameraKeySampleTime, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
+import { addKeyHere, applyPinnedFraming, cameraKeySampleTime, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
 import { shownShot } from "/camera/anim.ts";
 import { camLine } from "/camera/camline.ts";
 import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
@@ -265,6 +265,7 @@ registerEngine({
   },
   setFree,
   flyFree,
+  applyPinnedFraming,
   setFov: () => {},
   setGizmo: () => {},
   cancelPreviewTransform: () => {},
@@ -2287,6 +2288,52 @@ test("pinned camera angles reopen their own Free Cam pose and lens at the same t
       u.freecam.setFree(false);
       u.set({ compareGrid: false, pinnedAngles: [null, null, null, null] });
     })()`);
+  }
+});
+
+test("a pinned angle applies framing to another key without seeking back or overwriting focus", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 3 }]);
+    await u.setCamData([
+      { id: "a0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { id: "b0", t: 3, cut: true, p: [2, 2, 8], l: [0, 1, 0], focus: 4, fstop: 2.8, wave: 0.3 },
+    ]);
+    u.seekExact(0);
+    u.freecam.flyFree({ p: [7, 2, 6], l: [1, 1, 0], fov: 42, roll: 0.2, focus: 9, fstop: 8 });
+    u.set({ compareGrid: true, pinnedAngles: [null, null, null, null] });
+  })()`);
+  const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
+  const pin = `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Pin A')`;
+  const apply = `document.querySelector('button[aria-label="Apply angle A framing here"]')`;
+  try {
+    await waitUntil(pin);
+    await page.evaluate(`(${pin}).click()`);
+    await waitUntil(`document.querySelector('button[aria-label^="Go to angle A at"]')`);
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.freecam.setFree(false);
+      u.seekExact(3);
+    })()`);
+    await waitUntil(apply);
+    await page.evaluate(`(${apply}).click()`);
+    await waitUntil("window.__UX_TEST__.sourceCamKeys()[1]?.p[0] === 7");
+    const result = await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      return { time: u.S.t, keys: u.sourceCamKeys(), free: u.get().free };
+    })()`);
+    expect(result.time).toBe(3);
+    expect(result.free).toBe(false);
+    expect(result.keys[0]).toEqual(before[0]);
+    expect(result.keys[1]).toMatchObject({
+      id: "b0", t: 3, cut: true, p: [7, 2, 6], l: [1, 1, 0], fov: 42,
+      roll: 0.2, focus: 4, fstop: 2.8, wave: 0.3,
+    });
+    await page.evaluate("window.__UX_TEST__.undo()");
+    await waitUntil("window.__UX_TEST__.sourceCamKeys()[1]?.p[0] === 2");
+    expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+  } finally {
+    await page.evaluate("window.__UX_TEST__.set({ compareGrid: false, pinnedAngles: [null, null, null, null] })");
   }
 });
 

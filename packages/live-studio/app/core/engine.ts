@@ -26,6 +26,7 @@ export interface StudioEngine {
   setFinal: (on: boolean) => Promise<void> | void;
   setFree: (on: boolean, here?: boolean) => void;
   flyFree: (view: FreeView) => void;
+  applyPinnedFraming: (view: FreeView) => void;
   setFov: (d: number) => void;
   setGizmo: (mode: GizmoMode) => void;
   isGizmoDragging: () => boolean;
@@ -47,6 +48,7 @@ export const engine: StudioEngine = {
   setFinal: () => {},
   setFree: () => {},
   flyFree: () => {},
+  applyPinnedFraming: () => {},
   setFov: () => {},
   setGizmo: () => {},
   isGizmoDragging: () => false,

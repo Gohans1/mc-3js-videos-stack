@@ -5,7 +5,7 @@ import { buildScene, SHOTS_OUT as SHOTS } from "film/scene";
 import * as THREE from "three";
 
 import { aiSpans, listenActivity, loadActivity, onActivitySpans } from "./activity/activity";
-import { keys as camKeys, loadCam } from "./camera/cam";
+import { applyPinnedFraming, keys as camKeys, loadCam } from "./camera/cam";
 import { attachCamRow } from "./camera/camrow";
 import { loadLayers } from "./camera/layers";
 import { loadShots, shotsDoc } from "./camera/shots";
@@ -98,7 +98,7 @@ registerEngine({
   setFinal,
   setFree,
   flyFree,
-  setFov,
+  applyPinnedFraming,  setFov,
   setGizmo,
   isGizmoDragging,
   removeObject,

@@ -24,6 +24,7 @@ import {
   exitHandleForSlope,
   startSlope,
 } from "../core/ease";
+import type { FreeView } from "../core/engine";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { cameraSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
@@ -1100,16 +1101,17 @@ const insertKey = (t: number, view: CameraView, free?: CameraView) => {
     `Camera keyframe added at ${stamp(t)}. ${check ? "Check the camera motion on both sides. " : ""}Ctrl+Z to undo`,
   );
 };
-export const saveView = (only?: number) => {
-  if (!S.tools?.free.on) {
-    say("Turn on Free camera (F) and frame the shot first");
-    return;
-  }
-  const t = r3(S.t),
-    view = viewFromFree();
+const applyCameraView = (view: CameraView, only?: number, pinned = false) => {
+  const t = r3(S.t);
   const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
-  if (activeCameraRig(at >= 0 ? cameraKeyShotIndex(at) : cameraShotIndex(t))?.rail)
-    return say("The rail sets camera position. Remove it to use a free camera view");
+  const shot = at >= 0 ? cameraKeyShotIndex(at) : cameraShotIndex(t);
+  const rig = activeCameraRig(shot);
+  if (rig?.rail)
+    return say("The rail sets camera position. Remove it to apply this framing");
+  if (pinned && rig?.look === "one-node")
+    return say("Switch to 2-node to apply the pinned camera position");
+  if (pinned && at < 0 && !cameraTimeMatchesSource(t))
+    return say("Move the playhead to a playing frame to apply this framing");
   if (at >= 0) {
     if (keys[at].locked) return say("Unlock this camera keyframe first");
     editCameraKeyInScene(at, cameraKeyIsAnchored(keys[at]), (i, current) => {
@@ -1122,8 +1124,16 @@ export const saveView = (only?: number) => {
       say("Camera keyframe updated at " + stamp(next.t));
     });
   } else {
-    insertKey(t, drawnView(), view);
+    insertKey(t, drawnView(t), view);
   }
+};
+export const saveView = (only?: number) => {
+  if (!S.tools?.free.on) return say("Turn on Free camera (F) and frame the shot first");
+  applyCameraView(viewFromFree(), only);
+};
+export const applyPinnedFraming = (view: FreeView) => {
+  if (!S.tools || view.fov === undefined) return;
+  applyCameraView({ p: [...view.p], l: [...view.l], fov: view.fov, roll: view.roll ?? 0 }, undefined, true);
 };
 export const applyFreeToKeyframe = saveView;
 export const addKeyHere = () => {

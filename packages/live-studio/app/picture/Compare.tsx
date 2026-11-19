@@ -122,6 +122,21 @@ export function AngleGrid() {
                   {image ? "Replace " : "Pin "}
                   {label}
                 </Button>
+                {image?.view && (
+                  <Button
+                    variant="picture"
+                    size="sm"
+                    aria-label={"Apply angle " + label + " framing here"}
+                    onClick={() => {
+                      if (!image.view) return;
+                      setPlaying(false);
+                      engine.applyPinnedFraming(image.view);
+                      set({ compareGrid: false });
+                    }}
+                  >
+                    Apply framing
+                  </Button>
+                )}
                 {image && (
                   <Button
                     variant="picture"
