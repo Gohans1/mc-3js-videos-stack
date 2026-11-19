@@ -23,7 +23,7 @@ from functools import cache
 from pathlib import Path
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-from process import render as process_audio
+from process import render as process_audio  # noqa: E402
 if str(Path(__file__).resolve().parents[1]) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from studio_tell import job  # noqa: E402
@@ -224,7 +224,113 @@ def track_chain(e):
     return [*_safe_filters(t.get("filters")), *([f"volume={db:.4g}dB"] if db else [])]
 
 
-PROJECTED_VOICE = LEGACY_TIMELINE = None
+PROJECTED_VOICE = LEGACY_TIMELINE = CAM_SEGMENTS = None
+
+
+@cache
+def _scene_spatial_data():
+    cam_keys = []
+    placed_data = {}
+    cam_rel = CONFIG.get("camTimeline", "src/timeline/cam.json")
+    if isinstance(cam_rel, str) and cam_rel.strip():
+        cam_path = ROOT / cam_rel
+        if cam_path.is_file():
+            raw_cam = _read_json(_assert_in_root(cam_path, "camTimeline"), cam_rel)
+            if isinstance(raw_cam, list):
+                cam_keys = raw_cam
+            elif isinstance(raw_cam, dict) and isinstance(raw_cam.get("keys"), list):
+                cam_keys = raw_cam["keys"]
+    placed_rel = CONFIG.get("placedTimeline") or CONFIG.get("placed") or "src/timeline/placed.json"
+    if isinstance(placed_rel, str) and placed_rel.strip():
+        placed_path = ROOT / placed_rel
+        if placed_path.is_file():
+            raw_placed = _read_json(_assert_in_root(placed_path, "placedTimeline"), placed_rel)
+            if isinstance(raw_placed, dict):
+                placed_data = raw_placed
+    return cam_keys, placed_data
+
+
+def _cam_source_time(t_film: float) -> float:
+    segs = CAM_SEGMENTS
+    if not segs:
+        return t_film
+    for seg in segs:
+        f = float(seg.get("from", 0.0))
+        to = float(seg.get("to", 0.0))
+        if t_film <= to or seg is segs[-1]:
+            sf = float(seg.get("sourceFrom", 0.0))
+            st = float(seg.get("sourceTo", sf))
+            if seg.get("kind") == "freeze" or abs(st - sf) < 1e-9 or to <= f:
+                return sf
+            u = max(0.0, min(1.0, (t_film - f) / (to - f)))
+            r0 = float(seg.get("rate0", 1.0))
+            r1 = float(seg.get("rate1", r0))
+            if abs(r0 - r1) < 1e-9 or (r0 + r1) <= 1e-9:
+                return sf + (st - sf) * u
+            frac = (r0 * u + 0.5 * (r1 - r0) * u * u) / (0.5 * (r0 + r1))
+            return sf + (st - sf) * frac
+    return t_film
+
+
+def _is_safe_rel_ir_path(space: str) -> bool:
+    if not space or "\0" in space or space.startswith("/") or space.startswith("\\"):
+        return False
+    if len(space) >= 2 and space[1] == ":" and space[0].isalpha():
+        return False
+    return ".." not in space.replace("\\", "/").split("/")
+
+
+def _decode_ir_stereo_f32(path: Path):
+    import numpy as np
+    from ir import normalize_stereo_ir
+
+    r = subprocess.run(
+        ["ffmpeg", "-xerror", "-v", "error", "-i", str(path), "-ar", "48000", "-ac", "2", "-f", "f32le", "-"],
+        capture_output=True,
+        check=True,
+        timeout=30,
+    )
+    pcm = np.frombuffer(r.stdout, dtype=np.float32)
+    frames = (len(pcm) // 2) * 2
+    if frames == 0:
+        return np.array([1.0], dtype=np.float32), np.array([1.0], dtype=np.float32)
+    stereo = pcm[:frames].reshape(-1, 2)
+    return normalize_stereo_ir(stereo[:, 0], stereo[:, 1])
+
+
+@cache
+def _resolve_ir_buffers(space: str):
+    from ir import generate_impulse_response, is_preset_space
+
+    if is_preset_space(space):
+        ir_l, ir_r = generate_impulse_response(space, 48000)
+        return ir_l, ir_r, None
+    if not _is_safe_rel_ir_path(space):
+        raise SystemExit(f"unsafe reverb space path: {space!r}")
+    local_candidate = ROOT / space
+    if "/" in space or "\\" in space or "." in Path(space).name:
+        try:
+            checked = _assert_in_root(local_candidate, f"Reverb IR '{space}'")
+        except ValueError as e:
+            raise SystemExit(str(e))
+        if checked.is_file():
+            try:
+                ir_l, ir_r = _decode_ir_stereo_f32(checked)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                raise SystemExit(f"failed reading reverb IR '{space}': {e}")
+            return ir_l, ir_r, checked
+    elif SAFE_NAME.match(space):
+        try:
+            f = audio_file(space)
+        except ValueError as e:
+            raise SystemExit(str(e))
+        if f.is_file():
+            try:
+                ir_l, ir_r = _decode_ir_stereo_f32(f)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as e:
+                raise SystemExit(f"failed reading reverb IR '{space}': {e}")
+            return ir_l, ir_r, f
+    raise SystemExit(f"missing reverb IR '{space}': must be one of small-room/hall/stairwell/cave/outdoor or an existing audio file inside the film or sound vault")
 _SFX_CFG = CONFIG.get("sfx", "sound/sfx")
 if not isinstance(_SFX_CFG, str) or not _SFX_CFG.strip():
     raise SystemExit('package.json: "live-studio.sfx" must be a folder path')
@@ -468,6 +574,60 @@ def unfit():
         return f"{SOUND_REL}: voiceStrength must be between 0 and 100"
     if A.get("narration") is not None and (not isinstance(A["narration"], str) or not A["narration"]):
         return f"{SOUND_REL}: narration must be a sound name"
+
+    def _bad_reverb(spec, where):
+        if spec is None:
+            return None
+        if not isinstance(spec, dict):
+            return f"{SOUND_REL}: {where}.reverb must be a JSON object"
+        sp = spec.get("space")
+        if not isinstance(sp, str) or not _is_safe_rel_ir_path(sp):
+            return f"{SOUND_REL}: {where}.reverb.space invalid or unsafe path"
+        if spec.get("wet") is not None and (not _is_num(spec["wet"]) or not 0 <= spec["wet"] <= 1):
+            return f"{SOUND_REL}: {where}.reverb.wet must be between 0 and 1"
+        if spec.get("preDelayMs") is not None and (not _is_num(spec["preDelayMs"]) or not 0 <= spec["preDelayMs"] <= 500):
+            return f"{SOUND_REL}: {where}.reverb.preDelayMs must be between 0 and 500"
+        return None
+
+    def _bad_spatial(spec, where):
+        if spec is None:
+            return None
+        if not isinstance(spec, dict):
+            return f"{SOUND_REL}: {where}.spatial must be a JSON object"
+        for vk in ("at", "offset"):
+            v = spec.get(vk)
+            if v is not None and (not isinstance(v, list) or len(v) != 3 or not all(_is_num(x) for x in v)):
+                return f"{SOUND_REL}: {where}.spatial.{vk} must be [x, y, z]"
+        if spec.get("target") is not None and (not isinstance(spec["target"], str) or not spec["target"]):
+            return f"{SOUND_REL}: {where}.spatial.target must be a non-empty string"
+        if spec.get("refDistance") is not None and (not _is_num(spec["refDistance"]) or spec["refDistance"] <= 0):
+            return f"{SOUND_REL}: {where}.spatial.refDistance must be > 0"
+        if spec.get("maxDistance") is not None and (not _is_num(spec["maxDistance"]) or spec["maxDistance"] <= 0):
+            return f"{SOUND_REL}: {where}.spatial.maxDistance must be > 0"
+        if spec.get("refDistance") is not None and spec.get("maxDistance") is not None and spec["maxDistance"] < spec["refDistance"]:
+            return f"{SOUND_REL}: {where}.spatial.maxDistance must be >= refDistance"
+        if spec.get("rolloff") is not None and (not _is_num(spec["rolloff"]) or not 0 <= spec["rolloff"] <= 10):
+            return f"{SOUND_REL}: {where}.spatial.rolloff must be between 0 and 10"
+        if spec.get("occlusion") is not None and (not _is_num(spec["occlusion"]) or not 0 <= spec["occlusion"] <= 1):
+            return f"{SOUND_REL}: {where}.spatial.occlusion must be between 0 and 1"
+        if spec.get("airAbsorption") is not None and not isinstance(spec["airAbsorption"], bool):
+            return f"{SOUND_REL}: {where}.spatial.airAbsorption must be boolean"
+        return None
+
+    err = _bad_reverb(A.get("reverb"), "audio")
+    if err:
+        return err
+    if A.get("spaces") is not None:
+        if not isinstance(A["spaces"], list):
+            return f"{SOUND_REL}: spaces must be a list"
+        for i, s in enumerate(A["spaces"]):
+            if not isinstance(s, dict) or not _is_num(s.get("from")) or s["from"] < 0:
+                return f"{SOUND_REL}: spaces[{i}].from must be >= 0"
+            if s.get("to") is not None and (not _is_num(s["to"]) or s["to"] <= s["from"]):
+                return f"{SOUND_REL}: spaces[{i}].to must come after from"
+            err = _bad_reverb(s, f"spaces[{i}]")
+            if err:
+                return err
     tracks = A.get("tracks")
     if tracks is not None:
         if not isinstance(tracks, list):
@@ -530,6 +690,9 @@ def unfit():
                 _safe_filters(row.get("filters"))
             except ValueError as e:
                 return f"{SOUND_REL}: {kind}[{i}] {e}"
+            err = _bad_reverb(row.get("reverb"), f"{kind}[{i}]") or _bad_spatial(row.get("spatial"), f"{kind}[{i}]")
+            if err:
+                return err
     return None
 
 
@@ -619,8 +782,8 @@ def voice_intervals(clips=None):
 
 
 def prepare_timing(apply_choices=True, drop_off=True):
-    global A, END, PROJECTED_VOICE, LEGACY_TIMELINE
-    END, PROJECTED_VOICE, LEGACY_TIMELINE = SOURCE_END, None, None
+    global A, END, PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS
+    END, PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS = SOURCE_END, None, None, None
     if unfit():
         return
     if apply_choices:
@@ -664,7 +827,11 @@ def prepare_timing(apply_choices=True, drop_off=True):
         for i in no_len:
             if i < len(A["sfx"]) and "length" in A["sfx"][i]:
                 A["sfx"][i]["_auto_length"] = True
-    PROJECTED_VOICE, LEGACY_TIMELINE = result["voiceIntervals"], result["legacyTimeline"]
+    PROJECTED_VOICE, LEGACY_TIMELINE, CAM_SEGMENTS = (
+        result["voiceIntervals"],
+        result["legacyTimeline"],
+        result.get("camSegments"),
+    )
 
 
 def duck_windows():
@@ -765,10 +932,13 @@ def build(out, beds, sfx, voice=True, span=None, master=True, float_output=False
 
 
 def _build(out, beds, sfx, voice, span, master, float_output, end, folder, source_bindings):
+    from ir import resolve_clip_reverb
+    from spatial import is_spatial_active
+
     inputs, chains = [], []
     end = END if end is None else end
 
-    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None):
+    def add(path, at, gain, start=0.0, length=None, fade_in=0.0, fade_out=0.0, loop=False, extra=(), gain_keys=None, processing=None, reverb_spec=None, spatial_spec=None):
         if length is not None and length <= 0:
             return
         if source_bindings is not None:
@@ -796,7 +966,6 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
                 msg = (e.stderr or e.stdout or str(e)).strip().splitlines()[-1] if isinstance(e, subprocess.CalledProcessError) and (e.stderr or e.stdout) else str(e)
                 raise SystemExit(f"audio processing failed for {processing.get('name', path)}: {msg}")
             path, start = processed, 0
-        inputs.extend(["-i", str(path)])
         f = [f"atrim=start={start}" + (f":duration={length}" if length else ""), "asetpts=PTS-STARTPTS",
              "aformat=sample_rates=48000:channel_layouts=stereo", f"volume={gain}dB", *extra]
         automation = gain_filter(gain_keys, gain)
@@ -807,6 +976,44 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         if fade_out and length:
             f.append(f"afade=t=out:st={max(0, length - fade_out)}:d={fade_out}")
         samples = max(0, math.floor(at * 48000 + 0.5))
+        spatial_on = is_spatial_active(spatial_spec)
+        if spatial_on or reverb_spec is not None:
+            pre_wav = folder / f"{i}_pre.wav"
+            pre_graph = f"[0:a]{','.join(f)}[p]"
+            try:
+                subprocess.run(
+                    ["ffmpeg", "-xerror", "-v", "error", "-y", "-i", str(path), "-filter_complex", pre_graph, "-map", "[p]", "-ar", "48000", "-ac", "2", "-c:a", "pcm_f32le", str(pre_wav)],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except subprocess.CalledProcessError as e:
+                detail = next(iter((e.stderr or "").splitlines()), f"exit {e.returncode}")
+                raise SystemExit(f"ffmpeg spatial pre-render failed for {path}: {detail}")
+            import numpy as np
+            from scipy.io import wavfile
+            from ir import apply_convolution_reverb
+            from spatial import apply_spatial_audio
+
+            _, raw_buf = wavfile.read(str(pre_wav))
+            if raw_buf.ndim == 1:
+                raw_buf = np.column_stack((raw_buf, raw_buf))
+            buf = raw_buf.astype(np.float32)
+            if spatial_on:
+                cam_keys, placed_data = _scene_spatial_data()
+                buf = apply_spatial_audio(buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time)
+            if reverb_spec is not None:
+                ir_l, ir_r, ir_path = _resolve_ir_buffers(reverb_spec["space"])
+                if source_bindings is not None and ir_path is not None:
+                    source_bindings["files"][stored_path(ir_path)] = media_identity(ir_path)
+                buf = apply_convolution_reverb(buf, ir_l, ir_r, reverb_spec["wet"], reverb_spec["preDelayMs"], 48000)
+            fx_wav = folder / f"{i}_fx.wav"
+            wavfile.write(str(fx_wav), 48000, np.asarray(buf, dtype=np.float32))
+            inputs.extend(["-i", str(fx_wav)])
+            chains.append(f"[{i}:a]adelay={samples}S|{samples}S[a{i}]")
+            return
+        inputs.extend(["-i", str(path)])
         f.append(f"adelay={samples}S|{samples}S")
         chains.append(f"[{i}:a]{','.join(f)}[a{i}]")
 
@@ -816,17 +1023,24 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
     if voice and not A.get("narration") and has_voice:
         add(_assert_in_root(ROOT / "assets/public/agent/full_voice.wav", "Voice audio"), 0, float(A.get("voiceGain") or 0), length=END,
             processing={"dialogue": True, **({"__timing": {"duration": SOURCE_END, "timeline": LEGACY_TIMELINE}} if LEGACY_TIMELINE else {})})
+    spaces = A.get("spaces")
+    film_reverb = A.get("reverb")
     for b in beds:
         if b["to"] <= b["from"]:
             continue
         duck_db = float(b["duck"]) if b.get("duck") is not None else 0.0
         duck = duck_expr(b["from"], b["to"], duck_db) if duck_db and (A.get("narration") or has_voice) else None
-        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])])
+        mid_t = 0.5 * (float(b["from"]) + float(b["to"]))
+        rev = resolve_clip_reverb(b.get("reverb"), mid_t, spaces, film_reverb)
+        add(present(b["name"]), float(b["from"]), float(b["gain"]), float(b.get("start") or 0), float(b["to"] - b["from"]), float(b["fadeIn"]), float(b["fadeOut"]), loop=True, gain_keys=b.get("gainKeys"), processing=b, extra=[*_safe_filters(b.get("filters")), *track_chain(b), *([duck] if duck else []), *([pan_filter(float(b["pan"]))] if b.get("pan") else [])], reverb_spec=rev, spatial_spec=b.get("spatial"))
     for s in sfx:
         start_at = float(s.get("start") or 0)
         if (s.get("length") is not None and float(s["length"]) <= 0) or start_at >= seconds(s["name"]):
             continue
-        add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, float(s["length"]) if s.get("length") is not None else None, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])])
+        s_len = float(s["length"]) if s.get("length") is not None else None
+        mid_t = float(s["at"]) + (0.5 * s_len if s_len else 0.0)
+        rev = resolve_clip_reverb(s.get("reverb"), mid_t, spaces, film_reverb)
+        add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, s_len, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])], reverb_spec=rev, spatial_spec=s.get("spatial"))
     if not chains:  # a film with no sound yet: silence as long as the film
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
