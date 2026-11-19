@@ -33,6 +33,12 @@ export function HSLAdjust({
       },
       keep,
     );
+  const isHslDefault =
+    grade.hsl?.enabled !== false &&
+    HUES.every(({ id }) => {
+      const b = grade.hsl?.[id];
+      return !b || ((b.hue ?? 0) === 0 && (b.saturation ?? 0) === 0 && (b.brightness ?? 0) === 0);
+    });
   return (
     <Section
       title="HSL"
@@ -46,7 +52,7 @@ export function HSLAdjust({
       right={
         <Reset
           label="Reset HSL"
-          disabled={locked}
+          disabled={locked || isHslDefault}
           onClick={() => changeGrade(shot, resetLookHsl)}
         />
       }
@@ -121,6 +127,14 @@ type Drag =
   { state: "idle" } | { state: "dragging"; before: string; index: number; points: CurvePoint[] };
 const bounded = (v: number, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
 
+const isNeutralCurve = (pts?: CurvePoint[]) =>
+  !pts ||
+  (pts.length === NEUTRAL_CURVE.length &&
+    pts.every(
+      ([x, y], idx) =>
+        Math.abs(x - NEUTRAL_CURVE[idx][0]) < 1e-4 && Math.abs(y - NEUTRAL_CURVE[idx][1]) < 1e-4,
+    ));
+
 function CurveEditor({
   shot,
   grade,
@@ -176,6 +190,7 @@ function CurveEditor({
         <span className="ml-auto">
           <Reset
             label={`Reset ${channel.title} curve`}
+            disabled={disabled || isNeutralCurve(points)}
             onClick={() => {
               cancel();
               select(null);
@@ -351,7 +366,11 @@ export function CurvesAdjust({
       right={
         <Reset
           label="Reset all curves"
-          disabled={disabled}
+          disabled={
+            disabled ||
+            (grade.curves?.enabled !== false &&
+              CHANNELS.every((c) => isNeutralCurve(grade.curves?.[c.id])))
+          }
           onClick={() => changeGrade(shot, resetLookCurves)}
         />
       }

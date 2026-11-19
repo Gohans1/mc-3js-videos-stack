@@ -477,6 +477,15 @@ export function SpeedCurve({
           <Button
             variant="secondary"
             size="sm"
+            disabled={
+              Object.keys(normCuts).length === 0 &&
+              value.length === 5 &&
+              value.every(
+                ([x, y], idx) => Math.abs(x - idx * 0.25) < 1e-4 && Math.abs(y - 1) < 1e-4,
+              ) &&
+              (!handles ||
+                handles.every(([a, b]) => Math.abs(a - 1) < 1e-4 && Math.abs(b - 1) < 1e-4))
+            }
             onClick={() => {
               save(
                 buildSpeedCurve([

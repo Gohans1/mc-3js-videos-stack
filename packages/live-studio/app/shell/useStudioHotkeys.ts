@@ -6,7 +6,7 @@ import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 
 import { easeCameraPicks, nudgeCameraPicks, saveView, stepCameraKey } from "../camera/cam";
 import { copyCam } from "../camera/camline";
-import { AWAY } from "../core/device";
+import { AWAY, PHONE } from "../core/device";
 import { redo, undo } from "../core/doc";
 import { engine } from "../core/engine";
 import { DURATION } from "../core/filmMeta";
@@ -269,7 +269,22 @@ export function useStudioHotkeys() {
     { hotkey: "Shift+P", callback: fresh(togglePreviewAxis) },
     { hotkey: "Shift+S", callback: fresh(togglePreviewAudio), options: { enabled: !free } },
     // CapCut's marker is the studio's note: one at the playhead, and the next or previous one
-    { hotkey: "M", callback: () => openNote(null) },
+    {
+      hotkey: "M",
+      callback: () => {
+        const stage = S.el?.stage;
+        let visible = !PHONE;
+        if (visible && stage && typeof getComputedStyle === "function") {
+          for (let el: HTMLElement | null = stage; el; el = el.parentElement) {
+            if (getComputedStyle(el).display === "none") {
+              visible = false;
+              break;
+            }
+          }
+        }
+        void openNote(null, true, undefined, visible ? { x: 0.5, y: 0.88 } : undefined);
+      },
+    },
     // the Review room (notes/ReviewRoom.tsx) in place of the timeline and the panels, and back
     { hotkey: "N", callback: () => setReview(!get().review) },
     { hotkey: "Shift+M", callback: noteKey(1) },

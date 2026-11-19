@@ -334,6 +334,7 @@ function Inspector({ name }: { name: string }) {
             size="icon-lg"
             className={iconBtn}
             aria-label="Reset rotation and scale"
+            disabled={rot.every((v) => Math.abs(v) < 1e-4) && Math.abs(scale - 1) < 1e-4}
             onClick={() => resetTransform(name)}
           >
             <RotateCcw />

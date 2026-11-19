@@ -20,6 +20,10 @@ type Part = "color" | "saturation" | "brightness";
 type Drag =
   { state: "idle" } | { state: "dragging"; before: string; initial: WheelValue; value: WheelValue };
 const bound = (x: number, lo = -1, hi = 1) => Math.min(hi, Math.max(lo, x));
+const isWheelDefault = (w?: WheelValue) =>
+  !w ||
+  ((w.rgb ?? [0, 0, 0]).every((v) => Math.abs(v) < 1e-4) &&
+    Math.abs((w.saturation ?? 100) - 100) < 1e-4);
 // Hue positions measured from the user's CapCut color-wheel screenshot c1c52e07.
 const RING_HUES = [347.368, 279.718, 224.615, 193.663, 110, 54.247, 30.286, 11.172, -12.632];
 const polar = (rgb: RGB) => {
@@ -184,6 +188,7 @@ function Wheel({
         <span>{title}</span>
         <Reset
           label={`Reset ${title} wheel`}
+          disabled={disabled || isWheelDefault(value)}
           onClick={() => {
             cancel();
             changeGrade(shot, (g) => resetLookWheel(g, id));
@@ -330,7 +335,13 @@ export function WheelsAdjust({
       right={
         <Reset
           label="Reset color wheels"
-          disabled={locked}
+          disabled={
+            locked ||
+            (grade.wheels?.enabled !== false &&
+              mode === "primary" &&
+              Math.abs((grade.wheels?.amount ?? 100) - 100) < 1e-4 &&
+              WHEEL_KEYS.every((id) => isWheelDefault(grade.wheels?.[id])))
+          }
           onClick={() => changeGrade(shot, resetLookWheels)}
         />
       }

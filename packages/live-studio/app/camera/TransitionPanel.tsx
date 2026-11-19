@@ -28,6 +28,7 @@ import {
 } from "./transition-math";
 import {
   applyTransitionToAll,
+  isTransitionDefault,
   resetTransition,
   setTransition,
   setTransitionDuration,
@@ -82,6 +83,7 @@ export function TransitionPanel() {
         right={
           <Reset
             label="Reset transition parameters"
+            disabled={isTransitionDefault(shot)}
             onClick={() => {
               resetTransition(shot);
               replay();

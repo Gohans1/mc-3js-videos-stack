@@ -283,9 +283,10 @@ export function CameraShotSettings({ shot }: { shot: number }) {
           <Button
             variant="quiet"
             size="sm"
+            disabled={!row.camera}
             onClick={() =>
               shotsDoc.edit((rows) => {
-                delete rows[shot].camera;
+                if (rows[shot]?.id === row.id) delete rows[shot].camera;
               })
             }
           >
@@ -337,6 +338,18 @@ export function CameraShotSettings({ shot }: { shot: number }) {
             />
           </FieldRow>
         )}
+        <Button
+          variant="quiet"
+          size="sm"
+          disabled={!row.shutter}
+          onClick={() =>
+            shotsDoc.edit((rows) => {
+              if (rows[shot]?.id === row.id) delete rows[shot].shutter;
+            })
+          }
+        >
+          Reset shutter
+        </Button>
       </Section>
     </>
   );

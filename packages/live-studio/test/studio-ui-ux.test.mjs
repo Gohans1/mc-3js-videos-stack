@@ -18,11 +18,11 @@ import "/index.css";
 import { TooltipProvider } from "/components/ui/tooltip.tsx";
 import { Toaster } from "/components/ui/toast.tsx";
 import { registerEngine } from "/core/engine.ts";
-import { flushDocs, setAutoSave } from "/core/doc.ts";
+import { flushDocs, redo, setAutoSave, undo } from "/core/doc.ts";
 import { setFilmSource } from "/core/filmMeta.ts";
 import { S } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
-import { keys as camKeys, loadCam, setKey } from "/camera/cam.ts";
+import { keys as camKeys, loadCam, matchAllInShot, setKey } from "/camera/cam.ts";
 import { loadKeys as loadStudioKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
@@ -31,7 +31,34 @@ import { NoteThumb } from "/notes/note-parts.tsx";
 import { Stage } from "/picture/Stage.tsx";
 import { attachInk } from "/notes/ink.ts";
 import { cancelNote, ensureNote, goToNote, nowPicture, openNote, returnFromNote } from "/notes/notes.ts";
-import { flight, fly, flyFree, setFree } from "/picture/freecam.ts";
+import {
+  applyFreeToKeyframe,
+  axisView,
+  defaultFreeFov,
+  flight,
+  fly,
+  flyCam,
+  flyFree,
+  moveCam,
+  orbitFree,
+  rememberFreeView,
+  resetFreeFov,
+  resetFreeLensAll,
+  restoreFreeView,
+  setFree,
+  setFreeBob,
+  setFreeFocus,
+  setFreeFov,
+  setFreeFstop,
+  setFreeHandheld,
+  setFreeLock,
+  setFreeLook,
+  setFreeMm,
+  setFreeNavigation,
+  setFreePoseCoordinate,
+  setFreeRoll,
+  setFreeWave,
+} from "/picture/freecam.ts";
 import { attachPicture } from "/picture/pointer.ts";
 import { Settings } from "/shell/Settings.tsx";
 import { Transport } from "/shell/Transport.tsx";
@@ -339,6 +366,35 @@ window.__UX_TEST__ = {
   returnFromNote,
   setPref,
   setKey,
+  undo,
+  redo,
+  matchAllInShot,
+  freecam: {
+    applyFreeToKeyframe,
+    axisView,
+    defaultFreeFov,
+    flyCam,
+    flyFree,
+    moveCam,
+    orbitFree,
+    rememberFreeView,
+    resetFreeFov,
+    resetFreeLensAll,
+    restoreFreeView,
+    setFree,
+    setFreeBob,
+    setFreeFocus,
+    setFreeFov,
+    setFreeFstop,
+    setFreeHandheld,
+    setFreeLock,
+    setFreeLook,
+    setFreeMm,
+    setFreeNavigation,
+    setFreePoseCoordinate,
+    setFreeRoll,
+    setFreeWave,
+  },
   setCamData: async (next, selectIdx = 1) => {
     await flushDocs();
     camData = next;
@@ -1440,7 +1496,12 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     `window.__UX_TEST__.camKeys()[1].handheld?.amount === 1.4 && window.__UX_TEST__.camKeys()[1].bob === 0.35`,
   );
 
-  // 5. Coordinates Position X & Aim Y
+  // 5. Coordinates Position X & Aim Y (inside Advanced)
+  await page.evaluate(`(() => {
+    const advBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Advanced');
+    if (advBtn && advBtn.getAttribute('aria-expanded') === 'false') advBtn.click();
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Position X"]')`);
   await page.evaluate(setField("Position X", "7.5"));
   await page.evaluate(setField("Aim Y", "2.25"));
   await waitUntil(
@@ -2056,4 +2117,264 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
   await waitUntil(
     `window.__UX_TEST__.get().uxSpeedCurve.curve.every((p) => p[1] === 1) && !window.__UX_TEST__.get().uxSpeedCurve.cuts`,
   );
+  expect(
+    await page.evaluate(
+      `[...document.querySelectorAll('[data-ux-speedcurve] button')].find((b) => b.textContent?.trim() === 'Reset')?.disabled`,
+    ),
+  ).toBe(true);
+});
+
+test("Free cam defaultFreeFov ignores mutated camera.fov, FOV reset toggles accurately, and every freecam mutator resets S.finalAt", async () => {
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.S.tools.home = undefined;
+    u.S.tools.camera.fov = 50;
+    u.freecam.setFree(false);
+    u.S.tools.camera.fov = 50;
+    u.freecam.setFree(true);
+    u.freecam.setFreeFov(72);
+    // Simulate scene.ts writing free.fov into tools.camera.fov on draw
+    u.S.tools.camera.fov = 92;
+  })()`);
+
+  const defFovWhileMutated = await page.evaluate(`window.__UX_TEST__.freecam.defaultFreeFov()`);
+  expect(defFovWhileMutated).toBe(50);
+
+  await waitUntil(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]')`,
+  );
+  const beforeReset = await page.evaluate(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]').disabled`,
+  );
+  expect(beforeReset).toBe(false);
+
+  await page.evaluate(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]').click()`,
+  );
+  await waitUntil(`window.__UX_TEST__.get().freeFov === 50`);
+  const afterReset = await page.evaluate(
+    `document.querySelector('button[aria-label="Reset free camera FOV to default"]').disabled`,
+  );
+  expect(afterReset).toBe(true);
+
+  const mutatorResults = await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    const fc = u.freecam;
+    const out = [];
+    const check = (name, fn) => {
+      u.S.finalAt = 4.2;
+      fn();
+      out.push([name, u.S.finalAt]);
+    };
+    u.S.tools.free.previewEffects = false;
+    u.S.tools.free.p.set(0, 2, 6);
+    u.S.tools.free.l.set(0, 1, 0);
+    check("setFreeFov", () => fc.setFreeFov(64));
+    check("resetFreeFov", () => fc.resetFreeFov());
+    check("setFreeMm", () => fc.setFreeMm(35));
+    check("setFreeRoll", () => fc.setFreeRoll(0.25));
+    check("setFreeWave", () => fc.setFreeWave(1.1));
+    check("setFreeBob", () => fc.setFreeBob(0.45));
+    check("setFreeFstop", () => fc.setFreeFstop(2.8));
+    check("setFreeFocus", () => fc.setFreeFocus(4.5));
+    check("setFreeHandheld", () => fc.setFreeHandheld("HANDYCAM_RUN"));
+    check("setFreePoseCoordinate", () => fc.setFreePoseCoordinate("p", 0, 1.5));
+    check("moveCam", () => fc.moveCam(0.2, 0.1, 0));
+    fc.rememberFreeView();
+    check("flyCam", () => fc.flyCam(0.2, 0, 0));
+    check("orbitFree", () => fc.orbitFree(0.1, 0));
+    check("axisView", () => fc.axisView("front"));
+    check("restoreFreeView", () => fc.restoreFreeView(-1));
+    check("setFreeLook", () => fc.setFreeLook(false));
+    check("setFreeLock", () => fc.setFreeLock(true));
+    fc.setFreeLock(false);
+    check("resetFreeLensAll", () => fc.resetFreeLensAll());
+    check("flyFree", () => fc.flyFree({ p: [1, 2, 3], l: [0, 1, 0], fov: 45 }));
+    check("setFree(false)", () => fc.setFree(false));
+    check("setFree(true)", () => fc.setFree(true));
+    fc.setFree(false);
+    return out;
+  })()`);
+  for (const [name, finalAt] of mutatorResults) {
+    expect({ name, finalAt }).toEqual({ name, finalAt: -1 });
+  }
+});
+
+test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in shot, Shot Rig/Shutter resets, and Free cam Apply to keyframe", async () => {
+  await page.evaluate(
+    `window.__UX_TEST__.setCamData([
+      { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+      { id: "k1", t: 1.5, p: [2, 2, 6], l: [0, 1, 0], fov: 50 },
+      { id: "k2", t: 3, p: [4, 2, 6], l: [0, 1, 0], fov: 50 },
+      { id: "k3", t: 5, p: [6, 2, 6], l: [0, 1, 0], fov: 50 },
+    ], 1)`,
+  );
+  await page.evaluate(`window.__UX_TEST__.loadShots()`);
+  await page.evaluate(`window.__UX_TEST__.freecam.setFree(false)`);
+  await page.evaluate(`(() => {
+    window.__UX_TEST__.S.tools.cameraRig = true;
+    window.__UX_TEST__.S.tools.cameraProjection = true;
+    window.__UX_TEST__.set({ ready: true });
+  })()`);
+
+  await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Camera workspace"]')`);
+  // Advanced starts collapsed: raw Coordinates and Shutter stay hidden in Basic
+  expect(
+    await page.evaluate(`Boolean(document.querySelector('input[aria-label="Position X"]'))`),
+  ).toBe(false);
+  expect(
+    await page.evaluate(`Boolean(document.querySelector('input[aria-label="Shutter angle"]'))`),
+  ).toBe(false);
+
+  // One-click Match all in shot marks interior keys 1 & 2 cleanly in 1 undo step
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Match all in shot')`,
+  );
+  await page.evaluate(`(() => {
+    const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Match all in shot');
+    btn.click();
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.camKeys()[1].matchSpeed === true && window.__UX_TEST__.camKeys()[2].matchSpeed === true`,
+  );
+  expect(await page.evaluate(`window.__UX_TEST__.camKeys()[0].matchSpeed`)).toBeUndefined();
+  expect(await page.evaluate(`window.__UX_TEST__.camKeys()[3].matchSpeed`)).toBeUndefined();
+  await page.evaluate(`window.__UX_TEST__.undo()`);
+  await waitUntil(
+    `!window.__UX_TEST__.camKeys()[1].matchSpeed && !window.__UX_TEST__.camKeys()[2].matchSpeed`,
+  );
+
+  // Expand Advanced -> Camera rig & Shutter Resets start disabled, enable on edit, then reset cleanly
+  await page.evaluate(`(() => {
+    const adv = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Advanced');
+    adv.click();
+  })()`);
+  await waitUntil(`document.querySelector('input[aria-label="Position X"]')`);
+  await page.evaluate(`(() => {
+    for (const label of ['Camera rig', 'Shutter']) {
+      const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === label);
+      if (btn?.getAttribute('aria-expanded') === 'false') btn.click();
+    }
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Reset camera rig') && [...document.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Reset shutter')`,
+  );
+  const rigBtnDisabledInit = await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset camera rig')?.disabled`,
+  );
+  const shutterBtnDisabledInit = await page.evaluate(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset shutter')?.disabled`,
+  );
+  expect(rigBtnDisabledInit).toBe(true);
+  expect(shutterBtnDisabledInit).toBe(true);
+
+  await page.evaluate(`(() => {
+    const ortho = [...document.querySelectorAll('[role="radiogroup"][aria-label="Projection"] button')].find((b) => b.textContent?.trim() === 'Orthographic');
+    ortho.click();
+    const closeTiming = [...document.querySelectorAll('[role="radiogroup"][aria-label="Shutter timing"] button')].find((b) => b.textContent?.trim() === 'Close');
+    closeTiming.click();
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset camera rig')?.disabled === false && [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset shutter')?.disabled === false`,
+  );
+  await page.evaluate(`(() => {
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset camera rig').click();
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset shutter').click();
+  })()`);
+  await waitUntil(
+    `!window.__UX_TEST__.shotsData()[0]?.camera && !window.__UX_TEST__.shotsData()[0]?.shutter && [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset camera rig')?.disabled === true && [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset shutter')?.disabled === true`,
+  );
+
+  // Switch manually to Free cam sub-tab while Free cam is OFF -> shows CTA -> click Enter Free camera (F)
+  await page.evaluate(`(() => {
+    const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
+    tab.click();
+  })()`);
+  await waitUntil(
+    `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Enter Free camera'))`,
+  );
+  await page.evaluate(`(() => {
+    const enter = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Enter Free camera'));
+    enter.click();
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().free === true`);
+
+  // Free cam Pick aim point & Pick focus on frame work via canvas raycast
+  await page.evaluate(`window.__UX_TEST__.setStageBox(640, 360)`);
+  await page.evaluate(`window.__UX_TEST__.attachAndDrawTimeline()`);
+  await page.evaluate(`(() => {
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick aim point')).click();
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().cameraPick?.target === 'free'`);
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 94, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 94, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().cameraPick === null`);
+  await page.evaluate(`(() => {
+    [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame')).click();
+  })()`);
+  await waitUntil(`window.__UX_TEST__.get().pickFocus === 'free'`);
+  await page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX: cx, clientY: cy, button: 0, buttons: 1, pointerId: 95, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX: cx, clientY: cy, button: 0, buttons: 0, pointerId: 95, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new MouseEvent('click', { clientX: cx, clientY: cy, button: 0, bubbles: true }));
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.get().freeFocus === 'number'`,
+  );
+
+  // Set Free cam Aperture, Focus, Roll, Sway, Bob, Handheld and click Apply to keyframe
+  await page.evaluate(`(() => {
+    const fc = window.__UX_TEST__.freecam;
+    fc.setFreeFstop(2.8);
+    fc.setFreeFocus(4.2);
+    fc.setFreeRoll(0.2);
+    fc.setFreeWave(0.75);
+    fc.setFreeBob(0.4);
+    fc.setFreeHandheld("HANDYCAM_RUN");
+  })()`);
+  await waitUntil(
+    `document.querySelector('button[aria-label="Reset free camera aperture to default"]')?.disabled === false`,
+  );
+  await page.evaluate(`(() => {
+    const applyBtn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Apply to keyframe');
+    applyBtn.click();
+  })()`);
+  await waitUntil(
+    `window.__UX_TEST__.camKeys()[1].fstop === 2.8 && window.__UX_TEST__.camKeys()[1].bob === 0.4`,
+  );
+  const applied = await page.evaluate(`window.__UX_TEST__.camKeys()[1]`);
+  expect(applied.focus).toBe(4.2);
+  expect(applied.wave).toBe(0.75);
+  expect(applied.handheld).toBe("HANDYCAM_RUN");
+  expect(applied.roll).toBeCloseTo(0.2, 3);
+
+  // Single Ctrl+Z undo reverts entire Apply to keyframe cleanly
+  await page.evaluate(`window.__UX_TEST__.undo()`);
+  await waitUntil(
+    `window.__UX_TEST__.camKeys()[1].fstop === undefined && window.__UX_TEST__.camKeys()[1].bob === undefined`,
+  );
+  await page.evaluate(`window.__UX_TEST__.freecam.setFree(false)`);
+});
+
+test("Pressing M on desktop opens floating StageNoteComposer anchored on the stage", async () => {
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    u.set({ free: false, settingsOpen: false, compose: null, playing: false });
+    u.cancelNote();
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  })()`);
+  await page.press("m");
+  await waitUntil(`window.__UX_TEST__.get().compose?.kind === 'create'`);
+  const anchor = await page.evaluate(`window.__UX_TEST__.get().compose?.anchor`);
+  expect(anchor).toEqual({ x: 0.5, y: 0.88 });
+  await page.evaluate(`window.__UX_TEST__.cancelNote()`);
 });

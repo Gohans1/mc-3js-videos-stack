@@ -234,7 +234,13 @@ function TimingSpeedPanel() {
         {tab === "standard" && (
           <Section
             title="Speed"
-            right={<Reset label="Reset speed" onClick={() => setShotSpeed(shot, null)} />}
+            right={
+              <Reset
+                label="Reset speed"
+                disabled={!speed}
+                onClick={() => setShotSpeed(shot, null)}
+              />
+            }
           >
             <SliderRow
               label="Shot speed"
@@ -274,7 +280,13 @@ function TimingSpeedPanel() {
         {tab === "curve" && (
           <Section
             title="Curve"
-            right={<Reset label="Reset speed curve" onClick={() => setShotSpeed(shot, null)} />}
+            right={
+              <Reset
+                label="Reset speed curve"
+                disabled={!speed}
+                onClick={() => setShotSpeed(shot, null)}
+              />
+            }
           >
             <ul aria-label="Speed curves" className="grid grid-cols-4 gap-x-2.5 gap-y-3 py-1">
               {[

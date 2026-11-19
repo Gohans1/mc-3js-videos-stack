@@ -203,7 +203,18 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
                     g.enabled = on;
                   })
                 }
-                right={<Reset label="Reset adjustments" onClick={() => resetGrade(shot)} />}
+                right={
+                  <Reset
+                    label="Reset adjustments"
+                    disabled={
+                      locked ||
+                      !Object.entries(grade).some(([k, v]) =>
+                        k === "enabled" ? v === false : v !== undefined,
+                      )
+                    }
+                    onClick={() => resetGrade(shot)}
+                  />
+                }
               >
                 {grade.look && (
                   <FieldRow
@@ -254,7 +265,7 @@ export function AdjustPanel({ library: showLibrary = false }: { library?: boolea
                 right={
                   <Reset
                     label="Remove LUT"
-                    disabled={!resolved.lut}
+                    disabled={locked || !resolved.lut}
                     onClick={() =>
                       change(shot, (g) => {
                         delete g.lut;

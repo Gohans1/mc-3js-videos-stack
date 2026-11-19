@@ -159,6 +159,7 @@ export function PageInspector({ itemId }: { itemId: string }) {
             className="mt-3"
             variant="quiet"
             size="sm"
+            disabled={!override}
             onClick={() =>
               openFilmDoc.edit((data) => {
                 const it = data.items.find((x) => x.id === itemId)!;
