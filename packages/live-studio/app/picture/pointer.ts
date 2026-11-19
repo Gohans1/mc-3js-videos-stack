@@ -1,7 +1,7 @@
 // Preview input: right-click pins a note, right-drag sketches/draws a note; left-click picks an object/title/element,
 // and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
 import { cameraKeyFrameTime, keys, setFocus } from "../camera/cam";
-import { applyCameraPick, cancelCameraPick } from "../camera/camera-framing";
+import { applyCameraPick, applyContinuityPick, cancelCameraPick } from "../camera/camera-framing";
 import { cameraGizmoBusy, pickCameraPath } from "../camera/campath";
 import { PHONE } from "../core/device";
 import { engine } from "../core/engine";
@@ -266,6 +266,7 @@ export const attachPicture = () => {
     if (!pick) return false;
     const hit = lookAtClick(nx, ny);
     if (pick.target === "free") applyFreeCameraPick(pick, hit);
+    else if (pick.target === "continuity") applyContinuityPick(pick, hit.world);
     else void engine.render(S.t, () => applyCameraPick(pick, hit));
     return true;
   };

@@ -16,7 +16,7 @@ import { NumberField } from "../components/NumberField";
 import { shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
-import { showError, useStudio } from "../core/store";
+import { get, showError, useStudio } from "../core/store";
 import { seekExact, setPlaying } from "../playback/transport";
 import { cameraKeyFrameTime, edit, keys, railPositionForKey } from "./cam";
 import {
@@ -33,7 +33,7 @@ import {
   startCameraPick,
   swapCameraLens,
 } from "./camera-framing";
-import type { CameraPick } from "./slice";
+import type { CameraAimPick } from "./slice";
 
 const axes = ["X", "Y", "Z"];
 const nudgeAxes = [
@@ -67,8 +67,12 @@ export function CameraFraming({
     { value: "world", label: "World" },
     ...candidates.map(({ target, label }) => ({ value: target, label })),
   ];
-  useEffect(() => () => cancelCameraPick(), [key.id, key.t]);
-  const arm = (field: CameraPick["field"]) => {
+  useEffect(() => () => {
+    const current = get().cameraPick;
+    if (current?.target === undefined && current?.id === key.id && current?.t === key.t)
+      cancelCameraPick();
+  }, [key.id, key.t]);
+  const arm = (field: CameraAimPick["field"]) => {
     if (
       pick?.target !== "free" &&
       pick?.field === field &&

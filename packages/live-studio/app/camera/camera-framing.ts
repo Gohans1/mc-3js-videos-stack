@@ -10,6 +10,7 @@ import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
 import { r3, SAME } from "../core/time";
 import { readSceneFrame } from "../picture/render";
+import { setPlaying } from "../playback/transport";
 import {
   cameraAxisAt,
   cameraKeyFrameTime,
@@ -25,8 +26,8 @@ import {
   vectorPoint,
   writeLens,
 } from "./cam";
-import { shotsDoc } from "./shots";
-import type { CameraPick } from "./slice";
+import { type ContinuityAxis, type ShotRow, shotsDoc } from "./shots";
+import type { CameraAimPick, ContinuityPick } from "./slice";
 
 type PointField = "p" | "l";
 const worldPoint = (point: readonly [number, number, number]) => new Vector3(...point);
@@ -88,7 +89,7 @@ export const changeCameraCoordinate = (i: number, field: PointField, axis: numbe
     }),
   );
 
-export const startCameraPick = (i: number, field: CameraPick["field"]) => {
+export const startCameraPick = (i: number, field: CameraAimPick["field"]) => {
   const key = keys[i];
   if (!key || key.locked) return;
   set({ cameraPick: { field, id: key.id, t: key.t }, pickFocus: null });
@@ -97,10 +98,10 @@ export const startCameraPick = (i: number, field: CameraPick["field"]) => {
 export const cancelCameraPick = () => {
   if (!get().cameraPick) return;
   set({ cameraPick: null });
-  if (get().status.startsWith("Click a ")) say("", 0);
+  if (get().status.startsWith("Click ")) say("", 0);
 };
 export const applyCameraPick = (
-  pick: CameraPick,
+  pick: CameraAimPick,
   hit: { what: string; world?: [number, number, number] },
 ) => {
   if (get().cameraPick !== pick) return;
@@ -119,6 +120,35 @@ export const applyCameraPick = (
     cancelCameraPick();
     say("Aim updated");
   });
+};
+
+export const continuityShotMatches = (row: ShotRow, selected: Pick<ShotRow, "id" | "t">) =>
+  selected.id !== undefined ? selected.id === row.id : row.id === undefined && row.t === selected.t;
+
+export const startContinuityPick = (row: ShotRow) => {
+  if (!S.tools) return;
+  if (S.playing) setPlaying(false);
+  set({ cameraPick: { field: "axis", target: "continuity", id: row.id, t: row.t }, pickFocus: null });
+  say("Click the first point on the 180° axis. Esc cancels");
+};
+
+export const applyContinuityPick = (pick: ContinuityPick, point: ContinuityAxis[0] | undefined) => {
+  if (get().cameraPick !== pick) return;
+  const shot = shotsDoc.data?.findIndex((row) => continuityShotMatches(row, pick)) ?? -1;
+  if (shot <= 0) return cancelCameraPick();
+  if (!point) return say("Click a visible surface or press Esc to cancel");
+  const { first } = pick;
+  if (!first) {
+    set({ cameraPick: { ...pick, first: point } });
+    return say("Click the second point on the 180° axis. Esc cancels");
+  }
+  if (Math.hypot(point[0] - first[0], point[2] - first[2]) < 0.25)
+    return say("Click a second point farther along the line of action. Esc cancels");
+  shotsDoc.edit((rows) => {
+    rows[shot].continuityAxis = [first, point];
+  });
+  cancelCameraPick();
+  say("180° axis set");
 };
 
 const cameraBasis = (p: Vector3, l: Vector3, roll = 0) => {

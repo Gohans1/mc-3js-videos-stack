@@ -1,4 +1,5 @@
 import { type CameraRig, ORTHOGRAPHIC_DEPTH } from "film-stage/camera";
+import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -15,9 +16,11 @@ import { FieldRow, Section, Segmented, ValueBox } from "../components/inspector"
 import { shotEnd } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
-import { showError, useStudio } from "../core/store";
+import { get, showError, useStudio } from "../core/store";
+import { cutWarnings } from "../picture/camera-monitor";
 import { readSceneFrame } from "../picture/render";
 import { vectorPoint } from "./cam";
+import { cancelCameraPick, continuityShotMatches, startContinuityPick } from "./camera-framing";
 import { buildCameraRail } from "./camera-rail-edit";
 import {
   applyCameraRecipe,
@@ -25,7 +28,7 @@ import {
   CAMERA_RECIPES,
   type CameraRecipe,
 } from "./shot-authoring";
-import { shotsDoc } from "./shots";
+import { type ShotRow, shotsDoc } from "./shots";
 
 const SETUPS = [
   { id: "target", title: "2-node" },
@@ -42,6 +45,61 @@ const SHUTTER = [
   { id: "center", title: "Center" },
   { id: "close", title: "Close" },
 ] as const;
+
+function ContinuityControls({ row, shot }: { row: ShotRow; shot: number }) {
+  const pick = useStudio((s) => s.cameraPick);
+  const ready = useStudio((s) => s.ready);
+  useStudio((s) => s.camRev);
+  useStudio((s) => s.timingRev);
+  const active = pick?.target === "continuity" && continuityShotMatches(row, pick);
+  const { id, t } = row;
+  useEffect(
+    () => () => {
+      const current = get().cameraPick;
+      if (current?.target === "continuity" && continuityShotMatches({ id, t }, current))
+        cancelCameraPick();
+    },
+    [id, t],
+  );
+  return (
+    <>
+      <p className="text-muted-foreground text-xs">
+        {active
+          ? `Click the ${pick.first ? "second" : "first"} point on the line of action. Esc cancels.`
+          : "Pick two points along the line of action to check the cut into this shot."}
+      </p>
+      <p role="status" className="text-alarm text-xs empty:hidden">
+        {ready && cutWarnings(shot).join(" · ")}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant={active ? "secondary" : "quiet"}
+          size="sm"
+          aria-pressed={active}
+          disabled={!ready}
+          onClick={() => (active ? cancelCameraPick() : startContinuityPick(row))}
+        >
+          {active ? "Cancel axis pick" : "Pick 180° axis"}
+        </Button>
+        {row.continuityAxis && (
+          <Button
+            variant="quiet"
+            size="sm"
+            onClick={() => {
+              if (active) cancelCameraPick();
+              shotsDoc.edit((rows) => {
+                const target = rows.find((shot) => continuityShotMatches(shot, row));
+                if (target) delete target.continuityAxis;
+              });
+            }}
+          >
+            Clear 180° axis
+          </Button>
+        )}
+      </div>
+    </>
+  );
+}
 
 export function CameraShotSettings({ shot }: { shot: number }) {
   const editable = useStudio((s) => s.shots);
@@ -292,6 +350,11 @@ export function CameraShotSettings({ shot }: { shot: number }) {
           >
             Reset camera rig
           </Button>
+        </Section>
+      )}
+      {shot > 0 && (
+        <Section title="Continuity" closed>
+          <ContinuityControls row={row} shot={shot} />
         </Section>
       )}
       <Section title="Shutter" closed>

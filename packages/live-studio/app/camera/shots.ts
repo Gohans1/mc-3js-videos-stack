@@ -20,12 +20,16 @@ import { refreshTimes } from "../timeline/timeline";
 import type { ShotHit } from "./shot-hits";
 import { transitionOf, transitionSpan } from "./transitions";
 
+type AxisPoint = [number, number, number];
+export type ContinuityAxis = [AxisPoint, AxisPoint];
+
 export interface ShotRow {
   id?: string;
   t: number;
   cameraClock?: "scene" | "output";
   camera?: CameraRig;
   shutter?: Shutter;
+  continuityAxis?: ContinuityAxis;
   name?: string;
   [k: string]: unknown;
 }

@@ -1774,6 +1774,70 @@ test("Free camera exposes FOV, Roll, Sway settings in CamPanel and Settings and 
   expect(sceneSrc).toContain("free.wave");
 });
 
+test("shot continuity picks both ends of the line of action and checks the incoming cut", async () => {
+  const ready = await page.evaluate("window.__UX_TEST__.get().ready");
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots([{ id: "a", t: 0, name: "Intro" }, { id: "b", t: 3, name: "Reverse" }]);
+    await u.setCamData([
+      { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { id: "k1", t: 3, cut: true, p: [0, 2, -6], l: [0, 1, 0] },
+    ], 1);
+    u.freecam.setFree(false);
+    u.set({ side: "cam", shotPick: 1, shotList: false, ready: true });
+    u.attachAndDrawTimeline();
+  })()`);
+  const button = (label) =>
+    `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)})`;
+  const open = async (label) => {
+    await waitUntil(button(label));
+    await page.evaluate(`(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') !== 'true') button.click(); })()`);
+  };
+  const click = (label) => page.evaluate(`(${button(label)}).click()`);
+  const pick = (x) => page.evaluate(`(() => {
+    const c = window.__UX_TEST__.S.el.canvas;
+    const r = c.getBoundingClientRect();
+    const clientX = r.left + r.width * ${x}, clientY = r.top + r.height / 2;
+    c.dispatchEvent(new PointerEvent('pointerdown', { clientX, clientY, button: 0, buttons: 1, pointerId: 98, pointerType: 'mouse', bubbles: true }));
+    c.dispatchEvent(new PointerEvent('pointerup', { clientX, clientY, button: 0, buttons: 0, pointerId: 98, pointerType: 'mouse', bubbles: true }));
+  })()`);
+  const axis = "window.__UX_TEST__.shotsData()[1].continuityAxis";
+  const warning = `document.querySelector('section[aria-label="Continuity"] [role="status"]')?.textContent.includes('180° axis crossed')`;
+  try {
+    await open("Advanced");
+    await open("Continuity");
+    expect(await page.evaluate(warning)).toBe(false);
+    await click("Pick 180° axis");
+    expect(await page.evaluate("window.__UX_TEST__.get().cameraPick")).toMatchObject({ target: "continuity" });
+    await pick(0.45);
+    expect(await page.evaluate("window.__UX_TEST__.get().cameraPick?.first")).toHaveLength(3);
+    expect(await page.evaluate(`document.querySelector('section[aria-label="Continuity"]').textContent`)).toContain("second point");
+    expect(await page.evaluate(axis)).toBeUndefined();
+    await page.evaluate("window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))");
+    await waitUntil("window.__UX_TEST__.get().cameraPick === null");
+    expect(await page.evaluate(axis)).toBeUndefined();
+
+    await click("Pick 180° axis");
+    await pick(0.45);
+    await pick(0.55);
+    await waitUntil(`${axis}?.length === 2 && ${warning}`);
+    const points = await page.evaluate(axis);
+    expect(points[0][0]).toBeLessThan(0);
+    expect(points[1][0]).toBeGreaterThan(0);
+    await page.evaluate("window.__UX_TEST__.undo()");
+    await waitUntil(`!${axis} && !${warning}`);
+    await page.evaluate("window.__UX_TEST__.redo()");
+    await waitUntil(warning);
+    await click("Clear 180° axis");
+    await waitUntil(`!${axis} && !${warning}`);
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.set({ shotList: false, shotPick: null, cameraPick: null, ready: ${ready} });
+    })()`);
+  }
+});
+
 test("pinned camera angles reopen their own Free Cam pose and lens at the same time", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;

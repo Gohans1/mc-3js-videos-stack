@@ -1,7 +1,17 @@
 // The camera keys' and shots' part of the page state (core/store.ts)
 import type { SaveState } from "../core/doc";
 
-export type CameraPick = { field: "l"; target?: "free"; id?: string; t: number };
+import type { ContinuityAxis } from "./shots";
+
+export type CameraAimPick = { field: "l"; target?: "free"; id?: string; t: number };
+export type ContinuityPick = {
+  field: "axis";
+  target: "continuity";
+  id?: string;
+  t: number;
+  first?: ContinuityAxis[0];
+};
+export type CameraPick = CameraAimPick | ContinuityPick;
 export interface CameraSlice {
   cameraPick: CameraPick | null;
   timing: boolean;
