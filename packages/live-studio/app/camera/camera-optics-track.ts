@@ -1,6 +1,6 @@
-import { type CameraOpticsTracks, opticsKeys } from "film-stage/camera";
+import { type CameraOpticsKey, type CameraOpticsTracks, opticsKeys } from "film-stage/camera";
 
-import { equalJson } from "../../src/merge-edits.mjs";
+import type { CameraSpan } from "../../src/camera-clock.mjs";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 import { frameVisible, visibleOutputsAt } from "../../src/timing.mjs";
 import { S } from "../core/state";
@@ -57,23 +57,56 @@ export function editOpticsLane<K extends OpticsLane>(
   });
 }
 
+export const cameraTimeInSpan = (span: CameraSpan, output: number) =>
+  span.sourceFrom +
+  ((output - span.from) / (span.to - span.from)) * (span.sourceTo - span.sourceFrom);
+
+export const remapOpticsSpan = <T extends CameraOpticsTracks | undefined>(
+  optics: T,
+  before: CameraSpan,
+  after: CameraSpan,
+): T => {
+  if (!optics) return optics;
+  const outputAt = (time: number) =>
+    before.from +
+    ((time - before.sourceFrom) / (before.sourceTo - before.sourceFrom)) *
+      (before.to - before.from);
+  const map = <V>(records: Record<string, CameraOpticsKey<V>> | undefined) =>
+    records &&
+    Object.fromEntries(
+      Object.entries(records).map(([id, key]) => [
+        id,
+        { ...key, t: cameraTimeInSpan(after, outputAt(key.t)) },
+      ]),
+    );
+  return { ...optics, focus: map(optics.focus), focalLength: map(optics.focalLength) } as T;
+};
+
 export function mergeShotOptics(
   left: CameraOpticsTracks | undefined,
   right: CameraOpticsTracks | undefined,
+  cut: number,
 ): CameraOpticsTracks | undefined {
   if (!left || !right) return left ?? right;
 
-  const merge = <T>(a: Record<string, T> | undefined, b: Record<string, T> | undefined) => {
+  const merge = <T extends { t: number }>(
+    a: Record<string, T> | undefined,
+    b: Record<string, T> | undefined,
+  ) => {
     if (!a || !b) return a ?? b;
     const keys = new Map(Object.entries(a));
     for (const [id, key] of Object.entries(b)) {
-      if (equalJson(keys.get(id), key)) continue;
-      keys.set(keys.has(id) ? crypto.randomUUID() : id, key);
+      const sameTime = [...keys].find(([other, value]) => other !== id && value.t === key.t)?.[0];
+      if ((keys.has(id) || sameTime !== undefined) && key.t < cut) continue;
+      if (sameTime !== undefined) keys.delete(sameTime);
+      keys.set(id, key);
     }
     return Object.fromEntries(keys);
   };
 
   return {
+    ...left,
+    ...right,
     focus: merge(left.focus, right.focus),
     focalLength: merge(left.focalLength, right.focalLength),
   };
@@ -89,7 +122,7 @@ export function applyOpticsFocusPick(
   editOpticsLane(pick, "focus", (records) => {
     const key = findOpticsKey(opticsKeys(records), pick.time);
     records[key?.id ?? crypto.randomUUID()] = {
-      ...(key && { ease: records[key.id].ease }),
+      ...records[key?.id ?? ""],
       t: pick.time,
       value: { point, label: hit.what },
     };

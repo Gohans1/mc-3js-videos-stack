@@ -201,3 +201,22 @@ test("independent optical tracks preserve pose, blend focus from auto, and leave
   expect(cameraAt(0, poses, { optics }).focus).toBeNull();
   expect(cameraAt(4, poses, { optics }).focus).toBe(4);
 });
+
+test("rack focus blends from the rendered aim and custom lens timing stays physically positive", () => {
+  const poses = [0, 2].map((t) => ({
+    t, p: [0, 0, 0], l: [0, 0, 2 + 10 * t],
+    motion: "linear", ease: "linear", wave: 0,
+  }));
+  const optics = {
+    focalLength: { wide: { t: 0, value: 24 }, long: { t: 2, value: 80, ease: [0.2, -2, 0.8, -2] as const } },
+    focus: { auto: { t: 0, value: null }, near: { t: 2, value: 15, ease: "linear" } },
+  };
+  const t = 1 / 30;
+  const cam = cameraAt(t, poses, { optics });
+  applyCameraRig(cam, t, [0, 2], { lead: 1 }, (next) => cameraAt(next, poses));
+  const aim = cam.p.distanceTo(cam.l);
+  expect(aim).toBeGreaterThan(12);
+  expect(resolveFocusDistance(cam.focus, cam.p, () => null, aim).distance)
+    .toBeCloseTo(aim + (15 - aim) * (t / 2), 6);
+  expect(cameraAt(0.5, poses, { optics }).mm).toBeCloseTo(24, 6);
+});

@@ -51,7 +51,7 @@ function sample<T, R>(
   const a = keys[i];
   const b = keys[i + 1];
   if (!b || time === a.t || b.ease === "hold") return a.value;
-  const progress = easeOf(b.ease)((time - a.t) / (b.t - a.t));
+  const progress = Math.max(0, Math.min(1, easeOf(b.ease)((time - a.t) / (b.t - a.t))));
   return blend(a.value, b.value, progress);
 }
 
@@ -66,5 +66,5 @@ export const opticalFocusAt = (
   sample(optics?.focus, time, (from, to, u) => {
     if (u <= 0 || from === to) return from;
     if (u >= 1) return to;
-    return { from: from ?? aimDistance, to: to ?? aimDistance, u };
+    return { from, to, u, ...(from === null || to === null ? { autoDistance: aimDistance } : {}) };
   });

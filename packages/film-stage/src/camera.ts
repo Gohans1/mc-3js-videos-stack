@@ -236,7 +236,7 @@ export type FocusTargetSpec =
   | { target: string; offset?: readonly [number, number, number] }
   | { point: readonly [number, number, number]; label?: string };
 export type FocusValue =
-  FocusTargetSpec | { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number };
+  FocusTargetSpec | { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number; autoDistance?: number };
 
 const spanAt = (ks, t) => {
   if (ks.length <= 1 || t <= ks[0].t) return { i: 0, j: 0, u: 0 };
@@ -828,15 +828,22 @@ export function resolveFocusDistance(
   focus: FocusValue | undefined,
   camPos: THREE.Vector3,
   resolveTarget: (name: string) => THREE.Vector3 | null,
+  renderedAimDistance?: number,
 ): { distance?: number; label?: string } {
   if (focus == null) return {};
   if (isSingleFocus(focus)) {
     const res = resolveSingleFocus(focus as FocusTargetSpec, camPos, resolveTarget);
     return res ? { distance: res.distance, label: res.label } : {};
   }
-  const blend = focus as { from?: FocusTargetSpec; to?: FocusTargetSpec; u: number };
-  const a = resolveSingleFocus(blend.from, camPos, resolveTarget);
-  const b = resolveSingleFocus(blend.to, camPos, resolveTarget);
+  const blend = focus as Exclude<FocusValue, FocusTargetSpec>;
+  const autoDistance = blend.autoDistance === undefined
+    ? undefined : (renderedAimDistance ?? blend.autoDistance);
+  const resolve = (spec: FocusTargetSpec | undefined) =>
+    spec === null && autoDistance !== undefined
+      ? { distance: Math.max(0.05, autoDistance), label: "Auto" }
+      : resolveSingleFocus(spec, camPos, resolveTarget);
+  const a = resolve(blend.from);
+  const b = resolve(blend.to);
   if (a && b) {
     const distance =
       a.point && b.point

@@ -31,6 +31,7 @@ import { camLine } from "/camera/camline.ts";
 import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
 import { sampleEditedPath } from "/camera/campath.ts";
 import { fitCameraBox } from "/camera/camera-framing.ts";
+import { editOpticsLane } from "/camera/camera-optics-track.ts";
 import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
@@ -439,7 +440,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -1201,6 +1202,62 @@ test("optics keyframes author independent Focus and Focal length at the playhead
       u.set({ ready: ${ready} });
     })()`);
   }
+});
+
+test("output-clock optics survive Split and Merge without changing the curve or duplicating edited keys", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const priorTiming = u.get().timing;
+    const priorSample = u.S.tools.cameraSample;
+    const optics = {
+      focus: { far: { t: 0, value: 2 }, near: { t: 10, value: 10, ease: "linear" } },
+      focalLength: { wide: { t: 0, value: 24 }, long: { t: 10, value: 80, ease: "linear" } },
+    };
+    try {
+      await u.loadShots([{ id: "one", t: 0, name: "Intro", cameraClock: "output", optics }]);
+      await u.setCamData([
+        { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 40 },
+        { t: 10, p: [10, 2, 6], l: [0, 1, 0], fov: 40, motion: "linear" },
+      ], 0);
+      u.set({ timing: true });
+      u.refreshProjection({ freezes: [{ at: 2, duration: 3 }] });
+      u.S.tools.cameraSample = () => u.cameraAt(u.cameraTimesAt(u.S.t).camera, u.sourceCamKeys()).sample;
+      const times = [1, 3, 6, 7, 8, 10, 12.9];
+      const samples = () => times.map((time) => {
+        const { world, camera } = u.cameraTimesAt(time);
+        const shot = u.shotsData().findLast(row => row.t <= world);
+        const cam = u.cameraAt(camera, u.sourceCamKeys(), { optics: shot.optics });
+        const focus = typeof cam.focus === "number" ? cam.focus : cam.focus.from + (cam.focus.to - cam.focus.from) * cam.focus.u;
+        return [cam.mm, focus];
+      });
+      const before = samples();
+      u.seekExact(7);
+      u.splitShot();
+      if (u.shotsData().length !== 2) throw new Error("Split did not create the second shot: " + u.get().status);
+      const after = samples();
+      u.removeKey(u.get().camKey);
+      const merged = samples();
+      u.undo();
+      u.editOpticsLane(u.shotsData()[1], "focalLength", (records) => { records.long.value = 50; });
+      u.removeKey(u.camKeys().findIndex((key, i) => i > 0 && key.cut));
+      const track = u.shotsData()[0].optics.focalLength;
+      const last = u.cameraAt(9.9999, u.sourceCamKeys(), { optics: u.shotsData()[0].optics }).mm;
+      return { before, after, merged, track, last };
+    } finally {
+      u.S.tools.cameraSample = priorSample;
+      u.set({ timing: priorTiming, shotPick: null });
+      u.refreshProjection({});
+    }
+  })()`);
+  for (const [i, sample] of result.before.entries()) {
+    for (const [j, value] of sample.entries()) {
+      expect(result.after[i][j]).toBeCloseTo(value, 6);
+      expect(result.merged[i][j]).toBeCloseTo(value, 6);
+    }
+  }
+  expect(Object.keys(result.track)).toEqual(["wide", "long"]);
+  expect(result.track.long.value).toBe(50);
+  expect(result.last).toBeCloseTo(50, 3);
 });
 
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {

@@ -276,10 +276,10 @@ export async function buildScene(canvas, W, H, draft = false) {
   };
   const syncOptics = (cam, shot, shotEntry, activeLayerLook, bypass) => {
     const effectiveFstop = bypass ? 0 : cam.fstop;
+    const fallbackFocus = Math.max(0.05, camera.position.distanceTo(lookAt));
     const resolvedFocus = bypass
       ? {}
-      : resolveFocusDistance(cam.focus, camera.position, resolveFocusTarget);
-    const fallbackFocus = Math.max(0.05, camera.position.distanceTo(lookAt));
+      : resolveFocusDistance(cam.focus, camera.position, resolveFocusTarget, fallbackFocus);
     const rawFocusM = resolvedFocus.distance ?? (effectiveFstop > 0 ? fallbackFocus : undefined);
     const focusM = rawFocusM !== undefined ? Math.max(0.05, rawFocusM) : undefined;
     const lock = shotEntry?.camera?.fovAxis;
@@ -355,7 +355,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     const shot = SHOTS_OUT[Math.max(0, shotAt(worldTime))];
     const cam = sampleTrack(editTime, shot?.camera, shot?.optics);
     const focus = cam.focus && typeof cam.focus === "object" && "u" in cam.focus
-      ? resolveFocusDistance(cam.focus, cam.base.p, resolveFocusTarget).distance
+      ? resolveFocusDistance(cam.focus, camera.position, resolveFocusTarget, camera.position.distanceTo(lookAt)).distance
       : cam.focus;
     return { mm: cam.mm, focus };
   };

@@ -52,7 +52,7 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
-import { mergeShotOptics } from "./camera-optics-track";
+import { cameraTimeInSpan, mergeShotOptics, remapOpticsSpan } from "./camera-optics-track";
 import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
@@ -1267,13 +1267,23 @@ const shotSourceAt = (time: number) => {
   return fromSource(source) <= time ? source : toSource(time - 1e-8);
 };
 
+const opticsSpansOfShot = (shot: number) => {
+  if (!get().timing) return [];
+  const starts = sourceShotStarts();
+  const start = starts[shot];
+  const end = starts[shot + 1] ?? timingClock.sourceDuration;
+  return (clockForTimeline("cam").cameraSpans ?? []).filter(
+    (span) => span.sourceFrom >= start - 1e-8 && span.sourceTo <= end + 1e-8,
+  );
+};
+
 export const splitShot = () => {
   if (!get().shots) {
     say("This film keeps its shots in code: ask the AI in a note to split one");
     return;
   }
   const t = r3(S.t),
-    s = SHOTS_OUT.findLastIndex((x) => x.t <= t + SAME);
+    s = cameraShotIndex(t);
   const existing = keys.findIndex((key, i) => isHardCut(i) && Math.abs(key.t - t) < 0.000501);
   if (
     s < 0 ||
@@ -1289,12 +1299,28 @@ export const splitShot = () => {
   const splitTime = cut?.t ?? t;
   if (ambiguousCut(splitTime)) return say("Move the playhead to a playing frame to split the shot");
   let splitSource = cut ? shotSourceAt(splitTime) : r3(toSource(splitTime));
+  const originalOptics = shotsDoc.data?.[s]?.optics;
+  const spans = originalOptics && shotsDoc.data?.[s]?.cameraClock === "output" ? opticsSpansOfShot(s) : [];
+  const span = spans[0];
+  const world = timingClock.sourceAt(splitTime);
+  if (spans.length > 1 ||
+    (span && !(splitTime > span.from && splitTime < span.to &&
+      world > span.sourceFrom && world < span.sourceTo)))
+    return say("Use Scene time to split a shot with independent optics across multiple playback ranges");
+  const leftOptics = span
+    ? remapOpticsSpan(originalOptics, span, { ...span, to: splitTime, sourceTo: world })
+    : originalOptics;
+  const rightOptics = span
+    ? remapOpticsSpan(originalOptics, span, { ...span, from: splitTime, sourceFrom: world })
+    : originalOptics;
   const splitRows = (sh: ShotRow[]) => {
-    const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
+    const { t: _t, name, transition: _transition, hits, optics: _optics, ...rest } = sh[s];
     const { before, after } = splitShotHits(hits, splitSource);
     setHits(sh[s], before);
+    if (leftOptics) sh[s].optics = leftOptics;
     sh.splice(s + 1, 0, {
       ...structuredClone(rest),
+      ...(rightOptics && { optics: structuredClone(rightOptics) }),
       ...(after ? { hits: after } : {}),
       id: newRowId(),
       t: splitSource,
@@ -1396,6 +1422,15 @@ const mergeShot = (i: number) => {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
     return;
   }
+  const leftSpans = opticsSpansOfShot(s - 1);
+  const rightSpans = opticsSpansOfShot(s);
+  const leftSpan = leftSpans[0];
+  const rightSpan = rightSpans[0];
+  const joinedSpan = leftSpans.length === 1 && rightSpans.length === 1 &&
+    Math.abs(leftSpan.to - rightSpan.from) < 1e-8
+    ? { ...leftSpan, to: rightSpan.to, sourceTo: rightSpan.sourceTo }
+    : null;
+  const opticCut = joinedSpan ? cameraTimeInSpan(joinedSpan, rightSpan.from) : sourceShotStarts()[s];
   if (
     !preserveRailPositions([i - 1, i], () =>
       together(() =>
@@ -1405,7 +1440,9 @@ const mergeShot = (i: number) => {
               const removed = sh[s];
               const left = sh[s - 1];
               setHits(left, mergeShotHits(left.hits, removed?.hits));
-              const optics = mergeShotOptics(left.optics, removed?.optics);
+              const leftOptics = joinedSpan ? remapOpticsSpan(left.optics, leftSpan, joinedSpan) : left.optics;
+              const rightOptics = joinedSpan ? remapOpticsSpan(removed?.optics, rightSpan, joinedSpan) : removed?.optics;
+              const optics = mergeShotOptics(leftOptics, rightOptics, opticCut);
               if (optics) left.optics = optics;
               sh.splice(s, 1);
             }),
