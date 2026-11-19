@@ -57,7 +57,7 @@ window.checkNamed = async (disappears = false, at, to = 1.5) => {
     camera.lookAt(0, 1.6, 0);
     const draw = t => {
       actor.position.set(12 * (t - 0.75), 1.6, 0);
-      if (disappears && t >= 0.45) actor.removeFromParent();
+      if (disappears && t >= (typeof disappears === "number" ? disappears : 0.45)) actor.removeFromParent();
       else if (!actor.parent) scene.add(actor);
     };
     draw.tools = { camera, scene };
@@ -197,6 +197,10 @@ test("named scene mixes fail on a missing anchor unless there is an XYZ fallback
     expect(missing).toEqual({ error: expect.stringMatching(/elon.*unavailable/) });
     const excerpt = await browser.evaluate("window.checkNamed(true, undefined, 0.4)");
     expect(excerpt).toEqual({ frames: 19_200 });
+    const throughCut = await browser.evaluate("window.checkNamed(0.5, undefined, 0.5)");
+    expect(throughCut).toEqual({ frames: 24_000 });
+    const shortTail = await browser.evaluate("window.checkNamed(0.45, undefined, 0.485)");
+    expect(shortTail).toEqual({ error: expect.stringMatching(/elon.*unavailable/) });
     const fallback = (await browser.evaluate("window.checkNamed(true, [8, 1.6, 5])")) as {
       first: [number, number];
       last: [number, number];

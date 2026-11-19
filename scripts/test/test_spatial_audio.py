@@ -384,9 +384,8 @@ class TestMixPyEndToEnd(unittest.TestCase):
             self.assertGreater(rms(2.65, 3.00, 0), rms(2.65, 3.00, 1) * 2.0)
             self.assertGreater(rms(4.00, 4.35, 1), rms(4.00, 4.35, 0) * 2.0)
 
-    def test_mix_tracks_named_scene_actor_through_retimed_frames(self) -> None:
+    def _headless_chrome(self) -> str:
         import shutil
-        import tempfile
         from pathlib import Path
 
         chrome = next(
@@ -402,6 +401,13 @@ class TestMixPyEndToEnd(unittest.TestCase):
         )
         if chrome is None:
             self.skipTest("a Chrome binary is required to sample film scene anchors")
+        return chrome
+
+    def test_mix_tracks_named_scene_actor_through_retimed_frames(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        chrome = self._headless_chrome()
         sample_rate = 48000
         with tempfile.TemporaryDirectory(prefix="mix-scene-anchor-") as folder:
             root = Path(folder)
@@ -456,6 +462,70 @@ export function buildScene() {
             self.assertGreater(left, right * 4, "the scene actor begins on the left")
             left, right = power(0.72, 0.90)
             self.assertGreater(right, left * 4, "Speed moves the actor right before the source-time crossing")
+
+    def test_mix_resolves_named_anchor_until_the_exclusive_clip_end(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        chrome = self._headless_chrome()
+        source_rate = 11025
+        with tempfile.TemporaryDirectory(prefix="mix-scene-cut-") as folder:
+            root = Path(folder)
+            timeline = root / "src/timeline"
+            timeline.mkdir(parents=True)
+            (root / "package.json").write_text(json.dumps({
+                "name": "scene-cut",
+                "live-studio": {"chrome": chrome, "soundVault": False},
+            }), encoding="utf8")
+            (root / "src/edit.json").write_text('{"end":1}', encoding="utf8")
+            (root / "src/scene.ts").write_text("""
+import { Object3D, PerspectiveCamera, Scene } from "three";
+export const DURATION = 1;
+export const SHOTS = [{ t: 0 }, { t: 0.3 }];
+export const SHOTS_OUT = SHOTS;
+export function buildScene() {
+  const scene = new Scene();
+  const actor = new Object3D();
+  actor.name = "actor";
+  actor.position.set(-8, 1.6, 5);
+  const camera = new PerspectiveCamera();
+  camera.position.set(0, 1.6, 5);
+  camera.lookAt(0, 1.6, 0);
+  const draw = (t) => {
+    if (t < 0.3) scene.add(actor);
+    else actor.removeFromParent();
+  };
+  return Object.assign(draw, { tools: { scene, camera } });
+}
+""", encoding="utf8")
+            tone = 0.2 * np.sin(2 * np.pi * 313.25 * np.arange(source_rate) / source_rate)
+            self._write_wav(str(root / "sound/sfx/tone.wav"), np.column_stack((tone, tone)), source_rate)
+            clip = {"at": 0.2, "name": "tone", "gain": 0, "spatial": {"target": "actor", "refDistance": 10}}
+            destination = root / "sound/out.wav"
+
+            def mix(length):
+                (timeline / "audio.json").write_text(
+                    json.dumps({"beds": [], "sfx": [{**clip, "length": length}]}), encoding="utf8",
+                )
+                return subprocess.run(
+                    [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                    cwd=root, capture_output=True, text=True, timeout=120,
+                )
+
+            result = mix(0.1)
+            self.assertEqual(result.returncode, 0, msg=result.stderr + "\n" + result.stdout)
+            rate, out = self._read_wav_f32(str(destination))
+            self.assertEqual(rate, 48000)
+            cutoff_sample = round(0.3 * rate)
+            # 0.1s at 11025 Hz falls between source samples. FFmpeg emits the rounded tail at 48 kHz.
+            self.assertGreater(abs(out[cutoff_sample, 0]), 0.1)
+            self.assertEqual(out[cutoff_sample, 1], 0.0)
+            original = destination.read_bytes()
+
+            result = mix(0.1 + 1 / source_rate)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("spatial target 'actor' is unavailable at 0.300s", result.stderr)
+            self.assertEqual(destination.read_bytes(), original)
 
     def test_mix_py_custom_ir_occlusion_and_path_traversal_guard(self) -> None:
         import tempfile

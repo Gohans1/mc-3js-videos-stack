@@ -373,8 +373,8 @@ def _runtime_spatial_samples(beds, sfx, end, *, include_options=False):
     return samples["positions"], samples["cameras"]
 
 
-def _interpolate_scene_samples(positions, cameras, t):
-    at = t * SCENE_SAMPLE_HZ
+def _interpolate_scene_samples(positions, cameras, t, last_frame):
+    at = min(max(t, 0.0) * SCENE_SAMPLE_HZ, last_frame)
     first = math.floor(at)
     left, right, amount = str(first), str(math.ceil(at)), at - first
 
@@ -1129,14 +1129,21 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
             if spatial_on:
                 cam_keys, placed_data = _scene_spatial_data()
                 track = scene_positions.get(spatial_spec.get("target"))
+                clip_end = min(at + length, end) if length is not None else end
+                end_frame = clip_end * SCENE_SAMPLE_HZ
+                nearest_frame = round(end_frame)
+                # Decimal sums such as 0.2 + 0.1 can land just above the cut frame.
+                if abs(end_frame - nearest_frame) <= 4 * math.ulp(end_frame):
+                    end_frame = nearest_frame
+                last_frame = math.nextafter(end_frame, -math.inf)
 
                 def scene_sample(t):
-                    return _interpolate_scene_samples(track, scene_cameras, min(max(t, 0.0), end))
+                    return _interpolate_scene_samples(track, scene_cameras, t, last_frame)
 
                 try:
                     buf = apply_spatial_audio(
                         buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time,
-                        scene_sample_fn=scene_sample if track is not None else None,
+                        scene_sample_fn=scene_sample if track is not None and at < clip_end else None,
                     )
                 except ValueError as e:
                     raise SystemExit(str(e)) from e

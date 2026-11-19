@@ -406,7 +406,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
     const apply = commit ? edit : preview;
     apply((l) => {
       const target = (clip.list === "beds" ? l.beds : l.sfx)[clip.i];
-      const next: SpatialSpec = structuredClone(target.spatial ?? { at: [0, 1.6, 0] });
+      const next: SpatialSpec = structuredClone(target.spatial ?? {});
       mut(next);
       target.spatial = next;
     });
@@ -543,18 +543,13 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
                 onChange={(e) => setTargetDraft(e.target.value)}
                 onKeyDown={(e) => {
                   e.stopPropagation();
-                  if (e.key === "Enter" && shownTarget.trim()) {
-                    patchSpatial((s) => {
-                      s.target = shownTarget.trim();
-                    }, true);
-                    setTargetDraft(null);
-                    e.currentTarget.blur();
-                  }
+                  if (e.key === "Enter") e.currentTarget.blur();
                 }}
-                onBlur={() => {
-                  if (shownTarget.trim()) {
+                onBlur={(e) => {
+                  const name = e.currentTarget.value.trim();
+                  if (name && name !== spec.target) {
                     patchSpatial((s) => {
-                      s.target = shownTarget.trim();
+                      s.target = name;
                     }, true);
                   }
                   setTargetDraft(null);
@@ -562,25 +557,27 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
               />
             </FieldRow>
           )}
-          <FieldRow label="Offset">
-            {(["X", "Y", "Z"] as const).map((label, axis) => (
-              <ValueBox
-                key={label}
-                name={`Offset ${label}`}
-                value={vec("offset")[axis]}
-                step={0.1}
-                digits={2}
-                compact
-                live={(v) => liveAxis("offset", axis as 0 | 1 | 2, v)}
-                onCancel={cancelAxis}
-                onSave={(v) => saveAxis("offset", axis as 0 | 1 | 2, v)}
-              />
-            ))}
-          </FieldRow>
+          {spec.target && (
+            <FieldRow label="Offset">
+              {(["X", "Y", "Z"] as const).map((label, axis) => (
+                <ValueBox
+                  key={label}
+                  name={`Offset ${label}`}
+                  value={vec("offset")[axis]}
+                  step={0.1}
+                  digits={2}
+                  compact
+                  live={(v) => liveAxis("offset", axis as 0 | 1 | 2, v)}
+                  onCancel={cancelAxis}
+                  onSave={(v) => saveAxis("offset", axis as 0 | 1 | 2, v)}
+                />
+              ))}
+            </FieldRow>
+          )}
         </>
       )}
 
-      {mode !== "off" && (
+      {active && (
         <>
           <SliderRow
             label="Ref dist"

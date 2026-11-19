@@ -570,7 +570,8 @@ def apply_spatial_audio(
 
     bounds = list(range(0, n, block_size))
     params = [sample_at(start_time + idx / sample_rate) for idx in bounds]
-    params.append(sample_at(start_time + n / sample_rate))
+    last_control_sample = n - 1 if scene_sample_fn is not None else n
+    params.append(sample_at(start_time + last_control_sample / sample_rate))
     skip_lpf = all(p["cutoffHz"] >= 19950.0 for p in params)
 
     out = np.zeros_like(buf)

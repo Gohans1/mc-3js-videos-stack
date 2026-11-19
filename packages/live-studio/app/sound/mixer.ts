@@ -666,14 +666,17 @@ const play = (
 
     if (isOffline) {
       const step = 1 / 30;
-      const end = Math.min(c.t1, w.until ?? c.t1);
-      for (let t = at + step; t < end - 1e-7; t += step) {
+      const sourceEnd = c.loop ? c.t1 : c.t0 + s.buf.duration - c.start;
+      const last = Math.min(c.t1, sourceEnd, w.until ?? c.t1) - 1 / ctx.sampleRate;
+      const rampSpatial = (t: number) => {
         const ct = Math.max(begin, w.ctxAt(t));
         const sp = sampleSpatial(t);
         spGain.gain.linearRampToValueAtTime(sp.gain, ct);
         spPan.pan.linearRampToValueAtTime(sp.pan, ct);
         lpf.frequency.exponentialRampToValueAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), ct);
-      }
+      };
+      for (let t = at + step; t < last; t += step) rampSpatial(t);
+      if (last > at) rampSpatial(last);
     } else {
       updateSpatial = (tFilm: number, nowCtx: number) => {
         const sp = sampleSpatial(tFilm);
