@@ -159,8 +159,7 @@ export function cutBoundaryGhostTime({
     const segs = timingClock.segments;
     const hit = segs.find((s) => s.from <= rawCandidate && rawCandidate < s.to);
     if (hit && !hit.blank && hit.to > prevStart) {
-      const segEnd = Math.min(hit.to, cutAt);
-      captureAt = Math.min(segEnd - 1e-6, Math.max(prevStart, hit.from, segEnd - frameStep));
+      captureAt = rawCandidate;
     } else {
       let fallback: TimingSegmentLike | null = null;
       for (let i = segs.length - 1; i >= 0; i--) {

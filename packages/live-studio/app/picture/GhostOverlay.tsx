@@ -1,5 +1,5 @@
 import { Ghost, X } from "lucide-react";
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
 
 import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
@@ -39,35 +39,42 @@ function ensureGhostCapture(key: string, captureAt: number) {
       if (url) cacheGhostUrl(key, url);
       return url;
     })
+    .catch(() => null)
     .finally(() => {
       pendingGhost.delete(key);
       for (const fn of ghostSubs) fn();
     });
   pendingGhost.set(key, task);
+  for (const fn of ghostSubs) fn();
 }
 
-function useGhostTarget(): {
-  ghost: boolean;
+function useGhostTarget(autoCapture: boolean): {
   opacity: number;
   target: GhostTarget;
   url: string | null;
   busy: boolean;
 } {
-  const ghost = useStudio((s) => s.ghost);
   const opacity = useStudio((s) => s.ghostOpacity);
   const ratio = useStudio((s) => s.ratio);
   const ready = useStudio((s) => s.ready);
+  const playing = useStudio((s) => s.playing);
   const metaRev = useStudio((s) => s.metaRev);
+  const shotsRev = useStudio((s) => s.shotsRev);
   const sceneRev = useStudio(
     (s) =>
       `${s.camRev}:${s.shotsRev}:${s.layersRev}:${s.timingRev}:${s.keysRev}:${s.textRev}:${s.pictureRev}`,
   );
   useFrame();
 
-  const shots = SHOTS_OUT.map((s, i) => ({
-    t: s.t,
-    name: S.comments[i] || (typeof s.name === "string" ? s.name : undefined),
-  }));
+  const shots = useMemo(() => {
+    void metaRev;
+    void shotsRev;
+    return SHOTS_OUT.map((s, i) => ({
+      t: s.t,
+      name: S.comments[i]?.trim() || (typeof s.name === "string" ? s.name : undefined),
+    }));
+  }, [metaRev, shotsRev]);
+
   const target = cutBoundaryGhostTime({
     shots,
     t: S.t,
@@ -81,6 +88,7 @@ function useGhostTarget(): {
     ? `${target.prevShot}:${captureAt.toFixed(4)}:${sceneRev}:${metaRev}:${ratio}`
     : "";
   const [, setTick] = useState(0);
+  const [dragEpoch, setDragEpoch] = useState(0);
 
   useEffect(() => {
     const bump = () => setTick((n) => n + 1);
@@ -91,19 +99,34 @@ function useGhostTarget(): {
   }, []);
 
   useEffect(() => {
-    if (!ghost || !ready || !available || !cacheKey) return;
+    if (!autoCapture || !ready || !available || !cacheKey || playing) return;
+    if (S.dragging) {
+      let active = true;
+      const onRelease = () => {
+        queueMicrotask(() => {
+          if (active && !S.dragging) setDragEpoch((n) => n + 1);
+        });
+      };
+      addEventListener("pointerup", onRelease, { once: true });
+      addEventListener("pointercancel", onRelease, { once: true });
+      return () => {
+        active = false;
+        removeEventListener("pointerup", onRelease);
+        removeEventListener("pointercancel", onRelease);
+      };
+    }
     ensureGhostCapture(cacheKey, captureAt);
-  }, [ghost, ready, available, captureAt, cacheKey]);
+  }, [autoCapture, ready, available, captureAt, cacheKey, playing, dragEpoch]);
 
   const url = cacheKey ? (ghostCache.get(cacheKey) ?? null) : null;
-  const busy = ghost && available && url === null && pendingGhost.has(cacheKey);
+  const busy = available && url === null && pendingGhost.has(cacheKey);
 
-  return { ghost, opacity, target, url, busy };
+  return { opacity, target, url, busy };
 }
 
-export function GhostOverlay() {
-  const { ghost, opacity, target, url } = useGhostTarget();
-  if (!ghost || !target.available || !url) return null;
+function GhostOverlayBody() {
+  const { opacity, target, url } = useGhostTarget(true);
+  if (!target.available || !url) return null;
   const alpha = clampGhostOpacity(opacity);
   return (
     <img
@@ -117,9 +140,13 @@ export function GhostOverlay() {
   );
 }
 
-export function GhostHud() {
-  const { ghost, opacity, target, busy } = useGhostTarget();
-  if (!ghost) return null;
+export function GhostOverlay() {
+  if (!useStudio((s) => s.ghost)) return null;
+  return <GhostOverlayBody />;
+}
+
+function GhostHudBody() {
+  const { opacity, target, busy } = useGhostTarget(false);
   const pct = Math.round(clampGhostOpacity(opacity) * 100);
   const status = !target.available
     ? target.reason === "shot-0"
@@ -169,4 +196,9 @@ export function GhostHud() {
       </Button>
     </div>
   );
+}
+
+export function GhostHud() {
+  if (!useStudio((s) => s.ghost)) return null;
+  return <GhostHudBody />;
 }

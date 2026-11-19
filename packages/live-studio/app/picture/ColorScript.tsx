@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+import { timingClock } from "../../src/timing-state.mjs";
 import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
@@ -29,12 +30,14 @@ interface CachedShotEntry {
 const MAX_SCRIPT_CACHE = 128;
 const shotCache = new Map<string, CachedShotEntry>();
 
-function putShotCache(key: string, entry: CachedShotEntry) {
+function putShotCache(key: string, entry: CachedShotEntry, maxEntries: number) {
   if (shotCache.has(key)) shotCache.delete(key);
   shotCache.set(key, entry);
-  if (shotCache.size > MAX_SCRIPT_CACHE) {
+  const limit = Math.max(MAX_SCRIPT_CACHE, maxEntries);
+  while (shotCache.size > limit) {
     const oldest = shotCache.keys().next().value;
-    if (oldest !== undefined) shotCache.delete(oldest);
+    if (oldest === undefined) break;
+    shotCache.delete(oldest);
   }
 }
 
@@ -42,15 +45,19 @@ function cacheKeyFor(shotIndexValue: number, sampleAt: number, ratio: string): s
   return `${shotIndexValue}:${sampleAt.toFixed(3)}:${ratio}`;
 }
 
-function waitUntilPaused(signal: { cancelled: boolean }): Promise<void> {
-  if (!S.playing || signal.cancelled) return Promise.resolve();
+function waitUntilPaused(signal: AbortSignal): Promise<void> {
+  if (!S.playing || signal.aborted) return Promise.resolve();
   return new Promise((resolve) => {
+    const finish = () => {
+      off();
+      signal.removeEventListener("abort", finish);
+      resolve();
+    };
     const off = S.watch("playing", () => {
-      if (!S.playing || signal.cancelled) {
-        off();
-        resolve();
-      }
+      if (!S.playing) finish();
     });
+    signal.addEventListener("abort", finish, { once: true });
+    if (!S.playing || signal.aborted) finish();
   });
 }
 
@@ -59,16 +66,18 @@ function ColorScriptBody() {
   const ready = useStudio((s) => s.ready);
   const metaRev = useStudio((s) => s.metaRev);
   const shotsRev = useStudio((s) => s.shotsRev);
-  const playing = useStudio((s) => s.playing);
+  const timingRev = useStudio((s) => s.timingRev);
   const frame = useFrame();
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [capturing, setCapturing] = useState(false);
   const [, setPaintTick] = useState(0);
 
   const shots = useMemo(() => {
     void metaRev;
     void shotsRev;
-    return buildColorScriptShots(SHOTS_OUT, DURATION, S.comments, FPS);
-  }, [metaRev, shotsRev]);
+    void timingRev;
+    return buildColorScriptShots(SHOTS_OUT, DURATION, S.comments, FPS, timingClock);
+  }, [metaRev, shotsRev, timingRev]);
 
   const pacing = useMemo(() => analyzeShotPacing(shots), [shots]);
   const maxDuration = useMemo(() => Math.max(0.01, ...shots.map((s) => s.duration)), [shots]);
@@ -78,40 +87,61 @@ function ColorScriptBody() {
   }, [frame]);
 
   useEffect(() => {
-    if (!ready) return;
-    const signal = { cancelled: false };
-    const missing = shots.filter(
-      (shot) => !shotCache.has(cacheKeyFor(shot.index, shot.sampleAt, ratio)),
-    );
-    if (!missing.length) return;
+    const controller = new AbortController();
+    const { signal } = controller;
+    const missing = ready
+      ? shots.filter((shot) => !shotCache.has(cacheKeyFor(shot.index, shot.sampleAt, ratio)))
+      : [];
 
+    const cacheLimit = Math.max(MAX_SCRIPT_CACHE, shots.length);
     void (async () => {
-      for (const shot of missing) {
-        if (signal.cancelled) return;
-        if (S.playing) await waitUntilPaused(signal);
-        if (signal.cancelled) return;
-        const captured = await captureFramePixels(shot.sampleAt, 160);
-        if (signal.cancelled) return;
-        if (captured) {
-          const summary = extractColorScriptPalette(
-            captured.rgba,
-            captured.width,
-            captured.height,
-            4,
-          );
-          putShotCache(cacheKeyFor(shot.index, shot.sampleAt, ratio), {
-            dataUrl: captured.dataUrl,
-            summary,
-          });
-          setPaintTick((n) => n + 1);
+      await Promise.resolve();
+      if (signal.aborted) return;
+      if (!missing.length) {
+        setCapturing(false);
+        return;
+      }
+      setCapturing(true);
+      try {
+        for (const shot of missing) {
+          if (signal.aborted) return;
+          if (S.playing) {
+            setCapturing(false);
+            await waitUntilPaused(signal);
+            if (signal.aborted) return;
+            setCapturing(true);
+          }
+          try {
+            const captured = await captureFramePixels(shot.sampleAt, 160);
+            if (signal.aborted) return;
+            if (captured) {
+              const summary = extractColorScriptPalette(
+                captured.rgba,
+                captured.width,
+                captured.height,
+                4,
+              );
+              putShotCache(
+                cacheKeyFor(shot.index, shot.sampleAt, ratio),
+                { dataUrl: captured.dataUrl, summary },
+                cacheLimit,
+              );
+              setPaintTick((n) => n + 1);
+            }
+          } catch {
+            // Skip a failed capture so the remaining storyboard strip keeps populating.
+          }
+          if (signal.aborted) return;
+          // Yield to keep the UI thread responsive between captures.
+          await new Promise<void>((r) => setTimeout(r, 16));
         }
-        // Yield to keep the UI thread responsive between captures.
-        await new Promise<void>((r) => setTimeout(r, 16));
+      } finally {
+        if (!signal.aborted) setCapturing(false);
       }
     })();
 
     return () => {
-      signal.cancelled = true;
+      controller.abort();
     };
   }, [ready, shots, ratio, refreshNonce]);
 
@@ -125,7 +155,6 @@ function ColorScriptBody() {
   const capturedCount = shots.filter((s) =>
     shotCache.has(cacheKeyFor(s.index, s.sampleAt, ratio)),
   ).length;
-  const capturing = capturedCount < shots.length && !playing;
 
   return (
     <section
@@ -192,7 +221,7 @@ function ColorScriptBody() {
                   } as CSSProperties
                 }
                 className={cn(
-                  "border-stage h-full w-(--bar-w) cursor-pointer border-r bg-(--swatch) transition-opacity last:border-r-0 hover:opacity-100",
+                  "border-stage focus-visible:ring-ring h-full w-(--bar-w) cursor-pointer border-r bg-(--swatch) transition-opacity outline-none last:border-r-0 hover:opacity-100 focus-visible:ring-1 focus-visible:ring-inset",
                   shot.index === currentShot
                     ? "ring-primary opacity-100 ring-1 ring-inset"
                     : "opacity-80",

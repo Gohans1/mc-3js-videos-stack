@@ -367,7 +367,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[680px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "@max-[720px]:hidden pointer-coarse:hidden")}
               aria-label="Value check"
               aria-pressed={valueCheck !== "off"}
               onClick={() => set({ valueCheck: nextValueCheckMode(valueCheck) })}
@@ -379,7 +379,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[680px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "@max-[760px]:hidden pointer-coarse:hidden")}
               aria-label="Cut-boundary ghost"
               aria-pressed={ghost}
               onClick={() => set({ ghost: !ghost })}
@@ -391,7 +391,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[720px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "@max-[820px]:hidden pointer-coarse:hidden")}
               aria-label="Color script"
               aria-pressed={colorScript}
               onClick={() => set({ colorScript: !colorScript })}
@@ -442,7 +442,7 @@ export function Transport() {
             <Button
               variant="toolbar"
               size="icon-lg"
-              className={cn(square, "@max-[640px]:hidden pointer-coarse:hidden")}
+              className={cn(square, "@max-[680px]:hidden pointer-coarse:hidden")}
               aria-label="Blind audio test"
               aria-pressed={blindAudio}
               onClick={() => set({ blindAudio: !blindAudio })}
@@ -452,7 +452,7 @@ export function Transport() {
           </Tip>
           {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
           <div
-            className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden"
+            className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1060px]:w-20 @max-[900px]:hidden pointer-coarse:hidden"
             title="Volume (Ctrl+↑ ↓)"
           >
             <Slider

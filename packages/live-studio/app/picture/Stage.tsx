@@ -104,13 +104,27 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
       {!phone && (
         <svg aria-hidden className="pointer-events-none absolute size-0 overflow-hidden">
           <defs>
-            <filter id="director-eye-rec709" colorInterpolationFilters="sRGB">
+            <filter
+              id="director-eye-rec709"
+              x="0%"
+              y="0%"
+              width="100%"
+              height="100%"
+              colorInterpolationFilters="sRGB"
+            >
               <feColorMatrix
                 type="matrix"
                 values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
               />
             </filter>
-            <filter id="director-eye-silhouette" colorInterpolationFilters="sRGB">
+            <filter
+              id="director-eye-silhouette"
+              x="0%"
+              y="0%"
+              width="100%"
+              height="100%"
+              colorInterpolationFilters="sRGB"
+            >
               <feColorMatrix
                 type="matrix"
                 values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
@@ -197,9 +211,9 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         <div hidden={phone} className="contents">
           <OptionChips ref={bind("chips")} />
           <FilmView bind={bind} />
-          <GhostHud />
-          <BlindAudioCurtain />
         </div>
+        {!phone && <GhostHud />}
+        {!phone && <BlindAudioCurtain />}
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
           <div
@@ -210,8 +224,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           </div>
         )}
       </div>
+      {!phone && <ColorScriptStrip />}
       <div hidden={phone} className="contents">
-        <ColorScriptStrip />
         <Oscilloscope bind={bind} />
       </div>
       {error && (

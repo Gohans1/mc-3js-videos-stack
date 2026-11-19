@@ -1,3 +1,5 @@
+import type { TimingClockLike } from "./director-eye";
+
 export interface SwatchColor {
   r: number;
   g: number;
@@ -255,24 +257,64 @@ export function extractColorScriptPalette(
   return { swatches, avgLuma, contrast, avgHex };
 }
 
+function snapSampleAt(start: number, end: number, target: number, fps: number): number {
+  const step = 1 / Math.max(1, fps);
+  const snapped = Math.round(target * fps) / fps;
+  const maxSample = Math.max(start, end - step);
+  return Math.max(start, Math.min(maxSample, snapped));
+}
+
+function resolveVisibleSampleAt(
+  start: number,
+  end: number,
+  midSample: number,
+  fps: number,
+  timingClock?: TimingClockLike | null,
+): number {
+  if (!timingClock?.segments.length) return midSample;
+  const hit = timingClock.segments.find((s) => s.from <= midSample && midSample < s.to);
+  if (hit && !hit.blank) return midSample;
+  const desired = start + (end - start) * 0.5;
+  let bestMid = midSample;
+  let bestScore = -1;
+  for (const seg of timingClock.segments) {
+    if (seg.blank) continue;
+    const ovStart = Math.max(start, seg.from);
+    const ovEnd = Math.min(end, seg.to);
+    const overlap = ovEnd - ovStart;
+    if (overlap <= 1e-6) continue;
+    const ovMid = ovStart + overlap * 0.5;
+    // Prefer wide visible spans near the shot midpoint
+    const score = overlap - Math.abs(ovMid - desired) * 0.1;
+    if (score > bestScore) {
+      bestScore = score;
+      bestMid = snapSampleAt(ovStart, ovEnd, ovMid, fps);
+    }
+  }
+  return bestMid;
+}
+
 export function buildColorScriptShots(
   shots: readonly { t: number; name?: string }[],
   duration: number,
   comments: readonly string[] = [],
   fps = 30,
+  timingClock?: TimingClockLike | null,
 ): ColorScriptShot[] {
   const total = Math.max(duration, 1 / Math.max(1, fps));
-  return shots.map((s, index) => {
+  const out: ColorScriptShot[] = [];
+  for (let index = 0; index < shots.length; index++) {
+    const s = shots[index]!;
     const start = Math.max(0, s.t);
     const nextStart = shots[index + 1]?.t;
     const end = Math.max(start, nextStart !== undefined ? nextStart : duration);
     const shotDur = Math.max(0, end - start);
+    if (shotDur <= 1e-6) continue;
     const mid = start + shotDur * 0.5;
-    const snapped = Math.round(mid * fps) / fps;
-    const maxSample = Math.max(start, end - 1 / Math.max(1, fps));
-    const sampleAt = shotDur <= 0 ? start : Math.max(start, Math.min(maxSample, snapped));
-    const name = (comments[index] ?? s.name ?? "").trim() || `Shot ${index}`;
-    return {
+    const midSample = snapSampleAt(start, end, mid, fps);
+    const sampleAt = resolveVisibleSampleAt(start, end, midSample, fps, timingClock);
+    const name = comments[index]?.trim() || s.name?.trim() || `Shot ${index}`;
+    out.push({
       index,
       name,
       start,
@@ -280,12 +322,14 @@ export function buildColorScriptShots(
       duration: shotDur,
       sampleAt,
       widthPct: (shotDur / total) * 100,
-    };
-  });
+    });
+  }
+  return out;
 }
 
 export function analyzeShotPacing(shots: readonly ColorScriptShot[]): PacingSummary {
-  const byShot: PacingFlag[][] = shots.map(() => []);
+  const maxIndex = shots.reduce((m, s) => Math.max(m, s.index), -1);
+  const byShot: PacingFlag[][] = Array.from({ length: maxIndex + 1 }, () => []);
   const positive = shots.filter((s) => s.duration > 1e-4).map((s) => s.duration);
   if (!positive.length) {
     return {
@@ -310,16 +354,17 @@ export function analyzeShotPacing(shots: readonly ColorScriptShot[]): PacingSumm
   const uniformityCV = meanDuration > 0 ? stdDev / meanDuration : 0;
   const isSequenceUniform = positive.length >= 4 && uniformityCV < 0.12;
 
-  for (let i = 0; i < shots.length; i++) {
-    const d = shots[i]!.duration;
+  for (const shot of shots) {
+    const d = shot.duration;
     if (d <= 0) continue;
+    const bucket = byShot[shot.index]!;
     if (d >= 12 || (d >= 8 && (positive.length < 3 || d >= medianDuration * 2.2))) {
-      byShot[i]!.push("long-hold");
+      bucket.push("long-hold");
     } else if (positive.length >= 2 && d < 0.5 && medianDuration >= 1.0) {
-      byShot[i]!.push("flash-cut");
+      bucket.push("flash-cut");
     }
     if (isSequenceUniform) {
-      byShot[i]!.push("uniform");
+      bucket.push("uniform");
     }
   }
 
@@ -338,7 +383,8 @@ export function analyzeShotPacing(shots: readonly ColorScriptShot[]): PacingSumm
           runEnd++;
         }
         for (let k = runStart; k < runEnd; k++) {
-          if (!byShot[k]!.includes("uniform")) byShot[k]!.push("uniform");
+          const bucket = byShot[shots[k]!.index]!;
+          if (!bucket.includes("uniform")) bucket.push("uniform");
         }
         runStart = runEnd;
       } else {

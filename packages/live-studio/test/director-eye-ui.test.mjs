@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -47,10 +47,32 @@ S.comments = SHOT_LIST.map((s) => s.name);
 
 S.tools = {
   free: { on: false, fov: 60, roll: 0, wave: 0, p: { copy() {} }, l: { copy() {} } },
+  camera: { position: { copy() {} }, quaternion: { copy() {} }, fov: 50, aspect: 16 / 9 },
   scene: { fog: null },
 };
 
+const watchCounts = { time: 0, playing: 0 };
+const rawWatch = S.watch.bind(S);
+S.watch = (topic, fn) => {
+  if (topic === "time" || topic === "playing") watchCounts[topic]++;
+  const off = rawWatch(topic, fn);
+  let active = true;
+  return () => {
+    if (active && (topic === "time" || topic === "playing")) {
+      watchCounts[topic]--;
+      active = false;
+    }
+    return off();
+  };
+};
+
+let throwAtTime = null;
+let filmDraws = 0;
+
 S.render = Object.assign((t) => {
+  if (throwAtTime !== null && Math.abs(t - throwAtTime) < 0.15) {
+    throw new Error("Simulated capture failure at " + t);
+  }
   const c = S.el?.canvas;
   if (!c) return;
   if (!c.width || !c.height) {
@@ -71,11 +93,21 @@ S.render = Object.assign((t) => {
   // Paint a lighter bottom-right corner patch so quantization always detects 2+ distinct regions
   ctx.fillStyle = "#f5f5f5";
   ctx.fillRect(Math.floor(c.width * 0.75), Math.floor(c.height * 0.75), Math.ceil(c.width * 0.25), Math.ceil(c.height * 0.25));
+  // Paint a FreeCam marker at (20..32, 10..22) when FreeCam is active so live vs film draws are distinguishable
+  if (S.tools?.free?.on) {
+    ctx.fillStyle = "#ffeb3b";
+    ctx.fillRect(20, 10, 12, 12);
+  }
 }, {});
+
+const wrappedRenderFilmFrame = async (x, readFrame) => {
+  filmDraws++;
+  return renderFilmFrame(x, readFrame);
+};
 
 registerEngine({
   render,
-  renderFilmFrame,
+  renderFilmFrame: wrappedRenderFilmFrame,
   finalCanvas: () => null,
   setFinal: async () => {},
   setFree: (on) => set({ free: on }),
@@ -122,7 +154,27 @@ window.__EYE_TEST__ = {
   setPlaying,
   setVolume,
   toggleMute,
+  renderFilmFrame,
   SHOT_LIST,
+  watchCounts,
+  setThrowAt(t) {
+    throwAtTime = t;
+  },
+  getFilmDraws() {
+    return filmDraws;
+  },
+  resetFilmDraws() {
+    filmDraws = 0;
+  },
+  async sampleImgRgb(img) {
+    await img.decode?.().catch(() => {});
+    const c = document.createElement("canvas");
+    c.width = Math.max(1, img.naturalWidth);
+    c.height = Math.max(1, img.naturalHeight);
+    const ctx = c.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    return [...ctx.getImageData(4, 4, 1, 1).data.slice(0, 3)];
+  },
   initCanvas() {
     S.el.canvas.width = 320;
     S.el.canvas.height = 180;
@@ -225,9 +277,13 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await page.evaluate(`(() => {
+    window.errors.length = 0;
     const u = window.__EYE_TEST__;
+    u.setThrowAt(null);
     u.S.t = 0;
     u.S.playing = false;
+    u.S.dragging = null;
+    u.S.tools.free.on = false;
     u.S.render(0);
     u.setPref("guides", false);
     u.setPref("guideMode", "thirds");
@@ -235,6 +291,9 @@ beforeEach(async () => {
     u.setPref("ghostOpacity", 0.35);
     u.setVolume(1);
     u.set({
+      free: false,
+      ink: null,
+      compose: null,
       valueCheck: "off",
       ghost: false,
       blindAudio: false,
@@ -243,8 +302,13 @@ beforeEach(async () => {
       modal: null,
       settingsOpen: false,
     });
+    u.resetFilmDraws();
     document.activeElement?.blur?.();
   })()`);
+});
+
+afterEach(async () => {
+  expect(await page.evaluate("window.errors")).toEqual([]);
 });
 
 test("B&W Value Check cycles Normal -> B&W Rec.709 -> Silhouette -> Normal via button & Shift+V without mutating canvas pixels", async () => {
@@ -289,9 +353,14 @@ test("B&W Value Check cycles Normal -> B&W Rec.709 -> Silhouette -> Normal via b
   expect(afterRgb).toEqual([220, 40, 40]);
 });
 
-test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame at Shot 1 without mutating S.t, and adjusts opacity", async () => {
+test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame at Shot 1 without mutating S.t/FreeCam/canvas, defers while dragging, and adds zero listeners when OFF", async () => {
+  const baseWatchTime = await page.evaluate(`window.__EYE_TEST__.watchCounts.time`);
+
   await page.evaluate(`document.querySelector('button[aria-label="Cut-boundary ghost"]').click()`);
   await waitUntil(`document.querySelector('[aria-label="Cut-boundary ghost controls"]')`);
+  expect(await page.evaluate(`window.__EYE_TEST__.watchCounts.time`)).toBeGreaterThan(
+    baseWatchTime,
+  );
 
   const shot0Text = await page.evaluate(
     `document.querySelector('[aria-label="Cut-boundary ghost controls"]').textContent`,
@@ -299,12 +368,18 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(shot0Text).toContain("Shot 0 (no previous cut)");
   expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot]')`)).toBe(false);
 
-  // Seek into Shot 1 (t = 2.5s); outgoing frame of Shot 0 (crimson) must be captured without changing S.t
-  await page.evaluate(`window.__EYE_TEST__.seek(2.5)`);
+  // Seek into Shot 1 (t = 2.5s, Emerald) with FreeCam ON; outgoing frame of Shot 0 (Crimson) must capture without corrupting live canvas or FreeCam state
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.tools.free.on = true;
+    window.__EYE_TEST__.set({ free: true });
+    window.__EYE_TEST__.seek(2.5);
+  })()`);
   await waitUntil(`document.querySelector('img[data-ghost-shot="0"]')`);
 
-  const ghostState = await page.evaluate(`(() => {
+  const ghostState = await page.evaluate(`(async () => {
     const img = document.querySelector('img[data-ghost-shot="0"]');
+    const ghostRgb = await window.__EYE_TEST__.sampleImgRgb(img);
+    const liveRgb = [...window.__EYE_TEST__.S.el.canvas.getContext("2d").getImageData(10, 10, 1, 1).data.slice(0, 3)];
     const slider = document.querySelector('input[aria-label="Ghost overlay opacity"]');
     const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
     const opacityBefore = getComputedStyle(img).opacity;
@@ -313,18 +388,61 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
     slider.dispatchEvent(new Event("change", { bubbles: true }));
     return {
       playheadT: window.__EYE_TEST__.S.t,
+      freeStillOn: window.__EYE_TEST__.S.tools.free.on && window.__EYE_TEST__.get().free,
+      ghostRgb,
+      liveRgb,
       srcStartsData: img.getAttribute("src")?.startsWith("data:image/"),
       opacityBefore: Number(opacityBefore),
       storedOpacity: window.__EYE_TEST__.get().ghostOpacity,
     };
   })()`);
   expect(ghostState.playheadT).toBe(2.5);
+  expect(ghostState.freeStillOn).toBe(true);
+  expect(ghostState.ghostRgb[0]).toBeGreaterThan(180);
+  expect(ghostState.ghostRgb[1]).toBeLessThan(70);
+  expect(ghostState.liveRgb).toEqual([40, 180, 70]);
   expect(ghostState.srcStartsData).toBe(true);
   expect(ghostState.opacityBefore).toBeCloseTo(0.35, 2);
   expect(ghostState.storedOpacity).toBe(0.7);
 
+  // Also test renderFilmFrame at x === S.t (2.5) suspends FreeCam during capture and restores FreeCam + live canvas cleanly
+  const sameFrameCheck = await page.evaluate(`(async () => {
+    let duringFree = true;
+    let duringRgb = null;
+    await window.__EYE_TEST__.renderFilmFrame(2.5, () => {
+      duringFree = window.__EYE_TEST__.S.tools.free.on;
+      duringRgb = [...window.__EYE_TEST__.S.el.canvas.getContext("2d").getImageData(24, 14, 1, 1).data.slice(0, 3)];
+    });
+    const afterRgb = [...window.__EYE_TEST__.S.el.canvas.getContext("2d").getImageData(24, 14, 1, 1).data.slice(0, 3)];
+    return {
+      duringFree,
+      duringRgb,
+      afterFree: window.__EYE_TEST__.S.tools.free.on,
+      afterRgb,
+    };
+  })()`);
+  expect(sameFrameCheck.duringFree).toBe(false);
+  expect(sameFrameCheck.duringRgb).toEqual([40, 180, 70]);
+  expect(sameFrameCheck.afterFree).toBe(true);
+  expect(sameFrameCheck.afterRgb).toEqual([255, 235, 59]);
+
+  // Defer uncached capture while S.dragging is active, then capture on pointerup release
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.resetFilmDraws();
+    window.__EYE_TEST__.S.dragging = { resume: false };
+    window.__EYE_TEST__.seek(4.5);
+  })()`);
+  await Bun.sleep(50);
+  expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(0);
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.dragging = null;
+    window.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+  })()`);
+  await waitUntil(`document.querySelector('img[data-ghost-shot="1"]')`);
+
   await page.evaluate(`document.querySelector('button[aria-label="Close ghost overlay"]').click()`);
   await waitUntil(`window.__EYE_TEST__.get().ghost === false`);
+  expect(await page.evaluate(`window.__EYE_TEST__.watchCounts.time`)).toBe(baseWatchTime);
 });
 
 test("Extra Composition Guides render Golden Ratio Phi Grid, Diagonals, and Safe Zones across 16:9 and 9:16", async () => {
@@ -401,7 +519,22 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
   await waitUntil(`window.__EYE_TEST__.get().blindAudio === false`);
 });
 
-test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatches + pacing highlights, and seeks on click", async () => {
+test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatches + pacing highlights, cleans up on unmount while playing, recovers from shot capture failures, and seeks on click", async () => {
+  // Opening while playing attaches waitUntilPaused on S.watch("playing"); closing must leak zero listeners
+  const baseWatchPlaying = await page.evaluate(`window.__EYE_TEST__.watchCounts.playing`);
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.S.playing = true;
+    window.__EYE_TEST__.set({ playing: true, colorScript: true });
+  })()`);
+  await waitUntil(`document.querySelector('section[aria-label="Color script strip"]')`);
+  await waitUntil(`window.__EYE_TEST__.watchCounts.playing > ${baseWatchPlaying}`);
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.set({ colorScript: false, playing: false });
+    window.__EYE_TEST__.S.playing = false;
+  })()`);
+  await waitUntil(`window.__EYE_TEST__.watchCounts.playing === ${baseWatchPlaying}`);
+
+  // Reopen paused and verify normal capture + 4-swatch quantization + click-to-seek
   await page.evaluate(`document.querySelector('button[aria-label="Color script"]').click()`);
   await waitUntil(`document.querySelector('section[aria-label="Color script strip"]')`);
   await waitUntil(
@@ -418,12 +551,22 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
   expect(stripInfo.shot0Swatches.some((t) => t?.includes("#dc2828"))).toBe(true);
   expect(stripInfo.shot3Text).toContain("Hold");
 
+  // Simulate Shot 1 midpoint (t=3) throwing during Refresh: remaining 3 shots capture and spinner clears
+  await page.evaluate(`(() => {
+    window.__EYE_TEST__.setThrowAt(3);
+    document.querySelector('button[aria-label="Refresh color script"]').click();
+  })()`);
+  await waitUntil(
+    `document.querySelectorAll('section[aria-label="Color script strip"] img').length === 3 && !document.querySelector('section[aria-label="Color script strip"]')?.textContent?.includes("Capturing")`,
+  );
+  await page.evaluate(`window.__EYE_TEST__.setThrowAt(null)`);
+
   // Click Shot 2 card -> seeks playhead directly to Shot 2 start (t = 4)
   await page.evaluate(`document.querySelector('button[aria-label^="Seek to Shot 2"]')?.click()`);
   await waitUntil(`window.__EYE_TEST__.S.t === 4`);
 });
 
-test("Director's Eye hotkeys never hijack text inputs and Esc in Review mode exits Blind Audio first", async () => {
+test("Director's Eye hotkeys never hijack text inputs, Review mode supports all Eye hotkeys, and Esc closes Blind Audio without clearing Draw/Compose", async () => {
   await page.evaluate(`(() => {
     const input = document.getElementById("text-input-guard");
     input.focus();
@@ -445,18 +588,38 @@ test("Director's Eye hotkeys never hijack text inputs and Esc in Review mode exi
   expect(afterInput.colorScript).toBe(false);
   expect(afterInput.muted).toBe(false);
 
-  // In Review mode, Shift+H opens Blind Audio and Escape closes Blind Audio BEFORE Review mode
+  // In Review mode, Esc exits Blind Audio FIRST without cancelling open Draw ink or note Compose behind the curtain
   await page.evaluate(`(() => {
     document.getElementById("text-input-guard").blur();
-    window.__EYE_TEST__.set({ review: true });
+    window.__EYE_TEST__.set({
+      review: true,
+      ink: "pen",
+      compose: { t: 1, x: 0.5, y: 0.5 },
+    });
   })()`);
-  await page.evaluate(
-    `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "H", code: "KeyH", shiftKey: true, bubbles: true }))`,
+  await page.evaluate(`(() => {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "H", code: "KeyH", shiftKey: true, bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "V", code: "KeyV", shiftKey: true, bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "O", code: "KeyO", shiftKey: true, bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: ";", code: "Semicolon", altKey: true, bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "C", code: "KeyC", shiftKey: true, bubbles: true }));
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "m", code: "KeyM", altKey: true, bubbles: true }));
+  })()`);
+  await waitUntil(
+    `window.__EYE_TEST__.get().blindAudio === true && window.__EYE_TEST__.get().colorScript === true`,
   );
-  await waitUntil(`window.__EYE_TEST__.get().blindAudio === true`);
+  const inReview = await page.evaluate(`window.__EYE_TEST__.get()`);
+  expect(inReview.valueCheck).toBe("bw");
+  expect(inReview.ghost).toBe(true);
+  expect(inReview.guideMode).toBe("phi");
+  expect(inReview.muted).toBe(true);
+
   await page.evaluate(
     `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }))`,
   );
   await waitUntil(`window.__EYE_TEST__.get().blindAudio === false`);
-  expect(await page.evaluate(`window.__EYE_TEST__.get().review`)).toBe(true);
+  const afterEsc = await page.evaluate(`window.__EYE_TEST__.get()`);
+  expect(afterEsc.review).toBe(true);
+  expect(afterEsc.ink).toBe("pen");
+  expect(afterEsc.compose).not.toBeNull();
 });

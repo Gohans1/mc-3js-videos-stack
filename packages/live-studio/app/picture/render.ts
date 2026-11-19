@@ -42,21 +42,18 @@ export const render = (x: number, readFrame?: () => void) => {
   return next;
 };
 
-// Off-playhead film-camera capture for GhostOverlay & ColorScript: suspends free cam only for this draw and restores S.t when paused.
+// Off-playhead film-camera capture for GhostOverlay & ColorScript: suspends free cam only for this draw and always restores live FreeCam + S.t canvas.
 export const renderFilmFrame = (x: number, readFrame?: () => void) => {
   const next = drawing.then(async () => {
     const free = S.tools?.free;
-    const wasFree = Boolean(free?.on);
-    if (free && wasFree) free.on = false;
+    if (free?.on) free.on = false;
     try {
       if (S.render?.renderFrame) await S.render.renderFrame(x);
       else S.render?.(x);
       readFrame?.();
     } finally {
-      if (free && wasFree) free.on = true;
-      if (!S.playing && (x !== S.t || wasFree)) {
-        await draw(S.t);
-      }
+      if (free) free.on = get().free;
+      await draw(S.t);
     }
   });
   drawing = next.catch(() => {});

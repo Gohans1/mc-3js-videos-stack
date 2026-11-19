@@ -140,7 +140,7 @@ export function useStudioHotkeys() {
     camPicks > 0 ||
     keyPicks > 0 ||
     textPicks > 0;
-  // A popup open on top (Settings, focus eyedropper, an open note/pin, or empty Draw mode) takes Esc before timeline tools
+  // A popup open on top (Settings, Blind Audio curtain, focus eyedropper, an open note/pin, or empty Draw mode) takes Esc before timeline tools
   const escPopups: UseHotkeyDefinition[] = [
     {
       hotkey: "Escape",
@@ -149,23 +149,23 @@ export function useStudioHotkeys() {
     },
     {
       hotkey: "Escape",
+      callback: () => set({ blindAudio: false }),
+      options: { enabled: !settingsOpen && blindAudio },
+    },
+    {
+      hotkey: "Escape",
       callback: () => set({ pickFocus: null }),
-      options: { enabled: !settingsOpen && pickFocus },
+      options: { enabled: !settingsOpen && !blindAudio && pickFocus },
     },
     {
       hotkey: "Escape",
       callback: () => cancelNote(),
-      options: { enabled: !settingsOpen && !pickFocus && composeOpen },
+      options: { enabled: !settingsOpen && !blindAudio && !pickFocus && composeOpen },
     },
     {
       hotkey: "Escape",
       callback: () => setInk(null),
-      options: { enabled: !settingsOpen && !pickFocus && !composeOpen && !!ink },
-    },
-    {
-      hotkey: "Escape",
-      callback: () => set({ blindAudio: false }),
-      options: { enabled: !settingsOpen && !pickFocus && !composeOpen && !ink && blindAudio },
+      options: { enabled: !settingsOpen && !blindAudio && !pickFocus && !composeOpen && !!ink },
     },
   ];
   const keys: UseHotkeyDefinition[] = [

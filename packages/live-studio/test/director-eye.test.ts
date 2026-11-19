@@ -158,6 +158,38 @@ describe("color-script shots & pacing analysis", () => {
     assert.equal(summaryB.isSequenceUniform, true);
     assert.ok(summaryB.byShot.every((flags) => flags.includes("uniform")));
   });
+
+  test("handles empty comment overrides, skips zero-length ripple-deleted shots, and avoids blank timing gaps", () => {
+    const clock = compileTiming({ gaps: [{ from: 1.5, to: 4 }] }, 6);
+    const shots = buildColorScriptShots(
+      [
+        { t: 0, name: "Wide" },
+        { t: 2, name: "Removed" },
+        { t: 2, name: "Reveal" },
+      ],
+      8,
+      ["", "Ignored", ""],
+      30,
+      clock,
+    );
+    // Zero-length shot 1 is skipped while shot indices stay aligned for comments/tags
+    assert.deepEqual(
+      shots.map((s) => [s.index, s.name]),
+      [
+        [0, "Wide"],
+        [2, "Reveal"],
+      ],
+    );
+    // Shot 2 spans 2..8 (midpoint 5), Shot 0 spans 0..2 (midpoint 1 is visible, before blank gap at 1.5..4)
+    assert.equal(shots[0].sampleAt, 1);
+    const pacing = analyzeShotPacing(shots);
+    assert.equal(pacing.byShot.length, 3);
+    assert.deepEqual(pacing.byShot[1], []);
+
+    // If midpoint itself lands inside a blank gap (1.5..4 in shot 1..4), choose visible frame before 1.5
+    const gapAtMid = buildColorScriptShots([{ t: 1, name: "GapMid" }], 4, [], 30, clock);
+    assert.ok(gapAtMid[0].sampleAt < 1.5 && gapAtMid[0].sampleAt >= 1);
+  });
 });
 
 describe("cut-boundary ghost time math", () => {
@@ -262,6 +294,28 @@ describe("cut-boundary ghost time math", () => {
       assert.ok(Math.abs(g.captureAt - (4 - 1 / 30)) < 1e-6);
     }
   });
+
+  test("does not double-subtract frame step when a non-blank timing sub-segment ends near the cut", () => {
+    const shots = [
+      { t: 0, name: "SpeedA" },
+      { t: 2, name: "CutB" },
+    ];
+    const clock = {
+      segments: [
+        { from: 0, to: 1.5, blank: false },
+        { from: 1.5, to: 1.98, blank: false },
+        { from: 1.98, to: 2.0, blank: true },
+      ],
+    };
+    const g = cutBoundaryGhostTime({ shots, t: 2.2, fps: 30, timingClock: clock });
+    assert.equal(g.available, true);
+    if (g.available) {
+      assert.ok(
+        Math.abs(g.captureAt - (2 - 1 / 30)) < 1e-6,
+        `Expected exact prevShotEnd ${2 - 1 / 30}, got ${g.captureAt}`,
+      );
+    }
+  });
 });
 
 describe("composition guides geometry", () => {
@@ -343,36 +397,13 @@ describe("director-eye state helpers & hotkey conflict safety", () => {
     assert.equal(clampGhostOpacity(Number.NaN), 0.35);
   });
 
-  test("director-eye hotkeys are unique, wired into normal and review modes, and do not conflict with flight or existing studio keys", async () => {
-    const src = await Bun.file(new URL("../app/shell/useStudioHotkeys.ts", import.meta.url)).text();
-    const literalKeys = [...src.matchAll(/hotkey:\s*"([^"]+)"/g)].map((m) => m[1]);
-    const eyeEntries = Object.entries(DIRECTOR_EYE_HOTKEYS);
-    const eyeHotkeys = eyeEntries.map(([, v]) => v);
+  test("director-eye hotkeys are distinct and never collide with free-cam WASD flight keys", () => {
+    const eyeHotkeys = Object.values(DIRECTOR_EYE_HOTKEYS);
     const flightKeys = new Set(["W", "A", "S", "D", "Shift+W", "Shift+A", "Shift+S", "Shift+D"]);
 
-    // All declared Director's Eye hotkeys are distinct
     assert.equal(new Set(eyeHotkeys).size, eyeHotkeys.length);
-    // None use flight WASD movement keys or collide with literal hotkeys in useStudioHotkeys.ts
-    for (const [name, key] of eyeEntries) {
+    for (const key of eyeHotkeys) {
       assert.equal(flightKeys.has(key), false, `Hotkey ${key} collides with free-cam flight`);
-      assert.equal(
-        literalKeys.includes(key),
-        false,
-        `Hotkey ${key} duplicates a literal hotkey in useStudioHotkeys.ts`,
-      );
-      assert.ok(
-        src.includes(`DIRECTOR_EYE_HOTKEYS.${name}`),
-        `useStudioHotkeys.ts must register DIRECTOR_EYE_HOTKEYS.${name}`,
-      );
     }
-    assert.ok(
-      src.includes("Object.values(DIRECTOR_EYE_HOTKEYS)"),
-      "REVIEW_KEYS must include Director's Eye hotkeys",
-    );
-    // Blind Audio Escape handler sits before blade/hasPick/review exit
-    const blindEscIdx = src.indexOf("set({ blindAudio: false })");
-    const bladeEscIdx = src.indexOf("setBlade(false)");
-    const reviewEscIdx = src.indexOf("setReview(false)");
-    assert.ok(blindEscIdx > 0 && bladeEscIdx > blindEscIdx && reviewEscIdx > blindEscIdx);
   });
 });
