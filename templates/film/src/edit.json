@@ -3,6 +3,6 @@
   "voice": { "lines": [], "edits": {}, "warp": [] },
   "takes": [],
   "beats": {},
-  "light": { "fill": 0.6, "key": 40 },
+  "light": { "fill": 0.6, "spot": 28 },
   "look": { "saturation": 0 }
 }
