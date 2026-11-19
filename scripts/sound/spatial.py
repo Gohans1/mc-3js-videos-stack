@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import math
+import shutil
+import subprocess
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 
 if TYPE_CHECKING:
@@ -220,38 +224,6 @@ def eval_smoothstep_ease(ease: Any, t: float) -> float:
     return eval_ease(ease, t)
 
 
-def _catmull_centripetal(
-    p0: Sequence[float],
-    p1: Sequence[float],
-    p2: Sequence[float],
-    p3: Sequence[float],
-    u: float,
-) -> tuple[float, float, float]:
-    """Exact match to THREE.CatmullRomCurve3(..., false, 'centripetal') CubicPoly."""
-
-    def sq_pow(a: Sequence[float], b: Sequence[float]) -> float:
-        d2 = (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2
-        return max(1e-4, pow(d2, 0.25))
-
-    dt0 = sq_pow(p0, p1)
-    dt1 = sq_pow(p1, p2)
-    dt2 = sq_pow(p2, p3)
-
-    u2 = u * u
-    u3 = u2 * u
-    out = []
-    for axis in range(3):
-        x0, x1, x2, x3 = p0[axis], p1[axis], p2[axis], p3[axis]
-        t1 = ((x1 - x0) / dt0 - (x2 - x0) / (dt0 + dt1) + (x2 - x1) / dt1) * dt1
-        t2 = ((x2 - x1) / dt1 - (x3 - x1) / (dt1 + dt2) + (x3 - x2) / dt2) * dt1
-        c0 = x1
-        c1 = t1
-        c2 = -3.0 * x1 + 3.0 * x2 - 2.0 * t1 - t2
-        c3 = 2.0 * x1 - 2.0 * x2 + t1 + t2
-        out.append(c0 + c1 * u + c2 * u2 + c3 * u3)
-    return (out[0], out[1], out[2])
-
-
 def _inline_vec3(val: Any) -> tuple[float, float, float] | None:
     fields = ("eye", "at", "p", "pos")
     points = (val.get(field) for field in fields) if isinstance(val, Mapping) else (val,)
@@ -268,117 +240,41 @@ def camera_requires_scene(keys: Sequence[Mapping]) -> bool:
     )
 
 
-def _extract_vec3(val: Any, placed_data: Any, t: float) -> tuple[float, float, float]:
-    point = _inline_vec3(val)
-    if point is not None:
-        return point
-    if isinstance(val, Mapping):
-        target = val.get("target") or val.get("object")
-        if isinstance(target, str) and placed_data is not None:
-            pos = placed_at(placed_data, target, t)
-            off = val.get("off") or val.get("offset")
-            if isinstance(off, (list, tuple)) and len(off) >= 3:
-                return _add(pos, (float(off[0]), float(off[1]), float(off[2])))
-            return pos
-    return (0.0, 0.0, 0.0)
-
-
-def camera_at(keys: Sequence[Mapping], t: float, placed_data: Any = None) -> dict:
+def sample_camera_poses(
+    keys: Sequence[Mapping], times: Sequence[float], aspect: float = 16 / 9,
+) -> list[Mapping]:
+    if not times:
+        return []
     if not keys:
-        return {"p": (0.0, 1.6, 5.0), "l": (0.0, 1.6, 0.0), "roll": 0.0}
-    ordered = sorted(keys, key=lambda k: float(k.get("t", 0.0)))
-    if len(ordered) == 1 or t <= float(ordered[0].get("t", 0.0)):
-        k0 = ordered[0]
-        t0 = float(k0.get("t", 0.0))
-        return {
-            "p": _extract_vec3(k0.get("p"), placed_data, t0),
-            "l": _extract_vec3(k0.get("l"), placed_data, t0),
-            "roll": float(k0.get("roll", 0.0) or 0.0),
-        }
-    if t >= float(ordered[-1].get("t", 0.0)):
-        kn = ordered[-1]
-        tn = float(kn.get("t", 0.0))
-        return {
-            "p": _extract_vec3(kn.get("p"), placed_data, tn),
-            "l": _extract_vec3(kn.get("l"), placed_data, tn),
-            "roll": float(kn.get("roll", 0.0) or 0.0),
-        }
+        return [{"p": (0.0, 1.6, 5.0), "l": (0.0, 1.6, 0.0), "roll": 0.0}] * len(times)
 
-    # Group continuous cut segments matching camera.ts conventions.
-    segments: list[list[Mapping]] = [[]]
-    for idx, k in enumerate(ordered):
-        if idx > 0 and k.get("cut"):
-            segments.append([k])
-        else:
-            segments[-1].append(k)
-
-    seg = segments[-1]
-    for si, s in enumerate(segments):
-        next_start = float(segments[si + 1][0].get("t", 0.0)) if si + 1 < len(segments) else float("inf")
-        if t < next_start:
-            seg = s
-            break
-
-    if len(seg) == 1 or t <= float(seg[0].get("t", 0.0)):
-        k0 = seg[0]
-        return {
-            "p": _extract_vec3(k0.get("p"), placed_data, t),
-            "l": _extract_vec3(k0.get("l"), placed_data, t),
-            "roll": float(k0.get("roll", 0.0) or 0.0),
-        }
-    if t >= float(seg[-1].get("t", 0.0)):
-        kn = seg[-1]
-        return {
-            "p": _extract_vec3(kn.get("p"), placed_data, t),
-            "l": _extract_vec3(kn.get("l"), placed_data, t),
-            "roll": float(kn.get("roll", 0.0) or 0.0),
-        }
-
-    i = 0
-    for idx in range(len(seg) - 1):
-        if float(seg[idx + 1].get("t", 0.0)) > t:
-            i = idx
-            break
-    k1 = seg[i]
-    k2 = seg[i + 1]
-    t1 = float(k1.get("t", 0.0))
-    t2 = float(k2.get("t", 0.0))
-    span = t2 - t1
-    u_raw = 0.0 if span <= 1e-9 else (t - t1) / span
-    u = eval_ease(k2.get("ease"), u_raw)
-
-    p1 = _extract_vec3(k1.get("p"), placed_data, t1)
-    p2 = _extract_vec3(k2.get("p"), placed_data, t2)
-    l1 = _extract_vec3(k1.get("l"), placed_data, t1)
-    l2 = _extract_vec3(k2.get("l"), placed_data, t2)
-
-    p0 = (
-        _extract_vec3(seg[i - 1].get("p"), placed_data, float(seg[i - 1].get("t", 0.0)))
-        if i > 0
-        else _sub(_scale(p1, 2.0), p2)
-    )
-    p3 = (
-        _extract_vec3(seg[i + 2].get("p"), placed_data, float(seg[i + 2].get("t", 0.0)))
-        if i + 2 < len(seg)
-        else _sub(_scale(p2, 2.0), p1)
-    )
-    l0 = (
-        _extract_vec3(seg[i - 1].get("l"), placed_data, float(seg[i - 1].get("t", 0.0)))
-        if i > 0
-        else _sub(_scale(l1, 2.0), l2)
-    )
-    l3 = (
-        _extract_vec3(seg[i + 2].get("l"), placed_data, float(seg[i + 2].get("t", 0.0)))
-        if i + 2 < len(seg)
-        else _sub(_scale(l2, 2.0), l1)
-    )
-    pos = _catmull_centripetal(p0, p1, p2, p3, u)
-    look = _catmull_centripetal(l0, l1, l2, l3, u)
-
-    u_roll = eval_smoothstep_ease(k2.get("ease"), u_raw)
-    r1 = float(k1.get("roll", 0.0) or 0.0)
-    r2 = float(k2.get("roll", 0.0) or 0.0)
-    return {"p": pos, "l": look, "roll": r1 + (r2 - r1) * u_roll}
+    bun = shutil.which("bun")
+    if not bun:
+        raise ValueError("Bun is required to sample authored spatial camera keys")
+    cli = Path(__file__).resolve().parents[2] / "packages/live-studio/src/spatial-camera-cli.ts"
+    ordered = sorted(keys, key=lambda key: float(key.get("t", 0.0)))
+    inline = [
+        {**key, "p": _inline_vec3(key.get("p")) or key.get("p"),
+         "l": _inline_vec3(key.get("l")) or key.get("l")}
+        for key in ordered
+    ]
+    payload = {"keys": inline, "times": times, "aspect": aspect}
+    try:
+        result = subprocess.run(
+            [bun, str(cli)], input=json.dumps(payload), capture_output=True, encoding="utf8",
+            errors="replace", timeout=30,
+        )
+    except subprocess.TimeoutExpired as e:
+        raise ValueError("authored spatial camera sampling exceeded 30 seconds") from e
+    except OSError as e:
+        raise ValueError(f"cannot sample authored spatial camera: {e}") from e
+    if result.returncode:
+        detail = next(iter(result.stderr.strip().splitlines()), f"exit {result.returncode}")
+        raise ValueError(f"cannot sample authored spatial camera: {detail}")
+    poses = json.loads(result.stdout)
+    if len(poses) != len(times):
+        raise ValueError("authored spatial camera returned an incomplete batch")
+    return poses
 
 
 def placed_at(
@@ -563,6 +459,7 @@ def apply_spatial_audio(
     block_size: int = 128,
     scene_sample_fn: Callable[[float], tuple[Sequence[float] | None, Mapping | None]] | None = None,
     require_scene_position: bool = True,
+    camera_aspect: float = 16 / 9,
 ) -> np.ndarray:
     import numpy as np
     from scipy import signal
@@ -574,18 +471,19 @@ def apply_spatial_audio(
     if n == 0 or not is_spatial_active(spec):
         return buf.astype(np.float32)
 
-    def sample_at(t_film: float) -> dict[str, float]:
+    def sample_at(t_film: float):
         t_pic = source_time_fn(t_film) if source_time_fn is not None else t_film
         pos, pose = scene_sample_fn(t_film) if scene_sample_fn is not None else (None, None)
         if scene_sample_fn is not None and require_scene_position and pos is None and spec.get("at") is None:
             raise ValueError(f"spatial target {spec['target']!r} is unavailable at {t_film:.3f}s")
         src = resolve_source_position(spec, t_pic, placed_data, pos)
-        return compute_spatial_params(pose or camera_at(cam_keys, t_pic, placed_data), src, spec)
+        return t_pic, src, pose
 
     bounds = list(range(0, n, block_size))
-    params = [sample_at(start_time + idx / sample_rate) for idx in bounds]
     last_control_sample = n - 1 if scene_sample_fn is not None else n
-    params.append(sample_at(start_time + last_control_sample / sample_rate))
+    samples = [sample_at(start_time + idx / sample_rate) for idx in (*bounds, last_control_sample)]
+    authored_camera = iter(sample_camera_poses(cam_keys, [t for t, _, pose in samples if not pose], camera_aspect))
+    params = [compute_spatial_params(pose or next(authored_camera), src, spec) for _, src, pose in samples]
     skip_lpf = all(p["cutoffHz"] >= 19950.0 for p in params)
 
     out = np.zeros_like(buf)

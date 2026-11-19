@@ -1179,6 +1179,7 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
                         buf, at, 48000, spatial_spec, cam_keys, placed_data, _cam_source_time,
                         scene_sample_fn=scene_sample if use_scene else None,
                         require_scene_position=track is not None,
+                        camera_aspect=9 / 16 if CONFIG.get("ratio") == "9:16" else 16 / 9,
                     )
                 except ValueError as e:
                     raise SystemExit(str(e)) from e

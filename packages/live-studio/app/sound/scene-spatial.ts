@@ -270,7 +270,8 @@ export const sceneCameraPoseAt = (filmTime: number, opts?: { offline?: boolean }
           p: extractPoint(k.p, k.t),
           l: extractPoint(k.l, k.t),
         }));
-    const c = cameraAt(t, resolved);
+    const aspect = get().ratio === "9:16" ? 9 / 16 : 16 / 9;
+    const c = cameraAt(t, resolved, { aspect });
     const src = c.base ?? c;
     return {
       p: [src.p.x, src.p.y, src.p.z],

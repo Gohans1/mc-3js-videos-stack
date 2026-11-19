@@ -132,8 +132,8 @@ console.log(JSON.stringify(times.map((t) => {{
             check=True,
         )
         ts_poses = json.loads(proc.stdout)
-        for t, ts_pose in zip(sample_times, ts_poses):
-            py_pose = spatial.camera_at(cam_keys, t)
+        py_poses = spatial.sample_camera_poses(cam_keys, sample_times)
+        for t, ts_pose, py_pose in zip(sample_times, ts_poses, py_poses, strict=True):
             for axis in range(3):
                 self.assertAlmostEqual(py_pose["p"][axis], ts_pose["p"][axis], places=3, msg=f"p[{axis}] at t={t}")
                 self.assertAlmostEqual(py_pose["l"][axis], ts_pose["l"][axis], places=3, msg=f"l[{axis}] at t={t}")
@@ -462,6 +462,42 @@ export function buildScene() {
             self.assertGreater(left, right * 4, "the scene actor begins on the left")
             left, right = power(0.72, 0.90)
             self.assertGreater(right, left * 4, "Speed moves the actor right before the source-time crossing")
+
+    def test_mix_honors_plain_camera_hold_without_chrome(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        rate = 48000
+        with tempfile.TemporaryDirectory(prefix="mix-camera-hold-") as folder:
+            root = Path(folder)
+            timeline = root / "src/timeline"
+            timeline.mkdir(parents=True)
+            (root / "package.json").write_text(json.dumps({
+                "name": "camera-hold",
+                "live-studio": {"chrome": "no-chrome.exe", "soundVault": False},
+            }), encoding="utf8")
+            (root / "src/edit.json").write_text('{"end":1}', encoding="utf8")
+            (timeline / "cam.json").write_text(json.dumps([
+                {"t": 0, "p": [-1, 1.6, 5], "l": [-1, 1.6, 0], "wave": 0},
+                {"t": 1, "p": [8, 1.6, 5], "l": [8, 1.6, 0], "motion": "hold", "ease": "linear", "wave": 0},
+            ]), encoding="utf8")
+            (timeline / "audio.json").write_text(json.dumps({
+                "beds": [],
+                "sfx": [{"at": 0.2, "length": 0.4, "name": "tone", "gain": 0,
+                         "spatial": {"at": [0, 1.6, 5], "refDistance": 10}}],
+            }), encoding="utf8")
+            tone = 0.2 * np.sin(2 * np.pi * 317 * np.arange(rate) / rate)
+            self._write_wav(str(root / "sound/sfx/tone.wav"), np.column_stack((tone, tone)), rate)
+            run = subprocess.run(
+                [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                cwd=root, capture_output=True, text=True, timeout=40,
+            )
+            self.assertEqual(run.returncode, 0, msg=run.stderr + "\n" + run.stdout)
+            output_rate, out = self._read_wav_f32(str(root / "sound/out.wav"))
+            self.assertEqual(output_rate, rate)
+            left, right = np.mean(out[round(0.3 * rate):round(0.5 * rate)] ** 2, axis=0)
+            self.assertGreater(right, 0.001)
+            self.assertGreater(right, left * 4)
 
     def test_mix_uses_authored_scene_camera_for_every_spatial_anchor(self) -> None:
         import tempfile
