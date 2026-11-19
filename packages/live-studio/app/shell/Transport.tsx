@@ -1,11 +1,15 @@
 import {
   Brush,
+  Contrast,
   Ellipsis,
+  Ghost,
   Grid3x3,
+  Headphones,
   Maximize,
   Minimize,
   MoonStar,
   Move3d,
+  Palette,
   Pause,
   Pencil,
   Play,
@@ -48,6 +52,7 @@ import { setInk } from "../notes/ink";
 import { noteMarks, openNote, originOf, returnFromNote } from "../notes/notes";
 import { ClipExport } from "../picture/ClipExport";
 import { SnapshotButtons } from "../picture/Compare";
+import { guideModeLabel, nextValueCheckMode, valueCheckLabel } from "../picture/director-eye";
 import { PreviewControls } from "../picture/PreviewControls";
 import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback/transport";
 import { skimSound } from "../sound/skim";
@@ -246,6 +251,11 @@ export function Transport() {
     ink = useStudio((s) => s.ink),
     cam = useStudio((s) => s.cam);
   const guides = useStudio((s) => s.guides),
+    guideMode = useStudio((s) => s.guideMode),
+    valueCheck = useStudio((s) => s.valueCheck),
+    ghost = useStudio((s) => s.ghost),
+    blindAudio = useStudio((s) => s.blindAudio),
+    colorScript = useStudio((s) => s.colorScript),
     ratio = useStudio((s) => s.ratio),
     night = useStudio((s) => s.nightVision),
     full = useFullscreen();
@@ -350,7 +360,53 @@ export function Transport() {
           <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
           <PreviewControls />
           <Tip
-            label={`Guides (Ctrl+;): thirds, middle, and ${ratio === "9:16" ? "what the Shorts and TikTok buttons cover" : "the safe areas text and action stay inside"}`}
+            label={
+              valueCheck === "off"
+                ? "Value check (Shift+V): inspect Rec.709 B&W luminance or high-contrast silhouette (viewport only)"
+                : `${valueCheckLabel(valueCheck)} (Shift+V) · click to cycle`
+            }
+          >
+            <Button
+              variant="toolbar"
+              size="icon-lg"
+              className={cn(
+                square,
+                "pointer-coarse:hidden",
+                valueCheck === "off" && "@max-[720px]:hidden",
+              )}
+              aria-label="Value check"
+              aria-pressed={valueCheck !== "off"}
+              onClick={() => set({ valueCheck: nextValueCheckMode(valueCheck) })}
+            >
+              <Contrast />
+            </Button>
+          </Tip>
+          <Tip label="Cut-boundary ghost (Shift+O): overlay previous shot's outgoing frame to align cuts">
+            <Button
+              variant="toolbar"
+              size="icon-lg"
+              className={cn(square, "pointer-coarse:hidden", !ghost && "@max-[760px]:hidden")}
+              aria-label="Cut-boundary ghost"
+              aria-pressed={ghost}
+              onClick={() => set({ ghost: !ghost })}
+            >
+              <Ghost />
+            </Button>
+          </Tip>
+          <Tip label="Color script strip (Shift+C): shot thumbnails, palettes, luminance & pacing">
+            <Button
+              variant="toolbar"
+              size="icon-lg"
+              className={cn(square, "pointer-coarse:hidden", !colorScript && "@max-[820px]:hidden")}
+              aria-label="Color script"
+              aria-pressed={colorScript}
+              onClick={() => set({ colorScript: !colorScript })}
+            >
+              <Palette />
+            </Button>
+          </Tip>
+          <Tip
+            label={`Guides (Ctrl+; · Alt+; cycles): ${guideModeLabel(guideMode)}, and ${ratio === "9:16" ? "Shorts/TikTok safe zone" : "SMPTE safe areas"}`}
           >
             <Button
               variant="toolbar"
@@ -376,7 +432,7 @@ export function Transport() {
               </Button>
             </Tip>
           )}
-          <Tip label="Mute">
+          <Tip label="Mute test (Alt+M): silence audio for picture-only review (preserves volume)">
             <Button
               variant="toolbar"
               size="icon-lg"
@@ -388,9 +444,21 @@ export function Transport() {
               {muted ? <VolumeX /> : <Volume2 />}
             </Button>
           </Tip>
+          <Tip label="Blind audio test (Shift+H): black out picture to listen to audio alone (Esc exits)">
+            <Button
+              variant="toolbar"
+              size="icon-lg"
+              className={cn(square, "pointer-coarse:hidden", !blindAudio && "@max-[680px]:hidden")}
+              aria-label="Blind audio test"
+              aria-pressed={blindAudio}
+              onClick={() => set({ blindAudio: !blindAudio })}
+            >
+              <Headphones />
+            </Button>
+          </Tip>
           {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
           <div
-            className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1000px]:w-20 @max-[780px]:hidden pointer-coarse:hidden"
+            className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1060px]:w-20 @max-[900px]:hidden pointer-coarse:hidden"
             title="Volume (Ctrl+↑ ↓)"
           >
             <Slider

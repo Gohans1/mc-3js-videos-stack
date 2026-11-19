@@ -155,6 +155,19 @@ export const capturePreviewFrame = (t: number, read: (canvas: HTMLCanvasElement)
     S.finalAt = -1;
   });
 
+export const renderFilmFrame = (t: number, readFrame?: () => void) =>
+  queueFrame(async () => {
+    const free = S.tools?.free;
+    if (free) free.on = false;
+    try {
+      await draw(t, false);
+      readFrame?.();
+    } finally {
+      if (free) free.on = get().free;
+      await draw(S.t);
+    }
+  });
+
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
 // The final renderer is built the first time Final quality or Export still frame asks for it, once however often they ask
 let building: Promise<void> | null = null;

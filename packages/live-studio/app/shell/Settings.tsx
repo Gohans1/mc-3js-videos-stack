@@ -56,12 +56,14 @@ import { set, setPref, useStudio } from "../core/store";
 import { FPS, rangeText } from "../core/time";
 import { copyAll } from "../notes/notes";
 import { choose, pinPick, setGain, whereNext } from "../options/options";
+import { GUIDE_MODES, type GuideMode } from "../picture/director-eye";
 import { frameSize, setRatio } from "../picture/frame";
 import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { exportStill } from "../picture/still";
 import { jumpShot, seek, setPlaying } from "../playback/transport";
 import { resumeAudio } from "../sound/clock";
 import { zoomSpan } from "../timeline/timeline";
+import { DirectorEyeSettings } from "./DirectorEyeSettings";
 import { Speed } from "./Speed";
 
 type SettingsTabId = "view" | "camera" | "ai" | "render";
@@ -474,8 +476,38 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
             <Kbd>;</Kbd>
           </>
         ),
-        description: "guides: thirds and safe areas",
+        description: "Toggle framing guides and safe areas",
         search: "ctrl+; guides thirds safe areas",
+      },
+      {
+        keys: <Keys keys={["Alt", ";"]} />,
+        description: "Cycle guide layout through Thirds, Phi, Diagonals and All",
+        search: "alt+; guides thirds phi golden diagonals",
+      },
+      {
+        keys: <Keys keys={["Shift", "V"]} />,
+        description: "Cycle Value Check through Normal, B&W and Silhouette",
+        search: "shift+v value check luminance black white silhouette",
+      },
+      {
+        keys: <Keys keys={["Shift", "O"]} />,
+        description: "Overlay the outgoing frame from the previous shot",
+        search: "shift+o cut boundary ghost onion skin",
+      },
+      {
+        keys: <Keys keys={["Alt", "M"]} />,
+        description: "Mute or unmute for a picture-only review",
+        search: "alt+m mute test sound audio",
+      },
+      {
+        keys: <Keys keys={["Shift", "H"]} />,
+        description: "Hide the picture for a blind audio review",
+        search: "shift+h blind audio test listening",
+      },
+      {
+        keys: <Keys keys={["Shift", "C"]} />,
+        description: "Show or hide the color script strip",
+        search: "shift+c color script thumbnails storyboard",
       },
       {
         keys: (
@@ -952,6 +984,13 @@ export function Settings() {
       contract: x.contract,
       captions: x.captions,
       guides: x.guides,
+      guideMode: x.guideMode,
+      guideSafe: x.guideSafe,
+      valueCheck: x.valueCheck,
+      ghost: x.ghost,
+      ghostOpacity: x.ghostOpacity,
+      blindAudio: x.blindAudio,
+      colorScript: x.colorScript,
       tryOn: x.tryOn,
       free: x.free,
       flySpeed: x.flySpeed,
@@ -1174,7 +1213,43 @@ export function Settings() {
                   keys={["Ctrl", ";"]}
                   checked={s.guides}
                   onChange={(on) => setPref("guides", on)}
-                  help="Over the picture: the thirds, the middle, and the safe areas that text and action stay inside. On a 9:16 film the shaded edges are what the YouTube Shorts and TikTok buttons and captions cover. Kept in this browser."
+                  help="Over the picture: Thirds, Golden Ratio (38.2%), Baroque/Sinister diagonals, and SMPTE/Shorts safe areas. Alt+; cycles layout. Kept in this browser."
+                />
+                <Row>
+                  <span className="flex items-center gap-1.5 text-sm whitespace-nowrap">
+                    Guide layout <Keys keys={["Alt", ";"]} />
+                  </span>
+                  <ToggleGroup
+                    value={[s.guideMode]}
+                    onValueChange={(v: string[]) => {
+                      if (!v[0]) return;
+                      setPref("guideMode", v[0] as GuideMode);
+                      if (!s.guides) setPref("guides", true);
+                    }}
+                    aria-label="Guide layout"
+                    spacing={0.5}
+                    variant="segment"
+                    size="sm"
+                  >
+                    {GUIDE_MODES.map((m) => (
+                      <ToggleGroupItem key={m} value={m} className="pointer-coarse:h-10">
+                        {m === "thirds"
+                          ? "Thirds"
+                          : m === "phi"
+                            ? "Phi"
+                            : m === "diagonals"
+                              ? "Diag"
+                              : "All"}
+                      </ToggleGroupItem>
+                    ))}
+                  </ToggleGroup>
+                </Row>
+                <SwitchRow
+                  id="guide-safe"
+                  label="Safe zones in guides"
+                  checked={s.guideSafe}
+                  onChange={(on) => setPref("guideSafe", on)}
+                  help="Include 93% action / 90% title safe boxes (16:9) or Shorts/TikTok safe zone (9:16) inside framing guides."
                 />
                 {/* CapCut's Player menu > Color oscilloscope: a strip under the picture, too big for a phone (picture/Oscilloscope.tsx) */}
                 <div className="upright:hidden sideways:hidden contents">
@@ -1202,6 +1277,18 @@ export function Settings() {
                   onChange={(on) => setPref("tryOn", on)}
                   help="Near a prop or sound with several versions, chips show at the top right of the picture. Click A, B, C… to switch, Use to keep one."
                 />
+              </SettingCard>
+
+              <SettingCard title="Director’s Eye" icon={Layers} accent="primary" rows>
+                <div className="px-3">
+                  <DirectorEyeSettings
+                    valueCheck={s.valueCheck}
+                    ghost={s.ghost}
+                    ghostOpacity={s.ghostOpacity}
+                    colorScript={s.colorScript}
+                    blindAudio={s.blindAudio}
+                  />
+                </div>
               </SettingCard>
 
               <Options />

@@ -1,29 +1,19 @@
 // Framing guides over the picture (Ctrl+;, as CapCut's guides): the thirds a subject's eyes sit on, the middle, and the two
 // broadcast safe areas of SMPTE ST 2046-1, action safe (93%: nothing that matters past it) and title safe (90%: text inside it).
 // A 9:16 film is watched on a phone, so instead of those it shades what the Shorts and TikTok buttons and captions cover
-import { safe } from "film-kit/safe";
 import type { PointerEvent } from "react";
 
 import { useStudio } from "../core/store";
 import { frameSize } from "./frame";
+import { computeGuideGeometry, linesToPath } from "./guides-math";
 import { CROP_RATIOS, guideRect } from "./preview-model";
 import { changePreview, picturePoint } from "./preview-state";
 
-// The clear part of a 1080×1920 frame on both apps: Google's vertical video ad safe zone (288 top, 672 bottom, 48 left, 192 right)
-// and TikTok's In-Feed template (240, 660, 120 each side, the right 300 from y 840 down, its like and share column). Both are
-// published for ads only; an ordinary post sits under the same rails
-const PHONE: [number, number][] = [
-  [120, 288],
-  [888, 288],
-  [888, 840],
-  [780, 840],
-  [780, 1248],
-  [120, 1248],
-];
-
 export function Guides() {
-  const on = useStudio((s) => s.guides),
-    tall = useStudio((s) => s.ratio === "9:16");
+  const on = useStudio((s) => s.guides);
+  const ratio = useStudio((s) => s.ratio);
+  const mode = useStudio((s) => s.guideMode);
+  const showSafe = useStudio((s) => s.guideSafe);
   const p = useStudio((s) => s.preview);
   if (!on) return null;
   const [W, H] = frameSize(1600),
@@ -33,13 +23,12 @@ export function Guides() {
       width: W * k,
       height: H * k,
     });
-  const broadcast = (kind: "action" | "graphics") => {
-    const [x, y, right, bottom] = safe(W, H, kind);
-    return { x, y, width: right - x, height: bottom - y };
-  };
   const crop = p.crops.at(-1);
   const matte = crop && guideRect(W, H, CROP_RATIOS[crop]);
-  const phi = (Math.sqrt(5) - 1) / 2;
+  const g = computeGuideGeometry(W, H, ratio, mode, showSafe);
+  const extraPhi =
+    p.golden && g.phi.length === 0 ? computeGuideGeometry(W, H, ratio, "phi", false).phi : [];
+  const reciprocalPath = linesToPath(g.diagonalsReciprocal);
   const ruler = (axis: "rulerX" | "rulerY") => (e: PointerEvent<SVGLineElement>) => {
     if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
     const [x, y] = picturePoint(e, e.currentTarget.ownerSVGElement!);
@@ -52,19 +41,16 @@ export function Guides() {
     e.currentTarget.setPointerCapture(e.pointerId);
     ruler(axis)(e);
   };
-  const clear = `M${PHONE.map(([x, y]) => `${(x * W) / 1080} ${(y * H) / 1920}`).join("L")}Z`;
   const lines = (
     <>
-      <path d={`M${W / 3} 0V${H}M${(2 * W) / 3} 0V${H}M0 ${H / 3}H${W}M0 ${(2 * H) / 3}H${W}`} />
-      <path d={`M${W / 2 - 18} ${H / 2}H${W / 2 + 18}M${W / 2} ${H / 2 - 18}V${H / 2 + 18}`} />
-      {tall ? (
-        <path d={clear} />
-      ) : (
-        <>
-          <rect {...broadcast("action")} fill="none" />
-          <rect {...broadcast("graphics")} fill="none" strokeDasharray="6 6" />
-        </>
-      )}
+      {g.thirds.length > 0 && <path d={linesToPath(g.thirds)} />}
+      {g.phi.length > 0 && <path d={linesToPath(g.phi)} />}
+      {g.diagonalsMain.length > 0 && <path d={linesToPath(g.diagonalsMain)} />}
+      <path d={linesToPath(g.centerCross)} />
+      {g.safeBoxes.map(({ dashed, ...box }) => (
+        <rect key={box.width} {...box} fill="none" strokeDasharray={dashed ? "6 6" : undefined} />
+      ))}
+      {g.phoneClear && <path d={g.phoneClear} />}
       {p.crops.map((ratio) => (
         <rect key={ratio} {...guideRect(W, H, CROP_RATIOS[ratio])} strokeDasharray="12 4" />
       ))}
@@ -72,35 +58,14 @@ export function Guides() {
         [35, 50, 85].map((mm) => (
           <rect key={mm} {...box((0.94 * 35) / mm)} strokeDasharray="3 3" />
         ))}
-      {p.golden && (
-        <path
-          d={
-            "M" +
-            W * phi +
-            " 0V" +
-            H +
-            "M" +
-            W * (1 - phi) +
-            " 0V" +
-            H +
-            "M0 " +
-            H * phi +
-            "H" +
-            W +
-            "M0 " +
-            H * (1 - phi) +
-            "H" +
-            W
-          }
-          strokeDasharray="5 4"
-        />
-      )}
+      {extraPhi.length > 0 && <path d={linesToPath(extraPhi)} strokeDasharray="5 4" />}
     </>
   );
   return (
     <svg
       viewBox={`0 0 ${W} ${H}`}
       preserveAspectRatio="none"
+      data-guide-mode={mode}
       aria-hidden
       className="pointer-events-none absolute inset-0 z-3 size-full [&_*]:[vector-effect:non-scaling-stroke]"
     >
@@ -128,9 +93,9 @@ export function Guides() {
           fillOpacity={p.passepartout / 100}
         />
       )}
-      {tall && (
+      {g.phoneClear && (
         <path
-          d={`M0 0H${W}V${H}H0Z${clear}`}
+          d={`M0 0H${W}V${H}H0Z${g.phoneClear}`}
           fillRule="evenodd"
           fillOpacity={0.35}
           className="fill-stage"
@@ -138,9 +103,11 @@ export function Guides() {
       )}
       <g strokeOpacity={0.45} strokeWidth={3} fill="none" className="stroke-stage">
         {lines}
+        {reciprocalPath && <path d={reciprocalPath} strokeDasharray="6 6" />}
       </g>
       <g strokeOpacity={0.6} strokeWidth={1} fill="none" className="stroke-picture">
         {lines}
+        {reciprocalPath && <path d={reciprocalPath} strokeDasharray="6 6" />}
       </g>
       {p.crops.map((ratio) => {
         const r = guideRect(W, H, CROP_RATIOS[ratio]);

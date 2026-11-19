@@ -666,3 +666,15 @@
     visibility: visible;
   }
 }
+
+[data-value-check="bw"] {
+  filter: url("#director-eye-rec709");
+}
+
+[data-value-check="silhouette"] {
+  filter: url("#director-eye-silhouette");
+}
+
+.ghost-overlay-img {
+  opacity: var(--ghost-opacity, 0.35);
+}

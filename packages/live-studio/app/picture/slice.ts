@@ -3,6 +3,7 @@ import type { FocusTargetSpec } from "film-stage/camera";
 
 import type { Ratio } from "../../src/frame.ts";
 import type { FilmViewSize } from "../core/prefs";
+import type { GuideMode, ValueCheckMode } from "./director-eye";
 import { initialPreview, type PreviewOptions } from "./preview-model";
 
 export type PreviewStill = { url: string; t: number };
@@ -13,7 +14,14 @@ export type FreeTouched = Partial<
 export interface PictureSlice {
   ratio: Ratio; // the film's frame shape (frame.ts), from its package.json
   captions: boolean;
-  guides: boolean; // thirds and safe areas over the picture (Guides.tsx)
+  guides: boolean; // framing guides over the picture (Guides.tsx)
+  guideMode: GuideMode;
+  guideSafe: boolean;
+  valueCheck: ValueCheckMode; // viewport luminance check only, never touches film grade
+  ghost: boolean; // cut-boundary onion skin overlay (GhostOverlay.tsx)
+  ghostOpacity: number;
+  blindAudio: boolean; // audio-only listening curtain over Stage
+  colorScript: boolean; // horizontal shot/palette/pacing strip (ColorScript.tsx)
   freeLook: boolean;
   freeLocked: boolean;
   freeNavigation: "fly" | "walk";
@@ -47,6 +55,9 @@ export const pictureSlice: Omit<
   PictureSlice,
   | "captions"
   | "guides"
+  | "guideMode"
+  | "guideSafe"
+  | "ghostOpacity"
   | "flySpeed"
   | "nightVision"
   | "filmView"
@@ -55,6 +66,10 @@ export const pictureSlice: Omit<
   | "freeLook"
 > = {
   ratio: "16:9",
+  valueCheck: "off",
+  ghost: false,
+  blindAudio: false,
+  colorScript: false,
   free: false,
   freeLocked: false,
   freeNavigation: "fly",

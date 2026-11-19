@@ -14,10 +14,14 @@ import { InkBar } from "../notes/InkBar";
 import { OptionChips } from "../options/OptionChips";
 import { reloadNow } from "../playback/transport";
 import { FullscreenTransport } from "../shell/FullscreenTransport";
+import { BlindAudioCurtain } from "./BlindAudioCurtain";
+import { ColorScriptStrip } from "./ColorScript";
 import { AngleGrid, CompareOverlay } from "./Compare";
+import { valueCheckLabel } from "./director-eye";
 import { ExposureLegend } from "./ExposureLegend";
 import { FilmView } from "./FilmView";
 import { FreeCameraControls } from "./FreeCameraControls";
+import { GhostHud, GhostOverlay } from "./GhostOverlay";
 import { Guides } from "./Guides";
 import { Oscilloscope } from "./Oscilloscope";
 import { stageFit } from "./pointer";
@@ -26,7 +30,9 @@ import { ShotList } from "./ShotList";
 function Badges() {
   const free = useStudio((s) => s.free),
     final = useStudio((s) => s.final),
-    night = useStudio((s) => s.nightVision);
+    night = useStudio((s) => s.nightVision),
+    valueCheck = useStudio((s) => s.valueCheck),
+    muted = useStudio((s) => s.muted);
   const contract = useStudio((s) => s.contract.length),
     status = useStudio((s) => s.status),
     newBuild = useStudio((s) => s.newBuild);
@@ -45,6 +51,20 @@ function Badges() {
       {final && (
         <Badge variant="alarm" render={<b />}>
           FINAL QUALITY
+        </Badge>
+      )}
+      {valueCheck !== "off" && (
+        <Badge
+          variant="check"
+          render={<b />}
+          title="Viewport value check only — film grade and renders are unchanged"
+        >
+          {valueCheckLabel(valueCheck)}
+        </Badge>
+      )}
+      {muted && (
+        <Badge variant="check" render={<b />} title="Audio muted for picture-only review (Alt+M)">
+          MUTED
         </Badge>
       )}
       {contract > 0 && (
@@ -84,6 +104,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
   useLayoutEffect(stageFit, [split]);
   const pickingCamera = useStudio((s) => s.cameraPick !== null);
   const pickFocus = useStudio((s) => s.pickFocus !== null);
+  const valueCheck = useStudio((s) => s.valueCheck);
+  const blindAudio = useStudio((s) => s.blindAudio);
   return (
     // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
     // it alone), then CapCut's Color oscilloscope under it when on
@@ -94,6 +116,43 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           : "bg-background upright:rounded-none sideways:rounded-none upright:bg-black sideways:bg-black upright:aspect-(--frame) upright:max-h-[62vh] upright:w-full upright:flex-none relative col-start-1 row-start-1 flex min-h-0 min-w-0 flex-col overflow-hidden rounded-t-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2"
       }
     >
+      {!phone && (
+        <svg aria-hidden className="pointer-events-none absolute size-0 overflow-hidden">
+          <defs>
+            <filter
+              id="director-eye-rec709"
+              x="0%"
+              y="0%"
+              width="100%"
+              height="100%"
+              colorInterpolationFilters="sRGB"
+            >
+              <feColorMatrix
+                type="matrix"
+                values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
+              />
+            </filter>
+            <filter
+              id="director-eye-silhouette"
+              x="0%"
+              y="0%"
+              width="100%"
+              height="100%"
+              colorInterpolationFilters="sRGB"
+            >
+              <feColorMatrix
+                type="matrix"
+                values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"
+              />
+              <feComponentTransfer>
+                <feFuncR type="linear" slope={3.6} intercept={-1.3} />
+                <feFuncG type="linear" slope={3.6} intercept={-1.3} />
+                <feFuncB type="linear" slope={3.6} intercept={-1.3} />
+              </feComponentTransfer>
+            </filter>
+          </defs>
+        </svg>
+      )}
       <div
         ref={bind("view")}
         className="@container relative flex min-h-0 w-full flex-1 items-center justify-center"
@@ -131,34 +190,40 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
                 : undefined
             }
           >
-            <canvas
-              ref={bind("canvas")}
-              className={cn(
-                "absolute inset-0 block size-full touch-none",
-                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
-                pickingCamera || pickFocus
-                  ? "cursor-crosshair"
-                  : free
-                    ? "cursor-grab"
-                    : "cursor-default",
-              )}
-            />
-            <canvas
-              ref={bind("final")}
-              hidden
-              className={cn(
-                "pointer-events-none absolute inset-0 block size-full",
-                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
-              )}
-            />
-            <canvas
-              ref={bind("shutter")}
-              hidden
-              className={cn(
-                "pointer-events-none absolute inset-0 block size-full",
-                preview && preview.zoom > 100 && "[image-rendering:pixelated]",
-              )}
-            />
+            <div
+              data-value-check={!phone && !clean && valueCheck !== "off" ? valueCheck : undefined}
+              className="absolute inset-0"
+            >
+              <canvas
+                ref={bind("canvas")}
+                className={cn(
+                  "absolute inset-0 block size-full touch-none",
+                  preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                  pickingCamera || pickFocus
+                    ? "cursor-crosshair"
+                    : free
+                      ? "cursor-grab"
+                      : "cursor-default",
+                )}
+              />
+              <canvas
+                ref={bind("final")}
+                hidden
+                className={cn(
+                  "pointer-events-none absolute inset-0 block size-full",
+                  preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                )}
+              />
+              <canvas
+                ref={bind("shutter")}
+                hidden
+                className={cn(
+                  "pointer-events-none absolute inset-0 block size-full",
+                  preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                )}
+              />
+              {!phone && !clean && <GhostOverlay />}
+            </div>
             <canvas
               ref={bind("inspection")}
               hidden={!preview || clean || preview.layers === "off"}
@@ -237,6 +302,8 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           aria-label="Camera minimap, top view with world axes"
           className="bg-scrim-strong border-border pointer-events-none absolute top-24 right-3 z-4 size-28 rounded-lg border"
         />
+        {!phone && !clean && <GhostHud />}
+        {!phone && <BlindAudioCurtain />}
         {!phone && <FullscreenTransport />}
         {!phone && loading && (
           <div
@@ -247,8 +314,11 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           </div>
         )}
       </div>
-      <div hidden={phone} className="contents">
-        <Oscilloscope bind={bind} />
+      <div hidden={blindAudio} className="contents">
+        {!phone && <ColorScriptStrip />}
+        <div hidden={phone} className="contents">
+          <Oscilloscope bind={bind} />
+        </div>
       </div>
       {error && (
         <div
