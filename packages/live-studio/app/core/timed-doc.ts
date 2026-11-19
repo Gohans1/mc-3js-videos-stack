@@ -12,6 +12,11 @@ export interface TimedDoc<T> extends Doc<T> {
   edit: (change: (d: T) => void, inputClock?: TimingClock) => void;
   preview: (change: (d: T) => void, inputClock?: TimingClock) => void;
 }
+export type TimedProjection<T> = { data: T; clock: TimingClock };
+type TimedHooks<T> = Omit<Hooks<T>, "changed"> & {
+  changed: (previous?: TimedProjection<T>) => void;
+};
+
 const refreshers = new Set<() => void>();
 export const refreshTimedDocs = () => {
   for (const refresh of refreshers) refresh();
@@ -20,15 +25,18 @@ export const refreshTimedDocs = () => {
 // History and disk keep source coordinates. Only the editable view is projected, so changing speed cannot bake motion keys.
 export const createTimedDoc = <T extends object>(
   name: string,
-  hooks: Hooks<T>,
+  hooks: TimedHooks<T>,
   durations: () => Record<string, number> = () => ({}),
 ): TimedDoc<T> => {
   let view: T | null = null;
-  const changed = () => {
-    view = mapTimeline(name, source.data, clockForTimeline(name), false, null, durations());
-    hooks.changed();
+  let viewClock = clockForTimeline(name);
+  const changed = (refresh = false) => {
+    const previous = refresh && view !== null ? { data: view, clock: viewClock } : undefined;
+    viewClock = clockForTimeline(name);
+    view = mapTimeline(name, source.data, viewClock, false, null, durations());
+    hooks.changed(previous);
   };
-  const source = createDoc<T>(name, { ...hooks, changed });
+  const source = createDoc<T>(name, { ...hooks, changed: () => changed() });
   const changeSource = (change: (d: T) => void, inputClock?: TimingClock) => (data: T) => {
     const clock = clockForTimeline(name);
     const basis = inputClock ?? clock;
@@ -42,7 +50,7 @@ export const createTimedDoc = <T extends object>(
     }
   };
   const refresh = () => {
-    if (source.data !== null) changed();
+    if (source.data !== null) changed(true);
   };
   refreshers.add(refresh);
   return {

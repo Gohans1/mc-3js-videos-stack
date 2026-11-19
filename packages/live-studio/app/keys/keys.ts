@@ -1,13 +1,14 @@
+import { EDIT } from "film/edit";
+
+import { isTimedKey, keyRows, rowAt } from "../../src/contract-keys.ts";
+import { equalJson } from "../../src/merge-edits.mjs";
 // The film's key files (package.json "live-studio".keyFiles: Steve's moves, hands, look, face; the props' keys), edited by hand
 // on the key rows like the camera keys (doc.ts: undo, saving, an agent's edit wins). Every list of {t, ...} in a file is a row
 // (contract.mjs keyRows), so a film needs no setup beyond naming the file and the EDIT key it reads it from. Each change puts a
 // fresh copy in EDIT[that key], which the film reads every frame and caches on, so it is never edited in place.
 // Keys only move in time between the keys around them: their order is the film's.
-import { equalJson } from "../../src/merge-edits.mjs";
+import { clockForTimeline } from "../../src/timing-state.mjs";
 import { lightEdit } from "../activity/activity";
-import { EDIT } from "film/edit";
-
-import { keyRows, rowAt } from "../../src/contract-keys.ts";
 import { together } from "../core/doc";
 import { getFile, prefetchFile } from "../core/net";
 import { transitionSelection } from "../core/selection";
@@ -15,11 +16,12 @@ import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, invalidatePictures, say, set } from "../core/store";
 import { r3, SAME, stamp } from "../core/time";
-import { createTimedDoc, type TimedDoc } from "../core/timed-doc";
+import { createTimedDoc, type TimedDoc, type TimedProjection } from "../core/timed-doc";
 import { type KeyRef } from "./slice";
 
 export interface Key {
   t: number;
+  __timing?: { source: number; output: number };
   [k: string]: unknown;
 }
 export interface Row {
@@ -161,7 +163,7 @@ export const hold = (on: boolean) => {
   held = on;
   if (!on) flush();
 };
-const changed = (f: number) => {
+const changed = (f: number, previous?: TimedProjection<object>) => {
   if (held) {
     pending.add(f);
     clearTimeout(idle);
@@ -177,9 +179,28 @@ const changed = (f: number) => {
         }))
       : [],
   );
-  const picks = get().keyPicks,
-    live = picks.filter((p) => keyOf(p));
-  if (live.length !== picks.length) set({ keyPicks: live });
+  const picks = get().keyPicks;
+  const clock = clockForTimeline(`keys/${f}`);
+  const live = picks.flatMap((pick) => {
+    if (!previous || pick.f !== f) return keyOf(pick) ? [pick] : [];
+    const before = listAt(previous.data, pick.path);
+    const key = before[pick.i];
+    if (!key) return [];
+    const source = key.__timing?.source ?? previous.clock.sourceAt(key.t, "after");
+    const sameSource = (candidate: Key, basis: typeof clock) =>
+      Math.abs((candidate.__timing?.source ?? basis.sourceAt(candidate.t, "after")) - source) <
+      1e-7;
+    const occurrence = before
+      .slice(0, pick.i)
+      .filter((candidate) => sameSource(candidate, previous.clock)).length;
+    const matchingIndices = keysOf(f, pick.path).flatMap((candidate, i) =>
+      sameSource(candidate, clock) ? [i] : [],
+    );
+    const i = matchingIndices[occurrence];
+    return i === undefined ? [] : [{ ...pick, i }];
+  });
+  if (live.length !== picks.length || live.some((pick, i) => pick.i !== picks[i].i))
+    set({ keyPicks: live });
   bump();
 };
 
@@ -207,7 +228,7 @@ const ensureFiles = () => {
       ...x,
       doc: createTimedDoc<object>(`keys/${f}`, {
         label: x.file.split("/").pop()!,
-        changed: () => changed(f),
+        changed: (previous) => changed(f, previous),
         received: (before, after) => {
           if (!get().aiActivity) return;
           const changed = rowsOf(f).filter((row) =>
@@ -312,14 +333,16 @@ export const preview = (refs: KeyRef[], change: (r: KeyRef, ks: Key[]) => void) 
 export type CopiedKey = { f: number; path: string[]; k: Key };
 export const pasteKeys = (items: CopiedKey[], d: number) => {
   const live = items
-    .filter(
-      (x) =>
-        rows.some((r) => r.f === x.f && r.path.join(".") === x.path.join(".")) &&
-        !isSingleKeyRow(x.f, x.path),
-    )
-    .map((x) => ({ ...x, k: { ...structuredClone(x.k), t: r3(Math.max(0, x.k.t + d)) } }));
+    .filter(({ f, path }) => {
+      const row = rowAt(files[f]?.doc.data, path);
+      return Array.isArray(row) && row.every(isTimedKey);
+    })
+    .map(({ f, path, k }) => {
+      const { __timing: _, ...fields } = structuredClone(k);
+      return { f, path, k: { ...fields, t: r3(Math.max(0, k.t + d)) } };
+    });
   if (!live.length) {
-    say("Nothing pasted: single events don't take extra keyframes");
+    say("Nothing pasted: the copied keyframe tracks are unavailable");
     return;
   }
   together(() => {
@@ -359,6 +382,7 @@ export const removeKeys = (refs: KeyRef[]) => {
   const keep = rows.filter(
     (row) =>
       (isSingleKeyRow(row.f, row.path) ||
+        (files[row.f].edit === "placed" && row.path.length === 2 && row.path[1] === "keys") ||
         files[row.f].requiredRows.some((path) => path.join(".") === row.path.join("."))) &&
       keysOf(row.f, row.path).every((_, i) => refs.some((r) => sameKey(r, { ...row, i }))),
   );

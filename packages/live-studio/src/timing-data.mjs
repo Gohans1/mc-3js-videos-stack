@@ -59,7 +59,12 @@ const cameraPositions = (key, clock, edge, shotCut) => {
 };
 const cameraVisible = (key, clock) =>
   clock.visible(key.t) || (!key.cut && clock.visible(key.t - 1e-7));
-const cameraMeta = (key, t, alias) => ({ source: key.t, output: t, alias });
+const cameraMeta = (key, t, alias, sourceRow) => ({
+  source: key.t,
+  output: t,
+  alias,
+  ...(sourceRow !== undefined && { sourceRow }),
+});
 const orderCameraRows = (a, b) =>
   a.t - b.t ||
   Number(!!a.cut || a.__timing?.source === 0) - Number(!!b.cut || b.__timing?.source === 0);
@@ -77,11 +82,18 @@ const projectCameraRows = (rows, clock) => {
         shotCut,
       );
       const alias = positions.length > 1 ? (key.id ?? index) : undefined;
-      const track =
-        clock.placements || clock.cameraRateAt || (key.cut && clock.cameraShotStarts?.length);
-      return positions.map((t) =>
-        track ? { ...key, t, __timing: cameraMeta(key, t, alias) } : { ...key, t },
-      );
+      const sharesSourceTime = rows[index - 1]?.t === key.t || rows[index + 1]?.t === key.t;
+      const sourceRow = sharesSourceTime ? index : undefined;
+      return positions.map((t) => {
+        const lookup = shotCut ? (clock.cameraPicture ?? clock) : clock;
+        const track =
+          sourceRow !== undefined ||
+          clock.placements ||
+          clock.cameraRateAt ||
+          (key.cut && clock.cameraShotStarts?.length) ||
+          Math.abs(lookup.sourceAt(t, key.cut ? "after" : "before") - key.t) > 1e-8;
+        return track ? { ...key, t, __timing: cameraMeta(key, t, alias, sourceRow) } : { ...key, t };
+      });
     })
     .sort(orderCameraRows);
 };

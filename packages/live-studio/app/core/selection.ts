@@ -73,6 +73,11 @@ export const hasAnySelection = (s: SelectionFields): boolean =>
   s.textPicks.length > 0 ||
   s.object !== null;
 
+export const cameraSelection = (indices: number[]) => ({
+  camKey: indices.length === 1 ? indices[0] : null,
+  camPicks: indices.length > 1 ? indices : [],
+});
+
 export const transitionSelection = (action: SelectionAction, currentSide: Side): SelectionPatch => {
   switch (action.kind) {
     case "none":
@@ -86,8 +91,7 @@ export const transitionSelection = (action: SelectionAction, currentSide: Side):
         return { camKey: null, camPicks: [], shotPicks: [] };
       return {
         ...CLEAR_PICKS,
-        camKey: action.indices.length === 1 ? action.indices[0] : null,
-        camPicks: action.indices.length > 1 ? action.indices : [],
+        ...cameraSelection(action.indices),
         shotPicks: action.shots ?? [],
         side: currentSide === "speed" ? "speed" : "cam",
       };
@@ -167,8 +171,7 @@ export const transitionSelection = (action: SelectionAction, currentSide: Side):
         layerPicks: action.layers,
         textPicks: action.text,
         shotPicks: action.shots,
-        camKey: action.cam.length === 1 ? action.cam[0] : null,
-        camPicks: action.cam.length > 1 ? action.cam : [],
+        ...cameraSelection(action.cam),
         keyPicks: action.keys,
         clips: action.clips,
         clip: action.clips.length === 1 ? action.clips[0] : null,

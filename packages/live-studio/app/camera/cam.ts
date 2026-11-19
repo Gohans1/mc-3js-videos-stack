@@ -1,9 +1,10 @@
 import { hfovOf, vfovOf } from "film-kit/lens";
 import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/camera";
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
-import { EDIT, toSource } from "film/edit";
+import { EDIT, fromSource, toSource } from "film/edit";
 
 import { cameraShotAtBoundary, canPlaceCameraCut } from "../../src/camera-clock.mjs";
+import { frameCountOf } from "../../src/frame";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
 // camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
@@ -25,11 +26,11 @@ import {
 } from "../core/ease";
 import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
-import { transitionSelection } from "../core/selection";
+import { cameraSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
 import { FPS, r3, SAME, stamp } from "../core/time";
-import { createTimedDoc } from "../core/timed-doc";
+import { createTimedDoc, type TimedProjection } from "../core/timed-doc";
 import { readSceneFrame } from "../picture/render";
 import { seekExact } from "../playback/transport";
 import {
@@ -57,7 +58,7 @@ export type { HandheldSpec };
 export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
 export interface CamKey {
   id?: string;
-  __timing?: { source: number; output: number; alias?: string | number };
+  __timing?: { source: number; output: number; alias?: string | number; sourceRow?: number };
   t: number;
   p: Point;
   l: Point;
@@ -94,17 +95,35 @@ const newRowId = () =>
 
 export let keys: CamKey[] = [];
 const initialKeyTimes = new Map<string, number>();
-const changed = () => {
+const changed = (previous?: TimedProjection<CamKey[]>) => {
   keys = doc.data ?? [];
   (EDIT as Record<string, unknown>).cam = structuredClone(doc.source ?? []);
   S.dirty = true;
   S.finalAt = -1;
-  const { camKey: k, camPicks: ps } = get();
-  set({
-    camRev: get().camRev + 1,
-    ...(k !== null && !keys[k] ? { camKey: null } : {}),
-    ...(ps.some((i) => !keys[i]) ? { camPicks: [] } : {}),
-  });
+  const { camKey, camPicks } = get();
+  const nextIndex = (i: number) => {
+    if (!previous) return keys[i] ? i : -1;
+    const old = previous.data[i];
+    if (!old) return -1;
+    const source = cameraSourceTime(old, previous.clock);
+    const sourceRow = old.__timing?.sourceRow;
+    let closest = -1;
+    keys.forEach((key, index) => {
+      const matches = old.id
+        ? key.id === old.id
+        : key.__timing?.sourceRow === sourceRow &&
+          !!key.cut === !!old.cut &&
+          Math.abs(cameraSourceTime(key) - source) < 1e-7;
+      if (matches && (closest < 0 || Math.abs(key.t - old.t) < Math.abs(keys[closest].t - old.t)))
+        closest = index;
+    });
+    return closest;
+  };
+  const selected = camKey === null ? camPicks : [camKey];
+  const visible = previous
+    ? [...new Set(selected.map(nextIndex).filter((i) => i >= 0))].sort((a, b) => a - b)
+    : selected.filter((i) => !!keys[i]);
+  set({ camRev: get().camRev + 1, ...cameraSelection(visible) });
 };
 const doc = createTimedDoc<CamKey[]>("cam", {
   label: "camera",
@@ -188,7 +207,11 @@ const placementRoom = (k: CamKey): [number, number] => {
   const placement = clockForTimeline("cam").cameraSpans?.find(
     (span) => k.t >= span.from && k.t < span.to,
   );
-  return placement ? [placement.from, Math.max(k.t, placement.to - SAME)] : [0, Infinity];
+  const end = k.cut
+    ? Math.floor(((frameCountOf(DURATION, FPS) - 1) * 1000) / FPS) / 1000
+    : DURATION - SAME;
+  const limit = placement ? Math.min(placement.to - SAME, end) : end;
+  return [placement?.from ?? 0, Math.max(k.t, limit)];
 };
 export const room = (i: number): [number, number] => {
   const [from, to] = placementRoom(keys[i]);
@@ -211,8 +234,8 @@ export const isHardCut = (i: number) =>
   i > 0 && !!keys[i]?.cut && keys[i].__timing?.source !== 0 && boundaryOf(i) < 0;
 const deletableKey = (i: number) => movable(i) || (isHardCut(i) && !keys[i].locked);
 export const canDeleteCameraKey = (i: number) => deletableKey(i) || rollable(i);
-const cameraSourceTime = (key: CamKey) =>
-  key.__timing?.source ?? clockForTimeline("cam").sourceAt(key.t, key.cut ? "after" : "before");
+const cameraSourceTime = (key: CamKey, clock = clockForTimeline("cam")) =>
+  key.__timing?.source ?? clock.sourceAt(key.t, key.cut ? "after" : "before");
 const sourceShotStarts = () => {
   const starts = clockForTimeline("cam").cameraShotStarts;
   return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
@@ -1167,17 +1190,60 @@ export const splitShot = () => {
   }
   const t = r3(S.t),
     s = SHOTS_OUT.findLastIndex((x) => x.t <= t + SAME);
+  const existing = keys.findIndex((key, i) => isHardCut(i) && Math.abs(key.t - t) < 0.000501);
   if (
     s < 0 ||
     t < SAME * 3 ||
     t > DURATION - SAME * 3 ||
-    keys.some((k) => k.cut && Math.abs(k.t - t) < SAME * 3) ||
+    keys.some((k, i) => i !== existing && k.cut && Math.abs(k.t - t) < SAME * 3) ||
     Math.abs(SHOTS_OUT[s].t - t) < SAME * 3
   ) {
     say("A shot starts or ends here already. Move the playhead");
     return;
   }
-  if (ambiguousCut(t)) return say("Move the playhead to a playing frame to split the shot");
+  const cut = keys[existing];
+  const splitTime = cut?.t ?? t;
+  if (ambiguousCut(splitTime)) return say("Move the playhead to a playing frame to split the shot");
+  const sourceTime = toSource(splitTime);
+  // Voice warp round-trips can land a few floating-point ticks beyond the cut frame.
+  const splitSource = !cut
+    ? r3(sourceTime)
+    : fromSource(sourceTime) <= splitTime
+      ? sourceTime
+      : toSource(splitTime - 1e-8);
+  const splitRows = (sh: ShotRow[]) => {
+    const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
+    const { before, after } = splitShotHits(hits, splitSource);
+    setHits(sh[s], before);
+    sh.splice(s + 1, 0, {
+      ...structuredClone(rest),
+      ...(after ? { hits: after } : {}),
+      id: newRowId(),
+      t: splitSource,
+      name: secondName(name ?? `Shot ${s}`, sh),
+    });
+  };
+  if (cut) {
+    const clock = clockForTimeline("cam");
+    const pictureTime = (clock.cameraPicture ?? clock).sourceAt(cut.t);
+    if (Math.abs(cameraSourceTime(cut) - pictureTime) > 1e-7)
+      return say("The picture and camera clocks differ here. Split on a frame where they align");
+    const needsTailOwnership = cut.tailId === undefined;
+    const original = (doc.source ?? []).findIndex((key) =>
+      key.cut && (cut.id ? key.id === cut.id : Math.abs(key.t - pictureTime) < 1e-7),
+    );
+    if (needsTailOwnership && (original < 0 || cut.locked))
+      return say("Select an unlocked camera cut before splitting here");
+    together(() => {
+      if (needsTailOwnership)
+        doc.editSource((rows) => { rows[original].tailId = false; });
+      shotsDoc.edit(splitRows);
+    });
+    const next = keys.findIndex((key) => key.cut && Math.abs(key.t - splitTime) < SAME);
+    setKey(next < 0 ? null : next);
+    say(`Shot split at ${stamp(t)} using the existing camera cut. Ctrl+Z to undo`);
+    return;
+  }
   const free = S.tools?.free.on ? viewFromFree() : undefined;
   const here = drawnView();
   const i = keys.findIndex((k) => k.t > t);
@@ -1194,24 +1260,11 @@ export const splitShot = () => {
     return anchorUnavailable();
   start.cut = true;
   start.tailId = tail?.id ?? false;
-  const splitSource = r3(toSource(t));
   if (
     !preserveRailPositions([at - 1], () =>
       together(() =>
         applyShotAndCamera(
-          () =>
-            shotsDoc.edit((sh) => {
-              const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
-              const { before, after } = splitShotHits(hits, splitSource);
-              setHits(sh[s], before);
-              sh.splice(s + 1, 0, {
-                ...structuredClone(rest),
-                ...(after ? { hits: after } : {}),
-                id: newRowId(),
-                t: splitSource,
-                name: secondName(name ?? `Shot ${s}`, sh),
-              });
-            }),
+          () => shotsDoc.edit(splitRows),
           edit,
           (ks, usePictureCut) => {
             if (usePictureCut) {

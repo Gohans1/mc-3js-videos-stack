@@ -6,6 +6,23 @@ import { cameraSpeed } from "../src/camera-speed.mjs";
 import { mapTimeline } from "../src/timing-data.mjs";
 import { cameraTimesAt, clockForTimeline, setTiming, timedDraw } from "../src/timing-state.mjs";
 
+test("mixed legacy and identified camera keys at the opening keep their authored order on save", () => {
+  setTiming({}, 8, []);
+  const clock = clockForTimeline("cam");
+  const keys = [
+    { t: 0, p: [1, 0, 0], l: [1, 0, 1] },
+    { t: 0, id: "second", p: [2, 0, 0], l: [2, 0, 1] },
+    { t: 3, p: [3, 0, 0], l: [3, 0, 1] },
+  ];
+  const projected = mapTimeline("cam", keys, clock);
+  projected[2].roll = 0.1;
+  assert.deepEqual(mapTimeline("cam", projected, clock, true, keys), [
+    keys[0],
+    keys[1],
+    { ...keys[2], roll: 0.1 },
+  ]);
+});
+
 test("a shot's output clock keeps moving through freezes while the actor stays fixed", () => {
   const timing = { freezes: [{ at: 2, duration: 3 }] };
   setTiming(timing, 8, [{ t: 0, cameraClock: "output" }, { t: 4 }]);

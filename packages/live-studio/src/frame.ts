@@ -4,10 +4,12 @@
 export type Ratio = "16:9" | "9:16";
 export const RATIOS: readonly Ratio[] = ["16:9", "9:16"];
 export const ratioOf = (pkg: any): Ratio => pkg?.["live-studio"]?.ratio ?? "16:9";
+export const frameCountOf = (duration: number, fps: number) =>
+  Math.max(1, Math.floor(duration * fps + 1e-6));
 // The [first, last] frame each render chunk draws: frame f shows second f/fps, and only frames before the end are drawn, so a
 // film a hair past a chunk's end (30.01 s) has no chunk of zero frames
 export const chunksOf = (duration: number, chunk: number, fps: number): [number, number][] => {
-  const frames = Math.max(1, Math.floor(duration * fps + 1e-6)),
+  const frames = frameCountOf(duration, fps),
     per = chunk * fps;
   return Array.from({ length: Math.ceil(frames / per) }, (_, i) => [
     i * per,

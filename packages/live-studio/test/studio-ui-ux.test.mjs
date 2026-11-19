@@ -12,6 +12,7 @@ const STUDIO = resolve(import.meta.dir, "..");
 
 const ENTRY = `
 import { useRef } from "react";
+import { EDIT } from "film/edit";
 import { createRoot } from "react-dom/client";
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
 import "/index.css";
@@ -19,12 +20,13 @@ import { TooltipProvider } from "/components/ui/tooltip.tsx";
 import { Toaster } from "/components/ui/toast.tsx";
 import { registerEngine } from "/core/engine.ts";
 import { flushDocs, redo, setAutoSave, undo } from "/core/doc.ts";
-import { setFilmSource } from "/core/filmMeta.ts";
+import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
-import { keys as camKeys, loadCam, matchAllInShot, removeKey, setKey } from "/camera/cam.ts";
+import { refreshTimedDocs } from "/core/timed-doc.ts";
+import { keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, splitShot } from "/camera/cam.ts";
 import { camLine } from "/camera/camline.ts";
-import { loadKeys as loadStudioKeys } from "/keys/keys.ts";
+import { files as keyFiles, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
 import { CamPanel } from "/camera/CamPanel.tsx";
@@ -73,7 +75,8 @@ import { TimelinePanel } from "/timeline/TimelinePanel.tsx";
 import { SpeedCurve } from "/timeline/SpeedCurve.tsx";
 import { cut, paste } from "/timeline/clipboard.ts";
 import { attachTimeline, drawTimelineActivity, drawTimelines, marks } from "/timeline/timeline.ts";
-import { setTiming } from "../src/timing-state.mjs";
+import { setTiming, timing, timingClock } from "../src/timing-state.mjs";
+import { warp } from "../src/warp.mjs";
 
 const INITIAL_CAM = () => [
   { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
@@ -93,6 +96,24 @@ const origFetch = globalThis.fetch.bind(globalThis);
 globalThis.fetch = async (input, init) => {
   const url = typeof input === "string" ? input : input instanceof URL ? input.pathname : input.url;
   const path = url.replace(/^https?:\\/\\/[^/]+/, "").split("?")[0];
+  if (path === "/api/together" && init?.method === "POST") {
+    const { files } = JSON.parse(String(init.body));
+    const versions = {};
+    const saved = {};
+    for (const { name, data } of files) {
+      if (name === "cam") {
+        camData = data;
+        versions.cam = "v" + ++camVer;
+      } else if (name === "shots") {
+        shotsData = data;
+        versions.shots = "sv" + ++shotsVer;
+      } else {
+        return new Response(null, { status: 400 });
+      }
+      saved[name] = data;
+    }
+    return Response.json({ versions, files: saved });
+  }
   if (path === "/api/cam") {
     if (init?.method === "POST") {
       camPosts += 1;
@@ -150,7 +171,10 @@ globalThis.fetch = async (input, init) => {
     return new Response(JSON.stringify(savedNotes), { headers: { "Content-Type": "application/json" } });
   }
   if (path === "/api/keys") {
-    return new Response(JSON.stringify([{ file: "src/placed.json", edit: "placed", requiredRows: [] }]), {
+    return new Response(JSON.stringify([
+      { file: "src/placed.json", edit: "placed", requiredRows: [] },
+      { file: "src/props.json", edit: "props", requiredRows: [] },
+    ]), {
       headers: { "Content-Type": "application/json" },
     });
   }
@@ -162,6 +186,12 @@ globalThis.fetch = async (input, init) => {
       }),
       { headers: { "Content-Type": "application/json" } },
     );
+  }
+  if (path === "/api/keys/1") {
+    return Response.json({
+      version: "p1",
+      data: { Lantern: [{ t: 0, visible: true }] },
+    });
   }
   return origFetch(input, init);
 };
@@ -323,6 +353,7 @@ window.__UX_TEST__ = {
   setDraft,
   removeKey,
   loadStudioKeys,
+  keyFiles: () => keyFiles, keysOf, pickKeys,
   savedNotes: () => savedNotes,
   cancelNote,
   finalToggles: () => finalToggles,
@@ -362,13 +393,26 @@ window.__UX_TEST__ = {
     drawTimelines();
   },
   camKeys: () => camKeys,
+  setVoiceWarp: (warp) => { EDIT.voice.warp = warp; },
+  refreshProjection: (value) => { setTiming(value, 10); refreshTimedDocs(); },
   camPostCount: () => camPosts,
   shotsData: () => shotsDoc.data ?? shotsData,
+  shotTimes: () => SHOTS_OUT.map(s => s.t),
   setAutoSave,
   loadShots: async (next = [{ t: 0, name: "Intro" }]) => {
     await flushDocs();
     shotsData = next;
-    setFilmSource({ DURATION: 10, SHOTS: next, SHOTS_OUT: next, applyEdit() {} });
+    let scene = next, output = next;
+    setFilmSource({
+      DURATION: 10,
+      get SHOTS() { return scene; },
+      get SHOTS_OUT() { return output; },
+      applyEdit() {
+        scene = (EDIT.shots ?? next).map(s => ({ ...s, t: warp(EDIT.voice.warp, s.t, 0, 1) }));
+        setTiming(timing, 10, scene);
+        output = scene.map(s => ({ ...s, t: timingClock.outputAt(s.t, "before") }));
+      },
+    });
     shotsVer += 1;
     await loadShots();
   },
@@ -386,6 +430,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
+  splitShot, retime,
   freeDoc,
   readFocusUiState,
   freecam: {
@@ -457,6 +502,8 @@ beforeAll(async () => {
   mkdirSync(cache, { recursive: true });
   dir = mkdtempSync(join(cache, "studio-ui-ux-"));
   const src = join(dir, "src");
+  const timingFile = join(dir, "timing.json");
+  writeFileSync(timingFile, "{}");
   mkdirSync(src, { recursive: true });
   writeFileSync(
     join(src, "scene.ts"),
@@ -466,7 +513,10 @@ beforeAll(async () => {
   );
   writeFileSync(
     join(src, "edit.ts"),
-    "export const EDIT = { beats: {}, voice: { edits: [] } }; export const fromSource = (t) => t; export const toSource = (t) => t;",
+    `import { warp } from ${JSON.stringify(join(STUDIO, "src", "warp.mjs").replaceAll("\\", "/"))};
+     export const EDIT = { beats: {}, voice: { edits: [], warp: [] } };
+     export const fromSource = t => warp(EDIT.voice.warp, t, 0, 1);
+     export const toSource = t => warp(EDIT.voice.warp, t, 1, 0);`,
   );
   const entry = join(STUDIO, "app/__ux_fixture__.tsx").replaceAll("\\", "/");
   vite = await createServer({
@@ -520,7 +570,7 @@ beforeAll(async () => {
       },
       react(),
       tailwindcss(),
-      filmPlugin({ SRC: src, threeFrom: STUDIO }),
+      filmPlugin({ SRC: src, threeFrom: STUDIO, timing: { FILE: timingFile } }),
     ],
     server: { host: "127.0.0.1", port: 0, hmr: false, fs: { strict: false } },
   });
@@ -1196,6 +1246,197 @@ test("the inspector converts an existing hard cut to a regular keyframe and Undo
   await page.evaluate("window.__UX_TEST__.undo()");
   await waitUntil(convert);
   expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].cut")).toBe(true);
+});
+
+test("Split and Merge preserve the authored keys next to an existing camera cut", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 2.999, p: [2, 2, 6], l: [0, 1, 0] },
+      { t: 3, p: [10, 2, 6], l: [4, 1, 0], cut: true },
+      { t: 6, p: [15, 2, 6], l: [7, 1, 0] },
+    ], 2);
+  })()`);
+  const result = await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    const frames = () => u.camKeys().map(({t, p, l}) => [t, p, l]);
+    const before = JSON.stringify(frames());
+    u.splitShot();
+    const shots = u.shotTimes();
+    const selected = u.get().camKey;
+    const pickedCut = u.camKeys()[selected]?.cut ?? false;
+    const unchanged = before === JSON.stringify(frames());
+    if (shots.length === 2 && pickedCut) u.removeKey(selected);
+    const afterMerge = u.camKeys().map(k => k.t);
+    if (shots.length === 2 && pickedCut) {
+      u.undo();
+      u.undo();
+    }
+    return { shots, pickedCut, unchanged, afterMerge, undone: u.shotTimes() };
+  })()`);
+  expect(result).toEqual({
+    shots: [0, 3],
+    pickedCut: true,
+    unchanged: true,
+    afterMerge: [0, 2.999, 6],
+    undone: [0],
+  });
+});
+
+test("retiming a final camera cut keeps it reachable by the playhead", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 3.167, p: [10, 2, 6], l: [4, 1, 0], cut: true },
+    ], 1);
+    const t = u.retime(1, 100);
+    u.seekExact(t);
+    return [t, u.S.t];
+  })()`);
+  expect(result).toEqual([9.966, 9.966]);
+});
+
+test("cutting and pasting the final keyframe restores its optional prop track", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadStudioKeys();
+    const path = ["Lantern"];
+    u.pickKeys([{ f: 1, path, i: 0 }]);
+    u.cut();
+    const afterCut = u.keysOf(1, path).map(k => k.t);
+    u.S.t = 2;
+    u.paste();
+    const afterPaste = u.keysOf(1, path).map(k => k.t);
+    u.undo();
+    u.undo();
+    return { afterCut, afterPaste, restored: u.keysOf(1, path).map(k => k.t) };
+  })()`);
+  expect(result).toEqual({ afterCut: [], afterPaste: [2], restored: [0] });
+});
+
+test("cut keeps the required base keyframe of a placed object", async () => {
+  const times = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadStudioKeys();
+    const path = ["HeroCube", "keys"];
+    u.pickKeys([{ f: 0, path, i: 0 }]);
+    u.cut();
+    return u.keysOf(0, path).map(k => k.t);
+  })()`);
+  expect(times).toEqual([0]);
+});
+
+test("keyframe selection distinguishes both source keys at the same cut edge", async () => {
+  const picked = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const times = [0, 2, 6, 8];
+    await u.setCamData(times.map(t => ({ t, p: [t, 2, 6], l: [0, 1, 0] })), 2);
+    u.refreshProjection({ cuts: [{ from: 2, to: 6 }] });
+    try {
+      const pickedDuringCut = u.camKeys()[u.get().camKey]?.p[0];
+      u.setKey(u.camKeys().findIndex(k => k.p[0] === 6));
+      u.refreshProjection({});
+      return [pickedDuringCut ?? null, u.camKeys()[u.get().camKey]?.p[0] ?? null];
+    } finally {
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(picked).toEqual([6, 6]);
+});
+
+test("Split promotes a hard cut projected to fractional milliseconds by Speed with voice warp", async () => {
+  const shots = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 3.167, p: [10, 2, 6], l: [4, 1, 0], cut: true },
+    ], 1);
+    u.setVoiceWarp([[0, 0], [4, 8]]);
+    u.refreshProjection({ speeds: [{ from: 0, to: 10, rate: 2 }] });
+    try {
+      const at = u.camKeys().find(k => k.cut).t;
+      u.S.t = at;
+      u.splitShot();
+      const projectedShots = u.shotsData().map(s => s.t);
+      const shotEdge = u.shotTimes()[1];
+      if (projectedShots.length === 2) u.undo();
+      return [at, projectedShots, shotEdge];
+    } finally {
+      u.setVoiceWarp([]);
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(shots).toEqual([1.5835, [0, 1.5835], 1.5835]);
+});
+
+test("keyframe selection keeps the second authored key at a shared source time", async () => {
+  const picked = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const times = [0, 1, 1, 3];
+    await u.setCamData(times.map((t, i) => ({ t, p: [i * 3, 2, 6], l: [0, 1, 0] })), 2);
+    u.refreshProjection({ speeds: [{ from: 4, to: 10, rate: 2 }] });
+    try {
+      return u.camKeys()[u.get().camKey]?.p[0] ?? null;
+    } finally {
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(picked).toBe(6);
+});
+
+test("Split keeps a voice-warped shot edge on its existing camera frame", async () => {
+  const edge = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 0.4, p: [10, 2, 6], l: [4, 1, 0], cut: true },
+    ], 1);
+    u.setVoiceWarp([[0, 0], [3, 4]]);
+    try {
+      u.splitShot();
+      const edge = u.shotTimes()[1];
+      if (edge !== undefined) u.undo();
+      return edge ?? null;
+    } finally {
+      u.setVoiceWarp([]);
+    }
+  })()`);
+  expect(edge).toBeCloseTo(12 / 30, 7);
+  expect(edge).toBeLessThanOrEqual(12 / 30);
+});
+
+test("keyframe selections retain their source keys when a picture cut shifts visible indices", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadStudioKeys();
+    const path = ["HeroCube", "keys"];
+    const times = [0, 3, 6, 8];
+    const camera = times.map(t => ({ t, p: [t, 2, 6], l: [0, 1, 0] }));
+    const objects = u.keyFiles()[0].doc;
+    const saved = objects.sourceSnapshot();
+    await u.setCamData(camera, 1);
+    try {
+      objects.editSource(data => { data.HeroCube.keys = times.map(t => ({ t, at: [t, 1, 0] })); });
+      u.set({ camKey: null, camPicks: [1, 3], keyPicks: [1, 3].map(i => ({ f: 0, path, i })) });
+      u.refreshProjection({ cuts: [{ from: 0, to: 4 }] });
+      const state = u.get();
+      return {
+        focused: u.camKeys()[state.camKey]?.p[0] ?? null,
+        camera: state.camPicks.map(i => u.camKeys()[i].p[0]),
+        objects: state.keyPicks.map(({ i }) => u.keysOf(0, path)[i].at[0]),
+      };
+    } finally {
+      u.refreshProjection({});
+      objects.restoreSource(saved);
+    }
+  })()`);
+  expect(result).toEqual({ focused: 8, camera: [], objects: [8] });
 });
 
 test("cutting a mixed camera selection preserves the hard cut excluded from the clipboard", async () => {
