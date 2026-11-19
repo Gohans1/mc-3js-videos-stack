@@ -96,6 +96,8 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
   scene.add(key, key.target, fill, fill.target, rim, rim.target, hemisphere, ambient);
 
   const practicals = new Map<string, PracticalHandle>();
+  const initialBg = scene.background;
+  const initialFog = scene.fog;
   let ownedBg: THREE.Color | null = null;
   let disposed = false;
 
@@ -115,8 +117,8 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
         if (!ownedBg) ownedBg = new THREE.Color(bg);
         else ownedBg.set(bg);
         scene.background = ownedBg;
-      } else if (ownedBg && scene.background === ownedBg) {
-        scene.background = null;
+      } else if (ownedBg) {
+        if (scene.background === ownedBg) scene.background = initialBg;
         ownedBg = null;
       }
     },
@@ -136,7 +138,8 @@ export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions =
       hemisphere.dispose();
       ambient.dispose();
       scene.remove(key, key.target, fill, fill.target, rim, rim.target, hemisphere, ambient);
-      if (ownedBg && scene.background === ownedBg) scene.background = null;
+      if (ownedBg && scene.background === ownedBg) scene.background = initialBg;
+      scene.fog = initialFog;
       ownedBg = null;
     },
   };
@@ -164,7 +167,7 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
   // Key
   rig.key.visible = sample.key.enabled;
   rig.key.color.set(sample.key.color);
-  rig.key.intensity = sample.key.enabled ? sample.key.intensity : 0;
+  rig.key.intensity = sample.key.enabled ? Math.max(0, sample.key.intensity) : 0;
   rig.key.castShadow = sample.key.enabled && sample.key.castShadow;
   rig.key.shadow.radius = Math.max(0, sample.key.shadowRadius);
   placeDirectional(rig.key, target, sample.key.azimuth, sample.key.elevation, rig.distance);
@@ -174,39 +177,38 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
   const bounceScale = sample.fill.negativeFill ? 0.45 : 1;
   rig.fill.visible = sample.fill.enabled;
   rig.fill.color.set(sample.fill.color);
-  rig.fill.intensity = sample.fill.enabled ? sample.fill.intensity * negScale : 0;
+  rig.fill.intensity = sample.fill.enabled ? Math.max(0, sample.fill.intensity) * negScale : 0;
   placeDirectional(rig.fill, target, sample.fill.azimuth, sample.fill.elevation, rig.distance);
 
   // Rim
   rig.rim.visible = sample.rim.enabled;
   rig.rim.color.set(sample.rim.color);
-  rig.rim.intensity = sample.rim.enabled ? sample.rim.intensity : 0;
+  rig.rim.intensity = sample.rim.enabled ? Math.max(0, sample.rim.intensity) : 0;
   placeDirectional(rig.rim, target, sample.rim.azimuth, sample.rim.elevation, rig.distance);
 
   // World
+  const ambientLevel = Math.max(0, sample.world.ambientIntensity);
   rig.hemisphere.color.set(sample.world.skyColor);
   rig.hemisphere.groundColor.set(sample.world.groundColor);
-  rig.hemisphere.intensity = sample.world.ambientIntensity * 0.65 * bounceScale;
+  rig.hemisphere.intensity = ambientLevel * 0.65 * bounceScale;
   rig.ambient.color.set(sample.world.skyColor);
-  rig.ambient.intensity = sample.world.ambientIntensity * 0.35 * bounceScale;
+  rig.ambient.intensity = ambientLevel * 0.35 * bounceScale;
   (rig as LightingRig & { _syncBg?: (bg: string | null) => void })._syncBg?.(
     sample.world.background,
   );
 
   // Fog
+  const fogNear = Math.max(0, sample.fog.near);
+  const fogFar = Math.max(fogNear + 0.01, sample.fog.far);
   if (sample.fog.mode === "none") {
     scene.fog = null;
   } else if (sample.fog.mode === "linear") {
     if (scene.fog instanceof THREE.Fog) {
       scene.fog.color.set(sample.fog.color);
-      scene.fog.near = sample.fog.near;
-      scene.fog.far = Math.max(sample.fog.near + 0.01, sample.fog.far);
+      scene.fog.near = fogNear;
+      scene.fog.far = fogFar;
     } else {
-      scene.fog = new THREE.Fog(
-        sample.fog.color,
-        sample.fog.near,
-        Math.max(sample.fog.near + 0.01, sample.fog.far),
-      );
+      scene.fog = new THREE.Fog(sample.fog.color, fogNear, fogFar);
     }
   } else if (scene.fog instanceof THREE.FogExp2) {
     scene.fog.color.set(sample.fog.color);
@@ -228,13 +230,20 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
       removePractical(scene, practicals, p.id);
       handle = undefined;
     }
+    const pDistance = Math.max(0, p.distance);
+    const pDecay = Math.max(0, p.decay);
     if (!handle) {
       if (p.kind === "spot") {
-        const spot = new THREE.SpotLight(p.color, p.intensity, p.distance, degToRad(p.angle ?? 45));
+        const spot = new THREE.SpotLight(
+          p.color,
+          0,
+          pDistance,
+          degToRad(clamp(p.angle ?? 45, 1, 89)),
+        );
         scene.add(spot, spot.target);
         handle = { kind: "spot", light: spot, target: spot.target };
       } else {
-        const point = new THREE.PointLight(p.color, p.intensity, p.distance, p.decay);
+        const point = new THREE.PointLight(p.color, 0, pDistance, pDecay);
         scene.add(point);
         handle = { kind: "point", light: point };
       }
@@ -243,9 +252,9 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
 
     handle.light.color.set(p.color);
     handle.light.position.set(p.at[0], p.at[1], p.at[2]);
-    handle.light.intensity = practicalIntensityAt(p, t, i);
-    handle.light.distance = p.distance;
-    handle.light.decay = p.decay;
+    handle.light.intensity = Math.max(0, practicalIntensityAt(p, t, i));
+    handle.light.distance = pDistance;
+    handle.light.decay = pDecay;
 
     if (handle.kind === "spot") {
       const spot = handle.light as THREE.SpotLight;
@@ -285,23 +294,30 @@ function toGodraysParams(
   gammaCorrection: boolean,
   resolutionScale: number,
   upsampleQuality: GodraysUpsampleQuality,
-): Partial<GodraysPassParams> {
+): { params: Partial<GodraysPassParams>; key: string; kernel: KernelSize | false } {
   const weight = Math.max(0, state.weight);
+  const density = Math.max(0, state.density * weight);
+  const maxDensity = clamp(state.maxDensity * weight, 0, 1);
+  const distanceAttenuation = Math.max(0, state.edgeStrength);
+  const raymarchSteps = clamp(Math.round(state.raymarchSteps), 4, 240);
+  const colorHex = state.color ?? fallbackColor;
+  const kernel = state.blur ? blurKernelFromRadius(state.edgeRadius) : false;
+  const variance = kernel !== false ? clamp(state.edgeRadius * 0.05, 0.02, 0.5) : 0;
+  const key = `${density}|${maxDensity}|${distanceAttenuation}|${raymarchSteps}|${colorHex}|${kernel}|${variance}`;
   return {
-    density: Math.max(0, state.density * weight),
-    maxDensity: clamp(state.maxDensity * weight, 0, 1),
-    distanceAttenuation: Math.max(0, state.edgeStrength),
-    raymarchSteps: clamp(Math.round(state.raymarchSteps), 4, 240),
-    color: new THREE.Color(state.color ?? fallbackColor),
-    blur: state.blur
-      ? {
-          kernelSize: blurKernelFromRadius(state.edgeRadius),
-          variance: clamp(state.edgeRadius * 5, 1, 30),
-        }
-      : false,
-    gammaCorrection,
-    resolutionScale,
-    upsampleQuality,
+    key,
+    kernel,
+    params: {
+      density,
+      maxDensity,
+      distanceAttenuation,
+      raymarchSteps,
+      color: new THREE.Color(colorHex),
+      blur: kernel !== false ? { kernelSize: kernel, variance } : false,
+      gammaCorrection,
+      resolutionScale,
+      upsampleQuality,
+    },
   };
 }
 
@@ -325,38 +341,61 @@ export function createGodraysPass(
     return { supported: false, pass: null, update() {}, dispose() {} };
   }
 
+  const typedLight = light as THREE.DirectionalLight | THREE.PointLight;
   const gammaCorrection = opts.gammaCorrection ?? false;
   const resolutionScale = opts.resolutionScale ?? 0.5;
   const upsampleQuality = opts.upsampleQuality ?? GodraysUpsampleQuality.LOW;
 
   let pass: GodraysPass | null = null;
   try {
-    pass = new GodraysPass(
-      light as THREE.DirectionalLight | THREE.PointLight,
-      camera as THREE.PerspectiveCamera,
-      {
-        gammaCorrection,
-        resolutionScale,
-        upsampleQuality,
-        raymarchSteps: 60,
-      },
-    );
+    pass = new GodraysPass(typedLight, camera as THREE.PerspectiveCamera, {
+      gammaCorrection,
+      resolutionScale,
+      upsampleQuality,
+      raymarchSteps: 60,
+    });
     if (opts.enabled === false) pass.enabled = false;
   } catch {
     return { supported: false, pass: null, update() {}, dispose() {} };
   }
+
+  let lastKey = "";
+  let lastKernel: KernelSize | false | undefined = undefined;
 
   return {
     supported: true,
     pass,
     update(state: GodraysState, fallbackColor = "#ffffff") {
       if (!pass) return;
-      pass.enabled = state.enabled;
-      if (!state.enabled) return;
+      const active = Boolean(
+        state.enabled &&
+        typedLight.visible &&
+        typedLight.castShadow &&
+        state.weight > 0 &&
+        state.density > 0,
+      );
+      pass.enabled = active;
+      if (!active) return;
+      const { key, kernel, params } = toGodraysParams(
+        state,
+        fallbackColor,
+        gammaCorrection,
+        resolutionScale,
+        upsampleQuality,
+      );
+      if (key === lastKey) return;
       try {
-        pass.setParams(
-          toGodraysParams(state, fallbackColor, gammaCorrection, resolutionScale, upsampleQuality),
-        );
+        // three-good-godrays@0.12.2 disposes blurPass on setParams without clearing the field.
+        if (lastKernel !== kernel) {
+          const internal = pass as unknown as {
+            blurPass?: { dispose?: () => void } | null;
+          };
+          internal.blurPass?.dispose?.();
+          internal.blurPass = null;
+        }
+        pass.setParams(params);
+        lastKey = key;
+        lastKernel = kernel;
       } catch {
         pass.enabled = false;
       }
@@ -367,6 +406,8 @@ export function createGodraysPass(
         pass.dispose();
       } finally {
         pass = null;
+        lastKey = "";
+        lastKernel = undefined;
       }
     },
   };

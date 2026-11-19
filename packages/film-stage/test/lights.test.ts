@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import * as THREE from "three";
 
@@ -15,7 +17,6 @@ import {
   type LightsDoc,
   practicalIntensityAt,
 } from "../src/lights";
-import * as lightsMeta from "../src/lights-meta";
 
 function hexToRgb(hex: string): [number, number, number] {
   const clean = hex.replace("#", "");
@@ -77,9 +78,15 @@ describe("kelvinToHex & LIGHT_PRESETS", () => {
     expect(LIGHT_PRESETS["studio-three-point"].state.godrays.enabled).toBe(false);
   });
 
-  test("lights-meta exports pure runtime without importing Three.js", () => {
-    expect(lightsMeta.kelvinToHex(5600)).toBe(kelvinToHex(5600));
-    expect(lightsMeta.DEFAULT_LIGHTS).toEqual(DEFAULT_LIGHTS);
+  test("lights-meta and camera-meta import zero Three.js or postprocessing modules", () => {
+    const transpiler = new Bun.Transpiler({ loader: "ts" });
+    for (const rel of ["../src/lights-meta.ts", "../src/camera-meta.ts"]) {
+      const code = readFileSync(join(import.meta.dir, rel), "utf8");
+      const specs = transpiler.scanImports(code).map((imp) => imp.path);
+      for (const forbidden of ["three", "three-good-godrays", "postprocessing"]) {
+        expect(specs.some((p) => p === forbidden || p.startsWith(`${forbidden}/`))).toBe(false);
+      }
+    }
   });
 });
 
@@ -403,11 +410,159 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(rig.practicals.size).toBe(0);
   });
 
-  test("createGodraysPass handles unsupported lights and WebGL-less environments without throwing", () => {
+  test("lightsAt handles coincident cut at t=0 and clamps overshoot eases cleanly", () => {
+    const coincident: LightKey[] = [
+      { t: 0, key: { intensity: 1 } },
+      { t: 0, cut: true, key: { intensity: 5 } },
+      { t: 4, key: { intensity: 2 } },
+    ];
+    expect(lightsAt(coincident, 0).key.intensity).toBe(5);
+    expect(lightsAt(coincident.slice(0, 2), 0).key.intensity).toBe(5);
+
+    // Overshoot bezier dips below 0 and exceeds 1 around endpoints
+    const overshootKeys: LightKey[] = [
+      {
+        t: 0,
+        key: { intensity: 0, elevation: -85, shadowRadius: 0 },
+        fill: { intensity: 0 },
+        rim: { intensity: 0 },
+        world: { ambientIntensity: 0 },
+        fog: { mode: "exp2", near: 0, far: 1, density: 0, color: "#000000" },
+        practicals: [
+          {
+            id: "lamp",
+            name: "Lamp",
+            kind: "point",
+            at: [0, 0, 0],
+            color: "#000000",
+            intensity: 0,
+            distance: 0,
+            decay: 0,
+          },
+          {
+            id: "spot",
+            name: "Spot",
+            kind: "spot",
+            at: [1, 1, 1],
+            color: "#000000",
+            intensity: 0,
+            distance: 0,
+            decay: 0,
+            angle: 10,
+            penumbra: 0,
+          },
+        ],
+        godrays: {
+          enabled: true,
+          density: 0,
+          maxDensity: 0,
+          edgeStrength: 0,
+          edgeRadius: 0,
+          raymarchSteps: 4,
+          blur: true,
+          weight: 0,
+        },
+      },
+      {
+        t: 2,
+        ease: [0.6, -1.2, 0.4, 2.2],
+        key: { intensity: 4, elevation: 88, shadowRadius: 20 },
+        fill: { intensity: 3 },
+        rim: { intensity: 3 },
+        world: { ambientIntensity: 2 },
+        fog: { mode: "exp2", near: 5, far: 20, density: 1.5, color: "#ffffff" },
+        practicals: [
+          {
+            id: "lamp",
+            name: "Lamp",
+            kind: "point",
+            at: [2, 2, 2],
+            color: "#ffffff",
+            intensity: 10,
+            distance: 20,
+            decay: 5,
+          },
+        ],
+        godrays: {
+          enabled: true,
+          density: 0.5,
+          maxDensity: 1,
+          edgeStrength: 10,
+          edgeRadius: 15,
+          raymarchSteps: 120,
+          blur: true,
+          weight: 3,
+        },
+      },
+    ];
+
+    for (let s = 0.05; s < 2; s += 0.1) {
+      const val = lightsAt(overshootKeys, s);
+      expect(val.key.intensity).toBeGreaterThanOrEqual(0);
+      expect(val.key.elevation).toBeGreaterThanOrEqual(-90);
+      expect(val.key.elevation).toBeLessThanOrEqual(90);
+      expect(val.key.shadowRadius).toBeGreaterThanOrEqual(0);
+      expect(val.fill.intensity).toBeGreaterThanOrEqual(0);
+      expect(val.rim.intensity).toBeGreaterThanOrEqual(0);
+      expect(val.world.ambientIntensity).toBeGreaterThanOrEqual(0);
+      expect(val.fog.near).toBeGreaterThanOrEqual(0);
+      expect(val.fog.far).toBeGreaterThanOrEqual(0);
+      expect(val.fog.density).toBeGreaterThanOrEqual(0);
+      expect(val.fog.density).toBeLessThanOrEqual(2);
+      expect(val.godrays.density).toBeGreaterThanOrEqual(0);
+      expect(val.godrays.maxDensity).toBeLessThanOrEqual(1);
+      expect(val.godrays.maxDensity).toBeGreaterThanOrEqual(0);
+      expect(val.godrays.raymarchSteps).toBeGreaterThanOrEqual(4);
+      expect(val.godrays.weight).toBeGreaterThanOrEqual(0);
+      for (const p of val.practicals) {
+        expect(p.intensity).toBeGreaterThanOrEqual(0);
+        expect(p.distance).toBeGreaterThanOrEqual(0);
+        expect(p.decay).toBeGreaterThanOrEqual(0);
+        if (p.angle !== undefined) expect(p.angle).toBeGreaterThanOrEqual(1);
+        if (p.penumbra !== undefined) expect(p.penumbra).toBeGreaterThanOrEqual(0);
+      }
+    }
+  });
+
+  test("createLightingRig captures and restores pre-existing scene background and fog", () => {
+    const scene = new THREE.Scene();
+    const initialBg = new THREE.Color("#123456");
+    const initialFog = new THREE.Fog("#654321", 2, 12);
+    scene.background = initialBg;
+    scene.fog = initialFog;
+
+    const rig = createLightingRig(scene);
+    applyLightingRig(
+      rig,
+      lightsAt(
+        [
+          {
+            t: 0,
+            world: { background: "#111111" },
+            fog: { mode: "none", color: "#000", near: 1, far: 5, density: 0 },
+          },
+        ],
+        0,
+      ),
+      0,
+    );
+    expect((scene.background as THREE.Color).getHexString()).toBe("111111");
+    expect(scene.fog).toBeNull();
+
+    // Clearing world.background restores initial background cleanly
+    applyLightingRig(rig, lightsAt([{ t: 0, world: { background: null } }], 0), 0);
+    expect(scene.background).toBe(initialBg);
+
+    applyLightingRig(rig, lightsAt([{ t: 0, world: { background: "#222222" } }], 0), 0);
+    rig.dispose();
+    expect(scene.background).toBe(initialBg);
+    expect(scene.fog).toBe(initialFog);
+  });
+
+  test("createGodraysPass handles unsupported lights, gates castShadow/visible, calibrates variance, and resets blurPass on kernel change", () => {
     const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100);
     const spot = new THREE.SpotLight(0xffffff, 2);
     const dirNoShadow = new THREE.DirectionalLight(0xffffff, 2);
-    // Clear shadow cleanly to simulate missing shadow support
     (dirNoShadow as { shadow?: unknown }).shadow = undefined;
 
     const fromSpot = createGodraysPass(spot as unknown as THREE.DirectionalLight, cam);
@@ -420,25 +575,80 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(fromNoShadow.supported).toBe(false);
     expect(fromNoShadow.pass).toBeNull();
 
-    // Real DirectionalLight in Node/Bun (without WebGL context if shader compile fails or creates pass)
     const dir = new THREE.DirectionalLight(0xffffff, 2);
+    dir.castShadow = true;
     const wrapper = createGodraysPass(dir, cam, { enabled: false });
-    expect(() =>
-      wrapper.update(
-        {
-          enabled: true,
-          density: 0.02,
-          maxDensity: 0.5,
-          edgeStrength: 2,
-          edgeRadius: 2,
-          raymarchSteps: 40,
-          blur: true,
-          weight: 0.8,
-          color: "#ffddaa",
-        },
-        "#ffffff",
-      ),
-    ).not.toThrow();
+    expect(wrapper.supported).toBe(true);
+    expect(wrapper.pass).not.toBeNull();
+
+    const passAny = wrapper.pass as unknown as {
+      blurPass: { dispose?: () => void } | null;
+      setParams: (params: { blur?: { variance: number; kernelSize: number } | false }) => void;
+    };
+    const captured: Array<{ blur?: { variance: number; kernelSize: number } | false }> = [];
+    const origSetParams = passAny.setParams.bind(passAny);
+    passAny.setParams = (params) => {
+      captured.push(params);
+      return origSetParams(params);
+    };
+
+    const rayState = {
+      enabled: true,
+      density: 0.02,
+      maxDensity: 0.5,
+      edgeStrength: 2,
+      edgeRadius: 2,
+      raymarchSteps: 40,
+      blur: true,
+      weight: 0.8,
+      color: "#ffddaa",
+    };
+
+    wrapper.update(rayState, "#ffffff");
+    expect(wrapper.pass?.enabled).toBe(true);
+    expect(captured).toHaveLength(1);
+    const firstBlur = captured[0].blur;
+    expect(firstBlur && typeof firstBlur === "object").toBe(true);
+    if (firstBlur && typeof firstBlur === "object") {
+      expect(firstBlur.variance).toBeGreaterThan(0);
+      expect(firstBlur.variance).toBeLessThanOrEqual(0.5);
+    }
+
+    // Kernel change clears previous blurPass cleanly before setParams instead of keeping disposed pass
+    const firstKernel = firstBlur && typeof firstBlur === "object" ? firstBlur.kernelSize : -1;
+    let disposedCount = 0;
+    const oldBlur = {
+      dispose: () => {
+        disposedCount++;
+      },
+    };
+    passAny.blurPass = oldBlur;
+    wrapper.update({ ...rayState, edgeRadius: 6 }, "#ffffff");
+    expect(captured).toHaveLength(2);
+    const secondBlur = captured[1].blur;
+    const nextKernel = secondBlur && typeof secondBlur === "object" ? secondBlur.kernelSize : -1;
+    expect(nextKernel).not.toBe(firstKernel);
+    expect(disposedCount).toBe(1);
+    expect(passAny.blurPass).not.toBe(oldBlur);
+
+    // Repeating identical params does not re-invoke setParams
+    wrapper.update({ ...rayState, edgeRadius: 6 }, "#ffffff");
+    expect(captured).toHaveLength(2);
+
+    // Gated off cleanly when castShadow=false or visible=false or density/weight <= 0
+    dir.castShadow = false;
+    wrapper.update(rayState, "#ffffff");
+    expect(wrapper.pass?.enabled).toBe(false);
+
+    dir.castShadow = true;
+    dir.visible = false;
+    wrapper.update(rayState, "#ffffff");
+    expect(wrapper.pass?.enabled).toBe(false);
+
+    dir.visible = true;
+    wrapper.update({ ...rayState, weight: 0 }, "#ffffff");
+    expect(wrapper.pass?.enabled).toBe(false);
+
     expect(() => wrapper.dispose()).not.toThrow();
   });
 });

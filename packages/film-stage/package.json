@@ -57,7 +57,8 @@
     "film-kit": "workspace:*",
     "gl-transitions": "3.1.0",
     "html-to-image": "1.11.13",
-    "postprocessing": "catalog:"
+    "postprocessing": "catalog:",
+    "three-good-godrays": "catalog:"
   },
   "devDependencies": {
     "@types/three": "catalog:"

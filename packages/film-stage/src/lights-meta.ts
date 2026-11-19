@@ -191,16 +191,15 @@ function mixHexLinear(a: string, b: string, u: number): string {
   if (a === b) return normalizeHex(a, a);
   const [ar, ag, ab] = parseHexLinear(a);
   const [br, bg, bb] = parseHexLinear(b);
-  const r = linearToSrgb(lerp(ar, br, u)) * 255;
-  const g = linearToSrgb(lerp(ag, bg, u)) * 255;
-  const bl = linearToSrgb(lerp(ab, bb, u)) * 255;
+  const r = linearToSrgb(clamp(lerp(ar, br, u), 0, 1)) * 255;
+  const g = linearToSrgb(clamp(lerp(ag, bg, u), 0, 1)) * 255;
+  const bl = linearToSrgb(clamp(lerp(ab, bb, u), 0, 1)) * 255;
   return `#${byteHex(r)}${byteHex(g)}${byteHex(bl)}`;
 }
 
 function mixAngleDeg(a: number, b: number, u: number): number {
   const diff = ((((b - a) % 360) + 540) % 360) - 180;
-  const raw = a + diff * u;
-  return raw >= 360 ? raw - 360 : raw < -180 ? raw + 360 : raw;
+  return ((((a + diff * u + 180) % 360) + 360) % 360) - 180;
 }
 
 export const DEFAULT_LIGHTS: LightsState = {
@@ -524,6 +523,15 @@ export const LIGHT_PRESETS: Record<LightPresetId, LightPreset> = {
 
 export const LIGHT_PRESET_IDS = Object.keys(LIGHT_PRESETS) as LightPresetId[];
 
+function clonePractical(p: PracticalState): PracticalState {
+  return {
+    ...p,
+    at: [...p.at] as Vec3,
+    ...(p.target ? { target: [...p.target] as Vec3 } : {}),
+    ...(typeof p.flicker === "object" && p.flicker !== null ? { flicker: { ...p.flicker } } : {}),
+  };
+}
+
 export function cloneLightsState(s: LightsState): LightsState {
   return {
     ...(s.target ? { target: [...s.target] as Vec3 } : {}),
@@ -532,12 +540,7 @@ export function cloneLightsState(s: LightsState): LightsState {
     rim: { ...s.rim },
     world: { ...s.world },
     fog: { ...s.fog },
-    practicals: s.practicals.map((p) => ({
-      ...p,
-      at: [...p.at] as Vec3,
-      ...(p.target ? { target: [...p.target] as Vec3 } : {}),
-      ...(typeof p.flicker === "object" && p.flicker !== null ? { flicker: { ...p.flicker } } : {}),
-    })),
+    practicals: s.practicals.map(clonePractical),
     godrays: { ...s.godrays },
   };
 }
@@ -551,20 +554,7 @@ function mergeStates(base: LightsState, patch: LightKey, docTarget?: Vec3): Ligh
     rim: { ...base.rim, ...patch.rim },
     world: { ...base.world, ...patch.world },
     fog: { ...base.fog, ...patch.fog },
-    practicals: patch.practicals
-      ? patch.practicals.map((p) => ({
-          ...p,
-          at: [...p.at] as Vec3,
-          ...(p.target ? { target: [...p.target] as Vec3 } : {}),
-          ...(typeof p.flicker === "object" && p.flicker !== null
-            ? { flicker: { ...p.flicker } }
-            : {}),
-        }))
-      : base.practicals.map((p) => ({
-          ...p,
-          at: [...p.at] as Vec3,
-          ...(p.target ? { target: [...p.target] as Vec3 } : {}),
-        })),
+    practicals: (patch.practicals ?? base.practicals).map(clonePractical),
     godrays: { ...base.godrays, ...patch.godrays },
   };
 }
@@ -585,12 +575,39 @@ export interface ResolvedLightKey {
   state: LightsState;
 }
 
+const resolvedCache = new WeakMap<
+  object,
+  {
+    keysRef: LightKey[];
+    target: Vec3 | undefined;
+    len: number;
+    first: LightKey | undefined;
+    last: LightKey | undefined;
+    resolved: ResolvedLightKey[];
+  }
+>();
+
 /** Resolve carried-forward state at every sorted keyframe, resetting cleanly on `cut: true` or presets. */
 export function resolveLightKeys(
   input: LightsDoc | LightKey[] | null | undefined,
 ): ResolvedLightKey[] {
   const doc = normalizeLightsDoc(input);
   if (doc.keys.length === 0) return [];
+  if (input && typeof input === "object") {
+    const rawKeys = Array.isArray(input) ? input : input.keys;
+    const rawTarget = Array.isArray(input) ? undefined : input.target;
+    const cached = resolvedCache.get(input);
+    if (
+      cached &&
+      cached.keysRef === rawKeys &&
+      cached.target === rawTarget &&
+      cached.len === rawKeys.length &&
+      cached.first === rawKeys[0] &&
+      cached.last === rawKeys[rawKeys.length - 1]
+    ) {
+      return cached.resolved;
+    }
+  }
   const sorted = [...doc.keys].sort((a, b) => a.t - b.t);
   const out: ResolvedLightKey[] = [];
 
@@ -613,6 +630,20 @@ export function resolveLightKeys(
       state: mergeStates(base, key, doc.target),
     });
   }
+  if (input && typeof input === "object") {
+    const rawKeys = Array.isArray(input) ? input : input.keys;
+    const rawTarget = Array.isArray(input) ? undefined : input.target;
+    if (Array.isArray(rawKeys)) {
+      resolvedCache.set(input, {
+        keysRef: rawKeys,
+        target: rawTarget,
+        len: rawKeys.length,
+        first: rawKeys[0],
+        last: rawKeys[rawKeys.length - 1],
+        resolved: out,
+      });
+    }
+  }
   return out;
 }
 
@@ -621,8 +652,18 @@ function interpolatePractical(
   b: PracticalState | undefined,
   u: number,
 ): PracticalState {
-  if (a && !b) return { ...a, at: [...a.at], intensity: a.intensity * (1 - u) };
-  if (!a && b) return { ...b, at: [...b.at], intensity: b.intensity * u };
+  if (a && !b) {
+    return {
+      ...clonePractical(a),
+      intensity: Math.max(0, a.intensity * clamp(1 - u, 0, 1)),
+    };
+  }
+  if (!a && b) {
+    return {
+      ...clonePractical(b),
+      intensity: Math.max(0, b.intensity * clamp(u, 0, 1)),
+    };
+  }
   const pa = a!,
     pb = b!;
   const chosen = u < 0.5 ? pa : pb;
@@ -635,16 +676,23 @@ function interpolatePractical(
     at: mixVec3(pa.at, pb.at, u),
     ...(pa.target || pb.target ? { target: mixVec3(targetA, targetB, u) } : {}),
     color: mixHexLinear(pa.color, pb.color, u),
-    intensity: lerp(pa.intensity, pb.intensity, u),
-    distance: lerp(pa.distance, pb.distance, u),
-    decay: lerp(pa.decay, pb.decay, u),
+    intensity: Math.max(0, lerp(pa.intensity, pb.intensity, u)),
+    distance: Math.max(0, lerp(pa.distance, pb.distance, u)),
+    decay: clamp(lerp(pa.decay, pb.decay, u), 0, 10),
     ...(pa.angle !== undefined || pb.angle !== undefined
-      ? { angle: lerp(pa.angle ?? 45, pb.angle ?? 45, u) }
+      ? { angle: clamp(lerp(pa.angle ?? 45, pb.angle ?? 45, u), 1, 89) }
       : {}),
     ...(pa.penumbra !== undefined || pb.penumbra !== undefined
-      ? { penumbra: lerp(pa.penumbra ?? 0.3, pb.penumbra ?? 0.3, u) }
+      ? { penumbra: clamp(lerp(pa.penumbra ?? 0.3, pb.penumbra ?? 0.3, u), 0, 1) }
       : {}),
-    ...(chosen.flicker !== undefined ? { flicker: chosen.flicker } : {}),
+    ...(chosen.flicker !== undefined
+      ? {
+          flicker:
+            typeof chosen.flicker === "object" && chosen.flicker !== null
+              ? { ...chosen.flicker }
+              : chosen.flicker,
+        }
+      : {}),
   };
 }
 
@@ -681,50 +729,54 @@ function interpolateLights(a: LightsState, b: LightsState, u: number): LightsSta
     key: {
       enabled: half ? b.key.enabled : a.key.enabled,
       color: mixHexLinear(a.key.color, b.key.color, u),
-      intensity: lerp(a.key.intensity, b.key.intensity, u),
+      intensity: Math.max(0, lerp(a.key.intensity, b.key.intensity, u)),
       azimuth: mixAngleDeg(a.key.azimuth, b.key.azimuth, u),
-      elevation: lerp(a.key.elevation, b.key.elevation, u),
-      shadowRadius: lerp(a.key.shadowRadius, b.key.shadowRadius, u),
+      elevation: clamp(lerp(a.key.elevation, b.key.elevation, u), -90, 90),
+      shadowRadius: clamp(lerp(a.key.shadowRadius, b.key.shadowRadius, u), 0, 32),
       castShadow: half ? b.key.castShadow : a.key.castShadow,
     },
     fill: {
       enabled: half ? b.fill.enabled : a.fill.enabled,
       color: mixHexLinear(a.fill.color, b.fill.color, u),
-      intensity: lerp(a.fill.intensity, b.fill.intensity, u),
+      intensity: Math.max(0, lerp(a.fill.intensity, b.fill.intensity, u)),
       azimuth: mixAngleDeg(a.fill.azimuth, b.fill.azimuth, u),
-      elevation: lerp(a.fill.elevation, b.fill.elevation, u),
+      elevation: clamp(lerp(a.fill.elevation, b.fill.elevation, u), -90, 90),
       negativeFill: half ? b.fill.negativeFill : a.fill.negativeFill,
     },
     rim: {
       enabled: half ? b.rim.enabled : a.rim.enabled,
       color: mixHexLinear(a.rim.color, b.rim.color, u),
-      intensity: lerp(a.rim.intensity, b.rim.intensity, u),
+      intensity: Math.max(0, lerp(a.rim.intensity, b.rim.intensity, u)),
       azimuth: mixAngleDeg(a.rim.azimuth, b.rim.azimuth, u),
-      elevation: lerp(a.rim.elevation, b.rim.elevation, u),
+      elevation: clamp(lerp(a.rim.elevation, b.rim.elevation, u), -90, 90),
     },
     world: {
       skyColor: mixHexLinear(a.world.skyColor, b.world.skyColor, u),
       groundColor: mixHexLinear(a.world.groundColor, b.world.groundColor, u),
-      ambientIntensity: lerp(a.world.ambientIntensity, b.world.ambientIntensity, u),
+      ambientIntensity: clamp(lerp(a.world.ambientIntensity, b.world.ambientIntensity, u), 0, 10),
       background,
     },
     fog: {
       mode: half ? b.fog.mode : a.fog.mode,
       color: mixHexLinear(a.fog.color, b.fog.color, u),
-      near: lerp(a.fog.near, b.fog.near, u),
-      far: lerp(a.fog.far, b.fog.far, u),
-      density: lerp(a.fog.density, b.fog.density, u),
+      near: Math.max(0, lerp(a.fog.near, b.fog.near, u)),
+      far: Math.max(0, lerp(a.fog.far, b.fog.far, u)),
+      density: clamp(lerp(a.fog.density, b.fog.density, u), 0, 2),
     },
     practicals,
     godrays: {
       enabled: half ? b.godrays.enabled : a.godrays.enabled,
-      density: lerp(a.godrays.density, b.godrays.density, u),
-      maxDensity: lerp(a.godrays.maxDensity, b.godrays.maxDensity, u),
-      edgeStrength: lerp(a.godrays.edgeStrength, b.godrays.edgeStrength, u),
-      edgeRadius: lerp(a.godrays.edgeRadius, b.godrays.edgeRadius, u),
-      raymarchSteps: Math.round(lerp(a.godrays.raymarchSteps, b.godrays.raymarchSteps, u)),
+      density: clamp(lerp(a.godrays.density, b.godrays.density, u), 0, 1),
+      maxDensity: clamp(lerp(a.godrays.maxDensity, b.godrays.maxDensity, u), 0, 1),
+      edgeStrength: clamp(lerp(a.godrays.edgeStrength, b.godrays.edgeStrength, u), 0, 20),
+      edgeRadius: clamp(lerp(a.godrays.edgeRadius, b.godrays.edgeRadius, u), 0, 20),
+      raymarchSteps: clamp(
+        Math.round(lerp(a.godrays.raymarchSteps, b.godrays.raymarchSteps, u)),
+        4,
+        240,
+      ),
       blur: half ? b.godrays.blur : a.godrays.blur,
-      weight: lerp(a.godrays.weight, b.godrays.weight, u),
+      weight: clamp(lerp(a.godrays.weight, b.godrays.weight, u), 0, 5),
       ...(raysColor ? { color: raysColor } : {}),
     },
   };
@@ -734,7 +786,7 @@ function interpolateLights(a: LightsState, b: LightsState, u: number): LightsSta
 export function lightsAt(input: LightsDoc | LightKey[] | null | undefined, t: number): LightsState {
   const resolved = resolveLightKeys(input);
   if (resolved.length === 0) return cloneLightsState(DEFAULT_LIGHTS);
-  if (t <= resolved[0].t) return cloneLightsState(resolved[0].state);
+  if (t < resolved[0].t) return cloneLightsState(resolved[0].state);
   const last = resolved[resolved.length - 1];
   if (t >= last.t) return cloneLightsState(last.state);
 
