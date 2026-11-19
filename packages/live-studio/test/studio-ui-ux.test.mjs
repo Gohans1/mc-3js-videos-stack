@@ -13,6 +13,7 @@ const STUDIO = resolve(import.meta.dir, "..");
 const ENTRY = `
 import { useRef } from "react";
 import { EDIT } from "film/edit";
+import { cameraAt } from "film-stage/camera";
 import { createRoot } from "react-dom/client";
 import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera, Scene, Vector3 } from "three";
 import "/index.css";
@@ -24,7 +25,7 @@ import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
 import { refreshTimedDocs } from "/core/timed-doc.ts";
-import { keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, splitShot } from "/camera/cam.ts";
+import { addKeyHere, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, splitShot } from "/camera/cam.ts";
 import { camLine } from "/camera/camline.ts";
 import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
@@ -75,7 +76,7 @@ import { TimelinePanel } from "/timeline/TimelinePanel.tsx";
 import { SpeedCurve } from "/timeline/SpeedCurve.tsx";
 import { copy, cut, paste } from "/timeline/clipboard.ts";
 import { attachTimeline, drawTimelineActivity, drawTimelines, marks } from "/timeline/timeline.ts";
-import { setTiming, timing, timingClock } from "../src/timing-state.mjs";
+import { cameraTimesAt, setTiming, timing, timingClock } from "../src/timing-state.mjs";
 import { warp } from "../src/warp.mjs";
 
 const INITIAL_CAM = () => [
@@ -434,7 +435,8 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt,
+  sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
   freecam: {
@@ -1311,6 +1313,113 @@ test("the inspector converts an existing hard cut to a regular keyframe and Undo
   await page.evaluate("window.__UX_TEST__.undo()");
   await waitUntil(convert);
   expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].cut")).toBe(true);
+});
+
+for (const operation of ["addKeyHere", "splitShot"]) {
+  test(`neutral camera ${operation} preserves easing on both sides of the playhead`, async () => {
+    const result = await page.evaluate(`(async () => {
+      const u = window.__UX_TEST__;
+      await u.loadShots(${operation === "splitShot" ? '[{ t: 0, name: "Intro", camera: { lead: 0.4 } }]' : "undefined"});
+      const source = [
+        { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 30, roll: 0 },
+        { t: 2, p: [10, 2, 6], l: [4, 1, 0], fov: 60, roll: 1, ${operation === "addKeyHere" ? 'motion: "linear",' : ""} },
+      ];
+      await u.setCamData(source, 0);
+      u.seekExact(1);
+      const tools = u.S.tools;
+      const prior = tools.cameraSample;
+      tools.cameraSample = () => u.cameraAt(u.S.t, u.camKeys()).sample;
+      const timeline = [0.25, 0.5, 0.99, 1, 1.01, 1.5, 1.75];
+      const samples = () => timeline.map(t => {
+        const base = u.cameraAt(t, u.camKeys()).base;
+        return [base.p.x, base.l.x, base.fov, base.roll];
+      });
+      try {
+        const before = samples();
+        u.${operation}();
+        const after = samples();
+        const advised = u.get().status.includes("Check the camera motion");
+        const keys = u.camKeys().map(k => k.t);
+        const shots = u.shotTimes();
+        let merged;
+        if (${JSON.stringify(operation)} === "splitShot") {
+          u.removeKey(u.get().camKey);
+          merged = { samples: samples(), keys: u.camKeys().map(k => k.t), shots: u.shotTimes() };
+          u.undo();
+        }
+        u.undo();
+        return { before, after, keys, shots, merged, advised, undone: samples() };
+      } finally {
+        tools.cameraSample = prior;
+      }
+    })()`);
+    expect(result.keys).toEqual(operation === "splitShot" ? [0, 1, 1, 2] : [0, 1, 2]);
+    expect(result.shots).toEqual(operation === "splitShot" ? [0, 1] : [0]);
+    for (const [i, expected] of result.before.entries()) {
+      for (const [j, value] of expected.entries()) {
+        expect(result.after[i][j]).toBeCloseTo(value, 3);
+        if (result.merged) expect(result.merged.samples[i][j]).toBeCloseTo(value, 3);
+      }
+    }
+    if (operation === "splitShot") {
+      expect(result.merged.keys).toEqual([0, 1, 2]);
+      expect(result.merged.shots).toEqual([0]);
+    }
+    expect(result.undone).toEqual(result.before);
+    expect(result.advised).toBe(operation === "splitShot");
+  });
+}
+
+test("camera Add warns and keeps the authored ease when only framing is available", async () => {
+  const got = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0], fstop: 2, roll: 0.1 },
+      { t: 2, p: [10, 2, 6], l: [0, 1, 0], fstop: 8, roll: 0.5, motion: "linear", ease: "smooth" },
+    ], 0);
+    const prior = u.S.tools.cameraSample;
+    u.S.tools.cameraSample = () => ({ p: [5, 2, 6], l: [0, 1, 0], fov: 50 });
+    u.seekExact(1);
+    try {
+      u.addKeyHere();
+      return {
+        keys: u.camKeys().map(k => k.t),
+        endingEase: u.camKeys().at(-1).ease,
+        advised: u.get().status.includes("Check the camera motion"),
+      };
+    } finally {
+      u.S.tools.cameraSample = prior;
+      u.undo();
+    }
+  })()`);
+  expect(got).toEqual({ keys: [0, 1, 2], endingEase: "smooth", advised: true });
+});
+
+test("camera Add leaves an unrelated source frame untouched during a detached Freeze", async () => {
+  const got = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadShots();
+    await u.setCamData([
+      { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { t: 4, p: [4, 2, 6], l: [0, 1, 0], motion: "linear", ease: "linear" },
+    ], 0);
+    u.refreshProjection({ freezes: [{ at: 2, frame: 0.5, duration: 2 }] });
+    u.seekExact(2.5);
+    const prior = u.S.tools.cameraSample;
+    u.S.tools.cameraSample = () => u.cameraAt(u.cameraTimesAt(u.S.t).camera, u.sourceCamKeys()).sample;
+    try {
+      u.addKeyHere();
+      return {
+        source: u.sourceCamKeys().map(k => k.t),
+        advised: u.get().status.includes("Move the playhead to a playing frame"),
+      };
+    } finally {
+      u.S.tools.cameraSample = prior;
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(got).toEqual({ source: [0, 4], advised: true });
 });
 
 test("Split and Merge preserve the authored keys next to an existing camera cut", async () => {

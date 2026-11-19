@@ -647,6 +647,7 @@ const CamKey = z.looseObject({
   l: point,
   cut: z.boolean().optional(),
   tailId: z.union([z.literal(false), z.string().min(1)]).optional(),
+  keepTailOnMerge: z.literal(true).optional(),
   locked: z.boolean().optional(),
   muted: z.boolean().optional(),
   color: z.enum(["amber", "blue", "green", "pink"]).optional(),
@@ -688,7 +689,11 @@ export const CamTimeline = z
     (ks) => ks.every((k, i) => i === 0 || k.t >= ks[i - 1].t),
     "camera keys must be in order of time",
   )
-  .refine(distinctRowIds, "camera key ids must differ");
+  .refine(distinctRowIds, "camera key ids must differ")
+  .refine(
+    (ks) => ks.every((key) => !key.keepTailOnMerge || (key.cut && typeof key.tailId === "string")),
+    "keepTailOnMerge requires a camera cut with a tailId",
+  );
 
 const vec3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
 export const PlacedKeySchema = z.looseObject({

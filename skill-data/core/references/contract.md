@@ -23,6 +23,8 @@ Word and mouth timestamps index native audio samples; narration clips place them
 
 Dùng Split để tạo ranh shot, kể cả ngay tại cut nội bộ khi đồng hồ ảnh và camera khớp. Cut nội bộ trong cam.json đổi góc tức thời và có thể chuyển về keyframe thường bằng Convert to regular keyframe.
 
+Split giữ nhịp bằng cách chia đường easing khi đoạn camera hỗ trợ; keepTailOnMerge giữ key đóng khi gộp shot để đường đã chia vẫn chạy đúng.
+
 To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never shift every key by hand. `bun run at <heard second>` converts between the clocks.
 
 ## Optional hooks on draw

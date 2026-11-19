@@ -5,7 +5,7 @@ import { EDIT, fromSource, toSource } from "film/edit";
 
 import { cameraShotAtBoundary, canPlaceCameraCut } from "../../src/camera-clock.mjs";
 import { frameCountOf } from "../../src/frame";
-import { clockForTimeline } from "../../src/timing-state.mjs";
+import { cameraTimesAt, clockForTimeline } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
 // camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
 // puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
@@ -33,6 +33,7 @@ import { FPS, pasteTargets, r3, SAME, stamp } from "../core/time";
 import { createTimedDoc, type TimedProjection } from "../core/timed-doc";
 import { readSceneFrame } from "../picture/render";
 import { seekExact } from "../playback/transport";
+import { divideCameraEase } from "./camera-ease-split";
 import {
   type CameraFieldGroup,
   cameraKeyNavigation,
@@ -75,6 +76,7 @@ export interface CamKey {
   reversePath?: boolean;
   cut?: boolean;
   tailId?: string | false;
+  keepTailOnMerge?: true;
   locked?: boolean;
   muted?: boolean;
   color?: "amber" | "blue" | "green" | "pink";
@@ -255,6 +257,7 @@ export const convertHardCutToKeyframe = (i: number) => {
       edit((rows) => {
         delete rows[i].cut;
         delete rows[i].tailId;
+        delete rows[i].keepTailOnMerge;
       }),
     )
   )
@@ -335,6 +338,7 @@ export const pasteCamKeys = (items: CamKey[], d: number) => {
         for (const [j, k] of ok.entries()) {
           delete k.cut;
           delete k.tailId;
+          delete k.keepTailOnMerge;
           delete k.__timing;
           delete k.locked;
           delete k.reason;
@@ -426,7 +430,10 @@ export const retime = (i: number, t: number, apply: typeof edit = edit) => {
   if (next === keys[i].t) return next;
   apply((ks) => {
     ks[i].t = next;
-    if (ks[i].cut) ks[i].tailId = false;
+    if (ks[i].cut) {
+      ks[i].tailId = false;
+      delete ks[i].keepTailOnMerge;
+    }
   });
   if (apply === edit) selectPlacement(id, next);
   return next;
@@ -985,6 +992,7 @@ const capturedKey = (t: number, view: CameraView, before?: CamKey, incoming?: Ca
     id: _id,
     cut: _cut,
     tailId: _tail,
+    keepTailOnMerge: _keepTail,
     ease: _ease,
     matchSpeed: _match,
     easeChannels: _channels,
@@ -1015,14 +1023,61 @@ const anchorUnavailable = () =>
     "This film cannot move the camera anchor. Choose a fixed point or provide a camera anchor editor.",
   );
 
+const cameraTimeMatchesSource = (time: number) =>
+  Math.abs(cameraTimesAt(time).camera - clockForTimeline("cam").sourceAt(time)) < 1e-7;
+
+const neutralSubdivision = (i: number, time: number, view: CameraView) => {
+  if (
+    !S.tools?.cameraSample ||
+    view.fstop === undefined ||
+    view.roll === undefined ||
+    view.wave === undefined ||
+    view.bob === undefined ||
+    !("focus" in view)
+  )
+    return null;
+  const clock = clockForTimeline("cam");
+  const source = sourceCameraSegment(i);
+  if (!source || clock.cameraPicture || railAtKey(i - 1)) return null;
+  const { active, at } = source;
+  const before = active[at - 1];
+  const after = active[at];
+  if (!keys[i - 1] || !before || !after || keys[i].cut || after.locked || after.dollyZoomScale)
+    return null;
+  if (Math.abs(cameraSourceTime(keys[i - 1]) - before.t) >= 1e-7) return null;
+  if (![before.p, before.l, after.p, after.l].every(Array.isArray)) return null;
+  if (active.some((key) => key.matchSpeed || key.handheld || key.bob)) return null;
+  if (JSON.stringify(before.focus) !== JSON.stringify(after.focus)) return null;
+  const isSmooth = (key: CamKey | undefined) => !!key && (key.motion ?? "smooth") === "smooth";
+  if (after.motion === "linear") {
+    if ((at > 1 && isSmooth(before)) || isSmooth(active[at + 1])) return null;
+  } else if (!isSmooth(after) || active.length !== 2 || before.outHandle || after.inHandle) {
+    return null;
+  }
+  return divideCameraEase(after, (clock.sourceAt(time) - before.t) / (after.t - before.t));
+};
+
 const insertKey = (t: number, view: CameraView, free?: CameraView) => {
   const next = keys.findIndex((k) => k.t > t);
   const i = next < 0 ? keys.length : next;
   const key = capturedKey(t, view, keys[i - 1], keys[i]);
   if (!key || (free && !withFraming(key, free))) return anchorUnavailable();
-  if (!preserveRailPositions([i - 1], () => edit((ks) => ks.splice(i, 0, key)))) return;
+  const subdivision = free ? null : neutralSubdivision(i, t, view);
+  const check = !free && !subdivision && i > 0 && keys[i] && !keys[i].cut;
+  if (subdivision) Object.assign(key, subdivision.left);
+  if (
+    !preserveRailPositions([i - 1], () =>
+      edit((ks) => {
+        if (subdivision) Object.assign(ks[i], subdivision.right);
+        ks.splice(i, 0, key);
+      }),
+    )
+  )
+    return;
   selectPlacement(key.id, t);
-  say(`Camera keyframe added at ${stamp(t)}. Ctrl+Z to undo`);
+  say(
+    `Camera keyframe added at ${stamp(t)}. ${check ? "Check the camera motion on both sides. " : ""}Ctrl+Z to undo`,
+  );
 };
 export const saveView = (only?: number) => {
   if (!S.tools?.free.on) {
@@ -1052,7 +1107,12 @@ export const saveView = (only?: number) => {
 export const applyFreeToKeyframe = saveView;
 export const addKeyHere = () => {
   if (S.tools?.free.on) saveView();
-  else if (S.tools && keyAt(S.t) < 0) insertKey(r3(S.t), drawnView());
+  else if (S.tools && keyAt(S.t) < 0) {
+    const t = r3(S.t);
+    if (!cameraTimeMatchesSource(t))
+      return say("Move the playhead to a playing frame before adding a camera key");
+    insertKey(t, drawnView(t));
+  }
 };
 // ---------- A cut moved (a roll edit): the shot before ends sooner or later and the one after starts with it; nothing in the film
 // moves, only where the picture changes camera. The shot's start in shots.json moves with its cut key (one undo step for both),
@@ -1150,18 +1210,16 @@ export const rollCut = (i: number, t: number) => {
 };
 export const previewRoll = (i: number, t: number) => rollWith(i, t, preview, shotsDoc.preview);
 
-// ---------- Split and merge (CapCut's Split, B). Splitting at the playhead changes nothing on screen: the first half keeps its move
-// up to a key a millisecond before the cut (the film's own tails sit there too), and the second half starts on the same picture,
-// from the free camera's view when it is on. The new shot copies the old one's fields (how the film draws it). Merging is the
-// reverse: the cut, its tail and the shot go, and the camera glides from one shot's keys into the other's
+// Split captures both sides of the cut and copies the shot's settings. Exact easing subdivisions keep
+// the closing key on Merge, because it still holds the left part of the camera curve.
 const TAIL = 0.001;
 // The film's own draw with the free camera off, for its camera alone: no overlays (picture/render.ts) on a frame nobody sees
-const drawnView = (): CameraView => {
+const drawnView = (time = S.t): CameraView => {
   const tools = S.tools!;
   const was = tools.free.on;
   tools.free.on = false;
   try {
-    S.render!(S.t);
+    S.render!(time);
     return (
       tools.cameraSample?.() ?? {
         p: vectorPoint(tools.camera.position),
@@ -1182,6 +1240,12 @@ const secondName = (name: string, shots: ShotRow[]) => {
   while (taken.has(`${base} (${n})`)) n++;
   return `${base} (${n})`;
 };
+const shotSourceAt = (time: number) => {
+  const source = toSource(time);
+  // A voice-warp round trip must not delay a shot past its camera cut frame.
+  return fromSource(source) <= time ? source : toSource(time - 1e-8);
+};
+
 export const splitShot = () => {
   if (!get().shots) {
     say("This film keeps its shots in code: ask the AI in a note to split one");
@@ -1203,13 +1267,7 @@ export const splitShot = () => {
   const cut = keys[existing];
   const splitTime = cut?.t ?? t;
   if (ambiguousCut(splitTime)) return say("Move the playhead to a playing frame to split the shot");
-  const sourceTime = toSource(splitTime);
-  // Voice warp round-trips can land a few floating-point ticks beyond the cut frame.
-  const splitSource = !cut
-    ? r3(sourceTime)
-    : fromSource(sourceTime) <= splitTime
-      ? sourceTime
-      : toSource(splitTime - 1e-8);
+  let splitSource = cut ? shotSourceAt(splitTime) : r3(toSource(splitTime));
   const splitRows = (sh: ShotRow[]) => {
     const { t: _t, name, transition: _transition, hits, ...rest } = sh[s];
     const { before, after } = splitShotHits(hits, splitSource);
@@ -1228,14 +1286,16 @@ export const splitShot = () => {
     if (Math.abs(cameraSourceTime(cut) - pictureTime) > 1e-7)
       return say("The picture and camera clocks differ here. Split on a frame where they align");
     const needsTailOwnership = cut.tailId === undefined;
-    const original = (doc.source ?? []).findIndex((key) =>
-      key.cut && (cut.id ? key.id === cut.id : Math.abs(key.t - pictureTime) < 1e-7),
+    const original = (doc.source ?? []).findIndex(
+      (key) => key.cut && (cut.id ? key.id === cut.id : Math.abs(key.t - pictureTime) < 1e-7),
     );
     if (needsTailOwnership && (original < 0 || cut.locked))
       return say("Select an unlocked camera cut before splitting here");
     together(() => {
       if (needsTailOwnership)
-        doc.editSource((rows) => { rows[original].tailId = false; });
+        doc.editSource((rows) => {
+          rows[original].tailId = false;
+        });
       shotsDoc.edit(splitRows);
     });
     const next = keys.findIndex((key) => key.cut && Math.abs(key.t - splitTime) < SAME);
@@ -1244,21 +1304,31 @@ export const splitShot = () => {
     return;
   }
   const free = S.tools?.free.on ? viewFromFree() : undefined;
-  const here = drawnView();
+  if (!free && !cameraTimeMatchesSource(t))
+    return say("Move the playhead to a playing frame to split the shot");
+  const here = drawnView(t);
   const i = keys.findIndex((k) => k.t > t);
   const at = i < 0 ? keys.length : i;
   const before = keys[at - 1];
   const reuseKey = !!before && Math.abs(before.t - t) < 1e-6;
   if (reuseKey && before.locked && clockForTimeline("cam").cameraPicture)
     return say("Unlock this camera keyframe before splitting at its time");
+  const subdivision = free || reuseKey ? null : neutralSubdivision(at, t, here);
+  const rig = SHOTS_OUT[s]?.camera;
+  const shotBoundMotion = rig?.lead || rig?.bank || rig?.look === "tangent";
+  const check =
+    !free && (shotBoundMotion || (!subdivision && !reuseKey && before && keys[at] && !keys[at].cut));
+  if (subdivision) splitSource = shotSourceAt(t);
   const tail = reuseKey
     ? null
-    : capturedKey(Math.max(before?.t ?? 0, r3(t - TAIL)), here, before, keys[at]);
+    : capturedKey(subdivision ? t : Math.max(before?.t ?? 0, r3(t - TAIL)), here, before, keys[at]);
+  if (tail && subdivision) Object.assign(tail, subdivision.left);
   const start = capturedKey(t, here, before);
   if ((!reuseKey && !tail) || !start || (free && !withFraming(start, free)))
     return anchorUnavailable();
   start.cut = true;
   start.tailId = tail?.id ?? false;
+  if (subdivision) start.keepTailOnMerge = true;
   if (
     !preserveRailPositions([at - 1], () =>
       together(() =>
@@ -1271,6 +1341,7 @@ export const splitShot = () => {
               if (reuseKey) ks[at - 1].t = start.t;
               if (tail) tail.t = Math.min(tail.t, start.t);
             }
+            if (subdivision) Object.assign(ks[at], subdivision.right);
             ks.splice(at, 0, ...(tail ? [tail, start] : [start]));
           },
         ),
@@ -1281,15 +1352,24 @@ export const splitShot = () => {
   selectPlacement(start.id, start.t);
   const word = speechAtCut(start.t);
   if (word)
-    return say("Shot split at " + stamp(start.t) + ". The cut crosses “" + word + "”.", 6000);
+    return say(
+      "Shot split at " +
+        stamp(start.t) +
+        ". The cut crosses “" +
+        word +
+        "”." +
+        (check ? " Check the camera motion on both sides. Ctrl+Z to undo." : ""),
+      6000,
+    );
   say(
-    `Shot ${s} split at ${stamp(t)}.${free ? "" : " Frame the new shot with Free camera (F)."}`,
+    `Shot ${s} split at ${stamp(t)}.${check ? " Check the camera motion on both sides. Ctrl+Z to undo." : free ? "" : " Frame the new shot with Free camera (F)."}`,
     6000,
   );
 };
 const mergeShot = (i: number) => {
   const s = shotOfCut(i),
     tail = tailOf(i);
+  const keepTail = keys[i].keepTailOnMerge;
   if (keys[tail]?.locked) return say("Unlock the outgoing keyframe before merging");
   if (s <= 0) {
     say("This cut has no shot of its own in shots.json. Ask the AI in a note");
@@ -1308,7 +1388,7 @@ const mergeShot = (i: number) => {
           edit,
           (ks) => {
             ks.splice(i, 1);
-            if (tail >= 0) ks.splice(tail, 1);
+            if (tail >= 0 && !keepTail) ks.splice(tail, 1);
           },
         ),
       ),

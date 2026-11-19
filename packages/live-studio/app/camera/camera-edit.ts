@@ -398,6 +398,7 @@ export const createHoldCameraKey = (
     matchSpeed: _match,
     cut: __,
     tailId: _tail,
+    keepTailOnMerge: _keepTail,
     __timing: _timing,
     locked: _lock,
     reason: _reason,

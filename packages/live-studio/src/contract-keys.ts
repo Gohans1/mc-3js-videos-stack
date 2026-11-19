@@ -61,6 +61,7 @@ export const CAM_KEYS = [
   "l",
   "cut",
   "tailId",
+  "keepTailOnMerge",
   "locked",
   "muted",
   "color",
