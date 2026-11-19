@@ -343,10 +343,10 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
   const airLpfId = useId();
   const active = isSpatialActive(c.spatial);
   const spec = c.spatial ?? {};
-  const mode: "off" | "world" | "target" = !active ? "off" : spec.target ? "target" : "world";
 
   const targets = availableSpatialTargets();
   const [customRequested, setCustomRequested] = useState(false);
+  const mode = spec.target || customRequested ? "target" : active ? "world" : "off";
   const [targetDraft, setTargetDraft] = useState<string | null>(null);
   const dragSnapRef = useRef<string | null>(null);
 
@@ -388,7 +388,10 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
       return;
     }
     const first = spec.target ?? targets[0];
-    if (!first) return;
+    if (!first) {
+      setCustomRequested(true);
+      return;
+    }
     setCustomRequested(!targets.includes(first));
     setTargetDraft(null);
     setClipSpatial(clip, {
@@ -477,9 +480,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
         items={[
           { id: "off", title: "Off" },
           { id: "world", title: "World XYZ" },
-          ...(mode === "target" || targets.length
-            ? [{ id: "target" as const, title: "Target" }]
-            : []),
+          { id: "target", title: "Target" },
         ]}
       />
 
@@ -536,7 +537,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
             <FieldRow label="Name">
               <Input
                 value={shownTarget}
-                placeholder="Placed object name"
+                placeholder="Scene object name"
                 aria-label="Custom target name"
                 className="h-8"
                 onChange={(e) => setTargetDraft(e.target.value)}

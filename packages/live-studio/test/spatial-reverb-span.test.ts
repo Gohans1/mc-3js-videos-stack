@@ -18,8 +18,8 @@ async function withAudioPage(verify: (browser: Bun.WebView) => Promise<void>) {
       `
 import { S } from ${JSON.stringify(join(app, "core/state.ts"))};
 import { registerEngine } from ${JSON.stringify(join(app, "core/engine.ts"))};
-import { prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from ${JSON.stringify(join(app, "sound/scene-spatial.ts"))};
-import { Object3D, PerspectiveCamera } from ${JSON.stringify(three)};
+import { availableSpatialTargets, prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from ${JSON.stringify(join(app, "sound/scene-spatial.ts"))};
+import { Object3D, PerspectiveCamera, Scene } from ${JSON.stringify(three)};
 import { renderAudioSpan, setLive } from ${JSON.stringify(join(app, "sound/mixer.ts"))};
 S.el = { audio: document.createElement("audio") };
 
@@ -47,14 +47,20 @@ window.checkReverb = async (space) => {
   const meter = await window.__lanesRender(6, 6.75);
   return { excerpts, peak: meter.peak };
 };
-window.checkNamed = async () => {
+window.checkNamed = async (disappears = false, at, to = 1.5) => {
   const makeDraw = () => {
+    const scene = new Scene();
     const actor = new Object3D();
+    actor.name = "elon";
     const camera = new PerspectiveCamera();
     camera.position.set(0, 1.6, 5);
     camera.lookAt(0, 1.6, 0);
-    const draw = t => actor.position.set(12 * (t - 0.75), 1.6, 0);
-    draw.tools = { camera, objects: [[actor, "Elon"]] };
+    const draw = t => {
+      actor.position.set(12 * (t - 0.75), 1.6, 0);
+      if (disappears && t >= 0.45) actor.removeFromParent();
+      else if (!actor.parent) scene.add(actor);
+    };
+    draw.tools = { camera, scene };
     return draw;
   };
   const preview = makeDraw();
@@ -62,19 +68,22 @@ window.checkNamed = async () => {
   S.tools = preview.tools;
   S.t = 0.25;
   registerEngine({ buildAudioScene: async () => makeDraw() });
-  const lanes = { beds: [], sfx: [{ name: "tone", at: 0, length: 1.5, gain: 0, spatial: { target: "elon" } }] };
+  const lanes = { beds: [], sfx: [{ name: "tone", at: 0, length: 1.5, gain: 0, spatial: { target: "elon", at } }] };
   setLive(true, {
     lanes: () => lanes, library: () => [], span: () => [0, 1.5], voice: () => [],
     camPose: sceneCameraPoseAt, targetPos: sceneTargetAt, prepareTargets: prepareSceneTargets,
   });
   const live = sceneTargetAt("elon", 0.25);
-  const mix = await renderAudioSpan(0, 1.5);
+  let mix;
+  try { mix = await renderAudioSpan(0, to); }
+  catch (error) { return { error: error.message }; }
+  if (to < 1.5) return { frames: mix.length };
   const rms = (channel, from, to) => {
     const part = mix.getChannelData(channel).subarray(from * 48000, to * 48000);
     return Math.sqrt(part.reduce((sum, sample) => sum + sample * sample, 0) / part.length);
   };
   return {
-    live, restored: sceneTargetAt("Elon", 0.25),
+    live, restored: sceneTargetAt("elon", 0.25), names: availableSpatialTargets(),
     first: [rms(0, 0.1, 0.35), rms(1, 0.1, 0.35)],
     last: [rms(0, 1.05, 1.4), rms(1, 1.05, 1.4)],
   };
@@ -170,12 +179,29 @@ test("named scene anchors move between channels without replacing the preview sc
     const result = (await browser.evaluate("window.checkNamed()")) as {
       live: number[];
       restored: number[];
+      names: string[];
       first: [number, number];
       last: [number, number];
     };
+    expect(result.names).toContain("elon");
     expect(result.live).toEqual([-6, 1.6, 0]);
     expect(result.restored).toEqual(result.live);
     expect(result.first[0]).toBeGreaterThan(result.first[1] * 2);
     expect(result.last[1]).toBeGreaterThan(result.last[0] * 2);
+  });
+}, 30000);
+
+test("named scene mixes fail on a missing anchor unless there is an XYZ fallback", async () => {
+  await withAudioPage(async (browser) => {
+    const missing = await browser.evaluate("window.checkNamed(true)");
+    expect(missing).toEqual({ error: expect.stringMatching(/elon.*unavailable/) });
+    const excerpt = await browser.evaluate("window.checkNamed(true, undefined, 0.4)");
+    expect(excerpt).toEqual({ frames: 19_200 });
+    const fallback = (await browser.evaluate("window.checkNamed(true, [8, 1.6, 5])")) as {
+      first: [number, number];
+      last: [number, number];
+    };
+    expect(fallback.first[0]).toBeGreaterThan(fallback.first[1] * 2);
+    expect(fallback.last[1]).toBeGreaterThan(fallback.last[0] * 2);
   });
 }, 30000);

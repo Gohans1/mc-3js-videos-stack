@@ -565,7 +565,7 @@ const play = (
   c: Clip,
   s: Sound,
   at: number,
-  w: Pick<Window, "speed" | "when" | "ctxAt">,
+  w: Pick<Window, "speed" | "when" | "ctxAt"> & { until?: number },
   offline?: boolean,
   sampled?: SceneTargetSampler,
 ): Voice | null => {
@@ -641,6 +641,11 @@ const play = (
           source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
           spSpec.at)
         : spSpec.at;
+      if (!rawSrc && isOffline && spSpec.target) {
+        throw new Error(
+          `Spatial target '${spSpec.target}' is unavailable at ${tFilm.toFixed(3)}s. Add spatial.at for a fallback.`,
+        );
+      }
       return rawSrc
         ? computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec)
         : { cutoffHz: 20000, gain: 1, pan: 0 };
@@ -661,10 +666,10 @@ const play = (
 
     if (isOffline) {
       const step = 1 / 30;
-      for (let t = at + step; t <= c.t1 + 1e-4; t += step) {
-        const tt = Math.min(t, c.t1);
-        const ct = Math.max(begin, w.ctxAt(tt));
-        const sp = sampleSpatial(tt);
+      const end = Math.min(c.t1, w.until ?? c.t1);
+      for (let t = at + step; t < end - 1e-7; t += step) {
+        const ct = Math.max(begin, w.ctxAt(t));
+        const sp = sampleSpatial(t);
         spGain.gain.linearRampToValueAtTime(sp.gain, ct);
         spPan.pan.linearRampToValueAtTime(sp.pan, ct);
         lpf.frequency.exponentialRampToValueAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), ct);
@@ -1052,6 +1057,7 @@ const renderLanesSpan = async (
   const w = {
     speed: 1,
     ctxAt: (t: number) => t - start,
+    until: to,
     when: (t: number) => Math.max(0, t - start),
   };
   all.forEach((c, i) => {
@@ -1118,10 +1124,16 @@ export const renderFilm = async (
     v.connect(st.bus);
     v.start(0);
   }
-  const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t,
+    until: DURATION,
+    when: (t: number) => Math.max(0, t),
+  };
   all.forEach((c, i) => {
     const s = loaded[i];
-    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true, sampled);
+    if (s && c.t0 < DURATION && c.t1 > 0)
+      play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true, sampled);
   });
   await ctx.startRendering();
   return l;

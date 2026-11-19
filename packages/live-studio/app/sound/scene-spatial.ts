@@ -156,7 +156,11 @@ export async function prepareSceneTargets(
   const [w, h] = sizeOf(get().ratio, 320);
   const deadline = performance.now() + 120_000;
   const samples = new Map<number, SpatialFrame>();
-  const draw = await engine.buildAudioScene(canvas, w, h, true);
+  const draw = await engine.buildAudioScene(canvas, w, h, true).catch((error) => {
+    if (required.size) throw error;
+    return null;
+  });
+  if (!draw) return;
   try {
     for (const variant of draw.variants ?? []) {
       const current = S.render?.variants?.find((item) => item.id === variant.id);
@@ -193,11 +197,19 @@ export async function prepareSceneTargets(
     const a = first?.positions.get(name);
     const b = last?.positions.get(name);
     const k = frame - Math.floor(frame);
-    const at: Vec3 | undefined =
-      a && b
-        ? [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]
-        : (a ?? b);
-    return at ? { at, camera: first?.camera ?? last?.camera ?? undefined } : {};
+    const interpolate = (start: Vec3, end: Vec3): Vec3 => [
+      start[0] + (end[0] - start[0]) * k,
+      start[1] + (end[1] - start[1]) * k,
+      start[2] + (end[2] - start[2]) * k,
+    ];
+    const at = a && b ? interpolate(a, b) : (a ?? b);
+    const c0 = first?.camera;
+    const c1 = last?.camera;
+    const camera =
+      c0?.up && c1?.up
+        ? { p: interpolate(c0.p, c1.p), l: interpolate(c0.l, c1.l), up: interpolate(c0.up, c1.up) }
+        : (c0 ?? c1 ?? undefined);
+    return { at, camera };
   };
 }
 

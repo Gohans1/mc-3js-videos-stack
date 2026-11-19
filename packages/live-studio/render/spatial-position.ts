@@ -6,14 +6,18 @@ import { findTarget } from "./target";
 
 type TargetTools = Partial<Pick<Tools, "scene" | "camera" | "bones" | "objects" | "targets">>;
 
+const registeredNames = (tools: TargetTools | null | undefined): string[] => [
+  ...(tools?.targets ?? []).map((target) => target.id),
+  ...(tools?.objects ?? []).map(([, label]) => label),
+  ...Object.keys(tools?.bones ?? {}),
+];
+
 export function sceneSpatialNames(tools: TargetTools | null | undefined): string[] {
-  return [
-    ...new Set([
-      ...(tools?.targets ?? []).map((target) => target.id),
-      ...(tools?.objects ?? []).map(([, label]) => label),
-      ...Object.keys(tools?.bones ?? {}),
-    ]),
-  ].filter((name) => name && name !== "cam");
+  const names = new Set(registeredNames(tools));
+  tools?.scene?.traverse?.((object) => {
+    if (object.name) names.add(object.name);
+  });
+  return [...names].filter((name) => name && name.toLowerCase() !== "cam");
 }
 
 const spatialObject = (tools: TargetTools, name: string): Object3D | null =>
@@ -28,7 +32,7 @@ export function sceneSpatialPosition(
   if (!tools || !name || name.toLowerCase() === "cam") return null;
   let object = spatialObject(tools, name);
   if (!object) {
-    const matches = sceneSpatialNames(tools).filter(
+    const matches = [...new Set(registeredNames(tools))].filter(
       (label) => label.toLowerCase() === name.toLowerCase(),
     );
     if (matches.length === 1) object = spatialObject(tools, matches[0]);
