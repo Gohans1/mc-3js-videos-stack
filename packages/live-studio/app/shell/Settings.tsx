@@ -20,12 +20,13 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
 import { type Ratio, RATIOS } from "../../src/frame.ts";
+import { armActivityChime } from "../activity/chime";
 import { copyCam } from "../camera/camline";
 import { HelpTip } from "../components/HelpTip";
 import { Tip } from "../components/Tip";
 import { AWAY } from "../core/device";
+import { setAutoSave } from "../core/doc";
 import { engine } from "../core/engine";
-import { armActivityChime } from "../activity/chime";
 import { FLY_SPEED } from "../core/prefs";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
@@ -33,6 +34,7 @@ import { FPS, rangeText } from "../core/time";
 import { copyAll } from "../notes/notes";
 import { choose, pinPick, setGain, whereNext } from "../options/options";
 import { frameSize, setRatio } from "../picture/frame";
+import { FreeCamLensFields } from "../picture/FreeCamLens";
 import { exportStill } from "../picture/still";
 import { jumpShot, seek, setPlaying } from "../playback/transport";
 import { resumeAudio } from "../sound/clock";
@@ -229,13 +231,13 @@ function Options() {
 }
 
 const KEYS: [ReactNode, ReactNode][] = [
-  ["Right-click the picture", "pick an object or title there; right-click empty space to clear the selection"],
+  ["Click the picture", "pick an object or title there; click empty space to clear the selection"],
   [
-    "Drag the picture",
-    "the free camera comes on from the view you see and turns with the drag (Shift+drag: orbit); F leaves it",
+    "Left-drag the picture",
+    "move the camera (Shift+left-drag: orbit, middle-drag: pan; wakes free camera if off); F returns to film camera",
   ],
   [
-    "Click the picture",
+    "Right-click the picture",
     "pin a note there, then type, talk, or pick a Draw tool. On a phone, tap to pin",
   ],
   [
@@ -272,7 +274,7 @@ const KEYS: [ReactNode, ReactNode][] = [
     </>,
     "next note (Alt+Shift+M: previous)",
   ],
-  [<Kbd key="k">D</Kbd>, "draw on the picture (not in free camera)"],
+  [<Kbd key="k">G</Kbd>, "draw on the picture (works in the free camera too)"],
   [
     <>
       <Kbd>1</Kbd>–<Kbd>4</Kbd>
@@ -463,16 +465,22 @@ const KEYS: [ReactNode, ReactNode][] = [
   [
     <Kbd key="k">F</Kbd>,
     <>
-      free camera: click to pin a note, right-click to pick an object, drag to look, scroll to move
-      in, right-drag to pan, Shift+drag to orbit, <Kbd>-</Kbd>
+      free camera: right-click to pin a note, right-drag to draw, left-click to pick an object,
+      left-drag to look (Shift+left-drag: orbit, middle-drag: pan), scroll to move in, <Kbd>-</Kbd>
       <Kbd>=</Kbd> lens there. Flies like Minecraft: hold <Kbd>W</Kbd>
       <Kbd>A</Kbd>
       <Kbd>S</Kbd>
-      <Kbd>D</Kbd>, <Kbd>Space</Kbd> up, <Kbd>Shift</Kbd> down (or <Kbd>E</Kbd> <Kbd>Q</Kbd>), press{" "}
-      <Kbd>W</Kbd> twice to sprint
+      <Kbd>D</Kbd>, <Kbd>Space</Kbd> up, <Kbd>Shift</Kbd> down; <Kbd>Q</Kbd> plays and pauses and{" "}
+      <Kbd>E</Kbd> steps back 5 s there; press <Kbd>W</Kbd> twice to sprint
     </>,
   ],
-  [<Kbd key="k">G</Kbd>, "final quality"],
+  [
+    <>
+      <Kbd>Shift</Kbd>
+      <Kbd>G</Kbd>
+    </>,
+    "final quality",
+  ],
   [
     <>
       <Kbd>Shift</Kbd>
@@ -518,7 +526,9 @@ export function Settings() {
       meter: x.meter,
       ratio: x.ratio,
       aiActivity: x.aiActivity,
+      noteNotify: x.noteNotify,
       activityChime: x.activityChime,
+      manualConfirm: x.manualConfirm,
     })),
   );
   const step = (d: number) => seek(S.t + d);
@@ -637,14 +647,34 @@ export function Settings() {
             help="Under the picture, a dot lit while the AI works and its latest step beside it (click it for the steps before). The note it reads or answers, the lesson file it reads or writes and the seconds it looks at or renders light up for a moment. Nothing moves the playhead, scrolls or takes the focus. Kept in this browser."
           />
           <SwitchRow
+            id="note-notify"
+            label="Notify when AI resolves a note"
+            checked={s.noteNotify}
+            onChange={(on) => {
+              setPref("noteNotify", on);
+              if (on && s.activityChime) armActivityChime();
+            }}
+            help="Shows a toast alert and sounds the chime when the AI resolves a note or asks a question. On by default; kept in this browser."
+          />
+          <SwitchRow
             id="activity-chime"
-            label="Play a chime for review and errors"
+            label="Play ting chime on AI alerts"
             checked={s.activityChime}
             onChange={(on) => {
               setPref("activityChime", on);
               if (on) armActivityChime();
             }}
-            help="Sounds once for a note that needs your attention or an activity error, while the Studio is focused and the film is paused. Kept in this browser."
+            help="Sounds a short ting once for resolved notes or activity errors while Studio is open and playback is paused. On by default; kept in this browser."
+          />
+          <SwitchRow
+            id="manual-confirm"
+            label="Confirm before saving changes"
+            checked={s.manualConfirm}
+            onChange={(on) => {
+              setPref("manualConfirm", on);
+              setAutoSave(!on);
+            }}
+            help="Hold timeline, camera, object, sound, and adjustment tweaks in preview until you click Confirm or Revert, so the AI isn't blocked by unconfirmed experiments."
           />
           <SwitchRow
             id="try-on"
@@ -748,6 +778,9 @@ export function Settings() {
               </span>
             </span>
           </Row>
+          <div className="flex flex-col gap-2.5 py-2.5">
+            <FreeCamLensFields />
+          </div>
           <Row>
             <span className="flex min-w-0 flex-1 items-center gap-1.5">
               <span className="text-sm">Camera angle</span>
@@ -797,7 +830,7 @@ export function Settings() {
             <SwitchRow
               id="final"
               label="Final quality"
-              keys={["G"]}
+              keys={["Shift", "G"]}
               checked={s.final}
               onChange={(on) => {
                 void engine.setFinal(on);

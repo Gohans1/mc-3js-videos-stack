@@ -136,7 +136,7 @@ export const noteDetailFormat = ({ root: ROOT, dir, projectDir, config, topics }
     if (n.finalLook) lines.push("seen in final quality");
     if (n.version) lines.push(`said about version: ${n.version}`);
     // the thread after the note itself, oldest first: what was tried or asked, what the creator said back or reworded
-    for (const m of thread.slice(1))
+    for (const m of thread.slice(1)) {
       lines.push(
         m.reworded
           ? `creator reworded it, it was: ${m.text}`
@@ -146,6 +146,20 @@ export const noteDetailFormat = ({ root: ROOT, dir, projectDir, config, topics }
               ? `you asked: ${m.text}`
               : `tried: ${m.text} (${m.checkpoint})`,
       );
+      if (m.by === "ai") {
+        if (m.after) lines.push(`after picture: ${posix(m.after)}`);
+        if (m.noAfterReason) lines.push(`no after picture reason: ${m.noAfterReason}`);
+        if (m.t != null || m.cam) {
+          const camParts = [];
+          if (m.t != null) camParts.push(`at ${m.t}s`);
+          if (m.cam) {
+            camParts.push(`p=${list(m.cam.p)} l=${list(m.cam.l)}`);
+            if (m.cam.fov != null) camParts.push(`fov=${m.cam.fov}`);
+          }
+          lines.push(`after view: ${camParts.join(" ")}`);
+        }
+      }
+    }
     if (n.learned) lines.push(`learned (${SCOPE[n.learned.scope]}): ${n.learned.what}`);
     if (toLearn(n))
       lines.push(

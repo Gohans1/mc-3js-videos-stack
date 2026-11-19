@@ -70,7 +70,7 @@ const clip = (f: () => void) => (e: KeyboardEvent) => {
   f();
 };
 const clipKey = { preventDefault: false, ignoreInputs: true } as const;
-// An on/off key acts on a fresh press only: a key still held from flying (D) must not flip Draw once the free camera is left
+// An on/off key acts on a fresh press only so holding a key never flickers Draw or Final quality on repeat
 const fresh = (f: () => void) => (e: KeyboardEvent) => {
   if (!e.repeat) f();
 };
@@ -82,6 +82,8 @@ const zoomKey = (d: -1 | 1) => () => {
 
 const REVIEW_KEYS = new Set([
   "Space",
+  "Q",
+  "E",
   "ArrowLeft",
   "ArrowRight",
   "Shift+ArrowLeft",
@@ -96,6 +98,7 @@ const REVIEW_KEYS = new Set([
   "K",
   "L",
   "G",
+  "Shift+G",
   "Mod+Shift+F",
   "Mod+ArrowUp",
   "Mod+ArrowDown",
@@ -104,6 +107,7 @@ const REVIEW_KEYS = new Set([
 export function useStudioHotkeys() {
   const settingsOpen = useStudio((s) => s.settingsOpen);
   const composeOpen = useStudio((s) => s.compose !== null);
+  const pickFocus = useStudio((s) => s.pickFocus !== null);
   const ink = useStudio((s) => s.ink),
     picks = useStudio((s) => s.clips.length),
     sound = useStudio((s) => s.sound);
@@ -131,7 +135,7 @@ export function useStudioHotkeys() {
     camPicks > 0 ||
     keyPicks > 0 ||
     textPicks > 0;
-  // A popup open on top (a "?" or a menu) takes Esc for itself first
+  // A popup open on top (Settings, focus eyedropper, an open note/pin, or empty Draw mode) takes Esc before timeline tools
   const escPopups: UseHotkeyDefinition[] = [
     {
       hotkey: "Escape",
@@ -140,14 +144,26 @@ export function useStudioHotkeys() {
     },
     {
       hotkey: "Escape",
+      callback: () => set({ pickFocus: null }),
+      options: { enabled: !settingsOpen && pickFocus },
+    },
+    {
+      hotkey: "Escape",
+      callback: () => cancelNote(),
+      options: { enabled: !settingsOpen && !pickFocus && composeOpen },
+    },
+    {
+      hotkey: "Escape",
       callback: () => setInk(null),
-      options: { enabled: !settingsOpen && !!ink },
+      options: { enabled: !settingsOpen && !pickFocus && !composeOpen && !!ink },
     },
   ];
   const keys: UseHotkeyDefinition[] = [
     // ---- CapCut's own
-    // In the free camera Space flies up (picture/flight.ts), as in Minecraft
+    // In the free camera Space flies up (picture/flight.ts), so Q toggles Play/Pause and E steps back 5 s there
     { hotkey: "Space", callback: togglePlay, options: { enabled: !free } },
+    { hotkey: "Q", callback: togglePlay, options: { enabled: free } },
+    { hotkey: "E", callback: () => seek(S.t - 5), options: { enabled: free } },
     { hotkey: "ArrowLeft", callback: () => seek(S.t - 1 / FPS) },
     { hotkey: "ArrowRight", callback: () => seek(S.t + 1 / FPS) },
     { hotkey: "Shift+ArrowLeft", callback: () => seek(S.t - 5 / FPS) },
@@ -245,11 +261,9 @@ export function useStudioHotkeys() {
     { hotkey: "Mod+;", callback: fresh(() => setPref("guides", !get().guides)) },
     { hotkey: "Mod+Shift+F", callback: fresh(toggleFullscreen) },
     // ---- The studio's own
-    // D also flies the free camera right (W A S D), so there only the Draw button draws
     {
-      hotkey: "D",
+      hotkey: "G",
       callback: fresh(() => setInk(get().ink ? null : "pen")),
-      options: { enabled: !free },
     },
     { hotkey: "F", callback: fresh(() => engine.setFree(!get().free)) },
     { hotkey: "J", callback: () => shuttleOn(-1) },
@@ -263,7 +277,7 @@ export function useStudioHotkeys() {
     { hotkey: "Shift+K", callback: () => saveView(), options: { enabled: cam } },
     { hotkey: "Alt+C", callback: copyCam },
     {
-      hotkey: "G",
+      hotkey: "Shift+G",
       callback: fresh(() => engine.setFinal(!get().final)),
       options: { enabled: !AWAY },
     },
@@ -289,7 +303,7 @@ export function useStudioHotkeys() {
     {
       hotkey: "Escape",
       callback: () => setBlade(false),
-      options: { enabled: !settingsOpen && !ink && blade },
+      options: { enabled: !settingsOpen && !ink && !pickFocus && !composeOpen && blade },
     },
     {
       hotkey: "Escape",
@@ -297,7 +311,9 @@ export function useStudioHotkeys() {
         set(transitionSelection({ kind: "none" }, get().side));
         S.dirty = true;
       },
-      options: { enabled: !settingsOpen && !ink && !blade && hasPick },
+      options: {
+        enabled: !settingsOpen && !ink && !pickFocus && !composeOpen && !blade && hasPick,
+      },
     },
     // 1 to 4 pick a drawing tool while the tools are on screen, else every digit picks an alternative
     ...Array.from(
@@ -309,19 +325,14 @@ export function useStudioHotkeys() {
             i >= 1 && i <= 4 && toolsOpen(get()) ? setInk(INK_KEYS[i - 1]) : chooseInGroup(i),
         }) as UseHotkeyDefinition,
     ),
-    // W A S D, Space, Shift, Q and E fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
+    // W A S D, Space, and Shift fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];
   const reviewOnlyKeys: UseHotkeyDefinition[] = [
     ...escPopups,
     {
       hotkey: "Escape",
-      callback: () => cancelNote(),
-      options: { enabled: !settingsOpen && !ink && composeOpen },
-    },
-    {
-      hotkey: "Escape",
       callback: () => setReview(false),
-      options: { enabled: !settingsOpen && !ink && !composeOpen },
+      options: { enabled: !settingsOpen && !ink && !pickFocus && !composeOpen },
     },
     { hotkey: "ArrowUp", callback: () => void stepReview(-1) },
     { hotkey: "ArrowDown", callback: () => void stepReview(1) },

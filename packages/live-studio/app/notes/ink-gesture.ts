@@ -1,23 +1,21 @@
 import type { InkKind } from "./slice";
 
-export type InkGesture<E = unknown> =
+export type InkGesture =
   | { kind: "idle" }
-  | { kind: "drawing"; id: number }
-  | { kind: "path_press"; id: number }
-  | { kind: "right_press"; id: number; x: number; y: number; from: E }
-  | { kind: "sketching"; id: number };
+  | { kind: "drawing"; id: number; mask: 1 | 2 }
+  | { kind: "path_press"; id: number; mask: 1 | 2 };
 
-export const IDLE_INK_GESTURE: InkGesture<never> = { kind: "idle" };
+export const IDLE_INK_GESTURE: InkGesture = { kind: "idle" };
 
-export type InkEvent<E = unknown> =
+export type InkEvent =
   | {
       type: "down";
       id: number;
       button: number;
+      pointerType?: string;
       tool: InkKind | null;
       x: number;
       y: number;
-      raw?: E;
     }
   | { type: "move"; id: number; x: number; y: number }
   | { type: "up"; id: number; buttons: number; tool: InkKind | null }
@@ -25,68 +23,45 @@ export type InkEvent<E = unknown> =
   | { type: "blur" }
   | { type: "reset" };
 
-export interface InkStep<E = unknown> {
-  gesture: InkGesture<E>;
+export interface InkStep {
+  gesture: InkGesture;
   effect:
-    | "none"
-    | "start_stroke"
-    | "start_path"
-    | "start_sketch"
-    | "move_stroke"
-    | "end_stroke"
-    | "commit_path"
-    | "drop";
-  from?: E;
+    "none" | "start_stroke" | "start_path" | "move_stroke" | "end_stroke" | "commit_path" | "drop";
 }
 
-export function stepInk<E>(gesture: InkGesture<E>, event: InkEvent<E>): InkStep<E> {
+export function stepInk(gesture: InkGesture, event: InkEvent): InkStep {
   switch (event.type) {
-    case "down":
-      if (!event.tool || gesture.kind !== "idle" || (event.button !== 0 && event.button !== 2))
+    case "down": {
+      const isMouse = (event.pointerType ?? "mouse") === "mouse";
+      const drawButton = isMouse ? 2 : 0;
+      if (!event.tool || gesture.kind !== "idle" || event.button !== drawButton)
         return { gesture, effect: "none" };
-      if (event.button === 2)
-        return {
-          gesture: {
-            kind: "right_press",
-            id: event.id,
-            x: event.x,
-            y: event.y,
-            from: event.raw as E,
-          },
-          effect: "none",
-        };
+      const mask = isMouse ? 2 : 1;
       if (event.tool === "path")
-        return { gesture: { kind: "path_press", id: event.id }, effect: "start_path" };
-      return { gesture: { kind: "drawing", id: event.id }, effect: "start_stroke" };
+        return { gesture: { kind: "path_press", id: event.id, mask }, effect: "start_path" };
+      return { gesture: { kind: "drawing", id: event.id, mask }, effect: "start_stroke" };
+    }
     case "move":
       if (gesture.kind === "idle" || event.id !== gesture.id) return { gesture, effect: "none" };
-      if (gesture.kind === "right_press") {
-        if (Math.hypot(event.x - gesture.x, event.y - gesture.y) > 4) {
-          return {
-            gesture: { kind: "sketching", id: gesture.id },
-            effect: "start_sketch",
-            from: gesture.from,
-          };
-        }
-        return { gesture, effect: "none" };
-      }
-      if (gesture.kind === "drawing" || gesture.kind === "sketching")
-        return { gesture, effect: "move_stroke" };
+      if (gesture.kind === "drawing") return { gesture, effect: "move_stroke" };
       return { gesture, effect: "none" };
     case "up":
       if (gesture.kind === "idle" || event.id !== gesture.id) return { gesture, effect: "none" };
-      if (gesture.kind === "sketching" && (event.buttons & 2) !== 0)
-        return { gesture, effect: "none" };
       if (
         (gesture.kind === "drawing" || gesture.kind === "path_press") &&
-        (event.buttons & 1) !== 0
+        (event.buttons & gesture.mask) !== 0
       )
         return { gesture, effect: "none" };
-      if (gesture.kind === "right_press") return { gesture: IDLE_INK_GESTURE, effect: "none" };
-      if (gesture.kind === "sketching" || gesture.kind === "drawing") {
+      if (gesture.kind === "drawing") {
         return { gesture: IDLE_INK_GESTURE, effect: "end_stroke" };
       }
-      return { gesture: IDLE_INK_GESTURE, effect: event.tool === "path" ? "commit_path" : "none" };
+      if (gesture.kind === "path_press") {
+        return {
+          gesture: IDLE_INK_GESTURE,
+          effect: event.tool === "path" ? "commit_path" : "none",
+        };
+      }
+      return { gesture: IDLE_INK_GESTURE, effect: "none" };
     case "cancel":
       if (gesture.kind === "idle" || event.id !== gesture.id) return { gesture, effect: "none" };
       return { gesture: IDLE_INK_GESTURE, effect: "drop" };

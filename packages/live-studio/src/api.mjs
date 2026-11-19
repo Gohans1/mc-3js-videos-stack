@@ -23,6 +23,7 @@ import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.t
 import { CliTemplateUpsertSchema, openCliTemplates } from "./cli-templates.ts";
 import { mountCollaboration } from "./collaboration-api.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
+import { EaseTemplateUpload, openEaseTemplates } from "./ease-templates.mjs";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
 import { RATIOS } from "./frame.ts";
 import { LutUpload, openGrades, PresetUpload } from "./grades.mjs";
@@ -59,7 +60,6 @@ import { srtAsWebVtt } from "./voice-playground-recordings.mjs";
 import { playgroundExtensions, speechRequestOptions } from "./voice-playground-routes.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 import { weighFirstVisit } from "./weight.mjs";
-
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -120,7 +120,17 @@ const NoteChange = z.object({
   remove: z.boolean().optional(),
   restore: z.boolean().optional(),
   done: z.boolean().optional(),
-  fix: z.looseObject({ what: z.string(), ask: z.boolean().optional() }).optional(),
+  fix: z
+    .looseObject({
+      what: z.string(),
+      ask: z.boolean().optional(),
+      after: z.string().optional(),
+      afterData: z.string().optional(),
+      noAfterReason: z.string().optional(),
+      t: z.number().finite().nonnegative().optional(),
+      cam: z.looseObject({}).optional(),
+    })
+    .optional(),
   approve: z.literal(true).optional(),
   again: z.string().optional(),
   remember: z.enum(["film", "all"]).nullable().optional(),
@@ -590,6 +600,7 @@ export const createApi = (
       if (!result.success) return c.json({ error: formatZodIssue(result.error) }, 400);
     });
   const defaultPostBodyLimit = jsonBodyLimit(20 * 1024 * 1024, "20 MB");
+  const notesPostBodyLimit = jsonBodyLimit(24 * 1024 * 1024, "24 MB");
   // The films' own scripts still call two paths from before /api/: checkpoint.py marks notes done at /notes/:id, and
   // publish_pages.py reads /edit.json
   app.on("POST", ["/api/*", "/notes/*"], (c, next) => {
@@ -603,6 +614,8 @@ export const createApi = (
     ) {
       return next();
     }
+    if (c.req.path.startsWith("/api/notes") || c.req.path.startsWith("/notes/"))
+      return notesPostBodyLimit(c, next);
     return defaultPostBodyLimit(c, next);
   });
 
@@ -633,13 +646,21 @@ export const createApi = (
       return c.text("ok");
     },
   );
-  app.get("/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d|_r\\d)?\\.jpg}", (c) => {
-    const pic = film.notes.picture(c.req.param("name").slice(0, -4));
-    if (!pic) return c.body(null, 404);
-    c.header("content-type", "image/jpeg");
-    c.header("cache-control", "max-age=31536000, immutable");
-    return c.body(pic);
-  });
+  app.get(
+    "/api/note-img/:name{[a-z0-9]+(_crop|_strip|_f\\d+|_r\\d+|_fix\\d+)?\\.(jpg|jpeg|png|webp)}",
+    (c) => {
+      const name = c.req.param("name");
+      const pic = film.notes.picture(name);
+      if (!pic) return c.body(null, 404);
+      const ext = name.split(".").pop();
+      c.header(
+        "content-type",
+        ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg",
+      );
+      c.header("cache-control", "max-age=31536000, immutable");
+      return c.body(pic);
+    },
+  );
 
   // What the AI is doing (src/activity.mjs): a line from each of the film's commands (src/tell.mjs), the latest for a new page
   app.get("/api/activity", (c) => fresh(c, activity.state()));
@@ -1188,6 +1209,23 @@ export const createApi = (
   app.post("/api/adjust/preset/:id/apply", (c) =>
     gradeResult(c, () => grades.applyPreset(c.req.param("id"))),
   );
+
+  const easeTemplates = openEaseTemplates();
+  app.get("/api/ease-templates", (c) => fresh(c, easeTemplates.list()));
+  app.post("/api/ease-templates", zValidator("json", EaseTemplateUpload), (c) => {
+    const body = c.req.valid("json");
+    const saved = easeTemplates.save(body.name, body.curve, {
+      id: body.id,
+      basedOn: body.basedOn,
+    });
+    send("ease-templates");
+    return c.json(saved);
+  });
+  app.delete("/api/ease-templates/:id", (c) => {
+    const res = easeTemplates.remove(c.req.param("id"));
+    send("ease-templates");
+    return c.json(res);
+  });
 
   let weighed = null; // the heavy files last named, so each reload doesn't say it again
   app.post("/api/weight", zValidator("json", PageWeight), (c) => {

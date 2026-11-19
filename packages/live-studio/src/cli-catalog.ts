@@ -1297,8 +1297,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     meta: {
       effect: "read",
       cost: "optional-paid",
-      costHint:
-        "List and --json are free. Text detail runs Jev lesson lookup when configured.",
+      costHint: "List and --json are free. Text detail runs Jev lesson lookup when configured.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
@@ -1308,8 +1307,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "note",
     label: "note",
     category: "daily",
-    summary:
-      "Respond to a creator note or restore a deleted one.",
+    summary: "Respond to a creator note or restore a deleted one.",
     runner: "bun-script",
     target: "note",
     cwdModes: ["film"],
@@ -1326,7 +1324,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "done",
         label: "done",
-        summary: "Mark note fixed and queue it for creator check.",
+        summary:
+          "Mark note fixed and queue it for creator check (requires --after image or --no-after reason).",
         args: [
           {
             key: "id",
@@ -1341,6 +1340,42 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             type: "string",
             required: true,
             placeholder: "Adjusted cam timing",
+          },
+        ],
+        flags: [
+          {
+            key: "--after",
+            flag: "--after",
+            label: "After Image",
+            type: "string",
+            placeholder: "renders/still_12s.jpg",
+            hint: "Proof frame after fixing (PNG/JPG/WebP). Capture a custom INSPECT angle if the target moved.",
+          },
+          {
+            key: "--no-after",
+            flag: "--no-after",
+            label: "No-After Reason",
+            type: "string",
+            placeholder: "Audio-only mix tweak; no visual change",
+            hint: "Required if --after is omitted; pass either --after or --no-after.",
+          },
+          {
+            key: "--cam",
+            flag: "--cam",
+            label: "Custom Camera View",
+            type: "string",
+            tier: "advanced",
+            placeholder: "px,py,pz,lx,ly,lz,fov",
+            hint: "Custom FreeCam pose (same 6-7 numbers as INSPECT) to fly creator straight to fixed spot.",
+          },
+          {
+            key: "--t",
+            flag: "--t",
+            label: "After Timestamp",
+            type: "string",
+            tier: "advanced",
+            placeholder: "12.5",
+            hint: "Heard second or mm:ss where the After view lives if timing shifted.",
           },
         ],
       },

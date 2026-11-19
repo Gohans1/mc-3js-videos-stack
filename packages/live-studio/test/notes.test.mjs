@@ -14,6 +14,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 
 import {
+  noteFreeView,
   noteNumberMap,
   noteRangePill,
   noteSecond,
@@ -178,6 +179,10 @@ test("resolveNoteMedia serves persisted /api/note-img URLs (the pasted pictures 
     thumb: "/api/note-img/mw9jknxt.jpg",
     crop: "/api/note-img/mw9jknxt_crop.jpg",
     refs: [],
+    after: null,
+    noAfterReason: null,
+    afterCam: null,
+    afterTime: null,
   });
 
   const doneSaved = { id: "mw3t3iip", done: true, img: "notes/img/mw3t3iip.jpg" };
@@ -185,6 +190,51 @@ test("resolveNoteMedia serves persisted /api/note-img URLs (the pasted pictures 
     thumb: "/api/note-img/mw3t3iip.jpg",
     crop: null,
     refs: [],
+    after: null,
+    noAfterReason: null,
+    afterCam: null,
+    afterTime: null,
+  });
+
+  const withAfter = {
+    id: "fx1234",
+    done: true,
+    img: "notes/img/fx1234.jpg",
+    fixes: [
+      {
+        at: 1000,
+        what: "Moved bench",
+        after: "notes/img/fx1234_fix0.png",
+        t: 4.5,
+        cam: { p: [1, 2, 3], l: [4, 5, 6], fov: 50 },
+      },
+    ],
+  };
+  assert.deepEqual(resolveNoteMedia(withAfter, []), {
+    thumb: "/api/note-img/fx1234.jpg",
+    crop: null,
+    refs: [],
+    after: "/api/note-img/fx1234_fix0.png",
+    noAfterReason: null,
+    afterCam: { p: [1, 2, 3], l: [4, 5, 6], fov: 50 },
+    afterTime: 4.5,
+  });
+
+  const withReasonOnly = {
+    id: "fx5678",
+    done: true,
+    fixes: [
+      { at: 2000, what: "Audio gain fix", noAfterReason: "Audio-only change; frame unchanged" },
+    ],
+  };
+  assert.deepEqual(resolveNoteMedia(withReasonOnly, []), {
+    thumb: null,
+    crop: null,
+    refs: [],
+    after: null,
+    noAfterReason: "Audio-only change; frame unchanged",
+    afterCam: null,
+    afterTime: null,
   });
 
   const unsentOnly = { id: "new123", done: false };
@@ -200,6 +250,10 @@ test("resolveNoteMedia serves persisted /api/note-img URLs (the pasted pictures 
     thumb: "data:image/jpeg;base64,/9j/main",
     crop: "data:image/jpeg;base64,/9j/crop",
     refs: ["data:image/jpeg;base64,/9j/ref"],
+    after: null,
+    noAfterReason: null,
+    afterCam: null,
+    afterTime: null,
   });
   assert.deepEqual(
     resolveNoteMedia(
@@ -213,6 +267,10 @@ test("resolveNoteMedia serves persisted /api/note-img URLs (the pasted pictures 
     thumb: null,
     crop: null,
     refs: [],
+    after: null,
+    noAfterReason: null,
+    afterCam: null,
+    afterTime: null,
   });
 });
 
@@ -398,6 +456,83 @@ test("watchNotesFile detects atomic rename writes even before file exists and su
     assert.equal(hits, 1);
   } finally {
     w.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("noteFreeView extracts free-camera pose from cam.world and falls back to cam.line fields", () => {
+  assert.equal(
+    noteFreeView({ freeCam: false, cam: { world: { p: [1, 2, 3], l: [4, 5, 6] } } }),
+    null,
+  );
+  assert.equal(noteFreeView({ freeCam: true }), null);
+
+  assert.deepEqual(
+    noteFreeView({
+      freeCam: true,
+      cam: {
+        shot: 0,
+        line: "p: [1, 2, 3], l: [4, 5, 6], fov: 42.5, roll: -0.25, wave: 1.5",
+        world: { p: [1, 2, 3], l: [4, 5, 6], fov: 42.5, roll: -0.25, wave: 1.5 },
+      },
+    }),
+    { p: [1, 2, 3], l: [4, 5, 6], fov: 42.5, roll: -0.25, wave: 1.5 },
+  );
+
+  // Older notes only store p & l in world and keep fov/roll/wave in cam.line
+  assert.deepEqual(
+    noteFreeView({
+      freeCam: true,
+      cam: {
+        shot: 0,
+        line: "p: [V(0, 0, 0), V(0, 0, 0)], l: [V(1, 1, 1), V(1, 1, 1)], fov: 68, roll: 0.15, wave: 0.8",
+        world: { p: [11.2, 4.5, 19.8], l: [14.1, 2.0, 12.6] },
+      },
+    }),
+    { p: [11.2, 4.5, 19.8], l: [14.1, 2.0, 12.6], fov: 68, roll: 0.15, wave: 0.8 },
+  );
+});
+
+test("blank fix.what with afterData rejects cleanly without writing an orphaned file", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "notes-blank-fix-"));
+  try {
+    const notes = createNotes(dir);
+    notes.add({
+      note: {
+        id: "abc1",
+        t: 2,
+        time: "00:02.000",
+        shot: 0,
+        text: "first",
+        at: "2026-11-14T10:00:00.000Z",
+      },
+    });
+    const r = notes.change("abc1", {
+      fix: {
+        what: "   ",
+        afterData: "data:image/png;base64,iVBORw0KGgo=",
+      },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(existsSync(join(dir, "notes/img/abc1_fix0.png")), false);
+
+    const app = createApi(
+      { notes, dir, PUBLIC: dir, syncNotes: () => {}, stamp: async () => 1 },
+      { page: () => "", events: [], send: () => {} },
+    );
+    const res = await app.request("/api/notes/abc1", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        fix: {
+          what: "   ",
+          afterData: "data:image/png;base64,iVBORw0KGgo=",
+        },
+      }),
+    });
+    assert.equal(res.ok, false);
+    assert.equal(existsSync(join(dir, "notes/img/abc1_fix0.png")), false);
+  } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });

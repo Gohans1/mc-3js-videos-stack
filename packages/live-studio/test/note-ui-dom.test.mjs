@@ -96,6 +96,7 @@ import { Transport } from "/shell/Transport.tsx";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
 import { listenActivity, onActivitySpans } from "/activity/activity.ts";
 import { Segmented } from "/components/inspector.tsx";
+import { engine, registerEngine } from "/core/engine.ts";
 import { onEvent } from "/core/events.ts";
 import { S } from "/core/state.ts";
 import { get, set, studio, useStudio } from "/core/store.ts";
@@ -133,6 +134,8 @@ function Harness() {
 
   window.__DOM_TEST__ = {
     S,
+    engine,
+    registerEngine,
     get,
     set,
     studio,
@@ -190,10 +193,15 @@ describe("notes UI mounted Chrome DOM interactions", () => {
   let baseUrl;
   let webview;
   let currentNotes = fixtureNotes();
-  let textDocument = { version: "text-base", data: { items: [
-    { id: "title", kind: "text", from: 1, to: 2, track: 0, text: "Opening" },
-    { id: "caption", kind: "text", from: 3, to: 4, track: 1, text: "End" },
-  ] } };
+  let textDocument = {
+    version: "text-base",
+    data: {
+      items: [
+        { id: "title", kind: "text", from: 1, to: 2, track: 0, text: "Opening" },
+        { id: "caption", kind: "text", from: 3, to: 4, track: 1, text: "End" },
+      ],
+    },
+  };
   const sseClients = new Set();
   const sendEvent = (event, data = "") => {
     for (const client of sseClients) client.write(`event: ${event}\ndata: ${data}\n\n`);
@@ -381,6 +389,8 @@ describe("notes UI mounted Chrome DOM interactions", () => {
                 ? { ...n, state: "done", done: true, approved: "2026-11-15T12:00:00.000Z" }
                 : n,
             );
+          } else if (id && body && body.remove) {
+            currentNotes = currentNotes.filter((n) => n.id !== id);
           } else if (id && body && "text" in body) {
             currentNotes = currentNotes.map((n) => (n.id === id ? { ...n, text: body.text } : n));
           }
@@ -1940,7 +1950,10 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     })()`);
     await waitUntil(notesTab, "Notes tab beside Lessons", 15000);
     assert.equal(await webview.evaluate(`${notesTab}.hasAttribute('data-ai-lit')`), false);
-    assert.equal(await webview.evaluate(`document.querySelectorAll('[data-slot="toast-title"]').length`), 0);
+    assert.equal(
+      await webview.evaluate(`document.querySelectorAll('[data-slot="toast-title"]').length`),
+      0,
+    );
 
     currentNotes = currentNotes.map((n) =>
       n.id === "n-open"
@@ -1953,22 +1966,41 @@ describe("notes UI mounted Chrome DOM interactions", () => {
         : n,
     );
     sendNotes();
-    await waitUntil(`${toastCount("Note #3 ready to check")} === 1`, "one toast for the remote fix");
-    await waitUntil(`(() => {
+    await waitUntil(
+      `${toastCount("Note #3 ready to check")} === 1`,
+      "one toast for the remote fix",
+    );
+    await waitUntil(
+      `(() => {
       const rail = document.querySelector('[aria-label="Studio activity"]');
       const notice = rail?.querySelector('[data-slot="toast"]');
       if (!notice) return false;
       const a = rail.getBoundingClientRect(), b = notice.getBoundingClientRect();
       return b.height > 0 && b.top >= a.top - 1 && b.bottom <= a.bottom + 1 &&
         b.left >= a.left - 1 && b.right <= a.right + 1;
-    })()`, "the notice lives inside the reserved activity rail");
+    })()`,
+      "the notice lives inside the reserved activity rail",
+    );
     await waitUntil(`${notesTab}.hasAttribute('data-ai-lit')`, "inactive Notes tab lights up");
-    assert.deepEqual(await webview.evaluate("({ at: window.__DOM_TEST__.S.t, playing: window.__DOM_TEST__.S.playing })"), { at: 8, playing: true });
+    assert.deepEqual(
+      await webview.evaluate(
+        "({ at: window.__DOM_TEST__.S.t, playing: window.__DOM_TEST__.S.playing })",
+      ),
+      { at: 8, playing: true },
+    );
 
     assert.notEqual(await webview.evaluate(`getComputedStyle(${notesTab}).boxShadow`), "none");
-    assert.equal(await webview.evaluate(`document.querySelector('[role="tab"][aria-selected="true"]').textContent`), "Lessons");
+    assert.equal(
+      await webview.evaluate(
+        `document.querySelector('[role="tab"][aria-selected="true"]').textContent`,
+      ),
+      "Lessons",
+    );
     await webview.evaluate(`${notesTab}.click()`);
-    await waitUntil(`document.querySelector('[data-note="n-open"][data-ai-lit]')`, "changed note lights up");
+    await waitUntil(
+      `document.querySelector('[data-note="n-open"][data-ai-lit]')`,
+      "changed note lights up",
+    );
 
     currentNotes = currentNotes.map((n) =>
       n.id === "n-open" ? { ...n, state: "done", approved: "2026-11-15T11:00:00.000Z" } : n,
@@ -1981,11 +2013,17 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     );
     await webview.evaluate("window.beforeNotesRefresh = window.__DOM_TEST__.get().notes");
     sendNotes();
-    await waitUntil("window.beforeNotesRefresh !== window.__DOM_TEST__.get().notes", "duplicate event has reloaded notes");
+    await waitUntil(
+      "window.beforeNotesRefresh !== window.__DOM_TEST__.get().notes",
+      "duplicate event has reloaded notes",
+    );
     assert.equal(await webview.evaluate(toastCount("Note #3 approved")), 1);
 
     await webview.evaluate(`window.__DOM_TEST__.changeNote('n-check', { approve: true })`);
-    await waitUntil(`window.__DOM_TEST__.get().notes.find(n => n.id === 'n-check').approved === '2026-11-15T12:00:00.000Z'`, "server echoed local approval");
+    await waitUntil(
+      `window.__DOM_TEST__.get().notes.find(n => n.id === 'n-check').approved === '2026-11-15T12:00:00.000Z'`,
+      "server echoed local approval",
+    );
     assert.equal(await webview.evaluate(toastCount("Note #1 approved")), 0);
 
     const toastAction = `[...document.querySelectorAll('[data-slot="toast"]')]
@@ -2011,16 +2049,32 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "explicit Review opens the requested note despite the current filter",
     );
     assert.equal(await webview.evaluate("window.__DOM_TEST__.get().noteSearch"), "Pan settle");
-    currentNotes = currentNotes.map((note) => note.id === "n-done"
-      ? { ...note, state: "check", fixes: [...note.fixes, { what: "Pan fixed again", at: "2026-11-15T15:00:00.000Z" }] } : note);
+    currentNotes = currentNotes.map((note) =>
+      note.id === "n-done"
+        ? {
+            ...note,
+            state: "check",
+            fixes: [...note.fixes, { what: "Pan fixed again", at: "2026-11-15T15:00:00.000Z" }],
+          }
+        : note,
+    );
     sendNotes();
-    await waitUntil(`${toastCount("Note #4 ready to check")} === 1`, "new fix arrives during Review");
+    await waitUntil(
+      `${toastCount("Note #4 ready to check")} === 1`,
+      "new fix arrives during Review",
+    );
     await webview.evaluate(`[...document.querySelectorAll('[data-slot="toast"]')]
       .find(x => x.querySelector('[data-slot="toast-title"]')?.textContent === 'Note #4 ready to check')
       .querySelector('[data-slot="toast-action"]').click()`);
-    await waitUntil(`document.querySelector('[aria-label="Review notes"] [data-note="n-done"]')`, "toast selects the exact note already in Review");
+    await waitUntil(
+      `document.querySelector('[aria-label="Review notes"] [data-note="n-done"]')`,
+      "toast selects the exact note already in Review",
+    );
 
-    assert.match(await webview.evaluate(`document.querySelector('[aria-label="Review notes"]').textContent`), /New preview build available/);
+    assert.match(
+      await webview.evaluate(`document.querySelector('[aria-label="Review notes"]').textContent`),
+      /New preview build available/,
+    );
     await webview.evaluate(`window.__DOM_TEST__.setTiming({ main: [
       { id: 'b', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
       { id: 'a', kind: 'clip', sourceFrom: 0, sourceTo: 6 },
@@ -2031,10 +2085,16 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     await webview.evaluate(`window.__DOM_TEST__.set({ noteSearch: '', newBuild: false })`);
     await webview.evaluate("window.__DOM_TEST__.S.dirty = false");
     sendEvent("activity", JSON.stringify({ id: 1, say: "Reading the scene", when: Date.now() }));
-    await waitUntil(`document.querySelector('[aria-label^="Reading the scene"]')`, "text-only activity reached the rail");
+    await waitUntil(
+      `document.querySelector('[aria-label^="Reading the scene"]')`,
+      "text-only activity reached the rail",
+    );
     assert.equal(await webview.evaluate("window.__DOM_TEST__.S.dirty"), false);
     assert.equal(await webview.evaluate("window.timelineActivityDraws"), 0);
-    sendEvent("activity", JSON.stringify({ id: 2, say: "Checking the cut", when: Date.now(), at: 2, to: 3 }));
+    sendEvent(
+      "activity",
+      JSON.stringify({ id: 2, say: "Checking the cut", when: Date.now(), at: 2, to: 3 }),
+    );
     await waitUntil("window.timelineActivityDraws === 1", "time range redraws the timeline");
     assert.equal(await webview.evaluate("window.__DOM_TEST__.S.dirty"), false);
 
@@ -2044,22 +2104,44 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     assert.equal(await webview.evaluate(`${textTab}.hasAttribute('data-ai-lit')`), false);
     textDocument = {
       version: "text-external",
-      data: { items: textDocument.data.items.map((item) =>
-        item.id === "caption" ? { ...item, text: "Closing credits" } : item) },
+      data: {
+        items: textDocument.data.items.map((item) =>
+          item.id === "caption" ? { ...item, text: "Closing credits" } : item,
+        ),
+      },
     };
     sendEvent("text");
     await waitUntil(`${textTab}.hasAttribute('data-ai-lit')`, "external text edit lights its tab");
-    assert.equal(await webview.evaluate(`[...document.querySelectorAll('[aria-label="Text tracks"] li[data-ai-lit] button[aria-label^="Select"]')].map(x => x.getAttribute("aria-label")).join("")`), "Select Text 2");
-    assert.equal(await webview.evaluate(`document.querySelector('[role="tab"][aria-selected="true"]').textContent.startsWith("Notes")`), true);
+    assert.equal(
+      await webview.evaluate(
+        `[...document.querySelectorAll('[aria-label="Text tracks"] li[data-ai-lit] button[aria-label^="Select"]')].map(x => x.getAttribute("aria-label")).join("")`,
+      ),
+      "Select Text 2",
+    );
+    assert.equal(
+      await webview.evaluate(
+        `document.querySelector('[role="tab"][aria-selected="true"]').textContent.startsWith("Notes")`,
+      ),
+      true,
+    );
     await webview.evaluate("window.__DOM_TEST__.set({ aiActivity: false })");
-    await waitUntil(`!${textTab}.hasAttribute('data-ai-lit')`, "turning activity off clears the tab cue");
-    currentNotes = currentNotes.map((note) => note.id === "n-ask"
-      ? { ...note, state: "done", approved: "2026-11-15T16:00:00.000Z" } : note);
+    await waitUntil(
+      `!${textTab}.hasAttribute('data-ai-lit')`,
+      "turning activity off clears the tab cue",
+    );
+    currentNotes = currentNotes.map((note) =>
+      note.id === "n-ask" ? { ...note, state: "done", approved: "2026-11-15T16:00:00.000Z" } : note,
+    );
     sendNotes();
-    await waitUntil(`${toastCount("Note #2 approved")} === 1`, "remote note notices stay available with AI activity off");
-    assert.equal(await webview.evaluate(`document.querySelector('[aria-label="Studio activity"]') === null`), true);
+    await waitUntil(
+      `${toastCount("Note #2 approved")} === 1`,
+      "remote note notices stay available with AI activity off",
+    );
+    assert.equal(
+      await webview.evaluate(`document.querySelector('[aria-label="Studio activity"]') === null`),
+      true,
+    );
   }, 30000);
-
 
   test("a local note link resolves its exact target and does not jump for a missing note", async () => {
     await webview.evaluate(`(() => {
@@ -2068,7 +2150,10 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       set({ noteSearch: 'Pan settle', playing: false });
       location.hash = 'note=n-open';
     })()`);
-    await waitUntil(`document.querySelector('[aria-label="Review notes"] [data-note="n-open"]')`, "link opens the linked note despite the filter");
+    await waitUntil(
+      `document.querySelector('[aria-label="Review notes"] [data-note="n-open"]')`,
+      "link opens the linked note despite the filter",
+    );
     assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 1);
     const copy = `document.querySelector('button[aria-label="Copy note link"]')`;
     await webview.evaluate(`(() => {
@@ -2086,7 +2171,10 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       window.__DOM_TEST__.setReview(false);
       location.hash = 'note=gone';
     })()`);
-    await waitUntil(`window.__DOM_TEST__.get().status.includes('no longer available')`, "missing note notice");
+    await waitUntil(
+      `window.__DOM_TEST__.get().status.includes('no longer available')`,
+      "missing note notice",
+    );
     assert.equal(await webview.evaluate("window.__DOM_TEST__.S.t"), 1);
     assert.equal(await webview.evaluate("window.__DOM_TEST__.get().review"), false);
   });
@@ -2136,4 +2224,380 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     await waitUntil(aligned("Horizontal choices"), "indicator returns with a valid value");
     assert.deepEqual(await webview.evaluate("window.__DOM_ERRORS__"), []);
   });
+
+  test("Settings toggles noteNotify and activityChime default on and noteNotify controls resolve toasts", async () => {
+    const notesTab = `[...document.querySelectorAll('[role="tab"]')].find(x => x.textContent.startsWith('Notes'))`;
+    const toastHas = (title) =>
+      `[...document.querySelectorAll('[data-slot="toast-title"]')].some(x => x.textContent === ${JSON.stringify(title)})`;
+    try {
+      await webview.resize(1280, 800);
+      const defaults = JSON.parse(
+        await webview.evaluate(`JSON.stringify({
+          noteNotify: window.__DOM_TEST__.get().noteNotify,
+          activityChime: window.__DOM_TEST__.get().activityChime,
+        })`),
+      );
+      assert.equal(defaults.noteNotify, true, "noteNotify defaults to true");
+      assert.equal(defaults.activityChime, true, "activityChime defaults to true");
+
+      await webview.evaluate(`(async () => {
+        localStorage.removeItem('noteNotify');
+        localStorage.removeItem('activityChime');
+        const { S, set, setMode, loadNotes } = window.__DOM_TEST__;
+        S.t = 0;
+        S.playing = false;
+        set({
+          lib: 'lessons',
+          aiActivity: true,
+          playing: false,
+          settingsOpen: false,
+          noteNotify: true,
+          activityChime: true,
+        });
+        setMode('library');
+        await loadNotes();
+      })()`);
+      await waitUntil(
+        `document.querySelector('button[aria-label="Settings"]')`,
+        "Settings trigger ready",
+      );
+
+      const isSwitchChecked = (sel) => `(() => {
+        const el = document.querySelector(${JSON.stringify(sel)});
+        if (!el) return false;
+        const wrap = el.closest('[data-slot="switch"]');
+        return Boolean(wrap?.hasAttribute('data-checked') || el.checked);
+      })()`;
+      const clickSwitch = (sel) => `(() => {
+        const el = document.querySelector(${JSON.stringify(sel)});
+        (el.closest('[data-slot="switch"]') ?? el).click();
+      })()`;
+
+      await webview.evaluate(`document.querySelector('button[aria-label="Settings"]').click()`);
+      await waitUntil(
+        `document.querySelector('#note-notify') && document.querySelector('#activity-chime')`,
+        "Settings switches mounted",
+      );
+
+      assert.equal(await webview.evaluate(isSwitchChecked("#note-notify")), true);
+      assert.equal(await webview.evaluate(isSwitchChecked("#activity-chime")), true);
+
+      // Toggle noteNotify OFF and verify resolve alert stays lit on Notes tab without popping a toast
+      await webview.evaluate(clickSwitch("#note-notify"));
+      await waitUntil(`!(${isSwitchChecked("#note-notify")})`, "noteNotify unchecked");
+      assert.equal(await webview.evaluate(`localStorage.getItem('noteNotify')`), "off");
+      assert.equal(await webview.evaluate(`window.__DOM_TEST__.get().noteNotify`), false);
+
+      await webview.evaluate(
+        `document.querySelector('button[aria-label="Close settings"]').click()`,
+      );
+      await waitUntil(`window.__DOM_TEST__.get().settingsOpen === false`, "Settings closed");
+
+      currentNotes = [
+        ...currentNotes.map((n) =>
+          n.id === "n-open"
+            ? {
+                ...n,
+                state: "check",
+                done: true,
+                fixes: [{ what: "Fixed rim", at: "2026-11-18T10:00:00.000Z" }],
+              }
+            : n,
+        ),
+        {
+          id: "n-5",
+          at: "2026-11-18T09:00:00.000Z",
+          t: 5,
+          time: "00:05.000",
+          frame: 150,
+          shot: 1,
+          shotName: "Main",
+          text: "Warm up skylight",
+          state: "open",
+          done: false,
+        },
+      ];
+      currentNumbers = { ...currentNumbers, "n-5": 5 };
+      sendNotes();
+      await waitUntil(
+        `${notesTab}?.hasAttribute('data-ai-lit')`,
+        "Notes tab still lights up when noteNotify is false",
+      );
+      await new Promise((r) => setTimeout(r, 150));
+      assert.equal(
+        await webview.evaluate(toastHas("Note #3 ready to check")),
+        false,
+        "noteNotify=false suppresses resolve toast",
+      );
+
+      // Re-enable noteNotify and toggle activityChime off/on
+      await webview.evaluate(`document.querySelector('button[aria-label="Settings"]').click()`);
+      await waitUntil(`document.querySelector('#note-notify')`, "Settings reopened");
+      await webview.evaluate(clickSwitch("#note-notify"));
+      await waitUntil(isSwitchChecked("#note-notify"), "noteNotify re-checked");
+      assert.equal(await webview.evaluate(`localStorage.getItem('noteNotify')`), "on");
+
+      await webview.evaluate(clickSwitch("#activity-chime"));
+      await waitUntil(`!(${isSwitchChecked("#activity-chime")})`, "activityChime unchecked");
+      assert.equal(await webview.evaluate(`localStorage.getItem('activityChime')`), "off");
+      await webview.evaluate(clickSwitch("#activity-chime"));
+      await waitUntil(isSwitchChecked("#activity-chime"), "activityChime re-checked");
+      assert.equal(await webview.evaluate(`localStorage.getItem('activityChime')`), "on");
+
+      await webview.evaluate(
+        `document.querySelector('button[aria-label="Close settings"]').click()`,
+      );
+      currentNotes = currentNotes.map((n) =>
+        n.id === "n-5"
+          ? {
+              ...n,
+              state: "check",
+              done: true,
+              fixes: [{ what: "Warmed skylight", at: "2026-11-18T10:05:00.000Z" }],
+            }
+          : n,
+      );
+      sendNotes();
+      await waitUntil(
+        toastHas("Note #5 ready to check"),
+        "Restoring noteNotify emits resolve toast",
+      );
+    } finally {
+      await webview
+        .evaluate(
+          `(() => {
+          localStorage.removeItem('noteNotify');
+          localStorage.removeItem('activityChime');
+          window.__DOM_TEST__.set({ settingsOpen: false, noteNotify: true, activityChime: true });
+        })()`,
+        )
+        .catch(() => {});
+      await webview.resize(1024, 720);
+    }
+  }, 20000);
+
+  test("ReviewRoom Compare clears prior note Now image when switching notes so cameras never bleed", async () => {
+    currentNotes = [
+      {
+        id: "n-check",
+        at: "2026-11-12T10:00:00.000Z",
+        t: 2,
+        time: "00:02.000",
+        frame: 60,
+        shot: 0,
+        shotName: "Intro",
+        text: "Check corner one",
+        state: "check",
+        done: true,
+        img: "n-check.jpg",
+        freeCam: true,
+        cam: { world: { p: [2, 2, 6], l: [2, 1, 0], fov: 50 } },
+        fixes: [{ what: "Fixed corner one", at: "2026-11-12T11:00:00.000Z" }],
+      },
+      {
+        id: "n-check-2",
+        at: "2026-11-12T10:01:00.000Z",
+        t: 4,
+        time: "00:04.000",
+        frame: 120,
+        shot: 1,
+        shotName: "Main",
+        text: "Check corner two",
+        state: "check",
+        done: true,
+        img: "n-check-2.jpg",
+        freeCam: true,
+        cam: { world: { p: [25, 2, 6], l: [25, 1, 0], fov: 50 } },
+        fixes: [{ what: "Fixed corner two", at: "2026-11-12T11:01:00.000Z" }],
+      },
+    ];
+    currentNumbers = { "n-check": 1, "n-check-2": 2 };
+    try {
+      await webview.resize(1280, 800);
+      await webview.evaluate(`(async () => {
+        const d = window.__DOM_TEST__;
+        const vec = (x, y, z) => ({ x, y, z, set(nx, ny, nz) { this.x = nx; this.y = ny; this.z = nz; } });
+        window.__ORIG_S_STATE__ = {
+          el: d.S.el,
+          render: d.S.render,
+          tools: d.S.tools,
+          engineRender: d.engine.render,
+        };
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 36;
+        const g = canvas.getContext('2d');
+        d.S.el = { ...d.S.el, canvas };
+        d.S.tools = { free: { on: false, p: vec(0, 2, 6), l: vec(0, 1, 0), fov: 50, roll: 0, wave: 0 } };
+        d.S.render = Object.assign(async () => {
+          if (d.S.tools.free.p.x >= 10) {
+            await new Promise((resolve) => {
+              window.__resolveSecondNow__ = () => {
+                g.fillStyle = '#3b82f6';
+                g.fillRect(0, 0, 64, 36);
+                resolve();
+              };
+            });
+            return;
+          }
+          g.fillStyle = '#10b981';
+          g.fillRect(0, 0, 64, 36);
+        }, { eases: {} });
+        d.registerEngine({
+          render: async (t, readFrame) => {
+            await d.S.render(t);
+            readFrame?.();
+          },
+        });
+        d.set({ pictureRev: (d.get().pictureRev ?? 0) + 1 });
+        await d.loadNotes();
+        d.set({ reviewTab: "check", reviewPick: "n-check", review: true });
+      })()`);
+
+      await waitUntil(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check"] img[alt^="The film now"]')`,
+        "First note Now image rendered in ReviewRoom Compare",
+      );
+      const src1 = await webview.evaluate(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check"] img[alt^="The film now"]').src`,
+      );
+      assert.ok(src1.startsWith("data:image/jpeg"), "First note captured Now snapshot");
+
+      await webview.evaluate(`(() => {
+        document.querySelector('button[aria-label*="Check corner two"]').click();
+      })()`);
+
+      await waitUntil(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check-2"]') && typeof window.__resolveSecondNow__ === 'function'`,
+        "Switched to second note while second Now capture is still pending",
+      );
+      const leakedNow = await webview.evaluate(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check-2"] img[alt^="The film now"]')?.src ?? null`,
+      );
+      assert.equal(
+        leakedNow,
+        null,
+        "Switching notes clears previous note Now image instead of bleeding stale snapshot",
+      );
+
+      await webview.evaluate(`window.__resolveSecondNow__()`);
+      await waitUntil(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check-2"] img[alt^="The film now"]')`,
+        "Second note Now image rendered after resolve",
+      );
+      const src2 = await webview.evaluate(
+        `document.querySelector('[aria-label="Review notes"] [data-note="n-check-2"] img[alt^="The film now"]').src`,
+      );
+      assert.ok(src2.startsWith("data:image/jpeg"), "Second note captured Now snapshot");
+      assert.notEqual(src2, src1, "Second note Now snapshot differs from first note camera view");
+      assert.equal(
+        await webview.evaluate(`window.__DOM_TEST__.S.tools.free.on`),
+        false,
+        "Live freeCam flag restored",
+      );
+    } finally {
+      await webview
+        .evaluate(
+          `(() => {
+          const d = window.__DOM_TEST__;
+          if (window.__ORIG_S_STATE__) {
+            d.S.el = window.__ORIG_S_STATE__.el;
+            d.S.render = window.__ORIG_S_STATE__.render;
+            d.S.tools = window.__ORIG_S_STATE__.tools;
+            d.registerEngine({ render: window.__ORIG_S_STATE__.engineRender });
+            delete window.__ORIG_S_STATE__;
+          }
+          delete window.__resolveSecondNow__;
+          d.set({ review: false, reviewPick: null, pictureRev: (d.get().pictureRev ?? 0) + 1 });
+        })()`,
+        )
+        .catch(() => {});
+      await webview.resize(1024, 720);
+    }
+  }, 20000);
+
+  test("Stage-anchored compose hides sidebar dock while Approve and Delete play inert non-duplicate exit transitions", async () => {
+    // 1. Pinned/anchored create compose yields sidebar NoteList dock completely
+    await webview.evaluate(`window.__DOM_TEST__.set({
+      compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: { x: 0.4, y: 0.5, what: "wall" }, anchor: { x: 0.4, y: 0.5 }, resume: false },
+      draft: "",
+    })`);
+    await Bun.sleep(40);
+    assert.equal(
+      await webview.evaluate(
+        `document.querySelector('[aria-label="Notes"] textarea[name="note"]')`,
+      ),
+      null,
+      "Desktop pinned compose never renders inside sidebar Notes dock",
+    );
+
+    // Unpinned + New note still opens inside sidebar Notes dock
+    await webview.evaluate(`window.__DOM_TEST__.set({
+      compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: null, resume: false },
+      draft: "",
+    })`);
+    await waitUntil(
+      `document.querySelector('[aria-label="Notes"] textarea[name="note"]')`,
+      "Unpinned compose renders in sidebar dock",
+    );
+    await webview.evaluate(`window.__DOM_TEST__.set({ compose: null, draft: "" })`);
+
+    // 2. Approve on Cards "To check" swaps live [data-note="n-check"] cleanly into [data-exiting-note="n-check"] inert ghost, then settles
+    await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "cards", noteStatus: "check" })`);
+    await waitUntil(
+      `document.querySelector('button[aria-label="Approve note #1 at 00:04.000"]')`,
+      "Approve button visible in Cards To check",
+    );
+    await webview.evaluate(
+      `document.querySelector('button[aria-label="Approve note #1 at 00:04.000"]').click()`,
+    );
+    await waitUntil(
+      `document.querySelector('[data-exiting-note="n-check"]')`,
+      "Approve starts NoteExitSlot transition",
+    );
+    const approveGhost = JSON.parse(
+      await webview.evaluate(`JSON.stringify((() => {
+        const ghost = document.querySelector('[data-exiting-note="n-check"]');
+        return {
+          inert: ghost?.inert === true,
+          ariaHidden: ghost?.getAttribute('aria-hidden'),
+          duplicateLiveAttr: Boolean(ghost?.querySelector('[data-note="n-check"]')),
+          liveCheckCards: document.querySelectorAll('[data-note="n-check"]').length,
+        };
+      })())`),
+    );
+    assert.deepEqual(approveGhost, {
+      inert: true,
+      ariaHidden: "true",
+      duplicateLiveAttr: false,
+      liveCheckCards: 0,
+    });
+    await waitUntil(
+      `!document.querySelector('[data-exiting-note="n-check"]')`,
+      "Approve exit slot unmounts after WAAPI exit completes",
+    );
+
+    // 3. Delete in Cards "To fix" plays inert exit transition before removing slot
+    await webview.evaluate(`window.__DOM_TEST__.set({ noteStatus: "open" })`);
+    await waitUntil(
+      `document.querySelector('[data-note="n-open"] button[aria-label^="Delete note"]')`,
+      "Delete button visible on open card",
+    );
+    await webview.evaluate(
+      `document.querySelector('[data-note="n-open"] button[aria-label^="Delete note"]').click()`,
+    );
+    await waitUntil(
+      `document.querySelector('[data-exiting-note="n-open"]')`,
+      "Delete starts NoteExitSlot transition",
+    );
+    assert.equal(
+      await webview.evaluate(`document.querySelectorAll('[data-note="n-open"]').length`),
+      0,
+      "Live data-note cleared immediately while ghost animates out",
+    );
+    await waitUntil(
+      `!document.querySelector('[data-exiting-note="n-open"]')`,
+      "Delete exit slot unmounts cleanly after exit completes",
+    );
+  }, 20000);
 });

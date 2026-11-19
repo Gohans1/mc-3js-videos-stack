@@ -6,10 +6,17 @@ import { join, relative, resolve } from "node:path";
 import { cliArgs, needFilm, numberArg } from "./src/cli.mjs";
 import { readLessonConfig } from "./src/lesson-settings.mjs";
 import { LESSONS, lessonsFor } from "./src/lessons.mjs";
+import { recordNoteReads } from "./src/note-cli.mjs";
 import { noteDetailFormat } from "./src/note-detail.mjs";
 import { noteLessonFormat, toLearn } from "./src/note-format.mjs";
 import { noteState, noteThread, wholeNote } from "./src/note-state.mjs";
-import { deletedSaid, findNote, noteNumbers, readDeletedNotes, readNoteRows } from "./src/notes.mjs";
+import {
+  deletedSaid,
+  findNote,
+  noteNumbers,
+  readDeletedNotes,
+  readNoteRows,
+} from "./src/notes.mjs";
 import { tell } from "./src/tell.mjs";
 
 const ROOT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
@@ -154,7 +161,7 @@ const HELP = `The creator's notes from the studio, for the AI about to act on th
 A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.
 Lessons > AI Inspector previews the shared inputs/output without API calls; Run Jev is a manual opt-in.
 Save writes notes/lessons-config.json (prompts, selection, output and CLI enable switch); matching results are cached.
-Answer one: bun run note done|ask|learned ID "words" (bun run note --help). Never edit notes.jsonl by hand.`;
+Answer one: bun run note done ID "words" (--after <image> | --no-after "<reason>"), or ask/learned (bun run note --help). Never edit notes.jsonl by hand.`;
 const validateSort = (mode) => {
   if (!Object.hasOwn(SORT, mode)) {
     console.error(
@@ -164,7 +171,15 @@ const validateSort = (mode) => {
   }
   return mode;
 };
-const args = cliArgs(HELP, ["--shot N", "--sort MODE", "--limit N", "--done", "--cam", "--json", "--deleted"]);
+const args = cliArgs(HELP, [
+  "--shot N",
+  "--sort MODE",
+  "--limit N",
+  "--done",
+  "--cam",
+  "--json",
+  "--deleted",
+]);
 let shot = null;
 let sort = "written";
 let limitArg;
@@ -205,7 +220,12 @@ if (ids.length) {
   const byKey = new Map(
     notes.flatMap((n) => [
       [n.id, n],
-      ...(n.n === null ? [] : [[`#${n.n}`, n], [String(n.n), n]]),
+      ...(n.n === null
+        ? []
+        : [
+            [`#${n.n}`, n],
+            [String(n.n), n],
+          ]),
     ]),
   );
   if (archived) for (const n of notes) byKey.set(n.id, n);
@@ -242,6 +262,9 @@ const shotCount = () => {
 const ordered = pick.toSorted(SORT[sort].cmp);
 const hidden = !ids.length && limit > 0 ? ordered.slice(limit) : [];
 const shown = hidden.length ? ordered.slice(0, limit) : ordered;
+if (!archived) {
+  recordNoteReads(ROOT, ids.length || shot !== null ? shown.map((n) => n.id) : [], notes);
+}
 if (json) {
   const rows = shown.map((n) => {
     const { n: number, t: recordedTime, time: recordedTimecode, cam: camera, ...note } = n;
@@ -342,7 +365,7 @@ if (ids.length || shot !== null) {
   const hasCheck = ordered.some((n) => noteState(n) === "check");
   console.log(
     todo
-      ? `\nnext: where it is heard now and what the film has there, file and row: bun run at ${todo.id}; fix it, look (AT=<the second at prints> bun run render stills), then bun run note done ${todo.id} "what changed"`
+      ? `\nnext: where it is heard now and what the film has there, file and row: bun run at ${todo.id}; fix it, capture an after shot (AT=<sec> bun run render stills, or add INSPECT=px,py,pz,lx,ly,lz,fov if the target moved so you shoot a suitable custom view), then bun run note done ${todo.id} "what changed" --after renders/still_<sec>s.jpg [--cam px,py,pz,lx,ly,lz,fov --t <sec>] (or --no-after "<reason>" when non-visual)`
       : learn
         ? `\nnext: keep the rule as said above, then bun run note learned ${learn.id} "the rule, where"`
         : `\nnext: ${hasCheck ? "nothing here is yours until the creator answers in the studio; " : ordered.length ? "these notes are done; " : ""}the open notes: bun run notes`,

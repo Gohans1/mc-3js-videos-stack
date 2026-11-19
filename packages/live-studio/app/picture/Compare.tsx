@@ -66,7 +66,7 @@ export function SnapshotButtons({ className }: { className: string }) {
     <>
       <Tip label="Snapshot (Shift+\): keep this picture to compare with after a change">
         <Button
-          variant="quiet"
+          variant="toolbar"
           size="icon-lg"
           className={cn("pointer-coarse:size-10", className)}
           aria-label="Take snapshot"
@@ -78,7 +78,7 @@ export function SnapshotButtons({ className }: { className: string }) {
       {still && (
         <Tip label="Hold to show the snapshot over the picture (hold \)">
           <Button
-            variant="quiet"
+            variant="toolbar"
             size="icon-lg"
             className={cn("select-none pointer-coarse:size-10", className)}
             aria-label="Compare with snapshot"

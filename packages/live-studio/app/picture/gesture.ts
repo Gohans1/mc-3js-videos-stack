@@ -1,9 +1,10 @@
-// Pure pointer/touch/sketch state machine for the 3D viewport (picture/pointer.ts).
+// Pure pointer/touch/sketch state machine for the 3D viewport (picture/pointer.ts):
+// desktop mouse left-click selects elements, left-drag moves the camera (Shift+left-drag orbits), right-click pins notes, right-drag sketches.
 export type ViewportGesture<E = unknown> =
   | { kind: "idle" }
   | { kind: "tap_press"; id: number; x: number; y: number; moved: boolean }
-  | { kind: "wake_press"; id: number; x: number; y: number; orbit: boolean; event?: E }
-  | { kind: "right_press"; id: number; x: number; y: number; event: E }
+  | { kind: "left_press"; id: number; x: number; y: number; shiftKey: boolean; event?: E }
+  | { kind: "right_press"; id: number; x: number; y: number; event?: E }
   | {
       kind: "cam_drag";
       id: number;
@@ -12,7 +13,7 @@ export type ViewportGesture<E = unknown> =
       x: number;
       y: number;
       mode: "look" | "orbit" | "slide";
-      woke: boolean;
+      tap: boolean;
       moved: boolean;
     }
   | { kind: "sketching"; id: number }
@@ -41,7 +42,7 @@ export interface ViewportStep<E = unknown> {
   armClickAt?: [number, number] | null;
   capture?: boolean;
   startSketchFrom?: E;
-  wokeFree?: boolean;
+  startCamDragFrom?: E;
 }
 
 export const IDLE_VIEWPORT_GESTURE: ViewportGesture<never> = { kind: "idle" };
@@ -49,7 +50,7 @@ export const IDLE_VIEWPORT_GESTURE: ViewportGesture<never> = { kind: "idle" };
 const canSupersede = <E>(g: ViewportGesture<E>, pointerType: string, id: number): boolean =>
   g.kind === "idle" ||
   g.kind === "pending_click" ||
-  ((g.kind === "wake_press" || g.kind === "right_press") && pointerType === "mouse") ||
+  ((g.kind === "left_press" || g.kind === "right_press") && pointerType === "mouse") ||
   (g.kind === "tap_press" && g.id === id);
 
 export function stepViewport<E>(
@@ -60,52 +61,55 @@ export function stepViewport<E>(
     case "press": {
       if (!canSupersede(gesture, event.pointerType, event.id))
         return { gesture, dropSketch: false };
-      if (!event.free) {
-        if (event.pointerType === "mouse" && event.button === 0) {
-          return {
-            gesture: {
-              kind: "wake_press",
-              id: event.id,
-              x: event.x,
-              y: event.y,
-              orbit: event.shiftKey,
-              event: event.raw,
-            },
-            dropSketch: false,
-          };
-        }
-        if (event.pointerType === "mouse" && event.button === 2) {
-          return {
-            gesture: {
-              kind: "right_press",
-              id: event.id,
-              x: event.x,
-              y: event.y,
-              event: event.raw as E,
-            },
-            dropSketch: false,
-          };
-        }
+      if (event.pointerType !== "mouse") {
         return {
           gesture: { kind: "tap_press", id: event.id, x: event.x, y: event.y, moved: false },
           dropSketch: false,
         };
       }
-      return {
-        gesture: {
-          kind: "cam_drag",
-          id: event.id,
-          startX: event.x,
-          startY: event.y,
-          x: event.x,
-          y: event.y,
-          mode: event.button !== 0 ? "slide" : event.shiftKey ? "orbit" : "look",
-          woke: false,
-          moved: false,
-        },
-        dropSketch: false,
-        capture: true,
-      };
+      if (event.button === 2) {
+        return {
+          gesture: {
+            kind: "right_press",
+            id: event.id,
+            x: event.x,
+            y: event.y,
+            event: event.raw,
+          },
+          dropSketch: false,
+        };
+      }
+      if (event.button === 0) {
+        return {
+          gesture: {
+            kind: "left_press",
+            id: event.id,
+            x: event.x,
+            y: event.y,
+            shiftKey: event.shiftKey,
+            event: event.raw,
+          },
+          dropSketch: false,
+        };
+      }
+      if (event.button === 1 && event.free) {
+        return {
+          gesture: {
+            kind: "cam_drag",
+            id: event.id,
+            startX: event.x,
+            startY: event.y,
+            x: event.x,
+            y: event.y,
+            mode: "slide",
+            tap: false,
+            moved: false,
+          },
+          dropSketch: false,
+          capture: true,
+        };
+      }
+      return { gesture, dropSketch: false };
     }
     case "move": {
       if ("id" in gesture && event.id !== gesture.id) return { gesture, dropSketch: false };
@@ -121,8 +125,7 @@ export function stepViewport<E>(
         };
       }
       if (
-        gesture.kind === "wake_press" &&
-        event.canWake &&
+        gesture.kind === "left_press" &&
         Math.hypot(event.x - gesture.x, event.y - gesture.y) > 4
       ) {
         return {
@@ -133,13 +136,13 @@ export function stepViewport<E>(
             startY: gesture.y,
             x: event.x,
             y: event.y,
-            mode: gesture.orbit ? "orbit" : "look",
-            woke: true,
+            mode: gesture.shiftKey ? "orbit" : "look",
+            tap: false,
             moved: true,
           },
           dropSketch: false,
-          wokeFree: true,
           capture: true,
+          startCamDragFrom: gesture.event,
         };
       }
       if (
@@ -159,18 +162,19 @@ export function stepViewport<E>(
     case "windowUp": {
       if ("id" in gesture && event.id !== gesture.id)
         return { gesture, dropSketch: false, armClickAt: null };
-      if (gesture.kind === "sketching" && (event.buttons & 2) !== 0)
+      if (
+        (gesture.kind === "sketching" || gesture.kind === "right_press") &&
+        (event.buttons & 2) !== 0
+      )
         return { gesture, dropSketch: false, armClickAt: null };
       if (
-        gesture.kind === "wake_press" &&
-        Math.hypot(event.x - gesture.x, event.y - gesture.y) <= 4
-      ) {
-        return {
-          gesture: { kind: "pending_click", x: gesture.x, y: gesture.y },
-          dropSketch: false,
-          armClickAt: [gesture.x, gesture.y],
-        };
-      }
+        (gesture.kind === "left_press" ||
+          (gesture.kind === "cam_drag" && gesture.mode !== "slide")) &&
+        (event.buttons & 1) !== 0
+      )
+        return { gesture, dropSketch: false, armClickAt: null };
+      if (gesture.kind === "cam_drag" && gesture.mode === "slide" && (event.buttons & 4) !== 0)
+        return { gesture, dropSketch: false, armClickAt: null };
       if (
         gesture.kind === "tap_press" &&
         !gesture.moved &&
@@ -180,19 +184,6 @@ export function stepViewport<E>(
           gesture: { kind: "pending_click", x: gesture.x, y: gesture.y },
           dropSketch: false,
           armClickAt: [gesture.x, gesture.y],
-        };
-      }
-      if (
-        gesture.kind === "cam_drag" &&
-        gesture.mode !== "slide" &&
-        !gesture.woke &&
-        !gesture.moved &&
-        Math.hypot(event.x - gesture.startX, event.y - gesture.startY) <= 4
-      ) {
-        return {
-          gesture: { kind: "pending_click", x: gesture.startX, y: gesture.startY },
-          dropSketch: false,
-          armClickAt: [gesture.startX, gesture.startY],
         };
       }
       const dropSketch = gesture.kind === "sketching";

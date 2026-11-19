@@ -1,11 +1,14 @@
 // The note being written. Every keystroke is kept on the device (notes/notes.ts setDraft), so a reload never loses it.
 // On an upright phone it sits right under the picture, so the keyboard can't cover it and a tap still lands on the picture;
 // in PhoneApp (inline) it is the top of the notes column, which the keyboard shrinks (device.ts resizes-content) instead of covering
-import { ImagePlus, TriangleAlert, X } from "lucide-react";
+import { GripHorizontal, ImagePlus, TriangleAlert, X } from "lucide-react";
 import {
+  type CSSProperties,
   lazy,
+  type PointerEvent as ReactPointerEvent,
   type ReactNode,
   Suspense,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -31,7 +34,9 @@ import {
   composeExitSnapshot,
   composeOrigin,
   computeOriginVector,
+  computeStageComposerPos,
   isDockedSheetCramped,
+  isStageAnchoredCompose,
   resolveExitHeightRange,
   resolveHeightRange,
   shouldAnimateEnter,
@@ -40,8 +45,9 @@ import { INK_KEYS, setInk, toolsOpen } from "./ink";
 import { modKeyLabel, noteShotTitle } from "./note-card-meta";
 import { AskCallout } from "./note-parts";
 import { cancelNote, saveNote, setDraft } from "./notes";
+import { PinDrawToolbar } from "./PinTools";
 import { addRefs, REFS_MAX, removeRef } from "./refs";
-import { type Compose as ComposeSpec, isComposeDirty } from "./slice";
+import { type Compose as ComposeSpec, isComposeDirty, type StageAnchor } from "./slice";
 
 const RefSketch = lazy(() => import("./RefSketch").then((m) => ({ default: m.RefSketch })));
 
@@ -53,23 +59,40 @@ interface ExitState extends ComposeExitSnapshot {
 export function Compose({
   inline = false,
   dock = false,
+  stage = false,
   idleFooter = null,
   onCrampedOverlayChange,
+  onIdle,
+  draggableHeader = false,
+  onDragHeaderPointerDown,
+  onHeaderDoubleClick,
   className,
 }: {
   inline?: boolean;
   dock?: boolean;
+  stage?: boolean;
   idleFooter?: ReactNode;
   onCrampedOverlayChange?: (active: boolean) => void;
+  onIdle?: () => void;
+  draggableHeader?: boolean;
+  onDragHeaderPointerDown?: (e: ReactPointerEvent<HTMLDivElement>) => void;
+  onHeaderDoubleClick?: () => void;
   className?: string;
 }) {
-  const compose = useStudio((s) => s.compose),
+  const rawCompose = useStudio((s) => s.compose),
     noteSaving = useStudio((s) => s.noteSaving),
     draft = useStudio((s) => s.draft),
     drawn = useStudio((s) => s.inkSaid),
     refs = useStudio((s) => s.refs),
     notes = useStudio((s) => s.notes);
-  const animateCompose = PHONE || !dock;
+  const compose = stage
+    ? isStageAnchoredCompose(rawCompose, PHONE)
+      ? rawCompose
+      : null
+    : dock && isStageAnchoredCompose(rawCompose, PHONE)
+      ? null
+      : rawCompose;
+  const animateCompose = PHONE || !dock || stage;
   const [openCompose, setOpenCompose] = useState<ComposeSpec | null>(compose);
   const [exitState, setExitState] = useState<ExitState | null>(null);
   if (compose) {
@@ -183,7 +206,7 @@ export function Compose({
   useLayoutEffect(() => {
     const outer = wrapRef.current,
       card = cardRef.current,
-      current = get().compose;
+      current = compose;
     if (!current || !composeKey || !outer || !card) {
       prevKey.current = null;
       enteredKeyRef.current = null;
@@ -207,7 +230,7 @@ export function Compose({
     if (!mode) return;
     const rect = card.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return;
-    const fixed = getComputedStyle(card).position === "fixed";
+    const fixed = stage || getComputedStyle(card).position === "fixed";
     let alive = true;
     const running: Animation[] = [];
     if (mode === "reduced") {
@@ -264,7 +287,7 @@ export function Compose({
       outer.style.overflow = "";
       card.style.transformOrigin = "";
     };
-  }, [composeKey, dock, inline, hasIdle, cramped, animateCompose]);
+  }, [compose, composeKey, dock, inline, stage, hasIdle, cramped, animateCompose]);
 
   // Asymmetric exit (/emil-design-eng: faster than enter, interruptible, masks swap cleanly & collapses height so list glides up)
   useLayoutEffect(() => {
@@ -286,7 +309,7 @@ export function Compose({
     let finished = false;
     const running: Animation[] = [];
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const fixed = getComputedStyle(card).position === "fixed";
+    const fixed = stage || getComputedStyle(card).position === "fixed";
     const dur = reduced ? 110 : 185;
 
     if (reduced) {
@@ -359,7 +382,11 @@ export function Compose({
       outer.style.overflow = "";
       card.style.transformOrigin = "";
     };
-  }, [exiting, shownCompose, dock, hasIdle]);
+  }, [exiting, shownCompose, dock, stage, hasIdle]);
+
+  useEffect(() => {
+    if (!shownCompose && !compose) onIdle?.();
+  }, [shownCompose, compose, onIdle]);
 
   // A pin just placed gives the box the keys and shows the drawing tools: until a word is typed or the box is clicked, 1 to 4
   // pick a tool here as they do anywhere else. Click the box first to start a note with a digit
@@ -402,26 +429,42 @@ export function Compose({
     : `${stamp(shownCompose.t)} · ${shotText}${shownCompose.pin ? ` · ${shownCompose.pin.what}` : ""}`;
   const locationHeader = (
     <div
+      onPointerDown={draggableHeader ? onDragHeaderPointerDown : undefined}
+      onDoubleClick={draggableHeader ? onHeaderDoubleClick : undefined}
+      title={draggableHeader ? "Drag to move · Double-click to reset" : undefined}
       className={cn(
-        "text-foreground/90 sideways:mb-1 text-ui flex-none leading-normal font-medium wrap-anywhere tabular-nums",
-        dock ? (cramped ? "mb-1" : "mb-1.5 [@media(max-height:679px)]:mb-1") : "mb-2",
+        "text-foreground/90 sideways:mb-1 text-ui flex flex-none items-center justify-between gap-2 leading-normal font-medium wrap-anywhere tabular-nums",
+        stage
+          ? "mb-1.5"
+          : dock
+            ? cramped
+              ? "mb-1"
+              : "mb-1.5 [@media(max-height:679px)]:mb-1"
+            : "mb-2",
+        draggableHeader && "cursor-grab touch-none select-none active:cursor-grabbing",
       )}
     >
-      {where}
+      <span className="min-w-0 truncate">{where}</span>
+      {draggableHeader && (
+        <GripHorizontal aria-hidden className="text-muted-foreground/70 size-3.5 shrink-0" />
+      )}
     </div>
   );
   return (
     <div
       ref={wrapRef}
+      data-stage-compose={stage ? (exiting ? "exiting" : shownCompose.kind) : undefined}
       aria-hidden={exiting ? true : undefined}
       inert={exiting ? true : undefined}
       className={cn(
         "font-md flex min-h-0 flex-col",
-        cramped && !inline && dock
-          ? "absolute inset-x-0 bottom-0 z-20 max-h-full"
-          : inline
-            ? "relative z-20 flex-initial"
-            : "flex-initial",
+        stage
+          ? "w-full max-w-full flex-initial"
+          : cramped && !inline && dock
+            ? "absolute inset-x-0 bottom-0 z-20 max-h-full"
+            : inline
+              ? "relative z-20 flex-initial"
+              : "flex-initial",
         exiting && "pointer-events-none select-none",
         className,
       )}
@@ -454,20 +497,23 @@ export function Compose({
         }}
         className={cn(
           "@container flex min-h-0 flex-1 flex-col overflow-hidden",
-          inline && dock
-            ? "bg-card safe-bottom border-hairline-subtle border-t px-3 pt-2"
-            : inline
-              ? "bg-card border-hairline-subtle border-b px-3 py-2"
-              : cn(
-                  "bg-popover/95 sideways:px-3 sideways:py-2 border-hairline-strong border-t shadow-2xl backdrop-blur-md",
-                  dock
-                    ? cn("px-3", cramped ? "py-1.5" : "py-2.5 [@media(max-height:679px)]:py-1.5")
-                    : "p-3",
-                ),
+          stage
+            ? "bg-popover/95 border-hairline-strong rounded-xl border p-2.5 shadow-2xl ring-1 ring-white/10 backdrop-blur-md"
+            : inline && dock
+              ? "bg-card safe-bottom border-hairline-subtle border-t px-3 pt-2"
+              : inline
+                ? "bg-card border-hairline-subtle border-b px-3 py-2"
+                : cn(
+                    "bg-popover/95 sideways:px-3 sideways:py-2 border-hairline-strong border-t shadow-2xl backdrop-blur-md",
+                    dock
+                      ? cn("px-3", cramped ? "py-1.5" : "py-2.5 [@media(max-height:679px)]:py-1.5")
+                      : "p-3",
+                  ),
           exiting === "save" && "ring-primary/70 ring-1 ring-inset",
         )}
       >
         {!scrollLocation && locationHeader}
+        {stage && <PinDrawToolbar hasPin={shownCompose.kind === "create" && !!shownCompose.pin} />}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           {scrollLocation && locationHeader}
           {shownDrawn && (
@@ -565,11 +611,13 @@ export function Compose({
             variant="note"
             className={cn(
               "sideways:h-16 max-w-[65ch] resize-y",
-              dock
-                ? cramped
-                  ? "h-12 max-h-[28vh] min-h-10"
-                  : "upright:h-19 h-12 max-h-[28vh] min-h-10 [@media(min-height:700px)]:h-19 [@media(min-height:700px)]:min-h-16"
-                : "upright:h-19 h-28",
+              stage
+                ? "h-16 max-h-[24vh] min-h-12"
+                : dock
+                  ? cramped
+                    ? "h-12 max-h-[28vh] min-h-10"
+                    : "upright:h-19 h-12 max-h-[28vh] min-h-10 [@media(min-height:700px)]:h-19 [@media(min-height:700px)]:min-h-16"
+                  : "upright:h-19 h-28",
             )}
           />
           {!isEdit && (
@@ -645,13 +693,13 @@ export function Compose({
         <div
           className={cn(
             "sideways:mt-1.5 flex max-w-[65ch] flex-none items-center gap-1.5",
-            dock && !inline && "flex-wrap",
-            dock ? "mt-1.5" : "mt-2",
+            (dock || stage) && !inline && "flex-wrap",
+            dock || stage ? "mt-1.5" : "mt-2",
           )}
         >
           <Button
-            size={PHONE ? "phone-cta" : "md"}
-            className="upright:flex-1 sm:min-w-28"
+            size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
+            className="upright:flex-1 sm:min-w-24"
             disabled={
               noteSaving ||
               !isComposeDirty(shownCompose, shownDraft, Boolean(shownDrawn) || shownRefs.length > 0)
@@ -663,7 +711,7 @@ export function Compose({
           {!isEdit && shownRefs.length === 0 && (
             <Button
               variant="subtle"
-              size={PHONE ? "phone-cta" : "md"}
+              size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
               aria-label="Add a picture"
               onClick={() => picker.current?.click()}
             >
@@ -671,7 +719,11 @@ export function Compose({
               <span className="hidden @xs:inline">Picture</span>
             </Button>
           )}
-          <Button variant="quiet" size={PHONE ? "phone-cta" : "md"} onClick={cancelNote}>
+          <Button
+            variant="quiet"
+            size={PHONE ? "phone-cta" : stage ? "sm" : "md"}
+            onClick={cancelNote}
+          >
             Cancel
           </Button>
         </div>
@@ -679,10 +731,10 @@ export function Compose({
           id={hintId}
           className={cn(
             "text-muted-foreground flex max-w-[65ch] flex-none items-baseline justify-between gap-2 text-xs leading-normal pointer-coarse:hidden [@media(max-height:720px)]:hidden",
-            dock ? (cramped ? "hidden" : "mt-1.5") : "mt-2",
+            dock || stage ? (cramped ? "hidden" : "mt-1.5") : "mt-2",
           )}
         >
-          {dock ? (
+          {dock || stage ? (
             <>
               <span className="min-w-0">
                 {isEdit ? "Enter saves" : "Enter adds"} · Shift+Enter new line · Esc cancels
@@ -695,6 +747,181 @@ export function Compose({
           )}
         </small>
       </div>
+    </div>
+  );
+}
+
+/** Floating desktop Stage composer positioned beside its pin/stroke anchor, keeping left Notes panel uninterrupted. */
+export function StageNoteComposer() {
+  const rawCompose = useStudio((s) => s.compose);
+  const inkDrawing = useStudio((s) => s.inkDrawing);
+  const active = isStageAnchoredCompose(rawCompose, PHONE);
+  const [renderChild, setRenderChild] = useState(active);
+  if (active && !renderChild) setRenderChild(true);
+
+  const hostRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const [anchor, setAnchor] = useState<StageAnchor>({ x: 0.5, y: 0.85 });
+  const [originKey, setOriginKey] = useState<string | null>(null);
+  const [dragOffset, setDragOffset] = useState({ dx: 0, dy: 0 });
+  const [dims, setDims] = useState({
+    viewSize: { width: 800, height: 500 },
+    stageRect: { left: 0, top: 0, width: 800, height: 500 },
+    cardSize: { width: 380, height: 220 },
+  });
+
+  const liveAnchor =
+    active && rawCompose?.kind === "create"
+      ? (rawCompose.anchor ??
+        (rawCompose.pin ? { x: rawCompose.pin.x, y: rawCompose.pin.y } : { x: 0.5, y: 0.85 }))
+      : null;
+
+  if (
+    liveAnchor &&
+    Number.isFinite(liveAnchor.x) &&
+    Number.isFinite(liveAnchor.y) &&
+    (liveAnchor.x !== anchor.x || liveAnchor.y !== anchor.y)
+  ) {
+    setAnchor(liveAnchor);
+  }
+
+  const liveOriginKey =
+    active && rawCompose?.kind === "create"
+      ? `${Math.round(rawCompose.t * 100)}:${rawCompose.pin?.what ?? ""}:${Math.round((rawCompose.pin?.x ?? -1) * 1000)}:${Math.round((rawCompose.pin?.y ?? -1) * 1000)}`
+      : null;
+
+  if (liveOriginKey !== originKey) {
+    setOriginKey(liveOriginKey);
+    if (liveOriginKey !== null && (dragOffset.dx !== 0 || dragOffset.dy !== 0)) {
+      setDragOffset({ dx: 0, dy: 0 });
+    }
+  }
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    const viewEl = host?.parentElement;
+    const stageEl = viewEl?.firstElementChild as HTMLElement | null;
+    if (!viewEl) return;
+
+    const sync = () => {
+      const vr = viewEl.getBoundingClientRect();
+      const sr = stageEl?.getBoundingClientRect();
+      const box = boxRef.current;
+      const viewSize = {
+        width: Math.round(vr.width || host.clientWidth || 800),
+        height: Math.round(vr.height || host.clientHeight || 500),
+      };
+      const stageRect =
+        sr && sr.width > 0
+          ? {
+              left: Math.round(sr.left - vr.left),
+              top: Math.round(sr.top - vr.top),
+              width: Math.round(sr.width),
+              height: Math.round(sr.height),
+            }
+          : { left: 0, top: 0, width: viewSize.width, height: viewSize.height };
+      const cardSize = {
+        width: box?.offsetWidth || 380,
+        height: box?.offsetHeight || 220,
+      };
+      setDims((prev) => {
+        if (
+          prev.viewSize.width === viewSize.width &&
+          prev.viewSize.height === viewSize.height &&
+          prev.stageRect.left === stageRect.left &&
+          prev.stageRect.top === stageRect.top &&
+          prev.stageRect.width === stageRect.width &&
+          prev.stageRect.height === stageRect.height &&
+          prev.cardSize.width === cardSize.width &&
+          prev.cardSize.height === cardSize.height
+        ) {
+          return prev;
+        }
+        return { viewSize, stageRect, cardSize };
+      });
+    };
+
+    sync();
+    if (typeof ResizeObserver !== "function") return;
+    const ro = new ResizeObserver(sync);
+    ro.observe(viewEl);
+    if (stageEl) ro.observe(stageEl);
+    if (boxRef.current) ro.observe(boxRef.current);
+    return () => ro.disconnect();
+  }, [renderChild, originKey]);
+
+  const placement = renderChild
+    ? computeStageComposerPos({
+        anchor: liveAnchor ?? anchor,
+        stageRect: dims.stageRect,
+        viewSize: dims.viewSize,
+        cardSize: dims.cardSize,
+        offset: dragOffset,
+      })
+    : null;
+
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanupRef.current?.(), []);
+
+  const onDragHeaderPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      if (e.target instanceof Element && e.target.closest("button, input, textarea")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragCleanupRef.current?.();
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startDx = dragOffset.dx;
+      const startDy = dragOffset.dy;
+      const onMove = (ev: PointerEvent) => {
+        setDragOffset({
+          dx: Math.round(startDx + ev.clientX - startX),
+          dy: Math.round(startDy + ev.clientY - startY),
+        });
+      };
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("pointercancel", onUp);
+        dragCleanupRef.current = null;
+      };
+      dragCleanupRef.current = onUp;
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("pointercancel", onUp);
+    },
+    [dragOffset.dx, dragOffset.dy],
+  );
+
+  const onHeaderDoubleClick = useCallback(() => {
+    setDragOffset({ dx: 0, dy: 0 });
+  }, []);
+
+  const onIdle = useCallback(() => {
+    setRenderChild(false);
+  }, []);
+
+  return (
+    <div ref={hostRef} className="pointer-events-none absolute inset-0 z-8 overflow-hidden">
+      {renderChild && placement && (
+        <div
+          ref={boxRef}
+          style={{ "--sx": `${placement.left}px`, "--sy": `${placement.top}px` } as CSSProperties}
+          className={cn(
+            "absolute top-(--sy) left-(--sx) flex max-h-[calc(100%-1rem)] w-[min(24rem,calc(100%-1rem))] flex-col transition-opacity duration-150",
+            inkDrawing ? "pointer-events-none opacity-25" : "pointer-events-auto opacity-100",
+          )}
+        >
+          <Compose
+            stage
+            draggableHeader
+            onDragHeaderPointerDown={onDragHeaderPointerDown}
+            onHeaderDoubleClick={onHeaderDoubleClick}
+            onIdle={onIdle}
+          />
+        </div>
+      )}
     </div>
   );
 }

@@ -57,8 +57,20 @@ const PREFS = {
   scopes: flag("scopes", false), // CapCut's Color oscilloscope under the picture (picture/Oscilloscope.tsx)
   meter: flag("audioMeter", true), // the master meter beside the timeline (sound/AudioMeter.tsx)
   aiActivity: flag("aiActivity", true), // what the AI is doing, lit as it works (activity/activity.ts)
-  activityChime: flag("activityChime", false),
-  filmView: oneOf("filmView", FILM_VIEW_SIZES, "m"),
+  noteNotify: flag("noteNotify", true), // toast + chime when AI finishes resolving a note
+  activityChime: flag("activityChime", true), // ting sound on resolved notes and activity errors
+  autoConnectEase: flag("autoConnectEase", true), // keeps camera speed continuous across keyframes in a shot
+  manualConfirm: flag("manualConfirm", true), // hold timeline/camera/setting edits in preview until confirmed
+  filmView: oneOf("filmView", FILM_VIEW_SIZES, "s"),
+  filmViewWidth: {
+    key: "filmViewWidth",
+    read: (v: string | null) => {
+      if (v === null || v === "") return null;
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 88 && n <= 1600 ? Math.round(n) : null;
+    },
+    write: (v: number | null) => (v === null ? "" : String(Math.round(v))),
+  },
   flySpeed: within("flySpeed", FLY_SPEED.min, FLY_SPEED.max, FLY_SPEED.start),
   noteView: oneOf("noteView", NOTE_VIEWS, "cards"),
 };

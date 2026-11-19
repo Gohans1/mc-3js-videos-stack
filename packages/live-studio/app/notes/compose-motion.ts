@@ -1,5 +1,5 @@
 // Pure origin-aware WAAPI calculations and exit snapshot registry for Compose.
-import type { RefPic } from "./slice";
+import type { Compose, RefPic, StageAnchor } from "./slice";
 
 export interface ComposeOrigin {
   left: number;
@@ -156,6 +156,94 @@ export function isDockedSheetCramped({
 export interface NoteFocusTarget {
   focus: () => boolean;
   blur: () => void;
+}
+
+export const isStageAnchoredCompose = (
+  compose: Compose | null | undefined,
+  isPhone: boolean,
+): boolean =>
+  Boolean(!isPhone && compose?.kind === "create" && (compose.pin !== null || !!compose.anchor));
+
+export interface StageComposerBoxInput {
+  anchor: StageAnchor;
+  stageRect: { left: number; top: number; width: number; height: number };
+  viewSize: { width: number; height: number };
+  cardSize: { width: number; height: number };
+  pad?: number;
+  pinGap?: number;
+  offset?: { dx: number; dy: number };
+}
+
+export interface StageComposerPlacement {
+  left: number;
+  top: number;
+  originX: number;
+  originY: number;
+}
+
+/** Places a desktop Stage composer right beside its pin/stroke anchor while clamping strictly inside the player bounds. */
+export function computeStageComposerPos({
+  anchor,
+  stageRect,
+  viewSize,
+  cardSize,
+  pad = 8,
+  pinGap = 24,
+  offset,
+}: StageComposerBoxInput): StageComposerPlacement {
+  const viewW = Math.max(1, viewSize.width || stageRect.width);
+  const viewH = Math.max(1, viewSize.height || stageRect.height);
+  const cardW = Math.min(cardSize.width || 312, Math.max(180, viewW - pad * 2));
+  const cardH = Math.min(cardSize.height || 180, Math.max(110, viewH - pad * 2));
+  const px = stageRect.left + anchor.x * stageRect.width;
+  const py = stageRect.top + anchor.y * stageRect.height;
+
+  const rightGutter = viewW - (stageRect.left + stageRect.width);
+  const leftGutter = stageRect.left;
+  const maxLeft = Math.max(pad, viewW - cardW - pad);
+  const maxTop = Math.max(pad, viewH - cardH - pad);
+
+  let left: number;
+  let horizontalStacked = false;
+
+  if (anchor.x >= 0.45 && rightGutter >= cardW + pad + 12) {
+    left = stageRect.left + stageRect.width + 12;
+  } else if (anchor.x < 0.45 && leftGutter >= cardW + pad + 12) {
+    left = stageRect.left - cardW - 12;
+  } else if (leftGutter >= cardW + pad + 12 && anchor.x <= 0.65) {
+    left = stageRect.left - cardW - 12;
+  } else {
+    const rightRoom = viewW - pad - (px + pinGap);
+    const leftRoom = px - pinGap - pad;
+    if (rightRoom >= cardW && (anchor.x <= 0.58 || leftRoom < cardW)) {
+      left = px + pinGap;
+    } else if (leftRoom >= cardW) {
+      left = px - pinGap - cardW;
+    } else {
+      left = clamp(px - cardW / 2, pad, maxLeft);
+      horizontalStacked = true;
+    }
+  }
+
+  let top: number;
+  if (!horizontalStacked) {
+    top = clamp(py - 28, pad, maxTop);
+  } else {
+    const below = py + 44;
+    const above = py - 44 - cardH;
+    if (below <= maxTop) top = below;
+    else if (above >= pad) top = above;
+    else top = clamp(py - cardH / 2, pad, maxTop);
+  }
+
+  if (offset) {
+    left = clamp(left + offset.dx, pad, maxLeft);
+    top = clamp(top + offset.dy, pad, maxTop);
+  }
+
+  const originX = Number(clamp(((px - left) / Math.max(cardW, 1)) * 100, 0, 100).toFixed(1));
+  const originY = Number(clamp(((py - top) / Math.max(cardH, 1)) * 100, 0, 100).toFixed(1));
+  return { left: Math.round(left), top: Math.round(top), originX, originY };
 }
 
 /** Coordinates synchronous mobile keyboard focus across mounted Compose surfaces and defers only explicit focus requests until mount without leaking to focus=false opens. */

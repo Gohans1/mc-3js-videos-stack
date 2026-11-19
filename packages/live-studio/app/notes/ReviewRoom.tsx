@@ -17,7 +17,7 @@ import {
   Plus,
   X,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useId, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -39,17 +39,25 @@ import { cn } from "@/lib/utils";
 import { noteState, noteThread } from "../../src/note-state.mjs";
 import { useLit, useLitAny } from "../activity/activity";
 import { SaveStatus, Segmented } from "../components/inspector";
+import { EASE_OUT, prefersReduced } from "../components/Motion";
 import { SearchBox } from "../components/SearchBox";
 import { Tip } from "../components/Tip";
 import { VirtualList } from "../components/VirtualList";
 import { get, set, useDialogModal, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { Compose } from "./Compose";
+import {
+  useExitedNotes,
+  useNoteExiting,
+  useNoteMotion,
+  useNoteSettleMotion,
+} from "./note-action-motion";
 import { noteShotTitle, pinShortLabel } from "./note-card-meta";
 import {
   ActiveFilterChips,
   hasSelectedText,
   LearnedCallout,
+  NoteExitSlot,
   NoteNumber,
   NoteStatusGlyph,
 } from "./note-parts";
@@ -99,38 +107,77 @@ const TABS: { id: ReviewTab; title: string }[] = [
 ];
 const pic = (rel: string) => `/api/note-img/${rel.split("/").pop()}`;
 
-// The note's own picture over the film as it is now at that moment, split by a handle: drag it, or use the arrow keys on it
+// The note's own picture over the AI after shot or the film as it is now, split by a handle: drag it, or use the arrow keys on it
 function Compare({ n, at }: { n: Note; at: number }) {
-  const then = noteMedia(n).thumb;
+  const media = noteMedia(n);
+  const then = media.thumb;
+  const aiAfter = media.after;
   const fix = lastFix(n);
   const showDiff = !!fix && !fix.ask && noteState(n) !== "open";
   const loading = useStudio((s) => s.loading),
     final = useStudio((s) => s.final),
     pictureRev = useStudio((s) => s.pictureRev);
-  // drawn by the film's renderer, outside React's render, after the room has painted: a render of the film takes a moment
-  const [now, setNow] = useState<string | null>(null);
+  // drawn by the film's renderer, outside React's render, after the room has painted: a render of the film takes a moment.
+  // Keyed by note + timestamp + revision so switching notes never bleeds a previous note's captured Now picture.
+  const nowKey = `${n.id}|${at.toFixed(3)}|${final ? 1 : 0}|${pictureRev}`;
+  const [liveNowState, setLiveNowState] = useState<{ key: string; url: string | null } | null>(
+    null,
+  );
+  const liveNow = liveNowState?.key === nowKey ? liveNowState.url : null;
+  const afterKey = `${n.id}|${aiAfter ?? ""}`;
+  const [preferLiveKey, setPreferLiveKey] = useState<string | null>(null);
+  const preferLive = preferLiveKey === afterKey;
   useEffect(() => {
     if (!then || !showDiff) return;
     let alive = true;
     const f = requestAnimationFrame(() => {
       void nowPicture(n).then((url) => {
-        if (alive) setNow(url);
+        if (alive) setLiveNowState({ key: nowKey, url });
       });
     });
     return () => {
       alive = false;
       cancelAnimationFrame(f);
     };
-  }, [n, at, final, loading, pictureRev, showDiff, then]);
+  }, [n, at, final, loading, nowKey, pictureRev, showDiff, then]);
   const [split, setSplit] = useState(50);
-  if (!then) return null;
+  const now = aiAfter && !preferLive ? aiAfter : liveNow;
+  const nowBadge = aiAfter && !preferLive ? "After" : "Now";
+  if (!then && !aiAfter) return null;
+  if (!then && aiAfter) {
+    return (
+      <div className="bg-backdrop/90 border-hairline flex w-full flex-col items-center gap-1.5 rounded-lg border p-2">
+        <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md">
+          <img
+            src={aiAfter}
+            alt={`After proof at ${stamp(media.afterTime ?? at)}`}
+            className="absolute inset-0 size-full object-contain"
+          />
+          <figcaption className="pointer-events-none absolute inset-2 flex items-start justify-end">
+            <Badge variant="frame">After</Badge>
+          </figcaption>
+        </figure>
+        {(media.afterCam || media.afterTime !== null) && (
+          <Button
+            type="button"
+            variant="subtle"
+            size="sm"
+            onClick={() => goToNote(n, false, "after")}
+          >
+            <Crosshair aria-hidden data-icon="inline-start" />
+            Jump to After camera
+          </Button>
+        )}
+      </div>
+    );
+  }
   if (!showDiff) {
     return (
       <>
         <div className="bg-backdrop/90 border-hairline flex w-full justify-center rounded-lg border p-2">
-          <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md note-image-outline">
+          <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md">
             <img
-              src={then}
+              src={then!}
               alt={`Saved frame at ${stamp(at)}`}
               className="absolute inset-0 size-full object-contain"
             />
@@ -144,15 +191,19 @@ function Compare({ n, at }: { n: Note; at: number }) {
   }
   return (
     <>
-      <div className="bg-backdrop/90 border-hairline flex w-full justify-center rounded-lg border p-2">
+      <div className="bg-backdrop/90 border-hairline flex w-full flex-col items-center gap-1.5 rounded-lg border p-2">
         <figure
-          className="bg-backdrop has-focus-visible:ring-ring upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md note-image-outline has-focus-visible:ring-2"
+          className="bg-backdrop has-focus-visible:ring-ring upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md has-focus-visible:ring-2"
           style={{ "--split": `${split}%`, "--hide": `${100 - split}%` }}
         >
           {now && (
             <img
               src={now}
-              alt={`The film now at ${stamp(at)}`}
+              alt={
+                aiAfter && !preferLive
+                  ? `After proof at ${stamp(media.afterTime ?? at)}`
+                  : `The film now at ${stamp(at)}`
+              }
               className="absolute inset-0 size-full object-contain"
             />
           )}
@@ -195,14 +246,49 @@ function Compare({ n, at }: { n: Note; at: number }) {
             </>
           )}
           <figcaption className="pointer-events-none absolute inset-x-2 top-2 flex items-center justify-between">
-            {then && <Badge variant="frame">Then</Badge>}
+            {then && <Badge variant="frame">Before</Badge>}
             {now && (
               <Badge variant="frame" className="ms-auto">
-                Now
+                {nowBadge}
               </Badge>
             )}
           </figcaption>
         </figure>
+        {(aiAfter && liveNow) || media.afterCam || media.afterTime !== null ? (
+          <div className="flex flex-wrap items-center justify-center gap-1.5">
+            {aiAfter && liveNow && (
+              <Button
+                type="button"
+                variant="subtle"
+                size="sm"
+                onClick={() => setPreferLiveKey((k) => (k === afterKey ? null : afterKey))}
+              >
+                {preferLive ? "Show AI after shot" : "Compare live scene"}
+              </Button>
+            )}
+            {(media.afterCam || media.afterTime !== null) && (
+              <>
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => goToNote(n, false, "before")}
+                >
+                  Original view
+                </Button>
+                <Button
+                  type="button"
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => goToNote(n, false, "after")}
+                >
+                  <Crosshair aria-hidden data-icon="inline-start" />
+                  After camera
+                </Button>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -341,6 +427,11 @@ function Thread({ n }: { n: Note }) {
               >
                 {m.text || <span className="text-label italic">(no words)</span>}
               </p>
+              {"noAfterReason" in m && m.noAfterReason && (
+                <p className="text-muted-foreground mt-1 text-xs">
+                  No after image: {m.noAfterReason}
+                </p>
+              )}
             </li>
           );
         })}
@@ -419,15 +510,26 @@ function RememberMenu({ n }: { n: Note }) {
   );
 }
 
-function Detail({ p, next }: { p: Placed; next: () => void }) {
+function Detail({
+  p,
+  next,
+  enterMotion,
+}: {
+  p: Placed;
+  next: () => void;
+  enterMotion: "action" | "pick" | null;
+}) {
   const { n, t } = p,
     kind = kindOf(n),
+    state = noteState(n),
+    wrapRef = useRef<HTMLDivElement>(null),
     shot = noteShotTitle(n.shot, n.shotName),
     fix = lastFix(n),
     lit = useLit(`note:${n.id}`),
     media = noteMedia(n),
     hasPictures =
       Boolean(media.thumb) ||
+      Boolean(media.after) ||
       media.refs.length > 0 ||
       typeof n.strip === "string" ||
       Boolean(media.crop) ||
@@ -438,6 +540,11 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
         <ClipboardCheck aria-hidden />
         <AlertDescription size="prose" className="min-w-0 wrap-anywhere">
           AI says fixed: <span className="text-foreground">{fix?.what}</span>
+          {fix?.noAfterReason && (
+            <span className="text-muted-foreground mt-0.5 block text-xs">
+              No after image: {fix.noAfterReason}
+            </span>
+          )}
         </AlertDescription>
       </Alert>
     ) : kind === "ask" ? (
@@ -454,6 +561,32 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
   const [big, setBig] = useState<{ src: string; alt: string } | null>(null);
   useDialogModal("reviewImage", !!big);
   const box = useRef<HTMLTextAreaElement>(null);
+  useNoteSettleMotion(wrapRef, n.id, state);
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!enterMotion || !el || typeof el.animate !== "function") return;
+    const reduced = prefersReduced();
+    const anim = reduced
+      ? el.animate([{ opacity: 0.55 }, { opacity: 1 }], { duration: 100, easing: EASE_OUT })
+      : enterMotion === "action"
+        ? el.animate(
+            [
+              { opacity: 0.25, transform: "translate3d(12px, 0, 0) scale(0.992)" },
+              { opacity: 1, transform: "translate3d(0, 0, 0) scale(1)" },
+            ],
+            { duration: 185, easing: EASE_OUT },
+          )
+        : el.animate(
+            [
+              { opacity: 0.65, transform: "translate3d(0, 4px, 0)" },
+              { opacity: 1, transform: "translate3d(0, 0, 0)" },
+            ],
+            { duration: 140, easing: EASE_OUT },
+          );
+    return () => anim.cancel();
+    // Play only on fresh Detail mount (key={p.n.id}) so deliberate clicks/approvals animate while arrow keys stay 0ms
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const send = () => {
     const w = words.trim();
     if (!w || !answerNote(n, w)) return;
@@ -462,8 +595,9 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
   };
   return (
     <div
+      ref={wrapRef}
       data-note={n.id}
-      data-tone={kind === "ask" ? "ai" : noteState(n)}
+      data-tone={kind === "ask" ? "ai" : state}
       data-ai-lit={lit || undefined}
       className="flex min-h-0 min-w-0 flex-1 flex-col rounded-lg"
     >
@@ -486,7 +620,12 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
             </Badge>
           )}
           <Tip label="Copy note link">
-            <Button variant="quiet" size="icon-sm" aria-label="Copy note link" onClick={() => void copyNoteLink(n)}>
+            <Button
+              variant="quiet"
+              size="icon-sm"
+              aria-label="Copy note link"
+              onClick={() => void copyNoteLink(n)}
+            >
               <Link2 aria-hidden />
             </Button>
           </Tip>
@@ -500,12 +639,13 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
         {newBuild && (
           <Alert className="mb-2 max-w-[65ch]">
             <AlertDescription>
-              New preview build available. Now shows the loaded version until you use Reload in the player.
+              New preview build available. Now shows the loaded version until you use Reload in the
+              player.
             </AlertDescription>
           </Alert>
         )}
         {hasPictures && aiSummary}
-        <Compare n={n} at={t} />
+        <Compare key={n.id} n={n} at={t} />
         <div className="mt-2">
           <Pictures n={n} open={setBig} />
         </div>
@@ -592,11 +732,14 @@ function Detail({ p, next }: { p: Placed; next: () => void }) {
 
 function Row({ p, on, pick }: { p: Placed; on: boolean; pick: () => void }) {
   const { n, t } = p,
-    thumb = noteMedia(n).thumb,
+    media = noteMedia(n),
+    thumb = media.thumb ?? media.after,
     kind = kindOf(n),
     state = noteState(n),
     needsWork = isCreatorNeedsWork(n, state),
-    lit = useLit(`note:${n.id}`);
+    lit = useLit(`note:${n.id}`),
+    exiting = useNoteExiting(),
+    { ref: rowMotionRef } = useNoteMotion<HTMLDivElement>(n.id, state);
   const firstLine = n.text.split(/\r?\n/, 1)[0]?.trim() || "";
   const rowTone = on
     ? cn(
@@ -621,6 +764,7 @@ function Row({ p, on, pick }: { p: Placed; on: boolean; pick: () => void }) {
       );
   return (
     <div
+      ref={rowMotionRef}
       data-tone={kind === "ask" ? "ai" : state}
       data-ai-lit={lit || undefined}
       onClick={(e) => {
@@ -636,7 +780,7 @@ function Row({ p, on, pick }: { p: Placed; on: boolean; pick: () => void }) {
     >
       <button
         type="button"
-        data-review-row={n.id}
+        data-review-row={exiting ? undefined : n.id}
         aria-current={on || undefined}
         aria-label={`Select note at ${stamp(t)}${firstLine ? `: ${firstLine}` : ""}`}
         onClick={pick}
@@ -647,7 +791,7 @@ function Row({ p, on, pick }: { p: Placed; on: boolean; pick: () => void }) {
             src={thumb}
             alt=""
             loading="lazy"
-            className="aspect-video w-18 flex-none rounded-sm object-cover note-image-outline"
+            className="note-image-outline aspect-video w-18 flex-none rounded-sm object-cover"
           />
         ) : (
           <span className="bg-backdrop text-muted-foreground ring-hairline-subtle flex aspect-video w-18 flex-none items-center justify-center rounded-sm ring-1">
@@ -734,6 +878,7 @@ export function ReviewRoom() {
   useStudio((s) => s.noteSort);
   const saved = useStudio((s) => s.saved);
   const roomRef = useRef<HTMLElement>(null);
+  const [detailEnterMotion, setDetailEnterMotion] = useState<"action" | "pick" | null>(null);
   const tab = useStudio((s) => s.reviewTab),
     pickId = useStudio((s) => s.reviewPick),
     q = useStudio((s) => s.noteSearch),
@@ -750,9 +895,14 @@ export function ReviewRoom() {
     done: reviewList("done"),
   };
   const list = lists[tab],
-    matched = list.findIndex((p) => p.n.id === pickId),
-    i = pickId === null ? 0 : matched,
-    p = list[i] ?? null;
+    displayList = useExitedNotes(
+      list,
+      (x) => x.n.id,
+      `review|${tab}|${q}|${scope}|${shotFilter ?? ""}|${facets.join(",")}`,
+    ),
+    matched = displayList.findIndex((e) => !e.exiting && e.item.n.id === pickId),
+    listIdx = pickId === null ? 0 : list.findIndex((p) => p.n.id === pickId),
+    p = list[listIdx] ?? null;
   useEffect(() => {
     if (get().compose) return;
     const cur = document.activeElement;
@@ -763,8 +913,9 @@ export function ReviewRoom() {
     else roomRef.current?.focus({ preventScroll: true });
   }, []);
   // the picture beside goes to the note picked
-  const pick = (to: Placed | undefined) => {
+  const pick = (to: Placed | undefined, motion: "action" | "pick" | null = "pick") => {
     if (!to) return;
+    setDetailEnterMotion(motion);
     set({ reviewPick: to.n.id });
     goToNote(to.n);
   };
@@ -776,15 +927,17 @@ export function ReviewRoom() {
     );
     const to = nextId ? list.find((x) => x.n.id === nextId) : undefined;
     if (to) {
-      pick(to);
+      pick(to, "action");
       focusReviewRow(to.n.id);
     } else {
+      setDetailEnterMotion(null);
       set({ reviewPick: null });
       roomRef.current?.focus({ preventScroll: true });
     }
   };
   const fixes = lists.check.filter((x) => kindOf(x.n) === "fix");
   const search = (noteSearch: string) => {
+    setDetailEnterMotion(null);
     set({ noteSearch });
     const { reviewTab, reviewPick } = get();
     const matching = reviewList(reviewTab);
@@ -805,10 +958,16 @@ export function ReviewRoom() {
       return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (get().settingsOpen || get().ink || get().compose || get().modal !== null) return;
-    if (e.key === "ArrowDown") stepReview(1);
-    else if (e.key === "ArrowUp") stepReview(-1);
-    else if (e.key.toLowerCase() === "a") approveReviewCurrent();
-    else return;
+    if (e.key === "ArrowDown") {
+      setDetailEnterMotion(null);
+      stepReview(1);
+    } else if (e.key === "ArrowUp") {
+      setDetailEnterMotion(null);
+      stepReview(-1);
+    } else if (e.key.toLowerCase() === "a") {
+      setDetailEnterMotion("action");
+      approveReviewCurrent();
+    } else return;
     e.preventDefault();
     e.stopPropagation();
   };
@@ -831,6 +990,7 @@ export function ReviewRoom() {
           value={tab}
           onChange={(v) => {
             const first = lists[v][0];
+            setDetailEnterMotion(null);
             set({ reviewTab: v, reviewPick: first?.n.id ?? null });
             if (first) goToNote(first.n);
           }}
@@ -883,10 +1043,10 @@ export function ReviewRoom() {
             <ActiveFilterChips />
           </div>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {list.length > 0 ? (
+            {displayList.length > 0 ? (
               <VirtualList
-                items={list}
-                getKey={(x) => x.n.id}
+                items={displayList}
+                getKey={(entry) => entry.key}
                 estimateSize={74}
                 gap={2}
                 role="list"
@@ -894,7 +1054,22 @@ export function ReviewRoom() {
                 stickyKeys={pickId ? [pickId] : undefined}
                 scrollToIndex={matched >= 0 ? matched : null}
                 className="min-h-0 flex-1 overscroll-contain p-1.5"
-                renderItem={(x) => <Row p={x} on={x === p} pick={() => pick(x)} />}
+                renderItem={(entry) => {
+                  const node = (
+                    <Row
+                      p={entry.item}
+                      on={!entry.exiting && entry.item === p}
+                      pick={() => pick(entry.item, "pick")}
+                    />
+                  );
+                  return entry.exiting ? (
+                    <NoteExitSlot id={entry.id} kind={entry.kind}>
+                      {node}
+                    </NoteExitSlot>
+                  ) : (
+                    node
+                  );
+                }}
               />
             ) : (
               <p className="text-muted-foreground p-3 text-sm leading-relaxed text-pretty">
@@ -971,7 +1146,7 @@ export function ReviewRoom() {
           </p>
         </div>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {p && <Detail key={p.n.id} p={p} next={next} />}
+          {p && <Detail key={p.n.id} p={p} next={next} enterMotion={detailEnterMotion} />}
         </div>
       </div>
       <Compose dock inline />

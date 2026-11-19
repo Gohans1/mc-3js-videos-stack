@@ -29,7 +29,8 @@ const GROUPS = [
         "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
       find: "native/imported assets and code helpers; BM25 then independent OpenFilm semantic candidates; --json for AI, --offline for cached-only search",
-      "assets:semantic": "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
+      "assets:semantic":
+        "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
       asset:
         "place and edit assets selected with find; JSON output, editable targets and heard seconds",
     },
@@ -82,7 +83,7 @@ const GROUPS = [
     "The creator's notes",
     {
       notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
-      note: "answer one: bun run note done (waits for the creator's check), ask, learned, or restore a deleted note (--help)",
+      note: 'answer one: bun run note done (requires --after <img> or --no-after "<reason>", optional --cam/--t custom view), ask, learned, or restore (--help)',
     },
   ],
   [
