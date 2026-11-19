@@ -285,8 +285,7 @@ export const CLI_CATEGORIES: readonly CliCategory[] = [
   {
     id: "render",
     label: "Rendering and checks",
-    description:
-      "Render stills, clips, finals, contact sheets, frame checks, pacing, and YouTube delivery audits.",
+    description: "Render stills, clips, finals, inspect picture and sound, or run delivery audits.",
   },
   {
     id: "setup",
@@ -508,7 +507,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         inheritFlags: true,
         label: "read",
         summary: "Read the canonical document and retained-write notices.",
-        args: [{ key: "name", label: "Document", type: "string", required: true }],
+        args: [
+          {
+            key: "name",
+            label: "Document",
+            type: "string",
+            required: true,
+            placeholder: "cam or lights",
+          },
+        ],
       },
       {
         id: "write",
@@ -516,7 +523,13 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "write",
         summary: "Save a JSON envelope with the base version read earlier.",
         args: [
-          { key: "name", label: "Document", type: "string", required: true },
+          {
+            key: "name",
+            label: "Document",
+            type: "string",
+            required: true,
+            placeholder: "cam or lights",
+          },
           { key: "input", label: "JSON envelope path", type: "string", required: true },
         ],
       },
@@ -3548,6 +3561,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "3,4",
       },
       {
+        key: "CROP",
+        label: "Native crop (x,y,w,h)",
+        type: "string",
+        visibleWhen: { field: "target", in: ["stills", "poster"] },
+        placeholder: "0.25,0.25,0.5,0.5",
+        hint: "Normalized rectangle within the frame, rendered at native pixel density.",
+      },
+      {
+        key: "COMPARE",
+        label: "Compare with previous still",
+        type: "boolean",
+        visibleWhen: { field: "target", in: ["stills", "poster"] },
+        hint: "Keep the old frame under renders/.prev/ and write a before/after comparison.",
+      },
+      {
         key: "CHECK",
         label: "CHECK (motion/seen/touch/text/order)",
         type: "string",
@@ -3923,6 +3951,84 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       helpMode: "flag",
       outputsHint:
         "Runs retain job.json/process.log and tool artifacts; OCR writes result.json, frames.jsonl and source frames. Scores need visual verification.",
+    },
+  },
+  {
+    id: "qc",
+    label: "qc",
+    category: "render",
+    summary:
+      "Check encoded video, audio sync, camera motion, or inspect image regions and differences.",
+    runner: "bun-file",
+    target: "scripts/review/qc.ts",
+    cwdModes: ["film", "root"],
+    args: [{ key: "video", label: "Video path", type: "string", choiceSource: "renders" }],
+    flags: [
+      {
+        key: "--checks",
+        flag: "--checks",
+        label: "Checks",
+        type: "string",
+        placeholder: "probe,forensics,sync,audio,look,speed,cam-motion,text",
+      },
+      { key: "--strict", flag: "--strict", label: "Fail on warnings", type: "boolean" },
+      { key: "--json", flag: "--json", label: "JSON report", type: "boolean" },
+    ],
+    subcommands: [
+      {
+        id: "box",
+        label: "box",
+        summary: "Measure brightness, RGB and contrast inside an image region.",
+        args: [
+          { key: "image", label: "Image path", type: "string", required: true },
+          { key: "rect", label: "Region (x,y,w,h)", type: "string", required: true },
+        ],
+        flags: [
+          { key: "--norm", flag: "--norm", label: "Normalized coordinates", type: "boolean" },
+          { key: "--json", flag: "--json", label: "JSON report", type: "boolean" },
+        ],
+        meta: { speed: "short" },
+      },
+      {
+        id: "compare",
+        label: "compare",
+        summary: "Quantify changed pixels and write a before/after comparison.",
+        args: [
+          { key: "before", label: "Before image", type: "string", required: true },
+          { key: "after", label: "After image", type: "string", required: true },
+        ],
+        flags: [
+          { key: "--out", flag: "--out", label: "Comparison image path", type: "string" },
+          {
+            key: "--threshold",
+            flag: "--threshold",
+            label: "Pixel threshold (0–255)",
+            type: "number",
+          },
+          { key: "--json", flag: "--json", label: "JSON report", type: "boolean" },
+        ],
+        meta: { effect: "write", speed: "short" },
+      },
+      {
+        id: "motion",
+        label: "motion",
+        summary: "Find rapid camera turns, zoom changes and the responsible key rows.",
+        flags: [
+          { key: "--cam", flag: "--cam", label: "Camera timeline path", type: "string" },
+          { key: "--from", flag: "--from", label: "Start second", type: "number" },
+          { key: "--to", flag: "--to", label: "End second", type: "number" },
+          { key: "--json", flag: "--json", label: "JSON report", type: "boolean" },
+        ],
+        meta: { speed: "short" },
+      },
+    ],
+    meta: {
+      effect: "read",
+      cost: "free",
+      speed: "long",
+      cancellable: true,
+      helpMode: "flag",
+      outputsHint: "Exit 0 passed, 1 found failures, 2 invalid input or nothing checked.",
     },
   },
   {

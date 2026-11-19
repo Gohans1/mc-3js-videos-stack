@@ -26,6 +26,7 @@ import {
   DOC,
   Edit,
   keyFileSchema,
+  LightsTimeline,
   OpenFilmTimeline,
   PlacedTimeline,
   problems,
@@ -102,6 +103,7 @@ export const contractFiles = (project) => {
     ...(choiceFiles.length ? choiceFiles : ["choices.json"]).map((f) => [f, [Choices, textOf(f)]]),
     ...own("soundTimeline", SoundTimeline),
     ...own("camTimeline", CamTimeline),
+    ...own("lightsTimeline", LightsTimeline),
     ...own("shotsTimeline", ShotsTimeline),
     ...own("textTimeline", TextTimeline),
     ...own("adjustmentTimeline", AdjustmentTimeline),
@@ -199,6 +201,8 @@ export const openFilm = (projectDir, { send, activity }) => {
   // "live-studio": { camTimeline: file }: the camera keys, which the film also puts in EDIT.cam (the page previews edits there)
   const camRel = pkg["live-studio"]?.camTimeline,
     cam = camRel ? openTimelineFile(PROJECT, camRel, CamTimeline) : null;
+  const lightsRel = pkg["live-studio"]?.lightsTimeline,
+    lights = lightsRel ? openTimelineFile(PROJECT, lightsRel, LightsTimeline) : null;
   // "live-studio": { keyFiles: { file: EDIT key } }: Steve's moves, the props' keys... as rows the studio retimes (contract.ts keyRows)
   const keyFiles = Object.entries(pkg["live-studio"]?.keyFiles ?? {}).map(([rel, edit]) => {
     const requiredRows = pkg["live-studio"]?.requiredKeyRows?.[edit] ?? [],
@@ -219,9 +223,17 @@ export const openFilm = (projectDir, { send, activity }) => {
   const timingRel = pkg["live-studio"]?.timingTimeline,
     timing = timingRel ? openTimelineFile(PROJECT, timingRel, TimingTimeline) : null;
   const openfilm = openOpenFilm(PROJECT, pkg["live-studio"]);
-  const editable = [sound, cam, shots, text, adjustment, timing, openfilm, ...keyFiles].filter(
-    Boolean,
-  );
+  const editable = [
+    sound,
+    cam,
+    lights,
+    shots,
+    text,
+    adjustment,
+    timing,
+    openfilm,
+    ...keyFiles,
+  ].filter(Boolean);
   const ownWrites = () => [
     ...editable.filter((f) => f.ownWrite()).map((f) => f.FILE),
     ...(voice.ownEditWrite() ? [EDIT] : []),
@@ -578,7 +590,9 @@ export const openFilm = (projectDir, { send, activity }) => {
   };
   const start = () => {
     history.start();
-    for (const file of [sound, cam, shots, text, adjustment, timing, ...keyFiles].filter(Boolean)) {
+    for (const file of [sound, cam, lights, shots, text, adjustment, timing, ...keyFiles].filter(
+      Boolean,
+    )) {
       if (!existsSync(dirname(file.FILE))) continue;
       watch(
         dirname(file.FILE),
@@ -650,6 +664,7 @@ export const openFilm = (projectDir, { send, activity }) => {
         { acceptMissing: event === "openfilm" },
       );
     timeline(cam, "cam", "cam", "Edited the camera keys");
+    timeline(lights, "lights", "light", "Edited the lighting keys");
     timeline(shots, "shots", "cam", "Edited the shots");
     timeline(text, "text", "text", "Edited the titles and text");
     timeline(adjustment, "adjustment", "adjust", "Edited the adjustment layers");
@@ -884,6 +899,7 @@ export const openFilm = (projectDir, { send, activity }) => {
     setRatio,
     features: () => ({
       cam: !!cam,
+      lights: !!lights,
       shots: !!shots,
       text: !!text,
       adjustment: !!adjustment,
@@ -902,6 +918,7 @@ export const openFilm = (projectDir, { send, activity }) => {
     sound,
     voice,
     cam,
+    lights,
     shots,
     text,
     adjustment,

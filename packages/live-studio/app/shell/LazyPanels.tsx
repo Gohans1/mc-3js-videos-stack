@@ -1,5 +1,6 @@
 export { AdjustLibrary } from "../camera/AdjustLibrary";
 export { AdjustPanel } from "../camera/AdjustPanel";
+export { LightPanel } from "../lighting/LightPanel";
 export { AnimPanel } from "../camera/AnimPanel";
 export { CameraEasePanel } from "../camera/SpeedPanel";
 export { TransitionLibrary } from "../camera/TransitionLibrary";

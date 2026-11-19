@@ -1,6 +1,17 @@
 // Pure field-key lists and timed key-row helpers shared with app/ without pulling zod into initial browser bundles.
 export const SOUND_KEYS = {
-  audio: ["beds", "sfx", "tracks", "narration", "voice", "voiceGain", "lufs", "drive"],
+  audio: [
+    "beds",
+    "sfx",
+    "tracks",
+    "narration",
+    "voice",
+    "voiceGain",
+    "lufs",
+    "drive",
+    "reverb",
+    "spaces",
+  ],
   beds: [
     "name",
     "from",
@@ -26,6 +37,8 @@ export const SOUND_KEYS = {
     "try",
     "filters",
     "track",
+    "reverb",
+    "spatial",
   ],
   sfx: [
     "at",
@@ -51,6 +64,8 @@ export const SOUND_KEYS = {
     "try",
     "filters",
     "track",
+    "reverb",
+    "spatial",
   ],
 };
 

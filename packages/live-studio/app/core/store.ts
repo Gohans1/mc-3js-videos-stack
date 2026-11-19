@@ -7,6 +7,7 @@ import { createStore, useStore } from "zustand";
 import type { GradeLibrary } from "../camera/adjust";
 import { type CameraSlice, cameraSlice } from "../camera/slice";
 import { type KeysSlice, keysSlice } from "../keys/slice";
+import { type LightsSlice, lightsSlice } from "../lighting/slice";
 import { createNoteFocusRegistry } from "../notes/compose-motion";
 import { type NotesSlice, notesSlice } from "../notes/slice";
 import { type ObjectsSlice, objectsSlice } from "../objects/slice";
@@ -59,6 +60,7 @@ interface PageSlice {
     | "audioSpeed"
     | "objects"
     | "cam"
+    | "light"
     | "speed"
     | "anim"
     | "adjust"
@@ -101,6 +103,7 @@ export type StudioState = PageSlice &
   OptionsSlice &
   SoundSlice &
   CameraSlice &
+  LightsSlice &
   KeysSlice &
   ObjectsSlice &
   TextSlice &
@@ -133,6 +136,7 @@ export const studio = createStore<StudioState>(() => ({
   ...optionsSlice,
   ...soundSlice,
   ...cameraSlice,
+  ...lightsSlice,
   ...keysSlice,
   ...objectsSlice,
   ...textSlice,

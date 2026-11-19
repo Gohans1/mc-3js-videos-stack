@@ -1,8 +1,18 @@
 import type * as z from "zod";
 
 export type ActivitySurface =
-  | "film" | "cli" | "sound" | "text" | "cam" | "adjust" | "openfilm"
-  | "keys" | "speed" | "transition" | "objects";
+  | "film"
+  | "cli"
+  | "sound"
+  | "text"
+  | "cam"
+  | "light"
+  | "adjust"
+  | "openfilm"
+  | "keys"
+  | "speed"
+  | "transition"
+  | "objects";
 
 export type ActivityIn = {
   surface?: ActivitySurface;

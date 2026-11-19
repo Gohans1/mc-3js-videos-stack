@@ -148,6 +148,7 @@ export const openFilmHistory = (
       ...[
         "soundTimeline",
         "camTimeline",
+        "lightsTimeline",
         "shotsTimeline",
         "textTimeline",
         "adjustmentTimeline",

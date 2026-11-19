@@ -27,6 +27,15 @@ Split giữ nhịp bằng cách chia đường easing khi đoạn camera hỗ tr
 
 To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never shift every key by hand. `bun run at <heard second>` converts between the clocks.
 
+## Timeline row formats
+
+| File        | Key fields                                                                                                                                                                            |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| cam.json    | Hard cuts place `cut: true` on the incoming key; Studio links the closing hold key before a cut via `tailId` when present                                                             |
+| timing.json | `speeds` use `from`, `to`, and either `rate` or `curve` pairs `[progress, speed]` with optional per-segment `handles`                                                                 |
+| timing.json | `freezes` use `at`, `duration`, and optional `frame` to hold another source second; `layerKinds` stores `base` and `changes` per `text`, `overlays`, `adjustment`, `audio`, `sfx`, `voice` |
+| text.json   | `items` use `kind`, `from`, `to`, and optional `text`, `track`, `align`, `bold`, `size`, `spacing`, `stroke { color, width }`, `background { color, opacity }`, `shadow`, `in`, `out` |
+
 ## Optional hooks on draw
 
 Each hook turns on one part of the studio. The template sets all of these:
@@ -91,6 +100,15 @@ The creator sees all of the above in the studio's Film tab, view only, under Cap
 Studio scans prop subfolders recursively for images, self-contained GLB models and TypeScript files; put a same-stem image or `.glb` beside a `.ts` prop to preview it in Objects without executing source.
 
 `src/timeline/placed.json` (`"live-studio".keyFiles`: `"placed"`) stores 3D blocks and mobs animated in scene seconds (`what`: `"block:<ns>:<id>" | "mob:<id>"`, optional `properties`/`clip`/`rate`, sorted `keys[]` with `t`, `at: [x, y, z]`, `rot: [x, y, z]`, `scale > 0`, `visible`, `ease`, `clip`, `rate`). Items (`item:<ns>:<id>`) do not go in `placed.json`: pick them into `pack/picks.json` (`items[]`) and attach via `loadModel(group, assets, await resolveModelData(assets, { model: "<ns>:item/<id>", type: "item" }), { display: {} })` (`assets = await prepareAssets(sources)`; or `parseItemDefinition(assets, "<ns>:<id>")` for 1.21.4+ defs) in `src/scene.ts`. Custom `.ts`/`.glb` props are copied from `vault/props/` into `src/props/` with `bun run asset use prop:global:<id>`.
+
+## Keyframed lighting and atmosphere
+
+| Part           | Convention                                                                                                                                             |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| lightsTimeline | Points to `src/timeline/lights.json`. Accepts a key array or `{ target, keys }`, with `t` in scene seconds                                             |
+| Each key       | Picks a `preset` or sets `key`, `fill` (`negativeFill`), `rim`, `world`, `fog`, `practicals`, and `godrays`; use `cut: true` for instant switches and `ease` for interpolation |
+| Scene wiring   | Create a rig with `film-stage/lights`, then call `lightsAt` and `applyLightingRig` per frame; the template falls back to `edit.json` light when empty |
+| Studio and CLI | Edit live in Camera → Light, or use `bun run collab read lights` and `bun run collab write lights <file>` with the read `base` version                 |
 
 ## Sound the studio finds
 

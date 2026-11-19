@@ -44,6 +44,7 @@ import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openPropLibrary } from "./prop-library.ts";
 import { openVoiceLibrary } from "./voice-library.mjs";
+import { assertInsideDir } from "./voice-map.mjs";
 import {
   PlaygroundConfig,
   PlaygroundConnectionQuery,
@@ -350,6 +351,7 @@ export const createApi = (
     port: port ?? null,
     has: film.features?.() ?? {
       cam: !!film.cam,
+      lights: !!film.lights,
       shots: !!film.shots,
       text: !!film.text,
       adjustment: !!film.adjustment,
@@ -534,7 +536,7 @@ export const createApi = (
       hasPageProblems: film.hasPageProblems?.() ?? false,
       tags,
     }).replace(/</g, "\\u003c");
-    const headScript = `<meta name="live-build" content="${build()}"><script>window.__STUDIO_BOOT=${bootJson};(()=>{const b=window.__STUDIO_BOOT,h=b.film&&b.film.has,t=b.tags||{},p=window.__PREFETCH={};const f=(u)=>{p[u]=fetch(!u.includes("?")&&t[u]?u+"?v="+t[u]:u).then((r)=>(r.ok||r.status===404)?r:null,()=>null)};for(const u of["/api/shots.json","/api/notes","/api/favorites","/api/activity"])f(u);if(h)for(const[k,u]of[["timing","/api/timing"],["shots","/api/shots"],["voiceMap","/api/voice_map.json"],["voice","/api/voice"],["cam","/api/cam"],["keys","/api/keys"],["text","/api/text"],["adjustment","/api/adjustment"],["sound","/api/sound?used=1"],["trials","/api/trials.json"],["choices","/api/choices.json"]])if(h[k])f(u)})();</script>`;
+    const headScript = `<meta name="live-build" content="${build()}"><script>window.__STUDIO_BOOT=${bootJson};(()=>{const b=window.__STUDIO_BOOT,h=b.film&&b.film.has,t=b.tags||{},p=window.__PREFETCH={};const f=(u)=>{p[u]=fetch(!u.includes("?")&&t[u]?u+"?v="+t[u]:u).then((r)=>(r.ok||r.status===404)?r:null,()=>null)};for(const u of["/api/shots.json","/api/notes","/api/favorites","/api/activity"])f(u);if(h)for(const[k,u]of[["timing","/api/timing"],["shots","/api/shots"],["voiceMap","/api/voice_map.json"],["voice","/api/voice"],["cam","/api/cam"],["lights","/api/lights"],["keys","/api/keys"],["text","/api/text"],["adjustment","/api/adjustment"],["sound","/api/sound?used=1"],["trials","/api/trials.json"],["choices","/api/choices.json"]])if(h[k])f(u)})();</script>`;
     const preloads = (film.preloads?.() ?? [])
       .map((href) => {
         // Match core/boot.ts's versioned fetch URL so the preload is consumed instead of downloading twice.
@@ -1423,6 +1425,16 @@ export const createApi = (
       r = film.adjustment.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
+  app.get("/api/lights", (c) => {
+    const data = film.lights?.read();
+    return data ? fresh(c, data) : noSound(c);
+  });
+  app.post("/api/lights", zValidator("json", KeySave), (c) => {
+    if (!film.lights) return noSound(c);
+    const { base, data } = c.req.valid("json"),
+      r = film.lights.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
   app.get("/api/timing", (c) => {
     const data = film.timing?.read();
     return data ? fresh(c, data) : noSound(c);
@@ -1457,6 +1469,7 @@ export const createApi = (
     new Map([
       ["sound", film.sound],
       ["cam", film.cam],
+      ["lights", film.lights],
       ["shots", film.shots],
       ["text", film.text],
       ["adjustment", film.adjustment],
@@ -1508,6 +1521,44 @@ export const createApi = (
     const name = c.req.param("name").slice(0, -5);
     const f = await film.smallSfx(name);
     return f ? sendFile(c, f, { onSound: true, sfxName: name }) : noSound(c);
+  });
+  app.get("/api/sound/ir", (c) => {
+    const raw = (c.req.query("path") || "").trim();
+    if (
+      !raw ||
+      raw.includes("\0") ||
+      raw.split(/[\\/]/).includes("..") ||
+      raw.startsWith("/") ||
+      raw.startsWith("\\") ||
+      /^[A-Za-z]:/.test(raw)
+    ) {
+      return c.json({ error: "Invalid IR path" }, 400);
+    }
+    const allowedExt = new Set([".wav", ".ogg", ".flac", ".mp3", ".webm"]);
+    if (
+      film.PROJECT &&
+      (raw.includes("/") || raw.includes("\\") || allowedExt.has(extname(raw).toLowerCase()))
+    ) {
+      let target;
+      try {
+        target = assertInsideDir(film.PROJECT, raw, "Reverb IR");
+      } catch {
+        return c.json({ error: "IR path escapes film directory" }, 403);
+      }
+      if (
+        !allowedExt.has(extname(target).toLowerCase()) ||
+        !existsSync(target) ||
+        !statSync(target).isFile()
+      ) {
+        return c.body(null, 404);
+      }
+      return sendFile(c, target, { onSound: true });
+    }
+    if (/^\w[\w.-]*$/.test(raw)) {
+      const f = film.sound?.fileOf(raw);
+      return f ? sendFile(c, f, { onSound: true, sfxName: raw }) : noSound(c);
+    }
+    return c.body(null, 404);
   });
 
   app.get("/api/mix.wav", (c) =>

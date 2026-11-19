@@ -10,6 +10,7 @@ import { getFile } from "../core/net";
 import { S, wake } from "../core/state";
 import { get, say } from "../core/store";
 import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
+import { ATTACK, RELEASE } from "./brickwall";
 import brickwall from "./brickwall.worklet.ts?worker&url";
 import {
   addModule,
@@ -26,6 +27,14 @@ import { duckCorners, duckGain, duckWindows } from "./duck";
 import { envelope, envelopePoints } from "./envelope";
 import { coefficients, widthOf } from "./eq";
 import { type GainKey, scheduleGain } from "./gain";
+import {
+  generateImpulseResponse,
+  isPresetSpace,
+  normalizeStereoIr,
+  resolveClipReverb,
+  type ResolvedReverb,
+  SPACE_PRESETS,
+} from "./ir";
 import { loopSources } from "./loop";
 import {
   clearProcessed,
@@ -36,14 +45,29 @@ import {
   processSpec,
   retainProcessed,
 } from "./processed";
+import { pictureTimeAt, type SceneTargetSampler, type SceneTargetSpan } from "./scene-spatial";
 import { type ClipRef } from "./slice";
 import type { Lanes, LibraryItem } from "./sound";
+import {
+  type CameraPose,
+  computeSpatialParams,
+  isSpatialActive,
+  offsetPosition,
+  type SpatialSpec,
+  type Vec3,
+} from "./spatial";
 
 interface Source {
   lanes: () => Lanes | null;
   library: () => LibraryItem[];
   span: (c: ClipRef) => [number, number];
   voice: () => { s: number; e: number }[];
+  camPose?: (t: number, opts?: { offline?: boolean }) => CameraPose;
+  prepareTargets?: (
+    spans: readonly SceneTargetSpan[],
+    signal?: AbortSignal,
+  ) => Promise<SceneTargetSampler | undefined>;
+  targetPos?: (name: string, t: number, opts?: { offline?: boolean }) => Vec3 | null;
 }
 interface Clip {
   key: string;
@@ -61,6 +85,8 @@ interface Clip {
   pan: number;
   filters: string[];
   process?: ProcessSpec;
+  reverb?: ResolvedReverb | null;
+  spatial?: SpatialSpec;
 }
 interface Sound {
   buf: AudioBuffer;
@@ -146,10 +172,199 @@ const load = (name: string) => {
   }
   return sounds.get(name)!;
 };
+interface RawIrData {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+}
+
+const irRaw = new Map<string, RawIrData>();
+const irBytes = new Map<string, ArrayBuffer | null>();
+const irBytePromises = new Map<string, Promise<ArrayBuffer | null>>();
+let irCtxBuffers = new WeakMap<BaseAudioContext, Map<string, AudioBuffer>>();
+let irDecodePromises = new WeakMap<BaseAudioContext, Map<string, Promise<AudioBuffer | null>>>();
+let convolversByBus = new WeakMap<AudioNode, Map<string, ConvolverNode>>();
+
+const loadIrBytes = (space: string): Promise<ArrayBuffer | null> => {
+  if (!irBytePromises.has(space)) {
+    irBytePromises.set(
+      space,
+      getFile(`/api/sound/ir?path=${encodeURIComponent(space)}`)
+        .then(async (r) => {
+          const buf = r.ok ? await r.arrayBuffer() : null;
+          irBytes.set(space, buf);
+          return buf;
+        })
+        .catch(() => {
+          irBytes.set(space, null);
+          return null;
+        }),
+    );
+  }
+  return irBytePromises.get(space)!;
+};
+
+const resampleChannel = (src: Float32Array, fromRate: number, toRate: number): Float32Array => {
+  if (fromRate === toRate || src.length === 0) return new Float32Array(src);
+  const outLen = Math.max(1, Math.round((src.length * toRate) / fromRate));
+  const out = new Float32Array(outLen);
+  const ratio = fromRate / toRate;
+  for (let i = 0; i < outLen; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(src.length - 1, i0 + 1);
+    const frac = pos - i0;
+    out[i] = src[i0] * (1 - frac) + src[i1] * frac;
+  }
+  return out;
+};
+
+const ensureCustomIrForCtx = (
+  ctx: BaseAudioContext,
+  space: string,
+): Promise<AudioBuffer | null> => {
+  if (typeof ctx.createBuffer !== "function") return Promise.resolve(null);
+  const cached = irCtxBuffers.get(ctx)?.get(space);
+  if (cached) return Promise.resolve(cached);
+  let bySpace = irDecodePromises.get(ctx);
+  if (!bySpace) {
+    bySpace = new Map();
+    irDecodePromises.set(ctx, bySpace);
+  }
+  if (!bySpace.has(space)) {
+    bySpace.set(
+      space,
+      (async () => {
+        const bytes = await loadIrBytes(space);
+        if (!bytes) return null;
+        const decoder =
+          typeof ctx.decodeAudioData === "function" ? ctx : hasAudio() ? getAudioCtx() : null;
+        if (!decoder) return null;
+        const decoded = await decoder.decodeAudioData(bytes.slice(0));
+        const ch0 = decoded.getChannelData(0);
+        const ch1 = decoded.numberOfChannels > 1 ? decoded.getChannelData(1) : ch0;
+        const left = resampleChannel(ch0, decoded.sampleRate, ctx.sampleRate);
+        const right = resampleChannel(ch1, decoded.sampleRate, ctx.sampleRate);
+        normalizeStereoIr(left, right);
+        const audioBuf = ctx.createBuffer(2, left.length, ctx.sampleRate);
+        audioBuf.getChannelData(0).set(left);
+        audioBuf.getChannelData(1).set(right);
+        let ctxMap = irCtxBuffers.get(ctx);
+        if (!ctxMap) {
+          ctxMap = new Map();
+          irCtxBuffers.set(ctx, ctxMap);
+        }
+        ctxMap.set(space, audioBuf);
+        return audioBuf;
+      })().catch(() => null),
+    );
+  }
+  return bySpace.get(space)!;
+};
+
+const irAudioBufferFor = (ctx: BaseAudioContext, space: string): AudioBuffer | null => {
+  if (typeof ctx.createBuffer !== "function") return null;
+  let byKey = irCtxBuffers.get(ctx);
+  if (byKey?.has(space)) return byKey.get(space)!;
+
+  if (isPresetSpace(space)) {
+    if (space === "dry") return null;
+    const rawKey = `${space}@${ctx.sampleRate}`;
+    let raw = irRaw.get(rawKey);
+    if (!raw) {
+      raw = generateImpulseResponse(space, ctx.sampleRate);
+      irRaw.set(rawKey, raw);
+    }
+    const audioBuf = ctx.createBuffer(2, raw.left.length, ctx.sampleRate);
+    audioBuf.getChannelData(0).set(raw.left);
+    audioBuf.getChannelData(1).set(raw.right);
+    if (!byKey) {
+      byKey = new Map();
+      irCtxBuffers.set(ctx, byKey);
+    }
+    byKey.set(space, audioBuf);
+    return audioBuf;
+  }
+
+  if (irBytes.get(space) !== null) {
+    void ensureCustomIrForCtx(ctx, space).then((buf) => {
+      if (buf && on && hasAudio() && ctx === getAudioCtx()) replan();
+    });
+  }
+  return null;
+};
+
+const collectCustomSpaces = (l: Lanes): string[] => [
+  ...new Set(
+    [
+      ...(l.reverb ? [l.reverb.space] : []),
+      ...(l.spaces ?? []).map((s) => s.space),
+      ...l.beds.flatMap((b) => (b.reverb ? [b.reverb.space] : [])),
+      ...l.sfx.flatMap((s) => (s.reverb ? [s.reverb.space] : [])),
+    ].filter((sp) => sp && !isPresetSpace(sp)),
+  ),
+];
+
+const preloadReverbIrs = async (l: Lanes, ctx?: BaseAudioContext): Promise<boolean> => {
+  const custom = collectCustomSpaces(l);
+  if (!custom.length) return false;
+  if (!ctx) {
+    await Promise.all(custom.map(loadIrBytes));
+    return false;
+  }
+  const had = custom.map((sp) => Boolean(irCtxBuffers.get(ctx)?.has(sp)));
+  const bufs = await Promise.all(custom.map((sp) => ensureCustomIrForCtx(ctx, sp)));
+  return bufs.some((b, i) => Boolean(b) && !had[i]);
+};
+
+const sharedConvolver = (
+  ctx: BaseAudioContext,
+  bus: AudioNode,
+  space: string,
+): ConvolverNode | null => {
+  if (typeof ctx.createConvolver !== "function") return null;
+  const buf = irAudioBufferFor(ctx, space);
+  if (!buf) return null;
+  let bySpace = convolversByBus.get(bus);
+  if (!bySpace) {
+    bySpace = new Map();
+    convolversByBus.set(bus, bySpace);
+  }
+  let conv = bySpace.get(space);
+  if (!conv) {
+    conv = ctx.createConvolver();
+    conv.normalize = false;
+    conv.buffer = buf;
+    conv.connect(bus);
+    bySpace.set(space, conv);
+  }
+  return conv;
+};
+
+const resetBusConvolvers = (bus: AudioNode | undefined | null) => {
+  if (!bus) return;
+  const bySpace = convolversByBus.get(bus);
+  if (!bySpace) return;
+  for (const conv of bySpace.values()) {
+    try {
+      conv.disconnect();
+    } catch {}
+  }
+  convolversByBus.delete(bus);
+};
+
 // A file changed on disk (a new download): its old decode goes
 export const forgetSounds = () => {
   sounds.clear();
   ready.clear();
+  irRaw.clear();
+  irBytes.clear();
+  irBytePromises.clear();
+  irCtxBuffers = new WeakMap();
+  irDecodePromises = new WeakMap();
+  clearSkims();
+  if (liveStage) resetBusConvolvers(liveStage.bus);
+  convolversByBus = new WeakMap();
   clearProcessed();
 };
 // A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
@@ -157,7 +372,7 @@ export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
 // The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
 let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
 const mixBuffer = () => {
-  const url = S.el.audio?.currentSrc;
+  const url = S.el?.audio?.currentSrc;
   if (!url) return Promise.resolve(null);
   if (mixDecoded?.url !== url)
     mixDecoded = {
@@ -258,6 +473,13 @@ const clips = (l: Lanes, all = false): Clip[] => {
         duck: narrated ? ((b.duck as number | undefined) ?? 0) : 0,
         pan: b.pan ?? 0,
         filters: [...((b.filters as string[]) ?? []), ...(trackEq.get(b.track ?? "") ?? [])],
+        reverb: resolveClipReverb(
+          b.reverb,
+          pictureTimeAt(0.5 * (b.from + b.to)),
+          l.spaces,
+          l.reverb,
+        ),
+        spatial: isSpatialActive(b.spatial) ? b.spatial : undefined,
       });
   });
   l.sfx.forEach((s, i) => {
@@ -269,11 +491,12 @@ const clips = (l: Lanes, all = false): Clip[] => {
       return;
     }
     const start = p.own ? (s.start ?? 0) : 0; // an option plays from its own start
+    const t1 = s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1));
     out.push({
       key: `sfx:${i}`,
       name: p.name,
       t0: s.at,
-      t1: s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1)),
+      t1,
       start,
       length: s.length,
       loop: false,
@@ -284,6 +507,8 @@ const clips = (l: Lanes, all = false): Clip[] => {
       duck: 0,
       pan: s.pan ?? 0,
       filters: [...((s.filters as string[]) ?? []), ...(trackEq.get(s.track ?? "") ?? [])],
+      reverb: resolveClipReverb(s.reverb, pictureTimeAt(0.5 * (s.at + t1)), l.spaces, l.reverb),
+      spatial: isSpatialActive(s.spatial) ? s.spatial : undefined,
     });
   });
   const audible = out.filter((c) => c.t1 > c.t0);
@@ -302,8 +527,8 @@ const clips = (l: Lanes, all = false): Clip[] => {
 const soundFor = (c: Clip) => (c.process ? processed(c.process) : ready.get(c.name));
 const loadClip = (c: Clip) => (c.process ? loadProcessed(c.process) : load(c.name));
 const preloadSources = (l: Lanes) =>
-  Promise.all(
-    [
+  Promise.all([
+    ...[
       ...new Set(
         [...l.beds, ...l.sfx].flatMap((c) => {
           const p = c.try?.length ? lanePick(c.name)?.set : null;
@@ -311,11 +536,13 @@ const preloadSources = (l: Lanes) =>
         }),
       ),
     ].map(load),
-  );
+    ...collectCustomSpaces(l).map(loadIrBytes),
+  ]);
 
 interface Voice {
   srcs: AudioBufferSourceNode[];
   gain: GainNode;
+  updateSpatial?: (tFilm: number, nowCtx: number) => void;
 }
 let voices: Voice[] = [];
 const started = new Set<string>();
@@ -338,7 +565,9 @@ const play = (
   c: Clip,
   s: Sound,
   at: number,
-  w: Pick<Window, "speed" | "when" | "ctxAt">,
+  w: Pick<Window, "speed" | "when" | "ctxAt"> & { until?: number },
+  offline?: boolean,
+  sampled?: SceneTargetSampler,
 ): Voice | null => {
   const u0 = at - c.t0;
   if (!c.loop && c.start + u0 >= s.buf.duration) return null;
@@ -394,8 +623,89 @@ const play = (
     p.pan.value = c.pan;
     tail = tail.connect(p);
   }
-  tail.connect(bus);
-  return { srcs, gain };
+  let updateSpatial: Voice["updateSpatial"];
+  if (
+    c.spatial &&
+    isSpatialActive(c.spatial) &&
+    source?.camPose &&
+    typeof ctx.createBiquadFilter === "function"
+  ) {
+    const spSpec = c.spatial;
+    const isOffline =
+      offline ?? (typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext);
+    const sampleSpatial = (tFilm: number) => {
+      const sample = sampled?.(spSpec.target, tFilm);
+      const cam = sample?.camera ?? source!.camPose!(tFilm, { offline: isOffline });
+      const rawSrc = spSpec.target
+        ? (sample?.at ??
+          source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
+          spSpec.at)
+        : spSpec.at;
+      if (!rawSrc && isOffline && spSpec.target) {
+        throw new Error(
+          `Spatial target '${spSpec.target}' is unavailable at ${tFilm.toFixed(3)}s. Add spatial.at for a fallback.`,
+        );
+      }
+      return rawSrc
+        ? computeSpatialParams(cam, offsetPosition(rawSrc, spSpec.offset), spSpec)
+        : { cutoffHz: 20000, gain: 1, pan: 0 };
+    };
+    const lpf = ctx.createBiquadFilter();
+    lpf.type = "lowpass";
+    // Web Audio lowpass Q is specified in dB: 10^(-3.0103/20) = 1/sqrt(2) (Butterworth)
+    lpf.Q.value = -20 * Math.log10(Math.SQRT2);
+    const spGain = ctx.createGain();
+    const spPan = ctx.createStereoPanner();
+    spPan.channelCountMode = "explicit";
+    spPan.channelCount = 2;
+
+    const init = sampleSpatial(at);
+    lpf.frequency.setValueAtTime(Math.max(250, Math.min(20000, init.cutoffHz)), begin);
+    spGain.gain.setValueAtTime(init.gain, begin);
+    spPan.pan.setValueAtTime(init.pan, begin);
+
+    if (isOffline) {
+      const step = 1 / 30;
+      const sourceEnd = c.loop ? c.t1 : c.t0 + s.buf.duration - c.start;
+      const last = Math.min(c.t1, sourceEnd, w.until ?? c.t1) - 1 / ctx.sampleRate;
+      const rampSpatial = (t: number) => {
+        const ct = Math.max(begin, w.ctxAt(t));
+        const sp = sampleSpatial(t);
+        spGain.gain.linearRampToValueAtTime(sp.gain, ct);
+        spPan.pan.linearRampToValueAtTime(sp.pan, ct);
+        lpf.frequency.exponentialRampToValueAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), ct);
+      };
+      for (let t = at + step; t < last; t += step) rampSpatial(t);
+      if (last > at) rampSpatial(last);
+    } else {
+      updateSpatial = (tFilm: number, nowCtx: number) => {
+        const sp = sampleSpatial(tFilm);
+        spGain.gain.setTargetAtTime(sp.gain, nowCtx, 0.015);
+        spPan.pan.setTargetAtTime(sp.pan, nowCtx, 0.015);
+        lpf.frequency.setTargetAtTime(Math.max(250, Math.min(20000, sp.cutoffHz)), nowCtx, 0.015);
+      };
+    }
+    tail = tail.connect(lpf).connect(spGain).connect(spPan);
+  }
+
+  const conv = c.reverb ? sharedConvolver(ctx, bus, c.reverb.space) : null;
+  if (conv && c.reverb) {
+    const dryGain = ctx.createGain();
+    const wetGain = ctx.createGain();
+    dryGain.gain.value = 1 - c.reverb.wet;
+    wetGain.gain.value = c.reverb.wet;
+    tail.connect(dryGain).connect(bus);
+    if (c.reverb.preDelayMs > 0 && typeof ctx.createDelay === "function") {
+      const preDelay = ctx.createDelay(1.0);
+      preDelay.delayTime.value = c.reverb.preDelayMs / 1000;
+      tail.connect(preDelay).connect(wetGain).connect(conv);
+    } else {
+      tail.connect(wetGain).connect(conv);
+    }
+  } else {
+    tail.connect(bus);
+  }
+  return { srcs, gain, updateSpatial };
 };
 const hush = (list: Voice[]) => {
   if (!list.length || !hasAudio()) return;
@@ -414,6 +724,7 @@ addPlayer({
   reset: () => {
     started.clear();
     voices = [];
+    if (liveStage) resetBusConvolvers(liveStage.bus);
   },
   tick: (w) => {
     if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
@@ -438,6 +749,7 @@ addPlayer({
         });
       }
     }
+    for (const v of voices) v.updateSpatial?.(w.now, ctx.currentTime);
     window.__lanes = { sounding: voices.length, at: +w.now.toFixed(3), plans };
   },
 });
@@ -538,18 +850,48 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
 
 // ---------- A skim (timeline/peek.ts): the next len seconds from film second t, everything as playback sounds there, each
 // one cutting the last off, as audio scrubbing in an editor does
-let skim: { out: GainNode; srcs: AudioScheduledSourceNode[] } | null = null,
+interface SkimEntry {
+  out: GainNode;
+  srcs: AudioScheduledSourceNode[];
+  cancelAuto: () => void;
+}
+let skim: SkimEntry | null = null,
   skims = 0;
+const skimCleanupTimers = new Set<number>();
+const disposeSkim = (entry: SkimEntry) => {
+  entry.cancelAuto();
+  resetBusConvolvers(entry.out);
+  try {
+    entry.out.disconnect();
+  } catch {}
+};
+const clearSkims = () => {
+  for (const id of skimCleanupTimers) clearTimeout(id);
+  skimCleanupTimers.clear();
+  if (skim) {
+    disposeSkim(skim);
+    skim = null;
+  }
+};
 const endSkim = (at: number) => {
   if (!skim) return;
-  skim.out.gain.cancelScheduledValues(at);
-  skim.out.gain.setTargetAtTime(0, at, 0.003);
-  for (const s of skim.srcs) {
+  const old = skim;
+  skim = null;
+  old.cancelAuto();
+  old.out.gain.cancelScheduledValues(at);
+  old.out.gain.setTargetAtTime(0, at, 0.003);
+  for (const s of old.srcs) {
     try {
       s.stop(at + 0.02);
     } catch {}
   }
-  skim = null;
+  const now = old.out.context?.currentTime ?? at;
+  const delayMs = Math.max(30, Math.ceil((at - now + 0.04) * 1000));
+  const timer = window.setTimeout(() => {
+    skimCleanupTimers.delete(timer);
+    disposeSkim(old);
+  }, delayMs);
+  skimCleanupTimers.add(timer);
 };
 export const playSlice = async (t: number, len: number) => {
   const mine = ++skims,
@@ -592,7 +934,27 @@ export const playSlice = async (t: number, len: number) => {
     }
   }
   for (const s of srcs) s.stop(end); // the last stop called is the one kept
-  skim = { out, srcs };
+  const autoDelayMs = Math.max(40, Math.ceil((end - ctx.currentTime + 0.08) * 1000));
+  let doneTimer = 0;
+  const entry: SkimEntry = {
+    out,
+    srcs,
+    cancelAuto: () => {
+      if (doneTimer) {
+        clearTimeout(doneTimer);
+        skimCleanupTimers.delete(doneTimer);
+        doneTimer = 0;
+      }
+    },
+  };
+  doneTimer = window.setTimeout(() => {
+    skimCleanupTimers.delete(doneTimer);
+    doneTimer = 0;
+    if (skim === entry) skim = null;
+    disposeSkim(entry);
+  }, autoDelayMs);
+  skimCleanupTimers.add(doneTimer);
+  skim = entry;
   trackPreview(srcs);
 };
 
@@ -613,6 +975,7 @@ export const setLive = (live_: boolean, src: Source) => {
       hush(voices);
       voices = [];
       started.clear();
+      if (liveStage) resetBusConvolvers(liveStage.bus);
       setLaneGroups({});
     }
   }
@@ -620,34 +983,106 @@ export const setLive = (live_: boolean, src: Source) => {
   const l = src.lanes();
   if (on && l) {
     for (const c of clips(l)) loadClip(c);
+    void preloadReverbIrs(l, hasAudio() ? getAudioCtx() : undefined).then((loadedNew) => {
+      if (loadedNew && on) replan();
+    });
     replan();
   }
+};
+
+const sampleNamedTargets = (all: Clip[], from: number, to: number, signal?: AbortSignal) =>
+  source?.prepareTargets?.(
+    all.flatMap((clip) => {
+      if (!clip.spatial || clip.t0 >= to || clip.t1 <= from) return [];
+      return [
+        {
+          name: clip.spatial.target,
+          from: Math.max(clip.t0, from),
+          to: Math.min(clip.t1, to),
+          fallback: !!clip.spatial.at,
+        },
+      ];
+    }),
+    signal,
+  );
+
+const SPAN_SAMPLE_RATE = 48000;
+
+const renderLanesSpan = async (
+  l: Lanes,
+  from: number,
+  to: number,
+  frames: number,
+  voice?: AudioBuffer | null,
+  signal?: AbortSignal,
+): Promise<AudioBuffer | null> => {
+  await preloadSources(l);
+  const all = clips(l).filter((c) => c.t0 < to);
+  const loaded = await Promise.all(all.map(loadClip));
+  if (loaded.some((s) => !s)) return null;
+
+  const rate = SPAN_SAMPLE_RATE;
+  const preceding = all.filter((c) => c.t0 < from && c.reverb);
+  const decoder = preceding.some((c) => c.reverb && !isPresetSpace(c.reverb.space))
+    ? new OfflineAudioContext(2, 1, rate)
+    : null;
+  if (decoder) await preloadReverbIrs(l, decoder);
+  const customIrs = decoder ? irCtxBuffers.get(decoder) : undefined;
+
+  // The convolution and limiter need the input that can still affect the first exported sample.
+  let start = from;
+  for (const { t0, t1, reverb } of preceding) {
+    if (!reverb) continue;
+    const { space, preDelayMs } = reverb;
+    const response =
+      isPresetSpace(space) && space !== "dry"
+        ? SPACE_PRESETS[space].durationSec
+        : customIrs?.get(space)?.duration;
+    if (!response) continue;
+    const history = response + preDelayMs / 1000 + ATTACK + RELEASE;
+    if (t1 + history > from) start = Math.min(start, Math.max(t0, from - history));
+  }
+  const preroll = Math.ceil((from - start) * rate);
+  start = from - preroll / rate;
+  const ctx = new OfflineAudioContext(2, frames + preroll, rate);
+  if (customIrs) irCtxBuffers.set(ctx, customIrs);
+  const st = stage(ctx, ctx.destination);
+  st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
+  const sampled = await sampleNamedTargets(all, start, to, signal);
+  const voiceStart = Math.max(0, start);
+  if (voice && voiceStart < voice.duration) {
+    const v = ctx.createBufferSource();
+    v.buffer = voice;
+    v.connect(st.bus);
+    v.start(0, voiceStart, Math.min((frames + preroll) / rate, voice.duration - voiceStart));
+  }
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t - start,
+    until: to,
+    when: (t: number) => Math.max(0, t - start),
+  };
+  all.forEach((c, i) => {
+    const sample = loaded[i];
+    if (sample && c.t1 > start)
+      play(ctx, st.bus, c, sample, Math.max(start, c.t0), w, true, sampled);
+  });
+  const rendered = await ctx.startRendering();
+  if (!preroll) return rendered;
+  const out = ctx.createBuffer(2, frames, rate);
+  for (let c = 0; c < 2; c++)
+    out.getChannelData(c).set(rendered.getChannelData(c).subarray(preroll, preroll + frames));
+  return out;
 };
 
 // The lanes from..to as heard here, rendered offline: RMS per half second and the peak, to set against mix.py's own render
 window.__lanesRender = async (from: number, to: number) => {
   const l = source?.lanes();
-  if (!l) return null;
-  await preloadSources(l);
-  const all = clips(l),
-    loaded = await Promise.all(all.map(loadClip));
-  if (loaded.some((s) => !s)) return null;
-  const rate = 48000,
-    ctx = new OfflineAudioContext(2, Math.ceil((to - from) * rate), rate),
-    st = stage(ctx, ctx.destination);
-  st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  await st.ready;
-  const w = {
-    speed: 1,
-    ctxAt: (t: number) => t - from,
-    when: (t: number) => Math.max(0, t - from),
-  };
-  all.forEach((c, i) => {
-    const s = loaded[i];
-    if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
-  });
-  const out = await ctx.startRendering(),
-    hop = rate / 2,
+  if (!l || to <= from) return null;
+  const out = await renderLanesSpan(l, from, to, Math.ceil((to - from) * SPAN_SAMPLE_RATE));
+  if (!out) return null;
+  const hop = SPAN_SAMPLE_RATE / 2,
     rms: number[] = [];
   let peak = 0;
   for (let i = 0; i < out.length; i += hop) {
@@ -684,56 +1119,43 @@ export const renderFilm = async (
     ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate),
     st = stage(ctx, await into(ctx));
   st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  await st.ready;
+  await Promise.all([st.ready, preloadReverbIrs(l, ctx)]);
+  const sampled = await sampleNamedTargets(all, 0, DURATION);
   if (voice) {
     const v = ctx.createBufferSource();
     v.buffer = voice;
     v.connect(st.bus);
     v.start(0);
   }
-  const w = { speed: 1, ctxAt: (t: number) => t, when: (t: number) => Math.max(0, t) };
+  const w = {
+    speed: 1,
+    ctxAt: (t: number) => t,
+    until: DURATION,
+    when: (t: number) => Math.max(0, t),
+  };
   all.forEach((c, i) => {
     const s = loaded[i];
-    if (s) play(ctx, st.bus, c, s, Math.max(0, c.t0), w);
+    if (s && c.t0 < DURATION && c.t1 > 0)
+      play(ctx, st.bus, c, s, Math.max(0, c.t0), w, true, sampled);
   });
   await ctx.startRendering();
   return l;
 };
 
 // Render stereo [from, to] audio segment for direct in-browser low-res MP4 clip export.
-export const renderAudioSpan = async (from: number, to: number): Promise<AudioBuffer | null> => {
+export const renderAudioSpan = async (
+  from: number,
+  to: number,
+  signal?: AbortSignal,
+): Promise<AudioBuffer | null> => {
   const dur = Math.max(0, to - from);
   if (dur <= 1e-3) return null;
-  const rate = 48000,
-    frames = Math.max(1, Math.round(dur * rate)),
+  const frames = Math.max(1, Math.round(dur * SPAN_SAMPLE_RATE)),
     voice = await mixBuffer(),
     l = source?.lanes();
   if (on && l) {
-    await preloadSources(l);
-    const all = clips(l),
-      loaded = await Promise.all(all.map(loadClip));
-    if (!loaded.some((s) => !s)) {
-      const ctx = new OfflineAudioContext(2, frames, rate),
-        st = stage(ctx, ctx.destination);
-      st.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-      await st.ready;
-      if (voice && from < voice.duration) {
-        const v = ctx.createBufferSource();
-        v.buffer = voice;
-        v.connect(st.bus);
-        v.start(0, Math.max(0, from), Math.min(dur, voice.duration - Math.max(0, from)));
-      }
-      const w = {
-        speed: 1,
-        ctxAt: (t: number) => t - from,
-        when: (t: number) => Math.max(0, t - from),
-      };
-      all.forEach((c, i) => {
-        const s = loaded[i];
-        if (s && c.t1 > from && c.t0 < to) play(ctx, st.bus, c, s, Math.max(from, c.t0), w);
-      });
-      return ctx.startRendering();
-    }
+    const rendered = await renderLanesSpan(l, from, to, frames, voice, signal);
+    if (rendered) return rendered;
   }
   if (!voice) return null;
   const startSample = Math.max(0, Math.floor(from * voice.sampleRate)),

@@ -7,9 +7,11 @@
 //   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
 //   motion_cam_<from>-<to>_turn.jpg  for cam: how fast it turns and zooms (°/s) against the 7-second panning rule
 // and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graphs only.
+import { EDIT } from "live-studio/edit";
 import * as THREE from "three";
 
 import { measure, report, turnReport, turns, WIDTH_SECONDS } from "../checks/motion.mjs";
+import { cameraTimesAt, timingClock } from "../src/timing-state.mjs";
 import { canvas } from "./lab";
 import { chart, findTarget, hue, label, mark, targetHelp } from "./target";
 
@@ -19,15 +21,16 @@ const HZ = 60,
 export const motionCheck =
   (render, cfg, cuts = []) =>
   async (target, from, to) => {
-    const { camera, free, look } = render.tools ?? {};
+    const { free } = render.tools ?? {};
+    const draw = render.renderFrame?.bind(render) ?? render;
     if (typeof target !== "string" || !(to > from))
       return [
         "ERROR usage: CHECK=motion:<target>,<from s>,<to s> (target: cam, a bone, an object name or label)",
       ];
     const isCam = target === "cam";
-    if (!camera) return ["ERROR CHECK=motion requires draw.tools.camera on the film"];
-    const obj = findTarget(render.tools, target);
-    if (!obj) return [targetHelp(render.tools, target)];
+    if (!render.tools?.camera) return ["ERROR CHECK=motion requires draw.tools.camera on the film"];
+    const obj = isCam ? null : findTarget(render.tools, target);
+    if (!isCam && !obj) return [targetHelp(render.tools, target)];
     if (!isCam && !free)
       return ["ERROR CHECK=motion on an object requires draw.tools.free on the film"];
 
@@ -41,7 +44,8 @@ export const motionCheck =
         free.l.set(lx, ly, lz);
         free.fov = fov;
       } else {
-        render((from + to) / 2);
+        await draw((from + to) / 2);
+        const { camera, look } = render.tools;
         free.p.copy(camera.getWorldPosition(new THREE.Vector3()));
         if (look) free.l.copy(look);
         else camera.getWorldDirection(free.l).add(free.p);
@@ -55,7 +59,7 @@ export const motionCheck =
     let openImp = null;
     for (let i = 0, n = Math.round((to - from) * HZ); i <= n; i++) {
       const t = from + i / HZ;
-      render(t);
+      await draw(t);
       const imp = isCam ? render.tools?.optics?.impulse : undefined;
       if (imp) {
         if (!openImp) openImp = { from: t, to: t, kind: imp };
@@ -68,22 +72,35 @@ export const motionCheck =
         impulses.push(openImp);
         openImp = null;
       }
-      obj.updateWorldMatrix(true, false);
+      const measured = isCam ? render.tools.camera : obj;
+      measured.updateWorldMatrix(true, false);
+      const wp = measured.getWorldPosition(new THREE.Vector3());
       samples.push({
         t,
-        p: obj.getWorldPosition(new THREE.Vector3()).toArray(),
+        p: wp.toArray(),
         ...(isCam && {
-          q: obj.getWorldQuaternion(new THREE.Quaternion()).toArray(),
-          fov: camera.fov,
-          aspect: camera.aspect,
+          l: measured.getWorldDirection(new THREE.Vector3()).add(wp).toArray(),
+          q: measured.getWorldQuaternion(new THREE.Quaternion()).toArray(),
+          fov: measured.fov,
+          aspect: measured.aspect,
         }),
       });
     }
     if (openImp) impulses.push(openImp);
+    const camKeys = isCam ? (cfg.camKeys ?? EDIT?.cam ?? null) : null;
     const m = measure(samples, cuts, impulses);
     const tm = isCam ? turns(samples, cuts, impulses) : null;
-    const out = report(target, samples, m, tm?.pops.length);
-    if (tm) out.push(...turnReport(tm));
+    const camFaults = tm
+      ? tm.pops.length + (tm.fovPops?.length ?? 0) + (tm.fastPan ? 1 : 0) + (tm.fastFov ? 1 : 0)
+      : 0;
+    const attrOpts = {
+      worldPos: true,
+      samples,
+      camKeys,
+      timing: timingClock.duration > 0 ? { sourceAt: (t) => cameraTimesAt(t).camera } : null,
+    };
+    const out = report(target, samples, m, camFaults, attrOpts);
+    if (tm) out.push(...turnReport(tm, attrOpts));
     const tag = `motion_${target}_${from}-${to}`;
     const peak = Math.max(m.peak.v, 1e-6);
     const gl = canvas();
@@ -106,13 +123,13 @@ export const motionCheck =
       const ctx = onion.getContext("2d");
       for (let k = 0; k < GHOSTS; k++) {
         // later ghosts drawn over earlier ones: the faintest pose is the first
-        render(from + ((to - from) * k) / (GHOSTS - 1));
+        await draw(from + ((to - from) * k) / (GHOSTS - 1));
         ctx.globalAlpha = k ? 0.45 : 1;
         ctx.drawImage(gl, 0, 0);
       }
       ctx.globalAlpha = 1;
       const xy = (p) => {
-        const v = new THREE.Vector3(...p).project(camera);
+        const v = new THREE.Vector3(...p).project(render.tools.camera);
         return v.z < 1 ? [((v.x + 1) / 2) * W, ((1 - v.y) / 2) * H] : null;
       };
       const pts = samples.map((s) => xy(s.p));
@@ -202,9 +219,11 @@ export const motionCheck =
 
     if (tm) {
       // the turn rate a frame width in WIDTH_SECONDS makes, at the widest view the camera has
-      const wide = (fov) =>
-        (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * camera.aspect) * 180) / Math.PI;
-      const limit = wide(tm.fov.max) / WIDTH_SECONDS;
+      const widest = samples.reduce((max, { fov, aspect }) => {
+        const width = (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
+        return Math.max(max, width);
+      }, 0);
+      const limit = widest / WIDTH_SECONDS;
       const most = Math.max(tm.peak.v, tm.fovPeak.v, limit);
       const k = chart(W, 420, {
         from,
@@ -238,6 +257,7 @@ export const motionCheck =
         }
       }
       for (const p of tm.pops) mark(k, p.t, "#ff2d2d", "POP");
+      for (const p of tm.fovPops ?? []) mark(k, p.t, "#ff9900", "FOV POP");
       out.push({ still: `${tag}_turn.jpg`, canvas: k.canvas });
     }
 

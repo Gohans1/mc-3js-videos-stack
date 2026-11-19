@@ -63,13 +63,14 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=order checks history-dependent frames",
+        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=order checks history-dependent frames; CROP and --compare inspect stills",
       sheet:
         "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence; each new run has index.json",
       scenes:
         "suggest cuts in a local reference video (PySceneDetect, optional CPU tool): JSON, CSV, scene images and HTML; file seconds",
       media:
         "optional local media tools: audio/OCR/tracking/catalog/OTIO and bundled FFmpeg finishing/QC (media ffmpeg --help)",
+      qc: "inspect an encoded video, camera motion, an image region (box), or pixel changes (compare); --help for checks",
       framecheck:
         "encoded picture faults: black, flashes, jumps, shimmer, freezes; --json gives retained evidence",
       reference:
@@ -182,8 +183,10 @@ if (argv.includes("--json")) {
         ? Object.hasOwn(scripts, c.target) && !String(scripts[c.target]).includes("wrong-place.mjs")
         : c.cwdModes.includes(scope),
   }));
+  const listed = new Set(commands.map((command) => command.id));
   for (const [id, script] of Object.entries(scripts)) {
     if (
+      listed.has(id) ||
       (id === "postinstall" && !asked) ||
       CLI_COMMANDS.some((c) => c.runner === "bun-script" && c.target === id) ||
       (asked && asked !== id)
@@ -288,8 +291,9 @@ if (film) {
     conf = JSON.parse(readFileSync(pkgFile, "utf8"))["live-studio"] ?? {};
   } catch {} // bun run check names a broken package.json
   const what = {
-    soundTimeline: "sound: beds, sfx, the narration's place",
+    soundTimeline: "sound: beds, sfx, narration, room reverb and 3D anchors",
     camTimeline: "camera keys and cuts",
+    lightsTimeline: "light keys, atmosphere, fog and practicals",
     shotsTimeline: "shots: start, name, framing, transition",
     textTimeline: "titles and on-screen text",
     adjustmentTimeline: "colour and look layers",

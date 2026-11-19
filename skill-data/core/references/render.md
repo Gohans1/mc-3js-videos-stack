@@ -31,6 +31,8 @@ bun run deliver --youtube 9-15               # file seconds; retains renders/you
 
 | Job                    | How                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Inspect one region     | `CROP=x,y,w,h` uses normalized 0–1 coordinates with `render stills` or `poster`, rendering that camera sub-frustum at native pixel density                                                    |
+| Before and after       | `COMPARE=1` or `--compare` preserves the previous frame in `renders/.prev/` and writes a side-by-side pixel comparison image when a prior still exists                                        |
 | Trying a move or a fix | `SPAN=40,44 bun run render clip` draws just those seconds to `renders/span_40-44.mp4`, in seconds, chunks untouched; `framecheck` and `sheet` read its seconds from its name                 |
 | One stretch changed    | `CHUNKS=3 bun run render clip` redraws that 30 s chunk. A plain `render clip` keeps chunks whose built code, timelines and render settings are unchanged |
 | An asset replaced in place | Files under `assets/public` and `vault/openfilm/library` are not in the render stamp; force affected chunks with `CHUNKS=N` before inspecting the result |

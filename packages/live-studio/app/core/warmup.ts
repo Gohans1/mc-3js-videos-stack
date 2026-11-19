@@ -18,6 +18,7 @@ export const warmBootRequests = () => {
   if (has.voiceMap) prefetchFile("/api/voice_map.json");
   if (has.voice) prefetchFile("/api/voice");
   if (has.cam) prefetchFile("/api/cam");
+  if (has.lights) prefetchFile("/api/lights");
   if (has.keys) prefetchFile("/api/keys");
   if (has.text) prefetchFile("/api/text");
   if (has.adjustment) prefetchFile("/api/adjustment");

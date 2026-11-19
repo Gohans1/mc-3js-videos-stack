@@ -23,11 +23,14 @@ const heardIntervals = voiceClips
       voiceIntervals.map(([s, e]) => ({ s, e, words: [] })),
       clock,
     ).map(({ s, e }) => [s, e]);
+const camClock = clockForTimeline("cam");
+const mappedAudio = mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations);
 process.stdout.write(
   JSON.stringify({
-    audio: mapTimeline("sound", audio, clockForTimeline("sound"), false, null, durations),
+    audio: mappedAudio,
     end: Math.max(1 / 30, compileTiming(timing, duration).duration, layerDuration()),
     voiceIntervals: heardIntervals,
     legacyTimeline: clipTiming(clock, 0, duration),
+    camSegments: camClock.segments,
   }),
 );

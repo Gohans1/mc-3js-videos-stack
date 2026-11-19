@@ -1,7 +1,7 @@
 import { cameraShotAtBoundary } from "./camera-clock.mjs";
 import { isTornByReorder, remapOutputTime, startsOnHold, timebaseClock } from "./layer-timing.mjs";
 import { equalJson } from "./merge-edits.mjs";
-import { clipTiming, frameAt, playRanges } from "./timing.mjs";
+import { clipTiming, frameAt, playRanges, visibleOutputAt } from "./timing.mjs";
 
 const overlaySpan = (clock, basis, a, b) => {
   const forward = basis ? (t, edge) => remapOutputTime(basis, clock, t, edge) : clock.outputAt;
@@ -179,7 +179,12 @@ export const mapTimeline = (
     return inverse
       ? unprojectCameraRows(out, clock, previous, previousClock)
       : projectCameraRows(out, clock);
-  const keyVisible = (k) => clock.visible(k.t);
+  const isKeyTrack = name === "lights";
+  const keyInPlay = (k) =>
+    clock.visible(k.t) || (isKeyTrack && !k.cut && clock.visible(k.t - 1e-7));
+  const heldLightTime = (k) =>
+    name === "lights" && !keyInPlay(k) ? visibleOutputAt(clock, k.t) : null;
+  const keyVisible = (k) => keyInPlay(k) || heldLightTime(k) !== null;
   const keys = (value, before, depth = 0) => {
     if (!value || typeof value !== "object") return value;
     if (Array.isArray(value)) {
@@ -187,21 +192,30 @@ export const mapTimeline = (
         value.every((k) => k && typeof k === "object" && !Array.isArray(k) && Number.isFinite(k.t))
       ) {
         const mapped = value
-          .filter((key) => inverse || keyVisible(key))
-          .map((key) => {
-            const meta = key.__timing;
+          .filter((k) => inverse || keyVisible(k))
+          .map((k) => {
+            const edge = isKeyTrack && !k.cut && k.t > 0 ? "before" : "after";
+            const meta = k.__timing;
             const t =
-              inverse && meta && Math.abs(key.t - meta.output) < 1e-9
+              inverse && meta && Math.abs(k.t - meta.output) < 1e-9
                 ? meta.source
-                : time(key.t, "after");
-            const next = { ...key, t };
+                : ((inverse ? null : heldLightTime(k)) ?? time(k.t, edge));
+            const next = { ...k, t };
             if (inverse) delete next.__timing;
-            else if (clock.placements) next.__timing = { source: key.t, output: t };
+            else if (name === "lights" || clock.placements)
+              next.__timing = { source: k.t, output: t };
             return next;
           });
         if (inverse && Array.isArray(before))
-          mapped.push(...structuredClone(before.filter((key) => !keyVisible(key))));
-        return mapped.sort((a, b) => a.t - b.t);
+          mapped.push(...structuredClone(before.filter((k) => !keyVisible(k))));
+        return mapped.sort(
+          (a, b) =>
+            a.t - b.t ||
+            (isKeyTrack
+              ? Number(!!a.cut || a.__timing?.source === 0) -
+                Number(!!b.cut || b.__timing?.source === 0)
+              : 0),
+        );
       }
       return value.map((v, i) => keys(v, before?.[i], depth + 1));
     }
@@ -226,6 +240,10 @@ export const mapTimeline = (
     return value;
   };
   if (name.startsWith("keys/")) return keys(out, previous);
+  if (name === "lights")
+    return Array.isArray(out)
+      ? keys(out, previous)
+      : { ...out, keys: keys(out.keys, previous?.keys) };
   if (name === "text" || name === "adjustment" || name === "openfilm") {
     for (const [index, item] of out.items.entries()) {
       const a = item.from,

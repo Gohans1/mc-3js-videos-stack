@@ -19,6 +19,7 @@ Load details on demand, following agent-browser skills get core. Keep discovery 
 | Native backend        | How to use it                                                                                                                                                        |
 | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Verify a film         | Run bun run skills get core --ref review to choose a check. framecheck --json returns measurements, and sheet frames reports decoded timestamps.                     |
+| Unified QC check      | Run bun run qc FILE --json to inspect video specs, audio loudness/sync, camera motion, and text readability. Run bun run qc --help for box, compare, and motion subcommands. |
 | Discover FFmpeg tools | Use media ffmpeg list --json for the tool list, schema <tool> for its native arguments, and contract -- --static for the full contract.                              |
 | Pass native arguments | The catalog forwards options only through fields marked as passthrough. Other positionals reject hidden flags. Arguments go directly to the process without a shell. |
 | Update the backend    | Keep LICENSE, upstream.json, and the source hash. Update the upstream pin without editing vendor files, then rerun tests and check representative media.             |
