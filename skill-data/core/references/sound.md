@@ -52,10 +52,10 @@ Filters apply to both blocks; similarity is not confidence, so listen/view befor
 | Hand-edited audio.json | Scene seconds before Speed/Freeze; use the configured soundTimeline file |
 | gain | dB; find --show exampleProps are a starting point, not a universal level |
 | Music and ambience | Music uses beds; bed: true in controls.json places ambience in beds |
-| Không gian âm thanh | audio.json có reverb mặc định, spaces theo khoảng giây nguồn và reverb riêng từng clip. Preset phòng được tạo sẵn, custom IR đọc từ phim hoặc vault. |
-| Neo 3D | spatial.target bám vật thể placed hoặc vật thể có tên trong scene. spatial.at đặt XYZ hoặc làm tọa độ dự phòng, spatial.offset cộng theo tọa độ thế giới. |
-| Tên vật thể | Đặt Object3D.name hoặc nhãn trong draw.tools.objects. Nếu neo mất trong lúc clip còn phát, bản xuất báo lỗi trừ khi đã đặt spatial.at. |
-| Cắt lệch tiếng | J-Cut và L-Cut ở menu clip kéo mép tiếng qua ranh hình khi file nguồn và track còn chỗ. Có Undo. |
+| Acoustic spaces and reverb | audio.json supports a film default `reverb`, source-time `spaces` ranges, and per-clip `reverb` overrides; built-in room presets synthesize deterministic IRs, and custom IR WAVs load from the film or vault |
+| 3D spatial anchors | `spatial.target` tracks a placed object or named scene anchor; `spatial.at` sets world XYZ (or serves as fallback), and `spatial.offset` adds a world-space offset |
+| Named scene anchors | Set `Object3D.name` or register a label in `draw.tools.objects`; offline exports fail if a named target disappears mid-clip unless `spatial.at` provides a fallback |
+| J-Cut and L-Cut | Clip menu J-Cut and L-Cut extend clip edges across picture cuts when source room and track neighbors allow, with full Undo/Redo |
 | Source trim | start is source-file seconds; length is cue playback duration in audio.json. At constant rate without other retiming, an earshot start/end region uses length = (end - start) / rate; rate defaults to 1 |
 | Track gain and EQ | tracks[].gain affects the track; clip filters contain the Inspector's FFmpeg EQ chain |
 | Edit target | Keep the returned target; older index-based rows require rereading timeline after reordering |
