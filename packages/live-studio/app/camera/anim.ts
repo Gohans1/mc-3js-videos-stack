@@ -7,7 +7,6 @@ import type { AnimCurve } from "film-stage/animate";
 import type { AnimFx } from "film/scene";
 
 import { clockForTimeline, timingClock } from "../../src/timing-state.mjs";
-import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { type Side, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
@@ -26,7 +25,8 @@ import {
   syncPairedOption,
   tidyAnimSet,
 } from "./anim-math";
-import { cameraKeyFrameTime, keys } from "./cam";
+import { cameraKeyShotIndex, keys } from "./cam";
+import { cameraShotIndex } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type Slot = "in" | "out" | "combo";
@@ -88,7 +88,7 @@ export const shownShot = () => {
   const { shotPick: s, camKey: k } = get();
   return s !== null && SHOTS_OUT[s]
     ? s
-    : shotIndex(k !== null && keys[k] ? cameraKeyFrameTime(k) : S.t);
+    : k !== null && keys[k] ? cameraKeyShotIndex(k) : cameraShotIndex(S.t);
 };
 // A shot block clicked on the camera row: its details show, in the Animation tab if that is open, else the Camera tab
 export const pickShot = (i: number | null, side?: Side) => {

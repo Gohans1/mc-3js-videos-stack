@@ -1,4 +1,4 @@
-import { cameraMotionSpans } from "film-stage/camera";
+import { cameraMotionSpans, cameraTrackOptions } from "film-stage/camera";
 import { EDIT } from "film/edit";
 
 import type { CameraSpan } from "../../src/camera-clock.mjs";
@@ -94,6 +94,7 @@ import {
   splitShot,
 } from "./cam";
 import { cameraKeyColors } from "./camera-key-style";
+import { activeCameraRig } from "./camera-rig";
 import { shotsDoc } from "./shots";
 import {
   pickTransition,
@@ -279,12 +280,11 @@ const drawMotion = (
   const top = PAD + HEAD + 3,
     floor = h - PAD - FOOT - BAND - 2;
   const sourceKeys = EDIT.cam as CamKey[];
-  const rig = SHOTS_OUT[shot ?? sourceShotIndex(rawFrom)]?.camera;
+  const rig = activeCameraRig(shot ?? sourceShotIndex(rawFrom));
   const spans = cameraMotionSpans(sourceKeys, rawFrom, rawTo, {
     aspect: S.tools?.camera?.aspect,
-    fovAxis: rig?.fovAxis,
     resolveAnchor: S.tools?.resolveCameraAnchor,
-    rail: rig?.look === "one-node" ? undefined : rig?.rail,
+    ...cameraTrackOptions(rig),
   });
   const plotted: {
     a: number;

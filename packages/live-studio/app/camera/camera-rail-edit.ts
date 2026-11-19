@@ -2,20 +2,19 @@ import { makeCameraRail, resolveCameraPoint } from "film-stage/camera";
 
 import { cameraTimesAt } from "../../src/timing-state.mjs";
 import { together } from "../core/doc";
-import { shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say } from "../core/store";
-import { cameraKeyFrameTime, edit, keys, vectorPoint } from "./cam";
+import { cameraKeySampleTime, cameraKeyShotIndex, edit, keys, vectorPoint } from "./cam";
 import { shotsDoc } from "./shots";
 
 export const buildCameraRail = (shot: number) => {
   const tools = S.tools;
-  if (!tools || !SHOTS_OUT[shot]) return;
+  if (!tools?.cameraRig || !tools.cameraRails || !SHOTS_OUT[shot]) return;
   if (SHOTS_OUT[shot].camera?.look === "one-node")
     return say("Choose 2-node or Along path before building a camera rail");
   const indices = keys.flatMap((key, i) =>
-    !key.muted && shotIndex(cameraKeyFrameTime(i)) === shot ? [i] : [],
+    !key.muted && cameraKeyShotIndex(i) === shot ? [i] : [],
   );
   const seen = new Set<string | number>();
   const ordered = indices
@@ -32,7 +31,7 @@ export const buildCameraRail = (shot: number) => {
   if (ordered.length < 2) return say("Add at least two camera keyframes before building a rail");
   if (ordered.some((i) => keys[i].locked))
     return say("Unlock the camera keys before attaching them to a rail");
-  const times = ordered.map((i) => cameraKeyFrameTime(i));
+  const times = ordered.map((i) => cameraKeySampleTime(i));
   const track = tools.sampleCameraTrack?.(
     times.map((t) => (get().timing ? cameraTimesAt(t) : { world: t, camera: t })),
   );

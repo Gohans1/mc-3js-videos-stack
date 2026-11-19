@@ -4,8 +4,7 @@ import { Box3, Vector3 } from "three";
 
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { together } from "../core/doc";
-import { shotIndex } from "../core/film";
-import { DURATION, SHOTS_OUT } from "../core/filmMeta";
+import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set, showError } from "../core/store";
 import { r3, SAME } from "../core/time";
@@ -14,18 +13,20 @@ import { setPlaying } from "../playback/transport";
 import {
   cameraAxisAt,
   cameraKeyFrameTime,
+  cameraKeyShotIndex,
+  cameraLensAspect,
   cameraKeyIsAnchored,
   type CamKey,
   edit,
   editCameraKeyInScene,
   keys,
-  lensAspectAt,
   opticsOfKey,
   pasteCamKeys,
   type Point,
   vectorPoint,
   writeLens,
 } from "./cam";
+import { activeCameraRig } from "./camera-rig";
 import { type ContinuityAxis, type ShotRow, shotsDoc } from "./shots";
 import type { CameraAimPick, ContinuityPick } from "./slice";
 
@@ -166,8 +167,8 @@ export const nudgeCamera = (i: number, axis: "right" | "up" | "forward", amount:
       l = resolveKeyPoint(key, "l");
     if (!p || !l) return unavailable();
     const delta = cameraBasis(p, l, key.roll)[axis].multiplyScalar(amount);
-    const shot = shotIndex(key.t);
-    const rig = shotsDoc.data?.[shot]?.camera;
+    const shot = cameraKeyShotIndex(i);
+    const rig = activeCameraRig(shot);
     if (rig?.look === "one-node" && rig.position) {
       const position = vectorPoint(new Vector3(...rig.position).add(delta));
       shotsDoc.edit((rows) => {
@@ -186,7 +187,7 @@ export const nudgeCamera = (i: number, axis: "right" | "up" | "forward", amount:
 
 export const swapCameraLens = (i: number, mm: number) =>
   editCameraKeyInScene(i, cameraKeyIsAnchored(keys[i]), (i, key) => {
-    const rig = SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera;
+    const rig = activeCameraRig(cameraKeyShotIndex(i));
     if (rig?.projection === "orthographic" || rig?.rail)
       return say("Swap lens needs perspective and an editable camera position");
     if (rig?.look === "one-node")
@@ -196,13 +197,13 @@ export const swapCameraLens = (i: number, mm: number) =>
     if (!p || !l) return unavailable();
     const from = p.distanceTo(l);
     if (from < 1e-6) return say("Set an aim point away from the camera before swapping lenses");
-    const fov = rigFov(0, mm, S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(key.t));
+    const fov = rigFov(0, mm, S.tools?.camera?.aspect || 16 / 9, rig?.fovAxis);
     const distance = dollyZoom(from, opticsOfKey(i).fov, fov);
     const position = storedPoint(key.p, p.sub(l).setLength(distance).add(l));
     if (!position) return say("This film cannot move the camera anchor");
     edit((rows) => {
       rows[i].p = position;
-      writeLens(rows[i], "mm", mm);
+      writeLens(rows[i], "mm", mm, cameraKeyShotIndex(i));
     });
   });
 
@@ -231,9 +232,8 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
     for (const name of targets)
       for (const object of candidates.get(name) ?? []) box.expandByObject(object, true);
     if (box.isEmpty()) return say("Select at least one visible subject for Fit box");
-    const frame = cameraKeyFrameTime(i);
-    const shot = shotIndex(frame);
-    const rig = SHOTS_OUT[shot]?.camera;
+    const shot = cameraKeyShotIndex(i);
+    const rig = activeCameraRig(shot);
     if (rig?.rail) return say("Remove the rail to fit subjects from a new camera position");
     if (rig?.look === "tangent" || rig?.lead || rig?.bank)
       return say(
@@ -259,12 +259,12 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
       edit((rows) => {
         rows[i].p = nextP;
         rows[i].l = nextL;
-        if (fitted.fov !== undefined) writeLens(rows[i], "fov", fitted.fov, frame);
+        if (fitted.fov !== undefined) writeLens(rows[i], "fov", fitted.fov, shot);
       });
       if (shotsDoc.data?.[shot])
         shotsDoc.edit((rows) => {
           rows[shot].size = size;
-          if (rows[shot].camera?.look === "one-node")
+          if (rig?.look === "one-node" && rows[shot].camera)
             rows[shot].camera!.position = vectorPoint(fitted.p);
         });
     });
@@ -273,7 +273,7 @@ export const fitCameraBox = (i: number, targets: string[], size: ShotSize) =>
 export const addVertigo = (i: number) => {
   const key = keys[i];
   if (!key || key.locked) return;
-  const rig = SHOTS_OUT[shotIndex(key.t)]?.camera;
+  const rig = activeCameraRig(cameraKeyShotIndex(i));
   if (rig?.projection === "orthographic" || rig?.rail)
     return say("Vertigo needs perspective and an editable camera position");
   if (rig?.look && rig.look !== "target") return say("Vertigo needs the 2-node aim mode");
@@ -289,7 +289,7 @@ export const addVertigo = (i: number) => {
     if (distance < 0.01) return say("Set an aim point away from the camera before adding Vertigo");
     const aspect = S.tools?.camera?.aspect ?? 16 / 9;
     const optics = opticsOfKey(at);
-    const mm = (optics.mm ?? mmOf(optics.fov, lensAspectAt(active.t))) < 50 ? 50 : 24;
+    const mm = (optics.mm ?? mmOf(optics.fov, cameraLensAspect(cameraKeyShotIndex(at)))) < 50 ? 50 : 24;
     const toFov = rigFov(0, mm, aspect, cameraAxisAt(time));
     const offset = vector.setLength(dollyZoom(distance, optics.fov, toFov));
     const save = () => {
@@ -329,7 +329,7 @@ let relativeCamera: { keys: WorldKey[]; p: Vector3; basis: ReturnType<typeof cam
 export const copyRelativeCamera = async (i: number) => {
   const first = keys[i];
   if (!first) return;
-  if (SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail)
+  if (activeCameraRig(cameraKeyShotIndex(i))?.rail)
     return say("Copy relative needs an editable camera position");
   const end = endOfOccurrence(first);
   const moves = [];
@@ -384,7 +384,7 @@ const TURN = 2 * Math.PI;
 export const pasteRelativeCamera = (i: number) => {
   const copied = relativeCamera;
   if (!copied) return say("Copy a relative camera move first");
-  if (keys[i] && SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail)
+  if (keys[i] && activeCameraRig(cameraKeyShotIndex(i))?.rail)
     return say("Remove the rail before pasting a relative camera move");
   editCameraKeyInScene(i, cameraKeyIsAnchored(keys[i]), (_, key) => {
     const origin = resolveKeyPoint(key, "p");

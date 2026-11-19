@@ -13,14 +13,13 @@ import {
 
 import { type Shutter } from "../../src/shutter";
 import { FieldRow, Section, Segmented, ValueBox } from "../components/inspector";
-import { shotEnd } from "../core/film";
-import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
-import { get, showError, useStudio } from "../core/store";
+import { get, say, showError, useStudio } from "../core/store";
 import { cutWarnings } from "../picture/camera-monitor";
 import { readSceneFrame } from "../picture/render";
 import { vectorPoint } from "./cam";
 import { cancelCameraPick, continuityShotMatches, startContinuityPick } from "./camera-framing";
+import { activeCameraRig, visibleCameraShotFrame } from "./camera-rig";
 import { buildCameraRail } from "./camera-rail-edit";
 import {
   applyCameraRecipe,
@@ -104,11 +103,12 @@ function ContinuityControls({ row, shot }: { row: ShotRow; shot: number }) {
 export function CameraShotSettings({ shot }: { shot: number }) {
   const editable = useStudio((s) => s.shots);
   useStudio((s) => s.shotsRev);
-  useStudio((s) => s.ready);
+  const ready = useStudio((s) => s.ready);
   const row = shotsDoc.data?.[shot];
   if (!editable || !row) return null;
   const rig = row.camera ?? {},
     shutter = row.shutter ?? {};
+  const effectiveRail = activeCameraRig(shot)?.rail;
   const camera = (part: Partial<CameraRig>) =>
     shotsDoc.edit((rows) => {
       if (rows[shot]?.id === row.id) rows[shot].camera = { ...rows[shot].camera, ...part };
@@ -118,9 +118,10 @@ export function CameraShotSettings({ shot }: { shot: number }) {
       if (rows[shot]?.id === row.id) rows[shot].shutter = { ...rows[shot].shutter, ...part };
     });
   const orientation = (look: NonNullable<CameraRig["look"]>) => {
-    if (look === "one-node" && rig.rail) return;
+    if (look === "one-node" && effectiveRail) return;
     if (look !== "one-node") return camera({ look, position: undefined });
-    const t = Math.min(Math.max(S.t, SHOTS_OUT[shot]?.t ?? 0), shotEnd(shot) - 0.001);
+    const t = visibleCameraShotFrame(shot, S.t);
+    if (t === undefined) return say("Show this shot in the timeline before capturing its camera position");
     void readSceneFrame(t, () => {
       const source = S.tools?.camera;
       const clean = S.tools?.cameraSample?.().p;
@@ -166,8 +167,23 @@ export function CameraShotSettings({ shot }: { shot: number }) {
           Beats to camera hits
         </Button>
       </Section>
+      {ready && row.camera && Object.keys(row.camera).length > 0 && !S.tools?.cameraRig && (
+        <p className="text-muted-foreground px-3 py-2 text-xs">
+          This film uses a renderer that ignores its saved camera rig.
+        </p>
+      )}
       {S.tools?.cameraRig && (
         <Section title="Camera rig" closed>
+          {!S.tools.cameraProjection && rig.projection === "orthographic" && (
+            <p className="text-muted-foreground text-xs">
+              This film’s renderer uses perspective even with orthographic projection saved.
+            </p>
+          )}
+          {!S.tools.cameraRails && (rig.rail || rig.extrapolation === "linear") && (
+            <p className="text-muted-foreground text-xs">
+              This film’s renderer ignores saved camera rails and path extrapolation.
+            </p>
+          )}
           {S.tools.cameraProjection && (
             <>
               <Segmented
@@ -225,7 +241,7 @@ export function CameraShotSettings({ shot }: { shot: number }) {
           )}
           <Segmented
             label="Aim mode"
-            items={rig.rail ? SETUPS.filter(({ id }) => id !== "one-node") : [...SETUPS]}
+            items={effectiveRail ? SETUPS.filter(({ id }) => id !== "one-node") : [...SETUPS]}
             value={rig.look ?? "target"}
             onChange={orientation}
           />

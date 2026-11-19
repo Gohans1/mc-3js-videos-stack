@@ -4,6 +4,7 @@ import { EDIT } from "film/edit";
 import type { CameraPathPose } from "film/scene";
 import { Vector3 } from "three";
 
+import { activeCameraRig } from "../camera/camera-rig";
 import { camLine } from "../camera/camline";
 import { sampleEditedPath } from "../camera/campath";
 import { shotEnd, shotIndex } from "../core/film";
@@ -36,7 +37,7 @@ export const panStats = (i: number, t: number) => {
   return {
     speed,
     fullWidth,
-    mm: mmOf((a.fov + b.fov) / 2, lensAspect(aspect, shot.camera?.fovAxis)),
+    mm: mmOf((a.fov + b.fov) / 2, lensAspect(aspect, activeCameraRig(i)?.fovAxis)),
   };
 };
 

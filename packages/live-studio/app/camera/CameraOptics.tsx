@@ -11,10 +11,11 @@ import { get, say, set, useStudio } from "../core/store";
 import { SAME } from "../core/time";
 import { seekExact, setPlaying } from "../playback/transport";
 import {
-  cameraKeyFrameTime,
+  cameraKeySampleTime,
+  cameraKeyShotIndex,
+  cameraLensAspect,
   edit,
   keys,
-  lensAspectAt,
   type LensField,
   opticsOfKey,
   preview,
@@ -49,13 +50,14 @@ export function CameraOptics({
   useStudio((s) => s.ready);
   const key = keys[i];
   const optics = opticsOfKey(i);
-  const aspect = lensAspectAt(key.t);
+  const shot = cameraKeyShotIndex(i);
+  const aspect = cameraLensAspect(shot);
   const mm = optics.mm ?? mmOf(optics.fov, aspect);
   const disabled = !!key.locked;
   const field = (name: LensField, scale = 1) => ({
     doc,
     disabled,
-    preview: (value: number) => preview((rows) => writeLens(rows[i], name, value / scale)),
+    preview: (value: number) => preview((rows) => writeLens(rows[i], name, value / scale, shot)),
     save: (value: number) => setLens(i, name, value / scale),
   });
   const applyMm = (value: number) => {
@@ -169,7 +171,7 @@ export function CameraOptics({
           }
           if (S.tools?.free.on) engine.setFree(false);
           if (S.playing) setPlaying(false);
-          seekExact(cameraKeyFrameTime(i));
+          seekExact(cameraKeySampleTime(i));
           set({ pickFocus: { id: key.id, t: key.t }, cameraPick: null });
         }}
         onCommitFocus={(next) => setFocus(i, next)}

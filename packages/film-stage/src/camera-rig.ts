@@ -30,6 +30,12 @@ export interface CameraRig {
   rail?: Vec3[];
   extrapolation?: "hold" | "linear";
 }
+export const cameraTrackOptions = (rig?: CameraRig) => ({
+  fovAxis: rig?.fovAxis,
+  rail: rig?.look === "one-node" ? undefined : rig?.rail,
+  extrapolation: rig?.extrapolation,
+});
+
 type CameraOrientation = { p: Vector3; l: Vector3; roll: number };
 type Sample = (t: number) => Pick<CameraOrientation, "p" | "l">;
 const DEFAULT_UP = new Vector3(0, 1, 0);

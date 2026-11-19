@@ -23,7 +23,7 @@ Load details on demand, following agent-browser skills get core. Keep discovery 
 | Pass native arguments | The catalog forwards options only through fields marked as passthrough. Other positionals reject hidden flags. Arguments go directly to the process without a shell. |
 | Update the backend    | Keep LICENSE, upstream.json, and the source hash. Update the upstream pin without editing vendor files, then rerun tests and check representative media.             |
 
-Với at --json, scene là giây nguồn của ảnh; cam.time là giây lấy mẫu camera và cam.clock cho biết đồng hồ đang dùng.
+Với at --json, scene là giây nguồn của ảnh, cam.time là giây lấy mẫu camera và cam.clock cho biết đồng hồ đang dùng. Cam.evaluation đánh dấu ước tính từ dữ liệu lưu sẵn, với FOV và mm là null nếu Dolly Zoom thiếu tọa độ anchor.
 
 ## Contract
 

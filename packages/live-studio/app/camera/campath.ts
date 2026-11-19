@@ -1,4 +1,10 @@
-import { cameraAt, defaultCameraHandles, resolveCameraPoint } from "film-stage/camera";
+import {
+  applyCameraRig,
+  cameraAt,
+  cameraTrackOptions,
+  defaultCameraHandles,
+  resolveCameraPoint,
+} from "film-stage/camera";
 import { EDIT } from "film/edit";
 import type { CameraPathPose } from "film/scene";
 import * as THREE from "three";
@@ -6,7 +12,6 @@ import { TransformControls } from "three/addons/controls/TransformControls.js";
 
 import { gap } from "../../checks/contact.mjs";
 import { cameraTimesAt, clockForTimeline } from "../../src/timing-state.mjs";
-import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
@@ -14,8 +19,10 @@ import { FPS, SAME } from "../core/time";
 import { cameraSurfaces } from "../picture/camera-collision";
 import { filmCam } from "../picture/filmcam";
 import { seekExact, setPlaying } from "../playback/transport";
+import { shotSourceOf } from "./anim";
 import {
   cameraKeyFrameTime,
+  cameraKeyShotIndex,
   type CamKey,
   edit,
   keys,
@@ -26,6 +33,7 @@ import {
   sourceCameraSegment,
   vectorPoint,
 } from "./cam";
+import { activeCameraRig, cameraShotIndex } from "./camera-rig";
 
 type Handle = "inHandle" | "outHandle";
 type Field = "p" | "l" | Handle;
@@ -112,12 +120,19 @@ export const sampleEditedPath = (times: number[]): CameraPathPose[] => {
       fov,
     }));
   const track = EDIT.cam as CamKey[];
-  return clockTimes.map(({ camera }) =>
-    cameraAt(camera, track, {
+  return clockTimes.map(({ camera }, i) => {
+    const shot = cameraShotIndex(times[i]);
+    const rig = activeCameraRig(shot);
+    const options = {
       aspect: tools.camera?.aspect,
       resolveAnchor: tools.resolveCameraAnchor,
-    }),
-  );
+      ...cameraTrackOptions(rig),
+    };
+    const sample = (t: number) => cameraAt(t, track, options);
+    const pose = sample(camera);
+    applyCameraRig(pose, camera, shotSourceOf(shot), rig, sample);
+    return pose;
+  });
 };
 const colors = new THREE.LineBasicMaterial({ depthTest: false, vertexColors: true });
 const dot = new THREE.PointsMaterial({
@@ -178,7 +193,7 @@ const rebuild = (start: number, end: number, windowStart: number) => {
     );
 };
 
-const rigForKey = (index: number) => SHOTS_OUT[shotIndex(cameraKeyFrameTime(index))]?.camera;
+const rigForKey = (index: number) => activeCameraRig(cameraKeyShotIndex(index));
 export const cameraPathHandles = (index: number | null): Handle[] => {
   if (index === null || !keys[index] || keys[index].locked || keys[index].muted) return [];
   const rig = rigForKey(index);

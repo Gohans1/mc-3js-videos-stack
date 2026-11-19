@@ -7,6 +7,7 @@ import {
   applyCameraFeel,
   applyCameraRig,
   cameraAt,
+  cameraTrackOptions,
   EASES,
   lensAspect,
   mmOf,
@@ -336,9 +337,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     cameraAt(t, EDIT.cam, {
       aspect: W / H,
       resolveAnchor: resolveCameraAnchor,
-      fovAxis: rig?.fovAxis,
-      rail: rig?.rail,
-      extrapolation: rig?.extrapolation,
+      ...cameraTrackOptions(rig),
     });
   let clocks,
     editTime = 0,

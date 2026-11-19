@@ -126,6 +126,49 @@ test("at reads camera-clock optics and authored keys while a Freeze holds the pi
   );
 });
 
+test("at estimates the authored rig lens and uses camera anchor fallbacks for dolly zoom", (t) => {
+  const dir = film(t);
+  const put = (path, value) => writeFileSync(join(dir, path), JSON.stringify(value));
+  const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
+  pkg["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  put("package.json", pkg);
+  put("src/timeline/timing.json", {});
+  const cam = [{ t: 0, p: [0, 0, 10], l: [0, 0, 0], fov: 50 }];
+  put("src/timeline/cam.json", cam);
+  put("src/timeline/shots.json", [{ t: 0, camera: { fovAxis: { mode: "horizontal", aspect: 1 } } }]);
+  const rig = whatsAt(dir, 2).cam;
+  assert.equal(rig.fov, 29.4);
+  assert.equal(rig.evaluation, "authored");
+
+  put("src/timeline/shots.json", [{ t: 0 }]);
+  const dolly = { ...cam[0], t: 4, dollyZoomScale: 2, motion: "linear", ease: "linear" };
+  const anchor = { target: "Actor", fallback: [0, 0, 10] };
+  put("src/timeline/cam.json", [{ ...cam[0], p: anchor }, { ...dolly, p: anchor }]);
+  assert.equal(whatsAt(dir, 2).cam.fov, 22.6);
+  const unknown = { target: "Actor", offset: [0, 0, 0] };
+  put("src/timeline/cam.json", [{ ...cam[0], p: unknown }, { ...dolly, p: unknown }]);
+  assert.equal(whatsAt(dir, 2).cam.fov, null);
+  put("src/timeline/cam.json", [...cam, dolly, { ...dolly, t: 8, p: { target: "Other actor" } }]);
+  assert.equal(whatsAt(dir, 2).cam.fov, 22.6);
+  put("src/timeline/cam.json", [
+    cam[0],
+    {
+      ...dolly,
+      motion: "orbit",
+      p: unknown,
+      l: [10, 0, 0],
+      easeChannels: { position: [0, 0, 1, -1 / 3], aim: "linear" },
+    },
+  ]);
+  assert.equal(whatsAt(dir, 2).cam.fov, null);
+  put("src/timeline/cam.json", [
+    { ...cam[0], t: 0 },
+    { ...dolly, t: 2, p: [15, 0, 0], motion: "orbit", matchSpeed: true },
+    { ...dolly, t: 4, p: unknown, motion: "orbit" },
+  ]);
+  assert.equal(whatsAt(dir, 1).cam.fov, null);
+});
+
 test("at #N finds a note's moment after a Speed edit moved it: by its scene second, or by its place in its shot", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));

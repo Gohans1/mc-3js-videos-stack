@@ -13,12 +13,10 @@ import {
 
 import { FieldRow, Section, ValueBox } from "../components/inspector";
 import { NumberField } from "../components/NumberField";
-import { shotIndex } from "../core/film";
-import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, showError, useStudio } from "../core/store";
 import { seekExact, setPlaying } from "../playback/transport";
-import { cameraKeyFrameTime, edit, keys, railPositionForKey } from "./cam";
+import { cameraKeySampleTime, cameraKeyShotIndex, edit, keys, railPositionForKey } from "./cam";
 import {
   addVertigo,
   cameraCoordinates,
@@ -33,6 +31,7 @@ import {
   startCameraPick,
   swapCameraLens,
 } from "./camera-framing";
+import { activeCameraRig } from "./camera-rig";
 import type { CameraAimPick } from "./slice";
 
 const axes = ["X", "Y", "Z"];
@@ -56,7 +55,7 @@ export function CameraFraming({
   const [amount, setAmount] = useState(0.1);
   const [fit, setFit] = useState<string[]>([]);
   const disabled = !!key.locked;
-  const rig = SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera;
+  const rig = activeCameraRig(cameraKeyShotIndex(i));
   const tripod = rig?.look === "one-node";
   const onRail = !!rig?.rail;
   const parallel = rig?.projection === "orthographic";
@@ -83,7 +82,7 @@ export function CameraFraming({
       return;
     }
     if (S.playing) setPlaying(false);
-    seekExact(cameraKeyFrameTime(i));
+    seekExact(cameraKeySampleTime(i));
     startCameraPick(i, field);
   };
   if (section === "advanced") {

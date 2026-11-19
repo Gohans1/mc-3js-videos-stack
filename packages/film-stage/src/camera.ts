@@ -15,7 +15,7 @@ import {
   pairJoinSlopes,
   scalarJoinSlopes,
 } from "./camera-pace";
-import { compileCameraPath, type ResolveCameraAnchor } from "./camera-path";
+import { type CameraPoint, compileCameraPath, type ResolveCameraAnchor } from "./camera-path";
 import { type FovAxis, lensAspect, rigFov } from "./camera-rig";
 
 export * from "./camera-meta";
@@ -27,6 +27,7 @@ export {
   defaultCameraHandles,
   makeCameraRail,
   resolveCameraPoint,
+  type CameraPoint,
   type CameraMotion,
   type ResolveCameraAnchor,
 } from "./camera-path";
@@ -607,12 +608,43 @@ export function applyCameraFeel({
   return { roll, handheld: strongest?.kind, shakes: resolvedShakes };
 }
 
+const dollyPointsKnown = (
+  ks,
+  i: number,
+  position: number,
+  aim: number,
+  rail: boolean,
+  known: (point: CameraPoint) => boolean,
+) => {
+  if (i < 0) return (rail || known(ks.at(-1).p)) && known(ks.at(-1).l);
+  const mode = ks[i + 1].motion ?? "smooth";
+  const interior = (u: number) => u !== 0 && u !== 1;
+  const pointsAround = (neighbours: number) =>
+    ks.slice(Math.max(0, i - neighbours), i + 2 + neighbours);
+  const joined = (ks[i].matchSpeed && canMatchCameraSpeed(ks, i)) ||
+    (ks[i + 1].matchSpeed && canMatchCameraSpeed(ks, i + 1));
+  if (interior(position) || interior(aim)) {
+    // Match speed uses adjacent spans, whose curves can use another key on each side.
+    if (joined)
+      return pointsAround(2).every((key) => (rail || known(key.p)) && known(key.l));
+    if (!rail && mode === "orbit")
+      return pointsAround(0).every((key) => known(key.p) && known(key.l));
+  }
+  const pointsKnown = (field: "p" | "l", u: number) => {
+    if (u === 1) return known(ks[i + 1][field]);
+    if (u === 0 || mode === "hold") return known(ks[i][field]);
+    return pointsAround(mode === "smooth" ? 1 : 0).every((key) => known(key[field]));
+  };
+  return (rail || pointsKnown("p", position)) && pointsKnown("l", aim);
+};
+
 export function cameraAt(
   t,
   keys,
   opts?: {
     aspect?: number;
     resolveAnchor?: ResolveCameraAnchor;
+    pointKnown?: (point: CameraPoint) => boolean;
     fovAxis?: FovAxis;
     rail?: readonly (readonly [number, number, number])[];
     extrapolation?: "hold" | "linear";
@@ -743,6 +775,8 @@ export function cameraAt(
     roll,
     speed,
     distance,
+    lensKnown: dollyZoomScale === undefined || !opts?.pointKnown ||
+      dollyPointsKnown(ks, idx, u, lookU, !!opts.rail && opts.rail.length > 1, opts.pointKnown),
     mm,
     fstop,
     focus,

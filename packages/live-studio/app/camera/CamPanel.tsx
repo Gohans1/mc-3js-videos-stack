@@ -42,6 +42,7 @@ import { hasSweeteners, sweeten, SWEETS } from "../sound/sweeten";
 import { shotSpan, shownShot } from "./anim";
 import {
   addKeyHere,
+  cameraKeyShotIndex,
   canConvertHardCut,
   canDeleteCameraKey,
   convertHardCutToKeyframe,
@@ -437,7 +438,9 @@ function PicksSection({ picks }: { picks: number[] }) {
             onSave={(value) => {
               if (value !== undefined)
                 edit((rows) => {
-                  for (const i of picks) if (!rows[i].locked) writeLens(rows[i], field.key, value);
+                  for (const i of picks)
+                    if (!rows[i].locked)
+                      writeLens(rows[i], field.key, value, cameraKeyShotIndex(i));
                 });
             }}
           />

@@ -25,8 +25,12 @@ import { setFilmSource, SHOTS_OUT } from "/core/filmMeta.ts";
 import { S, wake } from "/core/state.ts";
 import { get, invalidatePictures, set, setPref, useStudio } from "/core/store.ts";
 import { refreshTimedDocs } from "/core/timed-doc.ts";
-import { addKeyHere, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, splitShot } from "/camera/cam.ts";
+import { addKeyHere, keys as camKeys, loadCam, matchAllInShot, removeKey, retime, setKey, setLens, splitShot } from "/camera/cam.ts";
+import { shownShot } from "/camera/anim.ts";
 import { camLine } from "/camera/camline.ts";
+import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
+import { sampleEditedPath } from "/camera/campath.ts";
+import { fitCameraBox } from "/camera/camera-framing.ts";
 import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
@@ -435,7 +439,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -958,6 +962,175 @@ test("Camera Graph fits the selected range and restores the full shot without ed
   expect(await page.evaluate("window.__UX_TEST__.camKeys()")).toEqual(before);
 });
 
+test("camera graph and path follow renderer rig capabilities and leave legacy framing editable", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__, tools = u.S.tools;
+    const original = [tools.cameraRig, tools.cameraRails, tools.sampleCameraTrack, tools.sampleCameraPath];
+    const keys = [0, 4].map(t => ({ t, p: [t, 2, 6], l: [0, 1, 0], fov: 50, motion: "linear", ease: "linear" }));
+    const camera = { rail: [[0, 2, 6], [40, 2, 6]], fovAxis: { mode: "horizontal", aspect: 1 } };
+    try {
+      await u.loadShots([{ id: "rig", t: 0, camera }]);
+      await u.setCamData(keys);
+      const stats = () => {
+        const at = channel => u.plotCameraGraph([0, 1], "value", channel, 0).find(p => p.t === 2).value;
+        const path = u.sampleEditedPath([2])[0];
+        return [at("position"), at("lens"), path.p.x, path.fov];
+      };
+      tools.sampleCameraPath = tools.sampleCameraTrack = undefined;
+      tools.cameraRig = tools.cameraRails = undefined;
+      const legacy = stats();
+      tools.cameraRig = tools.cameraRails = true;
+      const supported = stats();
+      tools.cameraRig = tools.cameraRails = undefined;
+      u.freecam.flyFree({ p: [7, 2, 6], l: [0, 1, 0], fov: 42 });
+      u.freecam.applyFreeToKeyframe(1);
+      return { legacy, supported, key: u.sourceCamKeys()[1] };
+    } finally {
+      [tools.cameraRig, tools.cameraRails, tools.sampleCameraTrack, tools.sampleCameraPath] = original;
+      u.freecam.setFree(false);
+    }
+  })()`);
+  expect(result.legacy).toEqual([2, 50, 2, 50]);
+  expect(result.supported[0]).toBeCloseTo(20, 5);
+  expect(result.supported[1]).toBeCloseTo(29.395, 2);
+  expect(result.supported[2]).toBeCloseTo(result.supported[0], 5);
+  expect(result.supported[3]).toBeCloseTo(result.supported[1], 5);
+  expect(result.key.p[0]).toBe(7);
+  expect(result.key.railU).toBeUndefined();
+});
+
+test("camera graph closes on the outgoing pose and writes a tail lens with its own shot axis", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__, tools = u.S.tools;
+    const supported = tools.cameraRig;
+    try {
+      tools.cameraRig = true;
+      await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 2, camera: { fovAxis: { mode: "horizontal", aspect: 1 } } }]);
+      await u.setCamData([
+        { t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50 },
+        { t: 2, p: [2, 2, 6], l: [0, 1, 0], fov: 40, motion: "linear", ease: "linear" },
+        { t: 2, p: [100, 2, 6], l: [0, 1, 0], fov: 50, cut: true },
+      ], 1);
+      const last = mode => u.plotCameraGraph([0, 1], mode, "position", 0).at(-1);
+      const value = last("value"), speed = last("speed");
+      u.scaleGraphValues([0, 1], "lens", 0, 0.8);
+      return { value, speed, fov: u.sourceCamKeys()[1].fov };
+    } finally {
+      tools.cameraRig = supported;
+    }
+  })()`);
+  expect(result.value.t).toBe(2);
+  expect(result.value.value).toBeCloseTo(2, 5);
+  expect(result.speed.value).toBeCloseTo(1, 4);
+  expect(result.fov).toBeCloseTo(42, 3);
+});
+
+test("Fit box edits the visible source shot after picture clips are reordered", async () => {
+  const original = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const previous = u.get().timing;
+    await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 4 }]);
+    await u.setCamData([
+      { id: "first", t: 1, p: [0, 2, 6], l: [0, 1, 0] },
+      { id: "second", t: 5, p: [0, 2, 8], l: [0, 1, 0], cut: true },
+    ]);
+    u.set({ timing: true });
+    u.refreshProjection({ main: [
+      { id: "later", kind: "clip", sourceFrom: 4, sourceTo: 8 },
+      { id: "earlier", kind: "clip", sourceFrom: 0, sourceTo: 4 },
+    ] });
+    const key = u.camKeys().findIndex(k => k.id === "second");
+    u.S.t = 1;
+    u.set({ camKey: null, shotPick: null });
+    if (u.shownShot() !== 1) throw new Error("Expected the visible second shot");
+    u.fitCameraBox(key, ["HeroCube"], "CU");
+    return previous;
+  })()`);
+  try {
+    await waitUntil(`window.__UX_TEST__.shotsData().some(s => s.size === "CU")`);
+    expect(await page.evaluate(`window.__UX_TEST__.shotsData().map(s => s.size)`)).toEqual([null, "CU"]);
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.set({ timing: ${original} });
+      u.refreshProjection({});
+    })()`);
+  }
+});
+
+test("editing a cut key uses its source shot rig while Freeze displays the outgoing shot", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__, tools = u.S.tools;
+    const rig = tools.cameraRig;
+    const timing = u.get().timing;
+    const fovAxis = { mode: "horizontal", aspect: 1 };
+    try {
+      tools.cameraRig = true;
+      await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 4, camera: { fovAxis } }]);
+      await u.setCamData([
+        { id: "first", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 45 },
+        { id: "second", t: 4, p: [0, 2, 8], l: [0, 1, 0], fov: 45, cut: true },
+      ]);
+      u.set({ timing: true });
+      u.refreshProjection({ freezes: [{ at: 4, frame: 2, duration: 2 }] });
+      const i = u.camKeys().findIndex(k => k.id === "second");
+      const marker = u.camKeys()[i].t;
+      u.setLens(i, "fov", 50);
+      return { world: u.cameraTimesAt(marker).world, fov: u.cameraAt(4, u.sourceCamKeys(), { fovAxis }).fov };
+    } finally {
+      tools.cameraRig = rig;
+      u.set({ timing });
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(result.world).toBe(2);
+  expect(result.fov).toBeCloseTo(50, 2);
+});
+
+test("1-node aim samples the selected shot after Freeze and respects partial rig support", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__, tools = u.S.tools;
+    const original = [tools.cameraRig, tools.cameraRails, tools.cameraSample, u.S.render, u.get().timing, u.get().ready];
+    let rendered = 0;
+    window.__restoreRigSample = () => {
+      [tools.cameraRig, tools.cameraRails, tools.cameraSample, u.S.render] = original;
+      u.set({ timing: original[4], ready: original[5], shotPick: null });
+      u.refreshProjection({});
+      delete window.__restoreRigSample;
+    };
+    tools.cameraRig = true;
+    tools.cameraRails = undefined;
+    tools.cameraSample = () => ({ p: [u.cameraTimesAt(rendered).world, 2, 6] });
+    u.S.render = Object.assign((time) => { rendered = time; }, { eases: u.S.render.eases });
+    await u.loadShots([
+      { id: "a", t: 0 },
+      { id: "b", t: 4, camera: { rail: [[0, 2, 6], [2, 2, 6]] } },
+    ]);
+    await u.setCamData([
+      { id: "a0", t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+      { id: "b0", t: 4, p: [4, 2, 6], l: [0, 1, 0], cut: true },
+    ]);
+    u.set({ timing: true, ready: true, shotPick: 1 });
+    u.refreshProjection({ freezes: [{ at: 4, frame: 2, duration: 2 }] });
+    u.S.t = 4;
+  })()`);
+  const button = (label) => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === '${label}')`;
+  try {
+    for (const label of ["Advanced", "Camera rig"]) {
+      await waitUntil(button(label));
+      await page.evaluate(`(() => { const button = ${button(label)}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`);
+    }
+    await waitUntil(button("1-node"));
+    await page.evaluate(`(${button("1-node")}).click()`);
+    await waitUntil(`window.__UX_TEST__.shotsData()[1].camera.look === "one-node"`);
+    const rig = await page.evaluate("window.__UX_TEST__.shotsData()[1].camera");
+    expect(rig.position).toEqual([4, 2, 6]);
+    expect(rig.rail).toEqual([[0, 2, 6], [2, 2, 6]]);
+  } finally {
+    await page.evaluate("window.__restoreRigSample()");
+  }
+});
+
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
@@ -1328,6 +1501,8 @@ for (const operation of ["addKeyHere", "splitShot"]) {
       u.seekExact(1);
       const tools = u.S.tools;
       const prior = tools.cameraSample;
+      const hadRig = tools.cameraRig;
+      tools.cameraRig = true;
       tools.cameraSample = () => u.cameraAt(u.S.t, u.camKeys()).sample;
       const timeline = [0.25, 0.5, 0.99, 1, 1.01, 1.5, 1.75];
       const samples = () => timeline.map(t => {
@@ -1351,6 +1526,7 @@ for (const operation of ["addKeyHere", "splitShot"]) {
         return { before, after, keys, shots, merged, advised, undone: samples() };
       } finally {
         tools.cameraSample = prior;
+        tools.cameraRig = hadRig;
       }
     })()`);
     expect(result.keys).toEqual(operation === "splitShot" ? [0, 1, 1, 2] : [0, 1, 2]);
@@ -3644,19 +3820,22 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     u.S.tools.camera.fov = 31;
     u.wake("render");
     u.wake("rendered");
-    await new Promise((r) => setTimeout(r, 15));
-    const afterLeading = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
-    // Burst rapid render/rendered ticks well inside the 120ms window
+    const value = () => document.querySelector('input[aria-label="Free cam FOV"]')?.value;
+    const waitFor = async (fov) => {
+      const until = performance.now() + 1000;
+      while (value() !== fov && performance.now() < until)
+        await new Promise(requestAnimationFrame);
+      return value();
+    };
+    const afterLeading = await waitFor("31");
     for (const nextFov of [33, 35, 37, 39, 41]) {
       u.S.tools.camera.fov = nextFov;
       u.wake("render");
       u.wake("rendered");
     }
-    await new Promise((r) => setTimeout(r, 20));
-    const midWindow = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
-    // After the 120ms throttle window expires, the latest FOV flushes cleanly
-    await new Promise((r) => setTimeout(r, 160));
-    const afterWindow = document.querySelector('input[aria-label="Free cam FOV"]')?.value;
+    await Promise.resolve();
+    const midWindow = value();
+    const afterWindow = await waitFor("41");
     u.S.playing = false;
     u.S.tools.camera.fov = 28;
     u.wake("rendered");

@@ -2,6 +2,7 @@ import { clampFov } from "film-kit/lens";
 import {
   cameraAt,
   type CameraChannel,
+  cameraTrackOptions,
   makeCameraRail,
   mmOf,
   resolveCameraPoint,
@@ -9,19 +10,18 @@ import {
 import { EDIT } from "film/edit";
 import type { Vector3 } from "three";
 
-import { cameraTimesAt, timingClock } from "../../src/timing-state.mjs";
-import { shotIndex } from "../core/film";
-import { SHOTS_OUT } from "../core/filmMeta";
+import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 import { S } from "../core/state";
 import { get, say, showError } from "../core/store";
 import { r3, SAME } from "../core/time";
 import { readSceneFrame } from "../picture/render";
 import {
   cameraKeyFrameTime,
+  cameraKeyShotIndex,
+  cameraLensAspect,
   type CamKey,
   edit,
   keys,
-  lensAspectAt,
   movable,
   opticsOfKey,
   type Point,
@@ -31,6 +31,7 @@ import {
 } from "./cam";
 import { type CameraView, reverseCameraKeyRange } from "./camera-edit";
 import { cameraCoordinates, resolveKeyPoint, storedPoint } from "./camera-framing";
+import { activeCameraRig, cameraShotIndex } from "./camera-rig";
 
 const graphOpticsValue = (index: number, channel: CameraChannel): number => {
   const optics = opticsOfKey(index);
@@ -78,15 +79,20 @@ export const plotCameraGraph = (
     const hold = keys[right].motion === "hold";
     const gap = (b - a) * 1e-6;
     const start = hold && keys[right].reversePath ? a + gap : a;
-    const end = hold && !keys[right].reversePath ? b - gap : b;
+    const endsOccurrence = clockForTimeline("cam").cameraSpans?.some(
+      (span) => a >= span.from && a < span.to && b === span.to,
+    );
+    const closesCut = cameraKeyFrameTime(right) < b || endsOccurrence;
+    const lastSample = closesCut ? b - Math.min(1e-6, (b - a) / 4) : b;
+    const end = hold && !keys[right].reversePath ? Math.min(lastSample, b - gap) : lastSample;
     if (hold && mode === "value") times.push(start, end);
     const dt = Math.min(1 / 2400, (b - a) / 1000);
     const clamp = (t: number) => Math.min(end, Math.max(start, t));
     return [...new Set(times)]
       .sort((u, v) => u - v)
       .map((t) => {
-        const lo = mode === "speed" ? clamp(t - dt) : t;
-        const hi = mode === "speed" ? clamp(t + dt) : t;
+        const lo = mode === "speed" ? clamp(t - dt) : Math.min(t, lastSample);
+        const hi = mode === "speed" ? clamp(t + dt) : lo;
         frames.set(lo, 0);
         frames.set(hi, 0);
         return { t, lo, hi };
@@ -99,7 +105,7 @@ export const plotCameraGraph = (
     t,
     value:
       mode === "value"
-        ? frames.get(t)!
+        ? frames.get(lo)!
         : hi === lo
           ? 0
           : Math.abs(frames.get(hi)! - frames.get(lo)!) / (hi - lo),
@@ -115,31 +121,30 @@ const sampleGraphViews = (times: number[], track: CamKey[]) => {
   return (
     tools?.sampleCameraTrack?.(clockTimes) ??
     clockTimes.map(({ camera }, i) => {
-      const rig = SHOTS_OUT[shotIndex(times[i])]?.camera;
+      const rig = activeCameraRig(cameraShotIndex(times[i]));
       const options = {
         aspect: tools?.camera?.aspect,
         resolveAnchor: tools?.resolveCameraAnchor,
-        fovAxis: rig?.fovAxis,
-        rail: rig?.look === "one-node" ? undefined : rig?.rail,
+        ...cameraTrackOptions(rig),
       };
       return cameraAt(camera, track, options).sample;
     })
   );
 };
 
-const writeGraphOptics = (key: CamKey, channel: CameraChannel, value: number) => {
+const writeGraphOptics = (key: CamKey, channel: CameraChannel, value: number, shot: number) => {
   if (channel === "lens") {
     const angle = clampFov(value);
-    if (key.mm !== undefined) writeLens(key, "mm", mmOf(angle, lensAspectAt(key.t)));
-    else writeLens(key, "fov", angle);
-  } else if (channel === "dof") writeLens(key, "fstop", Math.max(0, value));
-  else if (channel === "roll") writeLens(key, "roll", (value * Math.PI) / 180);
-  else writeLens(key, "wave", Math.max(0, value));
+    if (key.mm !== undefined) writeLens(key, "mm", mmOf(angle, cameraLensAspect(shot)), shot);
+    else writeLens(key, "fov", angle, shot);
+  } else if (channel === "dof") writeLens(key, "fstop", Math.max(0, value), shot);
+  else if (channel === "roll") writeLens(key, "roll", (value * Math.PI) / 180, shot);
+  else writeLens(key, "wave", Math.max(0, value), shot);
 };
 const spatialField = (channel: CameraChannel) =>
   channel === "position" ? "p" : channel === "aim" ? "l" : null;
 const cameraAxes = ["x", "y", "z"] as const;
-const graphRail = (i: number) => SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail;
+const graphRail = (i: number) => activeCameraRig(cameraKeyShotIndex(i))?.rail;
 export const graphUsesRail = (indices: number[], channel: CameraChannel) =>
   channel === "position" && indices.some(graphRail);
 const transformGraphValues = (
@@ -157,7 +162,7 @@ const transformGraphValues = (
     const next = values.map((value, j) => transform(value, j, values[0]));
     edit((rows) =>
       indices.forEach((i, j) => {
-        if (values[j] !== next[j]) writeGraphOptics(rows[i], channel, next[j]);
+        if (values[j] !== next[j]) writeGraphOptics(rows[i], channel, next[j], cameraKeyShotIndex(i));
       }),
     );
     return;

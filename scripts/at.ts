@@ -6,7 +6,11 @@ import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { shake } from "../packages/film-kit/src/shake";
-import { cameraAt } from "../packages/film-stage/src/camera";
+import {
+  cameraAt,
+  type CameraRig,
+  cameraTrackOptions,
+} from "../packages/film-stage/src/camera";
 import { hasGradeEffect } from "../packages/film-stage/src/grade";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
 import { noteScene, noteSecond } from "../packages/live-studio/app/notes/note-card-meta.ts";
@@ -99,6 +103,7 @@ const filmOf = (dir: string) => {
     size?: string;
     row: number;
     cameraClock?: "scene" | "output";
+    camera?: CameraRig;
   };
   const shots: (Shot & { transition?: Row; anim?: Row; adjust?: Row; hits?: Row[] })[] = shotRows
     ? shotRows.map((s, i) => ({
@@ -108,6 +113,7 @@ const filmOf = (dir: string) => {
         size: s.size,
         row: i,
         ...(s.cameraClock && { cameraClock: s.cameraClock }),
+        ...(s.camera && { camera: s.camera }),
         transition: s.transition,
         anim: s.anim,
         ...(s.adjust ? { adjust: s.adjust } : {}),
@@ -334,22 +340,31 @@ export const whatsAt = (dir: string, t: number) => {
   const nextCam = activeCam[camIndex + 1];
   const heldBeforeCut = !!previousCam && nextCam?.key.cut === true;
   const [fw, fh] = sizeOf(ratioOf({ "live-studio": conf }), 1920);
-  const vec3Or = (v: unknown, fallback: [number, number, number]): [number, number, number] =>
-    Array.isArray(v) &&
-    v.length === 3 &&
-    v.every((n) => typeof n === "number" && Number.isFinite(n))
-      ? (v as [number, number, number])
-      : fallback;
+  const cameraPoint = (value: unknown, fallback: [number, number, number]) => {
+    if (Array.isArray(value))
+      return value.length === 3 && value.every(Number.isFinite)
+        ? (value as [number, number, number])
+        : fallback;
+    return value && typeof value === "object" ? (value as Record<string, unknown>) : fallback;
+  };
   const camEval =
     !blank && cam.length
       ? cameraAt(
           cameraTime,
           cam.map((k) => ({
             ...k,
-            p: vec3Or(k.p, [0, 0, 0]),
-            l: vec3Or(k.l, [0, 0, -1]),
+            p: cameraPoint(k.p, [0, 0, 0]),
+            l: cameraPoint(k.l, [0, 0, -1]),
           })),
-          { aspect: fw / fh },
+          {
+            aspect: fw / fh,
+            ...cameraTrackOptions(shot?.camera),
+            pointKnown: (point) => {
+              if (Array.isArray(point)) return true;
+              const fallback = (point as Record<string, unknown>).fallback;
+              return Array.isArray(fallback) && fallback.length === 3 && fallback.every(Number.isFinite);
+            },
+          },
         )
       : null;
 
@@ -635,6 +650,7 @@ export const whatsAt = (dir: string, t: number) => {
     velocity,
     cam: camEval
       ? {
+          evaluation: "authored" as const,
           clock: worldAtCamera ? "output" : "scene",
           time: cameraTime,
           before: previousCam?.row ?? null,
@@ -642,8 +658,8 @@ export const whatsAt = (dir: string, t: number) => {
           t0: previousCam?.key.t ?? null,
           t1: heldBeforeCut ? undefined : nextCam?.key.t,
           ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
-          mm: +camEval.mm.toFixed(1),
-          fov: +camEval.fov.toFixed(1),
+          mm: camEval.lensKnown ? +camEval.mm.toFixed(1) : null,
+          fov: camEval.lensKnown ? +camEval.fov.toFixed(1) : null,
           ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
           ...(formatFocusSpec(camEval.focus) !== null
             ? { focus: formatFocusSpec(camEval.focus) }
@@ -905,12 +921,15 @@ if (isMain) {
     if (got.cam.clock === "output")
       out.push(`  camera time: ${mmss(got.cam.time)} on the output clock`);
     const optics = [
-      `${got.cam.mm}mm (${got.cam.fov}°)`,
+      got.cam.fov === null
+        ? "lens requires live anchor positions"
+        : `${got.cam.mm}mm (${got.cam.fov}°)`,
       ...(got.cam.fstop ? [`f/${got.cam.fstop}`] : []),
       ...(got.cam.focus ? [`focus ${got.cam.focus}`] : []),
       ...(got.cam.handheld ? [`handheld ${got.cam.handheld}`] : []),
     ];
     out.push(`  camera optics: ${optics.join(" · ")}`);
+    out.push("  optics estimate uses saved camera data");
   }
   if (got.velocity)
     out.push(

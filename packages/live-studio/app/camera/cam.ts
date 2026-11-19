@@ -5,7 +5,7 @@ import { EDIT, fromSource, toSource } from "film/edit";
 
 import { cameraShotAtBoundary, canPlaceCameraCut } from "../../src/camera-clock.mjs";
 import { frameCountOf } from "../../src/frame";
-import { cameraTimesAt, clockForTimeline } from "../../src/timing-state.mjs";
+import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
 // camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
 // puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
@@ -24,7 +24,6 @@ import {
   exitHandleForSlope,
   startSlope,
 } from "../core/ease";
-import { shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { cameraSelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
@@ -53,6 +52,7 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
+import { activeCameraRig, cameraShotIndex } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type { HandheldSpec };
@@ -180,7 +180,7 @@ export const opticsOfKey = (i: number) => {
     rows,
     at,
     S.tools?.camera?.aspect || 16 / 9,
-    cameraAxisAt(key ? cameraKeyFrameTime(i) : 0),
+    activeCameraRig(key ? cameraKeyShotIndex(i) : 0)?.fovAxis,
   );
 };
 export const loadCam = async () => {
@@ -241,6 +241,13 @@ const cameraSourceTime = (key: CamKey, clock = clockForTimeline("cam")) =>
 const sourceShotStarts = () => {
   const starts = clockForTimeline("cam").cameraShotStarts;
   return starts?.length ? starts : SHOTS_OUT.map((shot) => shot.t);
+};
+export const cameraKeyShotIndex = (index: number) => {
+  const key = keys[index];
+  const source = get().timing ? cameraSourceTime(key) : key.t;
+  const closes = !key.cut && (doc.source ?? []).some((row) => row.cut && row.t === source);
+  const shot = sourceShotStarts().findLastIndex((start) => (closes ? start < source : start <= source));
+  return Math.max(0, shot);
 };
 export const canConvertHardCut = (i: number) => {
   if (!isHardCut(i) || keys[i].locked) return false;
@@ -440,19 +447,19 @@ export const retime = (i: number, t: number, apply: typeof edit = edit) => {
 };
 // fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
-export const cameraAxisAt = (time: number) => SHOTS_OUT[shotIndex(time)]?.camera?.fovAxis;
-export const lensAspectAt = (time: number) =>
-  lensAspect(S.tools?.camera?.aspect || 16 / 9, cameraAxisAt(time));
-const fovForStorage = (fov: number, t: number) => {
+export const cameraAxisAt = (time: number) => activeCameraRig(cameraShotIndex(time))?.fovAxis;
+export const cameraLensAspect = (shot: number) =>
+  lensAspect(S.tools?.camera?.aspect || 16 / 9, activeCameraRig(shot)?.fovAxis);
+const fovForStorage = (fov: number, shot: number) => {
   const aspect = S.tools?.camera?.aspect || 16 / 9;
-  const axis = cameraAxisAt(t);
+  const axis = activeCameraRig(shot)?.fovAxis;
   return axis?.mode === "horizontal" ? vfovOf(hfovOf(fov, aspect), axis.aspect) : fov;
 };
 export const writeLens = (
   key: CamKey,
   field: LensField,
   value: number | undefined,
-  frame = key.t,
+  shot: number,
 ) => {
   if (field === "fov" || field === "mm") delete key.dollyZoomScale;
   if (field === "fov" && value !== undefined) delete key.mm;
@@ -462,7 +469,7 @@ export const writeLens = (
     key[field] =
       field === "roll"
         ? Math.round(value * 1e4) / 1e4
-        : r3(field === "fov" ? fovForStorage(value, frame) : value);
+        : r3(field === "fov" ? fovForStorage(value, shot) : value);
 };
 export const setLens = (
   i: number,
@@ -472,7 +479,7 @@ export const setLens = (
 ) =>
   apply((ks) => {
     if (!ks[i]) return;
-    writeLens(ks[i], field, v, cameraKeyFrameTime(i));
+    writeLens(ks[i], field, v, cameraKeyShotIndex(i));
   });
 export const resetLens = (i: number) =>
   edit((ks) => {
@@ -506,7 +513,7 @@ export const resetLensField = (i: number, field: LensField) =>
 export const setFocalLength = (i: number, mm: number | undefined, apply: typeof edit = edit) =>
   apply((ks) => {
     if (!ks[i]) return;
-    writeLens(ks[i], "mm", mm === undefined ? undefined : Math.max(5, mm), cameraKeyFrameTime(i));
+    writeLens(ks[i], "mm", mm === undefined ? undefined : Math.max(5, mm), cameraKeyShotIndex(i));
   });
 
 export const setFstop = (i: number, fstop: number | undefined, apply: typeof edit = edit) =>
@@ -817,6 +824,13 @@ export const cameraKeyFrameTime = (i: number) => {
   const key = keys[i];
   return !key.cut && keys[i + 1]?.cut && keys[i + 1].t === key.t ? key.t - 1e-6 : key.t;
 };
+export const cameraKeySampleTime = (i: number) => {
+  const marker = cameraKeyFrameTime(i);
+  if (!get().timing || !keys[i].cut || cameraShotIndex(marker) === cameraKeyShotIndex(i))
+    return marker;
+  return timingClock.outputAt(cameraSourceTime(keys[i]), "after");
+};
+
 export const sourceCameraSegment = (index: number) => {
   const key = keys[index],
     track = doc.source ?? [];
@@ -869,7 +883,7 @@ export const railPositionForKey = (i: number) => {
 };
 
 const railAtKey = (i: number) =>
-  keys[i] && SHOTS_OUT[shotIndex(cameraKeyFrameTime(i))]?.camera?.rail;
+  keys[i] && activeCameraRig(cameraKeyShotIndex(i))?.rail;
 
 const preserveRailPositions = (indices: number[], change: () => void) => {
   const track = doc.source ?? [];
@@ -877,8 +891,8 @@ const preserveRailPositions = (indices: number[], change: () => void) => {
   const visited = new Set<CamKey>();
   for (const i of indices) {
     if (!keys[i]) continue;
-    const shot = shotIndex(cameraKeyFrameTime(i));
-    if (!SHOTS_OUT[shot]?.camera?.rail) continue;
+    const shot = cameraKeyShotIndex(i);
+    if (!activeCameraRig(shot)?.rail) continue;
     const active = sourceCameraSegment(i)?.active ?? [];
     if (!active.length || visited.has(active[0])) continue;
     visited.add(active[0]);
@@ -926,7 +940,7 @@ export const editCameraKeyInScene = (
   const selected = keys[i];
   if (!selected || selected.locked) return;
   if (!needsScene) return change(i, selected);
-  void readSceneFrame(cameraKeyFrameTime(i), () => {
+  void readSceneFrame(cameraKeySampleTime(i), () => {
     const at = keys.findIndex((row) => row.id === selected.id && row.t === selected.t);
     if (at >= 0 && !keys[at].locked) change(at, keys[at]);
   }).catch(showError);
@@ -955,12 +969,12 @@ const viewFromFree = (): CameraView => {
         : {}),
   };
 };
-const withFraming = (key: CamKey, view: CameraView) => {
+const withFraming = (key: CamKey, view: CameraView, shot = cameraShotIndex(key.t)) => {
   const tools = S.tools!;
-  const aspect = lensAspectAt(key.t);
+  const aspect = cameraLensAspect(shot);
   const saved = replaceCameraFraming(key, view, aspect, tools.moveCameraAnchor);
   if (saved) {
-    if (key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, key.t));
+    if (key.fov !== undefined) key.fov = r3(fovForStorage(view.fov, shot));
     if (view.roll !== undefined) {
       if (view.roll) key.roll = view.roll;
       else delete key.roll;
@@ -1087,13 +1101,13 @@ export const saveView = (only?: number) => {
   const t = r3(S.t),
     view = viewFromFree();
   const at = only ?? selectedCameraKeyAt(keys, S.t, get().camKey, SAME);
-  if (SHOTS_OUT[shotIndex(at >= 0 ? cameraKeyFrameTime(at) : t)]?.camera?.rail)
+  if (activeCameraRig(at >= 0 ? cameraKeyShotIndex(at) : cameraShotIndex(t))?.rail)
     return say("The rail sets camera position. Remove it to use a free camera view");
   if (at >= 0) {
     if (keys[at].locked) return say("Unlock this camera keyframe first");
     editCameraKeyInScene(at, cameraKeyIsAnchored(keys[at]), (i, current) => {
       const next = structuredClone(current);
-      if (!withFraming(next, view)) return anchorUnavailable();
+      if (!withFraming(next, view, cameraKeyShotIndex(i))) return anchorUnavailable();
       edit((ks) => {
         ks[i] = next;
       });
@@ -1314,7 +1328,7 @@ export const splitShot = () => {
   if (reuseKey && before.locked && clockForTimeline("cam").cameraPicture)
     return say("Unlock this camera keyframe before splitting at its time");
   const subdivision = free || reuseKey ? null : neutralSubdivision(at, t, here);
-  const rig = SHOTS_OUT[s]?.camera;
+  const rig = activeCameraRig(s);
   const shotBoundMotion = rig?.lead || rig?.bank || rig?.look === "tangent";
   const check =
     !free && (shotBoundMotion || (!subdivision && !reuseKey && before && keys[at] && !keys[at].cut));
