@@ -221,6 +221,37 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
     ),
     true,
   );
+  // Windows paths with apostrophes (single quotes are literal path characters, not Win32 quote delimiters)
+  assert.equal(
+    isStudioProcessCmdline(
+      '"C:\\Users\\O\'Brien\\bun.exe" "C:\\Users\\O\'Brien\\repo\\packages\\live-studio\\src\\live.mjs" 4321',
+      4321,
+    ),
+    true,
+  );
+  assert.equal(
+    isStudioProcessCmdline(
+      "C:\\Users\\O'Brien\\bun.exe C:\\Users\\O'Brien\\repo\\packages\\live-studio\\src\\live.mjs 4321",
+      4321,
+    ),
+    true,
+  );
+  // Pre-split argv array (e.g., Linux /proc/<pid>/cmdline with spaces in path)
+  assert.equal(
+    isStudioProcessCmdline(
+      ["/usr/local/bin/bun", "/home/o'brien/my films/packages/live-studio/src/live.mjs", "4321"],
+      4321,
+    ),
+    true,
+  );
+  assert.equal(
+    isStudioProcessCmdline(
+      ["/usr/local/bin/bun", "/home/user/my films/packages/live-studio/src/live.mjs"],
+      4322,
+    ),
+    false,
+  );
+  assert.equal(isStudioProcessCmdline(["/bin/sh", "-c", "bun live.mjs 4321"], 4321), false);
   assert.equal(isStudioProcessCmdline('powershell.exe -Command "bun live.mjs 4321"', 4321), false);
   assert.equal(
     isStudioProcessCmdline(
@@ -246,8 +277,14 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   const otherDir = makeTempDemoFilm("live-other-");
   const port = await freePort();
   let recordedPid = null;
+  let decoyProc = null;
 
   t.after(() => {
+    if (decoyProc) {
+      try {
+        decoyProc.kill();
+      } catch {}
+    }
     if (recordedPid) {
       try {
         process.kill(recordedPid, "SIGTERM");
@@ -332,6 +369,28 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   assert.equal(wrongStop.status, 1);
   const stillUp = await fetch(`http://127.0.0.1:${port}/`);
   assert.equal(stillUp.status, 200);
+
+  // When a live studio answers on info.port (probe.ok === true) while studio.json points to a DIFFERENT live non-studio pid,
+  // --stop must refuse with exit 1 and leave BOTH that non-studio process AND studio.json intact
+  decoyProc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  const savedStudioInfo = readFileSync(studioJsonPath, "utf8");
+  writeFileSync(studioJsonPath, JSON.stringify({ port, project: dir, pid: decoyProc.pid }));
+  const mismatchStop = runLive(dir, "--stop");
+  assert.equal(
+    mismatchStop.status,
+    1,
+    `expected exit 1 when live studio answers but pid is non-studio:\nstdout: ${mismatchStop.stdout}\nstderr: ${mismatchStop.stderr}`,
+  );
+  assert.equal(decoyProc.exitCode, null, "non-studio decoy process must stay alive");
+  assert.doesNotThrow(() => process.kill(decoyProc.pid, 0));
+  assert.equal(existsSync(studioJsonPath), true, "studio.json must remain intact when probe.ok");
+  assert.equal(JSON.parse(readFileSync(studioJsonPath, "utf8")).pid, decoyProc.pid);
+  decoyProc.kill();
+  decoyProc = null;
+  writeFileSync(studioJsonPath, savedStudioInfo);
 
   // --stop on the owning film terminates cleanly and exits 0
   const stop = runLive(dir, "--stop");

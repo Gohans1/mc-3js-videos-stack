@@ -81,7 +81,9 @@ const writeStudioInfo = async (file, info) => {
       }
     }
   } catch (e) {
-    rmSync(tmp, { force: true });
+    try {
+      rmSync(tmp, { force: true });
+    } catch {}
     throw e;
   }
 };
@@ -121,17 +123,14 @@ export const isKnownHost = (host, hosts = []) => {
 const splitCmdline = (cmdline) => {
   const args = [];
   let cur = "";
-  let quote = "";
+  let inQuotes = false;
   let inToken = false;
   for (let i = 0; i < cmdline.length; i += 1) {
     const ch = cmdline[i];
-    if (quote) {
-      if (ch === quote) quote = "";
-      else cur += ch;
-    } else if (ch === '"' || ch === "'") {
-      quote = ch;
+    if (ch === '"') {
+      inQuotes = !inQuotes;
       inToken = true;
-    } else if (/\s/.test(ch)) {
+    } else if (!inQuotes && /\s/.test(ch)) {
       if (inToken) {
         args.push(cur);
         cur = "";
@@ -142,14 +141,21 @@ const splitCmdline = (cmdline) => {
       inToken = true;
     }
   }
-  if (quote) return null;
+  if (inQuotes) return null;
   if (inToken) args.push(cur);
   return args;
 };
 
 export const isStudioProcessCmdline = (cmdline, expectedPort) => {
-  if (typeof cmdline !== "string" || !cmdline.trim()) return false;
-  const tokens = splitCmdline(cmdline);
+  let tokens;
+  if (Array.isArray(cmdline)) {
+    if (!cmdline.every((t) => typeof t === "string")) return false;
+    tokens = cmdline;
+  } else if (typeof cmdline === "string" && cmdline.trim()) {
+    tokens = splitCmdline(cmdline);
+  } else {
+    return false;
+  }
   if (!tokens || tokens.length < 2) return false;
   const exe = tokens[0].replace(/^.*[\\/]/, "").toLowerCase();
   if (exe !== "bun" && exe !== "bun.exe") return false;
@@ -181,6 +187,17 @@ const readProcessCmdline = (pid) => {
     if (r.error || r.status !== 0) return { ok: false, cmdline: null };
     const line = (r.stdout ?? "").trim();
     return { ok: true, cmdline: line || null };
+  }
+  if (process.platform === "linux") {
+    try {
+      const raw = readFileSync(`/proc/${pid}/cmdline`, "utf8");
+      if (!raw) return { ok: true, cmdline: null };
+      const argv = (raw.endsWith("\0") ? raw.slice(0, -1) : raw).split("\0");
+      return { ok: true, cmdline: argv.length ? argv : null };
+    } catch (e) {
+      if (e?.code === "ENOENT" || e?.code === "ESRCH") return { ok: true, cmdline: null };
+      return { ok: false, cmdline: null };
+    }
   }
   const r = spawnSync("ps", ["-p", String(pid), "-o", "args="], {
     encoding: "utf8",
@@ -331,7 +348,8 @@ async function runStatus(project, studioJson, studioLog) {
     process.exit(1);
   }
   console.log(`studio running at http://localhost:${info.port}`);
-  for (const url of info.tailscale ?? []) console.log(`creator's link: ${url}`);
+  for (const url of Array.isArray(info.tailscale) ? info.tailscale : [])
+    console.log(`creator's link: ${url}`);
   console.log(`pid: ${info.pid ?? "unknown"}`);
   console.log(`project: ${project}`);
   if (existsSync(studioLog)) console.log(`log: ${studioLog}`);
@@ -481,7 +499,8 @@ async function runDetach(project, work, studioJson, studioLog, portArg, port, la
       console.log(`live at http://localhost:${port}`);
       if (rootStatus === 503)
         console.log(`note: film has a build error (studio is watching; see ${studioLog})`);
-      for (const url of info.tailscale ?? []) console.log(`creator's link: ${url}`);
+      for (const url of Array.isArray(info.tailscale) ? info.tailscale : [])
+        console.log(`creator's link: ${url}`);
       console.log(`pid: ${info.pid}`);
       console.log(`log: ${studioLog}`);
       process.exit(0);
