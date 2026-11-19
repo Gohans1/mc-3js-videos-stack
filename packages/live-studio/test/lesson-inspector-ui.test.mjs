@@ -176,11 +176,12 @@ test.each([1920, 960])(
     const list=document.querySelector('[aria-label="${label}"]');
     return [...list.querySelectorAll('[role=tab]')].map(tab=>({text:tab.textContent.trim(),disabled:tab.disabled}));
   })()`);
-    const editingTabs = width >= 1280
-      ? ["Audio", "Text", "Effects", "Objects", "Transitions", "Adjustment"]
-      : ["Audio", "Text", "Effects", "Objects", "Keyframes", "Transitions", "Camera"];
+    const editingTabs =
+      width >= 1280
+        ? ["Audio", "Text", "Effects", "Objects", "Transitions", "Adjustment"]
+        : ["Audio", "Text", "Effects", "Objects", "Keyframes", "Transitions", "Camera"];
     expect(tabs.filter((tab) => editingTabs.includes(tab.text))).toEqual(
-      editingTabs.map((text) => ({ text, disabled: text !== "Effects" })),
+      editingTabs.map((text) => ({ text, disabled: text !== "Effects" && text !== "Objects" })),
     );
   },
 );
