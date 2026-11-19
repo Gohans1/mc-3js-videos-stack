@@ -4,6 +4,7 @@
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
+import { withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
 import { apertureSamples, shutterBounds, shutterTimes } from "../src/shutter";
 import { timingClock } from "../src/timing-state.mjs";
@@ -268,8 +269,51 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     return out;
   };
 
-  for (const s of cfg.stills ?? [])
-    await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
+  for (const s of cfg.stills ?? []) {
+    if (!cfg.crop) {
+      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
+      continue;
+    }
+    const cam = render.tools?.camera;
+    if (!cam?.setViewOffset) {
+      log("WARN CROP requires draw.tools.camera on the film; rendering uncropped");
+      await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1), cfg.quality);
+      continue;
+    }
+    const cropped = await withCropViewOffset(cam, cfg.W, cfg.H, cfg.crop, async (view) => {
+      const rendered = await draw(s.frame, cfg.stillSamples ?? 1);
+      if (view.outWidth === cfg.W && view.outHeight === cfg.H) return rendered;
+      const outCrop = document.createElement("canvas");
+      outCrop.width = view.outWidth;
+      outCrop.height = view.outHeight + BAR;
+      const cctx = outCrop.getContext("2d");
+      cctx.drawImage(
+        rendered,
+        0,
+        0,
+        view.outWidth,
+        view.outHeight,
+        0,
+        0,
+        view.outWidth,
+        view.outHeight,
+      );
+      if (BAR)
+        cctx.drawImage(
+          rendered,
+          0,
+          cfg.H,
+          view.outWidth,
+          BAR,
+          0,
+          view.outHeight,
+          view.outWidth,
+          BAR,
+        );
+      return outCrop;
+    });
+    await still(s.name, cropped, cfg.quality);
+  }
 
   // The film in chunks of cfg.clip.chunk seconds, each its own mp4 starting on a keyframe, so render.mjs joins them by stream copy
   const chunks = chunkCount;
