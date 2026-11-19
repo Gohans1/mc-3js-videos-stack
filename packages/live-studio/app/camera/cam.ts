@@ -3,7 +3,7 @@ import type { CameraChannel, CameraMotion, FocusTargetSpec } from "film-stage/ca
 import { cameraKeyOptics, cameraRailU, canMatchCameraSpeed, lensAspect } from "film-stage/camera";
 import { EDIT, fromSource, toSource } from "film/edit";
 
-import { cameraShotAtBoundary, canPlaceCameraCut } from "../../src/camera-clock.mjs";
+import { type CameraClock, cameraShotAtBoundary, canPlaceCameraCut, compileCameraClock } from "../../src/camera-clock.mjs";
 import { frameCountOf } from "../../src/frame";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
 // The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
@@ -52,7 +52,7 @@ import {
   stripInvalidMatchSpeed,
 } from "./camera-edit";
 import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } from "./shot-hits";
-import { cameraTimeInSpan, mergeShotOptics, remapOpticsSpan } from "./camera-optics-track";
+import { cameraTimeInSpan, mergeShotOptics, redirectOpticsContext, remapOpticsSpan, splitOpticsContext } from "./camera-optics-track";
 import { activeCameraRig, cameraShotIndex, visibleCameraShotFrame } from "./camera-rig";
 import { type ShotRow, shotsDoc } from "./shots";
 
@@ -1267,12 +1267,12 @@ const shotSourceAt = (time: number) => {
   return fromSource(source) <= time ? source : toSource(time - 1e-8);
 };
 
-const opticsSpansOfShot = (shot: number) => {
+const opticsSpansOfShot = (shot: number, clock: CameraClock = clockForTimeline("cam")) => {
   if (!get().timing) return [];
-  const starts = sourceShotStarts();
+  const starts = clock.cameraShotStarts ?? sourceShotStarts();
   const start = starts[shot];
   const end = starts[shot + 1] ?? timingClock.sourceDuration;
-  return (clockForTimeline("cam").cameraSpans ?? []).filter(
+  return (clock.cameraSpans ?? []).filter(
     (span) => span.sourceFrom >= start - 1e-8 && span.sourceTo <= end + 1e-8,
   );
 };
@@ -1299,30 +1299,53 @@ export const splitShot = () => {
   const splitTime = cut?.t ?? t;
   if (ambiguousCut(splitTime)) return say("Move the playhead to a playing frame to split the shot");
   let splitSource = cut ? shotSourceAt(splitTime) : r3(toSource(splitTime));
-  const originalOptics = shotsDoc.data?.[s]?.optics;
-  const spans = originalOptics && shotsDoc.data?.[s]?.cameraClock === "output" ? opticsSpansOfShot(s) : [];
-  const span = spans[0];
-  const world = timingClock.sourceAt(splitTime);
-  if (spans.length > 1 ||
-    (span && !(splitTime > span.from && splitTime < span.to &&
-      world > span.sourceFrom && world < span.sourceTo)))
-    return say("Use Scene time to split a shot with independent optics across multiple playback ranges");
-  const leftOptics = span
-    ? remapOpticsSpan(originalOptics, span, { ...span, to: splitTime, sourceTo: world })
-    : originalOptics;
-  const rightOptics = span
-    ? remapOpticsSpan(originalOptics, span, { ...span, from: splitTime, sourceFrom: world })
-    : originalOptics;
+  const sourceRows = shotsDoc.data ?? [];
+  const original = sourceRows[s];
+  const originalOptics = original?.optics;
+  let leftOptics = originalOptics;
+  let rightOptics = originalOptics;
+  let opticCut = get().timing ? cameraTimesAt(splitTime).camera : splitTime;
+  if (originalOptics && original.cameraClock === "output" && get().timing) {
+    const before = opticsSpansOfShot(s);
+    if (before.length) {
+      splitSource = shotSourceAt(splitTime);
+      const starts = sourceShotStarts();
+      const future = sourceRows.map((row, i) => ({
+        t: starts[i] ?? timingClock.sourceAt(fromSource(row.t)),
+        cameraClock: row.cameraClock,
+      }));
+      future.splice(s + 1, 0, { t: timingClock.sourceAt(fromSource(splitSource)), cameraClock: "output" });
+      const clock = compileCameraClock(timingClock, future);
+      const left = opticsSpansOfShot(s, clock);
+      const right = opticsSpansOfShot(s + 1, clock);
+      const near = (a: number, b: number) => Math.abs(a - b) < 1e-8;
+      if (before.length !== 1 || left.length !== 1 || right.length !== 1 ||
+        !near(left[0].from, before[0].from) || !near(left[0].to, splitTime) ||
+        !near(right[0].from, splitTime) || !near(right[0].to, before[0].to))
+        return say("Use Scene time to split a shot when its optics would cross separate playback ranges");
+      opticCut = cameraTimeInSpan(before[0], splitTime);
+      leftOptics = remapOpticsSpan(originalOptics, before[0], left[0]);
+      rightOptics = remapOpticsSpan(originalOptics, before[0], right[0]);
+    }
+  }
   const splitRows = (sh: ShotRow[]) => {
     const { t: _t, name, transition: _transition, hits, optics: _optics, ...rest } = sh[s];
     const { before, after } = splitShotHits(hits, splitSource);
     setHits(sh[s], before);
-    if (leftOptics) sh[s].optics = leftOptics;
+    const rightId = newRowId();
+    const outgoingOptics = leftOptics && structuredClone(leftOptics);
+    const incomingOptics = rightOptics && structuredClone(rightOptics);
+    if (originalOptics && outgoingOptics && incomingOptics) {
+      const leftId = sh[s].id ?? newRowId();
+      sh[s].id = leftId;
+      splitOpticsContext(originalOptics, outgoingOptics, incomingOptics, opticCut, leftId, rightId, sh);
+      sh[s].optics = outgoingOptics;
+    }
     sh.splice(s + 1, 0, {
       ...structuredClone(rest),
-      ...(rightOptics && { optics: structuredClone(rightOptics) }),
+      ...(incomingOptics && { optics: incomingOptics }),
       ...(after ? { hits: after } : {}),
-      id: newRowId(),
+      id: rightId,
       t: splitSource,
       name: secondName(name ?? `Shot ${s}`, sh),
     });
@@ -1442,8 +1465,10 @@ const mergeShot = (i: number) => {
               setHits(left, mergeShotHits(left.hits, removed?.hits));
               const leftOptics = joinedSpan ? remapOpticsSpan(left.optics, leftSpan, joinedSpan) : left.optics;
               const rightOptics = joinedSpan ? remapOpticsSpan(removed?.optics, rightSpan, joinedSpan) : removed?.optics;
-              const optics = mergeShotOptics(leftOptics, rightOptics, opticCut);
+              const optics = mergeShotOptics(leftOptics, rightOptics, opticCut, [left.id, removed.id]);
               if (optics) left.optics = optics;
+              else delete left.optics;
+              if (removed.id && left.id) redirectOpticsContext(sh, removed.id, left.id);
               sh.splice(s, 1);
             }),
           edit,

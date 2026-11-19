@@ -31,7 +31,7 @@ import { camLine } from "/camera/camline.ts";
 import { plotCameraGraph, scaleGraphValues } from "/camera/camera-graph.ts";
 import { sampleEditedPath } from "/camera/campath.ts";
 import { fitCameraBox } from "/camera/camera-framing.ts";
-import { editOpticsLane } from "/camera/camera-optics-track.ts";
+import { editOpticsLane, opticsOutputsAt } from "/camera/camera-optics-track.ts";
 import { files as keyFiles, fold as foldKeyFile, keysOf, loadKeys as loadStudioKeys, pickKeys } from "/keys/keys.ts";
 import { loadShots, shotsDoc } from "/camera/shots.ts";
 import { ActivityRail } from "/activity/ActivityRail.tsx";
@@ -440,7 +440,7 @@ window.__UX_TEST__ = {
   cut,
   paste,
   matchAllInShot,
-  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane,
+  splitShot, retime, addKeyHere, cameraAt, cameraTimesAt, plotCameraGraph, scaleGraphValues, sampleEditedPath, fitCameraBox, setLens, shownShot, cameraKeySampleTime, editOpticsLane, opticsOutputsAt,
   sourceCamKeys: () => EDIT.cam,
   freeDoc,
   readFocusUiState,
@@ -1178,6 +1178,11 @@ test("optics keyframes author independent Focus and Focal length at the playhead
     await waitUntil(focal);
     await click(focal);
     await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.value === 45`);
+    expect(await page.evaluate("window.__UX_TEST__.opticsOutputsAt(1, 9.999)")).toEqual([]);
+    await click(`document.querySelector('button[aria-label="Clear Focal length track"]')`);
+    await waitUntil(`!${shot}.optics?.focalLength`);
+    await page.evaluate("window.__UX_TEST__.undo()");
+    await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.value === 45`);
     await waitUntil(`${previous}?.disabled === false`);
     await click(previous);
     await waitUntil("window.__UX_TEST__.S.t === 4");
@@ -1242,7 +1247,11 @@ test("output-clock optics survive Split and Merge without changing the curve or 
       u.removeKey(u.camKeys().findIndex((key, i) => i > 0 && key.cut));
       const track = u.shotsData()[0].optics.focalLength;
       const last = u.cameraAt(9.9999, u.sourceCamKeys(), { optics: u.shotsData()[0].optics }).mm;
-      return { before, after, merged, track, last };
+      u.undo();
+      u.editOpticsLane(u.shotsData()[1], "focalLength", (records) => { delete records.long; });
+      u.removeKey(u.camKeys().findIndex((key, i) => i > 0 && key.cut));
+      const afterDeletingOwner = Object.keys(u.shotsData()[0].optics.focalLength);
+      return { before, after, merged, track, last, afterDeletingOwner };
     } finally {
       u.S.tools.cameraSample = priorSample;
       u.set({ timing: priorTiming, shotPick: null });
@@ -1258,6 +1267,36 @@ test("output-clock optics survive Split and Merge without changing the curve or 
   expect(Object.keys(result.track)).toEqual(["wide", "long"]);
   expect(result.track.long.value).toBe(50);
   expect(result.last).toBeCloseTo(50, 3);
+  expect(result.afterDeletingOwner).toEqual(["wide"]);
+});
+
+test("Split keeps optics intact when a detached Freeze would split one output range into several", async () => {
+  const result = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const priorTiming = u.get().timing;
+    const lens = { a: { t: 0, value: 24 }, b: { t: 10, value: 80, ease: "linear" } };
+    try {
+      await u.loadShots([{ id: "one", t: 0, cameraClock: "output", optics: { focalLength: lens } }]);
+      await u.setCamData([
+        { t: 0, p: [0, 2, 6], l: [0, 1, 0] },
+        { t: 10, p: [10, 2, 6], l: [0, 1, 0], motion: "linear" },
+      ], 0);
+      u.set({ timing: true });
+      u.refreshProjection({ freezes: [{ at: 7, frame: 1, duration: 3 }] });
+      u.seekExact(4);
+      const before = JSON.stringify([u.shotsData(), u.sourceCamKeys()]);
+      u.splitShot();
+      return {
+        same: before === JSON.stringify([u.shotsData(), u.sourceCamKeys()]),
+        status: u.get().status,
+      };
+    } finally {
+      u.set({ timing: priorTiming, shotPick: null });
+      u.refreshProjection({});
+    }
+  })()`);
+  expect(result.same).toBe(true);
+  expect(result.status).toContain("separate playback ranges");
 });
 
 test("Camera Graph Equalize samples tracked keys and retains authored positions of muted fixed keys", async () => {

@@ -4,6 +4,7 @@ import { easeOf } from "./camera-meta";
 export interface CameraOpticsKey<T> {
   t: number;
   value: T;
+  contextOf?: string;
   ease?: string | readonly [number, number, number, number];
 }
 

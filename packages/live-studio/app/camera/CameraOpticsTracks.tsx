@@ -91,6 +91,20 @@ function OpticsKeyBar<T>({
         <span className="text-muted-foreground text-xs tabular-nums">
           {here ? stamp(S.t) : points.length ? `${points.length} keys` : "From camera keys"}
         </span>
+        {points.length > 0 && (
+          <Button
+            variant="quiet"
+            size="sm"
+            aria-label={`Clear ${label} track`}
+            onClick={() =>
+              editOpticsLane(row, lane, (records) => {
+                for (const id of Object.keys(records)) delete records[id];
+              })
+            }
+          >
+            Clear
+          </Button>
+        )}
       </FieldRow>
       {here && (
         <>
@@ -108,7 +122,11 @@ function OpticsKeyBar<T>({
                 if (t !== here.t && !opticsOutputsAt(shot, t).length)
                   return say("Enter a camera time that appears in this shot");
                 editOpticsLane(row, lane, (records) => {
-                  if (records[here.id]) records[here.id].t = t;
+                  const record = records[here.id];
+                  if (record) {
+                    const { contextOf: _context, ...author } = record;
+                    records[here.id] = { ...author, t };
+                  }
                 });
                 const outputs = opticsOutputsAt(shot, t);
                 const nearest = outputs.reduce<number | undefined>(
@@ -129,7 +147,11 @@ function OpticsKeyBar<T>({
             onChange={(value) => {
               if (value === "custom") return;
               editOpticsLane(row, lane, (records) => {
-                if (records[here.id]) records[here.id].ease = value;
+                const record = records[here.id];
+                if (record) {
+                  const { contextOf: _context, ...author } = record;
+                  records[here.id] = { ...author, ease: value };
+                }
               });
             }}
           />
@@ -172,8 +194,9 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
     if (!canKeyOpticsHere()) return say("Move to a visible picture frame to edit focus");
     editOpticsLane(row, "focus", (records) => {
       const key = findOpticsKey(opticsKeys(records), time);
+      const { contextOf: _context, ...existing } = records[key?.id ?? ""] ?? {};
       records[key?.id ?? crypto.randomUUID()] = {
-        ...records[key?.id ?? ""],
+        ...existing,
         t: time,
         value: value ?? null,
       };
