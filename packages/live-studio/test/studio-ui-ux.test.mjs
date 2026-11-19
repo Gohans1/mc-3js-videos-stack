@@ -1774,6 +1774,125 @@ test("Free camera exposes FOV, Roll, Sway settings in CamPanel and Settings and 
   expect(sceneSrc).toContain("free.wave");
 });
 
+test("pinned camera angles reopen their own Free Cam pose and lens at the same time", async () => {
+  await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    await u.loadCameraFixture();
+    u.seekExact(3);
+    u.set({ compareGrid: true, pinnedAngles: [null, null, null, null] });
+  })()`);
+  const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
+  const pin = async (label, view) => {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      const view = ${JSON.stringify(view)};
+      if (view) u.freecam.flyFree(view);
+      else u.freecam.setFree(false);
+      [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Pin ${label}').click();
+    })()`);
+    await waitUntil(`document.querySelector('button[aria-label^="Go to angle ${label} at"]')`);
+  };
+  await waitUntil(`document.querySelector('[aria-label="Pinned camera angles"]')`);
+  try {
+    await pin("A", { p: [1, 2, 3], l: [0, 1, 0], fov: 34, fstop: 2, focus: 4, roll: 0.1 });
+    await pin("B", { p: [7, 3, 2], l: [1, 2, 0], fov: 57, fstop: 8, focus: 9, roll: -0.2 });
+    await pin("C", null);
+    const open = async (label) => {
+      await page.evaluate("window.__UX_TEST__.set({ compareGrid: true })");
+      const button = `document.querySelector('button[aria-label^="Go to angle ${label} at"]')`;
+      await waitUntil(button);
+      return page.evaluate(`(() => {
+        (${button}).click();
+        const u = window.__UX_TEST__;
+        const f = u.S.tools.free;
+        return f.on ? [u.S.t, f.p.x, f.l.x, f.fov, f.fstop, f.focus, f.roll] : [u.S.t, "film"];
+      })()`);
+    };
+    expect(await open("A")).toEqual([3, 1, 0, 34, 2, 4, 0.1]);
+    expect(await open("B")).toEqual([3, 7, 1, 57, 8, 9, -0.2]);
+    expect(await open("C")).toEqual([3, "film"]);
+    expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
+  } finally {
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.freecam.setFree(false);
+      u.set({ compareGrid: false, pinnedAngles: [null, null, null, null] });
+    })()`);
+  }
+});
+
+test("pin capture keeps the Final frame pose and skips a preview that moved during render", async () => {
+  await page.evaluate(`(() => {
+    const u = window.__UX_TEST__;
+    const free = u.S.tools.free;
+    const live = u.S.render;
+    const canvas = u.S.el.final;
+    canvas.width = 8;
+    canvas.height = 8;
+    const finalFree = { ...free, p: free.p.clone(), l: free.l.clone() };
+    const arm = (label, final) => {
+      u.freecam.flyFree({ p: [1, 2, 3], l: [0, 1, 0], fov: 34 });
+      const frame = final ? finalFree : free;
+      const render = async () => {
+        window.__pinFrame = [frame.p.x, frame.fov];
+        if (final) {
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = frame.p.x === 1 ? '#ff0000' : '#0000ff';
+          ctx.fillRect(0, 0, 8, 8);
+        }
+        await new Promise(resolve => { window.__releasePin = resolve; });
+      };
+      if (final) u.S.finalRender = { tools: { free: finalFree }, renderFrame: render };
+      else live.renderFrame = render;
+      u.set({ final, compareGrid: true });
+      [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Pin ' + label).click();
+    };
+    window.__armPin = arm;
+    window.__clearPin = () => {
+      window.__releasePin?.();
+      delete live.renderFrame;
+      u.S.finalRender = null;
+      u.freecam.setFree(false);
+      u.set({ final: false, compareGrid: false, pinnedAngles: [null, null, null, null] });
+      for (const name of ['__armPin', '__clearPin', '__pinFrame', '__releasePin']) delete window[name];
+    };
+    u.set({ compareGrid: true, pinnedAngles: [null, null, null, null] });
+  })()`);
+  await waitUntil(`document.querySelector('[aria-label="Pinned camera angles"]')`);
+  const moveDuringCapture = async (label, final) => {
+    await page.evaluate(`window.__armPin('${label}', ${final})`);
+    await waitUntil("typeof window.__releasePin === 'function'");
+    expect(await page.evaluate("window.__pinFrame")).toEqual([1, 34]);
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      u.freecam.flyFree({ p: [7, 2, 3], l: [0, 1, 0], fov: 57 });
+      window.__releasePin();
+      delete window.__releasePin;
+    })()`);
+  };
+  try {
+    await moveDuringCapture("A", true);
+    await waitUntil("window.__UX_TEST__.get().pinnedAngles[0] !== null");
+    const pin = await page.evaluate(`(async () => {
+      const angle = window.__UX_TEST__.get().pinnedAngles[0];
+      const image = new Image();
+      image.src = angle.url;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0, 1, 1);
+      return { x: angle.view.p[0], fov: angle.view.fov, red: ctx.getImageData(0, 0, 1, 1).data[0] };
+    })()`);
+    expect(pin).toMatchObject({ x: 1, fov: 34 });
+    expect(pin.red).toBeGreaterThan(230);
+    await moveDuringCapture("B", false);
+    await waitUntil("window.__UX_TEST__.get().status.includes('Camera moved')");
+    expect(await page.evaluate("window.__UX_TEST__.get().pinnedAngles[1]")).toBeNull();
+  } finally {
+    await page.evaluate("window.__clearPin()");
+  }
+});
+
 test("Jumping to a note preview restores saved Free camera view or exits Free camera cleanly", async () => {
   const result = await page.evaluate(`(() => {
     const u = window.__UX_TEST__;

@@ -2,6 +2,7 @@
 // because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
 import { clampFov, fovOf, MAX_FOV, MIN_FOV } from "film-kit/lens";
 import type { FocusTargetSpec } from "film-stage/camera";
+import type { FreeCam } from "film/scene";
 import * as THREE from "three";
 
 import { saveView as applyFreeToKeyframe } from "../camera/cam";
@@ -488,6 +489,30 @@ export const setFree = (on: boolean, here = false) => {
   touchFree(false);
 };
 
+export const readFreeView = (f: FreeCam | undefined): FreeView | null => {
+  if (!f?.on) return null;
+  return {
+    p: f.p.toArray(),
+    l: f.l.toArray(),
+    fov: f.fov,
+    roll: f.roll ?? 0,
+    wave: f.wave ?? 0,
+    bob: f.bob ?? 0,
+    fstop: f.fstop ?? 0,
+    ...(f.focus !== undefined ? { focus: structuredClone(f.focus) } : {}),
+    handheld: f.handheld !== undefined ? structuredClone(f.handheld) : false,
+    previewEffects: f.previewEffects,
+  };
+};
+
+export const readLiveFreeView = (): FreeView | undefined => {
+  const view = readFreeView(S.tools?.free);
+  if (!view) return undefined;
+  const { p, l, previewEffects: _, ...lens } = view;
+  const round = ([x, y, z]: FreeView["p"]) => [+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)] as const;
+  return { p: round(p), l: round(l), ...lens };
+};
+
 export const flyFree = (view: FreeView) => {
   const tools = S.tools;
   if (!tools) return;
@@ -528,7 +553,7 @@ export const flyFree = (view: FreeView) => {
   f.focus = focus;
   f.handheld = handheld;
   orbitPivot = null;
-  if (f.previewEffects !== undefined) f.previewEffects = get().freeLook;
+  if (f.previewEffects !== undefined) f.previewEffects = view.previewEffects ?? get().freeLook;
   if (get().freeNavigation === "walk") set({ freeNavigation: "fly" });
   homed = true;
   f.on = true;
@@ -541,6 +566,7 @@ export const flyFree = (view: FreeView) => {
     freeFstop: fstop,
     freeFocus: focus,
     freeHandheld: handheld,
+    ...(f.previewEffects !== undefined && { freeLook: f.previewEffects }),
     freePoseRev: get().freePoseRev + 1,
     freeHistoryRev: get().freeHistoryRev + 1,
   });

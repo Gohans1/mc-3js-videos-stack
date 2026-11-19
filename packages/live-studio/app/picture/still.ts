@@ -62,20 +62,18 @@ export const exportStill = async () => {
   const t = S.t,
     place = await pickPlace(`${S.film}_${stamp(t).replace(":", "-")}`);
   if (!place) return;
-  const { buildFinal, drawFinalFrame } = await import("./render");
+  const { buildFinal, captureFinalFrame } = await import("./render");
   await buildFinal();
   if (S.t !== t) {
     say("The playhead moved before the frame was drawn: export it again");
     return;
   } // a scrub during the first build
-  await drawFinalFrame();
-  // Copied out at once: a WebGL canvas may be cleared once the page is next shown
   const c = document.createElement("canvas");
-  c.width = S.el.final.width;
-  c.height = S.el.final.height;
-  c.getContext("2d")!.drawImage(S.el.final, 0, 0);
-  S.finalAt = -1;
-  S.dirty = true;
+  await captureFinalFrame(t, (from) => {
+    c.width = from.width;
+    c.height = from.height;
+    c.getContext("2d")!.drawImage(from, 0, 0);
+  });
   const blob = await new Promise<Blob | null>((done) => c.toBlob(done, place.format, 0.95));
   if (!blob) {
     say("Couldn't export the still frame: the browser couldn't encode it");

@@ -17,6 +17,7 @@ export interface FreeView {
   fstop?: number;
   focus?: unknown;
   handheld?: unknown;
+  previewEffects?: boolean;
 }
 
 export interface StudioEngine {

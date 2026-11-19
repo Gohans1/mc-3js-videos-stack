@@ -91,6 +91,41 @@ test("at reads every timeline through its own clock: a 2x Speed puts scene secon
   );
 });
 
+test("at reads camera-clock optics and authored keys while a Freeze holds the picture", (t) => {
+  const dir = film(t);
+  const p = (name) => join(dir, name);
+  const put = (name, value) => writeFileSync(p(name), JSON.stringify(value));
+  const pkg = JSON.parse(readFileSync(p("package.json"), "utf8"));
+  pkg["live-studio"].shotsTimeline = "src/timeline/shots.json";
+  put("package.json", pkg);
+  put("src/edit.json", { end: 8 });
+  put("src/timeline/timing.json", { freezes: [{ at: 2, duration: 3 }] });
+  const key = (t, extra = {}) => ({
+    t,
+    p: [t, 2, 6],
+    l: [0, 1, 0],
+    fov: 30 * 2 ** (t / 8),
+    motion: "linear",
+    ease: "linear",
+    ...extra,
+  });
+  put("src/timeline/cam.json", [key(0), key(2.5), key(2.7, { fov: 90, muted: true }), key(8)]);
+  put("src/timeline/shots.json", [{ t: 0, name: "Camera still moves", cameraClock: "output" }]);
+
+  const output = whatsAt(dir, 4);
+  assert.equal(output.scene, 2);
+  assert.equal(output.cam.clock, "output");
+  assert.ok(Math.abs(output.cam.time - 32 / 11) < 1e-7);
+  assert.deepEqual([output.cam.before, output.cam.after, output.cam.fov], [1, 3, 38.6]);
+
+  put("src/timeline/shots.json", [{ t: 0, name: "Camera holds too" }]);
+  const scene = whatsAt(dir, 4);
+  assert.deepEqual(
+    [scene.cam.clock, scene.scene, scene.cam.time, scene.cam.before, scene.cam.after, scene.cam.fov],
+    ["scene", 2, 2, 0, 1, 35.7],
+  );
+});
+
 test("at #N finds a note's moment after a Speed edit moved it: by its scene second, or by its place in its shot", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));

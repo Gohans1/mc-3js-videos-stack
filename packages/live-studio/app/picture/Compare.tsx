@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
+import { engine } from "../core/engine";
 import { get, set, showError, useStudio } from "../core/store";
 import { stamp } from "../core/time";
 import { seekExact, setPlaying } from "../playback/transport";
@@ -104,6 +105,8 @@ export function AngleGrid() {
                   onClick={() => {
                     setPlaying(false);
                     seekExact(image.t);
+                    if (image.view) engine.flyFree(image.view);
+                    else if (get().free) engine.setFree(false);
                     set({ compareGrid: false });
                   }}
                 >

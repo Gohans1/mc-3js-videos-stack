@@ -3,13 +3,15 @@
 import type { Draw } from "film/scene";
 
 import { makeAccumulator } from "../../render/accum";
+import { equalJson } from "../../src/merge-edits.mjs";
 import { shutterBounds, shutterTimes } from "../../src/shutter";
 import { timingClock } from "../../src/timing-state.mjs";
 import { drawCamPath } from "../camera/campath";
 import { AWAY, PHONE } from "../core/device";
 import { shotEnd, shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
-import { S } from "../core/state";
+import type { FreeView } from "../core/engine";
+import { onWake, S } from "../core/state";
 import { get, invalidatePictures, set } from "../core/store";
 import { FPS } from "../core/time";
 import { drawGizmo } from "../objects/placed";
@@ -19,6 +21,7 @@ import { drawTextSel } from "../text/onpicture";
 import { drawCameraMap } from "./camera-map";
 import { drawFilmView } from "./filmcam";
 import { frameSize } from "./frame";
+import { readFreeView } from "./freecam";
 import { nightVision } from "./nightvision";
 import { renderWithMonitor } from "./preview-monitor";
 
@@ -141,18 +144,38 @@ export const readSceneFrame = (t: number, read: () => void) =>
     }
   });
 
-export const capturePreviewFrame = (t: number, read: (canvas: HTMLCanvasElement) => void) =>
+export const capturePreviewFrame = (
+  t: number,
+  angle: boolean,
+  read: (canvas: HTMLCanvasElement, view: FreeView | null) => void,
+) =>
   queueFrame(async () => {
-    if (S.finalRender && get().final && t === S.t) {
-      await drawFinalFrame();
-      read(S.el.final);
-    } else {
-      resizePreview(1);
-      await draw(t, false);
-      read(S.el.canvas);
+    const currentView = () => readFreeView(S.tools?.free);
+    const view = angle ? currentView() : null;
+    try {
+      if (S.finalRender && get().final && t === S.t) {
+        // Final renders with its own copy of this pose, so later live camera moves are safe.
+        await drawFinalFrame(t);
+        read(S.el.final, view);
+      } else {
+        resizePreview(1);
+        let moved = false;
+        const stopWatching = angle
+          ? onWake("render", () => {
+              if (!moved) moved = !equalJson(view, currentView());
+            })
+          : undefined;
+        try {
+          await draw(t, false);
+          if (!angle || (!moved && equalJson(view, currentView()))) read(S.el.canvas, view);
+        } finally {
+          stopWatching?.();
+        }
+      }
+    } finally {
+      S.dirty = true;
+      S.finalAt = -1;
     }
-    S.dirty = true;
-    S.finalAt = -1;
   });
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
@@ -177,7 +200,7 @@ export const buildFinal = () => {
 };
 // The frame on screen at final quality, into the final canvas (hidden unless Final quality is on), seen from the free camera
 // when it is on
-export const drawFinalFrame = async (t = S.t) => {
+const drawFinalFrame = async (t: number) => {
   const fr = S.finalRender!,
     free = S.tools!.free;
   Object.assign(fr.tools.free, {
@@ -197,15 +220,27 @@ export const drawFinalFrame = async (t = S.t) => {
   if (fr.renderFrame) await fr.renderFrame(t);
   else fr(t);
 };
-export const drawFinal = async () => {
-  await renderWithMonitor(S.finalRender?.tools.scene, () =>
-    renderShutter(S.t, S.finalRender, S.el.final, drawFinalFrame),
-  );
-  drawGizmo(S.finalRender!.tools);
-  S.finalAt = S.t;
-  S.el.final.hidden = false;
-  if (!S.playing && get().review) invalidatePictures();
-};
+export const captureFinalFrame = (t: number, read: (canvas: HTMLCanvasElement) => void) =>
+  queueFrame(async () => {
+    await drawFinalFrame(t);
+    read(S.el.final);
+    S.finalAt = -1;
+    S.dirty = true;
+  });
+
+export const drawFinal = () =>
+  queueFrame(async () => {
+    if (!get().final || S.playing || !S.finalRender) return;
+    const t = S.t;
+    await renderWithMonitor(S.finalRender.tools.scene, () =>
+      renderShutter(t, S.finalRender, S.el.final, drawFinalFrame),
+    );
+    if (!get().final || S.t !== t || S.playing) return;
+    drawGizmo(S.finalRender.tools);
+    S.finalAt = t;
+    S.el.final.hidden = false;
+    if (get().review) invalidatePictures();
+  });
 export const setFinal = async (on: boolean) => {
   if (AWAY) return;
   set({ final: on });

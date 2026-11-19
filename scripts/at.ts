@@ -22,13 +22,13 @@ import { staleVideo } from "../packages/live-studio/src/stale.mjs";
 import { mapTimeline } from "../packages/live-studio/src/timing-data.mjs";
 import { transitionAvailable } from "../packages/live-studio/src/timing-effects.mjs";
 import {
+  cameraTimesAt,
   clockForTimeline,
   layerDuration,
   setTiming,
   timingClock,
 } from "../packages/live-studio/src/timing-state.mjs";
 import {
-  frameAt,
   frameVisible,
   freezeRange,
   freezesOf,
@@ -90,10 +90,16 @@ const filmOf = (dir: string) => {
   const sourceEnd =
     typeof edit.end === "number" ? fromSource(edit.end) : Math.max(0, ...cam.map((k) => k.t));
   const timingSpec = read(conf.timingTimeline, {});
-  setTiming(timingSpec, sourceEnd);
   // a film keeps its shots in shotsTimeline (narration seconds) or as the camera's cuts (scene seconds)
   const shotRows: Row[] = read(conf.shotsTimeline, null);
-  type Shot = { index: number; t: number; name?: string; size?: string; row: number };
+  type Shot = {
+    index: number;
+    t: number;
+    name?: string;
+    size?: string;
+    row: number;
+    cameraClock?: "scene" | "output";
+  };
   const shots: (Shot & { transition?: Row; anim?: Row; adjust?: Row; hits?: Row[] })[] = shotRows
     ? shotRows.map((s, i) => ({
         index: i,
@@ -101,6 +107,7 @@ const filmOf = (dir: string) => {
         name: s.name,
         size: s.size,
         row: i,
+        ...(s.cameraClock && { cameraClock: s.cameraClock }),
         transition: s.transition,
         anim: s.anim,
         ...(s.adjust ? { adjust: s.adjust } : {}),
@@ -112,6 +119,7 @@ const filmOf = (dir: string) => {
         i === 0 || k.cut ? [{ index: 0, t: k.t, name: k.what, size: k.size, row: i }] : [],
       );
   shots.forEach((s, i) => (s.index = i));
+  setTiming(timingSpec, sourceEnd, shots);
   return { read, conf, edit, timingSpec, fromSource, cam, sourceEnd, shots };
 };
 
@@ -178,7 +186,7 @@ export const whatsAt = (dir: string, t: number) => {
   const film = filmOf(dir);
   const { read, conf, edit, cam, sourceEnd, shots } = film;
   const length = Math.max(timingClock.duration, layerDuration());
-  const scene = frameAt(timingClock, t);
+  const { world: scene, camera: cameraTime, worldAtCamera } = cameraTimesAt(t);
   // a gap in timing.json: the picture is black, so no shot, camera key or moving row is on screen
   const blank = !frameVisible(timingClock, t);
   const timing: Row = read(conf.timingTimeline, null) ?? {};
@@ -318,7 +326,13 @@ export const whatsAt = (dir: string, t: number) => {
     };
   };
   const cuts = blank ? [] : shots.map((_, i) => blend(i)).filter((b) => b !== null);
-  const ci = blank ? -1 : cam.filter((k) => k.t <= scene).length - 1;
+  const activeCam = cam
+    .map((key, row) => ({ key, row }))
+    .filter(({ key, row }) => row === 0 || key.cut || !key.muted);
+  const camIndex = activeCam.findLastIndex(({ key }) => key.t <= cameraTime);
+  const previousCam = activeCam[camIndex];
+  const nextCam = activeCam[camIndex + 1];
+  const heldBeforeCut = !!previousCam && nextCam?.key.cut === true;
   const [fw, fh] = sizeOf(ratioOf({ "live-studio": conf }), 1920);
   const vec3Or = (v: unknown, fallback: [number, number, number]): [number, number, number] =>
     Array.isArray(v) &&
@@ -329,7 +343,7 @@ export const whatsAt = (dir: string, t: number) => {
   const camEval =
     !blank && cam.length
       ? cameraAt(
-          scene,
+          cameraTime,
           cam.map((k) => ({
             ...k,
             p: vec3Or(k.p, [0, 0, 0]),
@@ -575,7 +589,7 @@ export const whatsAt = (dir: string, t: number) => {
     voiceFault = (e as Error).message;
   } finally {
     // buildVoiceCues mutates the shared timingClock singleton to voice sourceDur: restore the film's clock for script/notes below
-    setTiming(film.timingSpec, film.sourceEnd);
+    setTiming(film.timingSpec, film.sourceEnd, film.shots);
   }
   // the script not voiced yet (src/edit.json script_lines, scene seconds as the film's list reads them)
   const scriptLines: Row[] = edit.script_lines ?? [];
@@ -621,11 +635,13 @@ export const whatsAt = (dir: string, t: number) => {
     velocity,
     cam: camEval
       ? {
-          before: ci >= 0 ? ci : null,
-          after: ci < 0 ? 0 : ci + 1 < cam.length && !cam[ci + 1]?.cut ? ci + 1 : null,
-          t0: ci >= 0 ? cam[ci]!.t : null,
-          t1: ci < 0 ? cam[0]!.t : !cam[ci + 1]?.cut ? cam[ci + 1]?.t : undefined,
-          ...(ci >= 0 && cam[ci + 1]?.cut ? { heldBeforeCut: true } : {}),
+          clock: worldAtCamera ? "output" : "scene",
+          time: cameraTime,
+          before: previousCam?.row ?? null,
+          after: heldBeforeCut ? null : (nextCam?.row ?? null),
+          t0: previousCam?.key.t ?? null,
+          t1: heldBeforeCut ? undefined : nextCam?.key.t,
+          ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
           mm: +camEval.mm.toFixed(1),
           fov: +camEval.fov.toFixed(1),
           ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
@@ -886,6 +902,8 @@ if (isMain) {
             }`
       }`,
     );
+    if (got.cam.clock === "output")
+      out.push(`  camera time: ${mmss(got.cam.time)} on the output clock`);
     const optics = [
       `${got.cam.mm}mm (${got.cam.fov}°)`,
       ...(got.cam.fstop ? [`f/${got.cam.fstop}`] : []),

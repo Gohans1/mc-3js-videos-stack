@@ -601,7 +601,7 @@ const frame = async () => {
         S.finalAt = -1;
       } else if (S.finalAt !== S.t) {
         await drawFinal();
-        finalNow = true;
+        finalNow = get().final && S.finalAt === S.t;
       }
     }
     // The scopes read the frame on screen: the final-quality one when it shows (only when drawn now), else the draft

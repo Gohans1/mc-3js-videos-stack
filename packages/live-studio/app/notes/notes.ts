@@ -23,6 +23,7 @@ import { stored } from "../core/storage";
 import { get, invalidatePictures, say, set, ui } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { captionAt } from "../picture/captions";
+import { readLiveFreeView } from "../picture/freecam";
 import { seek, setPlaying } from "../playback/transport";
 import { inOutAt } from "../timeline/inout";
 import { wordNear } from "../timeline/timeline";
@@ -975,22 +976,6 @@ const sameFreeView = (a: FreeView | undefined, b: FreeView | undefined) => {
     JSON.stringify(a.focus ?? null) === JSON.stringify(b.focus ?? null) &&
     JSON.stringify(a.handheld ?? false) === JSON.stringify(b.handheld ?? false)
   );
-};
-
-const readLiveFreeView = (): FreeView | undefined => {
-  const f = S.tools?.free;
-  if (!f?.on) return undefined;
-  return {
-    p: [+f.p.x.toFixed(3), +f.p.y.toFixed(3), +f.p.z.toFixed(3)],
-    l: [+f.l.x.toFixed(3), +f.l.y.toFixed(3), +f.l.z.toFixed(3)],
-    fov: f.fov,
-    roll: f.roll ?? 0,
-    wave: f.wave ?? 0,
-    bob: f.bob ?? 0,
-    fstop: f.fstop ?? 0,
-    ...(f.focus !== undefined ? { focus: structuredClone(f.focus) } : {}),
-    handheld: f.handheld !== undefined ? structuredClone(f.handheld) : false,
-  };
 };
 
 export type NoteJumpMode = "auto" | "before" | "after";

@@ -2,10 +2,12 @@
 import type { FocusTargetSpec } from "film-stage/camera";
 
 import type { Ratio } from "../../src/frame.ts";
+import type { FreeView } from "../core/engine";
 import type { FilmViewSize } from "../core/prefs";
 import { initialPreview, type PreviewOptions } from "./preview-model";
 
 export type PreviewStill = { url: string; t: number };
+export type PinnedAngle = PreviewStill & { view: FreeView | null };
 export type FreeTouched = Partial<
   Record<"roll" | "wave" | "bob" | "fstop" | "focus" | "handheld", boolean>
 >;
@@ -35,7 +37,7 @@ export interface PictureSlice {
   filmView: FilmViewSize; // the film camera's corner picture beside the free camera (filmcam.ts): its size, split, or off
   filmViewWidth: number | null; // user-dragged pixel width of Film camera PiP; null keeps compact small default
   preview: PreviewOptions;
-  pinnedAngles: (PreviewStill | null)[];
+  pinnedAngles: (PinnedAngle | null)[];
   compareGrid: boolean;
   shotList: boolean;
   final: boolean;
