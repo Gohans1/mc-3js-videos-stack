@@ -915,49 +915,156 @@ test("the Inspector includes only files from the chosen lesson scope", async () 
   ).toContain("0 of 0");
 });
 
-test("the Lessons splitter keeps its width across Deck, Reader and Inspector and leaves Notes independent", async () => {
+test("the Library splitter keeps one width across Notes, Audio, Lessons and all tabs", async () => {
   await view.cdp("Emulation.setDeviceMetricsOverride", {
     width: 1920,
     height: 1080,
     deviceScaleFactor: 1,
     mobile: false,
   });
-  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
-  await navigateFixture("?shell");
-  const sizes = await view.evaluate(`(async () => {
-    const { lessons, studio } = window.inspectTest;
-    const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    const splitter = () => document.querySelector('[aria-label="Library width"]');
-    const width = () => Number(splitter().getAttribute("aria-valuenow"));
-    lessons.setState({ subTab: "deck", folder: [], open: null });
-    await frame();
-    const deck = width();
-    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
-    await frame();
-    const reader = width();
-    document.querySelector("[data-lesson-back]").click();
-    await frame();
-    const handle = splitter();
-    handle.focus();
-    handle.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true }));
-    await frame();
-    const custom = width();
-    document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
-    await frame();
-    const customReader = width();
-    lessons.setState({ subTab: "inspector" });
-    await frame();
-    const inspector = width();
-    studio.setState({ lib: "notes" });
-    await frame();
-    return { deck, reader, custom, customReader, inspector, notes: width() };
-  })()`);
-  expect(sizes.reader).toBe(sizes.deck);
-  expect(sizes.custom).toBeLessThan(sizes.deck);
-  expect(sizes.customReader).toBe(sizes.custom);
-  expect(sizes.inspector).toBe(sizes.custom);
-  expect(sizes.notes).not.toBe(sizes.custom);
-  await view.evaluate("localStorage.removeItem('studio.lessonsWidth')");
+  await view.evaluate(
+    "(() => { localStorage.removeItem('studio.libWidth'); localStorage.setItem('studio.lessonsWidth', '760'); })()",
+  );
+  try {
+    await navigateFixture("?shell");
+    await waitFor("window.inspectTest && document.querySelector('[aria-label=\"Library\"]')");
+    const defaultSizes = await view.evaluate(`(async () => {
+      const { lessons, studio } = window.inspectTest;
+      const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const aside = () => document.querySelector('aside[aria-label="Library"]');
+      const splitter = () => document.querySelector('[aria-label="Library width"]');
+      const measure = () => ({
+        offset: aside().offsetWidth,
+        valuenow: Number(splitter().getAttribute("aria-valuenow")),
+      });
+      const clickTab = async (name) => {
+        const tab = [...document.querySelectorAll('[aria-label="Libraries"] [role="tab"]')]
+          .find(t => t.textContent.includes(name));
+        tab.click();
+        await frame();
+        return measure();
+      };
+      studio.setState({ lib: "notes", sound: true });
+      lessons.setState({ subTab: "deck", folder: [], open: null });
+      await frame();
+      const notes = measure();
+      const lessonsDeck = await clickTab("Lessons");
+      document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+      await frame();
+      const lessonsReader = measure();
+      document.querySelector("[data-lesson-back]").click();
+      await frame();
+      lessons.setState({ subTab: "inspector" });
+      await frame();
+      const lessonsInspector = measure();
+      lessons.setState({ subTab: "deck" });
+      await frame();
+      const audio = await clickTab("Audio");
+      const ports = await clickTab("Ports");
+      const cli = await clickTab("CLI");
+      const film = await clickTab("Film");
+      const text = await clickTab("Text");
+      const effects = await clickTab("Effects");
+      await clickTab("Lessons");
+      return { notes, lessonsDeck, lessonsReader, lessonsInspector, audio, ports, cli, film, text, effects };
+    })()`);
+
+    for (const [name, measured] of Object.entries(defaultSizes)) {
+      expect(measured, name).toEqual({ offset: 400, valuenow: 400 });
+    }
+
+    const bar = await view.evaluate(`(() => {
+      const r = document.querySelector('[aria-label="Library width"]').getBoundingClientRect();
+      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+    })()`);
+    await view.cdp("Input.dispatchMouseEvent", { type: "mouseMoved", x: bar.x, y: bar.y });
+    await view.cdp("Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: bar.x,
+      y: bar.y,
+      button: "left",
+      buttons: 1,
+      clickCount: 1,
+    });
+    await view.cdp("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: bar.x + 120,
+      y: bar.y,
+      button: "left",
+      buttons: 1,
+    });
+    await view.cdp("Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: bar.x + 120,
+      y: bar.y,
+      button: "left",
+      buttons: 0,
+      clickCount: 1,
+    });
+
+    const resized = await view.evaluate(`(async () => {
+      const { lessons } = window.inspectTest;
+      const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const aside = () => document.querySelector('aside[aria-label="Library"]');
+      const splitter = () => document.querySelector('[aria-label="Library width"]');
+      const measure = () => ({
+        offset: aside().offsetWidth,
+        valuenow: Number(splitter().getAttribute("aria-valuenow")),
+      });
+      const clickTab = async (name) => {
+        const tab = [...document.querySelectorAll('[aria-label="Libraries"] [role="tab"]')]
+          .find(t => t.textContent.includes(name));
+        tab.click();
+        await frame();
+        return measure();
+      };
+      await frame();
+      const lessonsDeck = measure();
+      document.querySelector('[data-lesson-row="file:all:camera.md"]').click();
+      await frame();
+      const lessonsReader = measure();
+      lessons.setState({ subTab: "inspector" });
+      await frame();
+      const lessonsInspector = measure();
+      const notes = await clickTab("Notes");
+      const audio = await clickTab("Audio");
+      return {
+        storedLibW: localStorage.getItem("studio.libWidth"),
+        lessonsDeck,
+        lessonsReader,
+        lessonsInspector,
+        notes,
+        audio,
+      };
+    })()`);
+
+    expect(resized.lessonsDeck.offset).toBeGreaterThan(480);
+    expect(resized.lessonsDeck).toEqual(resized.lessonsReader);
+    expect(resized.lessonsInspector).toEqual(resized.lessonsDeck);
+    expect(resized.notes).toEqual(resized.lessonsDeck);
+    expect(resized.audio).toEqual(resized.lessonsDeck);
+    expect(resized.storedLibW).toBe(String(resized.lessonsDeck.offset));
+
+    await navigateFixture("?shell");
+    await waitFor("window.inspectTest && document.querySelector('aside[aria-label=\"Library\"]')");
+    const afterReload = await view.evaluate(`(async () => {
+      const { studio } = window.inspectTest;
+      const frame = () => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      studio.setState({ lib: "notes", sound: true });
+      await frame();
+      const notes = document.querySelector('aside[aria-label="Library"]').offsetWidth;
+      studio.setState({ lib: "lessons" });
+      await frame();
+      const lessonsW = document.querySelector('aside[aria-label="Library"]').offsetWidth;
+      return { notes, lessonsW };
+    })()`);
+    expect(afterReload.notes).toBe(resized.lessonsDeck.offset);
+    expect(afterReload.lessonsW).toBe(resized.lessonsDeck.offset);
+  } finally {
+    await view.evaluate(
+      "(() => { localStorage.removeItem('studio.libWidth'); localStorage.removeItem('studio.lessonsWidth'); })()",
+    );
+  }
 });
 
 test("a reader remains usable at 200% desktop magnification", async () => {
