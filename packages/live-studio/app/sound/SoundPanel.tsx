@@ -135,9 +135,9 @@ import {
   itemOf,
   kindOf,
   type Lanes,
+  type LibraryItem,
   lanes,
   library,
-  type LibraryItem,
   lightSounds,
   listen,
   listening,
@@ -971,16 +971,13 @@ function CategoryTree({
         >
           <Music aria-hidden />
           <span className="min-w-0 flex-1 wrap-anywhere">{timeline.title}</span>
-          <span className="text-muted-foreground tabular-nums">
-            {timeline.count.toLocaleString()}
-          </span>
+          <span className="text-muted-foreground tabular-nums">{timeline.count.toLocaleString()}</span>
         </Button>
       )}
       {tree.map((sec) => {
         const isGroupActive = activeNav.group === sec.id;
         const isOpen = open[sec.id];
-        const leaves =
-          sec.id === "yours" ? sec.leaves.filter((leaf) => leaf.id !== "timeline") : sec.leaves;
+        const leaves = sec.id === "yours" ? sec.leaves.filter((leaf) => leaf.id !== "timeline") : sec.leaves;
         return (
           <div key={sec.id} className="flex flex-col gap-0.5">
             <button
@@ -1871,7 +1868,7 @@ function Library({ side }: { side: boolean }) {
                                       ? "Add music or a sound effect to the timeline to see it here."
                                       : activeNav.group === "yours" && activeNav.leaf === "film"
                                         ? "Add audio files to this film to find them here."
-                                        : `No ${activeSection.one}s in this category.`}
+                                      : `No ${activeSection.one}s in this category.`}
                   </span>
                 </EmptyDescription>
               </EmptyHeader>
@@ -1988,9 +1985,7 @@ function Library({ side }: { side: boolean }) {
               return (
                 <li
                   key={g.key}
-                  onPointerDown={
-                    unavailable ? undefined : press(x.name, selectUses, advanceRoundRobin)
-                  }
+                  onPointerDown={unavailable ? undefined : press(x.name, selectUses, advanceRoundRobin)}
                   onDragStart={(e) => e.preventDefault()}
                   onPointerEnter={() => lightSounds(highlightedNames)}
                   onPointerLeave={() => lightSounds(null)}
@@ -2007,15 +2002,7 @@ function Library({ side }: { side: boolean }) {
                   )}
                 >
                   <div className="flex min-h-11 flex-1 items-start gap-2">
-                    <Tip
-                      label={
-                        unavailable
-                          ? "File unavailable"
-                          : isPlaying
-                            ? "Pause preview"
-                            : "Preview audio"
-                      }
-                    >
+                    <Tip label={unavailable ? "File unavailable" : isPlaying ? "Pause preview" : "Preview audio"}>
                       <Button
                         variant="cover"
                         size="cover"
@@ -2029,18 +2016,8 @@ function Library({ side }: { side: boolean }) {
                         }}
                       >
                         <span aria-hidden className="grid place-items-center">
-                          <Play
-                            className={cn(
-                              "col-start-1 row-start-1 translate-x-[0.5px] fill-current transition-opacity duration-150 motion-reduce:transition-none",
-                              isPlaying && "opacity-0",
-                            )}
-                          />
-                          <Pause
-                            className={cn(
-                              "col-start-1 row-start-1 fill-current transition-opacity duration-150 motion-reduce:transition-none",
-                              !isPlaying && "opacity-0",
-                            )}
-                          />
+                          <Play className={cn("col-start-1 row-start-1 translate-x-[0.5px] fill-current transition-opacity duration-150 motion-reduce:transition-none", isPlaying && "opacity-0")} />
+                          <Pause className={cn("col-start-1 row-start-1 fill-current transition-opacity duration-150 motion-reduce:transition-none", !isPlaying && "opacity-0")} />
                         </span>
                       </Button>
                     </Tip>
@@ -2053,9 +2030,7 @@ function Library({ side }: { side: boolean }) {
                           {title}
                         </span>
                         <span className="ms-auto flex flex-none items-center gap-1">
-                          {!unavailable && (
-                            <FavoriteStar kind="sounds" id={starId} name={title} onCard />
-                          )}
+                          {!unavailable && <FavoriteStar kind="sounds" id={starId} name={title} onCard />}
                           <Tip
                             label={
                               hasVariants
@@ -2080,7 +2055,7 @@ function Library({ side }: { side: boolean }) {
                         </span>
                       </div>
                       <div className="mt-auto flex min-h-6 flex-wrap items-center justify-between gap-1.5">
-                        <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-snug">
+                        <span className="text-muted-foreground text-xs flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 leading-snug">
                           {(isSynth || x.contentId || subtitle) && (
                             <span className="flex min-w-0 flex-wrap items-center gap-1">
                               {isSynth && <Badge variant="synth">Code</Badge>}
@@ -2089,9 +2064,7 @@ function Library({ side }: { side: boolean }) {
                                   Content ID
                                 </Badge>
                               )}
-                              {subtitle && (
-                                <span className="min-w-0 wrap-anywhere">{subtitle}</span>
-                              )}
+                              {subtitle && <span className="min-w-0 wrap-anywhere">{subtitle}</span>}
                             </span>
                           )}
                           <span className="tabular-nums">

@@ -22,6 +22,7 @@ import {
   applyJCut,
   applyLCut,
   clipCutBounds,
+  locked,
   picked,
   removeClips,
   setClips,
@@ -32,10 +33,13 @@ import {
 export function ClipMenu({ bind }: { bind: Bind }) {
   const picks = useStudio((s) => s.clips),
     [onClip, setOnClip] = useState(false);
+  useStudio((s) => s.soundRev);
+  useStudio((s) => s.timingRev);
   const inside = picks.some((c) => {
     const [a, b] = span(c);
     return a + 0.05 < S.t && S.t < b - 0.05;
   });
+  const isLocked = onClip && picks.length === 1 && locked(picks[0]);
   const cutInfo = onClip && picks.length === 1 ? clipCutBounds(picks[0]) : null;
   const pasteItem = (
     <ContextMenuItem disabled={!hasCopy()} onClick={paste}>
@@ -78,29 +82,33 @@ export function ClipMenu({ bind }: { bind: Bind }) {
               Split at playhead<ContextMenuShortcut>Ctrl+B</ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={!cutInfo?.jCut.changed}
+              disabled={isLocked || !cutInfo?.jCut.changed}
               onClick={() => picks.length === 1 && applyJCut(picks[0])}
             >
               J-Cut (Lead In)
               <ContextMenuShortcut>
-                {cutInfo?.jCut.changed
-                  ? "-0.75s"
-                  : cutInfo?.jCut.blockedBy === "source"
-                    ? "trimIn=0"
-                    : "blocked"}
+                {isLocked
+                  ? "locked"
+                  : cutInfo?.jCut.changed
+                    ? `-${cutInfo.jCut.delta}s`
+                    : cutInfo?.jCut.blockedBy === "source"
+                      ? "trimIn=0"
+                      : "blocked"}
               </ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={!cutInfo?.lCut.changed}
+              disabled={isLocked || !cutInfo?.lCut.changed}
               onClick={() => picks.length === 1 && applyLCut(picks[0])}
             >
               L-Cut (Trail Out)
               <ContextMenuShortcut>
-                {cutInfo?.lCut.changed
-                  ? "+0.75s"
-                  : cutInfo?.lCut.blockedBy === "source"
-                    ? "at end"
-                    : "blocked"}
+                {isLocked
+                  ? "locked"
+                  : cutInfo?.lCut.changed
+                    ? `+${cutInfo.lCut.delta}s`
+                    : cutInfo?.lCut.blockedBy === "source"
+                      ? "at end"
+                      : "blocked"}
               </ContextMenuShortcut>
             </ContextMenuItem>
             <ContextMenuSeparator />

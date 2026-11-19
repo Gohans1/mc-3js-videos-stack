@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,27 +11,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { focusTargetNames, keys as camKeys } from "../camera/cam";
+import { focusTargetNames } from "../camera/cam";
 import { FieldRow, Reset, Section, Segmented, SliderRow, ValueBox } from "../components/inspector";
 import { Tip } from "../components/Tip";
-import { SHOTS } from "../core/filmMeta";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
-import { r3 } from "../core/time";
+import { FPS, r3 } from "../core/time";
 import { useFrame } from "../core/useFrame";
-import { placedData } from "../objects/placed-data";
-import {
-  defaultReverbParams,
-  isPresetSpace,
-  resolveClipReverb,
-  resolveReverbSpec,
-  REVERB_SPACES,
-} from "./ir";
-import {
-  availableSpatialTargets,
-  registerSceneSpatialProvider,
-  sceneCameraPoseAt,
-  sceneTargetAt,
-} from "./scene-spatial";
+import { defaultReverbParams, isPresetSpace, resolveClipReverb, REVERB_SPACES } from "./ir";
+import { availableSpatialTargets, sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
 import type { ClipRef } from "./slice";
 import {
   type Bed,
@@ -57,12 +45,6 @@ import {
 
 const soundDoc = { snapshot, restore };
 
-registerSceneSpatialProvider({
-  getCamKeys: () => camKeys,
-  getPlaced: placedData,
-  getTargetNames: focusTargetNames,
-});
-
 const SPACE_LABELS: Record<string, string> = {
   __inherit__: "Inherit (shot / film)",
   dry: "Dry (off)",
@@ -81,8 +63,8 @@ const currentShotWindow = (t: number): [number, number] | null => {
     if (SHOTS[i].t <= t + 1e-4) idx = i;
   }
   const from = SHOTS[idx].t;
-  const maxBed = lanes?.beds.reduce((m, b) => Math.max(m, b.to), from + 1) ?? from + 1;
-  const to = SHOTS[idx + 1]?.t ?? Math.max(from + 1, maxBed);
+  const to =
+    idx + 1 < SHOTS.length ? SHOTS[idx + 1].t : Math.max(from + 1 / FPS, DURATION || from + 1);
   return [from, to];
 };
 
@@ -117,7 +99,16 @@ export function ReverbSection({
         : clipSpec.space
       : "__custom__";
 
-  const activeResolved = resolveReverbSpec(clipSpec);
+  const hasReverbControls = Boolean(clipSpec && clipSpec.space !== "dry");
+  const reverbDefaults = clipSpec ? defaultReverbParams(clipSpec.space) : null;
+  const wetPct =
+    hasReverbControls && reverbDefaults
+      ? Math.round((clipSpec!.wet ?? reverbDefaults.wet) * 100)
+      : 0;
+  const preDelayMs =
+    hasReverbControls && reverbDefaults
+      ? Math.round(clipSpec!.preDelayMs ?? reverbDefaults.preDelayMs)
+      : 0;
   const shotWin = currentShotWindow(mid);
 
   const onSelectSpace = (val: string | null) => {
@@ -262,11 +253,11 @@ export function ReverbSection({
         </div>
       )}
 
-      {activeResolved && clipSpec && (
+      {hasReverbControls && clipSpec && (
         <>
           <SliderRow
             label="Wet"
-            value={Math.round(activeResolved.wet * 100)}
+            value={wetPct}
             min={0}
             max={100}
             step={1}
@@ -278,7 +269,7 @@ export function ReverbSection({
           />
           <SliderRow
             label="Pre-delay"
-            value={Math.round(activeResolved.preDelayMs)}
+            value={preDelayMs}
             min={0}
             max={250}
             step={1}
@@ -322,17 +313,45 @@ export function ReverbSection({
   );
 }
 
-export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot }) {
+function SpatialReadout({ spec, mode }: { spec: SpatialSpec; mode: "world" | "target" }) {
   useFrame();
   const t = S.t;
+  const at = spec.at ?? [0, 1.6, 0];
+  const cam = sceneCameraPoseAt(t);
+  const rawSrc =
+    mode === "target" && spec.target ? (sceneTargetAt(spec.target, t) ?? [0, 0, 0]) : at;
+  const sp = computeSpatialParams(cam, offsetPosition(rawSrc, spec.offset), spec);
+  const panLabel =
+    Math.abs(sp.pan) < 0.03
+      ? "C"
+      : `${sp.pan < 0 ? "L" : "R"}${Math.round(Math.abs(sp.pan) * 100)}`;
+  return (
+    <p className="text-muted-foreground text-xs tabular-nums" aria-live="off">
+      Now: {panLabel} · {sp.distance.toFixed(1)}m · {Math.round(sp.cutoffHz)}Hz
+    </p>
+  );
+}
+
+export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot }) {
   const airLpfId = useId();
   const active = isSpatialActive(c.spatial);
   const spec = c.spatial ?? {};
   const mode: "off" | "world" | "target" = !active ? "off" : spec.target ? "target" : "world";
 
-  const targets = availableSpatialTargets();
+  const targets = mode === "target" ? availableSpatialTargets(focusTargetNames()) : [];
   const [customRequested, setCustomRequested] = useState(false);
   const [targetDraft, setTargetDraft] = useState<string | null>(null);
+  const dragSnapRef = useRef<string | null>(null);
+
+  useEffect(
+    () => () => {
+      if (dragSnapRef.current !== null) {
+        soundDoc.restore(dragSnapRef.current);
+        dragSnapRef.current = null;
+      }
+    },
+    [],
+  );
 
   const isCustomTarget = customRequested || Boolean(spec.target && !targets.includes(spec.target));
   const shownTarget = targetDraft ?? spec.target ?? "";
@@ -361,8 +380,9 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
       });
       return;
     }
-    const first = spec.target ?? targets[0] ?? "steve";
-    setCustomRequested(!targets.includes(first));
+    const avail = availableSpatialTargets(focusTargetNames());
+    const first = spec.target ?? avail[0] ?? "steve";
+    setCustomRequested(!avail.includes(first));
     setTargetDraft(null);
     setClipSpatial(clip, {
       ...base,
@@ -394,6 +414,23 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
     }, commit);
   };
 
+  const liveAxis = (field: "at" | "offset", axis: 0 | 1 | 2, v: number) => {
+    dragSnapRef.current ??= soundDoc.snapshot();
+    setAxis(field, axis, v, false);
+  };
+
+  const cancelAxis = () => {
+    if (dragSnapRef.current !== null) {
+      soundDoc.restore(dragSnapRef.current);
+      dragSnapRef.current = null;
+    }
+  };
+
+  const saveAxis = (field: "at" | "offset", axis: 0 | 1 | 2, v: number) => {
+    cancelAxis();
+    setAxis(field, axis, v, true);
+  };
+
   const refDist = spec.refDistance ?? SPATIAL_DEFAULTS.refDistance;
   const maxDist = Math.max(refDist, spec.maxDistance ?? SPATIAL_DEFAULTS.maxDistance);
   const rolloff = spec.rolloff ?? SPATIAL_DEFAULTS.rolloff;
@@ -409,19 +446,6 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
     : spec.target && targets.includes(spec.target)
       ? spec.target
       : "__custom__";
-
-  let readout: string | null = null;
-  if (active) {
-    const cam = sceneCameraPoseAt(t);
-    const rawSrc =
-      mode === "target" && spec.target ? (sceneTargetAt(spec.target, t) ?? [0, 0, 0]) : vec("at");
-    const sp = computeSpatialParams(cam, offsetPosition(rawSrc, spec.offset), spec);
-    const panLabel =
-      Math.abs(sp.pan) < 0.03
-        ? "C"
-        : `${sp.pan < 0 ? "L" : "R"}${Math.round(Math.abs(sp.pan) * 100)}`;
-    readout = `${panLabel} · ${sp.distance.toFixed(1)}m · ${Math.round(sp.cutoffHz)}Hz`;
-  }
 
   return (
     <Section
@@ -459,8 +483,9 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
               step={0.1}
               digits={2}
               compact
-              live={(v) => setAxis("at", axis as 0 | 1 | 2, v, false)}
-              onSave={(v) => setAxis("at", axis as 0 | 1 | 2, v, true)}
+              live={(v) => liveAxis("at", axis as 0 | 1 | 2, v)}
+              onCancel={cancelAxis}
+              onSave={(v) => saveAxis("at", axis as 0 | 1 | 2, v)}
             />
           ))}
         </FieldRow>
@@ -538,8 +563,9 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
                 step={0.1}
                 digits={2}
                 compact
-                live={(v) => setAxis("offset", axis as 0 | 1 | 2, v, false)}
-                onSave={(v) => setAxis("offset", axis as 0 | 1 | 2, v, true)}
+                live={(v) => liveAxis("offset", axis as 0 | 1 | 2, v)}
+                onCancel={cancelAxis}
+                onSave={(v) => saveAxis("offset", axis as 0 | 1 | 2, v)}
               />
             ))}
           </FieldRow>
@@ -649,11 +675,7 @@ export function SpatialSection({ clip, c }: { clip: ClipRef; c: Bed | OneShot })
               </label>
             </div>
           </FieldRow>
-          {readout && (
-            <p className="text-muted-foreground text-xs tabular-nums" aria-live="off">
-              Now: {readout}
-            </p>
-          )}
+          {active && <SpatialReadout spec={spec} mode={mode as "world" | "target"} />}
         </>
       )}
     </Section>

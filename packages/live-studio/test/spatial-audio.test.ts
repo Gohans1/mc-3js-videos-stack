@@ -1,14 +1,27 @@
 import { describe, expect, test } from "bun:test";
-import { createReadStream, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  createReadStream,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import * as THREE from "three";
+
+import { poseAt } from "../../mc-assets/src/placed-math.ts";
 import { generateImpulseResponse, resolveClipReverb, REVERB_SPACES } from "../app/sound/ir.ts";
 import { computeJCutStart, computeLCutEnd, shotCutOverlaps } from "../app/sound/jlcut.ts";
 import { computeSpatialParams, isSpatialActive, offsetPosition } from "../app/sound/spatial.ts";
 import { createApi } from "../src/api.mjs";
 import { SOUND_KEYS } from "../src/contract-keys.ts";
 import { ReverbSpec, ShotSpace, SoundTimeline, SpatialSpec } from "../src/contract.ts";
+import { mapTimeline } from "../src/timing-data.mjs";
+import { compileTiming } from "../src/timing.mjs";
 
 describe("IR synthesizer (ir.ts)", () => {
   test("produces identical deterministic 48kHz stereo buffers across repeated calls", () => {
@@ -19,10 +32,8 @@ describe("IR synthesizer (ir.ts)", () => {
       expect(a.right.length).toBe(b.right.length);
       expect(a.left).toEqual(b.left);
       expect(a.right).toEqual(b.right);
-      for (let i = 0; i < a.left.length; i++) {
-        expect(Number.isFinite(a.left[i])).toBe(true);
-        expect(Number.isFinite(a.right[i])).toBe(true);
-      }
+      expect(a.left.every(Number.isFinite)).toBe(true);
+      expect(a.right.every(Number.isFinite)).toBe(true);
     }
   });
 
@@ -163,15 +174,62 @@ describe("3D spatial audio math (spatial.ts)", () => {
     expect(noAir.cutoffHz).toBe(20000);
   });
 
-  test("respects camera roll and offsetPosition helper", () => {
-    // 90 deg roll rotates right vector onto camUp (+Y), so source above camera pans right
-    const rolledCam = { ...cam, roll: 90 };
+  test("respects camera roll in radians (matching Three.js rotateZ) and offsetPosition helper", () => {
+    // pi/2 roll rotates right vector onto camUp (+Y), so source above camera pans right
+    const rolledCam = { ...cam, roll: Math.PI / 2 };
     const above = computeSpatialParams(rolledCam, [0, 5.6, 5], { at: [0, 5.6, 5] });
     expect(above.pan).toBeCloseTo(1, 5);
+
+    // Parity against THREE.PerspectiveCamera.rotateZ across varied pitches/yaws/rolls
+    for (const roll of [0, 0.4, -0.75, Math.PI / 2]) {
+      const p: [number, number, number] = [2, 3, 6];
+      const l: [number, number, number] = [-1, 1.5, 0];
+      const threeCam = new THREE.PerspectiveCamera(45, 16 / 9, 0.1, 100);
+      threeCam.position.set(...p);
+      threeCam.up.set(0, 1, 0);
+      threeCam.lookAt(...l);
+      if (roll) threeCam.rotateZ(roll);
+      threeCam.updateMatrixWorld();
+      const m = threeCam.matrixWorld.elements;
+      const rightPos: [number, number, number] = [
+        p[0] + m[0] * 4,
+        p[1] + m[1] * 4,
+        p[2] + m[2] * 4,
+      ];
+      const spFromRoll = computeSpatialParams({ p, l, roll }, rightPos, { at: rightPos });
+      const spFromBasis = computeSpatialParams(
+        { p, l: [p[0] - m[8], p[1] - m[9], p[2] - m[10]], up: [m[4], m[5], m[6]] },
+        rightPos,
+        { at: rightPos },
+      );
+      expect(spFromRoll.pan).toBeCloseTo(1, 5);
+      expect(spFromBasis.pan).toBeCloseTo(1, 5);
+      expect(spFromRoll.pan).toBeCloseTo(spFromBasis.pan, 5);
+    }
 
     expect(offsetPosition([1, 2, 3], [0.5, -1, 2])).toEqual([1.5, 1, 5]);
     expect(isSpatialActive({ target: "steve" })).toBe(true);
     expect(isSpatialActive({ refDistance: 2 })).toBe(false);
+  });
+
+  test("mapTimeline('sound') remaps acoustic spaces through timing clock cleanly", () => {
+    const clock = compileTiming({ speeds: [{ from: 0, to: 4, rate: 2 }] }, 6);
+    const sourceAudio = {
+      tracks: [],
+      beds: [],
+      sfx: [],
+      spaces: [
+        { from: 0, to: 4, space: "hall", wet: 0.3 },
+        { from: 4, to: 6, space: "cave", wet: 0.5 },
+      ],
+    };
+    const outAudio = mapTimeline("sound", sourceAudio, clock, false);
+    expect(outAudio.spaces.map(({ __timing, ...rest }: any) => rest)).toEqual([
+      { from: 0, to: 2, space: "hall", wet: 0.3 },
+      { from: 2, to: 4, space: "cave", wet: 0.5 },
+    ]);
+    const restored = mapTimeline("sound", outAudio, clock, true, sourceAudio);
+    expect(restored.spaces).toEqual(sourceAudio.spaces);
   });
 });
 
@@ -323,6 +381,13 @@ describe("/api/sound/ir security and serving", () => {
 
       const jsonRes = await app.request("/api/sound/ir?path=package.json");
       expect(jsonRes.status).toBe(404);
+
+      mkdirSync(join(tmp, "assets", "ir", "dir.wav"), { recursive: true });
+      const dirRes = await app.request("/api/sound/ir?path=assets/ir/dir.wav");
+      expect(dirRes.status).toBe(404);
+
+      const encodedTravRes = await app.request("/api/sound/ir?path=assets%2F..%2Fsecret.wav");
+      expect(encodedTravRes.status).toBe(400);
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
@@ -336,20 +401,40 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
       const entry = join(tmp, "entry.ts");
       const outDir = join(tmp, "out");
       const studioDir = join(import.meta.dir, "..");
+      const req = createRequire(join(studioDir, "package.json"));
+      const reactPath = req.resolve("react");
+      const reactDomServerPath = req.resolve("react-dom/server");
       writeFileSync(
         entry,
         [
+          `import * as React from ${JSON.stringify(reactPath)};`,
+          `import { renderToStaticMarkup } from ${JSON.stringify(reactDomServerPath)};`,
+          `import { TooltipProvider } from ${JSON.stringify(join(studioDir, "app/components/ui/tooltip.tsx"))};`,
+          `import { ReverbSection } from ${JSON.stringify(join(studioDir, "app/sound/SpatialInspector.tsx"))};`,
           `export * as doc from ${JSON.stringify(join(studioDir, "app/core/doc.ts"))};`,
+          `export * as filmMeta from ${JSON.stringify(join(studioDir, "app/core/filmMeta.ts"))};`,
           `export * as mixer from ${JSON.stringify(join(studioDir, "app/sound/mixer.ts"))};`,
+          `export * as sceneSpatial from ${JSON.stringify(join(studioDir, "app/sound/scene-spatial.ts"))};`,
           `export * as sound from ${JSON.stringify(join(studioDir, "app/sound/sound.ts"))};`,
           `export * as state from ${JSON.stringify(join(studioDir, "app/core/state.ts"))};`,
           `export * as store from ${JSON.stringify(join(studioDir, "app/core/store.ts"))};`,
+          `export * as timingState from ${JSON.stringify(join(studioDir, "src/timing-state.mjs"))};`,
+          `export * as filmStub from "film/edit";`,
+          `export const renderReverbSection = (props: any) => renderToStaticMarkup(React.createElement(TooltipProvider, null, React.createElement(ReverbSection, props)));`,
         ].join("\n"),
       );
 
       const stubPlugin = {
         name: "studio-spatial-test-stubs",
         setup(build: any) {
+          build.onResolve({ filter: /^@\// }, (args: any) => {
+            const rel = args.path.slice(2);
+            for (const suffix of ["", ".ts", ".tsx", "/index.ts", "/index.tsx"]) {
+              const cand = join(studioDir, "app", rel + suffix);
+              if (existsSync(cand)) return { path: cand };
+            }
+            return undefined;
+          });
           build.onResolve({ filter: /\?(?:worker&url|url)$/ }, (args: any) => ({
             path: args.path,
             namespace: "url-stub",
@@ -364,7 +449,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           }));
           build.onLoad({ filter: /.*/, namespace: "film-stub" }, () => ({
             contents:
-              "export const EDIT = { end: 12 }; export const fromSource = () => []; export const SCENES = {};",
+              "export const EDIT = { end: 12 }; export const fromSource = (t) => t; export const toSource = (t) => t; export const SCENES = {};",
             loader: "js",
           }));
         },
@@ -384,6 +469,9 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         delays: [] as any[],
         filters: [] as any[],
         panners: [] as any[],
+        gains: [] as any[],
+        disconnectedConvolvers: 0,
+        disconnectedGains: 0,
       };
       const mkParam = (val = 0) => ({
         value: val,
@@ -399,6 +487,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         setTargetAtTime(v: number) {
           this.value = v;
         },
+        setValueCurveAtTime() {},
         cancelScheduledValues() {},
       });
       const mkNode = () => ({
@@ -408,13 +497,23 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         disconnect() {},
       });
       class FakeAudioCtx {
-        sampleRate = 48000;
+        sampleRate: number;
         currentTime = 0;
         destination = mkNode();
         state = "running";
         audioWorklet = { addModule: async () => {} };
+        constructor(sampleRate = 48000) {
+          this.sampleRate = sampleRate;
+        }
         createGain() {
-          return Object.assign(mkNode(), { gain: mkParam(1) });
+          const g = Object.assign(mkNode(), {
+            gain: mkParam(1),
+            disconnect() {
+              created.disconnectedGains++;
+            },
+          });
+          created.gains.push(g);
+          return g;
         }
         createStereoPanner() {
           const p = Object.assign(mkNode(), {
@@ -429,7 +528,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           const f = Object.assign(mkNode(), {
             type: "lowpass",
             frequency: mkParam(20000),
-            Q: mkParam(0.7071),
+            Q: mkParam(0),
           });
           created.filters.push(f);
           return f;
@@ -440,7 +539,13 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           return d;
         }
         createConvolver() {
-          const c = Object.assign(mkNode(), { normalize: true, buffer: null as any });
+          const c = Object.assign(mkNode(), {
+            normalize: true,
+            buffer: null as any,
+            disconnect() {
+              created.disconnectedConvolvers++;
+            },
+          });
           created.convolvers.push(c);
           return c;
         }
@@ -476,8 +581,22 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
             getFloatTimeDomainData() {},
           });
         }
-        async decodeAudioData() {
-          return this.createBuffer(2, 48000 * 4, 48000);
+        async decodeAudioData(buf: ArrayBuffer) {
+          // Marker size 64 simulates a 44100 Hz custom IR WAV file decoded on ctx
+          const isCustomIr = buf.byteLength === 64;
+          const sr = isCustomIr ? 44100 : this.sampleRate;
+          return this.createBuffer(2, isCustomIr ? 4410 : sr * 4, sr);
+        }
+      }
+      class FakeOfflineAudioCtx extends FakeAudioCtx {
+        length: number;
+        constructor(channels: number, length: number, sampleRate: number) {
+          super(sampleRate);
+          void channels;
+          this.length = length;
+        }
+        async startRendering() {
+          return this.createBuffer(2, this.length, this.sampleRate);
         }
       }
 
@@ -489,6 +608,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         innerHeight: (globalThis as any).innerHeight,
         Audio: (globalThis as any).Audio,
         AudioContext: (globalThis as any).AudioContext,
+        OfflineAudioContext: (globalThis as any).OfflineAudioContext,
         AudioWorkletNode: (globalThis as any).AudioWorkletNode,
         EventSource: (globalThis as any).EventSource,
         localStorage: (globalThis as any).localStorage,
@@ -504,6 +624,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           removeItem: (k: string) => void m.delete(k),
         };
       };
+      let irFetches = 0;
       try {
         (globalThis as any).localStorage = mkStorage();
         (globalThis as any).sessionStorage = mkStorage();
@@ -534,6 +655,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           removeAttribute() {}
         };
         (globalThis as any).AudioContext = FakeAudioCtx;
+        (globalThis as any).OfflineAudioContext = FakeOfflineAudioCtx;
         (globalThis as any).AudioWorkletNode = class {
           port = { postMessage() {}, onmessage: null };
           connect(dest: any) {
@@ -557,14 +679,36 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         globalThis.fetch = (async (url: string | URL | Request) => {
           const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
           if (u.startsWith("/api/sfx/")) return new Response(new ArrayBuffer(16), { status: 200 });
+          if (u.startsWith("/api/sound/ir")) {
+            irFetches++;
+            return new Response(new ArrayBuffer(64), { status: 200 });
+          }
           if (u.startsWith("/api/sound")) {
             return Response.json({
               version: "v1",
               live: true,
-              library: [{ name: "footstep", seconds: 4 }],
+              library: [
+                { name: "footstep", seconds: 4 },
+                { name: "bgm", seconds: 6 },
+              ],
               data: {
-                tracks: [{ id: "sfx", name: "SFX" }],
-                beds: [],
+                tracks: [
+                  { id: "bgm", name: "BGM" },
+                  { id: "sfx", name: "SFX" },
+                  { id: "locked_sfx", name: "Locked", lock: true },
+                ],
+                beds: [
+                  {
+                    name: "bgm",
+                    from: 4,
+                    to: 8,
+                    start: 1.0,
+                    gain: -10,
+                    fadeIn: 0.2,
+                    fadeOut: 0.2,
+                    track: "bgm",
+                  },
+                ],
                 sfx: [
                   {
                     at: 4,
@@ -575,6 +719,16 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
                     track: "sfx",
                     reverb: { space: "hall", wet: 0.35, preDelayMs: 20 },
                     spatial: { at: [6, 1.6, 5], refDistance: 2, maxDistance: 40, occlusion: 0.5 },
+                  },
+                  {
+                    at: 8,
+                    start: 2.0,
+                    length: 0.5,
+                    rate: 2,
+                    name: "footstep",
+                    gain: -3,
+                    track: "locked_sfx",
+                    reverb: { space: "assets/ir/custom.wav", wet: 0.4, preDelayMs: 10 },
                   },
                 ],
               },
@@ -588,7 +742,7 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         await mod.sound.loadSound();
         await new Promise((r) => setTimeout(r, 30));
 
-        // Verify playSlice constructs Web Audio reverb + spatial nodes cleanly
+        // Verify playSlice constructs Web Audio reverb + spatial nodes cleanly & Q is in dB
         await mod.mixer.playSlice(4.2, 0.25);
         expect(created.convolvers.length).toBeGreaterThanOrEqual(1);
         expect(created.convolvers[0].normalize).toBe(false);
@@ -596,12 +750,91 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(created.delays.length).toBeGreaterThanOrEqual(1);
         expect(created.delays[0].delayTime.value).toBeCloseTo(0.02, 5);
         expect(created.filters.length).toBeGreaterThanOrEqual(1);
+        expect(created.filters[0].Q.value).toBeCloseTo(-20 * Math.log10(Math.SQRT2), 5);
         expect(created.filters[0].frequency.value).toBeLessThan(5000); // occlusion LPF active
         expect(created.panners.some((p) => p.pan.value > 0.8)).toBe(true); // camera looks -Z, source at +X => right pan
 
-        // Verify J-Cut Lead In extends left across cut (4.0 -> 3.25) adjusting start/length, and Undo restores!
+        // Verify rapid skim cleanup disconnects old GainNode and shared ConvolverNode
+        const prevConvolverCount = created.disconnectedConvolvers;
+        const prevGainCount = created.disconnectedGains;
+        await mod.mixer.playSlice(4.2, 0.05);
+        await new Promise((r) => setTimeout(r, 150));
+        expect(created.disconnectedConvolvers).toBeGreaterThan(prevConvolverCount);
+        expect(created.disconnectedGains).toBeGreaterThan(prevGainCount);
+
+        // Verify offline custom IR decodes/resamples cleanly to OfflineAudioContext 48kHz & forgetSounds clears IR cache
+        created.convolvers.length = 0;
+        await mod.mixer.renderAudioSpan(7.9, 8.6);
+        expect(irFetches).toBe(1);
+        const customConv = created.convolvers.find((c) => c.buffer?.length === 4800);
+        expect(customConv).toBeDefined();
+        expect(customConv.buffer.sampleRate).toBe(48000);
+
+        mod.mixer.forgetSounds();
+        await mod.mixer.renderAudioSpan(7.9, 8.6);
+        expect(irFetches).toBe(2);
+
+        // Verify scene-spatial.ts reads source-time EDIT.cam/EDIT[placedKey] + frameAt + FreeCam/offline gates
+        mod.filmStub.EDIT.cam = [
+          { t: 0, p: [0, 1.6, 5], l: [0, 1.6, 0] },
+          { t: 4, p: [8, 1.6, 5], l: [0, 1.6, 0], ease: "linear" },
+        ];
+        mod.filmStub.EDIT.objects = {
+          hero: {
+            keys: [
+              { t: 0, at: [0, 0, 0] },
+              { t: 4, at: [10, 0, 0], ease: "inOut" },
+            ],
+          },
+        };
+        mod.timingState.setTiming(
+          {
+            speeds: [{ from: 0, to: 2, rate: 2 }],
+            freezes: [{ at: 1, duration: 1, frame: 0.5 }],
+          },
+          12,
+        );
+        mod.store.set({ timing: true });
+        mod.state.S.t = 1.0;
+        mod.state.S.tools = {
+          placed: { key: "objects" },
+          free: { on: true },
+          camera: {
+            matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 99, 99, 99, 1] },
+          },
+        };
+        // Freeze spans output [0.5, 1.5) holding source frame=0.5 while FreeCam is ignored
+        expect(mod.sceneSpatial.pictureTimeAt(1.0)).toBeCloseTo(0.5, 5);
+        expect(mod.sceneSpatial.pictureTimeAt(1.75)).toBeCloseTo(1.5, 5);
+        expect(mod.sceneSpatial.sceneCameraPoseAt(1.0).p[0]).toBeCloseTo(1, 4);
+        // Live camera pose is used only when !free.on && !offline
+        mod.state.S.tools.free.on = false;
+        expect(mod.sceneSpatial.sceneCameraPoseAt(1.0).p[0]).toBe(99);
+        expect(mod.sceneSpatial.sceneCameraPoseAt(1.0, { offline: true }).p[0]).toBeCloseTo(1, 4);
+        // Placed object at t=0.5 matches mc-assets/src/placed-math.ts poseAt arriving-key ease ("inOut")
+        const placedAtHalf = poseAt(mod.filmStub.EDIT.objects.hero.keys, 0.5);
+        const sceneAtHalf = mod.sceneSpatial.sceneTargetAt("hero", 1.0);
+        expect(sceneAtHalf?.[0]).toBeCloseTo(placedAtHalf.at.x, 5);
+        mod.store.set({ timing: false });
+        mod.timingState.setTiming({}, 12);
+        mod.state.S.tools = null;
+
+        // Verify ReverbSection keeps Wet & Pre-delay controls mounted even at wet = 0%
+        const wetZeroHtml = mod.renderReverbSection({
+          clip: { list: "sfx", i: 0 },
+          c: { ...mod.sound.lanes.sfx[0], reverb: { space: "hall", wet: 0, preDelayMs: 12 } },
+          from: 4,
+          to: 6,
+        });
+        expect(wetZeroHtml).toContain("Wet");
+        expect(wetZeroHtml).toContain("Pre-delay");
+
+        // Verify J-Cut respects SHOTS_OUT cut times, looping beds, rate!=1, locked tracks & Undo/Redo
+        mod.filmMeta.syncFilmMeta({ SHOTS: [{ t: 0 }, { t: 6 }], SHOTS_OUT: [{ t: 0 }, { t: 4 }] });
         const ref = { list: "sfx" as const, i: 0 };
         expect(mod.sound.lanes.sfx[0].at).toBe(4);
+        const cutInfo = mod.sound.clipCutBounds(ref, 0.75);
+        expect(cutInfo.jCut.delta).toBeCloseTo(0.75, 3);
         mod.sound.applyJCut(ref, 0.75);
         expect(mod.sound.lanes.sfx[0].at).toBeCloseTo(3.25, 3);
         expect(mod.sound.lanes.sfx[0].start).toBeCloseTo(0.75, 3);
@@ -614,6 +847,27 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
 
         mod.doc.redo();
         expect(mod.sound.lanes.sfx[0].at).toBeCloseTo(3.25, 3);
+
+        // Looping bed extends past SHOTS_OUT cut and wraps start via loopWrap(6, -0.5) => 4.0 cleanly
+        const bedRef = { list: "beds" as const, i: 0 };
+        mod.sound.applyJCut(bedRef, 1.5);
+        expect(mod.sound.lanes.beds[0].from).toBeCloseTo(2.5, 3);
+        expect(mod.sound.lanes.beds[0].start).toBeCloseTo(4.0, 3);
+        mod.sound.applyLCut(bedRef, 0.5);
+        expect(mod.sound.lanes.beds[0].to).toBeCloseTo(8.5, 3);
+
+        // Locked track is protected from applyJCut / applyLCut; rate=2 unlocking scales trimDelta
+        const lockedRef = { list: "sfx" as const, i: 1 };
+        expect(mod.sound.locked(lockedRef)).toBe(true);
+        mod.sound.applyJCut(lockedRef, 0.5);
+        expect(mod.sound.lanes.sfx[1].at).toBe(8);
+        mod.sound.edit((l: any) => {
+          l.tracks[2].lock = false;
+        });
+        mod.sound.applyJCut(lockedRef, 0.5);
+        expect(mod.sound.lanes.sfx[1].at).toBeCloseTo(7.5, 3);
+        expect(mod.sound.lanes.sfx[1].start).toBeCloseTo(1.0, 3);
+        expect(mod.sound.lanes.sfx[1].length).toBeCloseTo(1.0, 3);
         mod.mixer.setLive(false, {
           lanes: () => null,
           library: () => [],

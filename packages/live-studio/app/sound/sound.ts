@@ -6,7 +6,7 @@ import { changedRows, itemKey } from "../activity/timeline-activity";
 // The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
 // edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
 // remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
-import { DURATION, SHOTS } from "../core/filmMeta";
+import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { scheduleIdleBatch } from "../core/search";
 import { transitionSelection } from "../core/selection";
@@ -770,9 +770,11 @@ export const clipCutBounds = (c: ClipRef, deltaSec = DEFAULT_JL_CUT_SEC) => {
     leadSec: deltaSec,
     trailSec: deltaSec,
   };
+  const jCut = computeJCutStart(bounds);
+  const lCut = computeLCutEnd(bounds);
   return {
-    jCut: computeJCutStart(bounds),
-    lCut: computeLCutEnd(bounds),
+    jCut: { ...jCut, delta: jCut.changed ? r3(from - jCut.target) : 0 },
+    lCut: { ...lCut, delta: lCut.changed ? r3(lCut.target - to) : 0 },
   };
 };
 

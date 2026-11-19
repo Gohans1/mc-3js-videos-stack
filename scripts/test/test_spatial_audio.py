@@ -63,12 +63,12 @@ console.log(JSON.stringify(out));
                 {"at": [3, 1.6, 2], "refDistance": 2, "maxDistance": 30, "rolloff": 1.2, "occlusion": 0.25},
             ),
             (
-                {"p": [-2, 3, -4], "l": [1, 1.5, 2], "roll": 25},
+                {"p": [-2, 3, -4], "l": [1, 1.5, 2], "roll": 0.4},
                 [-12, 5, -9],
                 {"at": [-12, 5, -9], "refDistance": 1.5, "maxDistance": 50, "rolloff": 0.8, "occlusion": 0.7},
             ),
             (
-                {"p": [0, 10, 0], "l": [0, 0, 0], "roll": -15},
+                {"p": [0, 10, 0], "l": [0, 0, 0], "roll": -0.25},
                 [-5, 2, 1],
                 {"at": [-5, 2, 1], "airAbsorption": False},
             ),
@@ -104,8 +104,8 @@ console.log(JSON.stringify(cases.map(([cam, src, spec]) => computeSpatialParams(
     def test_camera_at_parity_with_film_stage(self) -> None:
         cam_keys = [
             {"t": 0.0, "p": [0, 2, 10], "l": [0, 1.5, 0], "ease": "inOut", "roll": 0},
-            {"t": 2.0, "p": [6, 3, 6], "l": [1, 1.5, 0], "ease": "linear", "roll": 10},
-            {"t": 5.0, "p": [8, 2, -4], "l": [0, 1.5, -2], "roll": -5},
+            {"t": 2.0, "p": [6, 3, 6], "l": [1, 1.5, 0], "ease": "linear", "roll": 0.35},
+            {"t": 5.0, "p": [8, 2, -4], "l": [0, 1.5, -2], "roll": -0.2},
             {"t": 6.0, "p": [-5, 4, 8], "l": [0, 1.6, 0], "cut": True, "ease": "out", "roll": 0},
             {"t": 9.0, "p": [-2, 2, 4], "l": [0, 1.6, 0], "roll": 0},
         ]
@@ -162,9 +162,83 @@ console.log(JSON.stringify(times.map((t) => {{
         rms_r = float(np.sqrt(np.mean(sp_out[:, 1] ** 2)))
         self.assertGreater(rms_r, rms_l * 4.0)
 
-        # Path traversal guard on custom IR
+        # Path traversal, directory WAVs, and dotted vault stems on custom IR
         with self.assertRaises(ValueError):
             ir.resolve_custom_ir_file("../outside.wav", REPO_ROOT, lambda p, l: None)
+
+        import tempfile
+
+        with tempfile.TemporaryDirectory(prefix="ir-guard-") as d:
+            dir_wav = os.path.join(d, "assets", "ir", "folder.wav")
+            os.makedirs(dir_wav, exist_ok=True)
+            with self.assertRaises(ValueError):
+                ir.resolve_custom_ir_file("assets/ir/folder.wav", d, lambda p, l: None)
+
+            vault_wav = os.path.join(d, "sound", "sfx", "footstep.v2.wav")
+            os.makedirs(os.path.dirname(vault_wav), exist_ok=True)
+            with open(vault_wav, "wb") as fh:
+                fh.write(b"RIFF")
+            resolved_vault = ir.resolve_custom_ir_file(
+                "footstep.v2",
+                d,
+                lambda p, l: None,
+                lambda p: vault_wav if p == "footstep.v2" else None,
+            )
+            self.assertEqual(os.path.abspath(resolved_vault), os.path.abspath(vault_wav))
+
+    def test_placed_at_parity_with_mc_assets(self) -> None:
+        placed = {
+            "mob": {
+                "keys": [
+                    {"t": 0.0, "at": [0.0, 1.0, 0.0]},
+                    {"t": 2.0, "at": [6.0, 3.0, -4.0], "ease": "inout"},
+                    {"t": 5.0, "at": [-4.0, 2.0, 8.0], "ease": "linear"},
+                    {"t": 6.0, "at": [2.0, 5.0, 2.0], "ease": "inOut"},
+                ]
+            }
+        }
+        sample_times = [-0.2, 0.0, 0.5, 1.4, 2.0, 3.2, 5.5, 6.0, 7.0]
+        script = f"""
+import {{ poseAt }} from "./packages/mc-assets/src/placed-math.ts";
+const keys = {json.dumps(placed["mob"]["keys"])};
+const times = {json.dumps(sample_times)};
+console.log(JSON.stringify(times.map((t) => {{
+  const p = poseAt(keys, t).at;
+  return [p.x, p.y, p.z];
+}})));
+"""
+        proc = subprocess.run(
+            ["bun", "-e", script],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        ts_pts = json.loads(proc.stdout)
+        for t, ts_pt in zip(sample_times, ts_pts):
+            py_pt = spatial.placed_at(placed, "mob", t)
+            self.assertIsNotNone(py_pt)
+            for axis in range(3):
+                self.assertAlmostEqual(py_pt[axis], ts_pt[axis], places=5, msg=f"axis {axis} at t={t}")
+
+    def test_spatial_filter_stability_and_hard_cut(self) -> None:
+        sr = 48000
+        dur = 1.6
+        t = np.arange(int(dur * sr)) / sr
+        sig = np.tile((0.4 * np.sin(2.0 * np.pi * 440.0 * t) + 0.3 * np.sin(2.0 * np.pi * 5500.0 * t))[:, None], (1, 2)).astype(np.float32)
+        in_peak = float(np.max(np.abs(sig)))
+
+        # Rapid rotation across behind-listener (<5.5kHz) <-> front (20kHz dry) <-> behind + hard cut
+        cam_keys = [
+            {"t": 0.0, "p": [0, 1.6, 5], "l": [0, 1.6, 10]},
+            {"t": 0.4, "p": [0, 1.6, 5], "l": [0, 1.6, 0]},
+            {"t": 0.8, "p": [0, 1.6, 5], "l": [0, 1.6, 10], "cut": True},
+            {"t": 1.6, "p": [0, 1.6, 5], "l": [0, 1.6, 0]},
+        ]
+        spec = {"at": [0, 1.6, 0], "refDistance": 2, "maxDistance": 40, "occlusion": 0.0}
+        out = spatial.apply_spatial_audio(sig, 0.0, sr, spec, cam_keys)
+        self.assertTrue(np.all(np.isfinite(out)))
+        self.assertLessEqual(float(np.max(np.abs(out))), in_peak * 1.6)
 
 
 class TestMixPyEndToEnd(unittest.TestCase):
@@ -395,7 +469,7 @@ class TestMixPyEndToEnd(unittest.TestCase):
             tail_energy = float(np.sqrt(np.mean(out_clear[int(0.8 * sr) : int(1.2 * sr)] ** 2)))
             self.assertGreater(tail_energy, 1e-3)
 
-            # 3) Path traversal is rejected safely
+            # 3) Path traversal and directory wavs are rejected safely
             with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -406,6 +480,114 @@ class TestMixPyEndToEnd(unittest.TestCase):
                 )
             bad = subprocess.run([sys.executable, self.MIX_PY], cwd=tmp, capture_output=True, text=True)
             self.assertNotEqual(bad.returncode, 0)
+
+            os.makedirs(os.path.join(ir_dir, "folder.wav"), exist_ok=True)
+            with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
+                json.dump(
+                    {
+                        "beds": [],
+                        "sfx": [{"at": 0.2, "name": "hiss", "gain": -6, "reverb": {"space": "assets/ir/folder.wav"}}],
+                    },
+                    f,
+                )
+            bad_dir = subprocess.run([sys.executable, self.MIX_PY], cwd=tmp, capture_output=True, text=True)
+            self.assertNotEqual(bad_dir.returncode, 0)
+
+    def test_mix_py_timing_warp_and_custom_keyfiles_placed(self) -> None:
+        import tempfile
+
+        sr = 48000
+        with tempfile.TemporaryDirectory(prefix="mix-timing-keyfiles-") as tmp:
+            sfx_dir = os.path.join(tmp, "sound", "sfx")
+            tl_dir = os.path.join(tmp, "src", "timeline")
+            os.makedirs(sfx_dir, exist_ok=True)
+            os.makedirs(tl_dir, exist_ok=True)
+
+            t = np.arange(int(2.2 * sr)) / sr
+            tone = 0.5 * np.sin(2.0 * np.pi * 520.0 * t)
+            self._write_wav(os.path.join(sfx_dir, "tone.wav"), np.column_stack((tone, tone)), sr)
+
+            with open(os.path.join(tmp, "package.json"), "w", encoding="utf8") as f:
+                json.dump(
+                    {
+                        "name": "timing-keyfiles-fixture",
+                        "live-studio": {
+                            "duration": 3.0,
+                            "soundVault": False,
+                            "keyFiles": {
+                                "src/timeline/objects.json": "placed",
+                            },
+                        },
+                    },
+                    f,
+                )
+            with open(os.path.join(tmp, "src", "edit.json"), "w", encoding="utf8") as f:
+                json.dump({"end": 3.0}, f)
+            with open(os.path.join(tl_dir, "cam.json"), "w", encoding="utf8") as f:
+                json.dump([{"t": 0.0, "p": [0, 1.6, 5], "l": [0, 1.6, 0], "wave": 0}], f)
+            # Speed 2x on source [0..2] -> output [0..1]; freeze at source at=1.0 for 1s holding source frame=0.5
+            with open(os.path.join(tl_dir, "timing.json"), "w", encoding="utf8") as f:
+                json.dump(
+                    {
+                        "speeds": [{"from": 0.0, "to": 2.0, "rate": 2.0}],
+                        "freezes": [{"at": 1.0, "duration": 1.0, "frame": 0.5}],
+                    },
+                    f,
+                )
+            # Non-default placed keyFile: moves from hard-left (-8 at source 0..1) to hard-right (+8 at source 2) after freeze
+            with open(os.path.join(tl_dir, "objects.json"), "w", encoding="utf8") as f:
+                json.dump(
+                    {
+                        "actor": {
+                            "keys": [
+                                {"t": 0.0, "at": [-8, 1.6, 5], "ease": "linear"},
+                                {"t": 1.0, "at": [-8, 1.6, 5], "ease": "linear"},
+                                {"t": 2.0, "at": [8, 1.6, 5]},
+                            ]
+                        }
+                    },
+                    f,
+                )
+            with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
+                json.dump(
+                    {
+                        "beds": [],
+                        "sfx": [
+                            {
+                                "at": 0.1,
+                                "name": "tone",
+                                "gain": -6,
+                                "reverb": {"space": "small-room", "wet": 0.25},
+                                "spatial": {
+                                    "target": "actor",
+                                    "refDistance": 2,
+                                    "maxDistance": 40,
+                                },
+                            }
+                        ],
+                    },
+                    f,
+                )
+
+            proc = subprocess.run(
+                [sys.executable, self.MIX_PY, "--raw", "sound/out.wav"],
+                cwd=tmp,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(proc.returncode, 0, msg=f"stderr:\n{proc.stderr}\nstdout:\n{proc.stdout}")
+            out_sr, out = self._read_wav_f32(os.path.join(tmp, "sound", "out.wav"))
+            self.assertEqual(out_sr, 48000)
+            self.assertTrue(np.all(np.isfinite(out)))
+
+            def rms(a: float, b: float, ch: int) -> float:
+                sl = out[int(a * sr) : int(b * sr), ch]
+                return float(np.sqrt(np.mean(sl * sl)))
+
+            # Inside freeze [0.5, 1.5], actor holds at source t=1.0 -> left-heavy
+            self.assertGreater(rms(0.55, 1.35, 0), rms(0.55, 1.35, 1) * 1.5)
+            # After freeze exits past output t=1.8 -> moves rapidly toward source t=2.0 -> right-heavy
+            self.assertGreater(rms(1.85, 2.20, 1), rms(1.85, 2.20, 0) * 1.5)
 
 
 if __name__ == "__main__":

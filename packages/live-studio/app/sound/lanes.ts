@@ -101,6 +101,7 @@ const drawClip = (
   x1: number,
   y: number,
   w: number,
+  cuts: readonly number[],
 ) => {
   const c = clipOf(ref)!,
     on = picked(ref);
@@ -207,14 +208,26 @@ const drawClip = (
       g.stroke();
     }
   }
-  const cuts = SHOTS.map((s) => s.t).filter((t) => t > 0);
   const overlap = shotCutOverlaps(from, to, cuts);
-  if (overlap.jLead) {
-    const cutX = Math.max(cx0, Math.min(cx1, x0 + (overlap.jLead.cut - from) * px));
-    if (cutX - cx0 > 2) {
-      g.fillStyle = "rgba(58, 169, 159, 0.22)";
-      g.fillRect(cx0, y, cutX - cx0, CLIP_H);
-      g.strokeStyle = "rgba(58, 169, 159, 0.85)";
+  if (overlap.jLead || overlap.lTrail) {
+    g.save();
+    g.beginPath();
+    g.rect(cx0, y, Math.max(0, cx1 - cx0 - 2), CLIP_H);
+    g.clip();
+    const paintOverhang = (
+      cutTime: number,
+      side: "j" | "l",
+      tag: string,
+      colorToken: "beat-sound" | "in-out",
+    ) => {
+      const cutX = Math.max(cx0, Math.min(cx1, x0 + (cutTime - from) * px));
+      const spanW = side === "j" ? cutX - cx0 : cx1 - cutX;
+      if (spanW <= 2) return;
+      g.fillStyle = tone(colorToken);
+      g.globalAlpha = 0.22;
+      g.fillRect(side === "j" ? cx0 : cutX, y, spanW, CLIP_H);
+      g.strokeStyle = tone(colorToken);
+      g.globalAlpha = 0.85;
       g.lineWidth = 1;
       g.beginPath();
       g.setLineDash([2, 2]);
@@ -222,30 +235,19 @@ const drawClip = (
       g.lineTo(cutX, y + CLIP_H - 1);
       g.stroke();
       g.setLineDash([]);
-      if (cutX - cx0 >= 22) {
-        g.fillStyle = "rgba(58, 169, 159, 0.95)";
-        g.fillText(`J -${overlap.jLead.amount.toFixed(1)}s`, cx0 + 4, y + CLIP_H - 7);
+      if (g.measureText(tag).width + 8 <= spanW) {
+        g.globalAlpha = 0.95;
+        g.fillStyle = tone(colorToken);
+        g.fillText(tag, (side === "j" ? cx0 : cutX) + 4, y + CLIP_H - 7);
       }
+    };
+    if (overlap.jLead) {
+      paintOverhang(overlap.jLead.cut, "j", `J -${overlap.jLead.amount.toFixed(1)}s`, "beat-sound");
     }
-  }
-  if (overlap.lTrail) {
-    const cutX = Math.max(cx0, Math.min(cx1, x0 + (overlap.lTrail.cut - from) * px));
-    if (cx1 - cutX > 2) {
-      g.fillStyle = "rgba(139, 126, 200, 0.22)";
-      g.fillRect(cutX, y, cx1 - cutX, CLIP_H);
-      g.strokeStyle = "rgba(139, 126, 200, 0.85)";
-      g.lineWidth = 1;
-      g.beginPath();
-      g.setLineDash([2, 2]);
-      g.moveTo(cutX, y + 1);
-      g.lineTo(cutX, y + CLIP_H - 1);
-      g.stroke();
-      g.setLineDash([]);
-      if (cx1 - cutX >= 22) {
-        g.fillStyle = "rgba(139, 126, 200, 0.95)";
-        g.fillText(`L +${overlap.lTrail.amount.toFixed(1)}s`, cutX + 4, y + CLIP_H - 7);
-      }
+    if (overlap.lTrail) {
+      paintOverhang(overlap.lTrail.cut, "l", `L +${overlap.lTrail.amount.toFixed(1)}s`, "in-out");
     }
+    g.restore();
   }
   if (c.try) {
     g.fillStyle = tone("warn");
@@ -322,7 +324,8 @@ export const drawLanes = () => {
   // A library sound under the pointer: its clips stay bright and ringed, the rest step back
   const lit = get().soundLit,
     litSet = lit ? new Set(lit) : null,
-    solo = get().solo;
+    solo = get().solo,
+    cuts = SHOTS.map((s) => s.t).filter((t) => t > 0);
   for (const ref of allClips()) {
     const [s, e] = span(ref),
       k = rowOf(ref);
@@ -339,7 +342,7 @@ export const drawLanes = () => {
       g.beginPath();
       g.roundRect(x0, y, x1 - x0, CLIP_H, 4);
       g.fill();
-    } else drawClip(g, ref, x0, x1, y, w);
+    } else drawClip(g, ref, x0, x1, y, w, cuts);
     g.globalAlpha = 1;
     if (shine) {
       g.strokeStyle = tone("pick");
@@ -363,7 +366,8 @@ export const drawLanes = () => {
       const dy =
         floating.clientY - c.getBoundingClientRect().top - floating.grabOffsetY - grabbed.y0;
       for (const b of boxes)
-        if (floating.refs.some((r) => same(r, b.ref))) drawClip(g, b.ref, b.x0, b.x1, b.y0 + dy, w);
+        if (floating.refs.some((r) => same(r, b.ref)))
+          drawClip(g, b.ref, b.x0, b.x1, b.y0 + dy, w, cuts);
     }
   }
   // The strip under the last track takes a dropped clip as a new track. As in CapCut it stays blank and lights only under a drag;
