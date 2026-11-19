@@ -943,8 +943,8 @@ const Shutter = z.object({
   phase: z.number().min(-1).max(1).optional(),
   apertureSamples: z.number().int().min(1).max(32).optional(),
 });
-const OpticsKey = z.object({ t: secs, ease: Ease.optional() });
-const CameraOpticsTracks = z.object({
+const OpticsKey = z.looseObject({ t: secs, ease: Ease.optional() });
+const CameraOpticsTracks = z.looseObject({
   focus: z.record(z.string().min(1), OpticsKey.extend({ value: FocusTarget.nullable() })).optional(),
   focalLength: z.record(z.string().min(1), OpticsKey.extend({ value: z.number().positive() })).optional(),
 });

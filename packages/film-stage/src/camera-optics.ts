@@ -1,5 +1,5 @@
-import { easeOf } from "./camera-meta";
 import type { FocusTargetSpec, FocusValue } from "./camera";
+import { easeOf } from "./camera-meta";
 
 export interface CameraOpticsKey<T> {
   t: number;
@@ -22,11 +22,17 @@ export interface CameraOpticsTracks {
 type OrderedKey<T> = CameraOpticsKey<T> & { id: string };
 const ordered = new WeakMap<object, readonly OrderedKey<unknown>[]>();
 
-export function opticsKeys<T>(track: CameraOpticsTrack<T> | undefined): readonly OrderedKey<T>[] {
-  if (!track) return [];
+export const opticsKeys = <T>(track: CameraOpticsTrack<T> | undefined): readonly OrderedKey<T>[] =>
+  track
+    ? Object.entries(track)
+        .map(([id, key]) => ({ ...key, id }))
+        .sort((a, b) => a.t - b.t)
+    : [];
+
+function sampledKeys<T>(track: CameraOpticsTrack<T>): readonly OrderedKey<T>[] {
   let keys = ordered.get(track);
   if (!keys) {
-    keys = Object.entries(track).map(([id, key]) => ({ ...key, id })).sort((a, b) => a.t - b.t);
+    keys = opticsKeys(track);
     ordered.set(track, keys);
   }
   return keys as readonly OrderedKey<T>[];
@@ -37,7 +43,8 @@ function sample<T, R>(
   time: number,
   blend: (a: T, b: T, progress: number) => R,
 ): T | R | undefined {
-  const keys = opticsKeys(track);
+  if (!track) return undefined;
+  const keys = sampledKeys(track);
   if (!keys.length) return undefined;
   const i = keys.findLastIndex((key) => key.t <= time);
   if (i < 0) return keys[0].value;

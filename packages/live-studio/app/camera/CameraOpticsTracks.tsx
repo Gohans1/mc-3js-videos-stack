@@ -1,5 +1,10 @@
 import { clampFov, fovOf } from "film-kit/lens";
-import { type CameraOpticsSample, type CameraOpticsTrack, type FocusTargetSpec, opticsKeys } from "film-stage/camera";
+import {
+  type CameraOpticsSample,
+  type CameraOpticsTrack,
+  type FocusTargetSpec,
+  opticsKeys,
+} from "film-stage/camera";
 import { useEffect } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -58,24 +63,31 @@ function OpticsKeyBar<T>({
     if (S.playing) setPlaying(false);
     seekExact(t);
   };
-  const ease = EASES.find(({id}) => id === (here?.ease ?? "smooth"))?.id;
+  const ease = EASES.find(({ id }) => id === (here?.ease ?? "smooth"))?.id;
   return (
     <>
-      <FieldRow label={label} nav={
-        <KeyNav
-          what={label}
-          prev={previous !== undefined}
-          next={next !== undefined}
-          here={!!here}
-          onPrev={() => go(previous)}
-          onNext={() => go(next)}
-          onToggle={() => {
-            if (!canKeyOpticsHere()) return say("Move to a visible picture frame to edit optics keys");
-            if (here) editOpticsLane(row, lane, (records) => { delete records[here.id]; });
-            else add();
-          }}
-        />
-      }>
+      <FieldRow
+        label={label}
+        nav={
+          <KeyNav
+            what={label}
+            prev={previous !== undefined}
+            next={next !== undefined}
+            here={!!here}
+            onPrev={() => go(previous)}
+            onNext={() => go(next)}
+            onToggle={() => {
+              if (!canKeyOpticsHere())
+                return say("Move to a visible picture frame to edit optics keys");
+              if (here)
+                editOpticsLane(row, lane, (records) => {
+                  delete records[here.id];
+                });
+              else add();
+            }}
+          />
+        }
+      >
         <span className="text-muted-foreground text-xs tabular-nums">
           {here ? stamp(S.t) : points.length ? `${points.length} keys` : "From camera keys"}
         </span>
@@ -99,8 +111,11 @@ function OpticsKeyBar<T>({
                   if (records[here.id]) records[here.id].t = t;
                 });
                 const outputs = opticsOutputsAt(shot, t);
-                const nearest = outputs.reduce<number | undefined>((best, output) =>
-                  best === undefined || Math.abs(output - S.t) < Math.abs(best - S.t) ? output : best,
+                const nearest = outputs.reduce<number | undefined>(
+                  (best, output) =>
+                    best === undefined || Math.abs(output - S.t) < Math.abs(best - S.t)
+                      ? output
+                      : best,
                   undefined,
                 );
                 go(nearest);
@@ -135,10 +150,13 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
   const lensKey = findOpticsKey(opticsKeys(focalLength), opticsTime());
   const { id, t } = row;
   const mine = pick?.target === "optics-focus" && pick.id === id && pick.t === t;
-  useEffect(() => () => {
-    const pick = get().cameraPick;
-    if (pick?.target === "optics-focus" && pick.id === id && pick.t === t) cancelCameraPick();
-  }, [id, t]);
+  useEffect(
+    () => () => {
+      const pick = get().cameraPick;
+      if (pick?.target === "optics-focus" && pick.id === id && pick.t === t) cancelCameraPick();
+    },
+    [id, t],
+  );
 
   const withSample = (write: (sample: CameraOpticsSample, time: number) => void) => {
     if (!canKeyOpticsHere()) return say("Move to a visible picture frame to add an optics key");
@@ -154,7 +172,11 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
     if (!canKeyOpticsHere()) return say("Move to a visible picture frame to edit focus");
     editOpticsLane(row, "focus", (records) => {
       const key = findOpticsKey(opticsKeys(records), time);
-      records[key?.id ?? crypto.randomUUID()] = { ...records[key?.id ?? ""], t: time, value: value ?? null };
+      records[key?.id ?? crypto.randomUUID()] = {
+        ...records[key?.id ?? ""],
+        t: time,
+        value: value ?? null,
+      };
     });
   };
   const editLens = (value: number, time = opticsTime()) => {
@@ -172,7 +194,12 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
   const focusValue = focusKey ? focusKey.value : sample?.focus;
   return (
     <>
-      <OpticsKeyBar label="Focus" lane="focus" row={row} shot={shot} track={focus}
+      <OpticsKeyBar
+        label="Focus"
+        lane="focus"
+        row={row}
+        shot={shot}
+        track={focus}
         add={() => withSample(({ focus }, time) => editFocus(focus, time))}
       />
       <FocusControls
@@ -186,13 +213,21 @@ function ShotOpticsEditor({ row, shot }: { row: ShotRow; shot: number }) {
           if (!canKeyOpticsHere()) return;
           if (S.playing) setPlaying(false);
           if (get().free) engine.setFree(false);
-          set({ cameraPick: { field: "focus", target: "optics-focus", id, t, time: opticsTime() }, pickFocus: null });
+          set({
+            cameraPick: { field: "focus", target: "optics-focus", id, t, time: opticsTime() },
+            pickFocus: null,
+          });
           say("Click a surface to set this focus key. Esc cancels");
         }}
         onCommitFocus={editFocus}
         resetLabel="Set focus key to Auto"
       />
-      <OpticsKeyBar label="Focal length" lane="focalLength" row={row} shot={shot} track={focalLength}
+      <OpticsKeyBar
+        label="Focal length"
+        lane="focalLength"
+        row={row}
+        shot={shot}
+        track={focalLength}
         add={() => withSample(({ mm }, time) => editLens(mm, time))}
       />
       <FocalLengthRow mm={mm} onApplyMm={editLens} disabled={!canKeyOpticsHere()} />
@@ -207,15 +242,17 @@ export function CameraOpticsTracksPanel() {
   const shot = cameraShotIndex(S.t);
   const row = shotsDoc.data?.[shot];
   if (!row) return null;
-  if (!S.tools?.cameraOpticsSample) return row.optics ? (
-    <p className="text-muted-foreground px-3 py-2 text-xs">
-      This film’s renderer ignores its saved optics tracks.
-    </p>
-  ) : null;
+  if (!S.tools?.cameraOpticsSample)
+    return row.optics ? (
+      <p className="text-muted-foreground px-3 py-2 text-xs">
+        This film’s renderer ignores its saved optics tracks.
+      </p>
+    ) : null;
   return (
     <Section title="Optics tracks" closed>
       <p className="text-muted-foreground text-xs">
-        Focus and focal length keys apply to the shot at the playhead. Dolly Zoom still drives the lens on its spans.
+        Focus and focal length keys apply to the shot at the playhead. Dolly Zoom still drives the
+        lens on its spans.
       </p>
       <ShotOpticsEditor row={row} shot={shot} />
     </Section>

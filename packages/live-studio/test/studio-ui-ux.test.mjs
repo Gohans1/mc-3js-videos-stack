@@ -1145,6 +1145,7 @@ test(`1-node aim samples the selected shot across ${mode} and respects partial r
 }
 
 test("optics keyframes author independent Focus and Focal length at the playhead, undo, and survive Merge", async () => {
+  const ready = await page.evaluate("window.__UX_TEST__.get().ready");
   await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
     await u.loadShots([{ id: "a", t: 0 }, { id: "b", t: 3 }]);
@@ -1154,7 +1155,7 @@ test("optics keyframes author independent Focus and Focal length at the playhead
     ], 1);
     u.S.tools.cameraOpticsSample = () => ({ mm: 45, focus: 4 });
     u.seekExact(4);
-    u.set({ side: "cam", shotPick: null });
+    u.set({ side: "cam", shotPick: null, ready: true });
   })()`);
   const before = await page.evaluate("window.__UX_TEST__.sourceCamKeys()");
   const click = (expression) => page.evaluate(`(${expression}).click()`);
@@ -1164,8 +1165,11 @@ test("optics keyframes author independent Focus and Focal length at the playhead
   const shot = "window.__UX_TEST__.shotsData()[1]";
   const previous = `document.querySelector('button[aria-label="Previous Focus keyframe"]')`;
   try {
+    const filmTab = `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find(b => b.textContent.trim() === 'Film cam')`;
+    await waitUntil(filmTab);
+    await click(filmTab);
     await waitUntil(section);
-    await click(section);
+    await page.evaluate(`(() => { const button = ${section}; if (button.getAttribute('aria-expanded') === 'false') button.click(); })()`);
     await waitUntil(focus);
     await click(focus);
     await waitUntil(`Object.values(${shot}.optics?.focus ?? {})[0]?.value === 4`);
@@ -1191,7 +1195,11 @@ test("optics keyframes author independent Focus and Focal length at the playhead
     await waitUntil(`Object.values(${shot}.optics?.focalLength ?? {})[0]?.t === 5`);
     expect(await page.evaluate("window.__UX_TEST__.sourceCamKeys()")).toEqual(before);
   } finally {
-    await page.evaluate("delete window.__UX_TEST__.S.tools.cameraOpticsSample");
+    await page.evaluate(`(() => {
+      const u = window.__UX_TEST__;
+      delete u.S.tools.cameraOpticsSample;
+      u.set({ ready: ${ready} });
+    })()`);
   }
 });
 
