@@ -37,6 +37,7 @@ import { NoteList } from "../notes/NoteList";
 const loadPanels = () => import("./LazyPanels");
 const AdjustLibrary = lazy(() => loadPanels().then((m) => ({ default: m.AdjustLibrary })));
 const AdjustPanel = lazy(() => loadPanels().then((m) => ({ default: m.AdjustPanel })));
+const LightPanel = lazy(() => loadPanels().then((m) => ({ default: m.LightPanel })));
 const AnimPanel = lazy(() => loadPanels().then((m) => ({ default: m.AnimPanel })));
 const TransitionLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TransitionLibrary })));
 const TransitionPanel = lazy(() => loadPanels().then((m) => ({ default: m.TransitionPanel })));
@@ -121,6 +122,7 @@ const useParts = () => {
     sound: useStudio((s) => s.sound),
     text: useStudio((s) => s.text),
     cam: useStudio((s) => s.cam),
+    lights: useStudio((s) => s.lights),
     keys: useStudio((s) => !!s.keyFiles?.length),
     placed: useStudio((s) => s.placed),
     open,
@@ -131,7 +133,7 @@ const useParts = () => {
 // Whether the film gives the studio anything to edit, so a wide screen has a details column to show
 export const useEditable = () => {
   const p = useParts();
-  return p.sound || p.text || p.cam || p.keys || p.placed;
+  return p.sound || p.text || p.cam || p.lights || p.keys || p.placed;
 };
 
 // Pending notes ordered by triage urgency (To check amber · AI asks purple · To fix cyan) in one restrained obsidian counter pill
@@ -355,6 +357,7 @@ const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
   keys: [{ id: "keys", title: "Keyframes" }],
   cam: [
     { id: "cam", title: "Camera" },
+    { id: "light", title: "Light" },
     { id: "speed", title: "Speed" },
     { id: "anim", title: "Animation" },
     { id: "adjust", title: "Adjust" },
@@ -378,12 +381,12 @@ const groupOf = (s: StudioState): Group =>
                 ? "transition"
                 : "cam";
 function Details() {
-  const { sound, text, cam, keys, placed } = useParts(),
+  const { sound, text, cam, lights, keys, placed } = useParts(),
     side = useStudio((s) => s.side);
   const aiTab = useAiTabs();
   const has: Record<Group, boolean> = {
     openfilm: true,
-    cam,
+    cam: cam || lights,
     transition: cam,
     adjustment: cam,
     sound,
@@ -439,6 +442,8 @@ function Details() {
                 <TransitionPanel />
               ) : value === "adjust" ? (
                 <AdjustPanel />
+              ) : value === "light" ? (
+                <LightPanel />
               ) : value === "anim" ? (
                 <AnimPanel />
               ) : value === "speed" ? (
@@ -514,13 +519,18 @@ function TextTab() {
 
 // Narrow: the camera tab holds CapCut's three, Camera | Speed | Animation, under it
 function CameraTab() {
+  const { cam, lights } = useParts();
   const layer = useStudio((s) => s.layerPicks.length > 0);
   const side = useStudio((s) => s.side),
     part = layer
       ? "adjust"
-      : side === "anim" || side === "speed" || side === "adjust"
+      : side === "light" || side === "anim" || side === "speed" || side === "adjust"
         ? side
-        : "cam";
+        : cam
+          ? "cam"
+          : lights
+            ? "light"
+            : "cam";
   return (
     <>
       {!layer && (
@@ -544,6 +554,8 @@ function CameraTab() {
             <SpeedPanel />
           ) : part === "adjust" ? (
             <AdjustPanel library />
+          ) : part === "light" ? (
+            <LightPanel />
           ) : (
             <CamPanel />
           )}
@@ -562,7 +574,7 @@ export function Side({
   desktop?: boolean;
   lessonsLockW?: number | null;
 }) {
-  const { sound, text, cam, keys, placed, open, check, asking } = useParts(),
+  const { sound, text, cam, lights, keys, placed, open, check, asking } = useParts(),
     side = useStudio((s) => s.side);
   const notesTone = check > 0 ? "check" : asking > 0 ? "ai" : "open";
   const layer = useStudio((s) => s.layerPicks.length > 0),
@@ -582,11 +594,11 @@ export function Side({
     const ro = new ResizeObserver(keepSelectedVisible);
     ro.observe(list);
     return () => ro.disconnect();
-  }, [wide, side, sound, text, cam, keys, placed]);
+  }, [wide, side, sound, text, cam, lights, keys, placed]);
   if (wide) return <Details />;
-  const editable = sound || text || cam || keys || placed;
+  const editable = sound || text || cam || lights || keys || placed;
   const raw =
-    side === "anim" || side === "speed" || side === "adjust"
+    side === "light" || side === "anim" || side === "speed" || side === "adjust"
       ? "cam"
       : side === "textAnim"
         ? "text"
@@ -698,8 +710,8 @@ export function Side({
             </Tabs.Tab>
             <Tabs.Tab
               value="cam"
-              {...aiTab("cam", value, ["speed", "adjust", "anim"])}
-              disabled={!cam}
+              {...aiTab("cam", value, ["light", "speed", "adjust", "anim"])}
+              disabled={!cam && !lights}
               className={tab}
             >
               {layer ? "Adjustment" : "Camera"}

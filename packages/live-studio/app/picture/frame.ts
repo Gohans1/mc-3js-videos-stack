@@ -9,6 +9,7 @@ import { reloadNow } from "../playback/transport";
 
 const ALL_FEATURES: FilmFeatures = {
   cam: true,
+  lights: true,
   shots: true,
   text: true,
   adjustment: true,

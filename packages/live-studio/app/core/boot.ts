@@ -1,5 +1,6 @@
 export interface FilmFeatures {
   cam: boolean;
+  lights?: boolean;
   shots: boolean;
   text: boolean;
   adjustment: boolean;

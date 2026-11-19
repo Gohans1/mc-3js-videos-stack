@@ -25,6 +25,7 @@ import { stamp } from "./core/time";
 import { attachKeyRows } from "./keys/keyrows";
 import { loadKeys, prepareKeys } from "./keys/keys";
 import { lessons, loadLessons } from "./lessons/lessons";
+import { loadLights } from "./lighting/lights";
 import { attachInk, drawInk } from "./notes/ink";
 import {
   drawnNotes,
@@ -179,7 +180,7 @@ const listen = () => {
   onEvent("lanes", () => loadSound({ lanesOnly: true })); // an agent edited lanes the page plays itself: no remix, just the file again
   const reloadNotice =
     (
-      rev: "camRev" | "shotsRev" | "layersRev" | "textRev",
+      rev: "camRev" | "lightsRev" | "shotsRev" | "layersRev" | "textRev",
       msg: string,
       load: () => Promise<unknown>,
       after?: () => void,
@@ -193,6 +194,7 @@ const listen = () => {
       }
     };
   onEvent("cam", reloadNotice("camRev", "Camera keys updated", loadCam, runFilmCheck)); // an agent edited the camera keys: the picture takes them now, no new build to load
+  onEvent("lights", reloadNotice("lightsRev", "Lighting updated", loadLights));
   onEvent("keys", (i) => loadKeys(Number(i))); // the same for one key file (Steve, props): which one it names
   onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
   onEvent("timing", loadTiming);
@@ -238,6 +240,7 @@ const listen = () => {
       loadTiming();
       loadSound({ usedOnly: true });
       loadCam();
+      loadLights();
       loadKeys();
       loadShots();
       loadText();
@@ -344,6 +347,7 @@ export const start = async (el: Elements) => {
   const editingReady = timingReady.then(() =>
     Promise.all([
       has.cam ? loadCam() : Promise.resolve(set({ cam: false })),
+      has.lights ? loadLights() : Promise.resolve(set({ lights: false })),
       has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
       has.text ? loadText() : Promise.resolve(set({ text: false })),
       has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
@@ -351,6 +355,7 @@ export const start = async (el: Elements) => {
     ]),
   );
   if (has.cam) prefetchFile("/api/cam");
+  if (has.lights) prefetchFile("/api/lights");
   if (has.keys) void prepareKeys();
   if (has.text) prefetchFile("/api/text");
   if (has.adjustment) prefetchFile("/api/adjustment");

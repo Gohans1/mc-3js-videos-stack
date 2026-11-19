@@ -350,6 +350,7 @@ export const createApi = (
     port: port ?? null,
     has: film.features?.() ?? {
       cam: !!film.cam,
+      lights: !!film.lights,
       shots: !!film.shots,
       text: !!film.text,
       adjustment: !!film.adjustment,
@@ -534,7 +535,7 @@ export const createApi = (
       hasPageProblems: film.hasPageProblems?.() ?? false,
       tags,
     }).replace(/</g, "\\u003c");
-    const headScript = `<meta name="live-build" content="${build()}"><script>window.__STUDIO_BOOT=${bootJson};(()=>{const b=window.__STUDIO_BOOT,h=b.film&&b.film.has,t=b.tags||{},p=window.__PREFETCH={};const f=(u)=>{p[u]=fetch(!u.includes("?")&&t[u]?u+"?v="+t[u]:u).then((r)=>(r.ok||r.status===404)?r:null,()=>null)};for(const u of["/api/shots.json","/api/notes","/api/favorites","/api/activity"])f(u);if(h)for(const[k,u]of[["timing","/api/timing"],["shots","/api/shots"],["voiceMap","/api/voice_map.json"],["voice","/api/voice"],["cam","/api/cam"],["keys","/api/keys"],["text","/api/text"],["adjustment","/api/adjustment"],["sound","/api/sound?used=1"],["trials","/api/trials.json"],["choices","/api/choices.json"]])if(h[k])f(u)})();</script>`;
+    const headScript = `<meta name="live-build" content="${build()}"><script>window.__STUDIO_BOOT=${bootJson};(()=>{const b=window.__STUDIO_BOOT,h=b.film&&b.film.has,t=b.tags||{},p=window.__PREFETCH={};const f=(u)=>{p[u]=fetch(!u.includes("?")&&t[u]?u+"?v="+t[u]:u).then((r)=>(r.ok||r.status===404)?r:null,()=>null)};for(const u of["/api/shots.json","/api/notes","/api/favorites","/api/activity"])f(u);if(h)for(const[k,u]of[["timing","/api/timing"],["shots","/api/shots"],["voiceMap","/api/voice_map.json"],["voice","/api/voice"],["cam","/api/cam"],["lights","/api/lights"],["keys","/api/keys"],["text","/api/text"],["adjustment","/api/adjustment"],["sound","/api/sound?used=1"],["trials","/api/trials.json"],["choices","/api/choices.json"]])if(h[k])f(u)})();</script>`;
     const preloads = (film.preloads?.() ?? [])
       .map((href) => {
         // Match core/boot.ts's versioned fetch URL so the preload is consumed instead of downloading twice.
@@ -1423,6 +1424,16 @@ export const createApi = (
       r = film.adjustment.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
+  app.get("/api/lights", (c) => {
+    const data = film.lights?.read();
+    return data ? fresh(c, data) : noSound(c);
+  });
+  app.post("/api/lights", zValidator("json", SoundSave), (c) => {
+    if (!film.lights) return noSound(c);
+    const { base, data } = c.req.valid("json"),
+      r = film.lights.write(base, data);
+    return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
+  });
   app.get("/api/timing", (c) => {
     const data = film.timing?.read();
     return data ? fresh(c, data) : noSound(c);
@@ -1457,6 +1468,7 @@ export const createApi = (
     new Map([
       ["sound", film.sound],
       ["cam", film.cam],
+      ["lights", film.lights],
       ["shots", film.shots],
       ["text", film.text],
       ["adjustment", film.adjustment],

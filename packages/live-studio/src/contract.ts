@@ -2,6 +2,7 @@
 // studio starts and whenever one changes; the page checks the film's module and its draw() once built. Problems are printed in
 // the studio's terminal, where the AI working on the film reads them, and shown in the page. bun run skills get core --ref contract explains
 // each part. What a schema doesn't name is the film's own (its camera keys, audio, props): loose objects let it through.
+import { LIGHT_PRESET_IDS } from "film-stage/lights-meta";
 import * as z from "zod";
 
 import { findTarget, targetHelp } from "../render/target.ts";
@@ -414,6 +415,7 @@ export const StudioConfig = z.looseObject({
   requiredKeyRows: z.record(z.string(), z.array(z.array(z.string()))).optional(),
   soundTimeline: filePath,
   camTimeline: filePath,
+  lightsTimeline: filePath,
   shotsTimeline: filePath,
   textTimeline: filePath,
   adjustmentTimeline: filePath,
@@ -635,6 +637,115 @@ export const CamTimeline = z
   );
 
 const vec3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const hexColor = z
+  .string()
+  .regex(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i, "expected #rgb or #rrggbb hex color");
+const finiteNum = z.number().finite();
+const PracticalFlickerSchema = z.union([
+  z.boolean(),
+  z.object({
+    rate: z.number().positive().optional(),
+    speed: z.number().positive().optional(),
+    amount: unit.optional(),
+    seed: finiteNum.optional(),
+  }),
+]);
+export const LightPracticalSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  kind: z.enum(["point", "spot"]),
+  at: vec3,
+  target: vec3.optional(),
+  color: hexColor,
+  intensity: finiteNum.min(0),
+  distance: finiteNum.min(0),
+  decay: finiteNum.min(0).max(10),
+  angle: finiteNum.min(1).max(89).optional(),
+  penumbra: unit.optional(),
+  flicker: PracticalFlickerSchema.optional(),
+});
+export const LightKey = z.looseObject({
+  id: z.string().min(1).optional(),
+  t: secs,
+  cut: z.boolean().optional(),
+  ease: Ease.optional(),
+  preset: z.enum(LIGHT_PRESET_IDS as unknown as [string, ...string[]]).optional(),
+  target: vec3.optional(),
+  key: z
+    .looseObject({
+      enabled: z.boolean().optional(),
+      color: hexColor.optional(),
+      intensity: finiteNum.min(0).optional(),
+      azimuth: finiteNum.min(-360).max(360).optional(),
+      elevation: finiteNum.min(-90).max(90).optional(),
+      shadowRadius: finiteNum.min(0).max(32).optional(),
+      castShadow: z.boolean().optional(),
+    })
+    .optional(),
+  fill: z
+    .looseObject({
+      enabled: z.boolean().optional(),
+      color: hexColor.optional(),
+      intensity: finiteNum.min(0).optional(),
+      azimuth: finiteNum.min(-360).max(360).optional(),
+      elevation: finiteNum.min(-90).max(90).optional(),
+      negativeFill: z.boolean().optional(),
+    })
+    .optional(),
+  rim: z
+    .looseObject({
+      enabled: z.boolean().optional(),
+      color: hexColor.optional(),
+      intensity: finiteNum.min(0).optional(),
+      azimuth: finiteNum.min(-360).max(360).optional(),
+      elevation: finiteNum.min(-90).max(90).optional(),
+    })
+    .optional(),
+  world: z
+    .looseObject({
+      skyColor: hexColor.optional(),
+      groundColor: hexColor.optional(),
+      ambientIntensity: finiteNum.min(0).max(10).optional(),
+      background: z.union([hexColor, z.null()]).optional(),
+    })
+    .optional(),
+  fog: z
+    .looseObject({
+      mode: z.enum(["none", "linear", "exp2"]).optional(),
+      color: hexColor.optional(),
+      near: finiteNum.min(0).optional(),
+      far: finiteNum.min(0).optional(),
+      density: finiteNum.min(0).max(2).optional(),
+    })
+    .optional(),
+  practicals: z.array(LightPracticalSchema).optional(),
+  godrays: z
+    .looseObject({
+      enabled: z.boolean().optional(),
+      density: finiteNum.min(0).max(1).optional(),
+      maxDensity: finiteNum.min(0).max(1).optional(),
+      edgeStrength: finiteNum.min(0).max(20).optional(),
+      edgeRadius: finiteNum.min(0).max(20).optional(),
+      raymarchSteps: z.number().int().min(4).max(240).optional(),
+      blur: z.boolean().optional(),
+      weight: finiteNum.min(0).max(5).optional(),
+      color: hexColor.optional(),
+    })
+    .optional(),
+});
+const lightKeysArray = z
+  .array(LightKey)
+  .refine(
+    (ks) => ks.every((k, i) => i === 0 || k.t >= ks[i - 1].t),
+    "lighting keys must be in order of time",
+  );
+export const LightsTimeline = z.union([
+  lightKeysArray,
+  z.looseObject({
+    target: vec3.optional(),
+    keys: lightKeysArray,
+  }),
+]);
 export const PlacedKeySchema = z.looseObject({
   t: time.refine((x) => x >= 0, "t must be nonnegative"),
   at: vec3,
