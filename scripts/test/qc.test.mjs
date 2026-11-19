@@ -307,7 +307,9 @@ test("qc full run auto-detects video, runs probe/cam-motion, and cleanly skips m
       "look",
       "speed",
       "cam-motion",
+      "text",
     ]);
+    expect(report.checks.find((c) => c.id === "text").status).toBe("skip");
     const cam = report.checks.find((c) => c.id === "cam-motion");
     expect(cam.status).toBe("pass");
     const probe = report.checks.find((c) => c.id === "probe");
