@@ -155,7 +155,11 @@ export async function buildScene(canvas, W, H, draft = false) {
   );
 
   const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
-  const rig = createLightingRig(scene, { target: roomTarget, distance: 18, shadowExtent: 10 });
+  const lightingRig = createLightingRig(scene, {
+    target: roomTarget,
+    distance: 18,
+    shadowExtent: 10,
+  });
   const inactiveRig = {
     ...DEFAULT_LIGHTS,
     key: { ...DEFAULT_LIGHTS.key, enabled: false },
@@ -204,7 +208,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     passCount = -1;
   composer.addPass(new EffectPass(camera, new SMAAEffect()));
   const dof = makeDof(composer, camera, { draft });
-  const godrays = createGodraysPass(rig.key, camera, { enabled: false });
+  const godrays = createGodraysPass(lightingRig.key, camera, { enabled: false });
   if (godrays.pass) composer.addPass(godrays.pass);
   const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
   composer.addPass(
@@ -477,12 +481,12 @@ export async function buildScene(canvas, W, H, draft = false) {
     if (lightKeys?.length) {
       hemi.visible = roomKey.visible = false;
       const lightsSample = lightsAt(EDIT.lights, t);
-      applyLightingRig(rig, lightsSample, t);
+      applyLightingRig(lightingRig, lightsSample, t);
       godrays.update(lightsSample.godrays, lightsSample.key.color);
       timelineLighting = true;
     } else {
       if (timelineLighting) {
-        applyLightingRig(rig, inactiveRig);
+        applyLightingRig(lightingRig, inactiveRig);
         godrays.update(inactiveRig.godrays);
         timelineLighting = false;
       }
