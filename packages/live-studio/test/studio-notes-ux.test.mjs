@@ -202,13 +202,38 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
   assert.equal(isKnownHost("other.ts.net:4321", readHosts), false);
   assert.equal(calls, 2);
 
-  // Studio cmdline verification rejects recycled/unrelated processes and CLI control flags
+  // Studio cmdline allowlist verifies bun directly running live.mjs and matches default port 4321
   assert.equal(
     isStudioProcessCmdline("bun W:/repo/packages/live-studio/src/live.mjs 4321", 4321),
     true,
   );
   assert.equal(isStudioProcessCmdline("bun ../src/live.mjs", 4321), true);
+  assert.equal(isStudioProcessCmdline("bun ../src/live.mjs", 4322), false);
+  assert.equal(isStudioProcessCmdline("bun ../src/live.mjs --lan", 4321), true);
+  assert.equal(
+    isStudioProcessCmdline("bun run packages/live-studio/src/live.mjs 4325 --lan", 4325),
+    true,
+  );
+  assert.equal(
+    isStudioProcessCmdline(
+      '"C:\\Program Files\\Bun\\bun.exe" "C:\\My Films\\demo\\packages\\live-studio\\src\\live.mjs" 4321',
+      4321,
+    ),
+    true,
+  );
   assert.equal(isStudioProcessCmdline('powershell.exe -Command "bun live.mjs 4321"', 4321), false);
+  assert.equal(
+    isStudioProcessCmdline(
+      '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "bun live.mjs 4321"',
+      4321,
+    ),
+    false,
+  );
+  assert.equal(isStudioProcessCmdline('/bin/sh -c "bun live.mjs 4321"', 4321), false);
+  assert.equal(isStudioProcessCmdline("bun -e \"console.log('live.mjs')\"", 4321), false);
+  assert.equal(isStudioProcessCmdline("bun test packages/live-studio/src/live.mjs", 4321), false);
+  assert.equal(isStudioProcessCmdline("rg live.mjs", 4321), false);
+  assert.equal(isStudioProcessCmdline("code packages/live-studio/src/live.mjs", 4321), false);
   assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --stop", 4321), false);
   assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --status", 4321), false);
   assert.equal(isStudioProcessCmdline("bun live.mjs 4321 --detach", 4321), false);
@@ -272,11 +297,15 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   recordedPid = studioInfo.pid;
   assert.equal(existsSync(join(dir, "renders/live/studio.log")), true);
 
-  // --status now reports running (exit 0)
+  // --status now reports running (exit 0), and a second --detach refuses to double-start
   const statusRunning = runLive(dir, "--status");
   assert.equal(statusRunning.status, 0, statusRunning.stderr);
   assert.match(statusRunning.stdout, new RegExp(`http://localhost:${port}`));
   assert.match(statusRunning.stdout, new RegExp(String(recordedPid)));
+
+  const alreadyRunning = runLive(dir, "--detach");
+  assert.equal(alreadyRunning.status, 1);
+  assert.match(alreadyRunning.stderr, new RegExp(`already runs at http://localhost:${port}`));
 
   // Dynamic .live_hosts without restarting Studio: 403 before, 200 after
   const denied = await fetch(`http://127.0.0.1:${port}/`, {
@@ -311,6 +340,20 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
 
   const statusAfter = runLive(dir, "--status");
   assert.equal(statusAfter.status, 1);
+
+  // --detach combines cleanly with --lan and stops cleanly
+  const detachLan = runLive(dir, "--detach", "--lan");
+  assert.equal(
+    detachLan.status,
+    0,
+    `detach --lan failed:\nstdout: ${detachLan.stdout}\nstderr: ${detachLan.stderr}`,
+  );
+  const lanInfo = JSON.parse(readFileSync(studioJsonPath, "utf8"));
+  recordedPid = lanInfo.pid;
+  assert.equal(runLive(dir, "--status").status, 0);
+  const stopLan = runLive(dir, "--stop");
+  assert.equal(stopLan.status, 0, stopLan.stderr);
+  recordedPid = null;
 });
 
 test("live.mjs --detach prints log tail and exits 1 when child exits early", async (t) => {
@@ -371,6 +414,18 @@ test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-
     1,
     `status should reject non-studio server:\n${fakeStatus.stdout}`,
   );
+
+  // --stop rejects invalid/missing port in studio.json without touching the PID
+  writeFileSync(studioJsonPath, JSON.stringify({ port: 0, project: dir, pid: benign.pid }));
+  const stopBadPort = spawnSync(process.execPath, [LIVE_SCRIPT, String(unusedPort), "--stop"], {
+    cwd: STUDIO,
+    env: { ...process.env, LIVE_PROJECT: dir },
+    encoding: "utf8",
+    timeout: 15000,
+  });
+  assert.equal(stopBadPort.status, 1);
+  assert.match(stopBadPort.stderr, /no valid port/i);
+  assert.equal(benign.exitCode, null, "non-studio process must still be alive");
 
   // --stop must NOT kill a recycled PID whose OS command line is not live.mjs, and clears stale studio.json
   writeFileSync(
@@ -443,7 +498,10 @@ test("live.mjs --detach returns promptly when the film has an initial Vite build
 
 test("app/index.html provides an inline Flexoki dark loading shell and hides it when showFailure renders <pre>", () => {
   const html = readFileSync(INDEX_HTML, "utf8");
-  assert.match(html, /<style>[\s\S]*#100F0F[\s\S]*#CECDC3[\s\S]*<\/style>/i);
+  assert.match(
+    html,
+    /<style>[\s\S]*@layer\s+base\s*\{[\s\S]*html,\s*body[\s\S]*#100F0F[\s\S]*#CECDC3[\s\S]*\}[\s\S]*<\/style>/i,
+  );
   assert.match(html, /body:has\(#root \+ pre\)\s*\.studio-boot\s*\{[\s\S]*display:\s*none/i);
   assert.match(html, /<div id="root">[\s\S]*Loading Studio…[\s\S]*<\/div>/);
   assert.match(html, /Couldn’t load the studio\. Check your connection, then reload\./);
@@ -580,6 +638,26 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     const mixedHit = lookAtClick(0.5, 0.5);
     assert.equal(mixedHit.what, "green_top_face");
     assert.deepEqual(mixedHit.world, [0, 1.1, 0]);
+
+    // An opaque mesh (transparent: false) renders solid even with opacity: 0, so it MUST stay pickable
+    const opaqueZeroOpacity = makePlane(
+      "opaque_zero_opacity",
+      1.25,
+      new THREE.MeshBasicMaterial({ transparent: false, opacity: 0, color: 0x445566 }),
+    );
+    scene.add(opaqueZeroOpacity);
+    scene.updateMatrixWorld(true);
+    S.tools = {
+      scene,
+      camera,
+      objects: [
+        [realFloor, "real_floor"],
+        [opaqueZeroOpacity, "opaque_zero_opacity"],
+      ],
+    };
+    const opaqueHit = lookAtClick(0.5, 0.5);
+    assert.equal(opaqueHit.what, "opaque_zero_opacity");
+    assert.deepEqual(opaqueHit.world, [0, 1.25, 0]);
 
     // lookOnPlane intersects horizontal plane y = 2.0 along camera ray
     assert.deepEqual(lookOnPlane(0.5, 0.5, 2), [0, 2, 0]);
@@ -989,7 +1067,7 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
     assert.ok(Math.abs(actualClock.outputAt(x) - refClock.outputAt(x)) < 1e-6);
   }
 
-  // 4. Non-bijective cut followed by restoring flat MUST NOT collapse away the cut's visibility/timing effect
+  // 4. Non-bijective cut or gap followed by restoring flat MUST NOT collapse away its visibility/timing effect
   const cut = timingPlan({ cuts: [{ from: 2, to: 5 }] });
   const cutTiming = {};
   Object.assign(cutTiming, structuredClone(cut));
@@ -998,4 +1076,13 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
   recordLinkage(cutTiming, cut, flat, true, LINKAGE_DEFAULTS);
   assert.equal(cutTiming.layerKinds.text.changes.length, 2);
   assert.equal(compileLayerTiming(cutTiming, 10, "text").visible(3), false);
+
+  const gap = timingPlan({ gaps: [{ from: 2, to: 4 }] });
+  const gapTiming = {};
+  Object.assign(gapTiming, structuredClone(gap));
+  recordLinkage(gapTiming, flat, gap, true, LINKAGE_DEFAULTS);
+  Object.assign(gapTiming, structuredClone(flat));
+  recordLinkage(gapTiming, gap, flat, true, LINKAGE_DEFAULTS);
+  assert.equal(gapTiming.layerKinds.text.changes.length, 2);
+  assert.equal(compileLayerTiming(gapTiming, 10, "text").visible(3), false);
 });

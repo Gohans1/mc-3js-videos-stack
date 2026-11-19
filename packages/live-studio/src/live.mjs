@@ -65,11 +65,21 @@ export const readStudioInfo = (file) => {
   }
 };
 
-const writeStudioInfo = (file, info) => {
+const RETRYABLE_RENAME = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+const writeStudioInfo = async (file, info) => {
   const tmp = `${file}.${process.pid}.tmp`;
   try {
     writeFileSync(tmp, JSON.stringify(info));
-    renameSync(tmp, file);
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        renameSync(tmp, file);
+        return;
+      } catch (e) {
+        if (!RETRYABLE_RENAME.has(e?.code) || attempt >= 5) throw e;
+        await sleep(25 * (attempt + 1));
+      }
+    }
   } catch (e) {
     rmSync(tmp, { force: true });
     throw e;
@@ -108,15 +118,50 @@ export const isKnownHost = (host, hosts = []) => {
   return allowed.includes(n);
 };
 
+const splitCmdline = (cmdline) => {
+  const args = [];
+  let cur = "";
+  let quote = "";
+  let inToken = false;
+  for (let i = 0; i < cmdline.length; i += 1) {
+    const ch = cmdline[i];
+    if (quote) {
+      if (ch === quote) quote = "";
+      else cur += ch;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      inToken = true;
+    } else if (/\s/.test(ch)) {
+      if (inToken) {
+        args.push(cur);
+        cur = "";
+        inToken = false;
+      }
+    } else {
+      cur += ch;
+      inToken = true;
+    }
+  }
+  if (quote) return null;
+  if (inToken) args.push(cur);
+  return args;
+};
+
 export const isStudioProcessCmdline = (cmdline, expectedPort) => {
   if (typeof cmdline !== "string" || !cmdline.trim()) return false;
-  const trimmed = cmdline.trim();
-  if (/^"?(?:[^"\s]*[\\/])?(?:powershell|pwsh|cmd)(?:\.exe)?(?:"|\s|$)/i.test(trimmed))
-    return false;
-  if (!/(?:^|[\s"'\\/])live\.mjs(?=$|[\s"'])/i.test(trimmed)) return false;
-  if (/(?:^|\s)--(?:stop|status|detach)(?=\s|$)/.test(trimmed)) return false;
-  const m = /(?:^|[\s"'\\/])live\.mjs["']?\s+(\d{1,5})(?=$|\s)/i.exec(trimmed);
-  if (m && Number.isInteger(expectedPort)) return Number(m[1]) === expectedPort;
+  const tokens = splitCmdline(cmdline);
+  if (!tokens || tokens.length < 2) return false;
+  const exe = tokens[0].replace(/^.*[\\/]/, "").toLowerCase();
+  if (exe !== "bun" && exe !== "bun.exe") return false;
+  const scriptIdx = tokens[1].toLowerCase() === "run" ? 2 : 1;
+  const script = tokens[scriptIdx];
+  if (!script || script.replace(/^.*[\\/]/, "").toLowerCase() !== "live.mjs") return false;
+  const rest = tokens.slice(scriptIdx + 1);
+  const portArg = /^\d+$/.test(rest[0] ?? "") ? rest[0] : undefined;
+  const flags = portArg ? rest.slice(1) : rest;
+  if (flags.some((a) => a !== "--lan")) return false;
+  const actualPort = portArg ? Number(portArg) || 4321 : 4321;
+  if (Number.isInteger(expectedPort)) return actualPort === expectedPort;
   return true;
 };
 
@@ -313,24 +358,32 @@ async function runStop(project, studioJson) {
     console.error("renders/live/studio.json has no valid pid: cannot stop safely");
     process.exit(1);
   }
+  if (!Number.isInteger(info.port) || info.port <= 0 || info.port > 65535) {
+    console.error("renders/live/studio.json has no valid port: cannot stop safely");
+    process.exit(1);
+  }
   if (!isPidAlive(info.pid)) {
     if (readStudioInfo(studioJson)?.pid === info.pid) rmSync(studioJson, { force: true });
     console.log(`studio is not running (cleared stale pid ${info.pid})`);
     process.exit(0);
   }
+  const probe = await probeStudio(info.port, project);
   const proc = readProcessCmdline(info.pid);
   if (!proc.ok) {
     console.error(`could not verify studio process pid ${info.pid}: refusing to stop`);
     process.exit(1);
   }
   if (!proc.cmdline) {
+    if (isPidAlive(info.pid) && probe.ok) {
+      console.error(
+        `could not read command line for running studio pid ${info.pid}: refusing to stop`,
+      );
+      process.exit(1);
+    }
     if (readStudioInfo(studioJson)?.pid === info.pid) rmSync(studioJson, { force: true });
     console.log(`studio is not running (cleared stale pid ${info.pid})`);
     process.exit(0);
   }
-  const probe = Number.isInteger(info.port)
-    ? await probeStudio(info.port, project)
-    : { ok: false, otherProject: null };
   if (!isStudioProcessCmdline(proc.cmdline, info.port)) {
     if (!probe.ok) {
       if (readStudioInfo(studioJson)?.pid === info.pid) rmSync(studioJson, { force: true });
@@ -690,7 +743,7 @@ async function main() {
   }
   console.log(`live at http://localhost:${PORT}`);
   const tailscale = await tailscaleLink(film, PORT);
-  writeStudioInfo(studioJsonPath, {
+  await writeStudioInfo(studioJsonPath, {
     port: PORT,
     project: film.PROJECT,
     pid: process.pid,
