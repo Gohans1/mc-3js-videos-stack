@@ -47,6 +47,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       hips = { L: new Float32Array(n * 3), R: new Float32Array(n * 3) };
     const yaw = new Float32Array(n),
       gait = new Float32Array(n).fill(NaN);
+    steve.g.updateWorldMatrix(true, true);
     if (steve.legsAt) {
       const wantL = want.L,
         wantR = want.R,
@@ -80,16 +81,27 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         }
       }
     }
-    steve.g.updateMatrixWorld(true); // all of him, as the last sample left him
+    steve.g.updateWorldMatrix(true, true); // all of him and his ancestors, as the last sample left him
     const legReach = steve.legReach;
-    const legScale = steve.g
-      ? Math.max(1e-3, tmp.setFromMatrixColumn(steve.g.matrixWorld, 1).length())
-      : 1;
+    const mWorld = (steve.rig ?? steve.g).matrixWorld;
+    const legScale = Math.max(
+      1e-3,
+      steve.restLegReach > 0
+        ? legReach / steve.restLegReach
+        : tmp.setFromMatrixColumn(mWorld, 1).length(),
+    );
+    const xzScale = Math.max(
+      1e-3,
+      Math.hypot(
+        tmp.setFromMatrixColumn(mWorld, 0).length(),
+        V.setFromMatrixColumn(mWorld, 2).length(),
+      ) / Math.SQRT2,
+    );
     const downH = DOWN * legScale,
       upH = UP * legScale,
-      drift = DRIFT * legScale,
-      settleSpeed = 0.12 * legScale,
-      sweepSpeed = 0.4 * legScale,
+      drift = DRIFT * xzScale,
+      settleSpeed = 0.12 * xzScale,
+      sweepSpeed = 0.4 * xzScale,
       strainMax = legReach + 0.02 * legScale,
       arcBase = 0.03 * legScale,
       arcMax = 0.1 * legScale;

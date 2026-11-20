@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -179,5 +180,132 @@ test("--help documents optional arguments and skips, and module exports dump/loa
     const tDir = join(dir, "src/timeline");
     save("sample", [{ t: 0, x: 1 }], tDir);
     expect(load("sample", tDir)).toEqual([{ t: 0, x: 1 }]);
+  });
+});
+
+test("corrupt collaboration state fails closed, duplicate args deduplicate, and dir.json / bare .json are handled safely", () => {
+  withFilm((dir) => {
+    const camFile = join(dir, "src/timeline/cam.json");
+    const castFile = join(dir, "src/timeline/cast.json");
+    const bareJson = join(dir, "src/timeline/.json");
+    const dirJson = join(dir, "src/timeline/dir.json");
+    writeFileSync(camFile, MESSY_CAM);
+    writeFileSync(castFile, MESSY_CAST);
+    writeFileSync(bareJson, "[ 1,  2 ]");
+    mkdirSync(dirJson);
+
+    // Corrupt .studio/collaboration/<sha256>.json for cam.json must fail closed (skipped in zero-arg, warned in explicit)
+    const collabDir = join(dir, ".studio/collaboration");
+    mkdirSync(collabDir, { recursive: true });
+    const camKey = createHash("sha256").update("src/timeline/cam.json").digest("hex");
+    writeFileSync(join(collabDir, `${camKey}.json`), "{corrupt json");
+
+    // Zero-arg mode skips corrupt-state cam.json, skips bare .json and dir.json/, and formats cast.json
+    const zeroRes = runFmt([], dir);
+    expect(zeroRes.status, zeroRes.stderr).toBe(0);
+    expect(zeroRes.stdout).toContain("skipped (Studio-protected): cam.json");
+    expect(readFileSync(camFile, "utf8")).toBe(MESSY_CAM);
+    expect(readFileSync(bareJson, "utf8")).toBe("[ 1,  2 ]");
+    expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
+
+    // Explicit corrupt-state cam still warns on stderr and formats when explicitly requested
+    const expCam = runFmt(["cam"], dir);
+    expect(expCam.status, expCam.stderr).toBe(0);
+    expect(expCam.stderr).toMatch(/warning:.*cam\.json.*Studio-protected/i);
+    expect(readFileSync(camFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAM))}\n`);
+
+    // Duplicate args ("cast" + "src/timeline/cast.json") format and log cast.json only once
+    writeFileSync(castFile, MESSY_CAST);
+    const dupRes = runFmt(["cast", "src/timeline/cast.json"], dir);
+    expect(dupRes.status, dupRes.stderr).toBe(0);
+    const castLines = dupRes.stdout.split("\n").filter((l) => l.startsWith("cast.json "));
+    expect(castLines).toHaveLength(1);
+
+    // Explicitly naming dir.json or bare .json exits 2
+    expect(runFmt(["src/timeline/dir.json"], dir).status).toBe(2);
+    expect(runFmt(["src/timeline/.json"], dir).status).toBe(2);
+  });
+});
+
+test("symlink/junction targets inside or replacing src/timeline exit 2 without writing", () => {
+  withFilm((dir) => {
+    const outerDir = mkdtempSync(join(tmpdir(), "timeline-fmt-link-"));
+    try {
+      const outsideFile = join(outerDir, "linked.json");
+      writeFileSync(outsideFile, '{   "outside": true  }');
+      const castFile = join(dir, "src/timeline/cast.json");
+      writeFileSync(castFile, MESSY_CAST);
+
+      // Directory junction inside src/timeline/ pointing outside works on Windows without admin privileges
+      const linkDir = join(dir, "src/timeline/link");
+      let linkedFile = false;
+      try {
+        symlinkSync(outsideFile, join(dir, "src/timeline/link.json"), "file");
+        linkedFile = true;
+      } catch {
+        // On Windows without Developer Mode, fall back to a directory junction
+        symlinkSync(outerDir, linkDir, "junction");
+      }
+
+      if (linkedFile) {
+        const expRes = runFmt(["src/timeline/link.json"], dir);
+        expect(expRes.status).toBe(2);
+        expect(expRes.stderr).toMatch(/symlink|junction|escapes/i);
+
+        const zeroRes = runFmt([], dir);
+        expect(zeroRes.status).toBe(2);
+        expect(readFileSync(castFile, "utf8")).toBe(MESSY_CAST);
+        expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
+      } else {
+        const expRes = runFmt(["src/timeline/link/linked.json"], dir);
+        expect(expRes.status).toBe(2);
+        expect(expRes.stderr).toMatch(/symlink|junction|escapes/i);
+        expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
+      }
+
+      // Symlinked/junctioned src/timeline directory itself in zero-arg mode exits 2 before readdir
+      const dir2 = mkdtempSync(join(tmpdir(), "timeline-fmt-linkdir-"));
+      try {
+        mkdirSync(join(dir2, "src"), { recursive: true });
+        symlinkSync(
+          outerDir,
+          join(dir2, "src/timeline"),
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        const zeroDirRes = runFmt([], dir2);
+        expect(zeroDirRes.status).toBe(2);
+        expect(zeroDirRes.stderr).toMatch(/symlink|junction|escapes/i);
+        expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
+      } finally {
+        rmSync(dir2, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(outerDir, { recursive: true, force: true });
+    }
+  });
+});
+
+test("Windows case-mismatch between on-disk filename and lowercase Studio guard stays protected", () => {
+  if (process.platform !== "win32") return;
+  withFilm((dir) => {
+    const camMixed = join(dir, "src/timeline/Cam.json");
+    const castFile = join(dir, "src/timeline/cast.json");
+    writeFileSync(camMixed, MESSY_CAM);
+    writeFileSync(castFile, MESSY_CAST);
+
+    // Studio guard registered under lowercase "src/timeline/cam.json" while disk holds "Cam.json"
+    const camGuard = openEditProtection(dir, "src/timeline/cam.json");
+    camGuard.reset("v1", JSON.parse(MESSY_CAM));
+
+    const zeroRes = runFmt([], dir);
+    expect(zeroRes.status, zeroRes.stderr).toBe(0);
+    expect(zeroRes.stdout).toMatch(/skipped \(Studio-protected\): Cam\.json/i);
+    expect(readFileSync(camMixed, "utf8")).toBe(MESSY_CAM);
+    expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
+
+    const expRes = runFmt(["Cam"], dir);
+    expect(expRes.status, expRes.stderr).toBe(0);
+    expect(expRes.stderr).toMatch(/warning:.*Cam\.json.*Studio-protected/i);
+    expect(readFileSync(camMixed, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAM))}\n`);
   });
 });

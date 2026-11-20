@@ -1,20 +1,13 @@
 // Formats src/timeline/*.json (or named stems/paths) with the studio's 140-column compact JSON layout:
 //   bun ../../scripts/timeline_fmt.ts [stem|path ...]
 //   import { dump, load, save } from ".../scripts/timeline_fmt.ts"
-import { createHash } from "node:crypto";
-import {
-  existsSync,
-  readdirSync,
-  readFileSync,
-  realpathSync,
-  statSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { basename, join, relative } from "node:path";
 
 import { cliArgs, jsonFile } from "../packages/live-studio/src/cli.mjs";
+import { openEditProtection } from "../packages/live-studio/src/edit-protection.mjs";
 import { compactJson as dump } from "../packages/live-studio/src/timeline_file.mjs";
-import { assertInsideDir } from "../packages/live-studio/src/voice-map.mjs";
+import { assertInsideDir, writeAtomicSync } from "../packages/live-studio/src/voice-map.mjs";
 
 export { dump };
 
@@ -22,53 +15,21 @@ export const load = (name: string, dir = join(process.cwd(), "src/timeline")) =>
   jsonFile(join(dir, `${name}.json`));
 
 export const save = (name: string, data: unknown, dir = join(process.cwd(), "src/timeline")) => {
-  writeFileSync(join(dir, `${name}.json`), `${dump(data)}\n`, "utf8");
+  writeAtomicSync(join(dir, `${name}.json`), `${dump(data)}\n`);
 };
 
-const hasActiveProtection = (state: unknown): boolean => {
-  if (!state || typeof state !== "object" || Array.isArray(state)) return false;
-  const s = state as Record<string, unknown>;
-  if (Array.isArray(s.guards) && s.guards.length > 0) return true;
-  if (s.wholeFileProtected === true) return true;
-  if (Array.isArray(s.protectedPaths) && s.protectedPaths.length > 0) return true;
+const isStudioProtected = (cwd: string, rel: string): boolean => {
+  const candidates =
+    process.platform === "win32" && rel !== rel.toLowerCase() ? [rel, rel.toLowerCase()] : [rel];
+  for (const candidate of candidates) {
+    try {
+      if (openEditProtection(cwd, candidate).report().protected.length > 0) return true;
+    } catch {
+      // Fail closed on corrupt collaboration JSON so human edits are never overwritten
+      return true;
+    }
+  }
   return false;
-};
-
-const readProtectedFiles = (cwd: string, rels: readonly string[]): Set<string> => {
-  const folder = join(cwd, ".studio/collaboration");
-  const protectedRels = new Set<string>();
-  if (!existsSync(folder)) return protectedRels;
-
-  for (const rel of rels) {
-    const key = createHash("sha256").update(rel).digest("hex");
-    const stateFile = join(folder, `${key}.json`);
-    if (!existsSync(stateFile)) continue;
-    try {
-      if (hasActiveProtection(JSON.parse(readFileSync(stateFile, "utf8")))) {
-        protectedRels.add(rel);
-      }
-    } catch {
-      protectedRels.add(rel);
-    }
-  }
-
-  for (const entry of readdirSync(folder)) {
-    if (!entry.endsWith(".json") || /^[a-f0-9]{64}\.json$/.test(entry)) continue;
-    try {
-      const state = JSON.parse(readFileSync(join(folder, entry), "utf8"));
-      if (!hasActiveProtection(state)) continue;
-      const ref =
-        typeof state.file === "string"
-          ? state.file
-          : typeof state.rel === "string"
-            ? state.rel
-            : null;
-      if (ref) protectedRels.add(ref.replaceAll("\\", "/").replace(/^\.\//, ""));
-    } catch {
-      /* ignore unrelated malformed collaboration entries */
-    }
-  }
-  return protectedRels;
 };
 
 const labelFor = (rel: string): string =>
@@ -117,7 +78,6 @@ next: bun run check`,
     Infinity,
   );
   const cwd = process.cwd();
-  const dir = join(cwd, "src/timeline");
   try {
     let targets: TargetFile[];
     const explicit = args.length > 0;
@@ -131,8 +91,9 @@ next: bun run check`,
         targets.push(target);
       }
     } else {
-      const files = readdirSync(dir)
-        .filter((f) => f.endsWith(".json"))
+      const safeDir = assertInsideDir(cwd, "src/timeline", "Timeline directory");
+      const files = readdirSync(safeDir)
+        .filter((f) => f.endsWith(".json") && f !== ".json")
         .sort();
       targets = files
         .map((name) => {
@@ -142,9 +103,8 @@ next: bun run check`,
         .filter((t): t is TargetFile => t !== null);
     }
 
-    const protectedRels = readProtectedFiles(
-      cwd,
-      targets.map((t) => t.rel),
+    const protectedRels = new Set(
+      targets.filter((target) => isStudioProtected(cwd, target.rel)).map((target) => target.rel),
     );
     const toFormat: TargetFile[] = [];
     for (const target of targets) {
@@ -157,15 +117,15 @@ next: bun run check`,
       toFormat.push(target);
     }
 
-    const parsed = toFormat.map((target) => jsonFile(target.abs, cwd));
+    const outputs = toFormat.map((target) => `${dump(jsonFile(target.abs, cwd))}\n`);
     for (const [i, target] of toFormat.entries()) {
       if (explicit && protectedRels.has(target.rel)) {
         console.error(
           `warning: ${target.label} has Studio-protected edits; formatting anyway as explicitly requested`,
         );
       }
-      const formatted = `${dump(parsed[i])}\n`;
-      writeFileSync(target.abs, formatted, "utf8");
+      const formatted = outputs[i]!;
+      writeAtomicSync(target.abs, formatted);
       const lines = formatted.split("\n").length - 1;
       console.log(target.label, lines, "lines");
     }

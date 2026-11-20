@@ -910,6 +910,8 @@ export async function makePlayer(
     b.llL.parent === b.ulL &&
     b.llR.parent === b.ulR;
   const rootParentLocal = b.root.parent ? b.root.parent.matrixWorld.clone() : new THREE.Matrix4();
+  const rigRestInv = rig.matrix.clone().invert();
+  const rootParentInRig = rigRestInv.clone().multiply(rootParentLocal);
   const UP = new THREE.Vector3(0, 1, 0);
   const gPos = new THREE.Vector3(),
     gQuat = new THREE.Quaternion(),
@@ -924,7 +926,9 @@ export async function makePlayer(
     gPos.set(at[0], at[1], at[2]);
     gQuat.setFromAxisAngle(UP, yawDeg * D);
     mG.compose(gPos, gQuat, g.scale);
-    mRoot.multiplyMatrices(mG, rootParentLocal);
+    if (g.parent) mG.premultiply(g.parent.matrixWorld);
+    if (rig.matrixAutoUpdate) rig.updateMatrix();
+    mRoot.multiplyMatrices(mG, rig.matrix).multiply(rootParentInRig);
     const rootQ =
       r.rx || r.ry || r.rz
         ? jointQuat(
@@ -967,13 +971,11 @@ export async function makePlayer(
     tz = new THREE.Vector3(),
     M = new THREE.Matrix4(),
     e2 = new THREE.Euler();
-  const rigRestInv = rig.matrix.clone().invert();
   const M_actor = new THREE.Matrix4(),
     GInv = new THREE.Matrix4(),
     MLoc = new THREE.Matrix4(),
     tmpP = new THREE.Vector3(),
     tmpS = new THREE.Vector3();
-  const parentTurn = (k) => b[k].parent.getWorldQuaternion(Q).multiply(parentRest[k]);
   const actorInv = () => {
     M_actor.multiplyMatrices(rig.matrixWorld, rigRestInv);
     return Math.abs(M_actor.determinant()) > 1e-12 ? GInv.copy(M_actor).invert() : null;
@@ -993,18 +995,12 @@ export async function makePlayer(
       k = `ua${sd}`;
     b[k].updateWorldMatrix(true, false);
     const inv = actorInv();
-    if (inv) {
-      S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
-      d.copy(target)
-        .applyMatrix4(inv)
-        .sub(S)
-        .applyQuaternion(Qi.copy(parentTurnLocal(k, inv)).invert());
-    } else {
-      S.setFromMatrixPosition(b[k].matrixWorld);
-      d.copy(target)
-        .sub(S)
-        .applyQuaternion(Qi.copy(parentTurn(k)).invert());
-    }
+    if (!inv) return { [k]: [0, 0, 0], [`la${sd}`]: [0, 0, 0] };
+    S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
+    d.copy(target)
+      .applyMatrix4(inv)
+      .sub(S)
+      .applyQuaternion(Qi.copy(parentTurnLocal(k, inv)).invert());
     if (pole) return armPole(sd, d, pole, L1, L2);
     const len = d.length();
     const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
@@ -1074,25 +1070,17 @@ export async function makePlayer(
       k = `ul${sd}`;
     b[`ll${sd}`].updateWorldMatrix(true, false);
     const inv = actorInv();
-    if (inv) {
-      S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
-      Qi.copy(parentTurnLocal(k, inv)).invert();
-      d.copy(target).applyMatrix4(inv).sub(S).applyQuaternion(Qi);
-      // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
-      // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
-      R.copy(Qi)
-        .multiply(localQuat(b[k], inv, Q))
-        .multiply(rest[k].Ci);
-      tx.set(1, 0, 0).applyQuaternion(R);
-      soleNow(sd, ty).applyMatrix4(inv).sub(S).applyQuaternion(Qi).normalize();
-    } else {
-      S.setFromMatrixPosition(b[k].matrixWorld);
-      Qi.copy(parentTurn(k)).invert();
-      d.copy(target).sub(S).applyQuaternion(Qi);
-      R.copy(Qi).multiply(b[k].getWorldQuaternion(Q)).multiply(rest[k].Ci);
-      tx.set(1, 0, 0).applyQuaternion(R);
-      soleNow(sd, ty).sub(S).applyQuaternion(Qi).normalize();
-    }
+    if (!inv) return { [k]: [0, 0, 0], [`ll${sd}`]: [0, 0, 0] };
+    S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
+    Qi.copy(parentTurnLocal(k, inv)).invert();
+    d.copy(target).applyMatrix4(inv).sub(S).applyQuaternion(Qi);
+    // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
+    // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
+    R.copy(Qi)
+      .multiply(localQuat(b[k], inv, Q))
+      .multiply(rest[k].Ci);
+    tx.set(1, 0, 0).applyQuaternion(R);
+    soleNow(sd, ty).applyMatrix4(inv).sub(S).applyQuaternion(Qi).normalize();
     const len = d.length();
     const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
     if (len < 1e-6) d.set(0, -1, 0);
@@ -1129,18 +1117,12 @@ export async function makePlayer(
   const headTo = (target) => {
     b.head.updateWorldMatrix(true, false);
     const inv = actorInv();
-    if (inv) {
-      S.setFromMatrixPosition(b.head.matrixWorld).applyMatrix4(inv);
-      d.copy(target)
-        .applyMatrix4(inv)
-        .sub(S)
-        .applyQuaternion(Qi.copy(parentTurnLocal("head", inv)).invert());
-    } else {
-      S.setFromMatrixPosition(b.head.matrixWorld);
-      d.copy(target)
-        .sub(S)
-        .applyQuaternion(Qi.copy(parentTurn("head")).invert());
-    }
+    if (!inv) return [0, 0, 0];
+    S.setFromMatrixPosition(b.head.matrixWorld).applyMatrix4(inv);
+    d.copy(target)
+      .applyMatrix4(inv)
+      .sub(S)
+      .applyQuaternion(Qi.copy(parentTurnLocal("head", inv)).invert());
     d.y -= 4 * PX;
     const yaw = THREE.MathUtils.clamp(Math.atan2(d.x, d.z) / D, -75, 75);
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
@@ -1154,7 +1136,10 @@ export async function makePlayer(
     }
   };
   const legsSig = () => {
+    rig.updateWorldMatrix(true, false);
     const parts = [`${g.scale.x},${g.scale.y},${g.scale.z}`];
+    if (g.parent) parts.push(`p:${g.parent.matrixWorld.elements.join(",")}`);
+    parts.push(`r:${rig.matrix.elements.join(",")}`);
     for (const n of rootParentLocal.elements) parts.push(String(n));
     for (const k of ["root", "ulL", "ulR", "llL", "llR"]) {
       const rk = rest[k],
@@ -1185,6 +1170,7 @@ export async function makePlayer(
     legTo,
     soleAt,
     soleNow,
+    restLegReach: baseLegReach,
     get legReach() {
       return legReachNow();
     },
