@@ -2202,6 +2202,9 @@ test("--pixel --plane finds where a frame's pixel meets a world plane through th
   const got = JSON.parse(r.stdout);
   assert.deepEqual(got.pixel, { at: [960, 540], plane: "z=-5", point: [0, 0, -5] });
   assert.deepEqual(got.cam.pose.p, [0, 0, 0]);
+  // which way the picture's right and up run in the world, for "move it right" by eye
+  assert.deepEqual(got.cam.screen, { right: [1, 0, 0], up: [0, 1, 0] });
+  assert.match(at().stdout, /picture right is world \+x, up is world \+y/);
   assert.match(at("--pixel", "960,540", "--plane", "y=1").stdout, /never meets y=1/);
   for (const args of [
     ["--pixel", "960,540"],

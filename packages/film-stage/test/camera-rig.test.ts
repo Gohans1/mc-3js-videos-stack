@@ -14,6 +14,7 @@ import {
   projectCamera,
   resolveFocusDistance,
   rigFov,
+  screenAxes,
 } from "../src/camera";
 
 test("horizontal FOV stays fixed across frame shapes and orthogonal lookup is stable", () => {
@@ -332,4 +333,19 @@ test("a picture's pixel meets a world plane through the camera as the film orien
   expect(() => pixelOnPlane(cam, { lead: 0.2 }, [540, 960], size, { axis: "z", at: 0 })).toThrow(
     /lead/,
   );
+});
+
+test("the picture's right and up are named as world directions, turned with the camera", () => {
+  const size: [number, number] = [1080, 1920];
+  const facing = { p: [0, 1, 5], l: [0, 1, 0], fov: 60, roll: 0 };
+  const axes = (pose: typeof facing) => {
+    const { right, up } = screenAxes(pose, undefined, size);
+    const round = (v: number) => Math.round(v) || 0;
+    return { right: right.map(round), up: up.map(round) };
+  };
+  expect(axes(facing)).toEqual({ right: [1, 0, 0], up: [0, 1, 0] });
+  // turned to look back down +z, the picture's right is the world's -x
+  expect(axes({ ...facing, p: [0, 1, -5] })).toEqual({ right: [-1, 0, 0], up: [0, 1, 0] });
+  // a quarter turn of roll stands the picture's right up the world's y
+  expect(axes({ ...facing, roll: Math.PI / 2 })).toEqual({ right: [0, 1, 0], up: [-1, 0, 0] });
 });

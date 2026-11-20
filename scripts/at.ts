@@ -12,6 +12,7 @@ import {
   type CameraRig,
   cameraTrackOptions,
   pixelOnPlane,
+  screenAxes,
 } from "../packages/film-stage/src/camera";
 import { hasGradeEffect } from "../packages/film-stage/src/grade";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
@@ -140,6 +141,26 @@ const filmOf = (dir: string) => {
   shots.forEach((s, i) => (s.index = i));
   setTiming(timingSpec, sourceEnd, shots);
   return { read, conf, edit, timingSpec, fromSource, cam, sourceEnd, shots };
+};
+
+// the picture's right and up in world terms; a rig that turns the camera as the shot plays has no one answer
+const pictureAxes = (
+  pose: { p: number[]; l: number[]; fov: number; roll: number },
+  rig: CameraRig | undefined,
+  frame: [number, number],
+) => {
+  try {
+    const { right, up } = screenAxes(pose, rig, frame);
+    const round = (v: number[]) => v.map((x) => +x.toFixed(3) || 0);
+    return { right: round(right), up: round(up) };
+  } catch {
+    return null;
+  }
+};
+// +x for a direction within 25 degrees of the world's x, else the vector itself
+const axisName = (v: number[]) => {
+  const i = v.findIndex((x) => Math.abs(x) > 0.9);
+  return i < 0 ? `[${v.join(", ")}]` : `${v[i]! > 0 ? "+" : "-"}${"xyz"[i]}`;
 };
 
 const readNotes = (dir: string): Row[] => {
@@ -383,6 +404,13 @@ export const whatsAt = (dir: string, t: number) => {
           },
         )
       : null;
+  // the authored pose before handheld shake, as cam.json keys write it (roll in radians)
+  const pose = camEval && {
+    p: camEval.base.p.toArray().map((v: number) => +v.toFixed(4)),
+    l: camEval.base.l.toArray().map((v: number) => +v.toFixed(4)),
+    fov: +camEval.base.fov.toFixed(3),
+    roll: +camEval.base.roll.toFixed(5),
+  };
 
   const audio = read(conf.soundTimeline ?? "src/timeline/audio.json", null);
   const sounds: Row[] = [];
@@ -664,33 +692,29 @@ export const whatsAt = (dir: string, t: number) => {
     cuts,
     held,
     velocity,
-    cam: camEval
-      ? {
-          evaluation: "authored" as const,
-          clock: worldAtCamera ? "output" : "scene",
-          time: cameraTime,
-          before: previousCam?.row ?? null,
-          after: heldBeforeCut ? null : (nextCam?.row ?? null),
-          t0: previousCam?.key.t ?? null,
-          t1: heldBeforeCut ? undefined : nextCam?.key.t,
-          ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
-          mm: camEval.lensKnown ? +camEval.mm.toFixed(1) : null,
-          fov: camEval.lensKnown ? +camEval.fov.toFixed(1) : null,
-          ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
-          ...(formatFocusSpec(camEval.focus) !== null
-            ? { focus: formatFocusSpec(camEval.focus) }
-            : {}),
-          ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
-          // the authored pose before handheld shake, as cam.json keys write it (roll in radians)
-          pose: {
-            p: camEval.base.p.toArray().map((v: number) => +v.toFixed(4)),
-            l: camEval.base.l.toArray().map((v: number) => +v.toFixed(4)),
-            fov: +camEval.base.fov.toFixed(3),
-            roll: +camEval.base.roll.toFixed(5),
-          },
-          frame: [fw, fh] as [number, number],
-        }
-      : null,
+    cam:
+      camEval && pose
+        ? {
+            evaluation: "authored" as const,
+            clock: worldAtCamera ? "output" : "scene",
+            time: cameraTime,
+            before: previousCam?.row ?? null,
+            after: heldBeforeCut ? null : (nextCam?.row ?? null),
+            t0: previousCam?.key.t ?? null,
+            t1: heldBeforeCut ? undefined : nextCam?.key.t,
+            ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
+            mm: camEval.lensKnown ? +camEval.mm.toFixed(1) : null,
+            fov: camEval.lensKnown ? +camEval.fov.toFixed(1) : null,
+            ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
+            ...(formatFocusSpec(camEval.focus) !== null
+              ? { focus: formatFocusSpec(camEval.focus) }
+              : {}),
+            ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
+            pose,
+            frame: [fw, fh] as [number, number],
+            screen: pictureAxes(pose, shot?.camera, [fw, fh]),
+          }
+        : null,
     sounds,
     texts,
     looks,
@@ -1014,6 +1038,10 @@ if (isMain) {
       ...(got.cam.handheld ? [`handheld ${got.cam.handheld}`] : []),
     ];
     out.push(`  camera optics: ${optics.join(" · ")}`);
+    if (got.cam.screen)
+      out.push(
+        `  picture right is world ${axisName(got.cam.screen.right)}, up is world ${axisName(got.cam.screen.up)}`,
+      );
     out.push("  optics estimate uses saved camera data");
   }
   if (got.velocity)
