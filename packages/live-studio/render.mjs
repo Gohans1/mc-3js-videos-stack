@@ -95,9 +95,9 @@ Nothing is written outside the film. Options are environment variables:
                              Finds history-dependent pictures without changing how you author the scene.
                              Writes renders/order.json and the first failing pair as lossless PNGs; 2/255 tolerance
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
-  CHECK=probe:<t>, CHECK=probe:<filter>,<t>  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
-                             or |-separated case-insensitive names/dot-paths like dish|elon.head or *); honors INSPECT,
-                             logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts)
+  CHECK=probe:<t>, CHECK="probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
+                             or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
+                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts)
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
   RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
@@ -127,7 +127,7 @@ const ENV_OPTIONS = [
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const flagged = process.argv
   .slice(2)
-  .map((a, i, all) => [/^--?([a-z]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
+  .map((a, i, all) => [/^--?([a-z0-9_]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
   .find(([m]) => m && ENV_OPTIONS.includes(m[1].toUpperCase()));
 if (flagged) {
   const [m, next] = flagged;
@@ -491,6 +491,11 @@ if (inspect || views) {
       `warning: CHECK=${filmCamChecks.join(",")} measures the film's own camera and ignores INSPECT/VIEWS`,
     );
   }
+}
+if (views && CHECKS.some((x) => x.name === "probe")) {
+  console.error(
+    "warning: CHECK=probe uses the film's own camera under VIEWS (it honors INSPECT= only)",
+  );
 }
 const stillsWritten = [];
 const preservedThisRun = new Set();
@@ -878,11 +883,20 @@ const stopChrome = (proc) => {
 const waitForChromeExit = (proc, timeoutMs = 2000) => {
   if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
   return new Promise((done) => {
-    const timer = setTimeout(done, timeoutMs);
-    proc.once("exit", () => {
+    let settled = false;
+    const finishWait = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      proc.off("exit", finishWait);
+      proc.off("error", finishWait);
+      proc.off("close", finishWait);
       done();
-    });
+    };
+    const timer = setTimeout(finishWait, timeoutMs);
+    proc.once("exit", finishWait);
+    proc.once("error", finishWait);
+    proc.once("close", finishWait);
   });
 };
 const releaseProfiles = () => {

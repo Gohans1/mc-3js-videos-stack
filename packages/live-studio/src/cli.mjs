@@ -115,7 +115,7 @@ export const envTypos = (known, env = process.env) => {
     return x === y || a.slice(i) === y || b.slice(i) === x;
   };
   for (const key of Object.keys(env))
-    if (/^[A-Z_]{2,16}$/.test(key) && !known.includes(key)) {
+    if (/^[A-Z_]{2,24}$/.test(key) && !known.includes(key)) {
       const near = known.find((k) => off(key, k));
       if (!near) continue;
       const typo = key[0] === near[0];

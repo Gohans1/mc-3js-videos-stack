@@ -18,6 +18,7 @@ import { join } from "node:path";
 export const CACHE_DIR_NAME = ".chrome-cache";
 export const DEFAULT_MAX_SLOTS = 8;
 const STALE_PARSE_GRACE_MS = 5000;
+const CONTENDED_CODES = new Set(["EEXIST", "EPERM", "EBUSY"]);
 
 export const isPidAlive = (pid) => {
   if (!Number.isInteger(pid) || pid <= 0) return false;
@@ -29,24 +30,30 @@ export const isPidAlive = (pid) => {
   }
 };
 
-const isStaleLock = (lockPath, isAlive, now, staleGraceMs) => {
+// Returns "missing" (lock vanished), "stale" (dead PID or expired unreadable lock), or "live" (active/contended)
+export const inspectLock = (
+  lockPath,
+  isAlive = isPidAlive,
+  now = () => Date.now(),
+  staleGraceMs = STALE_PARSE_GRACE_MS,
+) => {
   let raw;
   try {
     raw = readFileSync(lockPath, "utf8");
   } catch (err) {
-    return err?.code === "ENOENT";
+    return err?.code === "ENOENT" ? "missing" : "live";
   }
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && typeof parsed.pid === "number")
-      return !isAlive(parsed.pid);
+      return isAlive(parsed.pid) ? "live" : "stale";
   } catch {
     // Another process may still be flushing right after openSync("wx")
   }
   try {
-    return now() - statSync(lockPath).mtimeMs > staleGraceMs;
+    return now() - statSync(lockPath).mtimeMs > staleGraceMs ? "stale" : "live";
   } catch (err) {
-    return err?.code === "ENOENT";
+    return err?.code === "ENOENT" ? "missing" : "live";
   }
 };
 
@@ -70,6 +77,26 @@ const tryCreateLock = (lockPath, payload) => {
   }
   closeSync(fd);
   return { ok: true, code: null };
+};
+
+const acquireReclaimGuard = (reclaimPath, payload, now, staleGraceMs) => {
+  const first = tryCreateLock(reclaimPath, payload);
+  if (first.ok) return true;
+  if (first.code !== "EEXIST") return false;
+  let expired = false;
+  try {
+    expired = now() - statSync(reclaimPath).mtimeMs > staleGraceMs;
+  } catch (err) {
+    if (err?.code === "ENOENT") return tryCreateLock(reclaimPath, payload).ok;
+    return false;
+  }
+  if (!expired) return false;
+  try {
+    unlinkSync(reclaimPath);
+  } catch (err) {
+    if (err?.code !== "ENOENT") return false;
+  }
+  return tryCreateLock(reclaimPath, payload).ok;
 };
 
 export function acquireChromeProfile(
@@ -125,18 +152,36 @@ export function acquireChromeProfile(
 
     let attempt = tryCreateLock(lockPath, payload);
     if (!attempt.ok && attempt.code === "EEXIST") {
-      if (isStaleLock(lockPath, isAlive, now, staleGraceMs)) {
-        try {
-          unlinkSync(lockPath);
-        } catch (err) {
-          if (err?.code !== "ENOENT") continue;
-        }
+      const state = inspectLock(lockPath, isAlive, now, staleGraceMs);
+      if (state === "missing") {
+        // Disappeared between EEXIST and inspectLock: retry atomically without unlinking
         attempt = tryCreateLock(lockPath, payload);
+      } else if (state === "stale") {
+        const reclaimPath = `${lockPath}.reclaim`;
+        if (acquireReclaimGuard(reclaimPath, payload, now, staleGraceMs)) {
+          try {
+            const rechecked = inspectLock(lockPath, isAlive, now, staleGraceMs);
+            if (rechecked === "stale") {
+              try {
+                unlinkSync(lockPath);
+              } catch (err) {
+                if (err?.code !== "ENOENT") continue;
+              }
+              attempt = tryCreateLock(lockPath, payload);
+            } else if (rechecked === "missing") {
+              attempt = tryCreateLock(lockPath, payload);
+            }
+          } finally {
+            try {
+              unlinkSync(reclaimPath);
+            } catch {}
+          }
+        }
       }
     }
 
     if (!attempt.ok) {
-      if (attempt.code === "EEXIST") continue;
+      if (CONTENDED_CODES.has(attempt.code)) continue;
       return makeEphemeral();
     }
 

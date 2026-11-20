@@ -269,6 +269,94 @@ export function collectProbeTargets(
     const name = objectLabels.get(obj) ?? (obj.name || boneNames.get(obj)?.[0] || obj.type);
     out.push({ obj, name });
   }
+
+  // Disambiguate colliding base names (e.g. two actors both exposing a "Head" bone)
+  const counts = new Map<string, number>();
+  for (const entry of out) counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+  if ([...counts.values()].some((c) => c > 1)) {
+    const findOwner = (obj: THREE.Object3D): string | null => {
+      for (let p = obj.parent; p; p = p.parent) {
+        const label = objectLabels.get(p);
+        if (label) return label;
+      }
+      return null;
+    };
+    const findNamedParent = (obj: THREE.Object3D): string | null => {
+      for (let p = obj.parent; p; p = p.parent) {
+        if (p.name) return p.name;
+      }
+      return null;
+    };
+    for (const entry of out) {
+      if ((counts.get(entry.name) ?? 0) <= 1) continue;
+      const owner = findOwner(entry.obj);
+      if (owner) {
+        entry.name = `${owner}.${entry.name}`;
+        continue;
+      }
+      const uniqueBone = boneNames.get(entry.obj)?.find((k) => k !== entry.name);
+      if (uniqueBone) {
+        entry.name = uniqueBone;
+        continue;
+      }
+      const parentName = findNamedParent(entry.obj);
+      if (parentName) entry.name = `${parentName}.${entry.name}`;
+    }
+  }
+  return out;
+}
+
+// Compute world AABB over visible descendants while still measuring the root target itself
+// (so probing a hidden root reports its bounds with visible: false), recomputing dynamic bounds.
+export function computeVisibleBounds(obj: THREE.Object3D): THREE.Box3 {
+  obj.updateWorldMatrix(true, true);
+  const out = new THREE.Box3();
+  const tmp = new THREE.Box3();
+  const visit = (node: THREE.Object3D) => {
+    if ((node as THREE.SkinnedMesh).isSkinnedMesh) {
+      const sm = node as THREE.SkinnedMesh;
+      sm.skeleton?.bones.forEach((b) => b.updateWorldMatrix(true, false));
+      sm.computeBoundingBox();
+      if (sm.boundingBox && !sm.boundingBox.isEmpty()) {
+        tmp.copy(sm.boundingBox).applyMatrix4(sm.matrixWorld);
+        out.union(tmp);
+      }
+    } else if ((node as THREE.InstancedMesh).isInstancedMesh) {
+      const im = node as THREE.InstancedMesh;
+      if (im.count > 0) {
+        im.computeBoundingBox();
+        if (im.boundingBox && !im.boundingBox.isEmpty()) {
+          tmp.copy(im.boundingBox).applyMatrix4(im.matrixWorld);
+          out.union(tmp);
+        }
+      }
+    } else if ((node as THREE.BatchedMesh).isBatchedMesh) {
+      const bm = node as THREE.BatchedMesh;
+      bm.computeBoundingBox();
+      if (bm.boundingBox && !bm.boundingBox.isEmpty()) {
+        tmp.copy(bm.boundingBox).applyMatrix4(bm.matrixWorld);
+        out.union(tmp);
+      }
+    } else if (
+      (node as THREE.Mesh).isMesh ||
+      (node as THREE.Line).isLine ||
+      (node as THREE.Points).isPoints ||
+      (node as THREE.Sprite).isSprite
+    ) {
+      const geom = (node as THREE.Mesh | THREE.Line | THREE.Points | THREE.Sprite).geometry;
+      if (geom) {
+        if (!geom.boundingBox) geom.computeBoundingBox();
+        if (geom.boundingBox && !geom.boundingBox.isEmpty()) {
+          tmp.copy(geom.boundingBox).applyMatrix4(node.matrixWorld);
+          out.union(tmp);
+        }
+      }
+    }
+    for (const child of node.children) {
+      if (child.visible) visit(child);
+    }
+  };
+  visit(obj);
   return out;
 }
 
@@ -278,8 +366,8 @@ export function measureProbeTarget(
   camera: THREE.Camera,
 ): ProbeTarget {
   const camPos = camera.getWorldPosition(new THREE.Vector3());
+  const box = computeVisibleBounds(obj);
   const worldPos = obj.getWorldPosition(new THREE.Vector3());
-  const box = new THREE.Box3().setFromObject(obj);
   const empty = box.isEmpty();
   const bounds: ProbeBounds | null = empty
     ? null
