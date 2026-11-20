@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -13,7 +14,7 @@ import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-import { cliArgs, numberArg } from "../../packages/live-studio/src/cli.mjs";
+import { cliArgs, needFilm, numberArg } from "../../packages/live-studio/src/cli.mjs";
 import { killProcessTree } from "../../packages/live-studio/src/kill-process.mjs";
 import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { mediaPython } from "../media/home.mjs";
@@ -51,6 +52,7 @@ async function runWorker(executable, args, minutes) {
 }
 
 const HELP = `Optional reference analysis; never required to author a film.
+  bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
@@ -70,6 +72,20 @@ Analysis keeps completed reports but does not resume decoding after interruption
 Examples: bun run reference inspect references/ref.mp4 --scenes --frames 16
           bun run reference study references/ref.mp4
           bun run reference compare references/ref.mp4 renders/draft.mp4 --fit`;
+
+const usage = (why) => {
+  console.error(`${why}; bun run reference --help`);
+  process.exit(2);
+};
+
+const ADD_HELP = `Copy a downloaded reference into the film's references/ under a plain name, run in films/<name>.
+  bun run reference add <video> [--name ref] [--minutes 10]
+An H.264 .mp4 up to 1920 px is copied as references/<name>.mp4.
+Anything else (AV1, 4K, .mkv/.webm, ...) is kept byte for byte as references/<name>-source.<ext>,
+and references/<name>.mp4 becomes an H.264 copy (CRF 18, long side 1920 at most, same frames;
+AAC audio copied as it is, other audio AAC 256k).
+Never replaces a file: an existing name stops it (exit 2) before anything is copied.
+next: bun run reference study references/<name>.mp4`;
 
 if (process.argv[2] === "inspect") {
   const args = process.argv.slice(3);
@@ -115,6 +131,112 @@ if (process.argv[2] === "inspect") {
   process.exit(status);
 }
 
+if (process.argv[2] === "add") {
+  const argv = cliArgs(ADD_HELP, ["--name base", "--minutes N"], 1, process.argv.slice(3));
+  const { positionals, values } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { name: { type: "string" }, minutes: { type: "string" } },
+  });
+  const name = values.name ?? "ref";
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(name)) usage("--name takes letters, digits, - and _");
+  const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  if (positionals.length !== 1) usage("Choose add <video>");
+  const film = needFilm();
+  const source = resolve(positionals[0]);
+  if (!statSync(source, { throwIfNoEntry: false })?.isFile())
+    usage(`No local file: ${positionals[0]}`);
+  const probe = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "stream=codec_type,codec_name,width,height",
+      "-of",
+      "json",
+      source,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+  );
+  const info = probe.status === 0 ? JSON.parse(probe.stdout) : {};
+  const video = info.streams?.find((s) => s.codec_type === "video");
+  const audio = info.streams?.find((s) => s.codec_type === "audio");
+  if (!video?.width) {
+    console.error(
+      `reference add: no video stream in ${source} (${(probe.stderr || probe.error?.message || "").trim()})`,
+    );
+    process.exit(1);
+  }
+  // H.264 up to 1920 in an .mp4 decodes everywhere (ffmpeg, the studio, Chromium) and is kept as it is
+  const ready =
+    video.codec_name === "h264" &&
+    extname(source).toLowerCase() === ".mp4" &&
+    Math.max(video.width, video.height) <= 1920;
+  const dir = join(film, "references");
+  const picture = join(dir, `${name}.mp4`);
+  const kept = join(
+    dir,
+    `${name}-source${/^\.[a-z0-9]+$/i.test(extname(source)) ? extname(source).toLowerCase() : ""}`,
+  );
+  const taken = [picture, ...(ready ? [] : [kept])].filter((f) => existsSync(f));
+  if (taken.length)
+    usage(`${taken.join(", ")} already exists: pick another --name; nothing was copied`);
+  mkdirSync(dir, { recursive: true });
+  if (ready) {
+    copyFileSync(source, picture);
+    console.log(
+      `copied ${basename(source)} to references/${name}.mp4 (H.264, ${video.width}x${video.height})`,
+    );
+  } else {
+    copyFileSync(source, kept);
+    const scale = Math.min(1, 1920 / Math.max(video.width, video.height));
+    const width = 2 * Math.round((video.width * scale) / 2);
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-nostdin",
+        "-i",
+        kept,
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0?",
+        "-vf",
+        `scale=${width}:-2:flags=lanczos`,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "medium",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        ...(audio?.codec_name === "aac" ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", "256k"]),
+        picture,
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: minutes * 60_000 },
+    );
+    if (made.status !== 0 || !existsSync(picture)) {
+      rmSync(kept, { force: true });
+      rmSync(picture, { force: true });
+      console.error(
+        `reference add: the H.264 copy failed (${(made.stderr || made.error?.message || `exit ${made.status}`).trim()}); nothing was kept in references/`,
+      );
+      process.exit(1);
+    }
+    console.log(
+      `kept ${basename(source)} as references/${basename(kept)}; references/${name}.mp4 is an H.264 copy (CRF 18, ${width} wide, audio ${audio?.codec_name === "aac" ? "copied" : audio ? "AAC 256k" : "none"}) for the repo's tools`,
+    );
+  }
+  console.log(`next: bun run reference study references/${name}.mp4`);
+  process.exit(0);
+}
+
 const argv = cliArgs(HELP, ["--out folder", "--fit", "--film file", "--minutes N"], 3);
 const {
   positionals: [command, ...files],
@@ -129,10 +251,6 @@ const {
     minutes: { type: "string" },
   },
 });
-const usage = (why) => {
-  console.error(`${why}; bun run reference --help`);
-  process.exit(2);
-};
 if (!["study", "compare"].includes(command) || files.length !== (command === "study" ? 1 : 2))
   usage("Choose study <video> or compare <reference> <remake>");
 if (command === "study" && (values.fit || values.film)) usage("--fit and --film belong to compare");

@@ -3413,7 +3413,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "reference",
     category: "render",
     summary:
-      "Inspect reference pictures/captions, study timing or compare videos; no required style or quality score.",
+      "Add a reference to the film, inspect pictures/captions, study timing or compare videos; no required style or quality score.",
     runner: "bun-script",
     target: "reference",
     cwdModes: ["film", "root"],
@@ -3422,7 +3422,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "operation",
         label: "Operation",
         type: "enum",
-        options: ["inspect", "study", "compare"],
+        options: ["add", "inspect", "study", "compare"],
         required: true,
       },
       { key: "reference", label: "Reference Video / URL", type: "string", required: true },
@@ -3435,7 +3435,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
     ],
     flags: [
-      { key: "--out", flag: "--out", label: "Report Folder", type: "string" },
+      {
+        key: "--out",
+        flag: "--out",
+        label: "Report Folder",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect", "study", "compare"] },
+      },
+      {
+        key: "--name",
+        flag: "--name",
+        label: "Name in references/",
+        type: "string",
+        placeholder: "ref",
+        visibleWhen: { field: "operation", in: ["add"] },
+      },
       {
         key: "--transcript",
         flag: "--transcript",
@@ -3550,7 +3564,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
     },
   },
   // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────

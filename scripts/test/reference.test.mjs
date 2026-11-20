@@ -1,8 +1,16 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { mediaPython } from "../media/home.mjs";
@@ -140,6 +148,84 @@ test.skipIf(!existsSync(mediaPython("camera")))(
   },
   30000,
 );
+
+// an emoji in a downloaded reference's name broke ffmpeg in Git Bash, and its AV1 4K had to be transcoded by hand
+test("reference add keeps the source under a plain name and makes an H.264 copy only when needed", () => {
+  const film = mkdtempSync(join(tmpdir(), "reference-add-"));
+  try {
+    mkdirSync(join(film, "src"));
+    writeFileSync(join(film, "src/scene.ts"), "");
+    const make = (name, args) => {
+      const plain = join(film, `made${extname(name)}`);
+      const made = spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-f", "lavfi", "-i", "testsrc2=s=320x180:r=30:d=1", ...args, plain],
+        {
+          encoding: "utf8",
+          timeout: 10000,
+        },
+      );
+      expect(made.status, made.stderr).toBe(0);
+      renameSync(plain, join(film, name));
+      return join(film, name);
+    };
+    const frames = (file) =>
+      spawnSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-count_frames",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=codec_name,nb_read_frames",
+          "-of",
+          "csv=p=0",
+          file,
+        ],
+        { encoding: "utf8" },
+      ).stdout.trim();
+
+    const audioPackets = (file) =>
+      spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-i", file, "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        {
+          encoding: "utf8",
+        },
+      ).stdout.trim();
+
+    const lossless = make("cookie 🍪 clip.mkv", [
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=d=1",
+      "-c:v",
+      "ffv1",
+      "-c:a",
+      "aac",
+    ]);
+    const added = run(film, ["add", lossless]);
+    expect(added.status, added.stdout + added.stderr).toBe(0);
+    expect(readFileSync(join(film, "references/ref-source.mkv"))).toEqual(readFileSync(lossless));
+    expect(frames(join(film, "references/ref.mp4"))).toBe("h264,30");
+    expect(audioPackets(lossless)).toMatch(/^MD5=/);
+    expect(audioPackets(join(film, "references/ref.mp4"))).toBe(audioPackets(lossless));
+    expect(added.stdout).toMatch(/bun run reference study references\/ref\.mp4/);
+
+    const before = readFileSync(join(film, "references/ref.mp4"));
+    expect(run(film, ["add", lossless]).status).toBe(2);
+    expect(readFileSync(join(film, "references/ref.mp4"))).toEqual(before);
+
+    const h264 = make("ready.mp4", ["-c:v", "libx264", "-pix_fmt", "yuv420p"]);
+    expect(run(film, ["add", h264, "--name", "second"]).status).toBe(0);
+    expect(readFileSync(join(film, "references/second.mp4"))).toEqual(readFileSync(h264));
+    expect(existsSync(join(film, "references/second-source.mp4"))).toBe(false);
+  } finally {
+    rmSync(film, { recursive: true, force: true });
+  }
+}, 60000);
 
 test("failed analysis never recommends a previous report and each completed run keeps its own evidence", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-fresh-"));
