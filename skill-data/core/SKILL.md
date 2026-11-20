@@ -33,7 +33,7 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Find assets and presets         | bun run find <words> searches sounds, mocap and 2D presets (+ OpenFilm); add --kind object (or block, item, mob, prop) for 3D MC assets; --json, --offline supported         |
 | Keep an edit direction          | Film → Versions, or bun run history --film films/<name> --help                                                                                                               |
-| Discover, pick and place assets | bun run find --kind transition\|object; --show <id> inspects recipes/properties/clips; place, pick/unpick or copy Global props with bun run asset --help; see --ref contract |
+| Discover, pick and place assets | bun run find --kind transition\|object; --show <id> inspects recipes/properties/clips; preview 3D picks/blocks/items beside a 1.875m Steve scale figure with bun run asset preview; place, pick/unpick or copy Global props with bun run asset --help; see --ref contract |
 | Build a custom scene or effect  | src/scene.ts; bun run skills get core --ref contract                                                                                                                         |
 | Edit data                       | Timeline files named by the film's package.json; run bun run check after editing                                                                                             |
 | Inspect one heard second        | bun run at 35.6; AT=35.6 bun run render stills; open the printed image                                                                                                       |
@@ -51,7 +51,7 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                               |
 | Measure audio levels            | bun run listen; level measurements cannot identify a sound or decide whether it fits                                                                                         |
 | Hear and evaluate sound         | earshot is a separate CLI; see --ref sound                                                                                                                                   |
-| Receive feedback                | bun run studio; open the link and read bun run notes                                                                                                                         |
+| Receive feedback                | bun run studio --detach (background; --status / --stop); open the link and read bun run notes                                                                                |
 
 VAR=x bun run ... examples use POSIX or Bun Shell syntax. In PowerShell use $env:AT='35.6', run the command, then remove Env:AT or restore its previous value.
 

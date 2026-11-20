@@ -22,7 +22,7 @@ export const still = async (name, from, quality = 0.92) =>
   post(
     `/still/${name}`,
     await new Promise((res) =>
-      name.endsWith(".png")
+      /\.png$/i.test(name)
         ? from.toBlob(res, "image/png")
         : from.toBlob(res, "image/jpeg", quality),
     ),

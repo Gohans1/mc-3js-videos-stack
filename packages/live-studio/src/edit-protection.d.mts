@@ -1,6 +1,9 @@
+export const COLLAB_SNAPSHOTS: unique symbol;
+
 export interface EditProtectionReport {
   protected: string[];
   notices: unknown[];
+  [COLLAB_SNAPSHOTS]?: unknown[];
 }
 
 export interface EditProtection {
@@ -16,6 +19,13 @@ export interface EditProtection {
   reload: () => void;
   reset: (version: string, data?: unknown) => void;
 }
+
+export function formatProtectedPointer(ptr: string, docs?: unknown[]): string;
+export function summarizeNotice(
+  notice: unknown,
+  candidateDocs?: unknown[],
+  options?: { full?: boolean },
+): unknown;
 
 export function openEditProtection(
   project: string,

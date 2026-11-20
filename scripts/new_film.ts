@@ -24,7 +24,7 @@ Requires a prepared vault (new machine: bun run setup). Downloads dependencies; 
 The film name must also be unused by any existing workspace package.
 Rejects ports already assigned to another film; an unrelated running service can still occupy the port.
 If a step fails, the film is kept and the error prints the recovery command. Rerunning new-film never overwrites it.
-next: cd films/<name> and run bun run check, then bun run studio. Data rules: bun run skills get core --ref contract.`;
+next: cd films/<name> and run bun run check, then bun run studio --detach (or bun run studio). Data rules: bun run skills get core --ref contract.`;
 
 export const VALID_RATIOS = ["16:9", "9:16"] as const;
 export type FilmRatio = (typeof VALID_RATIOS)[number];
@@ -127,7 +127,7 @@ function main() {
   const film = join(FILMS, name);
   if (existsSync(film)) {
     console.error(
-      `films/${name} exists already; it was not changed. Use another name. To finish an interrupted creation:\nnext: bun packages/live-studio/init.mjs films/${name}, then bun run link ${name}, then cd films/${name} and bun run studio`,
+      `films/${name} exists already; it was not changed. Use another name. To finish an interrupted creation:\nnext: bun packages/live-studio/init.mjs films/${name}, then bun run link ${name}, then cd films/${name} and bun run studio --detach`,
     );
     process.exit(1);
   }
@@ -208,7 +208,7 @@ function main() {
   run("bun", ["scripts/link.ts", name], ROOT);
   console.log(`\nfilms/${name} created, dependencies installed and vault linked (studio port ${port}${ratio ? `, ratio ${ratio}` : ""}).
 The scene has not been opened yet; check it and open the URL Studio prints.
-next: cd films/${name} and run bun run check, then bun run studio`);
+next: cd films/${name} and run bun run check, then bun run studio --detach (check with --status, stop with --stop)`);
 }
 
 if (import.meta.main) {

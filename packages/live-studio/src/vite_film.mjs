@@ -38,6 +38,40 @@ export const filmPlugin = (film, { deferScene = false } = {}) => {
     // three/addons, three/webgpu and three/tsl stop resolving
     async resolveId(source, importer, options) {
       if (source === sceneId || source === editId) return `\0${source}`;
+      if (/^live-studio\/lab$/.test(source) && !options?.custom?.fromStudio) {
+        return this.resolve(join(STUDIO, "render/lab.ts"), importer, {
+          ...options,
+          skipSelf: true,
+          custom: { ...options?.custom, fromStudio: true },
+        });
+      }
+      if (
+        /^(block-model-renderer|fflate|mc-assets|mc-actor)(\/|$)/.test(source) &&
+        importer &&
+        !options?.custom?.fromFilm
+      ) {
+        const direct = await this.resolve(source, importer, {
+          ...options,
+          skipSelf: true,
+          custom: { ...options?.custom, fromFilm: true },
+        });
+        if (direct) return direct;
+        const candidates = [
+          pkgFile,
+          join(STUDIO, "../mc-assets/package.json"),
+          join(STUDIO, "../mc-actor/package.json"),
+          join(STUDIO, "../../templates/film/package.json"),
+        ];
+        for (const basePkg of candidates) {
+          if (!existsSync(basePkg)) continue;
+          const hit = await this.resolve(source, basePkg, {
+            ...options,
+            skipSelf: true,
+            custom: { ...options?.custom, fromFilm: true },
+          });
+          if (hit) return hit;
+        }
+      }
       if (!/^three(\/|$)/.test(source) || options?.custom?.oneThree) return null;
       return this.resolve(source, join(film.threeFrom, "package.json"), {
         ...options,

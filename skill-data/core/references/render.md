@@ -31,6 +31,7 @@ bun run deliver --youtube 9-15               # file seconds; retains renders/you
 
 | Job                    | How                                                                                                                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Warm Chrome shader cache | Headless Chrome reuses slot-locked GPU shader caches under `renders/.chrome-cache/slot-0..7` so warm renders skip shader recompilation; pass `RENDER_FRESH_CACHE=1` to force a fresh ephemeral profile |
 | Batch camera angles    | `VIEWS="corner:px,py,pz,lx,ly,lz,fov;kitchen:..."` (or `VIEWS=@views.json`) renders every `(view, t)` pair in one Chrome boot to `renders/view_<name>_<s>s.jpg` (`.png` for `poster`), keeping existing `still_*.jpg` and other `view_*.jpg`; works with `CROP=`, `COMPARE=1`, `LIST=1`, and `RES=` |
 | Inspect one region     | `CROP=x,y,w,h` uses normalized 0–1 coordinates with `render stills` or `poster`, rendering that camera sub-frustum at native pixel density                                                    |
 | Before and after       | `COMPARE=1` or `--compare` preserves the previous frame in `renders/.prev/` and writes a side-by-side pixel comparison image when a prior still exists                                        |

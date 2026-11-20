@@ -12,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, extname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
 import { build } from "vite";
@@ -369,12 +369,12 @@ if (env.CROP !== undefined) {
     process.exit(2);
   }
 }
-// a CHECK run writes its own charts; a still at 1 s beside them would only crowd bun run sheet
+// a CHECK or custom ENTRY lab run writes its own outputs; a still at 1 s beside them would only crowd bun run sheet
 const at =
   what === "clip" || what === "final"
     ? []
     : env.AT === undefined
-      ? env.CHECK && !views
+      ? (env.CHECK || env.ENTRY) && !views
         ? []
         : [1]
       : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
@@ -513,7 +513,7 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && what !== "poster" && !views && existsSync(RENDERS))
+if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS))
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
@@ -807,13 +807,29 @@ const server = Bun.serve({
         }
       } else if (url.startsWith("/still/")) {
         const name = url.slice(7);
-        if (/\.(jpg|png)$/.test(name) && !preservedThisRun.has(name)) {
+        const rendersRoot = resolve(RENDERS);
+        const dest = resolve(rendersRoot, name);
+        if (
+          !name ||
+          name.includes("/") ||
+          name.includes("\\") ||
+          name.includes("..") ||
+          name.includes(":") ||
+          name.includes("\0") ||
+          dirname(dest) !== rendersRoot
+        ) {
+          console.error(`ERROR invalid still path ${JSON.stringify(name)}`);
+          failed = true;
+          close();
+          return new Response("invalid still path", { status: 400 });
+        }
+        if (/\.(jpg|png)$/i.test(name) && !preservedThisRun.has(name)) {
           preservePrev(name);
           preservedThisRun.add(name);
         }
-        writeFileSync(join(RENDERS, name), b);
+        writeFileSync(dest, b);
         if (url === "/still/order.json") orderPending = false;
-        if (/\.(jpg|png)$/.test(url)) stillsWritten.push(`renders/${name}`);
+        if (/\.(jpg|png)$/i.test(name)) stillsWritten.push(`renders/${name}`);
       } else if (url.startsWith("/chunk/")) {
         const i = +url.slice(7);
         writeFileSync(chunkFile(i), b);
