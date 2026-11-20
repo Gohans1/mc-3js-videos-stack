@@ -54,7 +54,7 @@ import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { noteNudge } from "./src/note-cli.mjs";
 import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
-import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
+import { isRead, PACE, readFaults, readPace, sizeFaults } from "./src/readable.mjs";
 import { formatCoverage, refCoverage } from "./src/ref-coverage.mjs";
 import { refCutsWarning, referenceCopy, unstudiedWarning } from "./src/ref-cuts.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
@@ -797,7 +797,8 @@ if (Array.isArray(textRead?.items)) {
   const textEnd = textClock ? Math.min(ends.layers, textClock.duration) : ends?.layers;
   const heard = textClock ? mapTimeline("text", textRead, textClock, false, null, {}) : null;
   const said = [],
-    late = [];
+    late = [],
+    brief = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
     // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
@@ -812,14 +813,33 @@ if (Array.isArray(textRead?.items)) {
     if (!isRead(it, textRead.tracks)) return;
     if (h) covered.text.push([h.from, Math.min(h.to, textEnd)]);
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
+    const name = short.length > 28 ? `${short.slice(0, 27)}…` : short;
     const cut = h && h.to > textEnd;
-    for (const fault of h
-      ? readFaults(it, h, conf.ratio, textEnd, textClock)
-      : sizeFaults(it, conf.ratio))
-      said.push(
-        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? textEnd : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
-      );
+    const pace = h && readPace(it, h, textEnd, textClock);
+    (h ? readFaults(it, h, conf.ratio, textEnd, textClock) : sizeFaults(it, conf.ratio)).forEach(
+      (fault, n) => {
+        const line = `⚠ ${conf.textTimeline} items[${i}] "${name}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? textEnd : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`;
+        said.push(line);
+        if (n === 0 && pace?.tooBrief)
+          brief.push({ line, at: `items[${i}] "${name}" at ${h.from.toFixed(2)} heard`, pace });
+      },
+    );
   });
+  // a Short's captions, cut per phrase, run faster than subtitles: past three, one line says them all
+  const folded = new Set(brief.length > 3 ? brief.map((b) => b.line) : []);
+  const lines = [
+    ...(folded.size
+      ? [
+          `⚠ ${conf.textTimeline} ${brief.length} items show for less than a reader needs (${PACE}): ${brief
+            .slice(0, 3)
+            .map((b) => `${b.at}, ${b.pace.readable.toFixed(2)} s of ${b.pace.needs.toFixed(2)}`)
+            .join(
+              "; ",
+            )}; and ${brief.length - 3} more. Captions timed to a reference's own can stay; others hold longer or cut words`,
+        ]
+      : []),
+    ...said.filter((line) => !folded.has(line)),
+  ];
   if (late.length)
     found.push({
       where: conf.textTimeline,
@@ -828,8 +848,8 @@ if (Array.isArray(textRead?.items)) {
         "  move each earlier (bun run at <second> shows what is on screen there) or remove it",
       ].join("\n"),
     });
-  if (said.length) {
-    warnings.push(...said);
+  if (lines.length) {
+    warnings.push(...lines);
     hints.push(
       `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
     );

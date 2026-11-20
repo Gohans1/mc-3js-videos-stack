@@ -596,6 +596,39 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
 });
 
 // on-screen words have to be read before they go, and a line too small is mush on a phone: both warnings, never refusals
+// captions cut per spoken phrase, as a Short's are, run faster than a subtitle: one line for them all, not one each,
+// so the warnings under them still get read
+test("check says many captions too brief to read in one warning, naming the first three", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  const items = [1, 2, 3, 4, 5].map((n) => ({
+    kind: "text",
+    text: `word ${n}`,
+    from: n,
+    to: n + 0.4,
+  }));
+  items.push({ kind: "text", text: "tiny", size: 24, from: 7, to: 9 });
+  writeFileSync(join(dir, "src/timeline/text.json"), JSON.stringify({ items }));
+  const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const { warnings } = JSON.parse(r.stdout);
+  const pace = warnings.filter((w) => /Netflix's subtitle pace/.test(w));
+  assert.equal(pace.length, 1, pace.join("\n"));
+  assert.match(
+    pace[0],
+    /^⚠ src\/timeline\/text\.json 5 items show for less than a reader needs .*: items\[0\] "word 1" at 1\.00 heard, 0\.40 s of 0\.83; items\[1\] "word 2" at 2\.00 heard, 0\.40 s of 0\.83; items\[2\] "word 3" at 3\.00 heard, 0\.40 s of 0\.83; and 2 more/,
+  );
+  assert.ok(warnings.some((w) => /items\[5\] "tiny" .*size 24/.test(w)));
+});
+
 test("check warns of text shown too briefly to read and text too small for a phone, each with the seconds it plays", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

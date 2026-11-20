@@ -84,10 +84,11 @@ const visibleSpans = (from, to, clock) => {
   return out;
 };
 
-// end: the film's end in heard seconds; an item it cuts off is read only until then, its Out as far as it plays
-export const readFaults = (scene, heard, ratio = "16:9", end = Infinity, clock = null) => {
+// end: the film's end in heard seconds; an item it cuts off is read only until then, its Out as far as it plays.
+// null when no frame of it is on screen
+export const readPace = (scene, heard, end = Infinity, clock = null) => {
   const spans = visibleSpans(heard.from, Math.min(heard.to, end), clock);
-  if (clock && !spans.length) return [];
+  if (clock && !spans.length) return null;
   const io = heardInOut(scene, heard, clock),
     to = Math.min(heard.to, end),
     shown = Math.max(0, to - heard.from),
@@ -101,10 +102,19 @@ export const readFaults = (scene, heard, ratio = "16:9", end = Infinity, clock =
       : Math.max(0, shown - inLen / 2 - Math.max(0, to - (heard.to - io.out)) / 2),
     chars = charsOf(scene.text),
     needs = Math.max(READ_MIN, chars / READ_CPS);
+  return { readable, needs, chars, tooBrief: readable < needs - 0.005 };
+};
+
+export const PACE = `${READ_CPS} characters a second and at least ${READ_MIN.toFixed(2)} s, Netflix's subtitle pace`;
+
+// the pace fault first, then the size faults
+export const readFaults = (scene, heard, ratio = "16:9", end = Infinity, clock = null) => {
+  const pace = readPace(scene, heard, end, clock);
+  if (!pace) return [];
   return [
-    ...(readable < needs - 0.005
+    ...(pace.tooBrief
       ? [
-          `readable about ${readable.toFixed(2)} s for ${chars} characters; a reader needs ${needs.toFixed(2)} s (${READ_CPS} a second and at least ${READ_MIN.toFixed(2)} s, Netflix's subtitle pace): hold it longer, cut words, or a shorter In and Out`,
+          `readable about ${pace.readable.toFixed(2)} s for ${pace.chars} characters; a reader needs ${pace.needs.toFixed(2)} s (${PACE}): hold it longer, cut words, or a shorter In and Out`,
         ]
       : []),
     ...sizeFaults(scene, ratio),
