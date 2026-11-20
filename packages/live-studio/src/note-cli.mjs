@@ -218,7 +218,7 @@ export const recordNoteReads = (project, shownIds, allActiveNotes) => {
   writeNoteReads(project, data);
 };
 
-// The studio cannot tell a running AI that the creator wrote a note, so the commands it runs between fixes say so
+// The studio cannot tell a running AI that the creator wrote a note, so the commands it runs between fixes end on it
 export const noteNudge = (project) => {
   if (!existsSync(join(project, "notes/notes.jsonl"))) return "";
   const open = createNotes(project)
@@ -227,7 +227,7 @@ export const noteNudge = (project) => {
   if (!open.length) return "";
   const known = new Set(readNoteReads(project).lastList?.knownIds ?? []);
   const fresh = open.filter((n) => !known.has(n.id)).length;
-  return `creator notes: ${open.length} open${fresh ? `, ${fresh} new since your last bun run notes` : ""}: bun run notes`;
+  return `next: bun run notes first: the creator has ${open.length} open note${open.length > 1 ? "s" : ""}${fresh ? `, ${fresh} new since your last bun run notes` : ""}`;
 };
 
 export const collectNewNotesAfterRead = (project, targetId, { consume = false } = {}) => {

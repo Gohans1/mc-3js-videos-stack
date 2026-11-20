@@ -1,8 +1,12 @@
 import assert from "node:assert/strict";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { canPlaceCameraCut } from "../src/camera-clock.mjs";
 import { cameraSpeed } from "../src/camera-speed.mjs";
+import { heardLength } from "../src/film.mjs";
 import { mapTimeline } from "../src/timing-data.mjs";
 import { cameraTimesAt, clockForTimeline, setTiming, timedDraw } from "../src/timing-state.mjs";
 
@@ -328,6 +332,31 @@ test("camera lookahead follows the active output occurrence through freeze and m
     const moving = cameraTimesAt(1.25);
     assert.ok(Math.abs(moving.worldAtCamera(moving.camera + 0.25) - 0.5625) < 1e-8);
     assert.ok(moving.worldAtCamera(8) < 4);
+  } finally {
+    setTiming({}, 8, []);
+  }
+});
+
+// bun run check and reference solve --write read the cam clock a CLI sets up from the film's files alone
+test("heardLength sets the camera clock from the film's shots, so an output-clock shot moves through a freeze", () => {
+  const dir = mkdtempSync(join(tmpdir(), "heard-shots-"));
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  const conf = {
+    timingTimeline: "src/timeline/timing.json",
+    shotsTimeline: "src/timeline/shots.json",
+  };
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 8 }));
+  writeFileSync(
+    join(dir, conf.timingTimeline),
+    JSON.stringify({ freezes: [{ at: 2, duration: 3 }] }),
+  );
+  writeFileSync(
+    join(dir, conf.shotsTimeline),
+    JSON.stringify([{ t: 0, cameraClock: "output" }, { t: 4 }]),
+  );
+  try {
+    assert.ok(heardLength(dir, conf));
+    assert.equal(clockForTimeline("cam").sourceAt(4), 16 / 7);
   } finally {
     setTiming({}, 8, []);
   }

@@ -30,7 +30,7 @@
 
 | Task                     | How to run it                                                                                                                                                                               |
 | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| CPU tracking             | Run media setup tapir or media setup track to install a CPU Torch environment and a checksum-pinned checkpoint. Use --frames to cap the frames kept in memory and --minutes to cap runtime. |
+| CPU tracking             | Run media setup tapir or media setup track to install a CPU Torch environment and a checksum-pinned checkpoint. Use --frames to cap the frames kept in memory and --minutes to cap runtime. Media setup camera installs OpenCV and SciPy (no model) for whip pans in reference study and reference solve. |
 | Optional sound library   | media setup foley installs alpha Foley and checksum-verified PANNs. Set library.root and storage.data_dir outside the repo in TOML. CLAP downloads to its own cache on first use.           |
 | Audio metadata           | media setup metadata installs BWF MetaEdit for Windows and keeps notices in the archive. The adapter reads metadata and exports XML without editing WAV files.                              |
 | Move to another checkout | Keep vault/tools/media and run-* evidence. Reinstall the virtual environment with setup and reuse the uv cache. A moved virtual environment can retain old paths in its launcher.           |

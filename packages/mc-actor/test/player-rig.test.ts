@@ -682,32 +682,44 @@ describe("mc-actor player rig primitives", () => {
 
   // a close-up of a hand needed a second, scaled chef with all his skin but one arm wiped by hand, and a red face needed
   // a raw pixel rect painted over the head: both are the player's own now
-  test("faceColors.white colours the eye whites; tintParts and showParts act on SKIN_UV parts and survive setSkin", async () => {
+  const plainSkin = () => {
+    const c = makePixelCanvas(64, 64, [200, 160, 120, 255]);
+    c.getContext().clearRect(32, 0, 32, 16); // the hat layer empty, as most skins have it
+    return c;
+  };
+
+  test("faceColors.white colours the eye whites", async () => {
     installPixelDocument();
-    const rig = await loadPlayerTemplate();
-    const skin = () => {
-      const c = makePixelCanvas(64, 64, [200, 160, 120, 255]);
-      c.getContext().clearRect(32, 0, 32, 16); // the hat layer empty, as most skins have it
-      return c;
-    };
-    const p = await makePlayer(rig, skin(), { faceColors: { white: "#ddeeff" } });
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin(), {
+      faceColors: { white: "#ddeeff" },
+    });
     const faceMats = getHeadFaceMaterials(p);
     expect(faceMats.some((m) => m.color.getHexString() === "ddeeff")).toBe(true);
     expect(faceMats.some((m) => m.color.getHexString() === "f4f4f4")).toBe(false);
+  });
 
+  test("tintParts multiplies a SKIN_UV part's pixels and the lids follow it, through setSkin until cleared", async () => {
+    installPixelDocument();
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin());
     p.tintParts({ head: "#ff8000" });
     expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]); // head front
     expect(readPixel(p.skin, 44, 12)).toEqual([0, 0, 0, 0]); // hat front stays see-through
     expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]); // body front
-    const lid = faceMats.find((m) => m.polygonOffsetFactor === -4)!;
+    const lid = getHeadFaceMaterials(p).find((m) => m.polygonOffsetFactor === -4)!;
     expect(lid.color.getHexString()).toBe(
       new THREE.Color("rgb(200,80,0)").multiplyScalar(0.9).getHexString(),
     );
-    p.setSkin(skin());
+    p.setSkin(plainSkin());
     expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]);
     p.tintParts(null);
     expect(readPixel(p.skin, 12, 12)).toEqual([200, 160, 120, 255]);
+    expect(() => p.tintParts({ hands: "#fff" })).toThrow(/SKIN_UV/);
+  });
 
+  test("showParts keeps only the named parts and their overlay, hides the face, through setSkin until cleared", async () => {
+    installPixelDocument();
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin());
+    const faceMats = getHeadFaceMaterials(p);
     const { inner } = getSkinMaterials(p);
     p.showParts(["armR"]);
     expect(readPixel(p.skin, 44, 24)).toEqual([200, 160, 120, 255]); // right arm front
@@ -722,14 +734,13 @@ describe("mc-actor player rig primitives", () => {
       expect(readPixel(p.skin, x, y)[3]).toBe(0);
     expect(inner.alphaTest).toBe(0.5);
     expect(faceMats.every((m) => !m.visible)).toBe(true);
-    p.setSkin(skin());
+    p.setSkin(plainSkin());
     expect(readPixel(p.skin, 24, 24)[3]).toBe(0);
     p.showParts(null);
     expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]);
     expect(inner.alphaTest).toBe(0);
     expect(faceMats.every((m) => m.visible)).toBe(true);
     expect(() => p.showParts(["hand"])).toThrow(/head, body, armR, armL, legR, legL/);
-    expect(() => p.tintParts({ hands: "#fff" })).toThrow(/SKIN_UV/);
   });
 
   test("SKIN_UV maps canonical 64x64 Steve UV rects for all 12 Layer-1 and Layer-2 boxes with zero overlap", () => {

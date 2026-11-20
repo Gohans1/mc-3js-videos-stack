@@ -15,7 +15,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { mediaPython } from "../media/home.mjs";
-import { tableShot, testVideo } from "./pinhole.mjs";
+import { FPS, tableShot, testVideo } from "./pinhole.mjs";
 
 const cli = fileURLToPath(new URL("../review/reference.mjs", import.meta.url));
 const run = (cwd, args) =>
@@ -267,13 +267,28 @@ test.skipIf(!existsSync(mediaPython("camera")))(
       expect(cam()).toEqual(["inside", "mm-table-9", "after"]);
       expect(looked.stdout).toMatch(/rerun with --write to put the 13 keys/);
 
+      // a shot whose to is the next shot's cut second would take that cut key with it
+      const camFile = join(film, "src/timeline/cam.json");
+      const before = readFileSync(camFile, "utf8");
+      writeFileSync(
+        join(film, "late.json"),
+        JSON.stringify({ ...tableShot({ frames: [0, 3, 6, 9, 12, 13] }), to: 13 / FPS }),
+      );
+      const next = { t: +(13 / FPS).toFixed(4), id: "next", cut: true, p: [0, 1, 0], l: [0, 1, 1] };
+      writeFileSync(camFile, JSON.stringify({ keys: [...JSON.parse(before).keys, next] }));
+      const ate = run(film, ["solve", "late.json", "--video", "references/ref.mkv", "--write"]);
+      expect(ate.status).toBe(1);
+      expect(ate.stderr).toMatch(/runs into the cut "next" at 0\.4333 s/);
+      expect(cam()).toEqual(["inside", "mm-table-9", "after", "next"]);
+      writeFileSync(camFile, before);
+
       const wrote = run(film, ["solve", "pour.json", "--video", "references/ref.mkv", "--write"]);
       expect(wrote.status, wrote.stdout + wrote.stderr).toBe(0);
       expect(cam()).toEqual([...Array.from({ length: 13 }, (_, n) => `mm-table-${n}`), "after"]);
       expect(wrote.stdout).toMatch(/wrote 13 keys .* replaced 2: inside, mm-table-9/);
       const runs = readdirSync(join(film, "renders/reference/solve/table"));
-      expect(runs).toHaveLength(2);
-      expect(existsSync(join(film, "renders/reference/solve/table", runs[1], "sheet.jpg"))).toBe(
+      expect(runs).toHaveLength(3);
+      expect(existsSync(join(film, "renders/reference/solve/table", runs[2], "sheet.jpg"))).toBe(
         true,
       );
     } finally {

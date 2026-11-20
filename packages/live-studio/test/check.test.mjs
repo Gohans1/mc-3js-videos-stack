@@ -356,6 +356,84 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
   assert.doesNotMatch(r.stdout, /"zoomRate"/);
 });
 
+// coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
+test("check --json gives the reference coverage, matching sound hits with effects only", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  for (const name of ["line", "door_slam"]) {
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", `sound/sfx/${name}.wav`],
+      { cwd: dir },
+    );
+    assert.equal(ff.status, 0, String(ff.stderr));
+  }
+  mkdirSync(join(dir, "renders/reference/ref/run-1"), { recursive: true });
+  writeFileSync(
+    join(dir, "renders/reference/ref/run-1/study.json"),
+    JSON.stringify({
+      fps: 30,
+      duration: 10,
+      picture: { cuts: [] },
+      sound: { hits: [{ at: 0 }, { at: 2 }, { at: 6 }] },
+    }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [],
+      narration: "line",
+      sfx: [
+        { name: "line", at: 0, gain: 0 },
+        { name: "door_slam", at: 2, gain: 0 },
+      ],
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, -3], l: [0, 1, 0] },
+      { t: 5, p: [1, 1, -3], l: [0, 1, 0] },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        sfx: "sound/sfx",
+        camTimeline: "src/timeline/cam.json",
+      },
+    }),
+  );
+  const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const { coverage } = JSON.parse(r.stdout);
+  assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
+  assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
+});
+
+// the build throws on an unknown tone map; check is where an AI looks after editing edit.json
+test("a tone map name the film-stage does not have is a fault in edit.json, with the near name", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ ...edit, look: { ...edit.look, toneMapping: "Neutral" } }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /look\.toneMapping "Neutral": .*did you mean "neutral"\?/);
+});
+
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

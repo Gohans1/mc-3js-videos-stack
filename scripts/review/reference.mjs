@@ -101,6 +101,7 @@ Writes solve.json (cam.json keys, the error of each frame) and sheet.jpg (cyan c
 to a fresh renders/reference/solve/<name>/run-* folder; needs bun run media setup camera.
 --write puts the keys into the film's camera timeline, a reference second as a heard second (a remake keeps the
 reference's timing); the keys between from and to and earlier mm-<name>-* keys are replaced, and listed.
+"to" is the shot's last frame: a span reaching another shot's cut key stops before writing.
 Exit 0: solved; 1: failed or stopped, cam.json unchanged; 2: usage error.
 next: look at sheet.jpg before --write`;
 
@@ -131,6 +132,13 @@ const writeSolvedKeys = (film, name, solvedKeys) => {
   const replaced = list.filter(
     (k) => String(k?.id ?? "").startsWith(own) || (k?.t >= from - 1e-6 && k?.t <= to + 1e-6),
   );
+  const cut = replaced.find((k) => k?.cut && k.t > from + 1e-6 && !String(k.id).startsWith(own));
+  if (cut) {
+    console.error(
+      `reference solve: the shot runs into the cut ${JSON.stringify(cut.id ?? `t ${cut.t}`)} at ${cut.t} s in ${conf.camTimeline}; end "to" a frame before that shot. The camera timeline is unchanged`,
+    );
+    process.exit(1);
+  }
   const merged = [...list.filter((k) => !replaced.includes(k)), ...keys].toSorted(
     (a, b) => a.t - b.t,
   );

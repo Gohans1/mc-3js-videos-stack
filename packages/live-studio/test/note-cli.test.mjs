@@ -570,18 +570,19 @@ test("done --cam accepts 135mm prime fov (8.6) and +/-pi roll while rejecting ou
   );
 });
 
-test("render, check and at name the creator's open notes, and how many came since the AI last listed them", () => {
+// their last line stays a next: line, the one an AI acts on
+test("render, check and at end on the creator's open notes, and how many came since the AI last listed them", () => {
   const dir = film([note("a", "x"), note("b", "y", { state: "check", done: true })]);
   assert.equal(
     noteNudge(dir),
-    "creator notes: 1 open, 1 new since your last bun run notes: bun run notes",
+    "next: bun run notes first: the creator has 1 open note, 1 new since your last bun run notes",
   );
   recordNoteReads(dir, [], createNotes(dir).read());
-  assert.equal(noteNudge(dir), "creator notes: 1 open: bun run notes");
+  assert.equal(noteNudge(dir), "next: bun run notes first: the creator has 1 open note");
   createNotes(dir).add({ note: note("c", "z") });
   assert.equal(
     noteNudge(dir),
-    "creator notes: 2 open, 1 new since your last bun run notes: bun run notes",
+    "next: bun run notes first: the creator has 2 open notes, 1 new since your last bun run notes",
   );
   assert.equal(noteNudge(film([note("b", "y", { state: "done", done: true })])), "");
 });

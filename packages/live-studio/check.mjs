@@ -8,6 +8,7 @@ import { ANIMS } from "film-stage/animate";
 import { SHAKES } from "film-stage/camera";
 import { LOOK_IDS } from "film-stage/looks";
 import { TEXT_ITEM_KEYS } from "film-stage/titles";
+import { TONE_MAPS } from "film-stage/tone";
 import { TRANSITIONS } from "film-stage/transitions";
 
 import { LOCAL, vaultPath } from "../../scripts/vault.mjs";
@@ -578,6 +579,13 @@ rowTypos(
   GRADE_KEYS.map((k) => `grade.${k}`),
 );
 const checkLook = (where, slot, look) => checkPreset(where, slot, look, LOOK_IDS, "look");
+checkPreset(
+  "src/edit.json",
+  "look.toneMapping",
+  readJson("src/edit.json")?.look?.toneMapping,
+  TONE_MAPS,
+  "tone map",
+);
 if (Array.isArray(adjRead?.items))
   adjRead.items.forEach((it, i) =>
     checkLook(conf.adjustmentTimeline, `items[${i}].grade.look`, it?.grade?.look),
@@ -736,7 +744,8 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
     };
     const heard = mapTimeline("sound", selected, soundClock, false, null, soundDurations);
     heard.sfx.forEach((c, i) => {
-      if (!selected.sfx[i]._off && !muted.has(lanes.sfx[i].track) && !(c.length <= 0))
+      const clip = selected.sfx[i];
+      if (!clip._off && !clip._narration && !muted.has(lanes.sfx[i].track) && !(c.length <= 0))
         covered.sfx.push(c.at);
     });
     const late = [
@@ -1215,6 +1224,7 @@ const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
   issue: ps.map((p) => p.issue).join("\n"),
 }));
 const shownWarnings = [...warnings, ...hints];
+if (coverage && !json) console.log(formatCoverage(coverage));
 if (json)
   console.log(
     JSON.stringify({ ok: !problems.length, problems, warnings, ...(coverage && { coverage }) }),
@@ -1229,7 +1239,6 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
-if (coverage && !json) console.log(formatCoverage(coverage));
 const notesWaiting = json ? "" : noteNudge(PROJECT);
 if (notesWaiting) console.log(notesWaiting);
 await tell(PROJECT, {
