@@ -78,6 +78,13 @@ export const clockForTimeline = (name) =>
     : name === "sound"
       ? audioClock
       : (layerClocks[name === "openfilm" ? "overlays" : name] ?? timingClock);
+// the heard seconds where camera keys with cut: true cut the picture; the first key starts it, so it is no cut
+export const cameraCutSeconds = (keys) => {
+  const clock = clockForTimeline("cam");
+  return (Array.isArray(keys) ? keys : [])
+    .filter((k) => Number.isFinite(k?.t))
+    .flatMap((k, i) => (i > 0 && k.cut ? [clock.outputAt?.(k.t, "after") ?? k.t] : []));
+};
 export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 

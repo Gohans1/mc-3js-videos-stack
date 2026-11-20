@@ -8,7 +8,13 @@ import { canPlaceCameraCut } from "../src/camera-clock.mjs";
 import { cameraSpeed } from "../src/camera-speed.mjs";
 import { heardLength } from "../src/film.mjs";
 import { mapTimeline } from "../src/timing-data.mjs";
-import { cameraTimesAt, clockForTimeline, setTiming, timedDraw } from "../src/timing-state.mjs";
+import {
+  cameraCutSeconds,
+  cameraTimesAt,
+  clockForTimeline,
+  setTiming,
+  timedDraw,
+} from "../src/timing-state.mjs";
 
 test("mixed legacy and identified camera keys at the opening keep their authored order on save", () => {
   setTiming({}, 8, []);
@@ -360,4 +366,14 @@ test("heardLength sets the camera clock from the film's shots, so an output-cloc
   } finally {
     setTiming({}, 8, []);
   }
+});
+
+test("camera keys with cut: true cut the picture at their heard second, after a speed ramp too", (t) => {
+  t.after(() => setTiming({}, 8, []));
+  const keys = [{ t: 0, cut: true }, { t: 1 }, { t: 3, cut: true }, { t: 5 }, { t: 6, cut: true }];
+  setTiming({}, 8, []);
+  assert.deepEqual(cameraCutSeconds(keys), [3, 6]);
+  // the first two source seconds play in one
+  setTiming({ speeds: [{ from: 0, to: 2, rate: 2 }] }, 8, []);
+  assert.deepEqual(cameraCutSeconds(keys), [2, 5]);
 });

@@ -60,7 +60,7 @@ import { refCutsWarning, referenceCopy, unstudiedWarning } from "./src/ref-cuts.
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
-import { clockForTimeline } from "./src/timing-state.mjs";
+import { cameraCutSeconds, clockForTimeline } from "./src/timing-state.mjs";
 import { assertInsideDir } from "./src/voice-map.mjs";
 
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
@@ -1222,7 +1222,7 @@ const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =
 if (camKeys?.length && filmEnds()) {
   const camClock = clockForTimeline("cam");
   const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
-  covered.cameraCuts = camKeys.flatMap((k, i) => (i > 0 && k.cut ? [heard(k.t)] : []));
+  covered.cameraCuts = cameraCutSeconds(camKeys);
   covered.cameraUntil = heard(Math.max(...camKeys.map((k) => k.t)));
   const [first, ...rest] = refCutsWarning(
     PROJECT,

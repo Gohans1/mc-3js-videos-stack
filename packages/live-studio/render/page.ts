@@ -2,12 +2,13 @@
 // The page render.mjs opens in a headless Chrome: draws frames with the film's own draw(t), the same code the studio shows,
 // and encodes clips in the browser (mediabunny on WebCodecs, GPU H.264). Same t, same picture.
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
+import { EDIT } from "live-studio/edit";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
 import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
 import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
-import { timingClock } from "../src/timing-state.mjs";
+import { cameraCutSeconds, timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
@@ -64,11 +65,16 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
+  // framecheck skips a jump at a cut: a shot's start, or a camera key with cut: true inside a shot
+  const camKeys = Array.isArray(EDIT.cam) ? EDIT.cam : EDIT.cam?.keys;
+  const cuts = [...SHOTS.slice(1).map((s) => s.t), ...cameraCutSeconds(camKeys)]
+    .sort((a, b) => a - b)
+    .filter((t, i, all) => !i || t - all[i - 1] > 1e-6);
   if (cfg.clip)
     await post(
       "/cuts",
       JSON.stringify({
-        times: SHOTS.slice(1).map((s) => s.t),
+        times: cuts,
         variants: (render.variants ?? []).map((v) => v.id),
       }),
     );
