@@ -433,15 +433,24 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   let bonesVer = 0;
   const atOrigin = (fn) => {
     bonesVer++;
-    const p0 = player.g.position.clone(),
-      q0 = player.g.quaternion.clone();
+    const parent0 = player.g.parent,
+      p0 = player.g.position.clone(),
+      q0 = player.g.quaternion.clone(),
+      s0 = player.g.scale.clone(),
+      rs0 = player.rig?.scale.clone();
+    player.g.parent = null;
     player.g.position.set(0, 0, 0);
     player.g.quaternion.identity();
+    player.g.scale.set(1, 1, 1);
+    player.rig?.scale.set(1, 1, 1);
     try {
       return fn();
     } finally {
+      player.g.parent = parent0;
       player.g.position.copy(p0);
       player.g.quaternion.copy(q0);
+      player.g.scale.copy(s0);
+      if (rs0) player.rig.scale.copy(rs0);
     }
   };
   src.update();
@@ -449,7 +458,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const srcLeg =
     src.atNow("hipL").distanceTo(src.atNow("kneeL")) +
     src.atNow("kneeL").distanceTo(src.atNow("ankleL"));
-  const k = player.legReach / srcLeg; // the source's moves scaled to Steve's shorter legs
+  const k = (player.restLegReach ?? player.legReach) / srcLeg; // the source's moves scaled to Steve's shorter legs
   // everything below reads the source's rest from the pose it is in now: it must stand upright with its limbs square to
   // +z (a T- or A-pose facing +z), so build the source before any mixer has moved it
   const along = (a, c) => Math.abs(src.atNow(c).sub(src.atNow(a)).normalize().z);

@@ -375,7 +375,7 @@ const bytesOf = async (url) => {
 // his bones at rest and the skinned meshes the retargeter measures his body from (mocap.ts bodyBoxes)
 const rigOf = (player) => {
   player.setPose({});
-  const nums = [player.legReach],
+  const nums = [player.restLegReach ?? player.legReach],
     parts = [];
   player.g.traverse((o) => {
     if (!o.isBone && !o.isSkinnedMesh) return;
