@@ -565,7 +565,11 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ["scripts/media/audio_sdk.py", "lazy audio SDK backends used by the media worker"],
       ["scripts/media/timeline.py", "OTIO handoff backend used by the media worker"],
       ["scripts/media/tracking.py", "reference tracking worker spawned by media CLI"],
-      ["scripts/media/camera.py", "camera motion worker spawned by media CLI and reference study"],
+      [
+        "scripts/media/camera.py",
+        "camera motion and solve worker spawned by media CLI and reference study/solve",
+      ],
+      ["scripts/media/camera_solve.py", "matchmove solver imported by the camera worker"],
       ["scripts/media/library.py", "local Foley catalog worker spawned by media CLI"],
       [
         "scripts/media/llama.py",

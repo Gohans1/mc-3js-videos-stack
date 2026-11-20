@@ -15,8 +15,12 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { cliArgs, needFilm, numberArg } from "../../packages/live-studio/src/cli.mjs";
+import { heardLength } from "../../packages/live-studio/src/film.mjs";
 import { killProcessTree } from "../../packages/live-studio/src/kill-process.mjs";
 import { startJob } from "../../packages/live-studio/src/tell.mjs";
+import { compactJson } from "../../packages/live-studio/src/timeline_file.mjs";
+import { clockForTimeline } from "../../packages/live-studio/src/timing-state.mjs";
+import { writeAtomicSync } from "../../packages/live-studio/src/voice-map.mjs";
 import { mediaPython } from "../media/home.mjs";
 
 async function runWorker(executable, args, minutes) {
@@ -56,6 +60,7 @@ const HELP = `Optional reference analysis; never required to author a film.
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
+  bun run reference solve <shot.json> [--write]  Matchmove one shot's camera from points of our set; solve --help
   --out <folder>     Reports and comparison PNGs (default renders/reference/<video-name> or compare).
   --fit              Compare after scaling the remake's time to the reference's length (compare only).
   --film <film.html> Optional OpenFilm project for the upstream reused-media check (compare only).
@@ -86,6 +91,56 @@ and references/<name>.mp4 becomes an H.264 copy (CRF 18, long side 1920 at most,
 AAC audio copied as it is, other audio AAC 256k).
 Never replaces a file: an existing name stops it (exit 2) before anything is copied.
 next: bun run reference study references/<name>.mp4`;
+
+const SOLVE_HELP = `Solve one reference shot's camera from points of our set (a matchmove), run in films/<name>.
+  bun run reference solve shots/pour.json [--video references/ref.mp4] [--write] [--minutes 10]
+The shot file names reference seconds (from, to), the lens (fov in degrees, or null to fit it) and 4 or more
+points of our set: xyz in world metres and where each shows in the reference, uv {second: [x, y]} in video pixels,
+followed frame to frame between those seconds. Every field: scripts/media/camera_solve.py.
+Writes solve.json (cam.json keys, the error of each frame) and sheet.jpg (cyan crosses solved, yellow rings tracked)
+to a fresh renders/reference/solve/<name>/run-* folder; needs bun run media setup camera.
+--write puts the keys into the film's camera timeline, a reference second as a heard second (a remake keeps the
+reference's timing); the keys between from and to and earlier mm-<name>-* keys are replaced, and listed.
+Exit 0: solved; 1: failed or stopped, cam.json unchanged; 2: usage error.
+next: look at sheet.jpg before --write`;
+
+// the solved keys into package.json "live-studio".camTimeline: reference (heard) seconds become camera seconds through
+// the film's edit, and they take over their span and any earlier solve of the same shot
+const writeSolvedKeys = (film, name, solvedKeys) => {
+  const conf = JSON.parse(readFileSync(join(film, "package.json"), "utf8"))["live-studio"] ?? {};
+  if (!conf.camTimeline) {
+    console.error(
+      'reference solve: package.json has no "live-studio".camTimeline; the keys stay in solve.json',
+    );
+    process.exit(1);
+  }
+  const file = join(film, conf.camTimeline);
+  const data = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : [];
+  const list = Array.isArray(data) ? data : data?.keys;
+  if (!Array.isArray(list)) {
+    console.error(`reference solve: ${conf.camTimeline} is neither a key list nor {keys}`);
+    process.exit(1);
+  }
+  const camClock = heardLength(film, conf) ? clockForTimeline("cam") : null;
+  const keys = solvedKeys.map((k) => ({
+    ...k,
+    t: +(camClock ? camClock.sourceAt(k.t) : k.t).toFixed(4),
+  }));
+  const [from, to] = [keys[0].t, keys.at(-1).t];
+  const own = `mm-${name}-`;
+  const replaced = list.filter(
+    (k) => String(k?.id ?? "").startsWith(own) || (k?.t >= from - 1e-6 && k?.t <= to + 1e-6),
+  );
+  const merged = [...list.filter((k) => !replaced.includes(k)), ...keys].toSorted(
+    (a, b) => a.t - b.t,
+  );
+  writeAtomicSync(
+    file,
+    `${compactJson(Array.isArray(data) ? merged : { ...data, keys: merged })}\n`,
+  );
+  const gone = replaced.map((k) => k.id ?? `t ${k.t}`);
+  return `wrote ${keys.length} keys to ${conf.camTimeline} (camera seconds ${from}–${to})${gone.length ? `; replaced ${gone.length}: ${gone.join(", ")}` : ""}`;
+};
 
 if (process.argv[2] === "inspect") {
   const args = process.argv.slice(3);
@@ -234,6 +289,72 @@ if (process.argv[2] === "add") {
     );
   }
   console.log(`next: bun run reference study references/${name}.mp4`);
+  process.exit(0);
+}
+
+if (process.argv[2] === "solve") {
+  const argv = cliArgs(
+    SOLVE_HELP,
+    ["--video file", "--write", "--minutes N"],
+    1,
+    process.argv.slice(3),
+  );
+  const { positionals, values } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: { video: { type: "string" }, write: { type: "boolean" }, minutes: { type: "string" } },
+  });
+  if (positionals.length !== 1) usage("Choose solve <shot.json>");
+  const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  const film = needFilm();
+  const shotFile = resolve(positionals[0]);
+  const video = resolve(values.video ?? "references/ref.mp4");
+  for (const file of [shotFile, video])
+    if (!statSync(file, { throwIfNoEntry: false })?.isFile()) usage(`No local file: ${file}`);
+  let name;
+  try {
+    name = JSON.parse(readFileSync(shotFile, "utf8")).name;
+  } catch (error) {
+    usage(`${positionals[0]} is not JSON (${error.message})`);
+  }
+  if (!/^[a-z0-9][a-z0-9_-]*$/i.test(String(name)))
+    usage(`${positionals[0]}: name takes letters, digits, - and _`);
+  const python = mediaPython("camera");
+  if (!existsSync(python)) {
+    console.error("reference solve: needs bun run media setup camera first; nothing was solved");
+    process.exit(1);
+  }
+  const base = join(film, "renders/reference/solve", name);
+  mkdirSync(base, { recursive: true });
+  const out = mkdtempSync(join(base, `run-${Date.now()}-`));
+  console.error(`Solving ${name}; stops after ${minutes} minute(s). Evidence: ${out}`);
+  const ended = await startJob(film, `reference solve ${name}`, { say: `Matchmoving ${name}` });
+  const worker = fileURLToPath(new URL("../media/camera.py", import.meta.url));
+  const { status, stopped } = await runWorker(
+    python,
+    ["-B", worker, "solve", video, "--shot", shotFile, "--out", out],
+    minutes,
+  );
+  const reportFile = join(out, "solve.json");
+  const solved = !stopped && status === 0 && existsSync(reportFile);
+  await ended({
+    say: `Matchmove ${name} ${solved ? "solved" : "needs attention"}`,
+    level: solved ? "ok" : "warn",
+  });
+  if (!solved) {
+    console.error(
+      `reference solve: ${stopped ? "deadline reached" : `the solve failed (exit ${status})`}; cam.json is unchanged`,
+    );
+    process.exit(1);
+  }
+  const report = JSON.parse(readFileSync(reportFile, "utf8"));
+  console.log(`solve: ${reportFile}\nsheet: ${join(out, "sheet.jpg")}`);
+  if (values.write) console.log(writeSolvedKeys(film, name, report.keys));
+  console.log(
+    values.write
+      ? "next: look at sheet.jpg, then bun run check and a still of the shot"
+      : `next: look at sheet.jpg; rerun with --write to put the ${report.keys.length} keys into the camera timeline`,
+  );
   process.exit(0);
 }
 

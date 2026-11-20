@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -14,6 +15,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { mediaPython } from "../media/home.mjs";
+import { tableShot, testVideo } from "./pinhole.mjs";
 
 const cli = fileURLToPath(new URL("../review/reference.mjs", import.meta.url));
 const run = (cwd, args) =>
@@ -226,6 +228,60 @@ test("reference add keeps the source under a plain name and makes an H.264 copy 
     rmSync(film, { recursive: true, force: true });
   }
 }, 60000);
+
+// a film hand-merged ~300 solved keys into cam.json; solve --write replaces the shot's span and its own earlier solve only
+test.skipIf(!existsSync(mediaPython("camera")))(
+  "reference solve --write puts the solved keys in the camera timeline, replacing that span and the shot's earlier keys",
+  () => {
+    const film = mkdtempSync(join(tmpdir(), "reference-solve-"));
+    try {
+      mkdirSync(join(film, "src/timeline"), { recursive: true });
+      mkdirSync(join(film, "references"));
+      writeFileSync(join(film, "src/scene.ts"), "");
+      writeFileSync(join(film, "src/edit.json"), JSON.stringify({ end: 5 }));
+      writeFileSync(
+        join(film, "package.json"),
+        JSON.stringify({ "live-studio": { camTimeline: "src/timeline/cam.json" } }),
+      );
+      const cam = () =>
+        JSON.parse(readFileSync(join(film, "src/timeline/cam.json"), "utf8")).keys.map((k) => k.id);
+      writeFileSync(
+        join(film, "src/timeline/cam.json"),
+        JSON.stringify({
+          keys: [
+            { t: 0.2, id: "inside", p: [0, 1, 0], l: [0, 1, 1] },
+            { t: 1, id: "mm-table-9", p: [0, 1, 0], l: [0, 1, 1] },
+            { t: 2, id: "after", p: [0, 1, 0], l: [0, 1, 1] },
+          ],
+        }),
+      );
+      const made = spawnSync("ffmpeg", [...testVideo, join(film, "references/ref.mkv")], {
+        encoding: "utf8",
+        timeout: 10000,
+      });
+      expect(made.status, made.stderr).toBe(0);
+      writeFileSync(join(film, "pour.json"), JSON.stringify(tableShot()));
+
+      const looked = run(film, ["solve", "pour.json", "--video", "references/ref.mkv"]);
+      expect(looked.status, looked.stdout + looked.stderr).toBe(0);
+      expect(cam()).toEqual(["inside", "mm-table-9", "after"]);
+      expect(looked.stdout).toMatch(/rerun with --write to put the 13 keys/);
+
+      const wrote = run(film, ["solve", "pour.json", "--video", "references/ref.mkv", "--write"]);
+      expect(wrote.status, wrote.stdout + wrote.stderr).toBe(0);
+      expect(cam()).toEqual([...Array.from({ length: 13 }, (_, n) => `mm-table-${n}`), "after"]);
+      expect(wrote.stdout).toMatch(/wrote 13 keys .* replaced 2: inside, mm-table-9/);
+      const runs = readdirSync(join(film, "renders/reference/solve/table"));
+      expect(runs).toHaveLength(2);
+      expect(existsSync(join(film, "renders/reference/solve/table", runs[1], "sheet.jpg"))).toBe(
+        true,
+      );
+    } finally {
+      rmSync(film, { recursive: true, force: true });
+    }
+  },
+  120000,
+);
 
 test("failed analysis never recommends a previous report and each completed run keeps its own evidence", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-fresh-"));

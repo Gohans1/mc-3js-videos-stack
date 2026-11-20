@@ -1,7 +1,9 @@
-"""The camera's motion in a video, frame by frame, and its whip pans, on CPU with OpenCV.
+"""The camera in a video on CPU with OpenCV: its motion frame by frame and its whip pans (motion), or one shot's camera
+solved from surveyed points of our set (solve, a matchmove: camera_solve.py has the shot file).
 
-  bun run media camera reference.mp4
-  bun run media camera reference.mp4 --from 2 --to 6
+  bun run media camera motion reference.mp4
+  bun run media camera motion reference.mp4 --from 2 --to 6
+  bun run media camera solve references/ref.mp4 --shot shots/pour.json
 
 Each frame pair: corners (Shi-Tomasi) on the earlier frame, followed into the next by pyramidal Lucas-Kanade, then one
 similarity (move, zoom, turn) fitted by RANSAC, so a subject moving on its own counts less than the frame around it.
@@ -20,6 +22,8 @@ import math
 import os
 import sys
 from pathlib import Path
+
+from camera_solve import read_shot, solve
 
 LONG_SIDE = 360
 STILL_GREY = 3.0
@@ -130,20 +134,31 @@ def whips_of(rows, fps):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("action", choices=["motion"])
+    parser.add_argument("action", choices=["motion", "solve"])
     parser.add_argument("source", type=Path)
     parser.add_argument("--from", dest="start", type=float, default=0.0)
     parser.add_argument("--to", dest="end", type=float)
+    parser.add_argument("--shot", type=Path, help="solve: the shot file, see camera_solve.py")
     parser.add_argument("--out", type=Path, default=os.environ.get("MC_MEDIA_RUN_DIR"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     source = args.source.resolve()
     if not source.is_file():
         parser.error("source must be a local video file")
-    if not math.isfinite(args.start) or args.start < 0 or (args.end is not None and args.end <= args.start):
-        parser.error("--from is a second from 0 and --to comes after it")
-    plan = {"tool": "camera", "source": str(source), "requiredFiles": [],
-            "parameters": {"from": args.start, "to": args.end}}
+    shot = None
+    if args.action == "solve":
+        if args.shot is None or not args.shot.is_file():
+            parser.error("solve needs --shot <shot.json>")
+        try:
+            shot = read_shot(args.shot)
+        except (ValueError, json.JSONDecodeError) as error:
+            parser.error(f"{args.shot}: {error}")
+        parameters = {"shot": str(args.shot.resolve()), "name": shot["name"]}
+    else:
+        if not math.isfinite(args.start) or args.start < 0 or (args.end is not None and args.end <= args.start):
+            parser.error("--from is a second from 0 and --to comes after it")
+        parameters = {"from": args.start, "to": args.end}
+    plan = {"tool": "camera", "action": args.action, "source": str(source), "requiredFiles": [], "parameters": parameters}
     if args.dry_run:
         print(json.dumps(plan))
         return 0
@@ -154,17 +169,24 @@ def main():
         parser.error("--out must be empty; previous artifacts remain intact")
     out.mkdir(parents=True, exist_ok=True)
     try:
-        fps, rows = measure(source, args.start, args.end)
+        if shot:
+            report = solve(source, shot, out)
+            result = {"status": "completed", "plan": plan, "solve": "solve.json", "sheet": "sheet.jpg",
+                      "summary": report["summary"],
+                      "verification": "look at sheet.jpg: cyan crosses (solved) on the yellow rings (tracked); a frame with a large err is a lost track or a wrong xyz"}
+        else:
+            fps, rows = measure(source, args.start, args.end)
+            whips = whips_of(rows, fps)
+            motion = {"fps": fps, "units": "dx, dy: frame widths/heights a frame, dx < 0 the camera turns right; zoom > 1 pushes in; turn: degrees",
+                      "frames": rows, "whips": whips}
+            (out / "motion.json").write_text(json.dumps(motion) + "\n", encoding="utf-8")
+            result = {"status": "completed", "plan": plan, "motion": "motion.json", "whips": len(whips),
+                      "verification": "estimates from tracked corners; look at the frames of a whip before matching it"}
     except (Exception, KeyboardInterrupt) as error:
         (out / "result.json").write_text(json.dumps({"status": "failed", "plan": plan, "error": str(error)}, indent=2) + "\n", encoding="utf-8")
         print(str(error), file=sys.stderr)
         return 1
-    whips = whips_of(rows, fps)
-    motion = {"fps": fps, "units": "dx, dy: frame widths/heights a frame, dx < 0 the camera turns right; zoom > 1 pushes in; turn: degrees",
-              "frames": rows, "whips": whips}
-    (out / "motion.json").write_text(json.dumps(motion) + "\n", encoding="utf-8")
-    (out / "result.json").write_text(json.dumps({"status": "completed", "plan": plan, "motion": "motion.json", "whips": len(whips),
-                                                 "verification": "estimates from tracked corners; look at the frames of a whip before matching it"}, indent=2) + "\n", encoding="utf-8")
+    (out / "result.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
     print(out / "result.json")
     return 0
 

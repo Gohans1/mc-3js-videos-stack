@@ -3413,7 +3413,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "reference",
     category: "render",
     summary:
-      "Add a reference to the film, inspect pictures/captions, study timing or compare videos; no required style or quality score.",
+      "Add a reference to the film, inspect pictures/captions, study timing, compare videos or matchmove a shot's camera; no required style or quality score.",
     runner: "bun-script",
     target: "reference",
     cwdModes: ["film", "root"],
@@ -3422,10 +3422,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "operation",
         label: "Operation",
         type: "enum",
-        options: ["add", "inspect", "study", "compare"],
+        options: ["add", "inspect", "study", "compare", "solve"],
         required: true,
       },
-      { key: "reference", label: "Reference Video / URL", type: "string", required: true },
+      {
+        key: "reference",
+        label: "Reference Video / URL (solve: Shot File)",
+        type: "string",
+        required: true,
+      },
       {
         key: "remake",
         label: "Remake Video",
@@ -3449,6 +3454,21 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         placeholder: "ref",
         visibleWhen: { field: "operation", in: ["add"] },
+      },
+      {
+        key: "--video",
+        flag: "--video",
+        label: "Reference Video",
+        type: "string",
+        placeholder: "references/ref.mp4",
+        visibleWhen: { field: "operation", in: ["solve"] },
+      },
+      {
+        key: "--write",
+        flag: "--write",
+        label: "Write Keys to cam.json",
+        type: "boolean",
+        visibleWhen: { field: "operation", in: ["solve"] },
       },
       {
         key: "--transcript",
@@ -3564,7 +3584,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
     },
   },
   // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────

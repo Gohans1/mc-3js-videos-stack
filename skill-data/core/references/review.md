@@ -121,7 +121,8 @@ CHECK=text:20,45 bun run render stills       # the lines between two heard secon
 | Need | Optional local command |
 | --- | --- |
 | Follow a chosen point | bun run media tapir clip.mp4 --point 158,105; repeat --point for more original-pixel positions, --query-frame indexes sampled frames |
-| Camera move & whip pans | bun run media camera clip.mp4 --from 2 --to 6; motion.json has the move, zoom and turn each frame and the whips, and reference study adds them to study.md |
+| Camera move & whip pans | bun run media camera motion clip.mp4 --from 2 --to 6; motion.json has the move, zoom and turn each frame and the whips, and reference study adds them to study.md |
+| Matchmove a shot | bun run reference solve shots/pour.json solves the camera from 4+ points of our set seen in the reference (uv at a few seconds, tracked between); look at sheet.jpg, then --write puts the keys in cam.json |
 | Follow detected objects | bun run media track clip.mp4 --class 1; RF-DETR Nano/ByteTrack uses COCO classes, not Minecraft-specific recognition |
 | Choose the span | --from/--to use source-file seconds; --fps 5 --frames 16 defaults keep a small CPU job, raise either deliberately |
 | Check the evidence | Each run keeps actual frame timestamps, original PNGs, tracks.jsonl, source/model hashes and decode logs; IDs/visibility remain unverified model predictions |
@@ -169,7 +170,7 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 | Separate voice, BGM & SFX stems | `bun run media separate <video>` (see `--ref sound`) |
 | Audio events, SFX localization, beats & speech | `earshot timeline`/`sheet`, `bun run media locate`, `ced`, `beat`, `vad`, `caption` (see `--ref sound`) |
 | On-screen text & experimental frame summary | `bun run media ocr` (RapidOCR); `bun run media vision` (SmolVLM2, verify against retained frames) |
-| Point, object & camera motion | `bun run media tapir` (points), `bun run media track` (COCO boxes), `bun run media camera` (camera move, whip pans) |
+| Point, object & camera motion | `bun run media tapir` (points), `bun run media track` (COCO boxes), `bun run media camera motion` (camera move, whip pans), `bun run reference solve` (matchmove) |
 | Streams, keyframes, proxy, pixel diff & QC | `bun run media ffmpeg probe\|proxy\|look\|check`, `bun run qc` |
 
 For an experimental description of one frame, use `bun run media vision reference.mp4 --at 5 --prompt "Describe the visible action."` or pass an image. The small CPU model can invent objects or names; `result.json` marks its text unverified and keeps the frame, model hashes, native response and server log for checking.
@@ -216,4 +217,5 @@ When the creator asks for a film that matches a reference shot for shot, measure
 | Fast moves | The studio draws no motion blur and the reference's whips are smeared: judge them on `SPAN=<a>,<b> SAMPLES=8 bun run render clip`, not studio playback |
 | Look closely | One or two frames per image, or `CROP=x,y,w,h` on a still: a wide sheet is shrunk when read, a cell ends near 360 px |
 | Before calling a shot done | A poster at its key frame, a `SAMPLES=8` clip of it, and `CHECK=motion:cam,<a>,<b> bun run render stills` over its moves |
-| Points in the reference | `bun run media tapir references/ref.mp4 --point x,y` follows a point; `bun run media camera` gives the camera's move each frame; reading coordinates off a grid by eye drifts |
+| Points in the reference | `bun run media tapir references/ref.mp4 --point x,y` follows a point; `bun run media camera motion` gives the camera's move each frame; reading coordinates off a grid by eye drifts |
+| Same camera as the reference | `bun run reference solve <shot.json> --write` replaces the shot's keys with a solved camera; a hand-written OpenCV solve is the tool's job, not the film's |
