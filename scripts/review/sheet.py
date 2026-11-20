@@ -48,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
 from stale import render_context  # noqa: E402
 from sheet_view import (  # noqa: E402
-    compact_filter, displayed_time, extract_displayed_frame, image_dimensions, presentation_times,
+    compact_filter, displayed_time, extract_displayed_frame, image_dimensions, load_caption_font, presentation_times,
     review, sample_aspects, seconds, timeline_length, video_bounds,
 )
 from studio_tell import tell  # noqa: E402
@@ -67,26 +67,6 @@ if args[:1] == ["help"] or "-h" in args or "--help" in args:
 def usage(why, code=2):
     print(why, file=sys.stderr)
     raise SystemExit(code)
-
-
-def load_caption_font(ImageFont, size=18):
-    for candidate in (
-        "C:/Windows/Fonts/consola.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Menlo.ttc",
-    ):
-        if Path(candidate).is_file():
-            try:
-                return ImageFont.truetype(candidate, size)
-            except OSError:
-                pass
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        return ImageFont.load_default()
 
 
 def caption_labels(paths):
@@ -305,6 +285,11 @@ if vs_arg is not None and mode not in ("overview", "frames"):
     usage("--vs goes with frames or overview: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
 if vs_arg is not None and not Path(vs_arg).is_file():
     usage(f"no {vs_arg}: --vs takes the reference video in the film, as references/ref.mp4")
+if vs_arg is not None:
+    try:
+        import PIL  # noqa: F401
+    except ImportError as e:
+        usage(f"Pillow (PIL) is required to label --vs pairs: {e}", 1)
 if not valid_count:
     why = ("cut takes a number: bun run sheet <video> cut 4" if mode == "cut" else
            "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words")

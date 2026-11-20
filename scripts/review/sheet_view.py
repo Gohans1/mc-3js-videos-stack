@@ -333,6 +333,26 @@ def extract_displayed_frame(video, dest, seek, *, origin=0, compact=False, canva
     return actual
 
 
+def load_caption_font(ImageFont, size=18):
+    for candidate in (
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Menlo.ttc",
+    ):
+        if Path(candidate).is_file():
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
 def pair_with_reference(ours, reference, dest):
     """reference | ours at the size of ours; the reference fits the picture, top-aligned, so a draft's strip stays under ours."""
     width, height = image_dimensions(ours)
@@ -341,6 +361,17 @@ def pair_with_reference(ours, reference, dest):
     command(["ffmpeg", "-nostdin", "-v", "error", "-y", *left, "-i", str(ours), "-filter_complex",
              f"[0:v]{fit},format=yuvj420p[r];[1:v]setsar=1,format=yuvj420p[o];[r][o]hstack=inputs=2",
              "-frames:v", "1", "-q:v", "2", str(dest)])
+    # the side is named on the picture: a reviewer handed a bare pair has blamed ours for the reference's own logos
+    from PIL import Image, ImageDraw, ImageFont
+    with Image.open(dest) as opened:
+        pair = opened.convert("RGB")
+    draw = ImageDraw.Draw(pair)
+    font = load_caption_font(ImageFont, max(12, height // 40))
+    for x, label in ((0, "REFERENCE" if reference else "REFERENCE (ended)"), (width, "OURS")):
+        box = draw.textbbox((x + 8, 8), label, font=font)
+        draw.rectangle((box[0] - 6, box[1] - 4, box[2] + 6, box[3] + 4), fill=(0, 0, 0))
+        draw.text((x + 8, 8), label, fill=(255, 255, 255), font=font)
+    pair.save(dest, quality=92)
 
 
 def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock, vs=None):

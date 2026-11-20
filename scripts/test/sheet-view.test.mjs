@@ -655,6 +655,9 @@ test("--vs pairs the reference's frame at the same heard second beside ours, bla
   assert.ok(rgb(after.vs, refHalf).every((c) => c < 30));
   assert.ok(rgb(after.vs, ourHalf)[2] > 220);
   assert.match(r.stdout, /reference \| ours/);
+  // each side is named on the picture itself, in a dark box at its top left
+  assert.ok(rgb(inside.vs, "crop=24:8:12:10,scale=1:1")[1] < 160);
+  assert.ok(rgb(inside.vs, "crop=24:8:332:10,scale=1:1")[0] < 160);
 
   const overview = indexOf(f.run("overview", "0-2/4", "--vs", "references/ref.mp4")).data;
   assert.deepEqual(dimensions(overview.entries[0].sheet), [2560, 720]);
