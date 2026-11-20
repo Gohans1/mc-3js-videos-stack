@@ -20,7 +20,10 @@ export interface EditProtection {
 export function openEditProtection(
   project: string,
   rel: string,
-  options?: { orderedRows?: boolean; normalize?: <T>(data: T) => T },
+  options?: {
+    orderedRows?: boolean;
+    normalize?: (data: unknown, previous?: unknown, alignRetimes?: boolean) => unknown;
+  },
 ): EditProtection;
 export function resetProtectedFiles(project: string, names: readonly string[]): void;
 export function warnProtectedEdits(project: string): void;

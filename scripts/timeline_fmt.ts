@@ -2,7 +2,7 @@
 //   bun ../../scripts/timeline_fmt.ts [stem|path ...]
 //   import { dump, load, save } from ".../scripts/timeline_fmt.ts"
 import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { basename, join, relative, resolve } from "node:path";
 
 import { cliArgs, jsonFile } from "../packages/live-studio/src/cli.mjs";
 import { openEditProtection } from "../packages/live-studio/src/edit-protection.mjs";
@@ -62,8 +62,14 @@ const resolveTargetArg = (cwd: string, raw: string): TargetFile => {
   if (!statSync(abs).isFile()) {
     throw new Error(`Timeline path is not a file: "${candidate}"`);
   }
-  const rel = relative(realpathSync.native(cwd), realpathSync.native(abs)).replaceAll("\\", "/");
-  return { abs, rel, label: labelFor(rel) };
+  const realCwd = realpathSync.native(cwd);
+  const realAbs = realpathSync.native(abs);
+  const rel = relative(realCwd, realAbs).replaceAll("\\", "/");
+  const topSeg = rel.split("/")[0]?.toLowerCase();
+  if (topSeg === ".studio" || topSeg === "node_modules") {
+    throw new Error(`Refusing to format internal file: "${rel}"`);
+  }
+  return { abs: join(resolve(cwd), rel), rel, label: labelFor(rel) };
 };
 
 if (import.meta.main) {

@@ -1,7 +1,15 @@
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -143,9 +151,15 @@ test("invalid, missing, non-json, and path-traversal arguments exit 2 without mo
       const castFile = join(dir, "src/timeline/cast.json");
       const sceneFile = join(dir, "src/scene.ts");
       const brokenFile = join(dir, "src/timeline/broken.json");
+      const studioMeta = join(dir, ".studio/meta.json");
+      const nodeModPkg = join(dir, "node_modules/pkg/package.json");
+      mkdirSync(join(dir, ".studio"), { recursive: true });
+      mkdirSync(join(dir, "node_modules/pkg"), { recursive: true });
       writeFileSync(castFile, MESSY_CAST);
       writeFileSync(sceneFile, "export const x = 1;\n");
       writeFileSync(brokenFile, "{bad json");
+      writeFileSync(studioMeta, '{   "internal": true  }');
+      writeFileSync(nodeModPkg, '{   "name": "pkg"  }');
 
       const badCases = [
         { argv: ["cast", "missing"], err: /missing|not found|ENOENT/i },
@@ -154,6 +168,8 @@ test("invalid, missing, non-json, and path-traversal arguments exit 2 without mo
         { argv: ["cast", "src/scene.ts"], err: /\.json/i },
         { argv: [".."], err: /escapes film directory|\.json/i },
         { argv: ["cast", "broken"], err: /broken\.json/i },
+        { argv: ["cast", ".studio/meta.json"], err: /internal|\.studio/i },
+        { argv: ["cast", "node_modules/pkg/package.json"], err: /internal|node_modules/i },
         { argv: ["--bogus"], err: /unknown option/i },
       ];
 
@@ -163,6 +179,8 @@ test("invalid, missing, non-json, and path-traversal arguments exit 2 without mo
         expect(res.stderr, `args=${JSON.stringify(argv)}`).toMatch(err);
         expect(readFileSync(castFile, "utf8"), `args=${JSON.stringify(argv)}`).toBe(MESSY_CAST);
         expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
+        expect(readFileSync(studioMeta, "utf8")).toBe('{   "internal": true  }');
+        expect(readFileSync(nodeModPkg, "utf8")).toBe('{   "name": "pkg"  }');
       }
     } finally {
       rmSync(outerDir, { recursive: true, force: true });
@@ -237,13 +255,13 @@ test("symlink/junction targets inside or replacing src/timeline exit 2 without w
       writeFileSync(castFile, MESSY_CAST);
 
       // Directory junction inside src/timeline/ pointing outside works on Windows without admin privileges
-      const linkDir = join(dir, "src/timeline/link");
+      const linkDir = join(dir, "src/timeline/linkdir.json");
       let linkedFile = false;
       try {
         symlinkSync(outsideFile, join(dir, "src/timeline/link.json"), "file");
         linkedFile = true;
       } catch {
-        // On Windows without Developer Mode, fall back to a directory junction
+        // On Windows without Developer Mode, a .json-suffixed directory junction exercises both explicit & zero-arg guards
         symlinkSync(outerDir, linkDir, "junction");
       }
 
@@ -257,9 +275,14 @@ test("symlink/junction targets inside or replacing src/timeline exit 2 without w
         expect(readFileSync(castFile, "utf8")).toBe(MESSY_CAST);
         expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
       } else {
-        const expRes = runFmt(["src/timeline/link/linked.json"], dir);
+        const expRes = runFmt(["src/timeline/linkdir.json/linked.json"], dir);
         expect(expRes.status).toBe(2);
         expect(expRes.stderr).toMatch(/symlink|junction|escapes/i);
+
+        const zeroRes = runFmt([], dir);
+        expect(zeroRes.status).toBe(2);
+        expect(zeroRes.stderr).toMatch(/symlink|junction|escapes/i);
+        expect(readFileSync(castFile, "utf8")).toBe(MESSY_CAST);
         expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
       }
 
@@ -307,5 +330,25 @@ test("Windows case-mismatch between on-disk filename and lowercase Studio guard 
     expect(expRes.status, expRes.stderr).toBe(0);
     expect(expRes.stderr).toMatch(/warning:.*Cam\.json.*Studio-protected/i);
     expect(readFileSync(camMixed, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAM))}\n`);
+  });
+});
+
+test("Windows explicit formatting with mismatched casing preserves exact on-disk filename casing", () => {
+  if (process.platform !== "win32") return;
+  withFilm((dir) => {
+    const timelineDir = join(dir, "src/timeline");
+    const castFile = join(timelineDir, "cast.json");
+    writeFileSync(castFile, MESSY_CAST);
+
+    const stemRes = runFmt(["CAST"], dir);
+    expect(stemRes.status, stemRes.stderr).toBe(0);
+    expect(readdirSync(timelineDir)).toEqual(["cast.json"]);
+    expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
+
+    writeFileSync(castFile, MESSY_CAST);
+    const pathRes = runFmt(["src/timeline/CAST.json"], dir);
+    expect(pathRes.status, pathRes.stderr).toBe(0);
+    expect(readdirSync(timelineDir)).toEqual(["cast.json"]);
+    expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
   });
 });

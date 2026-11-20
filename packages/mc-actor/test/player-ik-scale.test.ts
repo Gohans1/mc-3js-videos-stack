@@ -594,6 +594,96 @@ describe("mc-actor scale-aware IK and feet", () => {
         1e-4,
       );
     }
+
+    // 4. Parent rotation + non-zero actor at/yaw locks premultiply order (parentWorld * mG)
+    {
+      const { player } = await createRig();
+      const parent = new THREE.Group();
+      parent.position.set(1.5, 0, -2.5);
+      parent.rotation.y = 0.7;
+      parent.scale.setScalar(1.4);
+      parent.add(player.g);
+
+      const body = () => ({ at: [0.6, 0, -0.4], yaw: 35, pose: {}, gait: null });
+      const moves = [{ t: 0, at: [0.6, 0, -0.4], yaw: 35 }];
+      const feet = makeFeet(player, () => 0.6, body, {});
+      const f = feet(moves, 0.3);
+      expect(f.mode("L"), "rotated parent L locked").toBe("l1");
+      expect(f.mode("R"), "rotated parent R locked").toBe("l1");
+
+      player.g.position.set(0.6, 0, -0.4);
+      player.g.rotation.set(0, 35 * THREE.MathUtils.DEG2RAD, 0);
+      player.setPose({});
+      parent.updateMatrixWorld(true);
+      expect(f.L!.distanceTo(player.soleAt("L")), "rotated parent L matches soleAt").toBeLessThan(
+        1e-4,
+      );
+      expect(f.R!.distanceTo(player.soleAt("R")), "rotated parent R matches soleAt").toBeLessThan(
+        1e-4,
+      );
+    }
+
+    // 5. Non-uniform [1.6, 1.0, 1.6]: xzScale (1.6) keeps 0.20m drift locked while legScale (1.0) keeps y=0.06 off-floor
+    {
+      const { player } = await createRig();
+      player.g.scale.set(1.6, 1.0, 1.6);
+      const driftBody = (_m: unknown, t: number) => ({
+        at: [0, 0, t > 0.2 ? Math.min(0.2, (t - 0.2) * 0.4) : 0],
+        yaw: 0,
+        pose: { root: { y: -0.05 } },
+        gait: null,
+      });
+      const moves = [{ t: 0, at: [0, 0, 0], yaw: 0 }];
+      const feet = makeFeet(player, () => 1.0, driftBody, {});
+      for (let t = 0.05; t <= 0.95; t += 0.05) {
+        expect(
+          feet(moves, t).mode("L"),
+          `non-uniform xzScale 0.20m drift at t=${t.toFixed(2)}`,
+        ).toBe("l1");
+      }
+
+      const aDeg = (Math.acos(1 - 0.06 / player.legReach) * 180) / Math.PI;
+      const liftBody = () => ({
+        at: [0, 0, 0],
+        yaw: 0,
+        pose: { ulL: [-aDeg, 0, 0], llL: [2 * aDeg, 0, 0] },
+        gait: null,
+      });
+      const liftFeet = makeFeet(player, () => 0.5, liftBody, {});
+      expect(
+        liftFeet(moves, 0.2).mode("L"),
+        "non-uniform legScale=1.0 sole y=0.06 is off-floor",
+      ).toBe("f0");
+    }
+
+    // 6. legsSig() invalidates on parent transform or rig.scale mutations without manual updateMatrixWorld,
+    //    and stays invariant across g.position, g.rotation, and setPose
+    {
+      const { player } = await createRig();
+      const sigBase = player.legsSig();
+      player.g.position.set(4, 2, -3);
+      player.g.rotation.set(0.3, 1.2, -0.4);
+      player.setPose({ ulL: [-30, 0, 0], llL: [60, 0, 0] });
+      expect(player.legsSig(), "legsSig invariant to g.position/rotation/setPose").toBe(sigBase);
+
+      player.rig.scale.setScalar(1.3);
+      const sigRig = player.legsSig();
+      expect(sigRig, "legsSig changes on rig.scale").not.toBe(sigBase);
+      player.rig.scale.setScalar(1);
+
+      const parent = new THREE.Group();
+      parent.add(player.g);
+      const sigP0 = player.legsSig();
+      parent.position.set(1, 0, 0);
+      const sigPPos = player.legsSig();
+      expect(sigPPos, "legsSig changes on parent.position").not.toBe(sigP0);
+      parent.rotation.y = 0.5;
+      const sigPRot = player.legsSig();
+      expect(sigPRot, "legsSig changes on parent.rotation").not.toBe(sigPPos);
+      parent.scale.setScalar(1.5);
+      const sigPScale = player.legsSig();
+      expect(sigPScale, "legsSig changes on parent.scale").not.toBe(sigPRot);
+    }
   });
 
   test("retargeter scales world hip travel linearly on scaled actors and keeps soles grounded", async () => {
@@ -675,6 +765,64 @@ describe("mc-actor scale-aware IK and feet", () => {
       await runCase(scale, { floor: false, own: false });
       await runCase(scale, { floor: true, own: true });
     }
+
+    // Exact pose parity (including root.y on a crouched frame) with parent + g.scale + rig.scale all active,
+    // and all three transforms restored afterward
+    {
+      const unit = await createRig();
+      const scaled = await createRig();
+      const parent = new THREE.Group();
+      parent.position.set(3, 0.5, -2);
+      parent.scale.setScalar(1.2);
+      parent.add(scaled.player.g);
+      scaled.player.g.position.set(0.4, 0.2, -0.6);
+      scaled.player.g.rotation.set(0.1, 0.8, -0.2);
+      scaled.player.g.scale.setScalar(1.4);
+      scaled.player.rig.scale.setScalar(1.15);
+      const gPosBefore = scaled.player.g.position.toArray();
+      const gQuatBefore = scaled.player.g.quaternion.toArray();
+      const gScaleBefore = scaled.player.g.scale.toArray();
+      const rigScaleBefore = scaled.player.rig.scale.toArray();
+
+      const srcUnit = makeUprightMocapSource();
+      const srcScaled = makeUprightMocapSource();
+      const rtUnit = retargeter(srcUnit, unit.player, { floor: true, own: true });
+      const rtScaled = retargeter(srcScaled, scaled.player, { floor: true, own: true });
+
+      // Crouched/lifted frame (hips shifted forward and down by 0.15m)
+      srcUnit.setShift(0.1, -0.15, 0.35);
+      srcScaled.setShift(0.1, -0.15, 0.35);
+      const poseUnit = rtUnit.pose(0);
+      const poseScaled = rtScaled.pose(0);
+
+      expect(poseScaled.root.x).toBeCloseTo(poseUnit.root.x, 5);
+      expect(poseScaled.root.y).toBeCloseTo(poseUnit.root.y, 5);
+      expect(poseScaled.root.z).toBeCloseTo(poseUnit.root.z, 5);
+      for (const joint of [
+        "chest",
+        "head",
+        "uaL",
+        "laL",
+        "uaR",
+        "laR",
+        "ulL",
+        "llL",
+        "ulR",
+        "llR",
+      ]) {
+        for (let i = 0; i < 3; i++) {
+          expect(poseScaled[joint][i], `pose equality ${joint}[${i}]`).toBeCloseTo(
+            poseUnit[joint][i],
+            3,
+          );
+        }
+      }
+      expect(scaled.player.g.parent).toBe(parent);
+      expect(scaled.player.g.position.toArray()).toEqual(gPosBefore);
+      expect(scaled.player.g.quaternion.toArray()).toEqual(gQuatBefore);
+      expect(scaled.player.g.scale.toArray()).toEqual(gScaleBefore);
+      expect(scaled.player.rig.scale.toArray()).toEqual(rigScaleBefore);
+    }
   });
 
   test("IK handles degenerate scales, mirrored scale, coincident targets, dirty matrices, and elbow pole direction", async () => {
@@ -747,23 +895,57 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(allFinite(h0)).toBe(true);
     }
 
-    // 4. Dirty transforms without manual updateMatrixWorld(true) before calling IK
+    // 4. Dirty transforms without manual updateMatrixWorld(true) before calling armTo, legTo, and headTo
     {
-      const { player, handEndR } = await createRig();
+      const { player, handEndR, headFrame } = await createRig();
       player.g.position.set(1.5, 0, -2.0);
       player.g.scale.setScalar(1.4);
-      // Intentionally do NOT call player.g.updateMatrixWorld(true) before armTo/legTo!
-      const expectedShoulder = player.bones.uaR.getWorldPosition(new THREE.Vector3()).clone();
-      // Mutate position again without updating matrices
-      player.g.position.set(2.5, 0, -2.0);
-      const target = expectedShoulder.clone().add(new THREE.Vector3(1.0, -0.3, 0.45));
-      const arm = player.armTo("R", target);
+      const prevSh = player.bones.uaR.getWorldPosition(new THREE.Vector3()).clone();
+      const prevHip = player.bones.ulR.getWorldPosition(new THREE.Vector3()).clone();
+      const prevHeadCenter = player.bones.head.localToWorld(headFrame.centerLocal.clone());
+
+      // Mutate position WITHOUT calling updateMatrixWorld(true)
+      const shift = new THREE.Vector3(1.0, 0.25, 0.5);
+      player.g.position.add(shift);
+
+      const armTarget = prevSh
+        .clone()
+        .add(shift)
+        .add(new THREE.Vector3(0, -0.3, 0.45));
+      const arm = player.armTo("R", armTarget);
       player.setPose(arm);
       player.g.updateMatrixWorld(true);
-      expect(player.bones.laR.localToWorld(handEndR.clone()).distanceTo(target)).toBeLessThan(0.01);
+      expect(player.bones.laR.localToWorld(handEndR.clone()).distanceTo(armTarget)).toBeLessThan(
+        0.01,
+      );
+
+      player.setPose({ ulR: [-25, 0, 0], llR: [50, 0, 0] });
+      player.g.position.add(shift);
+      const legTarget = prevHip
+        .clone()
+        .addScaledVector(shift, 2)
+        .add(new THREE.Vector3(0.05, -0.7, 0.35));
+      const leg = player.legTo("R", legTarget);
+      player.setPose(leg);
+      player.g.updateMatrixWorld(true);
+      expect(player.soleAt("R").distanceTo(legTarget)).toBeLessThan(0.01);
+
+      player.setPose({});
+      player.g.position.add(shift);
+      const headCenterNow = prevHeadCenter.clone().addScaledVector(shift, 3);
+      const headTarget = headCenterNow.clone().add(new THREE.Vector3(0.4, -0.2, 1.0));
+      const head = player.headTo(headTarget);
+      player.setPose({ head });
+      player.g.updateMatrixWorld(true);
+      const cWorld = player.bones.head.localToWorld(headFrame.centerLocal.clone());
+      const fWorld = player.bones.head.localToWorld(headFrame.forwardLocal.clone());
+      expect(
+        fWorld.sub(cWorld).normalize().dot(headTarget.clone().sub(headCenterNow).normalize()),
+        "dirty headTo gaze alignment",
+      ).toBeGreaterThan(0.998);
     }
 
-    // 5. Elbow pole direction bends the elbow toward the requested pole side in world space
+    // 5. Elbow pole direction and legTo knee pole direction under scale
     {
       const { player, handEndL } = await createRig();
       player.g.scale.setScalar(1.5);
@@ -790,6 +972,58 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(elbowOut.x, "outward pole places elbow to character's left (+x)").toBeGreaterThan(
         sh.x + 0.1,
       );
+
+      // legTo preserves a turned-out knee plane under scale
+      player.setPose({ ulL: [-30, 50, 0], llL: [60, 0, 0] });
+      player.g.updateMatrixWorld(true);
+      const hip = player.bones.ulL.getWorldPosition(new THREE.Vector3());
+      const soleTarget = hip.clone().add(new THREE.Vector3(0, -0.72, 0.1));
+      const legTurned = player.legTo("L", soleTarget);
+      player.setPose(legTurned);
+      player.g.updateMatrixWorld(true);
+      expect(player.soleAt("L").distanceTo(soleTarget)).toBeLessThan(0.01);
+      const kneeWorld = player.bones.llL.getWorldPosition(new THREE.Vector3());
+      expect(kneeWorld.x, "turned-out left knee bends outward (+x)").toBeGreaterThan(hip.x + 0.15);
+    }
+
+    // 6. armTo, legTo, and headTo work accurately when rig.scale !== 1 (non-uniform)
+    {
+      const { player, handEndR, headFrame } = await createRig();
+      player.rig.scale.set(1.2, 1.5, 1.2);
+      player.setPose({});
+      player.g.updateMatrixWorld(true);
+
+      const sh = player.bones.uaR.getWorldPosition(new THREE.Vector3());
+      const armTarget = sh.clone().add(new THREE.Vector3(0.06, -0.35, 0.42));
+      const arm = player.armTo("R", armTarget);
+      player.setPose(arm);
+      player.g.updateMatrixWorld(true);
+      expect(player.bones.laR.localToWorld(handEndR.clone()).distanceTo(armTarget)).toBeLessThan(
+        0.01,
+      );
+
+      player.setPose({ ulR: [-25, 0, 0], llR: [50, 0, 0] });
+      player.g.updateMatrixWorld(true);
+      const hip = player.bones.ulR.getWorldPosition(new THREE.Vector3());
+      const legTarget = hip.clone().add(new THREE.Vector3(-0.04, -0.78, 0.25));
+      const leg = player.legTo("R", legTarget);
+      player.setPose(leg);
+      player.g.updateMatrixWorld(true);
+      expect(player.soleAt("R").distanceTo(legTarget)).toBeLessThan(0.01);
+
+      player.setPose({});
+      player.g.updateMatrixWorld(true);
+      const hc = player.bones.head.localToWorld(headFrame.centerLocal.clone());
+      const headTarget = hc.clone().add(new THREE.Vector3(0.3, -0.25, 1.1));
+      const head = player.headTo(headTarget);
+      player.setPose({ head });
+      player.g.updateMatrixWorld(true);
+      const cWorld = player.bones.head.localToWorld(headFrame.centerLocal.clone());
+      const fWorld = player.bones.head.localToWorld(headFrame.forwardLocal.clone());
+      expect(
+        fWorld.sub(cWorld).normalize().dot(headTarget.clone().sub(hc).normalize()),
+        "rig.scale headTo gaze alignment",
+      ).toBeGreaterThan(0.998);
     }
   });
 });
