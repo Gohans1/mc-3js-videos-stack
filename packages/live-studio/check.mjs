@@ -50,6 +50,7 @@ import {
 } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
+import { noteNudge } from "./src/note-cli.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
@@ -1190,6 +1191,8 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
+const notesWaiting = json ? "" : noteNudge(PROJECT);
+if (notesWaiting) console.log(notesWaiting);
 await tell(PROJECT, {
   say: problems.length
     ? `Checked the film's files: ${problems.length} problem${problems.length > 1 ? "s" : ""} to fix`

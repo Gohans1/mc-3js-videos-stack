@@ -26,6 +26,7 @@ import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { killProcessTree } from "./src/kill-process.mjs";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
+import { noteNudge } from "./src/note-cli.mjs";
 import { openFilmResource } from "./src/openfilm.mjs";
 import {
   fallbackTimingDuration,
@@ -1163,6 +1164,8 @@ if (!failed && chunks) {
   }
 }
 if (failed) console.log("next: fix what the ERROR above says, then run the same render again");
+const notesWaiting = noteNudge(PROJECT);
+if (notesWaiting) console.log(notesWaiting);
 await ended({
   say: failed
     ? `Render ${what} failed`

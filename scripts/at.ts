@@ -20,6 +20,7 @@ import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { ratioOf, sizeOf } from "../packages/live-studio/src/frame.ts";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
+import { noteNudge } from "../packages/live-studio/src/note-cli.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { deletedSaid, findNote, noteNumbers } from "../packages/live-studio/src/notes.mjs";
 import { openSound, pickSoundClip, probeAudio } from "../packages/live-studio/src/sound.mjs";
@@ -1042,5 +1043,7 @@ if (isMain) {
   out.push(
     `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,
   );
+  const notesWaiting = noteNudge(film);
+  if (notesWaiting) out.push(notesWaiting);
   console.log(out.join("\n"));
 }

@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { markDone, resolveNote, sendChange } from "../src/note-cli.mjs";
+import { markDone, noteNudge, recordNoteReads, resolveNote, sendChange } from "../src/note-cli.mjs";
 import { createNotes } from "../src/notes.mjs";
 
 const note = (id, text, extra = {}) => ({ id, t: 10, time: "0:10.000", shot: 2, text, ...extra });
@@ -568,4 +568,20 @@ test("done --cam accepts 135mm prime fov (8.6) and +/-pi roll while rejecting ou
     answer(dir, "done", "1", "over-rolled", "--after", pic, "--cam", "1,2,3,4,5,6,50,3.2").status,
     2,
   );
+});
+
+test("render, check and at name the creator's open notes, and how many came since the AI last listed them", () => {
+  const dir = film([note("a", "x"), note("b", "y", { state: "check", done: true })]);
+  assert.equal(
+    noteNudge(dir),
+    "creator notes: 1 open, 1 new since your last bun run notes: bun run notes",
+  );
+  recordNoteReads(dir, [], createNotes(dir).read());
+  assert.equal(noteNudge(dir), "creator notes: 1 open: bun run notes");
+  createNotes(dir).add({ note: note("c", "z") });
+  assert.equal(
+    noteNudge(dir),
+    "creator notes: 2 open, 1 new since your last bun run notes: bun run notes",
+  );
+  assert.equal(noteNudge(film([note("b", "y", { state: "done", done: true })])), "");
 });
