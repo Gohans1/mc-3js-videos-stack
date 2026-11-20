@@ -28,6 +28,7 @@ import {
   lightsAt,
 } from "film-stage/lights";
 import { makeTitles } from "film-stage/titles";
+import { toneMappingMode } from "film-stage/tone";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
 import { mouthCues } from "live-studio/lips";
@@ -48,7 +49,6 @@ import {
   RenderPass,
   SMAAEffect,
   ToneMappingEffect,
-  ToneMappingMode,
   VignetteEffect,
 } from "postprocessing";
 // A new Minecraft film: a room, Steve and one keyed camera, made to be replaced shot by shot. Blocks are the game's own
@@ -218,7 +218,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       new BloomEffect({ intensity: 0.4, luminanceThreshold: 1.0, mipmapBlur: true }),
       tone,
       new VignetteEffect({ offset: 0.3, darkness: 0.45 }),
-      new ToneMappingEffect({ mode: ToneMappingMode.AGX }),
+      new ToneMappingEffect({ mode: toneMappingMode(EDIT.look.toneMapping) }),
     ),
   );
   const adjust = makeAdjustments(composer, camera),
@@ -656,7 +656,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "IN FRAME / STACK",
         lines: [
           {
-            text: "three.js r186 · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing AgX",
+            text: `three.js r186 · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
           },
         ],
       },

@@ -32,7 +32,8 @@
     "./grade-wheels": "./src/grade-wheels.ts",
     "./looks": "./src/looks.ts",
     "./dof": "./src/dof.ts",
-    "./lut": "./src/lut.ts"
+    "./lut": "./src/lut.ts",
+    "./tone": "./src/tone.ts"
   },
   "scripts": {
     "test": "bun test"
