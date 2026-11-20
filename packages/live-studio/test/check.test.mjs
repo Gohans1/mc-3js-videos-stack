@@ -356,26 +356,36 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
   assert.doesNotMatch(r.stdout, /"zoomRate"/);
 });
 
-// a film with the demo's scene, a 10 s reference study of these hits and these sound effects ("line" is its narration)
-const coverageFilm = (t, hits, sfx) => {
+// a film with the demo's scene, a 10 s reference study of these hits (none when hits is null) and these sound effects
+// ("line" is its narration); refs(dir) adds files under references/
+const coverageFilm = (t, hits, sfx, refs) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"));
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
-  for (const name of ["line", "door_slam"]) {
+  for (const [name, hz] of [
+    ["line", 440],
+    ["door_slam", 880],
+  ]) {
     const ff = spawnSync(
       "ffmpeg",
-      ["-v", "error", "-f", "lavfi", "-i", "sine=d=0.5", `sound/sfx/${name}.wav`],
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=0.5:f=${hz}`, `sound/sfx/${name}.wav`],
       { cwd: dir },
     );
     assert.equal(ff.status, 0, String(ff.stderr));
   }
-  mkdirSync(join(dir, "renders/reference/ref/run-1"), { recursive: true });
-  writeFileSync(
-    join(dir, "renders/reference/ref/run-1/study.json"),
-    JSON.stringify({ fps: 30, duration: 10, picture: { cuts: [] }, sound: { hits } }),
-  );
+  if (hits) {
+    mkdirSync(join(dir, "renders/reference/ref/run-1"), { recursive: true });
+    writeFileSync(
+      join(dir, "renders/reference/ref/run-1/study.json"),
+      JSON.stringify({ fps: 30, duration: 10, picture: { cuts: [] }, sound: { hits } }),
+    );
+  }
+  if (refs) {
+    mkdirSync(join(dir, "references"));
+    refs(dir);
+  }
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(
@@ -420,6 +430,37 @@ test("check --json gives the reference coverage, matching sound hits with effect
   );
   assert.ok(!warnings.some((w) => /"guide": no key the studio reads/.test(w)));
   assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
+});
+
+// a remake scratches with the reference's own narration: check names it until its rows are guides
+test("check warns of an unstudied reference and of a sound that is a reference's file, until its rows are guides", (t) => {
+  const film = (guide) =>
+    coverageFilm(
+      t,
+      null,
+      [
+        { name: "line", at: 0, gain: 0, guide },
+        { name: "line", at: 4, gain: 0, guide },
+        { name: "door_slam", at: 2, gain: 0 },
+      ],
+      (dir) => {
+        cpSync(join(dir, "sound/sfx/line.wav"), join(dir, "references/vox.wav"));
+        writeFileSync(join(dir, "references/ref.mp4"), "not studied");
+      },
+    ).warnings;
+  const scratch = film(false);
+  assert.deepEqual(
+    scratch.filter((w) => /byte for byte/.test(w)),
+    [
+      `⚠ src/timeline/audio.json "line" is references/vox.wav byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
+    ],
+  );
+  assert.ok(
+    scratch.some((w) =>
+      /^⚠ references\/ref\.mp4 has no study.*bun run reference study references\/ref\.mp4$/.test(w),
+    ),
+  );
+  assert.ok(!film(true).some((w) => /byte for byte/.test(w)));
 });
 
 // a study hears every onset, the voice's syllables too: only its strong accents are the cues a remake must hit

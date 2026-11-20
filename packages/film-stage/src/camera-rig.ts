@@ -114,19 +114,17 @@ export function orientCamera(camera: RigCamera, look: Vector3, roll: number, rig
 
 type StillPose = { p: readonly number[]; l: readonly number[]; fov: number; roll: number };
 
+// The rig option that turns the camera as the shot plays (one pose cannot say where it looks), or null
+export const rigTurnsCamera = (rig: CameraRig | undefined) =>
+  rig?.lead ? "lead" : rig?.bank ? "bank" : rig?.look === "tangent" ? "look: tangent" : null;
+
 // The camera the film draws from this pose and rig (applyCameraRig, orientCamera, projectCamera), for one still frame
 function poseCamera(
   pose: StillPose,
   rig: CameraRig | undefined,
   [w, h]: readonly [number, number],
 ) {
-  const moving = rig?.lead
-    ? "lead"
-    : rig?.bank
-      ? "bank"
-      : rig?.look === "tangent"
-        ? "look: tangent"
-        : null;
+  const moving = rigTurnsCamera(rig);
   if (moving)
     throw new Error(
       `the shot's rig ${moving} turns the camera as the shot plays, past what one pose holds`,

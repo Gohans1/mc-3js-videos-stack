@@ -5,6 +5,7 @@
   bun run media ocr reference.mp4 --from 10 --to 30 --frames 12
   bun run media ocr image.png --language vi --config config.yaml
   bun run media ocr reference.mp4 --from 0 --to 60 --frames 120 --crop 0,0.7,1,0.2
+  bun run media ocr reference.mp4 --captions --crop 0,0.7,1,0.17 --minutes 15
 
 --at, --from and --to use input-file seconds, without film offsets or speed changes.
 Default: 12 evenly spaced video frames; images have no timestamp. Source frames,
@@ -123,12 +124,20 @@ def reading_order(boxes):
 
 def caption_row(reads):
     """The caption line's height and middle over the whole span: words the band shares with it (a label on a prop, a
-    watermark) are shorter or sit off that line. None when nothing was read."""
-    heights = sorted(_height(b) for r in reads for b in r["text"])
-    if not heights:
+    watermark) are shorter or sit off that line, and text in more than half the reads (a handle, a title) does not
+    change like a caption, so it is not counted. None when nothing was read."""
+    seen = [r for r in reads if r["text"]]
+    times = {}
+    for r in seen:
+        for text in {b["text"] for b in r["text"]}:
+            times[text] = times.get(text, 0) + 1
+    boxes = [b for r in seen for b in r["text"] if times[b["text"]] * 2 <= len(seen)]
+    boxes = boxes or [b for r in seen for b in r["text"]]
+    if not boxes:
         return None
+    heights = sorted(_height(b) for b in boxes)
     height = heights[len(heights) // 2]
-    middles = sorted(_middle(b) for r in reads for b in r["text"] if _height(b) >= 0.6 * height)
+    middles = sorted(_middle(b) for b in boxes if _height(b) >= 0.6 * height)
     return height, middles[len(middles) // 2]
 
 

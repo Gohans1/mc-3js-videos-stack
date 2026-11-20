@@ -836,7 +836,7 @@ if (Array.isArray(textRead?.items)) {
             .map((b) => `${b.at}, ${b.pace.readable.toFixed(2)} s of ${b.pace.needs.toFixed(2)}`)
             .join(
               "; ",
-            )}; and ${brief.length - 3} more. Captions timed to a reference's own can stay; others hold longer or cut words`,
+            )}; and ${brief.length - 3} more (bun run check --json lists each). Captions timed to a reference's own can stay; others hold longer or cut words`,
         ]
       : []),
     ...said.filter((line) => !folded.has(line)),

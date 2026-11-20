@@ -226,3 +226,28 @@ test("a caption stacked in two lines, set lower, or read unsure in every frame i
     "was spicier",
   ]);
 });
+
+// a creator's handle sits in the band in every frame, more often than any one caption
+const HANDLE = `import runpy,sys,json
+m=runpy.run_path(sys.argv[1])
+box=lambda y,h:[[10,y],[400,y],[400,y+h],[10,y+h]]
+handle={"text":"@creator","score":0.99,"box":box(1600,30)}
+said=["he made","real cookies","with more","sugar now","then salt","and pepper","it was","so good"]
+reads=[{"at":0.125+0.25*i,"text":[handle]+([{"text":said[i//2],"score":0.95,"box":box(1400,100)}] if i%2==0 else [])}
+ for i in range(16)]
+print(json.dumps([c["text"] for c in m["captions_from"](reads,[],0,4)]))`;
+
+test("text shown in every frame (a handle, a title) is not taken for the caption", () => {
+  const r = python(["-c", HANDLE, SCRIPT]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), [
+    "he made",
+    "real cookies",
+    "with more",
+    "sugar now",
+    "then salt",
+    "and pepper",
+    "it was",
+    "so good",
+  ]);
+});

@@ -4051,6 +4051,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             placeholder: "12",
           },
           {
+            key: "--crop",
+            flag: "--crop",
+            label: "Band x,y,w,h (fractions)",
+            type: "string",
+            placeholder: "0,0.7,1,0.2",
+          },
+          { key: "--captions", flag: "--captions", label: "Timed Captions", type: "boolean" },
+          {
             key: "--score",
             flag: "--score",
             label: "Minimum Model Score",

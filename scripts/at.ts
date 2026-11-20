@@ -12,6 +12,7 @@ import {
   type CameraRig,
   cameraTrackOptions,
   pixelOnPlane,
+  rigTurnsCamera,
   screenAxes,
 } from "../packages/film-stage/src/camera";
 import { hasGradeEffect } from "../packages/film-stage/src/grade";
@@ -149,13 +150,10 @@ const pictureAxes = (
   rig: CameraRig | undefined,
   frame: [number, number],
 ) => {
-  try {
-    const { right, up } = screenAxes(pose, rig, frame);
-    const round = (v: number[]) => v.map((x) => +x.toFixed(3) || 0);
-    return { right: round(right), up: round(up) };
-  } catch {
-    return null;
-  }
+  if (rigTurnsCamera(rig)) return null;
+  const { right, up } = screenAxes(pose, rig, frame);
+  const round = (v: number[]) => v.map((x) => +x.toFixed(3) || 0);
+  return { right: round(right), up: round(up) };
 };
 // +x for a direction within 25 degrees of the world's x, else the vector itself
 const axisName = (v: number[]) => {
