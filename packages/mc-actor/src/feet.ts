@@ -81,6 +81,18 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       }
     }
     steve.g.updateMatrixWorld(true); // all of him, as the last sample left him
+    const legReach = steve.legReach;
+    const legScale = steve.g
+      ? Math.max(1e-3, tmp.setFromMatrixColumn(steve.g.matrixWorld, 1).length())
+      : 1;
+    const downH = DOWN * legScale,
+      upH = UP * legScale,
+      drift = DRIFT * legScale,
+      settleSpeed = 0.12 * legScale,
+      sweepSpeed = 0.4 * legScale,
+      strainMax = legReach + 0.02 * legScale,
+      arcBase = 0.03 * legScale,
+      arcMax = 0.1 * legScale;
     // on the floor or not, per foot and sample: the gait's stance half while walking, else the pose's sole height
     const down = { L: new Uint8Array(n), R: new Uint8Array(n) };
     for (const sd of ["L", "R"]) {
@@ -89,7 +101,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         const y = want[sd][i * 3 + 1],
           ph = gait[i];
         was = Number.isNaN(ph)
-          ? y < DOWN || (was && y <= UP)
+          ? y < downH || (was && y <= upH)
             ? 1
             : 0
           : (sd === "L" ? Math.cos(ph) < 0 : Math.cos(ph) > 0)
@@ -115,7 +127,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
     // where a planted sole stepping on its own goes: where the pose's sole comes to rest, at most SETTLE ahead
     const settle = (sd, i) => {
       let j = i + 1;
-      while (j < Math.min(n - 1, i + SETTLE * HZ) && down[sd][j] && speed(sd, j) > 0.12) j++;
+      while (j < Math.min(n - 1, i + SETTLE * HZ) && down[sd][j] && speed(sd, j) > settleSpeed) j++;
       return j;
     };
     const out = { L: new Float32Array(n * 3), R: new Float32Array(n * 3) },
@@ -145,8 +157,8 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         if (s.mode === "lock") {
           const away = Math.hypot(s.pin.x - W.x, s.pin.z - W.z),
             turned = Math.abs(((yaw[i] - s.yaw + 540) % 360) - 180);
-          // standing straight the leg is already at full reach: pulled 2 cm past it (the sole would lift off) is too far
-          const strained = s.pin.distanceTo(H) > steve.legReach + 0.02;
+          // standing straight the leg is already at full reach: pulled 2 cm (scaled) past it (the sole would lift off) is too far
+          const strained = s.pin.distanceTo(H) > strainMax;
           if (!down[sd][i]) {
             const j = landing(sd, i);
             // lifted for good (sitting down, lying back): it goes with the pose's own leg
@@ -157,11 +169,11 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
               const j = landing(sd, stanceEnd(sd, i));
               step(s, i, s.pin, j < 0 || j - i > 0.6 * HZ ? settle(sd, i) : j, true);
             }
-          } else if (strained || (o.mode !== "step" && (away > DRIFT || turned > TURN)))
+          } else if (strained || (o.mode !== "step" && (away > drift || turned > TURN)))
             step(s, i, s.pin, settle(sd, i), true);
         }
         // a sole the pose sweeps along the floor (a leg folding under him): lifted into one step to where it stops
-        if (s.mode === "free" && down[sd][i] && speed(sd, i) > 0.4 && o.mode !== "step")
+        if (s.mode === "free" && down[sd][i] && speed(sd, i) > sweepSpeed && o.mode !== "step")
           step(s, i, W.clone().setY(Math.max(0, W.y)), settle(sd, i), true);
         if (s.mode === "step") {
           const u = Math.min(1, (i - s.t0) / (s.t1 - s.t0)),
@@ -170,7 +182,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
             at(sd, s.t1, Q).setY(0);
             P.copy(s.from).lerp(Q, k);
             P.y +=
-              Math.min(0.1, 0.03 + 0.2 * Math.hypot(Q.x - s.from.x, Q.z - s.from.z)) *
+              Math.min(arcMax, arcBase + 0.2 * Math.hypot(Q.x - s.from.x, Q.z - s.from.z)) *
               Math.sin(Math.PI * u);
           } else P.copy(s.from).lerp(W, k);
           P.toArray(out[sd], i * 3);

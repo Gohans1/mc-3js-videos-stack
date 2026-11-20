@@ -955,7 +955,8 @@ export async function makePlayer(
     doLeg("ulL", "llL", LEGS.L.sole, wantL, hipL);
     doLeg("ulR", "llR", LEGS.R.sole, wantR, hipR);
   };
-  // The joint's parent turn now, relative to its rest, as a world rotation (includes the character's yaw and lean)
+  // The joint's parent turn now, relative to its rest, in the rig's rest-scale frame (rig.matrixWorld * rigRest^-1
+  // inverted) so uniform/non-uniform scale, rotated/lying roots, and scaled parents keep exact limb reach and shear-free turns
   const Q = new THREE.Quaternion(),
     Qi = new THREE.Quaternion(),
     S = new THREE.Vector3(),
@@ -966,21 +967,49 @@ export async function makePlayer(
     tz = new THREE.Vector3(),
     M = new THREE.Matrix4(),
     e2 = new THREE.Euler();
+  const rigRestInv = rig.matrix.clone().invert();
+  const M_actor = new THREE.Matrix4(),
+    GInv = new THREE.Matrix4(),
+    MLoc = new THREE.Matrix4(),
+    tmpP = new THREE.Vector3(),
+    tmpS = new THREE.Vector3();
   const parentTurn = (k) => b[k].parent.getWorldQuaternion(Q).multiply(parentRest[k]);
+  const actorInv = () => {
+    M_actor.multiplyMatrices(rig.matrixWorld, rigRestInv);
+    return Math.abs(M_actor.determinant()) > 1e-12 ? GInv.copy(M_actor).invert() : null;
+  };
+  const localQuat = (obj, inv, out) => {
+    MLoc.multiplyMatrices(inv, obj.matrixWorld).decompose(tmpP, out, tmpS);
+    return out;
+  };
+  const parentTurnLocal = (k, inv) => localQuat(b[k].parent, inv, Q).multiply(parentRest[k]);
   // Call after setPose with everything but this arm, then g.updateMatrixWorld(true). Returns the arm's joints (degrees) that
   // put the end of the hand on the world point: the elbow folds forward (it points back), the upper arm takes the rest
   // pole [x, y, z] (his left, up, forward, in the chest's axes): where the elbow should point. Without one the upper arm
   // never twists, which puts a hand near his own face on an elbow raised sideways at shoulder height; with one the arm
   // takes the twist too (a full 3-joint upper arm), so a hand to the chin comes up on an elbow hanging down and out
   const armTo = (sd, target, pole = null) => {
-    const { L1, L2 } = ARM[sd];
-    b[`ua${sd}`].getWorldPosition(S);
-    d.copy(target)
-      .sub(S)
-      .applyQuaternion(Qi.copy(parentTurn(`ua${sd}`)).invert());
+    const { L1, L2 } = ARM[sd],
+      k = `ua${sd}`;
+    b[k].updateWorldMatrix(true, false);
+    const inv = actorInv();
+    if (inv) {
+      S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
+      d.copy(target)
+        .applyMatrix4(inv)
+        .sub(S)
+        .applyQuaternion(Qi.copy(parentTurnLocal(k, inv)).invert());
+    } else {
+      S.setFromMatrixPosition(b[k].matrixWorld);
+      d.copy(target)
+        .sub(S)
+        .applyQuaternion(Qi.copy(parentTurn(k)).invert());
+    }
     if (pole) return armPole(sd, d, pole, L1, L2);
-    const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
-    d.normalize();
+    const len = d.length();
+    const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    if (len < 1e-6) d.set(0, -1, 0);
+    else d.divideScalar(len);
     const e =
       Math.PI -
       Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
@@ -1012,8 +1041,9 @@ export async function makePlayer(
     PE = new THREE.Euler();
   M0.makeBasis(HANG, FWD, SIDE);
   const armPole = (sd, dd, pole, L1, L2) => {
-    const n = THREE.MathUtils.clamp(dd.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
-    const dh = dd.clone().normalize();
+    const len = dd.length();
+    const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    const dh = len < 1e-6 ? new THREE.Vector3(0, -1, 0) : dd.clone().divideScalar(len);
     // the elbow on the circle of possible elbows, on the pole's side of the shoulder-hand line
     P.set(...pole)
       .addScaledVector(dh, -P.set(...pole).dot(dh))
@@ -1042,17 +1072,32 @@ export async function makePlayer(
   const legTo = (sd, target) => {
     const { L1, L2 } = LEGS[sd],
       k = `ul${sd}`;
-    b[k].getWorldPosition(S);
-    Qi.copy(parentTurn(k)).invert();
-    d.copy(target).sub(S).applyQuaternion(Qi);
-    // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
-    // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
-    R.copy(Qi).multiply(b[k].getWorldQuaternion(Q)).multiply(rest[k].Ci);
-    tx.set(1, 0, 0).applyQuaternion(R);
-    soleAt(sd, ty).sub(S).applyQuaternion(Qi).normalize();
-    tx.applyQuaternion(R.setFromUnitVectors(ty, tz.copy(d).normalize()));
-    const n = THREE.MathUtils.clamp(d.length(), Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
-    d.normalize();
+    b[`ll${sd}`].updateWorldMatrix(true, false);
+    const inv = actorInv();
+    if (inv) {
+      S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
+      Qi.copy(parentTurnLocal(k, inv)).invert();
+      d.copy(target).applyMatrix4(inv).sub(S).applyQuaternion(Qi);
+      // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
+      // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
+      R.copy(Qi)
+        .multiply(localQuat(b[k], inv, Q))
+        .multiply(rest[k].Ci);
+      tx.set(1, 0, 0).applyQuaternion(R);
+      soleNow(sd, ty).applyMatrix4(inv).sub(S).applyQuaternion(Qi).normalize();
+    } else {
+      S.setFromMatrixPosition(b[k].matrixWorld);
+      Qi.copy(parentTurn(k)).invert();
+      d.copy(target).sub(S).applyQuaternion(Qi);
+      R.copy(Qi).multiply(b[k].getWorldQuaternion(Q)).multiply(rest[k].Ci);
+      tx.set(1, 0, 0).applyQuaternion(R);
+      soleNow(sd, ty).sub(S).applyQuaternion(Qi).normalize();
+    }
+    const len = d.length();
+    const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
+    if (len < 1e-6) d.set(0, -1, 0);
+    else d.divideScalar(len);
+    tx.applyQuaternion(R.setFromUnitVectors(ty, d));
     const e =
       Math.PI -
       Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
@@ -1074,13 +1119,29 @@ export async function makePlayer(
     out.copy(LEGS[sd].sole).applyMatrix4(b[`ll${sd}`].matrixWorld);
   // g.updateMatrixWorld(true) for his bones alone (matrices.ts): update all of him before anything else reads it
   const updateBones = updaterTo(g, Object.values(b));
+  const baseLegReach = LEGS.L.L1 + LEGS.L.L2;
+  const legReachNow = () => {
+    rig.updateWorldMatrix(true, false);
+    M_actor.multiplyMatrices(rig.matrixWorld, rigRestInv);
+    return baseLegReach * tmpS.setFromMatrixColumn(M_actor, 1).length();
+  };
   // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range
   const headTo = (target) => {
-    b.head.getWorldPosition(S);
-    S.y += 4 * PX;
-    d.copy(target)
-      .sub(S)
-      .applyQuaternion(Qi.copy(parentTurn("head")).invert());
+    b.head.updateWorldMatrix(true, false);
+    const inv = actorInv();
+    if (inv) {
+      S.setFromMatrixPosition(b.head.matrixWorld).applyMatrix4(inv);
+      d.copy(target)
+        .applyMatrix4(inv)
+        .sub(S)
+        .applyQuaternion(Qi.copy(parentTurnLocal("head", inv)).invert());
+    } else {
+      S.setFromMatrixPosition(b.head.matrixWorld);
+      d.copy(target)
+        .sub(S)
+        .applyQuaternion(Qi.copy(parentTurn("head")).invert());
+    }
+    d.y -= 4 * PX;
     const yaw = THREE.MathUtils.clamp(Math.atan2(d.x, d.z) / D, -75, 75);
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
     return [down, yaw, 0];
@@ -1124,7 +1185,9 @@ export async function makePlayer(
     legTo,
     soleAt,
     soleNow,
-    legReach: LEGS.L.L1 + LEGS.L.L2,
+    get legReach() {
+      return legReachNow();
+    },
     headTo,
     skin: ctx,
     setSkin,
