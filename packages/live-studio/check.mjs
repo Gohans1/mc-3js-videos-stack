@@ -51,6 +51,7 @@ import {
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { noteNudge } from "./src/note-cli.mjs";
+import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
@@ -1173,6 +1174,9 @@ for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
     );
   }
 }
+
+const toolsWarning = ownToolsWarning(PROJECT);
+if (toolsWarning) warnings.push(toolsWarning);
 
 // one problem per file, as --help says: a file faulted by two checks (its schema, its sound names) has both under it
 const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
