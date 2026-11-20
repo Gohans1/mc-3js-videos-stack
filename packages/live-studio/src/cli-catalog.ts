@@ -3559,7 +3559,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "render",
     category: "render",
     summary:
-      "Render draft stills, video chunks, captions, lossless poster, final upload, or motion/text/order checks.",
+      "Render draft stills, video chunks, captions, lossless poster, final upload, VIEWS/CROP batches, or motion/probe/text/order checks.",
     runner: "bun-script",
     target: "render",
     cwdModes: ["film"],
@@ -3919,7 +3919,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "media",
     category: "render",
     summary:
-      "Optional local audio, OCR, tracking, sound catalog, metadata and OTIO tools with retained evidence.",
+      "Optional local audio, OCR, vision, tracking, sound catalog, metadata, OTIO, QC and FFmpeg tools with retained evidence.",
     runner: "bun-script",
     target: "media",
     cwdModes: ["root", "film"],
@@ -4442,17 +4442,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         message: "Fetches shared English voice metadata into vault/voices/shared-en.json.",
       },
     },
-  },
-  {
-    id: "bake:physics",
-    label: "bake:physics",
-    category: "pipeline",
-    summary: "Bake the Rapier wall demo's physics into its timeline; this film only.",
-    runner: "bun-script",
-    target: "bake:physics",
-    cwdModes: ["film"],
-    flags: [{ key: "--out", flag: "--out", label: "Output file", type: "string" }],
-    meta: { effect: "write", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
     id: "fetch:openfilm",

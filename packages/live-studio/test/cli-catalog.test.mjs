@@ -572,8 +572,16 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ],
       ["scripts/sound/beats.py", "stdin JSON beat-detection worker spawned by Live Studio audio"],
       [
+        "scripts/sound/ir.py",
+        "acoustic space IR synthesizer library imported by scripts/sound/mix.py",
+      ],
+      [
         "scripts/sound/process.py",
         "stdin JSON FFmpeg/Rubberband worker spawned by Live Studio audio",
+      ],
+      [
+        "scripts/sound/spatial.py",
+        "3D spatial audio math library imported by scripts/sound/mix.py",
       ],
       ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       [

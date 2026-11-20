@@ -13,20 +13,25 @@ const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"
 const PYTHON_STDIO = { PYTHONIOENCODING: "utf-8" };
 const HELP = `Optional local media tools for AI, with independent environments and retained evidence.
   bun run media list [--json]             Available tools and upstream/license information
-  bun run media doctor [tool] [--json]    Installed package versions; does not load/download models
+  bun run media doctor [tool] [--json]    Installed packages, binaries and runtimes; does not load/download models
   bun run media setup <tool>              Install pinned packages or verified Windows binaries/models
   bun run media <tool> --help             Tool-specific inputs, outputs and native configuration
   bun run media <tool> <arguments>        Run a structured local adapter
-  bun run media ffmpeg --help            Pinned FFmpeg finishing/inspection backend, native contract
+  bun run media ffmpeg --help             Pinned FFmpeg finishing/inspection backend, native contract
   --out DIR       Parent for fresh run-* evidence folders (default renders/media/<tool>)
   --minutes N     Wall-clock deadline (default 5; setup default 10). Logs and finished files survive failure.
+Tools (bun run media <tool> --help for syntax and limits):
+  Audio:   separate, beat, locate, vad, ced, denoise, effects, melody, midi, tts, fingerprint, caption, foley, metadata
+  Visual:  ocr, vision, tapir, track
+  Finish:  ffmpeg (ffmpeg list / schema <tool>), qc (--contract), timeline (OTIO)
 MC_MEDIA_HOME overrides the environment/model cache root (default vault/tools/media).
 setup uses the network; execution is local, free and does not upload media. First model
 use may download official weights, as each tool's help says. Models remain cached.
 Output: job.json/process.log plus tool artifacts, preserving all previous runs.
-Examples: bun run media setup ocr
-          bun run media ocr reference.mp4 --at 5,10 --minutes 5
-          bun run media ocr image.png --language vi
+Examples: bun run media doctor --json
+          bun run media ocr reference.mp4 --at 5,10 --language vi
+          bun run media separate clip.mp4 --from 0 --to 20
+          bun run media ffmpeg probe -- clip.mp4 --keyframes-near 1,3
 Built-ins are conveniences; native configuration and custom creative code stay available.`;
 const fail = (message) => {
   console.error(`${message}; bun run media --help`);

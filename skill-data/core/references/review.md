@@ -92,8 +92,6 @@ Narration comes from `voice:cues` once and is timeline context, not verified enc
 
 ## Measure a move
 
-For an experimental description of one frame, use bun run media vision reference.mp4 --at 5 --prompt "Describe the visible action." or pass an image. The small CPU model can invent objects or names; result.json marks its text unverified and keeps the frame, model hashes, native response and server log for checking.
-
 `CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:
 
 ```bash
@@ -161,6 +159,18 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 `CHECK=order bun run render stills` compares the same times captured in two different orders; `CHECK=order:20,25` narrows the heard-second range, including subframes and either side of sampled cuts. Inspect `renders/order.json` and the PNG pair named on failure; this optional sampled diagnostic does not replace `framecheck` or prove every frame correct.
 
 ## Reference video
+
+| Breakdown need | Local CLI |
+| --- | --- |
+| Frames, 4x4 overviews, captions & URL fetch | `bun run reference inspect <video\|URL>` (`--scenes --frames N --at ... --find ...`) |
+| Cuts, fades & scene gallery | `bun run scenes <video>` (PySceneDetect) or `bun run reference study <video>` |
+| Separate voice, BGM & SFX stems | `bun run media separate <video>` (see `--ref sound`) |
+| Audio events, SFX localization, beats & speech | `earshot timeline`/`sheet`, `bun run media locate`, `ced`, `beat`, `vad`, `caption` (see `--ref sound`) |
+| On-screen text & experimental frame summary | `bun run media ocr` (RapidOCR); `bun run media vision` (SmolVLM2, verify against retained frames) |
+| Point & object motion tracking | `bun run media tapir` (points), `bun run media track` (COCO boxes) |
+| Streams, keyframes, proxy, pixel diff & QC | `bun run media ffmpeg probe\|proxy\|look\|check`, `bun run qc` |
+
+For an experimental description of one frame, use `bun run media vision reference.mp4 --at 5 --prompt "Describe the visible action."` or pass an image. The small CPU model can invent objects or names; `result.json` marks its text unverified and keeps the frame, model hashes, native response and server log for checking.
 
 Use `bun run reference inspect <video|URL>` to prepare evidence for an AI, then let it decide what to study. Local inspection needs Python 3.11+ and FFmpeg; URL acquisition uses the installed yt-dlp executable, contacts the source service and never invokes ASR, installs a model or uploads to an AI provider.
 

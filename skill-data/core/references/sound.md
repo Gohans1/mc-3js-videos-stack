@@ -44,6 +44,8 @@ Filters apply to both blocks; similarity is not confidence, so listen/view befor
 
 --show identifies files, licenses, controls and placement; source-only pages still need integration and verification in the scene. --origin real is the existing Real / Studio grouping and does not establish recording provenance; retain explicit unknown origin from source metadata.
 
+Ordinary --json uses schemaVersion 2: keyword.results holds full records; semantic hits with alsoKeyword:true reference them by key and keep their own rank and similarity. Other semantic hits hold full records; --semantic keeps its existing schema.
+
 ## Clocks and editable data
 
 | Data | Meaning |
@@ -68,57 +70,6 @@ Custom JSON edits and other mixers/mastering/mux tools remain valid; connect the
 
 ## Load earshot when needed
 
-## Optional local media tools
-
-Discover with bun run media list, check with media doctor, and install only the needed backend with media setup <tool>. Each run has a deadline, a fresh evidence folder and cached models; these tools never change audio.json or replace creative decisions.
-
-| Need | Use and limits |
-| --- | --- |
-| Clean noisy speech | bun run media denoise recording.mp4 --from 5 --to 13; DeepFilterNet CPU, output WAV at 48 kHz, keep the original because ambience or consonants may disappear |
-| Lightweight sound labels | bun run media ced recording.wav --top-k 5; CED Tiny CPU gives independent AudioSet scores, not event times or verified probabilities |
-| Draft a voice locally | bun run media tts --text "The door opens."; Kokoro CPU, --voice/--language choose supported voices, no Vietnamese preset and no forced word alignment |
-| Compose editable notes | bun run media midi sting.mid; FluidSynth CPU renders MIDI with a licensed SoundFont, --soundfont selects another file with its own terms |
-| Fingerprint music | bun run media fingerprint bgm.wav --length 30; Chromaprint emits raw fingerprints for comparison, without a title database or copyright judgement |
-| Ask about recorded sound | bun run media caption recording.mp4 --from 5 --to 13 --prompt "Describe the sounds."; experimental MiDashengLM CPU, response.json and source audio stay beside result.json |
-| Trust model text | Caption and vision outputs are unverified hypotheses; small models have hallucinated in local trials, so check retained evidence and use earshot for independent sound comparison |
-| Native options and setup | media <tool> --help; pinned Windows binaries and model hashes live in scripts/media/tools.json, caption setup also needs CMake and MinGW and may need --minutes 20 on a cold build |
-
-The runtime, weights and bundled dependencies have separate licenses: Kokoro uses eSpeak-ng GPL notices, FluidR3 GM retains its MIT grant, and third-party SoundFonts/voices keep their own terms. setup downloads retained assets; inference remains local and a short-lived model server binds only to 127.0.0.1.
-
-## Optional SDK tools
-
-These commands use independent CPU environments, source-file seconds and fresh evidence folders. setup pins the tested packages; beat/separate/locate install CPU Torch from its official index, while Basic Pitch keeps Python 3.10 and its legacy resampy dependency isolated.
-
-| Need | Use and limits |
-| --- | --- |
-| Music beats and bar starts | bun run media beat bgm.wav --from 0 --to 25; beats/downbeats suggest cut points, keep intentional off-beat edits and verify the grid on the music |
-| Speech intervals | bun run media vad reference.mp4 --from 5 --to 15; Silero returns start/end, without words or speaker identity; --config is native Silero settings JSON |
-| Melody to editable MIDI | bun run media melody melody.wav; Basic Pitch keeps melody.mid, model-output.npz and source-timed notes; repeated notes or whole mixes can be misread, MIDI remains local to the selected excerpt |
-| Custom sound processing | bun run media effects voice.wav --config effects.json --tail 2; config is an array of objects with name and parameters, e.g. Gain/gain_db or Reverb/room_size, using native Pedalboard classes |
-| Vocals and backing | bun run media separate clip.mp4 --from 0 --to 8; Kim Vocal 2 is a small CPU starting model, --config forwards Separator parameters except owned paths/device, --model selects a licensed cached model; upstream ONNX chooses CPU threads and has no supported SDK thread limit |
-| Find a described sound | bun run media locate clip.wav --query "a man speaking" --query "a dog barking"; PE-A Small preserves raw logits every 40 ms, --threshold groups suggested spans and is not a calibrated probability or accuracy guarantee |
-| Model/config choices | media <tool> --help; --model accepts a file, or a local Transformers directory for locate; --config forwards backend JSON where advertised and cannot redirect artifact paths, including Basic Pitch debug_file |
-| Inspect a timeline handoff | bun run media timeline edit.otio; read/write roundtrip verifies references, ranges and metadata, without modifying the film |
-| Create a timeline handoff | media timeline edit.json accepts fps and tracks of kind Video/Audio, each with clips; clip url/start/duration or gap:true/duration use frame units, metadata stays intact |
-
-OTIO core writes .otio; NLE-specific formats need their own supported adapter or baked media. These tools do not translate draw(t), scene speed curves or shader effects automatically, and model output never becomes an artistic gate.
-
-Native regression checks require the optional effects, separate and timeline setups: bun test ./scripts/test/media-sdk.native.mjs. They verify PitchShift frequency/duration, failure on an unavailable stem and OTIO fields with generated fixtures; they do not download models and retain their temporary evidence paths.
-
-## Local sound library and metadata
-
-| Need | Optional command |
-| --- | --- |
-| Build a searchable sound library | bun run media foley index --config library.toml --limit 20 --workers 1; native TOML explicitly selects [library] root and [storage] data_dir outside it |
-| Search by meaning | bun run media foley search "a man speaking" --config library.toml; JSON preserves candidate scores and license fields, not a verdict of correctness or permission |
-| Inspect an asset / progress | media foley describe 2 --config library.toml; media foley status --config library.toml reports errors and pending model stages |
-| Choose local models | In native TOML use [models] enabled=true, device="cpu", clap=["htsat-unfused"] for this PC; first CLAP use downloads the upstream pinned checkpoint |
-| Resume indexing | Reuse the same TOML/data_dir and rerun index; SQLite/cache survive timeout, --limit caps analyses rather than the library scan |
-| Read Broadcast WAV fields | bun run media metadata recording.wav; BWF MetaEdit exports XML and verifies that the input hash remains unchanged |
-
-Foley is an optional young alpha project, supplementing earshot with a persistent catalog. The adapter exposes index/search/status/describe; its native CLI/MCP remains available, and PANNs CC-BY-4.0, CLAP Apache-2.0 and AudioSet notices stay separate from Foley's MIT code license.
-
-## Mix loudness processing
 bun run skills path earshot returns the skill directory; open SKILL.md and its relevant reference. earshot doctor checks the environment; read INSTALL.md if the executable is missing.
 
 | Goal | Command |
@@ -199,7 +150,7 @@ OTIO core writes .otio; NLE-specific formats need their own supported adapter or
 
 Native regression checks require the optional effects, separate and timeline setups: bun test ./scripts/test/media-sdk.native.mjs. They verify PitchShift frequency/duration, failure on an unavailable stem and OTIO fields with generated fixtures; they do not download models and retain their temporary evidence paths.
 
-## Local sound library and metadata
+## External audio and loops
 
 | External audio and loops | Commands and checks |
 | --- | --- |
@@ -207,6 +158,8 @@ Native regression checks require the optional effects, separate and timeline set
 | Sync a recording | Use schema sync to find offset, confidence, and drift. These measurements apply to file alignment. Check lip sync and the three film clocks separately. |
 | Inspect a loop seam | Run media qc request.json with rules.audio.loop_seam to measure clicks, level, and spectrum at the wrap or listed seams. Set thresholds for the project and listen to the result. |
 | Preserve the mix | Keep mix, listen, and Earshot for film audio. Check the native schema for loudness fallback and whether a video operation re-encodes audio. |
+
+## Local sound library and metadata
 
 | Need | Optional command |
 | --- | --- |
@@ -218,5 +171,3 @@ Native regression checks require the optional effects, separate and timeline set
 | Read Broadcast WAV fields | bun run media metadata recording.wav; BWF MetaEdit exports XML and verifies that the input hash remains unchanged |
 
 Foley is an optional young alpha project, supplementing earshot with a persistent catalog. The adapter exposes index/search/status/describe; its native CLI/MCP remains available, and PANNs CC-BY-4.0, CLAP Apache-2.0 and AudioSet notices stay separate from Foley's MIT code license.
-
-Ordinary --json uses schemaVersion 2: keyword.results holds full records; semantic hits with alsoKeyword:true reference them by key and keep their own rank and similarity. Other semantic hits hold full records; --semantic keeps its existing schema.

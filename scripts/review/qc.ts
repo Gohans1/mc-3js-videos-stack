@@ -59,6 +59,11 @@ Usage:
   bun run qc compare <before> <after> [--out <path>] [--threshold <n>] [--json]
   bun run qc motion [--cam <file>] [--from <s>] [--to <s>] [--json]
 
+Subcommands:
+  box <image> <x,y,w,h>      Mean RGB, sRGB/linear luma, WCAG contrast & stops; --norm uses 0..1 coords
+  compare <before> <after>   Pixel diff stats + side-by-side PNG (--out <path>, --threshold 0..255, default 4)
+  motion                     Audit camera/key speeds & pops from cam.json (--cam <file>, --from/--to <s>)
+
 Video QC options:
   --checks <list>     Comma-separated check IDs: ${ALL_CHECKS.join(",")}
   --strict            Treat warnings as failures (exit 1 on warn or fail)

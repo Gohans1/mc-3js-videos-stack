@@ -18,8 +18,6 @@ const GROUPS = [
   [
     "Make the film",
     {
-      "bake:physics":
-        "this film's physics cache: --help names inputs, output, clocks and cost; rerun after changing its simulation",
       studio:
         "the live studio: preview, timeline, notes (bun run studio --detach to start in background; --status, --stop, --lan)",
       collab:
@@ -66,11 +64,11 @@ const GROUPS = [
       render:
         "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=probe:4 logs live 3D bounds/screen coords; CHECK=order checks history-dependent frames; VIEWS, CROP and --compare inspect stills",
       sheet:
-        "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence; each new run has index.json",
+        "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence, or explicit image grids; each new run has index.json",
       scenes:
         "suggest cuts in a local reference video (PySceneDetect, optional CPU tool): JSON, CSV, scene images and HTML; file seconds",
       media:
-        "optional local media tools: audio/OCR/tracking/catalog/OTIO and bundled FFmpeg finishing/QC (media ffmpeg --help)",
+        "local media/AI tools (media list / doctor): audio stems/beats/locate/VAD/denoise, OCR/vision/tracking, OTIO, QC and FFmpeg (media --help)",
       qc: "inspect an encoded video, camera motion, an image region (box), or pixel changes (compare); --help for checks",
       framecheck:
         "encoded picture faults: black, flashes, jumps, shimmer, freezes; --json gives retained evidence",

@@ -56,7 +56,8 @@ Cuts and pace are image-change estimates, not recovered camera motion; flashes a
 Metrics and reused-media detection are advisory, not a quality gate or a copyright certificate.
 Exit 0: analysis finished; 1: failed analysis OR detected reference-media reuse (read the report); 2: usage error.
 Analysis keeps completed reports but does not resume decoding after interruption; use short reference clips.
-Examples: bun run reference study references/ref.mp4
+Examples: bun run reference inspect references/ref.mp4 --scenes --frames 16
+          bun run reference study references/ref.mp4
           bun run reference compare references/ref.mp4 renders/draft.mp4 --fit`;
 
 if (process.argv[2] === "inspect") {

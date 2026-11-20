@@ -13,16 +13,17 @@
 
 # Bản đồ
 
-| Đường dẫn                               | Nội dung                                                                              |
-| --------------------------------------- | ------------------------------------------------------------------------------------- |
-| .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                                            |
-| packages/live-studio                    | Studio, timeline, ghi chú, render; cách dùng: bun run skills get core --ref contract. |
-| packages/film-stage                     | Camera, fade, animate, transitions, titles, grade, velocity.                          |
-| packages/film-kit                       | Thở, chớp mắt, liếc, giật mình, run tay.                                              |
-| packages/mc-actor                       | Player, feet, mob, carry.                                                             |
-| packages/mc-assets                      | Pack, placed, screen, ink, variants.                                                  |
-| packages/clip-catalog                   | Kho mocap.                                                                            |
-| templates/film                          | Phim mẫu; bun run new-film.                                                           |
-| films/                                  | Phim thật.                                                                            |
-| scripts/                                | Voice, sound, review, vault.                                                          |
-| INSTALL.md                              | Cài đặt, kho, giấy phép.                                                              |
+| Đường dẫn                               | Nội dung                                                                                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                                                                      |
+| skill-data/core                         | Guide CLI và quy trình; chạy bun run help và bun run skills get core trước khi tự viết lệnh thủ công.           |
+| packages/live-studio                    | Studio, timeline, ghi chú, render; cách dùng: bun run skills get core --ref contract.                           |
+| packages/film-stage                     | Camera, fade, animate, transitions, titles, grade, velocity.                                                    |
+| packages/film-kit                       | Thở, chớp mắt, liếc, giật mình, run tay.                                                                        |
+| packages/mc-actor                       | Player, feet, mob, carry.                                                                                       |
+| packages/mc-assets                      | Pack, placed, screen, ink, variants.                                                                            |
+| packages/clip-catalog                   | Kho mocap.                                                                                                      |
+| templates/film                          | Phim mẫu; bun run new-film.                                                                                     |
+| films/                                  | Phim thật.                                                                                                      |
+| scripts/                                | Voice, sound, find, asset, review (reference, scenes, qc), media (21 công cụ local: bun run media list), vault. |
+| INSTALL.md                              | Cài đặt, kho, giấy phép.                                                                                        |
