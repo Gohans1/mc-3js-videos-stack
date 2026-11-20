@@ -64,7 +64,7 @@ const GROUPS = [
       render:
         "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=probe:4 logs live 3D bounds/screen coords; CHECK=order checks history-dependent frames; VIEWS, CROP and --compare inspect stills",
       sheet:
-        "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence, or explicit image grids; each new run has index.json",
+        "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence (--vs references/ref.mp4 sets each beside the reference's frame), or explicit image grids; each new run has index.json",
       scenes:
         "suggest cuts in a local reference video (PySceneDetect, optional CPU tool): JSON, CSV, scene images and HTML; file seconds",
       media:

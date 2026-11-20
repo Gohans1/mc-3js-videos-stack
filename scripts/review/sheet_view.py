@@ -333,7 +333,17 @@ def extract_displayed_frame(video, dest, seek, *, origin=0, compact=False, canva
     return actual
 
 
-def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock):
+def pair_with_reference(ours, reference, dest):
+    """reference | ours at the size of ours; the reference fits the picture, top-aligned, so a draft's strip stays under ours."""
+    width, height = image_dimensions(ours)
+    fit = f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease,setsar=1,pad={width}:{height}:(ow-iw)/2:0:black"
+    left = ["-i", str(reference)] if reference else ["-f", "lavfi", "-i", f"color=black:s={width}x{height}"]
+    command(["ffmpeg", "-nostdin", "-v", "error", "-y", *left, "-i", str(ours), "-filter_complex",
+             f"[0:v]{fit},format=yuvj420p[r];[1:v]setsar=1,format=yuvj420p[o];[r][o]hstack=inputs=2",
+             "-frames:v", "1", "-q:v", "2", str(dest)])
+
+
+def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock, vs=None):
     try:
         times = samples(spec, mode, start + first, stop - first, clock)
     except ValueError as e:
@@ -355,13 +365,15 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
                    "duration": stop - first,
                    "width": stream["width"], "height": stream["height"]},
         "context": context,
+        "reference": {"path": str(Path(vs).resolve()), "clock": "file"} if vs else None,
         "entries": [],
     }
     at_end = timeline_length(Path.cwd()) if context.get("timeline") == "fresh" else 0
     for i, t in enumerate(times):
         entry = {"requestedTime": t}
         entry["commands"] = {"frames": {
-            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t)],
+            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t),
+                     *(["--vs", str(Path(vs).resolve())] if vs else [])],
             "env": {"START": seconds(start)},
         }}
         if t < at_end:
@@ -370,25 +382,46 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
             entry.update({"sheet": str(out / f"overview_{i // 16 + 1:02d}.jpg"), "cell": i % 16 + 1})
         else:
             entry["frame"] = str(out / f"frame_{i:03d}.jpg")
+            if vs:
+                entry["vs"] = str(out / f"vs_{i:03d}.jpg")
         data["entries"].append(entry)
     index.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
     print(f"index: {index}", flush=True)
     print(f"{clock} seconds from {start:g}", flush=True)
+    if vs:
+        print(f"pairs: reference | ours, {Path(vs).name} at the same heard second (its file second, its exact frame)", flush=True)
     ended = job(Path.cwd(), "sheet", f"Extracting {len(times)} {mode} samples from {Path(video).name}")
     try:
         displayed = presentation_times(video, origin)
         for entry in data["entries"]:
             entry["seekTime"] = displayed_time(displayed, entry["requestedTime"] - start)
         aspects = sample_aspects(video, origin, data["entries"][-1]["seekTime"])
+        if vs:
+            ref_first, ref_stop, ref_origin, _ = video_bounds(vs)
+            ref_times = presentation_times(vs, ref_origin)
+            ref_seeks = {e["requestedTime"]: displayed_time(ref_times, e["requestedTime"]) for e in data["entries"]
+                         if ref_first <= e["requestedTime"] < ref_stop}
+            ref_aspects = sample_aspects(vs, ref_origin, max(ref_seeks.values())) if ref_seeks else {}
         canvas = None
         for i, entry in enumerate(data["entries"]):
-            dest = str(out / f"tile_{i:03d}.jpg") if mode == "overview" else entry["frame"]
+            dest = str(out / f"{'ours' if vs else 'tile'}_{i:03d}.jpg") if mode == "overview" else entry["frame"]
             aspect = aspects.get(round(entry["seekTime"], 9))
             entry["sampleAspectRatio"] = str(aspect) if aspect is not None else None
             entry["sourceTime"] = extract_displayed_frame(video, dest, entry["seekTime"], origin=origin,
                                                           compact=mode == "overview", canvas=canvas, aspect=aspect)
             if mode == "overview" and canvas is None:
                 canvas = image_dimensions(dest)
+            if vs:
+                seek = ref_seeks.get(entry["requestedTime"])
+                ref_dest = out / f"reference_{i:03d}.jpg"
+                entry["reference"] = None if seek is None else {"frame": str(ref_dest), "sourceTime": extract_displayed_frame(
+                    vs, ref_dest, seek, origin=ref_origin, aspect=ref_aspects.get(round(seek, 9)))}
+                pair_with_reference(dest, ref_dest if seek is not None else None,
+                                    out / f"tile_{i:03d}.jpg" if mode == "overview" else entry["vs"])
+                if mode == "overview":
+                    Path(dest).unlink()
+                    ref_dest.unlink(missing_ok=True)
+                    entry["reference"] = entry["reference"] and {"sourceTime": entry["reference"]["sourceTime"]}
             entry["time"] = start + entry["sourceTime"]
             requested = entry["requestedTime"]
             if context["shots"] != "unavailable":
@@ -397,7 +430,7 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
             if spoken:
                 entry["narration"] = {k: spoken[0][k] for k in ("text", "s", "e")}
             if mode == "frames":
-                print(f"{entry['time']:g}s\t{entry['frame']}", flush=True)
+                print(f"{entry['time']:g}s\t{entry.get('vs', entry['frame'])}", flush=True)
         if mode == "overview":
             command(["ffmpeg", "-nostdin", "-v", "error", "-y", "-framerate", "1",
                      "-i", "tile_%03d.jpg", "-vf", "tile=4x4", "-q:v", "2",

@@ -10,6 +10,9 @@
   bun run sheet renders/draft_video.mp4 shots    the whole film at a glance: one frame from the middle of every shot
   bun run sheet renders/draft_video.mp4 overview bounded compact overview, or overview 10-20/16 for a closer look
   bun run sheet renders/draft_video.mp4 frames 10,20-21/8  persistent native frames; no render, download or model
+  bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4
+                                                 each frame beside the reference's at the same heard second (its file
+                                                 second, its exact frame), reference | ours, to vs_*.jpg; overview takes it too
   bun run sheet renders/draft_video.mp4 cut 4    a transition up close: 6 frames from 0.25 s before cut 4 to 0.35 s after,
                                                  naming the shots either side (cut 4: shot 4 into 5, numbered from 0 as everywhere)
                                                  and the transition between them (shotsTimeline row 5 .transition)
@@ -251,9 +254,16 @@ def cuts_of(context):
 USE = "bun run sheet, bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
 pos = []
 out_arg = None
+vs_arg = None
 i = 0
 while i < len(args):
     a = args[i]
+    if a == "--vs" or a.startswith("--vs="):
+        vs_arg = a.split("=", 1)[1] if "=" in a else args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith("-") else ""
+        if not vs_arg:
+            usage("--vs needs the reference video: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
+        i += 1 if "=" in a else 2
+        continue
     if a == "--out":
         if out_arg is not None:
             usage("--out may only be passed once")
@@ -291,6 +301,10 @@ elif mode == "frames":
     valid_count = len(args) == 3
 else:
     valid_count = len(args) in (0, 2, 3) and (len(args) == 3) == (mode == "cut")
+if vs_arg is not None and mode not in ("overview", "frames"):
+    usage("--vs goes with frames or overview: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
+if vs_arg is not None and not Path(vs_arg).is_file():
+    usage(f"no {vs_arg}: --vs takes the reference video in the film, as references/ref.mp4")
 if not valid_count:
     why = ("cut takes a number: bun run sheet <video> cut 4" if mode == "cut" else
            "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words")
@@ -332,7 +346,7 @@ if args:
     end = math.nextafter(picture_to, -math.inf)
 
     if mode in ("overview", "frames"):
-        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock)
+        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock, vs=vs_arg)
         raise SystemExit
 
     if mode == "shots":

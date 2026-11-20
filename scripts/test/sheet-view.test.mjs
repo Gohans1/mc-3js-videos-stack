@@ -631,3 +631,43 @@ test("frames select the same first video stream as the probe", (t) => {
   assert.deepEqual(dimensions(chosen.entries[0].frame), [160, 90]);
   assert.ok(rgb(chosen.entries[0].frame)[0] > 220);
 });
+
+test("--vs pairs the reference's frame at the same heard second beside ours, black where the reference has ended", (t) => {
+  const f = fixture(t);
+  mkdirSync(join(f.dir, "references"));
+  media(join(f.dir, "references/ref.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=lime:s=160x90:r=25:d=1",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const r = f.run("frames", "0.5,1.5", "--vs", "references/ref.mp4");
+  const { data } = indexOf(r);
+  const [inside, after] = data.entries;
+  assert.equal(inside.reference.sourceTime, 0.48);
+  assert.equal(after.reference, null);
+  assert.deepEqual(dimensions(inside.vs), [640, 180]);
+  const [refHalf, ourHalf] = ["crop=320:180:0:0,scale=1:1", "crop=320:180:320:0,scale=1:1"];
+  assert.ok(rgb(inside.vs, refHalf)[1] > 220 && rgb(inside.vs, refHalf)[0] < 40);
+  assert.ok(rgb(inside.vs, ourHalf)[0] > 220);
+  assert.ok(rgb(after.vs, refHalf).every((c) => c < 30));
+  assert.ok(rgb(after.vs, ourHalf)[2] > 220);
+  assert.match(r.stdout, /reference \| ours/);
+
+  const overview = indexOf(f.run("overview", "0-2/4", "--vs", "references/ref.mp4")).data;
+  assert.deepEqual(dimensions(overview.entries[0].sheet), [2560, 720]);
+  assert.ok(rgb(overview.entries[0].sheet, "crop=320:180:0:0,scale=1:1")[1] > 220);
+  assert.ok(rgb(overview.entries[0].sheet, "crop=320:180:320:0,scale=1:1")[0] > 220);
+
+  for (const [args, why] of [
+    [["0.5", "--vs", "references/ref.mp4"], /--vs goes with frames or overview/],
+    [["frames", "0.5", "--vs", "references/none.mp4"], /no references\/none\.mp4/],
+    [["frames", "0.5", "--vs"], /--vs needs the reference video/],
+  ]) {
+    const bad = f.run(...args);
+    assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+    assert.match(bad.stderr, why);
+  }
+});
