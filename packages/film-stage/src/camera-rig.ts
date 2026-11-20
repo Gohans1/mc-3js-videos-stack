@@ -1,5 +1,5 @@
 import { clampFov, fovOf, hfovOf, vfovOf } from "film-kit/lens";
-import { type Box3, OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
+import { type Box3, OrthographicCamera, PerspectiveCamera, Plane, Ray, Vector3 } from "three";
 
 export type Vec3 = [number, number, number];
 export type Offset = [number, number];
@@ -102,6 +102,30 @@ export function orientCamera(camera: RigCamera, look: Vector3, roll: number, rig
   const tanV = Math.tan((camera.fov * Math.PI) / 360);
   camera.rotateY(Math.atan(x * tanV * camera.aspect));
   camera.rotateX(Math.atan(-y * tanV));
+}
+
+// Where a pixel of the picture (x right, y down, in a w x h frame) meets the plane axis = at, through a perspective
+// camera oriented as orientCamera does: a reference's landmark placed in our world. null when the ray never reaches it
+export function pixelOnPlane(
+  cam: { p: readonly number[]; l: readonly number[]; fov: number; roll: number },
+  rig: CameraRig | undefined,
+  [x, y]: readonly [number, number],
+  [w, h]: readonly [number, number],
+  plane: { axis: "x" | "y" | "z"; at: number },
+): Vec3 | null {
+  const camera = new PerspectiveCamera(cam.fov, w / h, 0.01, 1e5);
+  camera.position.fromArray(cam.p as number[]);
+  orientCamera(camera, new Vector3().fromArray(cam.l as number[]), cam.roll, rig);
+  camera.updateMatrixWorld();
+  const toward = new Vector3((x / w) * 2 - 1, 1 - (y / h) * 2, 0.5)
+    .unproject(camera)
+    .sub(camera.position);
+  const normal = new Vector3(+(plane.axis === "x"), +(plane.axis === "y"), +(plane.axis === "z"));
+  const hit = new Ray(camera.position, toward.normalize()).intersectPlane(
+    new Plane(normal, -plane.at),
+    new Vector3(),
+  );
+  return hit ? (hit.toArray() as Vec3) : null;
 }
 
 export function apertureOffset(

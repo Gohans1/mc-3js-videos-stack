@@ -10,6 +10,7 @@ import {
   cameraAt,
   fitBoxFrame,
   orientCamera,
+  pixelOnPlane,
   projectCamera,
   resolveFocusDistance,
   rigFov,
@@ -291,4 +292,23 @@ test("opticalFocusAt returns identical object focus targets directly without cre
     to: { point: [1, 2, 4], label: "Wall" },
     u: 0.5,
   });
+});
+
+test("a picture's pixel meets a world plane through the camera as the film orients it", () => {
+  const cam = { p: [0, 1, 5], l: [0, 1, 0], fov: 60, roll: 0 };
+  const size: [number, number] = [1080, 1920];
+  const centre = pixelOnPlane(cam, undefined, [540, 960], size, { axis: "z", at: 0 });
+  expect(centre).toEqual([expect.closeTo(0, 9), expect.closeTo(1, 9), expect.closeTo(0, 9)]);
+  // the top edge is half the vertical fov above the aim: 5 m away, tan(30 deg) * 5 higher
+  const top = pixelOnPlane(cam, undefined, [540, 0], size, { axis: "z", at: 0 });
+  expect(top?.[1]).toBeCloseTo(1 + 5 * Math.tan(Math.PI / 6), 6);
+  // a quarter turn of roll lays the picture's top edge along the world's x
+  const rolled = pixelOnPlane({ ...cam, roll: Math.PI / 2 }, undefined, [540, 0], size, {
+    axis: "z",
+    at: 0,
+  });
+  expect(Math.abs(rolled![0])).toBeCloseTo(5 * Math.tan(Math.PI / 6), 6);
+  expect(rolled![1]).toBeCloseTo(1, 6);
+  // a ray running away from the plane meets nothing
+  expect(pixelOnPlane(cam, undefined, [540, 0], size, { axis: "y", at: 0 })).toBeNull();
 });

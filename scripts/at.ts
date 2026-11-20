@@ -11,6 +11,7 @@ import {
   type CameraOpticsTracks,
   type CameraRig,
   cameraTrackOptions,
+  pixelOnPlane,
 } from "../packages/film-stage/src/camera";
 import { hasGradeEffect } from "../packages/film-stage/src/grade";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
@@ -680,6 +681,14 @@ export const whatsAt = (dir: string, t: number) => {
             ? { focus: formatFocusSpec(camEval.focus) }
             : {}),
           ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
+          // the authored pose before handheld shake, as cam.json keys write it (roll in radians)
+          pose: {
+            p: camEval.base.p.toArray().map((v: number) => +v.toFixed(4)),
+            l: camEval.base.l.toArray().map((v: number) => +v.toFixed(4)),
+            fov: +camEval.base.fov.toFixed(3),
+            roll: +camEval.base.roll.toFixed(5),
+          },
+          frame: [fw, fh] as [number, number],
         }
       : null,
     sounds,
@@ -710,12 +719,37 @@ the key rows moving, the notes not done near it. Run inside the film.
   bun run at '#52'       a note's moment (its #number, quoted: a bare # starts a shell comment; or its id, as mw9jknxt),
                          where it is heard now: a note keeps the second it was written at, and Speed or Freeze edits since
                          move that moment. A plain 52 is a second, not a note
+  bun run at 7.2 --pixel 540,1500 --plane y=0.92
+                         where that pixel of the frame (x right, y down, in the film's 1920 frame: a 1080x1920
+                         reference's own pixels) meets the plane y = 0.92 (or x=, z=) through the camera then:
+                         a reference's landmark or prop placed in our world
 Rows are named as their files keep them (scene or narration seconds); the seconds after them are heard.`;
 
 const isMain =
   process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isMain) {
-  const arg = cliArgs(HELP, ["--json"], 1).find((a) => a !== "--json");
+  const argv = cliArgs(HELP, ["--json", "--pixel x,y", "--plane axis=value"], 1);
+  const valueOf = (flag: string) => {
+    const i = argv.indexOf(flag);
+    return i < 0 ? undefined : argv[i + 1];
+  };
+  const arg = argv.find(
+    (a, i) => !a.startsWith("--") && !["--pixel", "--plane"].includes(argv[i - 1]!),
+  );
+  const pixelArg = valueOf("--pixel"),
+    planeArg = valueOf("--plane");
+  const pixelAt = pixelArg?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  const planeAt = planeArg?.match(/^([xyz])=(-?\d+(?:\.\d+)?)$/);
+  if (
+    (pixelArg === undefined) !== (planeArg === undefined) ||
+    (pixelArg && !pixelAt) ||
+    (planeArg && !planeAt)
+  ) {
+    console.error(
+      "--pixel x,y and --plane y=0.92 go together: bun run at 7.2 --pixel 540,1500 --plane y=0.92 (pixels of the film's frame, a plane x=, y= or z=)",
+    );
+    process.exit(2);
+  }
   if (!arg) {
     console.error(
       "which second? bun run at 35.6 (a note's, a line's or a fault's: bun run notes, voice:cues). A note by its number: bun run at '#52', quoted, since a bare # starts a shell comment and reaches no command",
@@ -854,8 +888,34 @@ if (isMain) {
           at: times[near]!,
           stale: staleVideo(film, hasDraft ? draft : cutsFile)?.file ?? null,
         };
+  const pixel =
+    pixelAt && planeAt && got.cam
+      ? {
+          at: [+pixelAt[1]!, +pixelAt[2]!] as [number, number],
+          plane: `${planeAt[1]}=${+planeAt[2]!}`,
+          point:
+            pixelOnPlane(
+              got.cam.pose,
+              got.shot?.camera,
+              [+pixelAt[1]!, +pixelAt[2]!],
+              got.cam.frame,
+              { axis: planeAt[1] as "x" | "y" | "z", at: +planeAt[2]! },
+            )?.map((v) => +v.toFixed(4)) ?? null,
+        }
+      : null;
+  if (pixelAt && !got.cam) {
+    console.error(
+      `no camera at ${t}: the picture is black or the film has no camera keys, so no pixel reaches the world`,
+    );
+    process.exit(1);
+  }
   // asked by a note, that note is the moment itself, not one near it
-  const data = { ...all, cut, notes: all.notes.filter((n) => n.id !== note?.id) };
+  const data = {
+    ...all,
+    cut,
+    ...(pixel && { pixel }),
+    notes: all.notes.filter((n) => n.id !== note?.id),
+  };
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(note ? { note, ...data } : data, null, 2));
     process.exit(0);
@@ -1039,6 +1099,12 @@ if (isMain) {
           ? ` (${hasDraft ? "the draft picture" : "renders/cuts.json"} is older than ${cut.stale}: numbered as the last render cut it; bun run render clip writes it again)`
           : ""
       }${!cut.stale ? `: bun run sheet renders/draft_video.mp4 cut ${cut.index} shows it frame by frame` : ""}`,
+    );
+  if (pixel)
+    out.push(
+      pixel.point
+        ? `pixel ${pixel.at.join(",")} of the ${got.cam!.frame.join("x")} frame meets ${pixel.plane} at [${pixel.point.join(", ")}] (the authored camera, before handheld shake)`
+        : `pixel ${pixel.at.join(",")} never meets ${pixel.plane}: its ray runs parallel to it or away from it`,
     );
   out.push(
     `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,

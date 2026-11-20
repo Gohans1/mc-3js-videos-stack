@@ -2188,3 +2188,28 @@ test("at formats point focus specs and Auto rack endpoints cleanly", (t) => {
   assert.equal(whatsAt(dir, 2).cam?.focus, "Wall (1,2.5,3)");
   assert.equal(whatsAt(dir, 4).cam?.focus, "point (4,5,6)");
 });
+
+test("--pixel --plane finds where a frame's pixel meets a world plane through the camera at that second", (t) => {
+  const dir = film(t);
+  const at = (...args) =>
+    spawnSync("bun", [AT, "4.1", ...args], {
+      env: { ...process.env, LIVE_PROJECT: dir },
+      encoding: "utf8",
+    });
+  // keys without p or l sit at the origin and look down -z; the frame's middle runs straight along that axis
+  const r = at("--pixel", "960,540", "--plane", "z=-5", "--json");
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.deepEqual(got.pixel, { at: [960, 540], plane: "z=-5", point: [0, 0, -5] });
+  assert.deepEqual(got.cam.pose.p, [0, 0, 0]);
+  assert.match(at("--pixel", "960,540", "--plane", "y=1").stdout, /never meets y=1/);
+  for (const args of [
+    ["--pixel", "960,540"],
+    ["--plane", "z=-5"],
+    ["--pixel", "a,b", "--plane", "z=-5"],
+  ]) {
+    const bad = at(...args);
+    assert.equal(bad.status, 2, bad.stdout);
+    assert.match(bad.stderr, /--pixel x,y and --plane y=0\.92 go together/);
+  }
+});
