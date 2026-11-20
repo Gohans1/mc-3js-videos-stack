@@ -20,6 +20,8 @@ export interface ProbeScreen {
   y1: number;
   inView: boolean;
   behind?: boolean;
+  /** how far the box reaches past each frame edge, in frame widths/heights; only the edges it crosses */
+  past?: Partial<Record<"left" | "top" | "right" | "bottom", number>>;
 }
 
 export interface ProbeTarget {
@@ -168,12 +170,21 @@ export function projectBoundsToScreen(
   }
 
   const inView = maxX >= 0 && minX <= 1 && maxY >= 0 && minY <= 1 && minZ <= 1;
+  const past: NonNullable<ProbeScreen["past"]> = {};
+  // a box the near plane cuts (a room around the camera) reaches past every edge without bound: nothing to say
+  if (inView && clips.every((c) => c.w > 1e-6 && c.z + c.w >= 0)) {
+    if (minY < 0) past.top = round4(-minY);
+    if (maxX > 1) past.right = round4(maxX - 1);
+    if (maxY > 1) past.bottom = round4(maxY - 1);
+    if (minX < 0) past.left = round4(-minX);
+  }
   return {
     x0: round4(clamp01(minX)),
     y0: round4(clamp01(minY)),
     x1: round4(clamp01(maxX)),
     y1: round4(clamp01(maxY)),
     inView,
+    ...(Object.keys(past).length ? { past } : {}),
   };
 }
 
@@ -441,11 +452,14 @@ const formatTargetLine = (item: ProbeTarget): string => {
     : item.screen.behind
       ? "behind"
       : "offscreen";
+  const past = Object.entries(item.screen.past ?? {})
+    .map(([edge, by]) => ` past ${edge} ${by.toFixed(2)}`)
+    .join("");
   if (item.bounds) {
-    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}] size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m screen=${scr}`;
+    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}] size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m screen=${scr}${past}`;
   }
   const axesText = item.axes ? ` +Y=[${fmt3(item.axes.y)}] +Z=[${fmt3(item.axes.z)}]` : "";
-  return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${axesText} dist=${item.cameraDist.toFixed(2)}m screen=${scr}`;
+  return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${axesText} dist=${item.cameraDist.toFixed(2)}m screen=${scr}${past}`;
 };
 
 export const probeCheck =

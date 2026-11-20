@@ -98,7 +98,8 @@ Nothing is written outside the film. Options are environment variables:
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
   CHECK=probe:<t>, CHECK="probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
                              or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
-                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts)
+                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
+                             screen=[x0,y0..x1,y1] in 0..1 of the frame, "past top 0.12": that far beyond the edge, in frames
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
   RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
