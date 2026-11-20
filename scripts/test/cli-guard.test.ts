@@ -121,3 +121,10 @@ test("run bare, as JSON for a script, through tee alone, other commands, and wor
   ])
     expect(verdict(cmd), cmd).toBeUndefined();
 });
+
+// a stopped compound command ran none of its parts: an AI that saw only the guard thought its edit before the render had run
+test("the reason says nothing in the stopped command ran", () => {
+  expect(verdict("sed -i s/a/b/ src/scene.ts && bun run render stills | tail")).toStartWith(
+    "Nothing in this command ran",
+  );
+});
