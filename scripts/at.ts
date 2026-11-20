@@ -738,6 +738,10 @@ if (isMain) {
   );
   const pixelArg = valueOf("--pixel"),
     planeArg = valueOf("--plane");
+  if (["--pixel", "--plane"].some((flag) => argv.indexOf(flag) !== argv.lastIndexOf(flag))) {
+    console.error("--pixel and --plane go once each: one pixel, one plane a run");
+    process.exit(2);
+  }
   const pixelAt = pixelArg?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
   const planeAt = planeArg?.match(/^([xyz])=(-?\d+(?:\.\d+)?)$/);
   if (
@@ -888,26 +892,32 @@ if (isMain) {
           at: times[near]!,
           stale: staleVideo(film, hasDraft ? draft : cutsFile)?.file ?? null,
         };
-  const pixel =
-    pixelAt && planeAt && got.cam
-      ? {
-          at: [+pixelAt[1]!, +pixelAt[2]!] as [number, number],
-          plane: `${planeAt[1]}=${+planeAt[2]!}`,
-          point:
-            pixelOnPlane(
-              got.cam.pose,
-              got.shot?.camera,
-              [+pixelAt[1]!, +pixelAt[2]!],
-              got.cam.frame,
-              { axis: planeAt[1] as "x" | "y" | "z", at: +planeAt[2]! },
-            )?.map((v) => +v.toFixed(4)) ?? null,
-        }
-      : null;
   if (pixelAt && !got.cam) {
     console.error(
       `no camera at ${t}: the picture is black or the film has no camera keys, so no pixel reaches the world`,
     );
     process.exit(1);
+  }
+  let pixel = null;
+  if (pixelAt && planeAt && got.cam) {
+    const at: [number, number] = [+pixelAt[1]!, +pixelAt[2]!];
+    try {
+      const point = pixelOnPlane(got.cam.pose, got.shot?.camera, at, got.cam.frame, {
+        axis: planeAt[1] as "x" | "y" | "z",
+        at: +planeAt[2]!,
+      });
+      pixel = {
+        at,
+        plane: `${planeAt[1]}=${+planeAt[2]!}`,
+        point: point?.map((v) => +v.toFixed(4)) ?? null,
+        ...(got.shot?.anim ? { anim: got.shot.anim } : {}),
+      };
+    } catch (e) {
+      console.error(
+        `--pixel at ${t}: ${(e as Error).message}; place it by eye with CHECK=probe instead`,
+      );
+      process.exit(1);
+    }
   }
   // asked by a note, that note is the moment itself, not one near it
   const data = {
@@ -1103,7 +1113,7 @@ if (isMain) {
   if (pixel)
     out.push(
       pixel.point
-        ? `pixel ${pixel.at.join(",")} of the ${got.cam!.frame.join("x")} frame meets ${pixel.plane} at [${pixel.point.join(", ")}] (the authored camera, before handheld shake)`
+        ? `pixel ${pixel.at.join(",")} of the ${got.cam!.frame.join("x")} frame meets ${pixel.plane} at [${pixel.point.join(", ")}] (the authored camera, before handheld shake${pixel.anim ? ` and the shot's anim ${JSON.stringify(pixel.anim)}, which moves it on top` : ""})`
         : `pixel ${pixel.at.join(",")} never meets ${pixel.plane}: its ray runs parallel to it or away from it`,
     );
   out.push(

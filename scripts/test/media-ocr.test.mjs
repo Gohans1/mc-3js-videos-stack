@@ -55,7 +55,7 @@ test("OCR dry run does not override a native config's score unless explicitly re
   assert.equal(JSON.parse(r.stdout).scoreThreshold, null);
 });
 
-test("OCR reads only a --crop band of each frame and plans it in source pixels' fractions", (t) => {
+test("OCR keeps a --crop band in its plan, as fractions of the picture", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "media-crop-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const source = join(dir, "image.png");
@@ -63,4 +63,34 @@ test("OCR reads only a --crop band of each frame and plans it in source pixels' 
   const r = python([SCRIPT, source, "--crop", "0,0.7,1,0.2", "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(JSON.parse(r.stdout).crop, [0, 0.7, 1, 0.2]);
+});
+
+test("a --crop band's offset is in the picture as shown: a phone video's rotation turns its coded size", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-rotated-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const coded = join(dir, "coded.mp4"),
+    rotated = join(dir, "rotated.mp4");
+  for (const args of [
+    ["-f", "lavfi", "-i", "color=red:s=160x90:d=0.2", "-pix_fmt", "yuv420p", coded],
+    ["-display_rotation", "90", "-i", coded, "-c", "copy", rotated],
+  ]) {
+    const made = spawnSync("ffmpeg", ["-v", "error", "-y", ...args], {
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+    assert.equal(made.status, 0, made.stderr);
+  }
+  const origin = (file) => {
+    const r = python([
+      "-c",
+      "import runpy,sys,json; m=runpy.run_path(sys.argv[1]); print(json.dumps(m['crop_origin'](sys.argv[2],[0.5,0.75,0.5,0.25])))",
+      SCRIPT,
+      file,
+    ]);
+    assert.equal(r.status, 0, r.stderr);
+    return JSON.parse(r.stdout);
+  };
+  assert.deepEqual(origin(coded), [80, 67]);
+  // shown 90 wide and 160 tall
+  assert.deepEqual(origin(rotated), [45, 120]);
 });

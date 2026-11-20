@@ -367,7 +367,7 @@ def pair_with_reference(ours, reference, dest):
         pair = opened.convert("RGB")
     draw = ImageDraw.Draw(pair)
     font = load_caption_font(ImageFont, max(12, height // 40))
-    for x, label in ((0, "REFERENCE" if reference else "REFERENCE (ended)"), (width, "OURS")):
+    for x, label in ((0, "REFERENCE" if reference else "REFERENCE (none at this second)"), (width, "OURS")):
         box = draw.textbbox((x + 8, 8), label, font=font)
         draw.rectangle((box[0] - 6, box[1] - 4, box[2] + 6, box[3] + 4), fill=(0, 0, 0))
         draw.text((x + 8, 8), label, fill=(255, 255, 255), font=font)
@@ -430,7 +430,8 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
         entry = {"requestedTime": t}
         entry["commands"] = {"frames": {
             "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t),
-                     *(["--vs", str(Path(vs).resolve())] if vs else [])],
+                     *(["--vs", str(Path(vs).resolve())] if vs else []),
+                     *(["--grid", str(grid["step"]), "--crop", ",".join(map(str, grid["crop"]))] if grid else [])],
             "env": {"START": seconds(start)},
         }}
         if t < at_end:

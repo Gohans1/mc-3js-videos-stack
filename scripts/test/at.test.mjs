@@ -2212,4 +2212,7 @@ test("--pixel --plane finds where a frame's pixel meets a world plane through th
     assert.equal(bad.status, 2, bad.stdout);
     assert.match(bad.stderr, /--pixel x,y and --plane y=0\.92 go together/);
   }
+  const twice = at("--pixel", "960,540", "--plane", "z=-5", "--plane", "z=-6");
+  assert.equal(twice.status, 2, twice.stdout);
+  assert.match(twice.stderr, /go once each/);
 });

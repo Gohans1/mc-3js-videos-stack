@@ -70,7 +70,7 @@ Nothing is written outside the film. Options are environment variables:
   SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   SAMPLES=16                 temporal shutter samples a frame for clip, final or poster (1-64; clip 1, final and poster 8): more is
-                             smoother blur, slower; a frame whose camera turns fast (a whip) takes more by itself, up to 64
+                             smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by itself, up to 64
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's

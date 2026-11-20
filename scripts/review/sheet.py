@@ -245,6 +245,8 @@ i = 0
 while i < len(args):
     a = args[i]
     if a == "--vs" or a.startswith("--vs="):
+        if vs_arg is not None:
+            usage("--vs may only be passed once")
         vs_arg = a.split("=", 1)[1] if "=" in a else args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith("-") else ""
         if not vs_arg:
             usage("--vs needs the reference video: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
@@ -253,6 +255,8 @@ while i < len(args):
     if a in ("--grid", "--crop"):
         if i + 1 >= len(args):
             usage(f"{a} needs a value: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")
+        if (grid_arg if a == "--grid" else crop_arg) is not None:
+            usage(f"{a} may only be passed once")
         if a == "--grid":
             grid_arg = args[i + 1]
         else:
@@ -300,11 +304,11 @@ if vs_arg is not None and mode not in ("overview", "frames"):
     usage("--vs goes with frames or overview: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
 if vs_arg is not None and not Path(vs_arg).is_file():
     usage(f"no {vs_arg}: --vs takes the reference video in the film, as references/ref.mp4")
-if vs_arg is not None:
+if vs_arg is not None or grid_arg is not None:
     try:
         import PIL  # noqa: F401
     except ImportError as e:
-        usage(f"Pillow (PIL) is required to label --vs pairs: {e}", 1)
+        usage(f"Pillow (PIL) is required to label {'--vs pairs' if vs_arg is not None else 'a --grid'}: {e}", 1)
 grid = None
 if crop_arg is not None and grid_arg is None:
     usage("--crop goes with --grid: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")

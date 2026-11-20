@@ -690,6 +690,12 @@ test("--grid rules each native frame in the video's own pixels, and --crop keeps
     .entries[0];
   assert.deepEqual(dimensions(cropped.frame), [200, 140]);
   assert.deepEqual(cropped.grid, { step: 50, crop: [100, 40, 300, 180] });
+  assert.deepEqual(cropped.commands.frames.argv.slice(-4), [
+    "--grid",
+    "50",
+    "--crop",
+    "100,40,300,180",
+  ]);
   // the line at the video's 150 px falls 50 px into the crop
   assert.ok(
     rgb(cropped.frame, "crop=4:40:48:80,scale=1:1:flags=area")[1] >
@@ -704,6 +710,7 @@ test("--grid rules each native frame in the video's own pixels, and --crop keeps
       /--crop .* inside the 320x180 picture/,
     ],
     [["overview", "--grid", "50"], /--grid goes with frames/],
+    [["frames", "0.5", "--grid", "50", "--grid", "25"], /--grid may only be passed once/],
   ]) {
     const bad = f.run(...args);
     assert.equal(bad.status, 2, bad.stdout + bad.stderr);

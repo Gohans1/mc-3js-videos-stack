@@ -50,6 +50,17 @@ def crop_band(value):
     return [x, y, w, h]
 
 
+def crop_origin(source, crop):
+    """The band's top-left in the picture as ffmpeg shows it: a rotated phone video's coded width and height swap."""
+    probe = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                            "stream=width,height:stream_side_data=rotation", "-of", "json", str(source)],
+                           capture_output=True, text=True, check=True, timeout=15)
+    stream = json.loads(probe.stdout)["streams"][0]
+    turn = next((float(d["rotation"]) for d in stream.get("side_data_list", []) if "rotation" in d), 0)
+    width, height = (stream["height"], stream["width"]) if abs(turn) % 180 == 90 else (stream["width"], stream["height"])
+    return [int(width * crop[0]), int(height * crop[1])]
+
+
 def frame_times(start, end, count, pins, duration):
     end = duration if end is None else end
     if not 0 <= start < end <= duration:
@@ -152,10 +163,7 @@ def main():
                     subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *([] if image else ["-ss", str(at)]), "-i", str(source),
                                     *band, "-frames:v", "1", "-update", "1", file.name], cwd=frames, check=True, timeout=30)
                 if band and origin is None:
-                    size = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-                                           "stream=width,height", "-of", "csv=p=0", str(source)],
-                                          capture_output=True, text=True, check=True, timeout=15).stdout.split(",")
-                    origin = (int(int(size[0]) * args.crop[0]), int(int(size[1]) * args.crop[1]))
+                    origin = crop_origin(source, args.crop)
                 started = time.monotonic()
                 read = engine(str(file))
                 result["backend"]["config"] = OmegaConf.to_container(engine.cfg, resolve=True, enum_to_str=True)
