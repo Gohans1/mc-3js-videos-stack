@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { cliArgs, numberArg } from "../packages/live-studio/src/cli.mjs";
 import { ffmpegCli } from "./media/ffmpeg.mjs";
+import { MEDIA_HOME as HOME, mediaPython as python } from "./media/home.mjs";
 import { runMediaJob } from "./media/job.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLS = JSON.parse(readFileSync(join(ROOT, "scripts/media/tools.json"), "utf8"));
-const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"));
 const PYTHON_STDIO = { PYTHONIOENCODING: "utf-8" };
 const HELP = `Optional local media tools for AI, with independent environments and retained evidence.
   bun run media list [--json]             Available tools and upstream/license information
@@ -22,7 +22,7 @@ const HELP = `Optional local media tools for AI, with independent environments a
   --minutes N     Wall-clock deadline (default 5; setup default 10). Logs and finished files survive failure.
 Tools (bun run media <tool> --help for syntax and limits):
   Audio:   separate, beat, locate, vad, ced, denoise, effects, melody, midi, tts, fingerprint, caption, foley, metadata
-  Visual:  ocr, vision, tapir, track
+  Visual:  ocr, vision, tapir, track, camera
   Finish:  ffmpeg (ffmpeg list / schema <tool>), qc (--contract), timeline (OTIO)
 MC_MEDIA_HOME overrides the environment/model cache root (default vault/tools/media).
 setup uses the network; execution is local, free and does not upload media. First model
@@ -37,8 +37,6 @@ const fail = (message) => {
   console.error(`${message}; bun run media --help`);
   process.exit(2);
 };
-const python = (id) =>
-  join(HOME, id, "env", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
 const runtimeVersions = (binaries) =>
   Object.fromEntries(
     binaries.map((binary) => {

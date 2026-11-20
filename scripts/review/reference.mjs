@@ -1,5 +1,14 @@
-import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, statSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -7,6 +16,7 @@ import { parseArgs } from "node:util";
 import { cliArgs, numberArg } from "../../packages/live-studio/src/cli.mjs";
 import { killProcessTree } from "../../packages/live-studio/src/kill-process.mjs";
 import { startJob } from "../../packages/live-studio/src/tell.mjs";
+import { mediaPython } from "../media/home.mjs";
 
 async function runWorker(executable, args, minutes) {
   const child = spawn(executable, args, {
@@ -52,7 +62,8 @@ study/compare need local video files and ffmpeg/ffprobe on PATH; no account or p
 inspect uses Python 3.11+ and ffmpeg/ffprobe for pictures; URL sources additionally use yt-dlp.
 inspect --detail transcript skips media download/decoding and never starts a speech model.
 Writes study.json/study.md or compare.json/compare.md with side-by-side PNGs in a fresh run-* subfolder; earlier evidence is kept.
-Cuts and pace are image-change estimates, not recovered camera motion; flashes and equal-luminance cuts can fool them.
+Cuts and pace are image-change estimates; flashes and equal-luminance cuts can fool them.
+study also lists whip pans and the camera's move each frame once bun run media setup camera is done (tracked corners, not a solved camera).
 Metrics and reused-media detection are advisory, not a quality gate or a copyright certificate.
 Exit 0: analysis finished; 1: failed analysis OR detected reference-media reuse (read the report); 2: usage error.
 Analysis keeps completed reports but does not resume decoding after interruption; use short reference clips.
@@ -166,6 +177,64 @@ if (stopped)
   console.error(
     "reference: stopped before completion; completed reports remain, decoding must restart",
   );
+// the measure's cuts are image changes and miss a whip pan, so study adds the camera's own motion from bun run media camera
+const studyJson = join(out, "study.json");
+if (command === "study" && !stopped && status === 0 && existsSync(studyJson)) {
+  const camera = mediaPython("camera");
+  if (!existsSync(camera))
+    console.error(
+      "reference: whip pans and camera motion need bun run media setup camera; cuts and changes stand",
+    );
+  else {
+    const m = spawnSync(
+      camera,
+      [
+        "-B",
+        fileURLToPath(new URL("../media/camera.py", import.meta.url)),
+        "motion",
+        resolve(files[0]),
+        "--out",
+        join(out, "camera"),
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: minutes * 60_000 },
+    );
+    const motionFile = join(out, "camera", "motion.json");
+    if (m.status === 0 && existsSync(motionFile)) {
+      const motion = JSON.parse(readFileSync(motionFile, "utf8"));
+      rmSync(join(out, "camera"), { recursive: true });
+      const studied = JSON.parse(readFileSync(studyJson, "utf8"));
+      const near = 1.5 / motion.fps;
+      const cuts = studied.picture?.cuts ?? [];
+      for (const w of motion.whips) {
+        const cut = cuts.find((c) => c.at >= w.from - near && c.at <= w.to + near);
+        if (cut) w.cut = cut.at;
+      }
+      writeFileSync(studyJson, JSON.stringify({ ...studied, motion }));
+      const t = (s) => s.toFixed(3);
+      appendFileSync(
+        join(out, "study.md"),
+        [
+          "",
+          `## Whips (${motion.whips.length})`,
+          "",
+          "The camera moving over 6% of the frame (or zooming 6%) a frame for 2 frames or more, from tracked corners; a whip around a cut is a whip transition. study.json motion.frames has dx, dy, zoom, turn and inliers for every frame.",
+          "",
+          ...(motion.whips.length
+            ? motion.whips.map(
+                (w) =>
+                  `- ${t(w.from)}–${t(w.to)}: the camera ${w.camera}${w.cut === undefined ? "" : `, a whip transition through the cut at ${t(w.cut)}`}${w.lostFrames ? `, ${w.lostFrames} frame(s) too smeared to track` : ""}`,
+              )
+            : ["None."]),
+          "",
+        ].join("\n"),
+      );
+      console.log(`${motion.whips.length} whip pan${motion.whips.length === 1 ? "" : "s"}`);
+    } else
+      console.error(
+        `reference: the camera's motion was not measured (${(m.stderr || m.error?.message || `exit ${m.status}`).trim()}); cuts and changes stand`,
+      );
+  }
+}
 await ended({
   say: `Reference ${command} ${status === 0 ? "finished" : "needs attention"}`,
   level: status === 0 ? "ok" : "warn",

@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { mediaPython } from "../media/home.mjs";
+
 const cli = fileURLToPath(new URL("../review/reference.mjs", import.meta.url));
 const run = (cwd, args) =>
   spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", timeout: 30000 });
@@ -79,6 +81,65 @@ test("reference studies a real cut and compares with reference first without cla
     rmSync(dir, { recursive: true, force: true });
   }
 }, 30000);
+
+// bun run scenes found 0 cuts in a reference with about 30 whip pans: study now follows the camera's motion
+test.skipIf(!existsSync(mediaPython("camera")))(
+  "reference study measures the camera's motion each frame and marks a whip pan",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "reference-whip-"));
+    try {
+      const still = join(dir, "texture.png");
+      const made = spawnSync(
+        "python",
+        [
+          "-c",
+          "import numpy as np, sys\nfrom PIL import Image\nrng = np.random.default_rng(7)\nblocks = rng.integers(0, 255, (45, 80, 3), dtype=np.uint8)\nImage.fromarray(blocks).resize((640, 360), Image.NEAREST).save(sys.argv[1])",
+          still,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      );
+      expect(made.status, made.stderr).toBe(0);
+      // a slow pan of 2 px a frame, a whip of 30 px a frame for frames 30-35, then a hold
+      const video = join(dir, "pan.mkv");
+      const ff = spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-loop",
+          "1",
+          "-framerate",
+          "30",
+          "-i",
+          still,
+          "-vf",
+          "crop=320:180:x='if(lt(n,30),n*2,if(lt(n,36),58+(n-29)*30,238))':y=60",
+          "-frames:v",
+          "60",
+          "-c:v",
+          "ffv1",
+          video,
+        ],
+        { encoding: "utf8", timeout: 10000 },
+      );
+      expect(ff.status, ff.stderr).toBe(0);
+      const study = run(dir, ["study", video]);
+      expect(study.status, study.stdout + study.stderr).toBe(0);
+      const studied = JSON.parse(readFileSync(reportFile(study), "utf8"));
+      const { frames, whips } = studied.motion;
+      expect(frames[10].dx).toBeCloseTo(-2 / 320, 3);
+      expect(Math.abs(frames[10].dy)).toBeLessThan(0.002);
+      expect(frames[33].dx).toBeCloseTo(-30 / 320, 2);
+      expect(frames[45].dx).toBeCloseTo(0, 3);
+      expect(whips).toEqual([{ from: 1, to: 1.2, camera: "pans right", lostFrames: 0 }]);
+      const md = readFileSync(reportFile(study).replace(/json$/, "md"), "utf8");
+      expect(md).toMatch(/## Whips \(1\)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  30000,
+);
 
 test("failed analysis never recommends a previous report and each completed run keeps its own evidence", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-fresh-"));
