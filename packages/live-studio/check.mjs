@@ -54,6 +54,7 @@ import { noteNudge } from "./src/note-cli.mjs";
 import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
+import { formatCoverage, refCoverage } from "./src/ref-coverage.mjs";
 import { refCutsWarning } from "./src/ref-cuts.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
@@ -64,7 +65,7 @@ import { assertInsideDir } from "./src/voice-map.mjs";
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
 src/edit.json, pack/picks.json or package.json "live-studio". Run inside the film.
   bun run check           the problems, each under the file it is in, or "ok"
-  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text]}
+  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text], "coverage"?: {...}}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), placed objects (placed.json: gohans/minecraft/mob IDs,
 mob clips) and pack/picks.json entries against the local vault when present, that every other .json in src/ parses,
 every "look" and "handheld" preset name and misspelt keys, every sound name in the sound timeline (beds, sfx and their "try"
@@ -403,6 +404,8 @@ if (soundBroken) {
 const warnings = [];
 // advice under the warnings, for a reader: text output only, never a --json warning
 const hints = [];
+// what the film has against the reference, in heard seconds, for the coverage line (src/ref-coverage.mjs)
+const covered = { sfx: [], text: [], cameraCuts: [], cameraUntil: 0 };
 // the studio opens the film's sounds through its sfx folder: without one no name can be looked up
 if (conf.soundTimeline && !conf.sfx)
   warnings.push(
@@ -732,6 +735,10 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
       return clock ? Math.min(ends.layers, clock.duration) : ends.layers;
     };
     const heard = mapTimeline("sound", selected, soundClock, false, null, soundDurations);
+    heard.sfx.forEach((c, i) => {
+      if (!selected.sfx[i]._off && !muted.has(lanes.sfx[i].track) && !(c.length <= 0))
+        covered.sfx.push(c.at);
+    });
     const late = [
       ...heard.beds.flatMap((c, i) => {
         const end = clipEnd(selected.beds[i], "beds");
@@ -794,6 +801,7 @@ if (Array.isArray(textRead?.items)) {
       return;
     }
     if (!isRead(it, textRead.tracks)) return;
+    if (h) covered.text.push([h.from, Math.min(h.to, textEnd)]);
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
     const cut = h && h.to > textEnd;
     for (const fault of h
@@ -1184,14 +1192,16 @@ const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =
 if (camKeys?.length && filmEnds()) {
   const camClock = clockForTimeline("cam");
   const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
-  const [first, ...rest] = refCutsWarning(
-    PROJECT,
-    camKeys.flatMap((k, i) => (i > 0 && k.cut ? [heard(k.t)] : [])),
-    heard(Math.max(...camKeys.map((k) => k.t))),
-  ).split("\n");
+  covered.cameraCuts = camKeys.flatMap((k, i) => (i > 0 && k.cut ? [heard(k.t)] : []));
+  covered.cameraUntil = heard(Math.max(...camKeys.map((k) => k.t)));
+  const [first, ...rest] = refCutsWarning(PROJECT, covered.cameraCuts, covered.cameraUntil).split(
+    "\n",
+  );
   if (first) warnings.push(first);
   hints.push(...rest);
 }
+
+const coverage = camKeys?.length && filmEnds() ? refCoverage(PROJECT, covered) : null;
 
 const toolsWarning = ownToolsWarning(PROJECT);
 if (toolsWarning) warnings.push(toolsWarning);
@@ -1202,7 +1212,10 @@ const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
   issue: ps.map((p) => p.issue).join("\n"),
 }));
 const shownWarnings = [...warnings, ...hints];
-if (json) console.log(JSON.stringify({ ok: !problems.length, problems, warnings }));
+if (json)
+  console.log(
+    JSON.stringify({ ok: !problems.length, problems, warnings, ...(coverage && { coverage }) }),
+  );
 else if (!problems.length)
   console.log(
     `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects\nnext: look at it: AT=<seconds> bun run render stills, or bun run studio`,
@@ -1213,6 +1226,7 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
+if (coverage && !json) console.log(formatCoverage(coverage));
 const notesWaiting = json ? "" : noteNudge(PROJECT);
 if (notesWaiting) console.log(notesWaiting);
 await tell(PROJECT, {

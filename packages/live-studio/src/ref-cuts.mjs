@@ -24,6 +24,8 @@ export const latestStudy = (project) => {
       file: best.file,
       fps: Number(data.fps) || 30,
       cuts: cuts.map((c) => c?.at).filter(Number.isFinite),
+      seconds: Number(data.duration) || null,
+      hits: (data.sound?.hits ?? []).map((h) => h?.at).filter(Number.isFinite),
     };
   } catch {
     return null;
