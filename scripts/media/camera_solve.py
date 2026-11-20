@@ -38,6 +38,7 @@ def read_shot(path):
 
 
 def read_span(source, i_from, i_to):
+    """the span's frames in grey (a 10 s 1080p shot in colour held ~2.5 GB)"""
     import cv2
 
     cap = cv2.VideoCapture(str(source))
@@ -47,8 +48,21 @@ def read_span(source, i_from, i_to):
         ok, image = cap.read()
         if not ok:
             break
-        frames[i] = image
+        frames[i] = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return frames
+
+
+def read_frames(source, picks):
+    import cv2
+
+    cap = cv2.VideoCapture(str(source))
+    out = {}
+    for i in picks:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+        ok, image = cap.read()
+        if ok:
+            out[i] = image
+    return out
 
 
 def follow(grey, i0, i1, p):
@@ -73,7 +87,10 @@ def follow(grey, i0, i1, p):
 def point_series(grey, point, fps, i_from, i_to):
     import numpy as np
 
-    keys = sorted((round(float(t) * fps), np.array(v, np.float32)) for t, v in point["uv"].items())
+    keys = sorted(((round(float(t) * fps), np.array(v, np.float32)) for t, v in point["uv"].items()), key=lambda k: k[0])
+    for (ka, _), (kb, _) in zip(keys, keys[1:]):
+        if ka == kb:
+            raise ValueError(f"point {point['name']}: two uv seconds fall on frame {ka}; keep one")
     tracked = point.get("track", True)
     res = {keys[0][0]: keys[0][1]}
     for (ka, va), (kb, vb) in zip(keys, keys[1:]):
@@ -254,15 +271,14 @@ def solve(source, shot, out):
     if not fps or not math.isfinite(fps):
         raise ValueError("no frame rate in the source")
     i_from, i_to = round(float(shot["from"]) * fps), round(float(shot["to"]) * fps)
-    images = read_span(source, i_from, i_to)
-    if len(images) < 2:
+    grey = read_span(source, i_from, i_to)
+    if len(grey) < 2:
         raise ValueError(f"fewer than 2 frames between {shot['from']} and {shot['to']} s")
-    grey = {i: cv2.cvtColor(im, cv2.COLOR_BGR2GRAY) for i, im in images.items()}
-    say(f"read {len(images)} frames ({width}x{height}, {fps:.3f} fps); following {len(shot['points'])} points")
+    say(f"read {len(grey)} frames ({width}x{height}, {fps:.3f} fps); following {len(shot['points'])} points")
     names = [p["name"] for p in shot["points"]]
     xyz = {p["name"]: np.array(p["xyz"], np.float64) for p in shot["points"]}
     series = {p["name"]: point_series(grey, p, fps, i_from, i_to) for p in shot["points"]}
-    frames = sorted(images)
+    frames = sorted(grey)
     fov = shot.get("fov")
     searched = fov is None
     if searched:
@@ -273,10 +289,19 @@ def solve(source, shot, out):
             return mean_err(solve_frames(names, xyz, series, sample, intrinsics(f, width, height)))
 
         best = min(np.arange(FOV_RANGE[0], FOV_RANGE[1] + 1, 2.0), key=trial)
+        g = (math.sqrt(5) - 1) / 2
         lo, hi = best - 2, best + 2
+        a, b = hi - g * (hi - lo), lo + g * (hi - lo)
+        fa, fb = trial(a), trial(b)
         for _ in range(16):
-            a, b = lo + (hi - lo) * 0.382, lo + (hi - lo) * 0.618
-            lo, hi = (lo, b) if trial(a) < trial(b) else (a, hi)
+            if fa < fb:
+                hi, b, fb = b, a, fa
+                a = hi - g * (hi - lo)
+                fa = trial(a)
+            else:
+                lo, a, fa = a, b, fb
+                b = lo + g * (hi - lo)
+                fb = trial(b)
         fov = float((lo + hi) / 2)
         say(f"lens: {fov:.2f} deg vertical fits best")
     K = intrinsics(fov, width, height)
@@ -323,8 +348,9 @@ def solve(source, shot, out):
     pick = [solved[round(j * (len(solved) - 1) / 7)] for j in range(min(8, len(solved)))]
     tiles, scale = [], 640 / max(width, height)
     mark = max(4, round(0.008 * max(width, height)))
+    colour = read_frames(source, pick)
     for i in pick:
-        im = images[i].copy()
+        im = colour[i] if i in colour else cv2.cvtColor(grey[i], cv2.COLOR_GRAY2BGR)
         for name, pr in zip(sol[i]["use"], sol[i]["proj"]):
             u = series[name][i]
             cv2.circle(im, (int(u[0]), int(u[1])), mark, (0, 255, 255), max(1, mark // 4))

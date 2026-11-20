@@ -1194,9 +1194,12 @@ if (camKeys?.length && filmEnds()) {
   const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
   covered.cameraCuts = camKeys.flatMap((k, i) => (i > 0 && k.cut ? [heard(k.t)] : []));
   covered.cameraUntil = heard(Math.max(...camKeys.map((k) => k.t)));
-  const [first, ...rest] = refCutsWarning(PROJECT, covered.cameraCuts, covered.cameraUntil).split(
-    "\n",
-  );
+  const [first, ...rest] = refCutsWarning(
+    PROJECT,
+    conf.camTimeline,
+    covered.cameraCuts,
+    covered.cameraUntil,
+  ).split("\n");
   if (first) warnings.push(first);
   hints.push(...rest);
 }

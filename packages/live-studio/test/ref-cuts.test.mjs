@@ -31,10 +31,10 @@ test("the newest study of any reference is the one read", () => {
 test("a camera cut away from every reference cut, and a reference cut the camera skips, are named", () => {
   const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
   study(dir, "ref", "run-1", [cut(4.071), cut(5.839), cut(30.43)], new Date());
-  const warning = refCutsWarning(dir, [2.62, 4.05], 10);
+  const warning = refCutsWarning(dir, "src/timeline/shots/cam.json", [2.62, 4.05], 10);
   assert.match(
     warning,
-    /^⚠ src\/timeline\/cam\.json cuts at 2\.62 s, where the reference does not cut/,
+    /^⚠ src\/timeline\/shots\/cam\.json cuts at 2\.62 s, where the reference does not cut/,
   );
   assert.match(warning, /the reference cuts at 5\.84 s and the camera does not/);
   assert.doesNotMatch(warning, /30\.43/, "past the film's last camera key is not built yet");
@@ -44,9 +44,12 @@ test("a camera cut away from every reference cut, and a reference cut the camera
 test("cuts within a frame and a half of the reference's pass", () => {
   const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
   study(dir, "ref", "run-1", [cut(4.071), cut(5.839)], new Date());
-  assert.equal(refCutsWarning(dir, [4.05, 5.86], 10), "");
+  assert.equal(refCutsWarning(dir, "src/timeline/cam.json", [4.05, 5.86], 10), "");
 });
 
 test("no study, no warning", () => {
-  assert.equal(refCutsWarning(mkdtempSync(join(tmpdir(), "ref-cuts-")), [2.62], 10), "");
+  assert.equal(
+    refCutsWarning(mkdtempSync(join(tmpdir(), "ref-cuts-")), "src/timeline/cam.json", [2.62], 10),
+    "",
+  );
 });

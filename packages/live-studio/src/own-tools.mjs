@@ -14,7 +14,7 @@ const ownTools = (project) => [
   ...["tools", "scripts"].flatMap((dir) =>
     isDir(join(project, dir))
       ? readdirSync(join(project, dir))
-          .filter((f) => !f.startsWith("."))
+          .filter((f) => !f.startsWith(".") && f !== "__pycache__")
           .map((f) => `${dir}/${f}`)
       : [],
   ),

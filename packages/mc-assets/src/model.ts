@@ -204,7 +204,9 @@ export async function texture(
   const colon = name.indexOf(":");
   const path = `assets/${colon >= 0 ? name.slice(0, colon) : "minecraft"}/textures/${name.slice(colon + 1)}.png`;
   const bmr = opts.renderer ?? (await loadBmr());
-  const data = await bmr.readTexture!(path, sources);
+  if (!bmr.readTexture)
+    throw new Error("texture() needs block-model-renderer 2.20 or later (readTexture)");
+  const data = await bmr.readTexture(path, sources);
   if (!data) throw new Error(`no texture ${path} in the asset sources`);
   const t = new THREE.Texture(data.image as THREE.Texture["image"]);
   Object.assign(t, {

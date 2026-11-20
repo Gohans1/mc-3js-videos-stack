@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { mediaPython } from "../media/home.mjs";
-import { cameraAt, FPS, tableShot, testVideo } from "./pinhole.mjs";
+import { cameraAt, FPS, markerFrames, markerVideo, tableShot, testVideo } from "./pinhole.mjs";
 
 const worker = fileURLToPath(new URL("../media/camera.py", import.meta.url));
 
@@ -43,6 +43,44 @@ test.skipIf(!existsSync(mediaPython("camera")))(
       expect(report.keys[0]).toMatchObject({ t: 0, cut: true, id: "mm-table-0", ease: "linear" });
       expect(existsSync(join(out, "sheet.jpg"))).toBe(true);
       expect(run.stdout).toMatch(/table: lens 40\.\d+ deg, 13 of 13 frames solved/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  150000,
+);
+
+test.skipIf(!existsSync(mediaPython("camera")))(
+  "camera solve follows the points through the frames between two keyed seconds, where a straight line would miss",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "camera-solve-track-"));
+    try {
+      const video = join(dir, "dots.mkv");
+      const made = spawnSync("ffmpeg", [...markerVideo, video], {
+        input: markerFrames(0.08),
+        encoding: "utf8",
+        timeout: 20000,
+      });
+      expect(made.status, made.stderr).toBe(0);
+      // keyed at frames 0 and 12 only; the camera bobs ~12 px between them
+      writeFileSync(
+        join(dir, "shot.json"),
+        JSON.stringify(tableShot({ frames: [0, 12], track: true, shake: 0.08 })),
+      );
+      const out = join(dir, "out");
+      const run = spawnSync(
+        mediaPython("camera"),
+        ["-B", worker, "solve", video, "--shot", join(dir, "shot.json"), "--out", out],
+        { encoding: "utf8", timeout: 120000 },
+      );
+      expect(run.status, run.stdout + run.stderr).toBe(0);
+      const report = JSON.parse(readFileSync(join(out, "solve.json"), "utf8"));
+      expect(report.summary.solved).toBe(13);
+      // followed: within a millimetre of the true path; straight lines between the keys put it ~14 cm off
+      const off = report.keys.map((k, frame) =>
+        Math.hypot(...k.p.map((v, i) => v - cameraAt(frame, 0.08).c[i])),
+      );
+      expect(Math.max(...off)).toBeLessThan(0.01);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

@@ -35,8 +35,8 @@ export const latestStudy = (project) => {
 const s = (t) => `${+t.toFixed(2)} s`;
 
 // A remake cuts where its reference cuts. The camera's cut seconds are heard seconds; until is the last heard second the
-// camera is keyed to, so the part of the reference not built yet is not reported
-export const refCutsWarning = (project, cameraCuts, until) => {
+// camera is keyed to, so the part of the reference not built yet is not reported. camFile: the film's camTimeline
+export const refCutsWarning = (project, camFile, cameraCuts, until) => {
   const study = latestStudy(project);
   if (!study) return "";
   const near = Math.max(0.05, 1.5 / study.fps);
@@ -46,7 +46,7 @@ export const refCutsWarning = (project, cameraCuts, until) => {
   if (!extra.length && !missing.length) return "";
   const where = relative(project, study.file).replaceAll("\\", "/");
   return [
-    `⚠ src/timeline/cam.json ${[
+    `⚠ ${camFile} ${[
       extra.length &&
         `cuts at ${extra.map(s).join(", ")}, where the reference does not cut (a jump in the middle of its move)`,
       missing.length &&

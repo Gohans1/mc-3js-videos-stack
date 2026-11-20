@@ -55,12 +55,12 @@ def measure(source, start, end):
         frames.append(cv2.cvtColor(small, cv2.COLOR_BGR2GRAY))
     if len(frames) < 2:
         raise ValueError("fewer than 2 frames in the span")
-    stack = np.stack(frames).astype(np.float32)
     height, width = frames[0].shape
     rows = [{"frame": first, "t": round(first / fps, 4), "dx": 0.0, "dy": 0.0, "zoom": 1.0, "turn": 0.0, "inliers": 1.0}]
     for i in range(1, len(frames)):
         row = {"frame": first + i, "t": round((first + i) / fps, 4)}
-        moving = stack[max(0, i - STILL_FRAMES):i + STILL_FRAMES].std(axis=0) >= STILL_GREY
+        # a float window per frame, not the whole video as floats (~0.6 GB for a minute of 9:16)
+        moving = np.stack(frames[max(0, i - STILL_FRAMES):i + STILL_FRAMES]).astype(np.float32).std(axis=0) >= STILL_GREY
         if moving.mean() < 0.02:
             rows.append({**row, "dx": 0.0, "dy": 0.0, "zoom": 1.0, "turn": 0.0, "inliers": 1.0})
             continue

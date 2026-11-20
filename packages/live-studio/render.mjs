@@ -245,14 +245,17 @@ if (
 // REF: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
 const vsVideo = process.env.REF ? resolve(PROJECT, process.env.REF) : null;
 if (process.env.REF !== undefined) {
+  const other =
+    ["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined) ??
+    (process.env.LIST === "1" ? "LIST=1" : null);
   const why = !process.env.REF
     ? "names no video"
     : !statSync(vsVideo, { throwIfNoEntry: false })?.isFile()
       ? `${process.env.REF} is no file in the film`
       : !["stills", "poster"].includes(what)
         ? "goes with stills or poster"
-        : ["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined)
-          ? `and ${["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined)} draw another picture than the reference's`
+        : other
+          ? `and ${other} draw another picture than the reference's`
           : null;
   if (why) {
     console.error(

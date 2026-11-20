@@ -32,7 +32,13 @@ test("a film with the template's files only gets no warning", () => {
 });
 
 test("tools/ and loose scripts the film made are named when fewer gaps came from it", () => {
-  const dir = film(["tools/compare.py", "tools/mm/solve.py", "tools/.venv/x", "refstrip.sh"]);
+  const dir = film([
+    "tools/compare.py",
+    "tools/mm/solve.py",
+    "tools/.venv/x",
+    "tools/__pycache__/compare.cpython-313.pyc",
+    "refstrip.sh",
+  ]);
   const warning = ownToolsWarning(dir, gaps(dir, ["food", "other"]));
   assert.match(
     warning,
