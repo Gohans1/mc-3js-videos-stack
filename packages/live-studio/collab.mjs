@@ -17,7 +17,7 @@ const BUILTIN_SET = new Set(BUILTIN_DOCS);
 
 const HELP = `Read and update a Studio document without undoing the creator's edits. Studio must be running.
   bun run collab [--film films/name] read cam [--full]            current version, data, protected paths and lean notices (--full keeps raw incoming)
-  bun run collab [--film films/name] write cam <file|-> [--quiet] JSON payload {"base":"version from read","data":...} (--quiet/-q prints compact summary)
+  bun run collab [--film films/name] write cam <file|-> [--quiet] JSON payload {"base":"version from read","data":...}, or read's output with its data edited (--quiet/-q prints compact summary)
   bun run collab [--film films/name] write-many <file|-> [-q]     atomic multi-file write via /api/together: {"writes":{"cam":{"base":"...","data":...},...}}
 --film is optional inside a film folder; pass - with write or write-many to read the JSON payload from stdin.
 Use bun run --silent collab read cam when piping JSON stdout (omits Bun's script banner).
@@ -110,6 +110,19 @@ const resolveDoc = (rawName, keyFiles) => {
 const readInputText = (input) =>
   input === "-" ? readFileSync(0, "utf8") : readFileSync(resolve(input), "utf8");
 
+// read's own output, its data edited, is a write: its version is the base
+const asWrite = (text) => {
+  let body;
+  try {
+    body = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  return body && typeof body.version === "string" && body.base === undefined
+    ? JSON.stringify({ base: body.version, data: body.data })
+    : text;
+};
+
 const parseWriteMany = (rawText, keyFiles) => {
   let payload;
   try {
@@ -195,7 +208,7 @@ if (action === "read" || action === "write") {
 let writeBody;
 let manyPlan = null;
 try {
-  if (action === "write") writeBody = readInputText(arg2);
+  if (action === "write") writeBody = asWrite(readInputText(arg2));
   else if (action === "write-many") manyPlan = parseWriteMany(readInputText(arg1), keyFiles);
 } catch (error) {
   console.error(`collab: ${error.message}`);

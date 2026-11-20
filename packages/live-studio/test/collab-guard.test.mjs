@@ -326,6 +326,13 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(afterFile.data[0].fov, 75);
     assert.equal(JSON.parse(readFileSync(camFile, "utf8"))[0].fov, 75);
 
+    // 3b) read's own output, its data edited, writes back: its version is the base
+    const reread = JSON.parse((await runCollab(["read", "cam"])).stdout);
+    reread.data[0].fov = 80;
+    const writeRead = await runCollab(["write", "cam", "-"], { stdin: JSON.stringify(reread) });
+    assert.equal(writeRead.status, 0, writeRead.stdout + writeRead.stderr);
+    assert.equal(JSON.parse(readFileSync(camFile, "utf8"))[0].fov, 80);
+
     // 4) Usage errors exit 2
     const missingInput = await runCollab(["--film", dir, "write", "cam"]);
     assert.equal(missingInput.status, 2);
