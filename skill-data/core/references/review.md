@@ -201,3 +201,19 @@ Sheet frames and reference inspect select the displayed frame by PTS for variabl
 `bun run reference study references/ref.mp4` estimates cuts, image-change pace, audio hits and, after media setup camera, whip pans (a whip around a cut is a whip transition); `bun run reference compare references/ref.mp4 renders/draft.mp4` writes JSON and comparison images, reference first. Cuts and pace can mistake flashes or miss equal-luminance cuts; the metrics support creative choices, not a solved camera or quality scores.
 
 Use local files with FFmpeg/ffprobe; each attempt creates a fresh `run-*` folder and stops after 5 minutes by default, with no decoding resume after interruption. Exit 1 can mean failure or reused reference media; read the report and `bun run reference --help` for `--minutes`, `--out` and `--fit`.
+
+## Remaking a reference
+
+When the creator asks for a film that matches a reference shot for shot, measure the reference first and compare at the same second, never from memory of it.
+
+| Step | How |
+| --- | --- |
+| Measure it | `bun run reference add <video>`, then `bun run reference study references/ref.mp4`: cuts, whip pans, sound hits in `study.json` |
+| Cut where it cuts | Set `"cut": true` only at the reference's cuts and change the layout only there; a whip transition is a keyed pan into the cut key mid-swing. `bun run check` names every cut the reference lacks |
+| Know how far it is | `bun run check` prints coverage of the reference: picture keyed, cuts matched, sound hits with an sfx, seconds of on-screen text (`--json`: `coverage`). A track at 0% is not done, whatever is left for polish |
+| Same second, side by side | `REF=references/ref.mp4 AT=<s> bun run render poster` writes `renders/vs_*.jpg` and a sharpness ratio; a soft subject in a poster is focus or DOF, not the draft size |
+| Focus | Focus on the face of the subject turned to the camera (a jar's front, not its centre); a close-up that is only soft at the subject is DOF |
+| Fast moves | The studio draws no motion blur and the reference's whips are smeared: judge them on `SPAN=<a>,<b> SAMPLES=8 bun run render clip`, not studio playback |
+| Look closely | One or two frames per image, or `CROP=x,y,w,h` on a still: a wide sheet is shrunk when read, a cell ends near 360 px |
+| Before calling a shot done | A poster at its key frame, a `SAMPLES=8` clip of it, and `CHECK=motion:cam,<a>,<b> bun run render stills` over its moves |
+| Points in the reference | `bun run media tapir references/ref.mp4 --point x,y` follows a point; `bun run media camera` gives the camera's move each frame; reading coordinates off a grid by eye drifts |

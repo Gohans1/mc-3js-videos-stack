@@ -103,6 +103,8 @@ Exit 0 means the command completed; 1 usually indicates a job/data failure, and 
 | Vault audio changed but listen uses cache | bun run listen --fresh                                                                 |
 | Wrong directory                           | Move to the root or films/<name> as the error says                                     |
 | earshot unavailable                       | earshot doctor; read INSTALL.md                                                        |
+| Editing a file                            | The Edit tool, not sed -i or a python replace: a pattern that matches nothing changes nothing and says nothing |
+| A long Python job                         | python -u and write results as it goes, with a deadline; a timeout loses whatever was not written |
 
 Gap reporting does not gate creativity or automatically justify another command. Logs belong to the current checkout; commit and synchronize them separately when sharing is needed.
 
@@ -112,7 +114,7 @@ Gap reporting does not gate creativity or automatically justify another command.
 | ----------------------------- | -------------------------------------------------------------- |
 | references/film.md            | New films, file maps, vault and isolated test films            |
 | references/contract.md        | Scene hooks, effects, custom HTML, open schemas and extensions |
-| references/review.md          | Picture/text/pacing checks, frame order and reference videos   |
+| references/review.md          | Picture/text/pacing checks, frame order, reference videos and remakes |
 | references/render.md          | Rendering, cache, output configuration and encode checks       |
 | references/sound.md           | Sound selection, mixing, levels and earshot                    |
 | references/voice.md           | Takes, generation, alignment, lip sync and assembly            |
