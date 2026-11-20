@@ -183,3 +183,518 @@ test("a sound damaged inside the zip (a bad download) stops the restore instead 
   );
   assert.equal(existsSync(join(root, "new/vault/sound/sfx/comedy/mixkit-472.wav")), false);
 });
+
+test("packVault splits core and heavy pure assets, excludes tools and cache, and restores both onto a new machine", async (t) => {
+  const { packVault, restoreVault } = await import("../sound_zip.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-vault-split-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const oldVault = join(root, "old/vault");
+  const coreFiles = {
+    "packs/modern-furniture.jar": "mod-jar-bytes",
+    "packs_index.json": '{"modern-furniture.jar":{"slug":"modern-furniture"}}',
+    "packs_check.json": '{"checked":true}',
+    "favorites.json": '{"default":[]}',
+    "motion/ual1/Walk_Loop.glb": "mocap-bytes",
+    "mc-sound/mc/mobs/creeper.ogg": "ogg-bytes",
+    "sfx/mixkit/mixkit-1.wav": "mixkit-bytes",
+    "jar/client.jar": "client-jar",
+    "jar/client_assets.zip": "slim-zip",
+    "jar/client_assets.zip.br": "slim-br",
+    "mcasset/1.21.11/minerender-data/manifest.json": "{}",
+    "mcprep/player.glb": "rig-bytes",
+    "voices/shared-en.json": "[]",
+    "props/lamp.ts": "export const lamp = 1;",
+  };
+  const heavyFiles = {
+    "sound/sfx/transitions/whoosh.wav": "whoosh-wav",
+    "sound/SOURCES.json": '{"whoosh":{"source":"sonniss"}}',
+    "sound/PEAKS.json": '{"whoosh":{"seconds":1}}',
+    "openfilm/library/LICENSE.md": "CC0",
+    "references/capcut/manifest.json": "{}",
+  };
+  for (const [rel, text] of Object.entries({ ...coreFiles, ...heavyFiles }))
+    put(join(oldVault, rel), text);
+  // Tools (venvs/models) and local caches must NEVER enter a vault backup archive
+  put(join(oldVault, "tools/media/venv/python.exe"), "huge-venv");
+  put(join(oldVault, "tools/earshot-home-win/model.bin"), "huge-model");
+  put(join(oldVault, "cache/mc-catalog.v1.json"), "{}");
+  put(join(oldVault, "packs/.tmp-cache"), "dotfile");
+  put(join(oldVault, "sound/sfx/x.wav.123.part"), "partial");
+
+  const coreZip = join(root, "core.zip");
+  const heavyZip = join(root, "heavy.zip");
+  const coreRes = await packVault({ local: oldVault, out: coreZip, part: "core", log: () => {} });
+  const heavyRes = await packVault({
+    local: oldVault,
+    out: heavyZip,
+    part: "heavy",
+    log: () => {},
+  });
+  assert.equal(coreRes.files, Object.keys(coreFiles).length);
+  assert.equal(heavyRes.files, Object.keys(heavyFiles).length);
+
+  const freshVault = join(root, "new/vault");
+  const restoredCore = await restoreVault({ zip: coreZip, local: freshVault, log: () => {} });
+  const restoredHeavy = await restoreVault({ zip: heavyZip, local: freshVault, log: () => {} });
+  assert.equal(restoredCore.written, Object.keys(coreFiles).length);
+  assert.equal(restoredCore.kept, 0);
+  assert.equal(restoredCore.parts.includes("packs"), true);
+  assert.equal(restoredCore.parts.includes("packs_index.json"), true);
+  assert.equal(restoredCore.parts.includes("motion"), true);
+  assert.equal(restoredHeavy.written, Object.keys(heavyFiles).length);
+  assert.equal(restoredHeavy.parts.includes("sound"), true);
+  assert.equal(restoredHeavy.parts.includes("openfilm"), true);
+
+  for (const [rel, text] of Object.entries({ ...coreFiles, ...heavyFiles }))
+    assert.equal(readFileSync(join(freshVault, rel), "utf8"), text, rel);
+  assert.equal(existsSync(join(freshVault, "tools")), false);
+  assert.equal(existsSync(join(freshVault, "cache")), false);
+  assert.equal(existsSync(join(freshVault, "packs/.tmp-cache")), false);
+
+  // Idempotent rerun keeps intact files and restores modified files
+  writeFileSync(join(freshVault, "packs/modern-furniture.jar"), "CORRUPTED----");
+  const rerun = await restoreVault({ zip: coreZip, local: freshVault, log: () => {} });
+  assert.equal(rerun.written, 1);
+  assert.equal(rerun.kept, Object.keys(coreFiles).length - 1);
+  assert.equal(
+    readFileSync(join(freshVault, "packs/modern-furniture.jar"), "utf8"),
+    "mod-jar-bytes",
+  );
+});
+
+test("packVault part=all bundles core and heavy pure assets into one archive without tools or cache", async (t) => {
+  const { packVault, restoreVault } = await import("../sound_zip.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-vault-all-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const oldVault = join(root, "old/vault");
+  put(join(oldVault, "packs/a.jar"), "jar");
+  put(join(oldVault, "packs_index.json"), "{}");
+  put(join(oldVault, "sound/SOURCES.json"), "{}");
+  put(join(oldVault, "tools/media/big.bin"), "skip-me");
+  put(join(oldVault, "cache/mc-catalog.v1.json"), "skip-me");
+
+  const out = join(root, "all.zip");
+  const packed = await packVault({ local: oldVault, out, part: "all", log: () => {} });
+  assert.equal(packed.files, 3);
+  const freshVault = join(root, "new/vault");
+  const res = await restoreVault({ zip: out, local: freshVault, log: () => {} });
+  assert.equal(res.written, 3);
+  assert.equal(existsSync(join(freshVault, "tools")), false);
+  assert.equal(existsSync(join(freshVault, "cache")), false);
+});
+
+test("restoreVault refuses tools, cache, foreign roots, and traversal entries before writing anything", async (t) => {
+  const { restoreVault } = await import("../sound_zip.mjs");
+  const { strToU8, zipSync } = await import("fflate");
+  const root = mkdtempSync(join(tmpdir(), "mc-vault-reject-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  for (const { label, entries } of [
+    {
+      label: "tools",
+      entries: { "packs/ok.jar": strToU8("ok"), "tools/media/python.exe": strToU8("x") },
+    },
+    { label: "cache", entries: { "cache/mc-catalog.v1.json": strToU8("x") } },
+    { label: "foreign", entries: { "notes/todo.txt": strToU8("x") } },
+    { label: "root-unknown", entries: { "random.txt": strToU8("x") } },
+    { label: "traversal", entries: { "packs/../../escape.txt": strToU8("x") } },
+    {
+      label: "nul-byte",
+      entries: { "packs/ok.jar": strToU8("ok"), "packs/a\0b.jar": strToU8("x") },
+    },
+  ]) {
+    const zpath = join(root, `${label}.zip`);
+    writeFileSync(zpath, zipSync(entries, { level: 0 }));
+    const dest = join(root, `vault-${label}`);
+    await assert.rejects(
+      restoreVault({ zip: zpath, local: dest, log: () => {} }),
+      /not a vault archive|outside|invalid/i,
+      label,
+    );
+    assert.equal(existsSync(dest), false, `${label} must not create vault`);
+  }
+});
+
+test("pack_vault CLI validates flags and produces split core/heavy archives and JSON output", async (t) => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const root = mkdtempSync(join(tmpdir(), "mc-pack-vault-cli-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const script = fileURLToPath(new URL("../pack_vault.mjs", import.meta.url));
+  const vault = join(root, "vault");
+  const outDir = join(root, "out");
+  put(join(vault, "packs/mod.jar"), "jar");
+  put(join(vault, "motion/walk.glb"), "glb");
+  put(join(vault, "sound/sfx/hit.wav"), "wav");
+  put(join(vault, "tools/earshot/bin"), "ignored");
+
+  const runCli = (args) =>
+    spawnSync(process.execPath, [script, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 15_000,
+      env: { ...process.env, MC_VAULT_ROOT: vault, MC_VAULT_EXTERNAL: outDir },
+    });
+
+  const help = runCli(["--help"]);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /pack:vault/);
+  assert.match(help.stdout, /--part/);
+
+  const badPart = runCli(["--part", "bogus"]);
+  assert.equal(badPart.status, 2);
+
+  const badZipForSplit = runCli([join(outDir, "one.zip")]);
+  assert.equal(badZipForSplit.status, 2);
+
+  const split = runCli([outDir, "--json"]);
+  assert.equal(split.status, 0, split.stderr);
+  const parsed = JSON.parse(split.stdout);
+  assert.equal(parsed.archives.length, 2);
+  assert.deepEqual(
+    parsed.archives.map((a) => a.part),
+    ["core", "heavy"],
+  );
+  for (const a of parsed.archives) assert.equal(existsSync(a.out), true, a.out);
+});
+
+test("setup_vault CLI accepts --help and rejects unknown flags or missing --vault-zip paths before work", async () => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const script = fileURLToPath(new URL("../setup_vault.mjs", import.meta.url));
+  const runCli = (args) =>
+    spawnSync(process.execPath, [script, ...args], {
+      encoding: "utf8",
+      timeout: 15_000,
+    });
+
+  const help = runCli(["--help"]);
+  assert.equal(help.status, 0, help.stderr);
+  assert.match(help.stdout, /--vault-zip/);
+
+  const bad = runCli(["--not-a-flag"]);
+  assert.equal(bad.status, 2);
+
+  const missing = runCli(["--vault-zip", join(tmpdir(), "definitely-missing-vault-archive.zip")]);
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /No vault archive/);
+});
+
+test("packVault ignores nested junctions and restoreVault refuses destination junctions, directory collisions, symlinks, and tools/ dir headers", async (t) => {
+  const { packVault, restoreVault } = await import("../sound_zip.mjs");
+  const { symlinkSync } = await import("node:fs");
+  const { zipSync } = await import("fflate");
+  const root = mkdtempSync(join(tmpdir(), "mc-vault-safety-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  // 1) Nested junction inside vault/packs must NOT leak external files, and a non-dir root (motion as file) must not ENOTDIR
+  const outside = join(root, "outside-secret");
+  put(join(outside, "leak.txt"), "top-secret");
+  const oldVault = join(root, "old/vault");
+  put(join(oldVault, "packs/ok.jar"), "ok");
+  put(join(oldVault, "motion"), "not-a-directory");
+  symlinkSync(
+    outside,
+    join(oldVault, "packs/sublink"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  const coreZip = join(root, "core.zip");
+  const packed = await packVault({ local: oldVault, out: coreZip, part: "core", log: () => {} });
+  assert.equal(packed.files, 1);
+
+  // 2) Restore must refuse an existing junction inside destination vault and never write outside
+  const victimVault = join(root, "victim/vault");
+  const escapeTarget = join(root, "escape-target");
+  mkdirSync(victimVault, { recursive: true });
+  mkdirSync(escapeTarget, { recursive: true });
+  symlinkSync(
+    escapeTarget,
+    join(victimVault, "packs"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  await assert.rejects(
+    restoreVault({ zip: coreZip, local: victimVault, log: () => {} }),
+    /symlink|junction|real directory/i,
+  );
+  assert.equal(existsSync(join(escapeTarget, "ok.jar")), false);
+
+  // 3) Restore must refuse a 0-byte archive file colliding with an existing directory cleanly
+  const emptyEntryZip = join(root, "empty-file.zip");
+  writeFileSync(emptyEntryZip, zipSync({ "packs/collide.jar": new Uint8Array(0) }, { level: 0 }));
+  const dirCollisionVault = join(root, "dir-collision/vault");
+  mkdirSync(join(dirCollisionVault, "packs/collide.jar"), { recursive: true });
+  await assert.rejects(
+    restoreVault({ zip: emptyEntryZip, local: dirCollisionVault, log: () => {} }),
+    /directory|refus/i,
+  );
+
+  // 4) Restore must refuse an archive containing only a disallowed directory header (tools/)
+  const toolsDirZip = join(root, "tools-dir.zip");
+  writeFileSync(toolsDirZip, zipSync({ "tools/": new Uint8Array(0) }, { level: 0 }));
+  const toolsDest = join(root, "tools-dir/vault");
+  await assert.rejects(
+    restoreVault({ zip: toolsDirZip, local: toolsDest, log: () => {} }),
+    /not a vault archive/i,
+  );
+  assert.equal(existsSync(toolsDest), false);
+});
+
+test("packVault extracts jar/client.jar before jar/client_assets.zip and .br so slimJar stays fresh", async (t) => {
+  const { packVault } = await import("../sound_zip.mjs");
+  const yauzl = (await import("yauzl")).default;
+  const { promisify } = await import("node:util");
+  const root = mkdtempSync(join(tmpdir(), "mc-vault-order-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const vault = join(root, "vault");
+  put(join(vault, "jar/client.jar"), "jar");
+  put(join(vault, "jar/client_assets.zip"), "zip");
+  put(join(vault, "jar/client_assets.zip.br"), "br");
+  const out = join(root, "core.zip");
+  await packVault({ local: vault, out, part: "core", log: () => {} });
+
+  const order = [];
+  const zf = await promisify(yauzl.open)(out, { lazyEntries: true });
+  await new Promise((done, fail) => {
+    zf.on("error", fail);
+    zf.on("end", done);
+    zf.on("entry", (e) => {
+      order.push(e.fileName);
+      zf.readEntry();
+    });
+    zf.readEntry();
+  });
+  assert.deepEqual(order, ["jar/client.jar", "jar/client_assets.zip", "jar/client_assets.zip.br"]);
+});
+
+test("pack_vault CLI handles non-existent directories, single-part zips, duplicate --part, empty halves, and clean next paths", async (t) => {
+  const { spawnSync } = await import("node:child_process");
+  const { fileURLToPath } = await import("node:url");
+  const root = mkdtempSync(join(tmpdir(), "mc-pack-vault-modes-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const script = fileURLToPath(new URL("../pack_vault.mjs", import.meta.url));
+  const vault = join(root, "vault");
+  put(join(vault, "packs/mod.jar"), "jar");
+  put(join(vault, "sound/sfx/hit.wav"), "wav");
+
+  const runCli = (args, vaultDir = vault) =>
+    spawnSync(process.execPath, [script, ...args], {
+      cwd: root,
+      encoding: "utf8",
+      timeout: 15_000,
+      env: { ...process.env, MC_VAULT_ROOT: vaultDir, MC_VAULT_EXTERNAL: join(root, "ext") },
+    });
+
+  // Duplicate --part must exit 2
+  assert.equal(runCli(["--part", "core", "--part", "bogus"]).status, 2);
+  assert.equal(runCli(["--part", "core", "--part", "heavy"]).status, 2);
+
+  // Existing non-directory file conflict must exit 2 in both split and single-part directory mode
+  const existingFile = join(root, "existing.txt");
+  put(existingFile, "keep");
+  assert.equal(runCli([existingFile]).status, 2);
+  assert.equal(runCli(["--part", "core", existingFile]).status, 2);
+  assert.equal(readFileSync(existingFile, "utf8"), "keep");
+
+  // Non-existent directory target in single-part mode must create a directory and place core + heavy zips side by side
+  const freshDir = join(root, "new-backup-dir");
+  const coreRun = runCli(["--part", "core", `${freshDir}/`, "--json"]);
+  assert.equal(coreRun.status, 0, coreRun.stderr);
+  const coreJson = JSON.parse(coreRun.stdout);
+  assert.match(
+    coreJson.archives[0].out,
+    /new-backup-dir[\\/]mc-films-vault-core-\d{4}-\d{2}-\d{2}\.zip$/,
+  );
+  assert.equal(coreJson.archives[0].files, 1);
+  assert.equal(coreJson.next.includes("\\\\"), false);
+
+  const heavyRun = runCli(["--part", "heavy", freshDir, "--json"]);
+  assert.equal(heavyRun.status, 0, heavyRun.stderr);
+  const heavyJson = JSON.parse(heavyRun.stdout);
+  assert.equal(existsSync(coreJson.archives[0].out), true);
+  assert.equal(existsSync(heavyJson.archives[0].out), true);
+
+  // Explicit .zip target writes to that exact zip path
+  const exactZip = join(root, "custom-all.zip");
+  const allRun = runCli(["--part", "all", exactZip, "--json"]);
+  assert.equal(allRun.status, 0, allRun.stderr);
+  assert.equal(JSON.parse(allRun.stdout).archives[0].files, 2);
+  assert.equal(existsSync(exactZip), true);
+
+  // Split mode with only core present skips empty heavy half; completely empty vault exits 1
+  const coreOnlyVault = join(root, "core-only-vault");
+  put(join(coreOnlyVault, "packs/only.jar"), "jar");
+  const halfRun = runCli([join(root, "half-out"), "--json"], coreOnlyVault);
+  assert.equal(halfRun.status, 0, halfRun.stderr);
+  assert.deepEqual(
+    JSON.parse(halfRun.stdout).archives.map((a) => a.part),
+    ["core"],
+  );
+  const emptyVault = join(root, "empty-vault");
+  mkdirSync(emptyVault, { recursive: true });
+  assert.equal(runCli([join(root, "empty-out")], emptyVault).status, 1);
+});
+
+test("setupVault restores repeatable archives, enforces --sound-zip scope, skips completed builds, and warns on missing externalRoot", async (t) => {
+  const { packVault } = await import("../sound_zip.mjs");
+  const { setupVault } = await import("../setup_vault.mjs");
+  const root = mkdtempSync(join(tmpdir(), "mc-setup-vault-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  // Build real core, heavy, partial-sound, and sound-only zips
+  const srcVault = join(root, "src/vault");
+  put(join(srcVault, "packs/mod.jar"), "jar");
+  put(join(srcVault, "packs_index.json"), "{}");
+  put(join(srcVault, "motion/walk.glb"), "glb");
+  put(join(srcVault, "mc-sound/SOURCES.json"), "{}");
+  put(join(srcVault, "mc-sound/mc/mobs/hit.ogg"), "ogg");
+  put(join(srcVault, "sound/SOURCES.json"), "{}");
+  put(join(srcVault, "sound/PEAKS.json"), "{}");
+  put(join(srcVault, "sound/sfx/a.wav"), "wav");
+  put(join(srcVault, "openfilm/library/LICENSE.md"), "CC0");
+
+  const coreZip = join(root, "core.zip");
+  const heavyZip = join(root, "heavy.zip");
+  await packVault({ local: srcVault, out: coreZip, part: "core", log: () => {} });
+  await packVault({ local: srcVault, out: heavyZip, part: "heavy", log: () => {} });
+
+  const partialSoundVault = join(root, "partial-sound/vault");
+  put(join(partialSoundVault, "sound/SOURCES.json"), "{}");
+  put(join(partialSoundVault, "sound/sfx/a.wav"), "wav");
+  const partialSoundZip = join(root, "partial-sound.zip");
+  await packVault({ local: partialSoundVault, out: partialSoundZip, part: "heavy", log: () => {} });
+
+  const makeDeps = (local, external) => {
+    const calls = [];
+    const logs = [];
+    return {
+      calls,
+      logs,
+      opts: {
+        local,
+        external,
+        toolsCheck: () => ({ stop: [], later: [] }),
+        prepareBase: async () => calls.push("base"),
+        runScript: (name) => calls.push(name),
+        runFetchSoundRaw: async () => {
+          calls.push("fetchSoundRaw");
+          return { failed: [], waiting: [] };
+        },
+        log: (msg) => logs.push(msg),
+      },
+    };
+  };
+
+  // 1) Repeatable --vault-zip core + heavy skips fetchSoundRaw, build_sound_vault, and build_mc_sound_vault
+  {
+    const local = join(root, "case1/vault");
+    const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
+    await setupVault({
+      argv: ["--vault-zip", coreZip, "--vault-zip", heavyZip],
+      ...opts,
+    });
+    assert.equal(existsSync(join(local, "packs/mod.jar")), true);
+    assert.equal(existsSync(join(local, "sound/PEAKS.json")), true);
+    assert.equal(calls.includes("fetchSoundRaw"), false);
+    assert.equal(calls.includes("build_sound_vault.mjs"), false);
+    assert.equal(calls.includes("build_mc_sound_vault.mjs"), false);
+  }
+
+  // 2) Partial sound archive (missing PEAKS.json) skips fetchSoundRaw but still runs build_sound_vault + build_mc_sound_vault
+  {
+    const local = join(root, "case2/vault");
+    const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
+    await setupVault({ argv: ["--vault-zip", partialSoundZip], ...opts });
+    assert.equal(calls.includes("fetchSoundRaw"), false);
+    assert.equal(calls.includes("build_sound_vault.mjs"), true);
+    assert.equal(calls.includes("build_mc_sound_vault.mjs"), true);
+  }
+
+  // 3) Legacy --sound-zip rejects non-sound archives (coreZip has packs/motion) and still builds mc-sound if absent
+  {
+    const local = join(root, "case3a/vault");
+    const { opts } = makeDeps(local, join(root, "nonexistent-ext"));
+    await assert.rejects(
+      setupVault({ argv: ["--sound-zip", coreZip], ...opts }),
+      /not a sound zip/i,
+    );
+    const localB = join(root, "case3b/vault");
+    const depB = makeDeps(localB, join(root, "nonexistent-ext"));
+    await setupVault({ argv: ["--sound-zip", partialSoundZip], ...depB.opts });
+    assert.equal(depB.calls.includes("build_mc_sound_vault.mjs"), true);
+  }
+
+  // 4) Passing a directory to --vault-zip fails cleanly before doing work
+  {
+    const local = join(root, "case4/vault");
+    const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
+    await assert.rejects(
+      setupVault({ argv: ["--vault-zip", root], ...opts }),
+      /not a file|No vault archive/i,
+    );
+    assert.deepEqual(calls, []);
+  }
+
+  // 5) Missing externalRoot with no sound archive surfaces Waiting for you notice instead of silent skip
+  {
+    const local = join(root, "case5/vault");
+    const { calls, logs, opts } = makeDeps(local, join(root, "does-not-exist-ext"));
+    await setupVault({ argv: [], ...opts });
+    assert.equal(calls.includes("fetchSoundRaw"), false);
+    assert.equal(calls.includes("build_sound_vault.mjs"), true);
+    assert.equal(
+      logs.some((l) => /Waiting for you:.*raw sound packs.*MC_VAULT_EXTERNAL/i.test(l)),
+      true,
+    );
+  }
+
+  // 6) Remote archive temp filename hashes normalized URL independently of argument order and cleans up on success or failure
+  {
+    const local = join(root, "case6/vault");
+    const runFetch = async (urls, zipSource = [coreZip, heavyZip]) => {
+      const names = [];
+      const temps = [];
+      const { opts } = makeDeps(local, join(root, "nonexistent-ext"));
+      await setupVault({
+        argv: urls.flatMap((u) => ["--vault-zip", u]),
+        ...opts,
+        fetchZip: async (_link, _dir, { name }) => {
+          const i = names.length;
+          names.push(name);
+          const copy = join(root, `tmp-${Date.now()}-${i}-${name}`);
+          writeFileSync(copy, readFileSync(zipSource[i]));
+          temps.push(copy);
+          return copy;
+        },
+      });
+      for (const f of temps) assert.equal(existsSync(f), false, `temp zip ${f} must be cleaned up`);
+      return names;
+    };
+    const first = await runFetch([
+      "https://drive.google.com/file/d/AbCdEf123/view",
+      "https://example.com/other.zip",
+    ]);
+    const reversed = await runFetch(
+      ["https://example.com/other.zip", "https://drive.google.com/uc?id=AbCdEf123"],
+      [heavyZip, coreZip],
+    );
+    assert.equal(first[0], reversed[1], "equivalent Drive links must share the same hash filename");
+    assert.equal(first[1], reversed[0], "reversed order must preserve each URL's hash filename");
+
+    // Failed remote restore must also delete the downloaded temp zip
+    let orphan = "";
+    const badOpts = makeDeps(join(root, "case6-bad/vault"), join(root, "nonexistent-ext")).opts;
+    await assert.rejects(
+      setupVault({
+        argv: ["--sound-zip", "https://example.com/not-sound.zip"],
+        ...badOpts,
+        fetchZip: async (_link, _dir, { name }) => {
+          orphan = join(root, `orphan-${name}`);
+          writeFileSync(orphan, readFileSync(coreZip));
+          return orphan;
+        },
+      }),
+      /not a sound zip/i,
+    );
+    assert.equal(existsSync(orphan), false, "failed remote restore must not orphan temp zip");
+  }
+});

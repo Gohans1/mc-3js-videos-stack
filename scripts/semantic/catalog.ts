@@ -5,8 +5,14 @@ import type { Entry } from "../find";
 import { ROOT } from "../vault.mjs";
 import type { Asset } from "./store";
 
-export const assetKey = (entry: Pick<Entry, "kind" | "id" | "src">) =>
-  JSON.stringify([entry.kind, entry.src ?? "", entry.id]);
+export const assetKey = (entry: Pick<Entry, "kind" | "id" | "src" | "data">) => {
+  const pack = entry.kind === "block" || entry.kind === "item" ? entry.data?.pack : undefined;
+  return JSON.stringify([
+    entry.kind,
+    typeof pack === "string" ? pack : (entry.src ?? ""),
+    entry.id,
+  ]);
+};
 export const assetFile = (entry: Entry, root = ROOT) => {
   const raw = typeof entry.data?.file === "string" ? entry.data.file : "";
   return raw ? resolve(entry.src === "this-film" ? process.cwd() : root, raw) : "";

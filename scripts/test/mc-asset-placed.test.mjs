@@ -1,6 +1,7 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
+  chmodSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -12,7 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { strToU8, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { Hono } from "hono";
 
 import { openAssets } from "../../packages/live-studio/src/assets.mjs";
@@ -216,6 +217,189 @@ test("asset pick, timeline --lane picks, and unpick manage pack/picks.json and w
   const np = json("use", "block:decor:oak_chair", "--film", film, "--from", "2", "--no-pick");
   expect(np.picked).toBeUndefined();
 }, 20000);
+
+test("asset unpick preserves both pick files when a remaining pack cannot build", () => {
+  const { film, run, json } = makeEnv();
+  json("pick", "block:decor:oak_chair,item:decor:rifle", "--source", "decor-mod");
+  writeFileSync(
+    join(film, "pack/picks.json"),
+    JSON.stringify([
+      { jar: "decor-mod.jar", namespace: "decor", blocks: ["oak_chair"], items: ["rifle"] },
+      { jar: "missing.jar", namespace: "other", blocks: ["cabinet"] },
+    ]),
+  );
+  const manifest = join(film, "pack/picks.json");
+  const output = join(film, "assets/public/picked.zip");
+  const originalManifest = readFileSync(manifest);
+  const originalZip = readFileSync(output);
+
+  const result = run("unpick", "block:decor:oak_chair,item:decor:rifle");
+
+  expect(result.status).toBe(1);
+  expect(readFileSync(manifest)).toEqual(originalManifest);
+  expect(readFileSync(output)).toEqual(originalZip);
+});
+
+test("asset use validates placement before publishing an auto-pick", () => {
+  const { film, run } = makeEnv();
+  const result = run(
+    "use",
+    "block:decor:oak_chair",
+    "--source",
+    "decor-mod",
+    "--props",
+    JSON.stringify({ clip: "walk" }),
+  );
+
+  expect(result.status).toBe(2);
+  expect(result.stderr).toContain("clip");
+  expect(existsSync(join(film, "pack/picks.json"))).toBe(false);
+  expect(existsSync(join(film, "assets/public/picked.zip"))).toBe(false);
+});
+
+test("asset use preserves a read-only manifest and leaves neither placement nor ZIP", () => {
+  const { film, run } = makeEnv();
+  const manifest = join(film, "pack/picks.json");
+  writeFileSync(manifest, "[]");
+  chmodSync(manifest, 0o444);
+  try {
+    const result = run("use", "block:decor:oak_chair", "--source", "decor-mod");
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("read-only");
+    expect(readFileSync(manifest, "utf8")).toBe("[]");
+    expect(existsSync(join(film, "assets/public/picked.zip"))).toBe(false);
+    expect(existsSync(join(film, "src/timeline/placed.json"))).toBe(false);
+  } finally {
+    chmodSync(manifest, 0o644);
+  }
+});
+
+test("a pending mod pick with a missing archive does not block placement of a vanilla block", () => {
+  const { film, json } = makeEnv();
+  const manifest = join(film, "pack/picks.json");
+  const picks = JSON.stringify([{ jar: "missing.jar", namespace: "decor", blocks: ["cabinet"] }]);
+  writeFileSync(manifest, picks);
+
+  const result = json("use", "block:minecraft:barrel");
+  expect(result.object.what).toBe("block:minecraft:barrel");
+  expect(readFileSync(manifest, "utf8")).toBe(picks);
+  expect(json("timeline", "--lane", "picks").zip.stale).toBe(true);
+});
+
+test("archive filenames select exactly one source in find, pick and unpick", () => {
+  const { film, vault, json } = makeEnv();
+  const id = "block:decor:oak_chair";
+  writeFileSync(
+    join(vault, "packs/decor-mod.zip"),
+    readFileSync(join(vault, "packs/other-decor.jar")),
+  );
+  const show = spawnSync(
+    "bun",
+    [join(ROOT, "scripts/find.ts"), "--show", id, "--source", "decor-mod.jar"],
+    { cwd: film, env: { ...process.env, MC_VAULT_ROOT: vault }, encoding: "utf8", timeout: 20000 },
+  );
+  expect(show.status, show.stderr).toBe(0);
+  expect(show.stdout).toContain("decor-mod.jar");
+  expect(show.stdout).not.toContain("decor-mod.zip");
+  const search = spawnSync(
+    "bun",
+    [join(ROOT, "scripts/find.ts"), "oak chair", "--kind", "block", "--json", "--offline"],
+    { cwd: film, env: { ...process.env, MC_VAULT_ROOT: vault }, encoding: "utf8", timeout: 20000 },
+  );
+  expect(search.status, search.stderr).toBe(0);
+  const hits = JSON.parse(search.stdout).keyword.results.filter((result) => result.id === id);
+  expect(new Set(hits.map((result) => result.key)).size).toBe(3);
+  json("pick", id, "--source", "decor-mod.jar");
+  writeFileSync(
+    join(film, "pack/picks.json"),
+    JSON.stringify([
+      { jar: "decor-mod.jar", namespace: "decor", blocks: ["oak_chair"] },
+      { jar: "decor-mod.zip", namespace: "decor", blocks: ["oak_chair"] },
+    ]),
+  );
+  const removed = json("unpick", id, "--source", "decor-mod.jar");
+  expect(removed.picks.map((row) => row.jar)).toEqual(["decor-mod.zip"]);
+});
+
+test("asset use builds pending picks and reports a ZIP stale after unpicking the last asset without building", () => {
+  const { film, json } = makeEnv();
+  json("pick", "block:decor:oak_chair", "--source", "decor-mod", "--no-build");
+  expect(json("timeline", "--lane", "picks").zip.stale).toBe(true);
+
+  json("use", "block:decor:oak_chair");
+
+  const zip = unzipSync(readFileSync(join(film, "assets/public/picked.zip")));
+  expect(zip["assets/decor/blockstates/oak_chair.json"]).toBeDefined();
+  expect(json("timeline", "--lane", "picks").zip.stale).toBe(false);
+  json("unpick", "block:decor:oak_chair", "--no-build");
+  expect(json("timeline", "--lane", "picks").zip.stale).toBe(true);
+});
+
+test("asset pick and use reject a second source for the same runtime block ID", () => {
+  const { film, run, json } = makeEnv();
+  const id = "block:decor:oak_chair";
+  json("pick", id, "--source", "decor-mod");
+  const output = join(film, "assets/public/picked.zip");
+  const originalZip = readFileSync(output);
+
+  for (const command of ["pick", "use"]) {
+    const result = run(command, id, "--source", "other-decor");
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain("decor-mod.jar");
+    expect(result.stderr).toContain("unpick");
+  }
+  expect(json("timeline", "--lane", "picks").data.map((row) => row.jar)).toEqual(["decor-mod.jar"]);
+  expect(readFileSync(output)).toEqual(originalZip);
+  expect(existsSync(join(film, "src/timeline/placed.json"))).toBe(false);
+});
+
+test("asset pick rejects different assets that would publish conflicting texture bytes", () => {
+  const { vault, run, json } = makeEnv();
+  json("pick", "block:decor:oak_chair", "--source", "decor-mod");
+  writeFileSync(
+    join(vault, "packs/table.jar"),
+    zipSync({
+      "assets/decor/blockstates/table.json": strToU8(
+        '{"variants":{"":{"model":"decor:block/table"}}}',
+      ),
+      "assets/decor/models/block/table.json": strToU8('{"textures":{"top":"decor:block/chair"}}'),
+      "assets/decor/textures/block/chair.png": new Uint8Array([7]),
+    }),
+  );
+
+  const result = run("pick", "block:decor:table", "--source", "table.jar");
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("assets/decor/textures/block/chair.png");
+  expect(json("timeline", "--lane", "picks").data.map((row) => row.jar)).toEqual(["decor-mod.jar"]);
+});
+
+test("asset use accepts namespaced shorthand and auto-picks a mod block in the minecraft namespace", () => {
+  const { vault, json } = makeEnv();
+  writeFileSync(
+    join(vault, "packs/custom.jar"),
+    zipSync({
+      "assets/minecraft/blockstates/mod_table.json": strToU8(
+        '{"variants":{"":{"model":"custom:block/table"}}}',
+      ),
+      "assets/custom/models/block/table.json": strToU8('{"elements":[]}'),
+    }),
+  );
+  const result = json("use", "minecraft:mod_table", "--kind", "block");
+  expect(result.object.what).toBe("block:minecraft:mod_table");
+  expect(result.picked.added).toEqual(["block:minecraft:mod_table"]);
+});
+
+test("asset use reports unknown vanilla blockstate properties before rendering", () => {
+  const { json } = makeEnv();
+  const result = json(
+    "use",
+    "block:minecraft:barrel",
+    "--props",
+    JSON.stringify({ properties: { facing: "up", facng: "north" } }),
+  );
+  expect(result.warnings.join("\n")).toContain('property facing="up"');
+  expect(result.warnings.join("\n")).toContain('property "facng"');
+});
 
 test("asset use, timeline, edit, and remove on placed lane convert heard<->scene clocks", () => {
   const { film, run, json } = makeEnv({ speedRate: 2 });

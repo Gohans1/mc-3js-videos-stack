@@ -20,9 +20,10 @@ const GROUPS = [
     {
       "bake:physics":
         "this film's physics cache: --help names inputs, output, clocks and cost; rerun after changing its simulation",
-      studio: "the live studio: preview, timeline, notes (bun run studio, then open the link)",
+      studio:
+        "the live studio: preview, timeline, notes (bun run studio --detach to start in background; --status, --stop, --lan)",
       collab:
-        "read protected Studio edits; write intentional AI changes with an explicit current base (--help)",
+        "read protected Studio edits; write or write-many intentional AI changes with an explicit current base (--help)",
       history:
         "named versions and autosaves for one film; restore with a recovery version kept first (--help)",
       check:
@@ -32,7 +33,7 @@ const GROUPS = [
       "assets:semantic":
         "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
       asset:
-        "pick/unpick pack blocks & items, place/edit 2D lanes & placed objects, or copy Global props to src/props/",
+        "pick/unpick pack blocks & items, preview 3D models beside Steve, place/edit 2D lanes & placed objects, or copy Global props to src/props/",
     },
   ],
   [
@@ -63,7 +64,7 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=order checks history-dependent frames; CROP and --compare inspect stills",
+        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=probe:4 logs live 3D bounds/screen coords; CHECK=order checks history-dependent frames; VIEWS, CROP and --compare inspect stills",
       sheet:
         "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence; each new run has index.json",
       scenes:
@@ -83,7 +84,8 @@ const GROUPS = [
   [
     "The creator's notes",
     {
-      notes: "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit)",
+      notes:
+        "the creator's open notes (up to 25; ID for one in full, --shot N, --sort, --limit, --no-lessons)",
       note: 'answer one: bun run note done (requires --after <img> or --no-after "<reason>", optional --cam/--t custom view), ask, learned, or restore (--help)',
     },
   ],
@@ -93,7 +95,9 @@ const GROUPS = [
       "new-film":
         "create from templates/film, install dependencies, link vault and build picks: bun run new-film <name> [port]; prepared vault required",
       setup:
-        "a new machine in one go: bun install, setup:vault, link (--sound-zip <zip> restores the sound)",
+        "a new machine in one go: bun install, setup:vault, link (--vault-zip <core.zip> --vault-zip <heavy.zip> restores private vault zips)",
+      "pack:vault":
+        "pack pure static vault assets into split private core (~1.2 GB) + heavy (~13.8 GB) zips (excludes tools/ and cache/) for setup --vault-zip",
       "pack:sound":
         "every sound and the complete OpenFilm source in one private zip, for setup --sound-zip on another machine",
       "setup:vault": "fill the vault on a new machine (downloads, verified)",

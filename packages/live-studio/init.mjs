@@ -131,6 +131,7 @@ const SCRIPTS = {
       "fetch:sfx",
       "fetch:sound-raw",
       "setup",
+      "pack:vault",
       "pack:sound",
       "assets:semantic",
       "eval:find",

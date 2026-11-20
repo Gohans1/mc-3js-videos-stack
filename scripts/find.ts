@@ -42,10 +42,12 @@ import {
   probeAudio,
   walkAudio,
 } from "../packages/live-studio/src/sound.mjs";
+import { resolveMcAssetBounds } from "../packages/mc-assets/src/bounds.ts";
 import {
   foldObjectVariants,
   loadMcAssetsCatalog,
   loadWarmMcCache,
+  matchesMcPackSource,
   type McAssetItem,
 } from "../packages/mc-assets/src/catalog.ts";
 import { readAssetCatalog } from "./openfilm/catalog.mjs";
@@ -120,7 +122,7 @@ const USE: Record<string, string> = {
     'audio.json sfx[] {"at","name","gain"} | beds[] {"name","from","to","gain","fadeIn","fadeOut"}',
   block:
     "placed.json objects: bun run asset use block:<ns>:<id> --film films/<name> --from 0 (mod blocks auto-pick into pack/picks.json)",
-  item: 'hand/scene attach: bun run asset pick item:<ns>:<id> --film films/<name>, then loadModel(group, assets, await resolveModelData(assets, {model:"<ns>:item/<id>",type:"item"}), {display:{}}) (assets = await prepareAssets(sources); parseItemDefinition for 1.21.4+) in src/scene.ts (items do not go in placed.json)',
+  item: 'hand/scene attach: bun run asset pick item:<ns>:<id> --film films/<name>, then await itemModel(assets, "<ns>:<id>") from mc-assets/model (or loadModel(group, assets, await resolveModelData(assets, {model:"<ns>:item/<id>",type:"item"}), {display:{}})) in src/scene.ts (items do not go in placed.json)',
   mob: "placed.json objects: bun run asset use mob:<id> --film films/<name> --from 0",
   prop: 'Global: bun run asset use prop:global:<id> --film films/<name> (copies to src/props/); Film: import from "./props/<id>"',
   transition: 'shots.json shot.transition {"fx","len"}',
@@ -232,6 +234,9 @@ const entryMatchesKind = (entry: Entry, asked: string) =>
 const fromSource = (entry: Entry, source: string) => {
   const src = entry.src?.toLowerCase();
   const pack = typeof entry.data?.pack === "string" ? entry.data.pack.toLowerCase() : "";
+  if (isObjectKind(entry.kind)) {
+    return pack ? matchesMcPackSource(source, pack, src) : src === source;
+  }
   const cleanSource = source.replace(/\.(?:jar|zip)$/i, "");
   return Boolean(
     (src &&
@@ -2216,6 +2221,26 @@ function details(x: Entry): string[] {
     }
     if (d.renderable === false) {
       out.push(`status: non-renderable (${brokenReason})`);
+    } else {
+      const vaultRoot = process.env.MC_VAULT_ROOT?.trim()
+        ? vaultPath(process.env.MC_VAULT_ROOT.trim())
+        : LOCAL;
+      const bounds = resolveMcAssetBounds(
+        {
+          kind: x.kind as "block" | "item",
+          namespace: ns,
+          name,
+          ...(packName ? { pack: packName } : {}),
+        },
+        { vaultRoot },
+      );
+      if (bounds) {
+        const fmt = (n: number) => Number(n.toFixed(3)).toString();
+        const scaleNote = x.kind === "item" ? " [unscaled; itemModel defaults to size=0.42]" : "";
+        out.push(
+          `bounds: ${fmt(bounds.size[0])} x ${fmt(bounds.size[1])} x ${fmt(bounds.size[2])} blocks (x: ${fmt(bounds.min[0])}..${fmt(bounds.max[0])}, y: ${fmt(bounds.min[1])}..${fmt(bounds.max[1])}, z: ${fmt(bounds.min[2])}..${fmt(bounds.max[2])})${scaleNote}`,
+        );
+      }
     }
     if (d.props && typeof d.props === "object") {
       const propText = Object.entries(d.props as Record<string, string[]>)
@@ -2227,26 +2252,23 @@ function details(x: Entry): string[] {
       const vs = (d.variants as { name: string }[]).map((v) => v.name);
       out.push(`variants (${vs.length}): ${vs.join(", ")}`);
     }
-    const srcFlag =
-      srcName && !["minecraft", "gohans"].includes(srcName) ? ` --source ${srcName}` : "";
+    const srcFlag = packName ? ` --source ${qArg(packName)}` : "";
     if (x.kind === "item") {
       out.push(
-        `note: items pick into assets/public/picked.zip and attach in src/scene.ts via block-model-renderer's loadModel(group, assets, await resolveModelData(assets, {model: "${ns}:item/${name}", type: "item"}), {display: {}}) with assets = await prepareAssets(sources) (or parseItemDefinition(assets, "${ns}:${name}") for 1.21.4+ defs); items do not go in placed.json.`,
+        `note: items pick into assets/public/picked.zip and attach in src/scene.ts via await itemModel(assets, "${ns}:${name}") from mc-assets/model (or low-level loadModel(group, assets, await resolveModelData(assets, {model: "${ns}:item/${name}", type: "item"}), {display: {}}) with assets = await prepareAssets(sources)); items do not go in placed.json.`,
       );
-      if (d.source === "minecraft") {
+      if (!packName) {
         out.push(
-          `use: vanilla client_assets.zip already ships ${ns}:item/${name}; load with loadModel(group, assets, await resolveModelData(assets, {model: "${ns}:item/${name}", type: "item"}), {display: {}})`,
+          `use: vanilla client_assets.zip already ships ${ns}:item/${name}; load with await itemModel(assets, "${ns}:${name}") from mc-assets/model`,
         );
       } else {
         out.push(`pick: bun run asset pick ${x.id} --film films/<name>${srcFlag}`);
       }
     } else {
-      if ((ns !== "minecraft" && ns !== "gohans") || d.type === "resourcepack") {
+      if (packName) {
         out.push(`pick: bun run asset pick ${x.id} --film films/<name>${srcFlag}`);
       }
-      out.push(
-        `use: bun run asset use ${x.id} --film films/<name> --from 0${(ns !== "minecraft" && ns !== "gohans") || d.type === "resourcepack" ? srcFlag : ""}`,
-      );
+      out.push(`use: bun run asset use ${x.id} --film films/<name> --from 0${srcFlag}`);
     }
   } else if (x.kind === "shape") {
     // arrow and underline are a stroke of a length (size), the rest a frame of w x h; x, y place its middle (0-1)
@@ -2390,6 +2412,8 @@ function show(ids: string[], pool: Entry[]) {
         );
       }
       const uniqueKinds = new Set(hits.map((x) => x.kind));
+      const firstPack = hits[0]!.data?.pack;
+      const firstSource = typeof firstPack === "string" ? firstPack : (hits[0]!.src ?? "");
       const shared =
         hits.length > 1
           ? uniqueKinds.size > 1
@@ -2397,7 +2421,7 @@ function show(ids: string[], pool: Entry[]) {
                 `${hits.length} kinds share the id ${hits[0]!.id}: each goes where its use line says (one of them: --show ${hits[0]!.id} --kind ${hits[0]!.kind})`,
               ]
             : [
-                `${hits.length} sources share the id ${hits[0]!.id}: add --source <name> to pick one (e.g. --show ${hits[0]!.id} --source ${hits[0]!.src})`,
+                `${hits.length} sources share the id ${hits[0]!.id}: add --source <name> to pick one (e.g. --show ${hits[0]!.id} --source ${qArg(firstSource)})`,
               ]
           : [];
       return (
@@ -2984,7 +3008,7 @@ export async function run(
     const extra = [
       query,
       ...[...set.keys()].filter(
-        (k) => !["--show", "-n", "--kind", "--source", "--broken"].includes(k),
+        (k) => !["--show", "-n", "--kind", "--source", "--broken", "--offline"].includes(k),
       ),
     ];
     if (extra.some(Boolean))

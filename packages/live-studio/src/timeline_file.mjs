@@ -3,35 +3,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { existsSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { relative } from "node:path";
 
+import { compactJson } from "./compact-json.mjs";
 import { CamTimeline, problems, ShotsTimeline } from "./contract.ts";
 import { openEditProtection } from "./edit-protection.mjs";
 import { equalJson, mergeEdits } from "./merge-edits.mjs";
 import { assertInsideDir } from "./voice-map.mjs";
 
-// Same layout as the films' own timeline writer (timeline_fmt.py): anything that fits 140 columns on one line, longer opens up a
-// level. A save from the studio then changes only the lines it touched
-const WIDTH = 140;
-// Python's json.dumps spacing (", " and ": "), so a line the studio didn't touch comes out the same, but for a whole-number
-// float: Python writes 2.0, the studio 2
-const oneLine = (v) =>
-  Array.isArray(v)
-    ? `[${v.map(oneLine).join(", ")}]`
-    : v && typeof v === "object"
-      ? `{${Object.entries(v)
-          .map(([k, x]) => `${JSON.stringify(k)}: ${oneLine(x)}`)
-          .join(", ")}}`
-      : JSON.stringify(v);
-export const compactJson = (v, ind = 0) => {
-  const one = oneLine(v);
-  if (one.length + ind <= WIDTH || typeof v !== "object" || v === null || !Object.keys(v).length)
-    return one;
-  const pad = " ".repeat(ind + 1);
-  if (Array.isArray(v))
-    return `[\n${v.map((x) => pad + compactJson(x, ind + 1)).join(",\n")}\n${" ".repeat(ind)}]`;
-  return `{\n${Object.entries(v)
-    .map(([k, x]) => `${pad}${JSON.stringify(k)}: ${compactJson(x, ind + 1)}`)
-    .join(",\n")}\n${" ".repeat(ind)}}`;
-};
+export { compactJson };
 
 const rowSlot = (row) => `${row.t}:${!!row.cut}`;
 const needsIds = (rows) => Array.isArray(rows) && rows.some((row) => row?.id === undefined);

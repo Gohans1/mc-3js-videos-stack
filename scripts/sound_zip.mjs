@@ -1,11 +1,13 @@
-// One zip of the vault's sounds and OpenFilm source, each file at its vault path: a new machine unzips it instead of
-// fetching Mixkit again and waiting hours on the Sonniss torrents. yazl writes ZIP64 by itself past 4 GB or 65,535 files.
+// Private vault archives (ZIP64 via yazl, streaming CRC32 verification via yauzl): pack pure static assets at their
+// vault-relative paths for fast new-machine setup without hours of torrents or manual downloads. Local tool installs
+// (vault/tools/ Python venvs & AI models) and regenerable caches (vault/cache/) are always excluded and rejected.
 import { spawn } from "node:child_process";
 import {
   closeSync,
   createReadStream,
   createWriteStream,
   existsSync,
+  lstatSync,
   mkdirSync,
   openSync,
   readdirSync,
@@ -14,7 +16,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { crc32 } from "node:zlib";
@@ -22,11 +24,38 @@ import { crc32 } from "node:zlib";
 import yauzl from "yauzl";
 import yazl from "yazl";
 
-const PARTS = ["sound", "sfx", "openfilm", "mc-sound"];
+export const SOUND_DIRS = ["sound", "sfx", "openfilm", "mc-sound"];
+export const CORE_DIRS = [
+  "packs",
+  "motion",
+  "mc-sound",
+  "sfx",
+  "jar",
+  "mcasset",
+  "mcprep",
+  "voices",
+  "props",
+];
+export const CORE_FILES = ["packs_index.json", "packs_check.json", "favorites.json"];
+export const HEAVY_DIRS = ["sound", "openfilm", "references"];
+export const VAULT_PARTS = {
+  core: { dirs: CORE_DIRS, files: CORE_FILES },
+  heavy: { dirs: HEAVY_DIRS, files: [] },
+  all: { dirs: [...CORE_DIRS, ...HEAVY_DIRS], files: CORE_FILES },
+  sound: { dirs: SOUND_DIRS, files: [] },
+};
+const ALLOWED_VAULT_DIRS = new Set([...CORE_DIRS, ...HEAVY_DIRS]);
+const ALLOWED_VAULT_FILES = new Set(CORE_FILES);
+const ALLOWED_SOUND_DIRS = new Set(SOUND_DIRS);
+const EMPTY_SET = new Set();
+
+// Code-point comparison keeps "." before "_" so jar/client.jar always extracts before jar/client_assets.zip/.br
+const codePointCompare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 // a build's own cache (dot files) and a write cut short (*.part)
 const SKIP = /(^|\/)\.|\.part(\.\w+)?$/;
-// Store audio for packing speed and keep already-compressed media intact
-const STORED = /\.(wav|ogg|mp3|flac|m4a|mp4|png|jpe?g|webp|zip|woff2)$/i;
+// Store already-compressed media and jar/zip archives for packing speed
+const STORED = /\.(wav|ogg|mp3|flac|m4a|mp4|png|jpe?g|webp|zip|jar|br|woff2)$/i;
 
 // A Drive share link (.../file/d/<id>/view, ...?id=<id>) as the URL of the file itself: confirm=t skips the virus-scan
 // page Drive puts before anything too big to scan. Any other link is fetched as it is
@@ -49,10 +78,14 @@ const startsAsZip = (file) => {
   return head.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
 };
 
-// Downloads the sound zip into dir with curl, resuming a download cut short. Drive serves a private file (or one past
-// its download quota) as an HTML page: that is refused with what the human does instead
-export async function fetchSoundZip(link, dir) {
-  const out = join(dir, "mc-films-sound.zip"),
+// Downloads a private vault/sound zip into dir with curl, resuming a download cut short. Drive serves a private file
+// (or one past its download quota) as an HTML page: that is refused with what the human does instead
+export async function fetchVaultZip(
+  link,
+  dir,
+  { name = "mc-films-vault.zip", flag = "--vault-zip" } = {},
+) {
+  const out = join(dir, name),
     partial = `${out}.part`;
   mkdirSync(dir, { recursive: true });
   if (existsSync(partial) && !startsAsZip(partial)) rmSync(partial);
@@ -79,36 +112,122 @@ export async function fetchSoundZip(link, dir) {
   if (startsAsZip(partial)) {
     if (status !== 0)
       throw new Error(
-        `The sound zip download stopped (curl ${status}): run the same command again to resume it`,
+        `The archive download stopped (curl ${status}): run the same command again to resume it`,
       );
     renameSync(partial, out);
     return out;
   }
   rmSync(partial, { force: true });
+  const kind = flag === "--sound-zip" ? "sound zip" : "vault zip";
   throw new Error(
-    `${link} did not give the sound zip (a private Drive file, a link past its download quota, or a wrong link): download it in a browser, then bun run setup --sound-zip <the downloaded zip>`,
+    `${link} did not give the ${kind} (a private Drive file, a link past its download quota, or a wrong link): download it in a browser, then bun run setup ${flag} <the downloaded zip>`,
   );
 }
 
-export async function packSound({ local, out, log = console.log }) {
+export const fetchSoundZip = (link, dir) =>
+  fetchVaultZip(link, dir, { name: "mc-films-sound.zip", flag: "--sound-zip" });
+
+function validateEntryName(
+  fileName,
+  { zip, allowedDirs, allowedFiles, label, hint, isDir = false },
+) {
+  const clean = isDir ? fileName.slice(0, -1) : fileName;
+  if (
+    !clean ||
+    clean.includes("\0") ||
+    clean.startsWith("/") ||
+    /^[a-z]:/i.test(clean) ||
+    clean.includes("\\")
+  ) {
+    throw new Error(`${zip} is not a ${label}: ${fileName} lies outside ${hint}`);
+  }
+  const segments = clean.split("/");
+  if (segments.some((s) => !s || s === "." || s === "..")) {
+    throw new Error(`${zip} is not a ${label}: ${fileName} lies outside ${hint}`);
+  }
+  if (isDir) {
+    if (!allowedDirs.has(segments[0]))
+      throw new Error(`${zip} is not a ${label}: ${fileName} lies outside ${hint}`);
+    return segments[0];
+  }
+  if (segments.length === 1) {
+    if (!allowedFiles.has(segments[0]))
+      throw new Error(`${zip} is not a ${label}: ${fileName} lies outside ${hint}`);
+    return segments[0];
+  }
+  if (!allowedDirs.has(segments[0]))
+    throw new Error(`${zip} is not a ${label}: ${fileName} lies outside ${hint}`);
+  return segments[0];
+}
+
+// Explicit non-following walk: Bun's recursive readdirSync traverses Windows junctions, which must never leak into zips
+function walkRealFiles(dir, relPrefix = "", out = []) {
+  const entries = readdirSync(dir, { withFileTypes: true }).sort((a, b) =>
+    codePointCompare(a.name, b.name),
+  );
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    const st = lstatSync(full);
+    if (st.isSymbolicLink()) continue;
+    const rel = relPrefix ? `${relPrefix}/${entry.name}` : entry.name;
+    if (st.isDirectory()) {
+      walkRealFiles(full, rel, out);
+    } else if (st.isFile()) {
+      out.push({ full, rel, size: st.size });
+    }
+  }
+  return out;
+}
+
+async function packArchive({
+  local,
+  out,
+  dirs,
+  rootFiles = [],
+  allowEmpty = false,
+  log = console.log,
+}) {
   const zip = new yazl.ZipFile();
   let files = 0,
     bytes = 0;
-  for (const part of PARTS) {
-    const dir = join(local, part);
-    if (!existsSync(dir)) {
-      log(`${part}: not in the vault, left out of the zip`);
+  const parts = new Set();
+
+  const resolvedOut = resolve(out);
+  for (const dirName of dirs) {
+    const dir = join(local, dirName);
+    const dirStat = lstatSync(dir, { throwIfNoEntry: false });
+    if (!dirStat) {
+      log(`${dirName}: not in the vault, left out of the zip`);
       continue;
     }
-    for (const rel of readdirSync(dir, { recursive: true })) {
-      const name = `${part}/${rel.replaceAll("\\", "/")}`,
-        st = statSync(join(dir, rel));
-      if (SKIP.test(name) || !st.isFile()) continue;
-      zip.addFile(join(dir, rel), name, { compress: !STORED.test(name) });
+    if (dirStat.isSymbolicLink() || !dirStat.isDirectory()) {
+      log(`${dirName}: skipped (not a real directory)`);
+      continue;
+    }
+    for (const { full, rel, size } of walkRealFiles(dir)) {
+      const name = `${dirName}/${rel}`;
+      if (SKIP.test(name) || resolve(full) === resolvedOut) continue;
+      zip.addFile(full, name, { compress: !STORED.test(name) });
       files++;
-      bytes += st.size;
+      bytes += size;
+      parts.add(dirName);
     }
   }
+
+  for (const fileName of rootFiles) {
+    const full = join(local, fileName);
+    const st = lstatSync(full, { throwIfNoEntry: false });
+    if (!st || st.isSymbolicLink() || !st.isFile()) continue;
+    zip.addFile(full, fileName, { compress: !STORED.test(fileName) });
+    files++;
+    bytes += st.size;
+    parts.add(fileName);
+  }
+
+  if (!files && !allowEmpty) {
+    throw new Error(`No matching vault assets found in ${local} to pack into ${out}`);
+  }
+
   zip.end();
   mkdirSync(dirname(out), { recursive: true });
   const partial = `${out}.${process.pid}.part`;
@@ -119,6 +238,36 @@ export async function packSound({ local, out, log = console.log }) {
     rmSync(partial, { force: true });
   }
   log(`${out}: ${files} files, ${(bytes / 2 ** 30).toFixed(2)} GB`);
+  return { files, bytes, parts: [...parts].sort(codePointCompare) };
+}
+
+export async function packVault({ local, out, part = "all", log = console.log }) {
+  const spec = VAULT_PARTS[part];
+  if (!spec) {
+    throw new Error(
+      `Unknown vault archive part "${part}" (expected: ${Object.keys(VAULT_PARTS).join(", ")})`,
+    );
+  }
+  const res = await packArchive({
+    local,
+    out,
+    dirs: spec.dirs,
+    rootFiles: spec.files,
+    allowEmpty: false,
+    log,
+  });
+  return { part, out, ...res };
+}
+
+export async function packSound({ local, out, log = console.log }) {
+  const { files, bytes } = await packArchive({
+    local,
+    out,
+    dirs: SOUND_DIRS,
+    rootFiles: [],
+    allowEmpty: true,
+    log,
+  });
   return { files, bytes };
 }
 
@@ -128,35 +277,106 @@ const crcOf = async (file) => {
   return crc;
 };
 
+async function validateZipEntries({ zip, allowedDirs, allowedFiles, label, hint }) {
+  const file = await promisify(yauzl.open)(zip, { lazyEntries: true });
+  await new Promise((done, fail) => {
+    file.on("error", fail);
+    file.on("end", done);
+    file.on("entry", (entry) => {
+      try {
+        validateEntryName(entry.fileName, {
+          zip,
+          allowedDirs,
+          allowedFiles,
+          label,
+          hint,
+          isDir: entry.fileName.endsWith("/"),
+        });
+        file.readEntry();
+      } catch (e) {
+        file.close();
+        fail(e);
+      }
+    });
+    file.readEntry();
+  });
+}
+
+function assertRealDirectoryChain(base, entryName) {
+  const baseStat = lstatSync(base, { throwIfNoEntry: false });
+  if (baseStat && (baseStat.isSymbolicLink() || !baseStat.isDirectory())) {
+    throw new Error(`Refusing to restore into symlink/junction or non-directory: ${base}`);
+  }
+  const segments = entryName.split("/");
+  let cur = base;
+  for (let i = 0; i < segments.length - 1; i++) {
+    cur = join(cur, segments[i]);
+    const st = lstatSync(cur, { throwIfNoEntry: false });
+    if (!st) break;
+    if (st.isSymbolicLink() || !st.isDirectory()) {
+      throw new Error(
+        `Refusing to restore through symlink/junction or non-directory ancestor: ${cur}`,
+      );
+    }
+  }
+}
+
 // A file already there with the zip's size and CRC is kept, so a stopped restore resumes where it was
-export async function restoreSound({ zip, local, log = console.log }) {
+async function restoreArchive({ zip, local, allowedDirs, allowedFiles, label, hint, log }) {
+  // Validate every path in the central directory before touching disk so a bad archive writes nothing
+  await validateZipEntries({ zip, allowedDirs, allowedFiles, label, hint });
+
+  const base = resolve(local);
+  const basePrefix = base.endsWith(sep) ? base : base + sep;
   const file = await promisify(yauzl.open)(zip, { lazyEntries: true });
   let written = 0,
     kept = 0;
+  const parts = new Set();
+
   await new Promise((done, fail) => {
     file.on("error", fail);
     file.on("end", done);
     file.on("entry", async (entry) => {
       try {
         if (entry.fileName.endsWith("/")) return file.readEntry();
-        const top = entry.fileName.split("/")[0];
-        if (!PARTS.includes(top))
-          throw new Error(
-            `${zip} is not a sound zip: ${entry.fileName} lies outside ${PARTS.join(", ")} (bun run pack:sound makes one)`,
-          );
-        const target = join(local, entry.fileName);
-        if (
-          existsSync(target) &&
-          statSync(target).size === entry.uncompressedSize &&
-          (await crcOf(target)) === entry.crc32
-        ) {
-          kept++;
-          return file.readEntry();
+        const top = validateEntryName(entry.fileName, {
+          zip,
+          allowedDirs,
+          allowedFiles,
+          label,
+          hint,
+        });
+        parts.add(top);
+        const target = resolve(base, entry.fileName);
+        if (!target.startsWith(basePrefix)) {
+          throw new Error(`${zip} is not a ${label}: ${entry.fileName} lies outside ${hint}`);
+        }
+        assertRealDirectoryChain(base, entry.fileName);
+        const existing = lstatSync(target, { throwIfNoEntry: false });
+        if (existing) {
+          if (existing.isSymbolicLink()) {
+            throw new Error(
+              `Refusing to overwrite symlink/junction ${target} with archive file ${entry.fileName}`,
+            );
+          }
+          if (existing.isDirectory()) {
+            throw new Error(
+              `Refusing to overwrite directory ${target} with archive file ${entry.fileName}`,
+            );
+          }
+          if (
+            existing.isFile() &&
+            existing.size === entry.uncompressedSize &&
+            (await crcOf(target)) === entry.crc32
+          ) {
+            kept++;
+            return file.readEntry();
+          }
         }
         mkdirSync(dirname(target), { recursive: true });
         const partial = `${target}.${process.pid}.part`;
         const stream = await promisify(file.openReadStream.bind(file))(entry);
-        // yauzl does not check CRC: a damaged download must not land in the vault as a sound
+        // yauzl does not check CRC: a damaged download must not land in the vault
         let crc = 0;
         try {
           await pipeline(
@@ -187,5 +407,24 @@ export async function restoreSound({ zip, local, log = console.log }) {
     file.readEntry();
   });
   log(`${zip}: ${written} files restored, ${kept} already there`);
+  return { written, kept, parts: [...parts].sort(codePointCompare) };
+}
+
+export async function restoreVault({ zip, local, soundOnly = false, log = console.log }) {
+  return restoreArchive({
+    zip,
+    local,
+    allowedDirs: soundOnly ? ALLOWED_SOUND_DIRS : ALLOWED_VAULT_DIRS,
+    allowedFiles: soundOnly ? EMPTY_SET : ALLOWED_VAULT_FILES,
+    label: soundOnly ? "sound zip" : "vault archive",
+    hint: soundOnly
+      ? `${SOUND_DIRS.join(", ")} (bun run pack:sound makes one)`
+      : "allowed vault asset paths (tools and cache are excluded; bun run pack:vault makes one)",
+    log,
+  });
+}
+
+export async function restoreSound({ zip, local, log = console.log }) {
+  const { written, kept } = await restoreVault({ zip, local, soundOnly: true, log });
   return { written, kept };
 }

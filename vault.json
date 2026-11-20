@@ -1,7 +1,7 @@
 {
   "root": "./vault",
   "externalRoot": "E:/mc_vault",
-  "requiredDirectories": ["motion", "packs", "tools", "mc-sound"],
+  "requiredDirectories": ["motion", "packs", "mc-sound"],
   "requiredFiles": ["jar/client_assets.zip", "mcprep/player.glb"],
   "film_links": {
     "mc": "jar",

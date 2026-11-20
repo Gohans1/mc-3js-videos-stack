@@ -9,3 +9,5 @@ storytold/artcraft
 storytold/effectcraft
 storytold/photocraft
 ...
+
+Cần tham khảo, tìm hiểu thêm tính năng công cụ etc... ? -> check các repo mẫu đã dc kéo sẵn ở C:\Users\ADMIN\Desktop\editor-refs

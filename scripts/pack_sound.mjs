@@ -13,7 +13,8 @@ repo root:
   bun run pack:sound                 into the external vault, named mc-films-sound-<date>.zip
   bun run pack:sound D:/sound.zip    there
 A new machine restores it with bun run setup --sound-zip <zip>. Keep it private: the Sonniss licence forbids passing its
-sounds on, and Mojang's sounds are not ours to share.`;
+sounds on, and Mojang's sounds are not ours to share.
+For full two-archive vault backups (core: packs/motion/mc-sound/jar/mobs + heavy: sound/openfilm/references), use bun run pack:vault.`;
 const [out] = cliArgs(HELP, [], 1);
 const where = existsSync(EXTERNAL) ? EXTERNAL : LOCAL;
 await packSound({

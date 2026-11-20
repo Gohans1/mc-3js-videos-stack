@@ -2,7 +2,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { cliArgs, numberArg } from "../packages/live-studio/src/cli.mjs";
-import { allEntries } from "./find";
+import { allEntries, objectEntries } from "./find";
 import { openBudget, readBudget } from "./semantic/budget";
 import { assetFromEntry, readiness, readManifest } from "./semantic/catalog";
 import { runIndex } from "./semantic/engine";
@@ -27,6 +27,7 @@ const HELP = `Incremental local Gemini Embedding 2 search (Google direct or Open
 Options:
   --db PATH              MC_SEMANTIC_DB or repo .studio/asset-search.sqlite; one index shared by search/build
   --manifest JSON        plan/build/status: MC_SEMANTIC_MANIFEST or local [{key,title,text,media?:{kind,file}}]
+  --kind KIND            plan/build/status/eval: object, block, item, mob or prop; indexes 3D names and descriptions
   --key KEY              plan/build: exact key printed by plan/query; omitted means the current catalog
   --dimensions N         768 (default), 1536 or 3072; each space needs a separate database
   --provider NAME        gemini (default), auto (Gemini alias), or explicitly openrouter; no provider fallback
@@ -66,6 +67,7 @@ const raw = cliArgs(
   [
     "--db PATH",
     "--manifest JSON",
+    "--kind KIND",
     "--key KEY",
     "--dimensions N",
     "--provider NAME",
@@ -100,6 +102,9 @@ for (let i = 0; i < raw.length; i++) {
   flags.set(value, next);
 }
 const [action, value] = args;
+const kind = flags.get("--kind");
+if (kind && !["object", "block", "item", "mob", "prop"].includes(kind))
+  usage("--kind takes object, block, item, mob or prop");
 if (
   !action ||
   !["plan", "build", "status", "query", "remove", "redo", "backup", "eval"].includes(action)
@@ -111,6 +116,7 @@ for (const flag of flags.keys()) {
   if (
     (flag === "--key" && !["plan", "build"].includes(action)) ||
     (flag === "--manifest" && !["plan", "build", "status"].includes(action)) ||
+    (flag === "--kind" && !["plan", "build", "status", "eval"].includes(action)) ||
     (["--max-requests", "--max-seconds", "--rpm", "--tpm", "--retries"].includes(flag) &&
       action !== "build") ||
     (flag === "--part" && action !== "redo") ||
@@ -177,10 +183,17 @@ const embed: Embed = (parts, signal) =>
 try {
   let output: unknown;
   const manifest = flags.get("--manifest") ?? settings.manifest;
+  if (kind && manifest && action !== "eval") usage("Choose --kind or a manifest");
+  const entries = async () =>
+    kind
+      ? (await objectEntries({ quiet: true })).filter(
+          (entry) => kind === "object" || entry.kind === kind,
+        )
+      : allEntries(false, ROOT);
   let assets = ["plan", "build", "status"].includes(action)
     ? manifest
       ? readManifest(resolve(manifest))
-      : allEntries(false, ROOT).map((entry) => assetFromEntry(entry))
+      : (await entries()).map((entry) => assetFromEntry(entry))
     : [];
   if (action === "plan" || action === "build") {
     if (flags.has("--key")) {
@@ -231,7 +244,7 @@ try {
     if (action === "eval") {
       if (statSync(value!).size > 8 * 1024 * 1024) throw new Error("Evaluation cases exceed 8 MB");
       const cases = parseEvalCases(JSON.parse(readFileSync(value!, "utf8")));
-      const report = await evaluateSearch(index, allEntries(false, ROOT), cases);
+      const report = await evaluateSearch(index, await entries(), cases);
       if (flags.has("--out"))
         writeFileSync(resolve(flags.get("--out")!), JSON.stringify(report, null, 2), {
           flag: "wx",

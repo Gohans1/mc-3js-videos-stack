@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { listActiveLegoTokens } from "../app/cli/model.ts";
 import {
   buildCliInvocation,
   CLI_CATEGORIES,
@@ -372,6 +373,11 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
   test("every command has unique id, valid category, unique subcommands, and valid visibleWhen refs", () => {
     const categoryIds = new Set(CLI_CATEGORIES.map((c) => c.id));
     const seenCmdIds = new Set();
+    const checkRule = (rule, names) => {
+      for (let cur = rule; cur; cur = cur.and) {
+        expect(names.has(cur.field)).toBe(true);
+      }
+    };
 
     const checkNode = (cmd, subPath, subNodes) => {
       if (!subNodes?.length) return;
@@ -387,12 +393,8 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
           ...chain.envDef.map((f) => f.key),
         ]);
         for (const def of [...chain.argsDef, ...chain.flagsDef, ...chain.envDef]) {
-          if (def.visibleWhen) {
-            expect(visibleFieldNames.has(def.visibleWhen.field)).toBe(true);
-          }
-          if (def.requiredWhen) {
-            expect(visibleFieldNames.has(def.requiredWhen.field)).toBe(true);
-          }
+          if (def.visibleWhen) checkRule(def.visibleWhen, visibleFieldNames);
+          if (def.requiredWhen) checkRule(def.requiredWhen, visibleFieldNames);
         }
         checkNode(cmd, nextPath, sub.subcommands);
       }
@@ -409,12 +411,8 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         ...(cmd.env ?? []).map((f) => f.key),
       ]);
       for (const def of [...(cmd.args ?? []), ...(cmd.flags ?? []), ...(cmd.env ?? [])]) {
-        if (def.visibleWhen) {
-          expect(fieldNames.has(def.visibleWhen.field)).toBe(true);
-        }
-        if (def.requiredWhen) {
-          expect(fieldNames.has(def.requiredWhen.field)).toBe(true);
-        }
+        if (def.visibleWhen) checkRule(def.visibleWhen, fieldNames);
+        if (def.requiredWhen) checkRule(def.requiredWhen, fieldNames);
       }
       checkNode(cmd, [], cmd.subcommands);
     }
@@ -1495,5 +1493,372 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(gapMissingDid.validationErrors.length).toBeGreaterThan(0);
+
+    const packCore = buildCliInvocation(
+      {
+        commandId: "pack:vault",
+        args: { out: "D:/backup" },
+        flags: { "--part": "core", "--json": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(packCore.validationErrors).toEqual([]);
+    expect(packCore.argvTokens).toEqual(["D:/backup", "--part", "core", "--json"]);
+
+    const setupSplit = buildCliInvocation(
+      {
+        commandId: "setup",
+        flags: { "--vault-zip": ["D:/core.zip", "D:/heavy.zip"] },
+      },
+      BASE_CONTEXT,
+    );
+    expect(setupSplit.validationErrors).toEqual([]);
+    expect(setupSplit.argvTokens).toEqual([
+      "--vault-zip",
+      "D:/core.zip",
+      "--vault-zip",
+      "D:/heavy.zip",
+    ]);
+  });
+
+  test("supports render VIEWS (stills/poster, INSPECT conflict, clip hidden) and new-film --ratio", () => {
+    const renderViews = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        env: { VIEWS: "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(renderViews.validationErrors).toEqual([]);
+    expect(renderViews.envEntries).toEqual([
+      ["VIEWS", "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50"],
+    ]);
+
+    const posterViews = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "poster" },
+        env: { AT: "4", VIEWS: "hero:0,2,5,0,1,0,50" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(posterViews.validationErrors).toEqual([]);
+    expect(posterViews.envEntries).toEqual([
+      ["AT", "4"],
+      ["VIEWS", "hero:0,2,5,0,1,0,50"],
+    ]);
+
+    const clipViews = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "clip" },
+        env: { VIEWS: "hero:0,2,5,0,1,0,50" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(clipViews.validationErrors).toEqual([]);
+    expect(clipViews.envEntries).toEqual([]);
+
+    const viewsInspectConflict = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        env: { INSPECT: "0,2,5,0,1,0,50", VIEWS: "a:0,2,5,0,1,0,50" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(viewsInspectConflict.validationErrors.length).toBeGreaterThan(0);
+
+    const newFilmRatio = buildCliInvocation(
+      {
+        commandId: "new-film",
+        args: { name: "short-demo" },
+        flags: { "--ratio": "9:16" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(newFilmRatio.validationErrors).toEqual([]);
+    expect(newFilmRatio.argvTokens).toEqual(["short-demo", "--ratio", "9:16"]);
+  });
+
+  test("keeps sheet image-list mode visibility consistent across resolver, isFieldVisible, and Lego tokens", () => {
+    const sheetImages = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: { images: ["renders/view_a.png", "renders/view_b.png"] },
+        flags: { "--out": "renders/views_sheet.jpg" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(sheetImages.validationErrors).toEqual([]);
+    expect(sheetImages.argvTokens).toEqual([
+      "renders/view_a.png",
+      "renders/view_b.png",
+      "--out",
+      "renders/views_sheet.jpg",
+    ]);
+
+    // Stale video-submode target/cutIndex/overviewRange/START must stay hidden in resolver, UI, and Lego bar
+    const staleCutDraft = {
+      subcommandPath: [],
+      args: { target: "cut", cutIndex: 4, images: ["renders/a.png"] },
+      flags: { "--out": "renders/out.jpg" },
+      env: { START: "60" },
+      targetFilm: "active",
+    };
+    const sheetStaleCut = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: staleCutDraft.args,
+        flags: staleCutDraft.flags,
+        env: staleCutDraft.env,
+      },
+      BASE_CONTEXT,
+    );
+    expect(sheetStaleCut.validationErrors).toEqual([]);
+    expect(sheetStaleCut.argvTokens).toEqual(["renders/a.png", "--out", "renders/out.jpg"]);
+    expect(sheetStaleCut.envEntries).toEqual([]);
+    const staleCutCombined = {
+      ...staleCutDraft.args,
+      ...staleCutDraft.flags,
+      ...staleCutDraft.env,
+    };
+    expect(
+      sheetStaleCut.argsDef
+        .filter((d) => isFieldVisible(d.visibleWhen, staleCutCombined))
+        .map((d) => d.key),
+    ).toEqual(["images"]);
+    expect(
+      sheetStaleCut.envDef
+        .filter((d) => isFieldVisible(d.visibleWhen, staleCutCombined))
+        .map((d) => d.key),
+    ).toEqual([]);
+    expect(listActiveLegoTokens(sheetStaleCut, staleCutDraft).map((t) => t.id)).toEqual([
+      "args:images",
+      "flags:--out",
+    ]);
+
+    const sheetStaleOverview = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: { target: "overview", images: ["renders/a.png"] },
+      },
+      BASE_CONTEXT,
+    );
+    expect(sheetStaleOverview.validationErrors).toEqual([]);
+    expect(sheetStaleOverview.argvTokens).toEqual(["renders/a.png"]);
+
+    // Both video and images set together must error and hide --out & cutIndex across resolver, UI, and Lego bar
+    const conflictDraft = {
+      subcommandPath: [],
+      args: {
+        video: "renders/draft_video.mp4",
+        target: "cut",
+        cutIndex: 4,
+        images: ["renders/a.png"],
+      },
+      flags: { "--out": "renders/out.jpg" },
+      env: {},
+      targetFilm: "active",
+    };
+    const sheetBothConflict = buildCliInvocation(
+      {
+        commandId: "sheet",
+        args: conflictDraft.args,
+        flags: conflictDraft.flags,
+      },
+      BASE_CONTEXT,
+    );
+    expect(sheetBothConflict.validationErrors).toContain("Give Video or Image Files, not both.");
+    expect(sheetBothConflict.argvTokens).toEqual([]);
+    const conflictCombined = { ...conflictDraft.args, ...conflictDraft.flags };
+    expect(
+      sheetBothConflict.flagsDef
+        .filter((d) => isFieldVisible(d.visibleWhen, conflictCombined))
+        .map((d) => d.key),
+    ).toEqual([]);
+    expect(listActiveLegoTokens(sheetBothConflict, conflictDraft)).toEqual([]);
+  });
+
+  test("enforces studio mode flags and collab write stdin guard with file-path negative control", () => {
+    const studioDetach = buildCliInvocation(
+      {
+        commandId: "studio",
+        flags: { "--detach": true, "--lan": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(studioDetach.validationErrors).toEqual([]);
+    expect(studioDetach.argvTokens).toEqual(["--lan", "--detach"]);
+
+    for (const flag of ["--status", "--stop"]) {
+      const solo = buildCliInvocation(
+        { commandId: "studio", flags: { [flag]: true } },
+        BASE_CONTEXT,
+      );
+      expect(solo.validationErrors).toEqual([]);
+      expect(solo.argvTokens).toEqual([flag]);
+
+      const lanConflict = buildCliInvocation(
+        {
+          commandId: "studio",
+          flags: { "--lan": true, [flag]: true },
+        },
+        BASE_CONTEXT,
+      );
+      expect(lanConflict.validationErrors.length).toBeGreaterThan(0);
+    }
+
+    for (const pair of [
+      { "--detach": true, "--stop": true },
+      { "--status": true, "--stop": true },
+    ]) {
+      const studioConflict = buildCliInvocation({ commandId: "studio", flags: pair }, BASE_CONTEXT);
+      expect(studioConflict.validationErrors.length).toBeGreaterThan(0);
+    }
+
+    const collabStdin = buildCliInvocation(
+      {
+        commandId: "collab",
+        subcommandPath: ["write"],
+        args: { name: "cam", input: "-" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(collabStdin.validationErrors).toEqual([]);
+    expect(collabStdin.argvTokens).toEqual(["write", "cam", "-"]);
+    expect(collabStdin.guardReason).toContain("stdin");
+
+    const collabFile = buildCliInvocation(
+      {
+        commandId: "collab",
+        subcommandPath: ["write"],
+        args: { name: "cam", input: "payload.json" },
+        flags: { "--quiet": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(collabFile.validationErrors).toEqual([]);
+    expect(collabFile.argvTokens).toEqual(["write", "cam", "payload.json", "--quiet"]);
+    expect(collabFile.guardReason).toBeNull();
+  });
+
+  test("resolves R2/R3 flags for collab, asset preview, render, notes, and timeline:fmt", () => {
+    const collabReadFull = buildCliInvocation(
+      {
+        commandId: "collab",
+        subcommandPath: ["read"],
+        args: { name: "cast" },
+        flags: { "--full": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(collabReadFull.validationErrors).toEqual([]);
+    expect(collabReadFull.argvTokens).toEqual(["read", "cast", "--full"]);
+
+    const collabWriteManyStdin = buildCliInvocation(
+      {
+        commandId: "collab",
+        subcommandPath: ["write-many"],
+        args: { input: "-" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(collabWriteManyStdin.validationErrors).toEqual([]);
+    expect(collabWriteManyStdin.guardReason).toContain("stdin");
+
+    const collabWriteManyFile = buildCliInvocation(
+      {
+        commandId: "collab",
+        subcommandPath: ["write-many"],
+        args: { input: "batch.json" },
+        flags: { "--quiet": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(collabWriteManyFile.validationErrors).toEqual([]);
+    expect(collabWriteManyFile.argvTokens).toEqual(["write-many", "batch.json", "--quiet"]);
+    expect(collabWriteManyFile.guardReason).toBeNull();
+
+    const assetPreview = buildCliInvocation(
+      {
+        commandId: "asset",
+        subcommandPath: ["preview"],
+        args: { id: "block:minecraft:oak_stairs item:minecraft:iron_sword" },
+        flags: {
+          "--kind": "block",
+          "--source": "modern-furniture",
+          "--out": "sheet.png",
+          "--size": 0.6,
+          "--limit": 6,
+          "--no-scale": true,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(assetPreview.validationErrors).toEqual([]);
+    expect(assetPreview.meta.effect).toBe("write");
+    expect(assetPreview.argvTokens).toEqual([
+      "preview",
+      "block:minecraft:oak_stairs",
+      "item:minecraft:iron_sword",
+      "--kind",
+      "block",
+      "--source",
+      "modern-furniture",
+      "--out",
+      "sheet.png",
+      "--size",
+      "0.6",
+      "--limit",
+      "6",
+      "--no-scale",
+    ]);
+
+    const assetPreviewDefault = buildCliInvocation(
+      {
+        commandId: "asset",
+        subcommandPath: ["preview"],
+      },
+      BASE_CONTEXT,
+    );
+    expect(assetPreviewDefault.validationErrors).toEqual([]);
+    expect(assetPreviewDefault.argvTokens).toEqual(["preview"]);
+
+    const renderFresh = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        env: { CHECK: "probe:4", RENDER_FRESH_CACHE: true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(renderFresh.validationErrors).toEqual([]);
+    expect(renderFresh.envEntries).toEqual([
+      ["CHECK", "probe:4"],
+      ["RENDER_FRESH_CACHE", "1"],
+    ]);
+
+    const notesFast = buildCliInvocation(
+      {
+        commandId: "notes",
+        args: { ids: "1 2" },
+        flags: { "--no-lessons": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(notesFast.validationErrors).toEqual([]);
+    expect(notesFast.argvTokens).toEqual(["1", "2", "--no-lessons"]);
+
+    const fmtTarget = buildCliInvocation(
+      {
+        commandId: "timeline:fmt",
+        args: { target: "cast lights" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(fmtTarget.validationErrors).toEqual([]);
+    expect(fmtTarget.argvTokens).toEqual(["cast", "lights"]);
   });
 });

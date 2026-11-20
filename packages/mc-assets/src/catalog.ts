@@ -60,6 +60,13 @@ export interface McPackMeta {
   downloads?: number;
 }
 
+export function matchesMcPackSource(source: string, filename: string, slug?: string) {
+  const selector = source.toLowerCase();
+  const file = filename.toLowerCase();
+  if (/\.(jar|zip)$/.test(selector)) return file === selector;
+  return file.replace(/\.(jar|zip)$/, "") === selector || slug?.toLowerCase() === selector;
+}
+
 export interface McCacheData {
   version: 1;
   schemaRevision?: number;
@@ -106,7 +113,7 @@ const DEFAULT_GOHANS_PACK = resolve(
 );
 
 const CACHE_REL = "cache/mc-catalog.v1.json";
-const SCHEMA_REVISION = 4;
+const SCHEMA_REVISION = 6;
 
 const u16 = (b: Uint8Array, o: number) => b[o]! | (b[o + 1]! << 8);
 const u32 = (b: Uint8Array, o: number) =>
@@ -192,6 +199,20 @@ export function readZipCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
   return map;
 }
 
+export function readPackCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
+  const entries = readZipCatalog(buf);
+  if (entries.has("pack.mcmeta") || [...entries.keys()].some((path) => path.startsWith("assets/")))
+    return entries;
+  const roots = [...entries.keys()].filter((path) => /^[^/]+\/pack\.mcmeta$/.test(path));
+  if (roots.length !== 1) return entries;
+  const prefix = roots[0]!.slice(0, -"pack.mcmeta".length);
+  return new Map(
+    [...entries].flatMap(([path, entry]) =>
+      path.startsWith(prefix) ? [[path.slice(prefix.length), entry] as const] : [],
+    ),
+  );
+}
+
 /** Decompresses only the requested archive paths using Central Directory byte ranges. */
 export function readZipMembers(
   buf: Uint8Array,
@@ -206,7 +227,7 @@ export function readZipMembers(
     if (!entry) continue;
     if (entry.zip64) {
       zip64Fallback ??= unzipSync(buf);
-      if (zip64Fallback[name]) result.set(name, zip64Fallback[name]);
+      if (zip64Fallback[entry.name]) result.set(name, zip64Fallback[entry.name]);
       continue;
     }
     const lh = entry.localOffset;
@@ -290,7 +311,23 @@ export function extractBlockstateProps(stateJson: any): Record<string, string[]>
   return out;
 }
 
-function collectBlockstateModels(stateJson: any): string[] {
+export function blockPropertyWarnings(
+  properties: Record<string, unknown>,
+  known: Record<string, string[]>,
+) {
+  return Object.entries(properties).flatMap(([name, value]) => {
+    const allowed = Object.hasOwn(known, name) ? known[name] : undefined;
+    if (!allowed)
+      return [
+        `property "${name}" not in blockstate (known: ${Object.keys(known).join(", ") || "none"})`,
+      ];
+    if (!allowed.includes(String(value)))
+      return [`property ${name}="${value}" not in blockstate (allowed: ${allowed.join("|")})`];
+    return [];
+  });
+}
+
+export function collectBlockstateModels(stateJson: any): string[] {
   const refs: string[] = [];
   const pushGroup = (g: any) => {
     for (const entry of Array.isArray(g) ? g : [g]) {
@@ -304,6 +341,81 @@ function collectBlockstateModels(stateJson: any): string[] {
     for (const p of stateJson.multipart) if (p?.apply) pushGroup(p.apply);
   }
   return [...new Set(refs)];
+}
+
+const vanillaBlockstatePath = (block: string) => `assets/minecraft/blockstates/${block}.json`;
+
+/** Traces a vanilla blockstate through both layers, returning only model/texture files from the overlay. */
+export function collectVanillaBlockOverrides(
+  block: string,
+  vanilla: (path: string) => any,
+  overlay: (path: string) => any,
+  hasOverlay: (path: string) => boolean,
+) {
+  const state = vanilla(vanillaBlockstatePath(block));
+  const roots = state ? collectBlockstateModels(state) : [`minecraft:block/${block}`];
+  return { state, ...collectModelOverrides(roots, vanilla, overlay, hasOverlay) };
+}
+
+export function collectModelOverrides(
+  roots: string[],
+  vanilla: (path: string) => any,
+  overlay: (path: string) => any,
+  hasOverlay: (path: string) => boolean,
+) {
+  const models = new Set<string>();
+  const textures = new Set<string>();
+  for (const root of roots) {
+    const visited = new Set<string>();
+    const slots = new Map<string, unknown>();
+    let ref: string | undefined = root;
+    while (ref) {
+      const parsed = parseRef(ref, "minecraft");
+      if (!parsed) break;
+      const path = `assets/${parsed.ns}/models/${parsed.path}.json`;
+      if (visited.has(path)) break;
+      visited.add(path);
+      const overridden = hasOverlay(path);
+      if (overridden) models.add(`${parsed.ns}:${parsed.path}`);
+      const model = overridden ? overlay(path) : vanilla(path);
+      for (const [slot, texture] of Object.entries(model?.textures ?? {}))
+        if (!slots.has(slot)) slots.set(slot, texture);
+      ref = typeof model?.parent === "string" ? model.parent : undefined;
+    }
+    for (const ref of slots.values()) {
+      const tex = typeof ref === "string" ? parseRef(ref, "minecraft") : null;
+      if (!tex) continue;
+      const texturePath = `assets/${tex.ns}/textures/${tex.path}.png`;
+      if (hasOverlay(texturePath)) textures.add(texturePath);
+    }
+  }
+  return { models, textures };
+}
+
+export function collectVanillaItemOverrides(
+  id: string,
+  vanilla: (path: string) => any,
+  overlay: (path: string) => any,
+  hasOverlay: (path: string) => boolean,
+) {
+  const def = vanilla(`assets/minecraft/items/${id}.json`);
+  const refs = collectItemDefModels(def);
+  return collectModelOverrides(
+    refs.length ? refs : [`minecraft:item/${id}`],
+    vanilla,
+    overlay,
+    hasOverlay,
+  );
+}
+
+export function zipJsonReader(buf: Uint8Array, catalog = readZipCatalog(buf)) {
+  const parsed = new Map<string, unknown>();
+  return (path: string) => {
+    if (!parsed.has(path)) {
+      parsed.set(path, readJsonMembers(buf, catalog, [path]).get(path)?.data);
+    }
+    return parsed.get(path);
+  };
 }
 
 export function collectItemDefModels(node: any, out: string[] = []): string[] {
@@ -426,9 +538,10 @@ function indexArchive(
   meta: McPackMeta,
   isVanilla: boolean,
   vanillaFiles?: Set<string>,
+  vanillaJson?: (path: string) => unknown,
 ): { entries: McAssetItem[]; files: string[] } {
   const buf = readFileBytes(filePath);
-  const catalog = readZipCatalog(buf);
+  const catalog = readPackCatalog(buf);
   const files = [...catalog.keys()];
 
   const geoOrObjByNs = new Map<string, boolean>();
@@ -526,25 +639,32 @@ function indexArchive(
     });
   }
 
-  // Resource-pack minecraft: model-only block overrides (when pack overrides model/texture without blockstate JSON)
   if (!isVanilla && meta.type === "resourcepack") {
-    for (const bm of blockModelsDirect) {
-      if (bm.ns !== "minecraft" || bm.id.startsWith("_")) continue;
-      const key = `${bm.ns}:${bm.id}`;
+    const blockIds = vanillaJson
+      ? Array.from(
+          vanillaFiles ?? [],
+          (path) => /^assets\/minecraft\/blockstates\/(.+)\.json$/.exec(path)?.[1],
+        ).filter((id): id is string => Boolean(id))
+      : blockModelsDirect.filter((model) => model.ns === "minecraft").map((model) => model.id);
+    for (const id of blockIds) {
+      if (id.startsWith("_") || SKIP_TECHNICAL_BLOCKS.has(id)) continue;
+      const key = `minecraft:${id}`;
       if (seenBlocks.has(key)) continue;
-      if (SKIP_TECHNICAL_BLOCKS.has(bm.id)) continue;
-      if (vanillaFiles?.size && !vanillaFiles.has(`assets/minecraft/blockstates/${bm.id}.json`)) {
-        // Only surface model-only overrides that map cleanly to a real block when vanilla exists, or top-level override
-        continue;
-      }
-      seenBlocks.add(key);
-      const err = checkModelChain(env, `${bm.ns}:block/${bm.id}`, bm.ns);
+      const { models, textures, state } = collectVanillaBlockOverrides(
+        id,
+        vanillaJson ?? (() => undefined),
+        (path) => jsonCache.get(path)?.data,
+        (path) => catalog.has(path),
+      );
+      if (!models.size && !textures.size) continue;
+      const err = [...models].map((ref) => checkModelChain(env, ref, "minecraft")).find(Boolean);
+      const props = extractBlockstateProps(state);
       entries.push({
         kind: "block",
         id: `block:${key}`,
-        namespace: bm.ns,
-        name: bm.id,
-        title: bm.id.replaceAll("_", " "),
+        namespace: "minecraft",
+        name: id,
+        title: id.replaceAll("_", " "),
         source: meta.slug,
         pack: meta.file,
         packTitle: meta.title,
@@ -555,6 +675,7 @@ function indexArchive(
         downloads: meta.downloads,
         renderable: !err,
         ...(err ? { brokenReason: err } : {}),
+        ...(props ? { props } : {}),
       });
     }
   }
@@ -628,6 +749,42 @@ function indexArchive(
       renderable: !err,
       ...(err ? { brokenReason: err } : {}),
     });
+  }
+
+  if (!isVanilla && meta.type === "resourcepack" && vanillaJson) {
+    const ids = new Set<string>();
+    for (const path of vanillaFiles ?? []) {
+      const match = /^assets\/minecraft\/(?:items|models\/item)\/(.+)\.json$/.exec(path);
+      if (match?.[1]) ids.add(match[1]);
+    }
+    for (const id of ids) {
+      if (id.startsWith("_") || id === "generated" || seenItems.has(`minecraft:${id}`)) continue;
+      const { models, textures } = collectVanillaItemOverrides(
+        id,
+        vanillaJson,
+        (path) => jsonCache.get(path)?.data,
+        (path) => catalog.has(path),
+      );
+      if (!models.size && !textures.size) continue;
+      const err = [...models].map((ref) => checkModelChain(env, ref, "minecraft")).find(Boolean);
+      entries.push({
+        kind: "item",
+        id: `item:minecraft:${id}`,
+        namespace: "minecraft",
+        name: id,
+        title: id.replaceAll("_", " "),
+        source: meta.slug,
+        pack: meta.file,
+        packTitle: meta.title,
+        edition: "modded",
+        type: meta.type,
+        license: meta.license,
+        url: meta.url,
+        downloads: meta.downloads,
+        renderable: !err,
+        ...(err ? { brokenReason: err } : {}),
+      });
+    }
   }
 
   return { entries, files };
@@ -858,6 +1015,7 @@ export function loadMcAssetsCatalog(options?: {
   const packIndex = readPacksIndex(vaultRoot);
   const packMetas: McPackMeta[] = [];
   const packItems: McAssetItem[] = [];
+  let vanillaJson: ReturnType<typeof zipJsonReader> | undefined;
   const sameMeta = (a: McPackMeta, b: McPackMeta) =>
     a.slug === b.slug &&
     a.title === b.title &&
@@ -924,7 +1082,10 @@ export function loadMcAssetsCatalog(options?: {
         }
       } else {
         try {
-          const res = indexArchive(abs, meta, false, vanillaFiles);
+          if (meta.type === "resourcepack" && vanillaFiles.size) {
+            vanillaJson ??= zipJsonReader(readFileBytes(jarPath));
+          }
+          const res = indexArchive(abs, meta, false, vanillaFiles, vanillaJson);
           nextCache.packs[file] = {
             fingerprint: fp,
             vanillaFingerprint: vanillaFp,

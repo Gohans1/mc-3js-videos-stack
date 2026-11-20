@@ -39,7 +39,9 @@ function makePickEnv() {
         JSON.stringify({ variants: { "": { model: "minecraft:block/oak_leaves" } } }),
       ),
       "assets/minecraft/models/block/cube_all.json": strToU8(JSON.stringify({ elements: [] })),
-      "assets/minecraft/models/block/oak_leaves.json": strToU8(JSON.stringify({ elements: [] })),
+      "assets/minecraft/models/block/oak_leaves.json": strToU8(
+        '{"textures":{"all":"minecraft:block/oak_leaves"},"elements":[]}',
+      ),
       "assets/minecraft/textures/block/oak_leaves.png": new Uint8Array([9, 9]),
     }),
   );
@@ -165,6 +167,52 @@ test("pick.mjs warns on resource-pack override collisions across picks", async (
   expect(res.status, res.stderr).toBe(0);
   expect(res.stderr).toContain("oak_leaves.json");
 });
+
+test("direct picker validates the manifest's archive filename before opening a pack", () => {
+  const { vault, film } = makePickEnv();
+  writeFileSync(
+    join(film, "pack/picks.json"),
+    JSON.stringify([{ jar: "decor-mod.txt", namespace: "decor", blocks: ["oak_chair"] }]),
+  );
+  const result = spawnSync("bun", [PICK_MJS], {
+    cwd: film,
+    env: { ...process.env, MC_VAULT_ROOT: vault },
+    encoding: "utf8",
+    timeout: 15000,
+  });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("expected a .jar or .zip filename in vault/packs");
+});
+
+test.each(["minecraft", "decor"])(
+  "direct picker keeps an overridden texture used through a vanilla model (%s block)",
+  (namespace) => {
+    const { vault, film } = makePickEnv();
+    writeFileSync(
+      join(vault, "packs/paint.jar"),
+      zipSync({
+        [`assets/${namespace}/blockstates/oak_leaves.json`]: strToU8(
+          '{"variants":{"":{"model":"minecraft:block/oak_leaves","y":90}}}',
+        ),
+        "assets/minecraft/textures/block/oak_leaves.png": new Uint8Array([4, 5]),
+      }),
+    );
+    writeFileSync(
+      join(film, "pack/picks.json"),
+      JSON.stringify([{ jar: "paint.jar", namespace, blocks: ["oak_leaves"] }]),
+    );
+    const result = spawnSync("bun", [PICK_MJS], {
+      cwd: film,
+      env: { ...process.env, MC_VAULT_ROOT: vault },
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    expect(result.status, result.stderr).toBe(0);
+    const files = unzipSync(readFileSync(join(film, "assets/public/picked.zip")));
+    expect(files["assets/minecraft/textures/block/oak_leaves.png"]).toEqual(new Uint8Array([4, 5]));
+    expect(files["assets/minecraft/models/block/oak_leaves.json"]).toBeUndefined();
+  },
+);
 
 test("updatePicks & removePicks preserve licence metadata, deduplicate, and optionally skip zip build", async () => {
   const { vault, film } = makePickEnv();

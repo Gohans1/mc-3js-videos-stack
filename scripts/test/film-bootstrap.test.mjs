@@ -36,9 +36,12 @@ const fixture = () => {
     "scripts/vault.mjs",
     "packages/live-studio/init.mjs",
     "packages/live-studio/src/cli.mjs",
+    "packages/live-studio/src/compact-json.mjs",
     "packages/live-studio/src/edit-protection.mjs",
     "packages/live-studio/src/merge-edits.mjs",
     "packages/mc-assets/pick.mjs",
+    "packages/mc-assets/src/catalog.ts",
+    "packages/mc-assets/src/picks-manifest.ts",
   ])
     put(root, file, readFileSync(join(ROOT, file), "utf8"));
   cpSync(join(ROOT, "packages/live-studio/demo"), join(root, "packages/live-studio/demo"), {
@@ -249,6 +252,45 @@ test("setup returns failure when local assets are missing, then succeeds after r
     expect(ready.status, ready.stderr).toBe(0);
     expect(existsSync(join(root, "vault/packs"))).toBe(true);
     expect(ready.stdout).toContain("next:");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("setup forwards repeatable --vault-zip arguments and completes without requiring vault/tools", () => {
+  const root = fixture();
+  try {
+    put(root, "vault.json", {
+      root: "./vault",
+      requiredDirectories: ["motion", "packs", "mc-sound"],
+      film_links: { mc: "jar" },
+    });
+    rmSync(join(root, "vault/packs"), { recursive: true });
+    put(
+      root,
+      "scripts/setup_vault.mjs",
+      `import { mkdirSync, writeFileSync } from "node:fs";
+const args = process.argv.slice(2);
+writeFileSync("vault/received-args.json", JSON.stringify(args));
+for (const d of ["motion", "packs", "mc-sound"]) mkdirSync("vault/" + d, { recursive: true });`,
+    );
+    const r = run(root, "scripts/setup.mjs", [
+      "--vault-zip",
+      "D:/core.zip",
+      "--vault-zip",
+      "D:/heavy.zip",
+    ]);
+    expect(r.status, r.stderr).toBe(0);
+    expect(json(join(root, "vault/received-args.json"))).toEqual([
+      "--vault-zip",
+      "D:/core.zip",
+      "--vault-zip",
+      "D:/heavy.zip",
+    ]);
+    expect(existsSync(join(root, "vault/tools"))).toBe(false);
+    expect(r.stdout).toContain("Setup complete.");
+    const repoVault = json(join(ROOT, "vault.json"));
+    expect(repoVault.requiredDirectories).not.toContain("tools");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

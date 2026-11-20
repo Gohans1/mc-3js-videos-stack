@@ -1,21 +1,52 @@
 // Cherry-picks blocks & items from vetted packs in vault/packs into assets/public/picked.zip.
 // Can be imported ({ pickBlocks, updatePicks, removePicks }) or run inside a film: bun ../../packages/mc-assets/pick.mjs
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 
 import { LOCAL } from "../../scripts/vault.mjs";
 import { cliArgs, needFilm } from "../live-studio/src/cli.mjs";
-import { compactJson } from "../live-studio/src/timeline_file.mjs";
-import { collectItemDefModels } from "./src/catalog.ts";
+import { compactJson } from "../live-studio/src/compact-json.mjs";
+import {
+  collectBlockstateModels,
+  collectItemDefModels,
+  collectModelOverrides,
+  collectVanillaBlockOverrides,
+  collectVanillaItemOverrides,
+  readPackCatalog,
+  readZipMembers,
+  zipJsonReader,
+} from "./src/catalog.ts";
+import { validatePickManifest } from "./src/picks-manifest.ts";
 
 const FIXED_MTIME = new Date(2026, 0, 1, 0, 0, 0);
+const PACK_METADATA = "pack.mcmeta";
+const picksFingerprint = (picks) =>
+  createHash("sha256")
+    .update(
+      JSON.stringify(
+        picks.map(({ jar, namespace, blocks = [], items = [] }) => [jar, namespace, blocks, items]),
+      ),
+    )
+    .digest("hex");
+const picksFileOf = (cwd) => join(cwd, "pack/picks.json");
+const pickedZipOf = (cwd) => join(cwd, "assets/public/picked.zip");
 
 const defaultPacksDir = () => join(LOCAL, "packs");
 const defaultVanillaJar = () => join(LOCAL, "jar/client_assets.zip");
 
 const bytesEqual = (a, b) => {
+  if (!a || !b) return a === b;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
   return true;
@@ -35,52 +66,62 @@ const assetPathOf = (r, kind) => {
   };
 };
 
-/** Builds `assets/public/picked.zip` from `pack/picks.json` (or `picksOverride`) and the prepared vault packs. */
-export function pickBlocks({
+function buildPickedZip({
   cwd = process.cwd(),
   vaultDir = defaultPacksDir(),
   vanillaJar = defaultVanillaJar(),
   quiet = false,
   picksOverride,
+  strictJars = [],
 } = {}) {
-  const picksPath = join(cwd, "pack/picks.json");
-  const outPath = join(cwd, "assets/public/picked.zip");
-  const picks = picksOverride ?? JSON.parse(readFileSync(picksPath, "utf8"));
+  const outPath = pickedZipOf(cwd);
+  const picks = validatePickManifest(
+    picksOverride ?? JSON.parse(readFileSync(picksFileOf(cwd), "utf8")),
+  );
   const files = {};
   const fileOwners = new Map();
-  let vanillaEntries = null;
+  let vanillaJson;
 
-  const getVanilla = () => {
-    if (vanillaEntries !== null) return vanillaEntries;
-    vanillaEntries = existsSync(vanillaJar)
-      ? unzipSync(readFileSync(vanillaJar), {
-          filter: (f) =>
-            f.name.startsWith("assets/minecraft/blockstates/") && f.name.endsWith(".json"),
-        })
-      : {};
-    return vanillaEntries;
+  const readVanilla = (path) => {
+    vanillaJson ??= existsSync(vanillaJar)
+      ? zipJsonReader(readFileSync(vanillaJar))
+      : () => undefined;
+    return vanillaJson(path);
   };
 
   for (const pick of picks) {
     const { jar, namespace: ns, blocks: ids = [], items = [] } = pick;
-    const entries = unzipSync(readFileSync(join(vaultDir, jar)), {
-      filter: (f) => f.name.startsWith("assets/") && !f.name.endsWith("/"),
-    });
+    const bytes = readFileSync(join(vaultDir, jar));
+    const entries = readPackCatalog(bytes);
+    const readOverlay = zipJsonReader(bytes, entries);
+    const hasOverlay = (path) => entries.has(path);
+    const get = (path) => {
+      if (!entries.has(path)) return undefined;
+      const data = readZipMembers(bytes, entries, [path]).get(path);
+      if (!data) throw new Error(`${jar}: cannot read ${path}`);
+      return data;
+    };
 
     const takeStatus = (path) => {
-      if (!(path in entries)) return "missing";
+      const data = get(path);
+      if (!data) return "missing";
+      const metaPath = `${path}.mcmeta`;
+      const meta = path.endsWith(".png") ? get(metaPath) : undefined;
       if (path in files) {
-        if (bytesEqual(files[path], entries[path])) return "same";
-        console.warn(
-          `Override collision: ${path} in ${jar} keeps earlier pick from ${fileOwners.get(path)}`,
-        );
+        if (bytesEqual(files[path], data) && bytesEqual(files[metaPath], meta)) return "same";
+        const owner = fileOwners.get(path);
+        const message = `Override collision: ${path} in ${jar} keeps earlier pick from ${owner}`;
+        if (strictJars.includes(jar) || strictJars.includes(owner)) {
+          throw new Error(`${message}; unpick the conflicting asset before choosing this source`);
+        }
+        console.warn(message);
         return "kept";
       }
-      files[path] = entries[path];
+      files[path] = data;
       fileOwners.set(path, jar);
-      if (path.endsWith(".png") && `${path}.mcmeta` in entries) {
-        files[`${path}.mcmeta`] = entries[`${path}.mcmeta`];
-        fileOwners.set(`${path}.mcmeta`, jar);
+      if (meta) {
+        files[metaPath] = meta;
+        fileOwners.set(metaPath, jar);
       }
       return "added";
     };
@@ -88,29 +129,30 @@ export function pickBlocks({
 
     const resolvedModels = new Map();
     const activeModels = new Set();
-    const model = (r, { optionalMissingMinecraft = true } = {}) => {
+    const model = (r, ownerId) => {
+      const by = ownerId ? ` [needed by ${ownerId}]` : "";
       const target = assetPathOf(r, "models");
       if (!target) return false;
       if (activeModels.has(target.path)) return true;
       if (resolvedModels.has(target.path)) {
         const cachedOk = resolvedModels.get(target.path);
         if (cachedOk) return true;
-        if (target.space === "minecraft" && optionalMissingMinecraft) return false;
+        if (target.space === "minecraft") return false;
         throw new Error(
-          `${jar}: model missing (${target.path}); restore the jar or fix pack/picks.json`,
+          `${jar}: model missing (${target.path})${by}; restore the jar or fix pack/picks.json`,
         );
       }
-      if (!(target.path in entries)) {
+      if (!entries.has(target.path)) {
         if (target.path in files) {
           resolvedModels.set(target.path, true);
           return true;
         }
-        if (target.space === "minecraft" && optionalMissingMinecraft) {
+        if (target.space === "minecraft") {
           resolvedModels.set(target.path, false);
           return false;
         }
         throw new Error(
-          `${jar}: model missing (${target.path}); restore the jar or fix pack/picks.json`,
+          `${jar}: model missing (${target.path})${by}; restore the jar or fix pack/picks.json`,
         );
       }
       activeModels.add(target.path);
@@ -121,13 +163,13 @@ export function pickBlocks({
           return true;
         }
         const m = JSON.parse(strFromU8(files[target.path]));
-        if (m.parent) model(m.parent, { optionalMissingMinecraft: true });
+        if (m.parent) model(m.parent, ownerId);
         for (const t of Object.values(m.textures ?? {})) {
           if (typeof t === "string" && !t.startsWith("#")) {
             const tp = assetPathOf(t, "textures");
             if (!tp) continue;
             if (!take(tp.path) && tp.space !== "minecraft") {
-              throw new Error(`${jar}: texture ${t} missing (${tp.path})`);
+              throw new Error(`${jar}: texture ${t} missing (${tp.path})${by}`);
             }
           }
         }
@@ -138,78 +180,66 @@ export function pickBlocks({
       }
     };
 
-    const blockstateModels = (s, optionalMissing) => {
-      const groups = [
-        ...Object.values(s.variants ?? {}),
-        ...(s.multipart ?? []).map((p) => p.apply),
-      ];
-      for (const v of groups) {
-        for (const one of Array.isArray(v) ? v : [v]) {
-          if (one?.model) model(one.model, { optionalMissingMinecraft: optionalMissing });
-        }
-      }
+    const takeOverrides = ({ models, textures }, ownerId) => {
+      for (const ref of models) model(ref, ownerId);
+      for (const path of textures) take(path);
+    };
+    const takeRoots = (refs, ownerId) => {
+      for (const ref of refs) model(ref, ownerId);
+      takeOverrides(collectModelOverrides(refs, readVanilla, readOverlay, hasOverlay), ownerId);
     };
 
     for (const id of ids) {
+      const ownerId = `block:${ns}:${id}`;
       const state = `assets/${ns}/blockstates/${id}.json`;
       const stState = takeStatus(state);
       if (stState !== "missing") {
         if (stState !== "kept") {
-          blockstateModels(JSON.parse(strFromU8(files[state])), true);
+          takeRoots(collectBlockstateModels(JSON.parse(strFromU8(files[state]))), ownerId);
         }
         continue;
       }
       if (ns === "minecraft") {
-        let matched = false;
-        const vState = getVanilla()[state];
-        if (vState) {
-          const parsed = JSON.parse(strFromU8(vState));
-          const groups = [
-            ...Object.values(parsed.variants ?? {}),
-            ...(parsed.multipart ?? []).map((p) => p.apply),
-          ];
-          for (const v of groups) {
-            for (const one of Array.isArray(v) ? v : [v]) {
-              if (one?.model && model(one.model, { optionalMissingMinecraft: true })) {
-                matched = true;
-              }
-            }
-          }
-        }
-        if (model(`minecraft:block/${id}`, { optionalMissingMinecraft: true })) matched = true;
-        if (matched) continue;
+        const overrides = collectVanillaBlockOverrides(id, readVanilla, readOverlay, hasOverlay);
+        takeOverrides(overrides, ownerId);
+        if (overrides.models.size || overrides.textures.size) continue;
       }
-      throw new Error(`${jar}: no blockstate ${state}`);
+      throw new Error(`${jar}: no blockstate ${state} [needed by ${ownerId}]`);
     }
 
     for (const id of items) {
+      const ownerId = `item:${ns}:${id}`;
       const itemDef = `assets/${ns}/items/${id}.json`;
       const stDef = takeStatus(itemDef);
       const hasDef = stDef !== "missing";
       if (stDef === "added" || stDef === "same") {
         const parsed = JSON.parse(strFromU8(files[itemDef]));
-        for (const ref of collectItemDefModels(parsed)) {
-          model(ref, { optionalMissingMinecraft: true });
-        }
+        takeRoots(collectItemDefModels(parsed), ownerId);
+      }
+      if (ns === "minecraft" && !hasDef) {
+        const overrides = collectVanillaItemOverrides(id, readVanilla, readOverlay, hasOverlay);
+        takeOverrides(overrides, ownerId);
+        if (overrides.models.size || overrides.textures.size) continue;
       }
       const itemModelRef = `${ns}:item/${id}`;
       const fallbackPath = `assets/${ns}/models/item/${id}.json`;
-      if (fallbackPath in entries) {
-        model(itemModelRef, { optionalMissingMinecraft: true });
+      if (entries.has(fallbackPath)) {
+        takeRoots([itemModelRef], ownerId);
       } else if (!hasDef) {
         throw new Error(
-          `${jar}: model missing (${fallbackPath}); restore the jar or fix pack/picks.json`,
+          `${jar}: model missing (${fallbackPath}) [needed by ${ownerId}]; restore the jar or fix pack/picks.json`,
         );
       }
     }
   }
 
-  files["pack.mcmeta"] = strToU8(
+  files[PACK_METADATA] = strToU8(
     JSON.stringify({
       pack: {
         pack_format: 75,
         description: "Blocks picked from the vault's mod packs (mc-assets/pick.mjs)",
       },
+      mc_films_picks_sha256: picksFingerprint(picks),
     }),
   );
 
@@ -217,11 +247,8 @@ export function pickBlocks({
   for (const path of Object.keys(files).sort()) {
     ordered[path] = [files[path], { level: 6, mtime: FIXED_MTIME }];
   }
-  mkdirSync(dirname(outPath), { recursive: true });
-  const tmp = `${outPath}.new`;
-  writeFileSync(tmp, zipSync(ordered));
-  renameSync(tmp, outPath);
-  const kb = Math.round(statSync(outPath).size / 1e3);
+  const bytes = zipSync(ordered);
+  const kb = Math.round(bytes.length / 1e3);
   const count = (k) => picks.reduce((n, p) => n + (p[k]?.length ?? 0), 0);
   const summary = {
     outPath,
@@ -230,27 +257,89 @@ export function pickBlocks({
     blocks: count("blocks"),
     items: count("items"),
   };
-  if (!quiet) {
-    console.log(
-      `${outPath}: ${summary.fileCount} files, ${summary.kb} KB; ${summary.blocks} blocks, ${summary.items} items`,
-    );
-  }
-  return summary;
+  return { bytes, summary, quiet };
 }
 
-function writePicksJson(picksPath, picks) {
-  mkdirSync(dirname(picksPath), { recursive: true });
-  const tmp = `${picksPath}.new-${process.pid}`;
-  writeFileSync(tmp, `${compactJson(picks)}\n`);
-  renameSync(tmp, picksPath);
+function stagePickFiles(files) {
+  const staged = [];
+  const discard = () => {
+    for (const { temp } of staged) rmSync(temp, { force: true });
+  };
+  try {
+    for (const [path, content] of files) {
+      const target = lstatSync(path, { throwIfNoEntry: false });
+      if (target && !target.isFile()) throw new Error(`Expected a regular file at ${path}`);
+      if (target && !(target.mode & 0o222))
+        throw new Error(`Cannot replace read-only file ${path}`);
+      mkdirSync(dirname(path), { recursive: true });
+      const temp = `${path}.new-${process.pid}`;
+      staged.push({ path, temp });
+      writeFileSync(temp, content);
+    }
+  } catch (error) {
+    discard();
+    throw error;
+  }
+  return {
+    commit() {
+      try {
+        for (const { path, temp } of staged) renameSync(temp, path);
+      } finally {
+        discard();
+      }
+    },
+    discard,
+  };
+}
+
+function summarizeZip(zip) {
+  if (!zip) return null;
+  const { outPath, fileCount, kb, blocks, items } = zip.summary;
+  if (!zip.quiet)
+    console.log(`${outPath}: ${fileCount} files, ${kb} KB; ${blocks} blocks, ${items} items`);
+  return zip.summary;
+}
+
+/** Builds `assets/public/picked.zip` from the film's manifest and the prepared vault packs. */
+export function pickBlocks(options = {}) {
+  const zip = buildPickedZip(options);
+  stagePickFiles([[zip.summary.outPath, zip.bytes]]).commit();
+  return summarizeZip(zip);
+}
+
+/** Builds a temporary in-memory picked ZIP for read-only previews without touching film files. */
+export function buildPickedZipBytes({
+  picks,
+  vaultDir = defaultPacksDir(),
+  vanillaJar = defaultVanillaJar(),
+} = {}) {
+  if (!Array.isArray(picks)) throw new Error("buildPickedZipBytes requires a picks array");
+  return buildPickedZip({ picksOverride: picks, vaultDir, vanillaJar, quiet: true }).bytes;
+}
+
+export function pickedZipState(cwd, picks) {
+  const path = pickedZipOf(cwd);
+  const exists = existsSync(path);
+  if (!exists) return { path, exists, stale: picks.length > 0 };
+  try {
+    const contents = unzipSync(readFileSync(path), {
+      filter: (entry) => entry.name === PACK_METADATA,
+    });
+    const metadata = JSON.parse(strFromU8(contents[PACK_METADATA]));
+    return {
+      path,
+      exists,
+      stale: metadata.mc_films_picks_sha256 !== picksFingerprint(picks),
+    };
+  } catch {
+    return { path, exists, stale: true };
+  }
 }
 
 export function readPicksJson(cwd) {
-  const picksPath = join(cwd, "pack/picks.json");
+  const picksPath = picksFileOf(cwd);
   if (!existsSync(picksPath)) return [];
-  const raw = JSON.parse(readFileSync(picksPath, "utf8"));
-  if (!Array.isArray(raw)) throw new Error("pack/picks.json must be a JSON array");
-  return raw;
+  return validatePickManifest(JSON.parse(readFileSync(picksPath, "utf8")));
 }
 
 function mergePickGroup(picks, { jar, namespace, blocks = [], items = [], licence, page }) {
@@ -292,7 +381,7 @@ function mergePickGroup(picks, { jar, namespace, blocks = [], items = [], licenc
 }
 
 /** Validates/builds `picked.zip` before atomically committing multiple pack picks into `pack/picks.json`. */
-export function updatePicksBatch(
+export function preparePicksBatch(
   cwd,
   groups,
   {
@@ -300,19 +389,41 @@ export function updatePicksBatch(
     vanillaJar = defaultVanillaJar(),
     build = true,
     quiet = false,
+    strictJars = [],
   } = {},
 ) {
-  const picksPath = join(cwd, "pack/picks.json");
-  const picks = readPicksJson(cwd).map((p) => structuredClone(p));
+  const picks = readPicksJson(cwd);
   const added = [];
   for (const g of groups) {
     added.push(...mergePickGroup(picks, g));
   }
-  const zipSummary = build
-    ? pickBlocks({ cwd, vaultDir, vanillaJar, quiet, picksOverride: picks })
+  return preparePickWrite(
+    cwd,
+    picks,
+    { vaultDir, vanillaJar, build, quiet, strictJars },
+    { added },
+  );
+}
+
+function preparePickWrite(cwd, picks, { vaultDir, vanillaJar, build, quiet, strictJars }, result) {
+  const file = picksFileOf(cwd);
+  const valid = validatePickManifest(picks);
+  const zip = build
+    ? buildPickedZip({ cwd, vaultDir, vanillaJar, quiet, strictJars, picksOverride: valid })
     : null;
-  writePicksJson(picksPath, picks);
-  return { file: picksPath, picks, added, built: zipSummary };
+  const files = zip ? [[zip.summary.outPath, zip.bytes]] : [];
+  const staged = stagePickFiles([...files, [file, `${compactJson(valid)}\n`]]);
+  return {
+    commit() {
+      staged.commit();
+      return { file, picks: valid, ...result, built: summarizeZip(zip) };
+    },
+    discard: staged.discard,
+  };
+}
+
+export function updatePicksBatch(cwd, groups, options) {
+  return preparePicksBatch(cwd, groups, options).commit();
 }
 
 /** Atomically merges picked blocks/items into `pack/picks.json` and rebuilds `picked.zip` unless `build === false`. */
@@ -340,56 +451,38 @@ export function updatePicks(
 }
 
 /** Removes blocks/items from `pack/picks.json`, prunes empty pack entries, and rebuilds `picked.zip` unless `build === false`. */
-export function removePicks(
+export function removePicksBatch(
   cwd,
+  groups,
   {
-    jar,
-    namespace,
-    blocks = [],
-    items = [],
     vaultDir = defaultPacksDir(),
     vanillaJar = defaultVanillaJar(),
     build = true,
     quiet = false,
-  },
+  } = {},
 ) {
-  const picksPath = join(cwd, "pack/picks.json");
-  const current = readPicksJson(cwd).map((p) => structuredClone(p));
-  const blockSet = new Set(blocks);
-  const itemSet = new Set(items);
+  let picks = readPicksJson(cwd);
   const removed = [];
-
-  const next = [];
-  for (const p of current) {
-    const matchPack = (!jar || p.jar === jar) && (!namespace || p.namespace === namespace);
-    if (!matchPack) {
-      next.push(p);
-      continue;
-    }
-    if (Array.isArray(p.blocks) && blockSet.size) {
-      p.blocks = p.blocks.filter((id) => {
-        if (!blockSet.has(id)) return true;
-        removed.push(`block:${p.namespace}:${id}`);
+  for (const { jar, namespace, blocks = [], items = [] } of groups) {
+    const filter = (p, names, ids, kind) =>
+      names.filter((id) => {
+        if (!ids.includes(id)) return true;
+        removed.push(`${kind}:${p.namespace}:${id}`);
         return false;
       });
-    }
-    if (Array.isArray(p.items) && itemSet.size) {
-      p.items = p.items.filter((id) => {
-        if (!itemSet.has(id)) return true;
-        removed.push(`item:${p.namespace}:${id}`);
-        return false;
-      });
-    }
-    if ((p.blocks?.length ?? 0) > 0 || (p.items?.length ?? 0) > 0) {
-      next.push(p);
-    }
+    picks = picks.filter((p) => {
+      if ((jar && p.jar !== jar) || (namespace && p.namespace !== namespace)) return true;
+      if (p.blocks && blocks.length) p.blocks = filter(p, p.blocks, blocks, "block");
+      if (p.items && items.length) p.items = filter(p, p.items, items, "item");
+      return p.blocks?.length || p.items?.length;
+    });
   }
+  if (!removed.length) return { file: picksFileOf(cwd), picks, removed, built: null };
+  return preparePickWrite(cwd, picks, { vaultDir, vanillaJar, build, quiet }, { removed }).commit();
+}
 
-  const zipSummary = build
-    ? pickBlocks({ cwd, vaultDir, vanillaJar, quiet, picksOverride: next })
-    : null;
-  writePicksJson(picksPath, next);
-  return { file: picksPath, picks: next, removed, built: zipSummary };
+export function removePicks(cwd, { jar, namespace, blocks, items, ...options }) {
+  return removePicksBatch(cwd, [{ jar, namespace, blocks, items }], options);
 }
 
 if (import.meta.main) {
@@ -397,7 +490,7 @@ if (import.meta.main) {
     `Builds assets/public/picked.zip from pack/picks.json and vault/packs, inside a film.
   bun ../../packages/mc-assets/pick.mjs
 Each pick: {jar, namespace, blocks: [blockstate ids], items: [item ids], licence, page}; items load with
-block-model-renderer's loadModel(group, assets, await resolveModelData(assets, {model: "<ns>:item/<id>", type: "item"}), {display: {}}) (assets = await prepareAssets(sources); parseItemDefinition(assets, "<ns>:<id>") for 1.21.4+ defs).
+await itemModel(assets, "<ns>:<id>") from mc-assets/model (or low-level loadModel(group, assets, await resolveModelData(assets, {model: "<ns>:item/<id>", type: "item"}), {display: {}}) with assets = await prepareAssets(sources)).
 Preserves namespaces, parent models, textures and animation metadata. Minecraft references come from client_assets.zip.
 Keep each jar's licence and source page in pack/picks.json; this generated zip is private and ignored by Git.
 Already called by bun run asset pick / bun run link <film>; no download or creative asset restriction.

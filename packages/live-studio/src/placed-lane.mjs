@@ -6,13 +6,24 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
-  statSync,
 } from "node:fs";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { LOCAL, vaultPath } from "../../../scripts/vault.mjs";
-import { pickBlocks, readPicksJson, removePicks, updatePicksBatch } from "../../mc-assets/pick.mjs";
-import { loadMcAssetsCatalog, scanGohansPack, scanVaultMobs } from "../../mc-assets/src/catalog.ts";
+import {
+  pickedZipState,
+  preparePicksBatch,
+  readPicksJson,
+  removePicksBatch,
+  updatePicksBatch,
+} from "../../mc-assets/pick.mjs";
+import {
+  blockPropertyWarnings,
+  loadMcAssetsCatalog,
+  matchesMcPackSource,
+  scanGohansPack,
+  scanVaultMobs,
+} from "../../mc-assets/src/catalog.ts";
 import { PlacedTimeline } from "./contract.ts";
 import { projectClock } from "./project-clock.mjs";
 import { PROP_CODE_EXTS, PROP_MEDIA_EXTS } from "./prop-library.ts";
@@ -169,18 +180,12 @@ export async function timelinePlaced(project, conf, options = {}) {
 export function timelinePicks(project) {
   const picksPath = join(project, "pack/picks.json");
   const picks = readPicksJson(project);
-  const zipPath = join(project, "assets/public/picked.zip");
-  const zipExists = existsSync(zipPath);
-  const picksMtime = existsSync(picksPath) ? statSync(picksPath).mtimeMs : 0;
-  const zipMtime = zipExists ? statSync(zipPath).mtimeMs : 0;
   const count = (k) => picks.reduce((n, p) => n + (p[k]?.length ?? 0), 0);
   return {
     file: picksPath,
     data: picks,
     zip: {
-      path: zipPath,
-      exists: zipExists,
-      stale: picks.length > 0 && (!zipExists || zipMtime + 50 < picksMtime),
+      ...pickedZipState(project, picks),
       blocks: count("blocks"),
       items: count("items"),
     },
@@ -193,14 +198,8 @@ export function timelinePicks(project) {
 
 function matchSourceFilter(item, source) {
   if (!source) return true;
-  const s = source.toLowerCase();
-  const clean = s.replace(/\.(?:jar|zip)$/i, "");
-  return (
-    item.source.toLowerCase() === s ||
-    item.source.toLowerCase() === clean ||
-    item.pack?.toLowerCase() === s ||
-    item.pack?.replace(/\.(?:jar|zip)$/i, "").toLowerCase() === clean
-  );
+  if (item.pack) return matchesMcPackSource(source, item.pack, item.source);
+  return item.source.toLowerCase() === source.toLowerCase();
 }
 
 function parsePickTarget(rawId) {
@@ -232,9 +231,12 @@ function resolveCatalogCandidates(cat, target, source) {
       (target.kind ? x.kind === target.kind : x.kind === "block" || x.kind === "item") &&
       x.namespace === target.namespace &&
       x.name === target.name &&
-      (source ? matchSourceFilter(x, source) : x.type !== "vanilla"),
+      x.type !== "vanilla" &&
+      (source
+        ? matchSourceFilter(x, source)
+        : x.namespace !== "minecraft" || x.type !== "resourcepack"),
   );
-  if (!source && target.namespace === "minecraft") {
+  if (target.namespace === "minecraft" && !list.length && (!source || source === "minecraft")) {
     throw new AssetUsageError(
       `Vanilla "${target.kind ?? "block"}:minecraft:${target.name}" does not need picking; pass --source <pack> only to pick a resource-pack override`,
       2,
@@ -253,7 +255,7 @@ function resolveCatalogCandidates(cat, target, source) {
     );
   }
   if (list.length > 1) {
-    const packs = [...new Set(list.map((x) => x.source))];
+    const packs = [...new Set(list.map((x) => x.pack ?? x.source))];
     const kinds = [...new Set(list.map((x) => `${x.kind}:${x.namespace}:${x.name}`))];
     if (packs.length === 1 && kinds.length > 1) {
       throw new AssetUsageError(
@@ -289,11 +291,13 @@ export function pickObjects(
   const parsed = parseAndValidatePickTargets(ids, kind);
 
   const cat = loadMcAssetsCatalog({ vaultRoot, quiet: true });
+  const picks = readPicksJson(project);
   const grouped = new Map();
   const warnings = [];
   for (const target of parsed) {
     const hit = resolveCatalogCandidates(cat, target, source);
     if (!hit.pack) throw new AssetUsageError(`Cannot pick non-pack asset ${hit.id}`, 2);
+    assertPickSource(findPick(picks, hit.kind, hit.namespace, hit.name), hit);
     if (hit.renderable === false) {
       warnings.push(
         `"${hit.id}" is marked non-renderable (${hit.brokenReason ?? "unknown loader or missing files"})`,
@@ -318,36 +322,41 @@ export function pickObjects(
 
   const vaultDir = join(vaultRoot, "packs");
   const vanillaJar = join(vaultRoot, "jar/client_assets.zip");
-  const out = updatePicksBatch(project, [...grouped.values()], {
+  const groups = [...grouped.values()];
+  const out = updatePicksBatch(project, groups, {
     vaultDir,
     vanillaJar,
     build,
     quiet: true,
+    strictJars: groups.map((group) => group.jar),
   });
   return warnings.length ? { ...out, warnings } : out;
 }
 
+function findPick(picks, kind, namespace, name) {
+  const key = kind === "block" ? "blocks" : "items";
+  return picks.find((row) => row.namespace === namespace && row[key]?.includes(name));
+}
+
+function assertPickSource(existing, hit) {
+  if (existing && existing.jar !== hit.pack) {
+    throw new AssetUsageError(
+      `${hit.id} already uses ${existing.jar} for this film; unpick it with --source ${existing.jar} before selecting ${hit.pack ?? hit.source}`,
+    );
+  }
+}
+
 function resolvePickJarsBySource(picks, vaultRoot, source) {
-  const s = source.toLowerCase();
-  const clean = s.replace(/\.(?:jar|zip)$/i, "");
-  let slugToJars;
+  const slugs = new Map();
   const idxFile = join(vaultRoot, "packs_index.json");
   if (existsSync(idxFile)) {
     try {
       const idx = JSON.parse(readFileSync(idxFile, "utf8"));
-      slugToJars = new Set(
-        Object.entries(idx)
-          .filter(([, m]) => m?.slug?.toLowerCase() === s || m?.slug?.toLowerCase() === clean)
-          .map(([jar]) => jar.toLowerCase()),
-      );
+      for (const [jar, meta] of Object.entries(idx))
+        if (typeof meta?.slug === "string") slugs.set(jar.toLowerCase(), meta.slug);
     } catch {}
   }
-  return picks.filter(
-    (p) =>
-      p.jar.toLowerCase() === s ||
-      p.jar.replace(/\.(jar|zip)$/i, "").toLowerCase() === clean ||
-      Boolean(slugToJars?.has(p.jar.toLowerCase())),
-  );
+  return picks.filter(({ jar }) => matchesMcPackSource(source, jar, slugs.get(jar.toLowerCase())));
 }
 
 export async function unpickObjects(
@@ -358,56 +367,51 @@ export async function unpickObjects(
   const vaultDir = join(vaultRoot, "packs");
   const vanillaJar = join(vaultRoot, "jar/client_assets.zip");
   const picks = readPicksJson(project);
-  const removed = [];
   const warnings = [];
   const toRemove = parseAndValidatePickTargets(ids, kind);
   const sourceMatches = source ? resolvePickJarsBySource(picks, vaultRoot, source) : undefined;
-
+  const groups = [];
   for (const t of toRemove) {
+    const selection = {
+      namespace: t.namespace,
+      blocks: !t.kind || t.kind === "block" ? [t.name] : [],
+      items: !t.kind || t.kind === "item" ? [t.name] : [],
+    };
     if (source) {
-      const matchingPacks = sourceMatches.filter((p) => p.namespace === t.namespace);
+      const matchingPacks = sourceMatches.filter(
+        (p) =>
+          p.namespace === t.namespace &&
+          (selection.blocks.some((name) => p.blocks?.includes(name)) ||
+            selection.items.some((name) => p.items?.includes(name))),
+      );
+      const jars = [...new Set(matchingPacks.map((p) => p.jar))];
+      if (jars.length > 1)
+        throw new AssetUsageError(
+          `--source ${source} matches multiple picks; choose one archive filename (${jars.join(", ")})`,
+        );
       if (!matchingPacks.length) {
         warnings.push(
           `No picked entry matching ${t.kind ? `${t.kind}:` : ""}${t.namespace}:${t.name} under --source ${source}`,
         );
         continue;
       }
-      for (const m of matchingPacks) {
-        const res = removePicks(project, {
-          jar: m.jar,
-          namespace: t.namespace,
-          blocks: !t.kind || t.kind === "block" ? [t.name] : [],
-          items: !t.kind || t.kind === "item" ? [t.name] : [],
-          vaultDir,
-          vanillaJar,
-          build: false,
-          quiet: true,
-        });
-        removed.push(...res.removed);
-      }
+      for (const m of matchingPacks) groups.push({ ...selection, jar: m.jar });
     } else {
-      const res = removePicks(project, {
-        jar: undefined,
-        namespace: t.namespace,
-        blocks: !t.kind || t.kind === "block" ? [t.name] : [],
-        items: !t.kind || t.kind === "item" ? [t.name] : [],
-        vaultDir,
-        vanillaJar,
-        build: false,
-        quiet: true,
-      });
-      removed.push(...res.removed);
+      groups.push(selection);
     }
   }
 
-  const built =
-    build && removed.length > 0
-      ? pickBlocks({ cwd: project, vaultDir, vanillaJar, quiet: true })
-      : null;
+  const result = removePicksBatch(project, groups, { vaultDir, vanillaJar, build, quiet: true });
+  const { removed } = result;
   const placedDoc = await readPlacedDoc(project, conf).catch(() => null);
   if (placedDoc?.data) {
     for (const [objName, obj] of Object.entries(placedDoc.data)) {
-      if (removed.includes(obj?.what)) {
+      if (
+        removed.includes(obj?.what) &&
+        !result.picks.some((p) =>
+          p.blocks?.some((name) => obj.what === `block:${p.namespace}:${name}`),
+        )
+      ) {
         warnings.push(`placed object "${objName}" still uses ${obj.what}`);
       }
     }
@@ -416,10 +420,7 @@ export async function unpickObjects(
     warnings.push("Nothing unpicked (requested ids were not in pack/picks.json)");
   }
   return {
-    file: join(project, "pack/picks.json"),
-    picks: readPicksJson(project),
-    removed,
-    built,
+    ...result,
     warnings,
   };
 }
@@ -768,6 +769,7 @@ export async function placeObject(
 ) {
   const vaultRoot = resolvedVaultRoot();
   let id = rawId;
+  if (kind === "block" && /^[^:]+:[^:]+$/.test(id)) id = `block:${id}`;
   if (!id.includes(":") && kind) {
     const lk = kind.toLowerCase();
     if (lk === "mob") id = `mob:${id}`;
@@ -789,7 +791,7 @@ export async function placeObject(
       if (hits.length === 1) id = hits[0].id;
       else if (hits.length > 1) {
         const packSources = hits.some((h) => h.pack)
-          ? [...new Set(hits.filter((h) => h.pack).map((h) => h.source))].slice(0, 4)
+          ? [...new Set(hits.filter((h) => h.pack).map((h) => h.pack))].slice(0, 4)
           : [];
         const srcHint = packSources.length
           ? ` with --source <pack> (${packSources.join(", ")})`
@@ -843,6 +845,7 @@ export async function placeObject(
       2,
     );
   }
+  if (force) throw new AssetUsageError("--force applies only to prop:global:<id>");
   const atFrom = from ?? 0;
   if (typeof atFrom !== "number" || !Number.isFinite(atFrom) || atFrom < 0) {
     throw new AssetUsageError("--from must be a finite non-negative number", 2);
@@ -850,7 +853,9 @@ export async function placeObject(
 
   validatePlacedProps(props, false);
   let what = id;
-  let picked = null;
+  let pickGroup;
+  let refreshPicks = false;
+  let selectedJar;
   const warnings = [];
   if (!Object.values(conf?.keyFiles ?? {}).includes("placed")) {
     warnings.push(
@@ -858,10 +863,15 @@ export async function placeObject(
     );
   }
   if (/^mob:/i.test(id)) {
+    if (noPick) throw new AssetUsageError("--no-pick applies only to blocks");
     const mobName = id.slice(4);
     const mobs = scanVaultMobs(vaultRoot);
-    const mob = mobs.find((m) => m.name === mobName);
-    if (!mob) throw new AssetUsageError(`Unknown mob "${id}" in vault mcasset/1.21.11`, 1);
+    const mob = mobs.find((m) => m.name === mobName && matchSourceFilter(m, source));
+    if (!mob)
+      throw new AssetUsageError(
+        `Unknown mob "${id}"${source ? ` under --source ${source}` : " in vault mcasset/1.21.11"}`,
+        1,
+      );
     validateMobClips(mob, [props.clip, props.keyClip]);
     what = `mob:${mobName}`;
   } else if (/^block:/i.test(id)) {
@@ -871,10 +881,14 @@ export async function placeObject(
     const blockName = parts.slice(2).join(":");
     what = `block:${ns}:${blockName}`;
     if (ns === "gohans") {
-      const gohans = scanGohansPack();
-      if (!gohans.some((g) => g.name === blockName)) {
+      const hit = scanGohansPack().find(
+        (g) => g.name === blockName && matchSourceFilter(g, source),
+      );
+      if (!hit) {
         throw new AssetUsageError(`Unknown built-in gohans block "${what}"`, 1);
       }
+      if (props.properties)
+        warnings.push(...blockPropertyWarnings(props.properties, hit.props ?? {}));
     } else {
       const cat = loadMcAssetsCatalog({ vaultRoot, quiet: true });
       const resolved = cat.items.filter(
@@ -882,7 +896,7 @@ export async function placeObject(
           x.kind === "block" &&
           x.namespace === ns &&
           x.name === blockName &&
-          (source ? matchSourceFilter(x, source) : x.type !== "resourcepack"),
+          (!source || matchSourceFilter(x, source)),
       );
       if (!resolved.length) {
         throw new AssetUsageError(
@@ -890,48 +904,41 @@ export async function placeObject(
           1,
         );
       }
-      if (resolved.every((x) => x.renderable === false)) {
+      const picks = readPicksJson(project);
+      const current = findPick(picks, "block", ns, blockName);
+      const active = current && resolved.find((hit) => hit.pack === current.jar);
+      const vanilla = !source && resolved.find((hit) => hit.type === "vanilla");
+      const candidates =
+        !source && ns === "minecraft"
+          ? resolved.filter((hit) => hit.type !== "resourcepack")
+          : resolved;
+      const hit = active || vanilla || (candidates.length === 1 ? candidates[0] : undefined);
+      if (!hit && !noPick) {
+        const eligible = candidates.length ? candidates : resolved;
+        throw new AssetUsageError(
+          `Choose --source <pack> for ${what} (${eligible.map((entry) => entry.pack ?? entry.source).join(", ")})`,
+        );
+      }
+      if (!noPick && hit) assertPickSource(current, hit);
+      selectedJar = hit?.pack;
+      if (hit?.renderable === false) {
         warnings.push(
-          `"${what}" is marked non-renderable (${resolved[0].brokenReason ?? "unknown loader or missing files"}); verify visually with bun run render stills`,
+          `"${what}" is marked non-renderable (${hit.brokenReason ?? "unknown loader or missing files"}); verify visually with bun run render stills`,
         );
       }
-      const packHits = resolved.filter((x) => Boolean(x.pack));
-      if (!noPick && packHits.length && (ns !== "minecraft" || source)) {
-        const currentPicks = readPicksJson(project);
-        const alreadyPicked = currentPicks.some(
-          (p) =>
-            p.namespace === ns &&
-            (p.blocks ?? []).includes(blockName) &&
-            packHits.some((h) => p.jar === h.pack),
-        );
-        if (!alreadyPicked) {
-          if (packHits.length > 1) {
-            throw new AssetUsageError(
-              `Ambiguous ${what} in multiple packs (${packHits.map((x) => x.source).join(", ")}): pass --source <pack> (or --no-pick)`,
-              2,
-            );
-          }
-          const hit = packHits[0];
-          picked = updatePicksBatch(
-            project,
-            [
-              {
-                jar: hit.pack,
-                namespace: ns,
-                blocks: [blockName],
-                licence: hit.license,
-                page: hit.url,
-              },
-            ],
-            {
-              vaultDir: join(vaultRoot, "packs"),
-              vanillaJar: join(vaultRoot, "jar/client_assets.zip"),
-              build: true,
-              quiet: true,
-            },
-          );
-        }
+      if (hit?.renderable && props.properties) {
+        warnings.push(...blockPropertyWarnings(props.properties, hit.props ?? {}));
       }
+      if (!noPick && hit?.pack && !current) {
+        pickGroup = {
+          jar: hit.pack,
+          namespace: ns,
+          blocks: [blockName],
+          licence: hit.license,
+          page: hit.url,
+        };
+      }
+      refreshPicks = !noPick && Boolean(active) && pickedZipState(project, picks).stale;
     }
   } else {
     throw new AssetUsageError(
@@ -989,8 +996,24 @@ export async function placeObject(
     keys: [key],
   };
   data[name] = object;
-  const saved = await writePlacedDoc(project, doc, data);
   const heardData = mapPlacedToHeard(data, clock);
+  const staged =
+    pickGroup || refreshPicks
+      ? preparePicksBatch(project, pickGroup ? [pickGroup] : [], {
+          vaultDir: join(vaultRoot, "packs"),
+          vanillaJar: join(vaultRoot, "jar/client_assets.zip"),
+          quiet: true,
+          strictJars: selectedJar ? [selectedJar] : [],
+        })
+      : null;
+  let saved;
+  let picked;
+  try {
+    saved = await writePlacedDoc(project, doc, data);
+    picked = staged?.commit();
+  } finally {
+    staged?.discard();
+  }
   return {
     ...saved,
     data: heardData,

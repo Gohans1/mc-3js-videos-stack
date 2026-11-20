@@ -38,6 +38,7 @@ export interface CliVisibleWhen {
   in?: readonly string[];
   unsetOrIn?: readonly string[];
   unsetOrStartsWith?: readonly string[];
+  and?: CliVisibleWhen;
 }
 
 export interface CliArgDef {
@@ -405,8 +406,16 @@ const assetManifestFlag: CliFlagDef = {
   type: "string",
   hint: "Optional JSON array of assets; relative media paths start at the manifest.",
 };
+const semanticObjectKindFlag: CliFlagDef = {
+  key: "--kind",
+  flag: "--kind",
+  label: "3D asset kind",
+  type: "enum",
+  options: ["object", "block", "item", "mob", "prop"],
+};
 const assetSelectionFlags: readonly CliFlagDef[] = [
   assetManifestFlag,
+  semanticObjectKindFlag,
   {
     key: "--key",
     flag: "--key",
@@ -513,9 +522,18 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             label: "Document",
             type: "string",
             required: true,
-            placeholder: "cam or lights",
+            placeholder: "cam, lights, or keyFile edit name (e.g. cast)",
           },
         ],
+        flags: [
+          {
+            key: "--full",
+            flag: "--full",
+            label: "Include full incoming notice payloads",
+            type: "boolean",
+          },
+        ],
+        meta: { effect: "read" },
       },
       {
         id: "write",
@@ -528,9 +546,46 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             label: "Document",
             type: "string",
             required: true,
-            placeholder: "cam or lights",
+            placeholder: "cam, lights, or keyFile edit name (e.g. cast)",
           },
-          { key: "input", label: "JSON envelope path", type: "string", required: true },
+          {
+            key: "input",
+            label: "JSON envelope path (or '-' for stdin)",
+            type: "string",
+            required: true,
+            placeholder: "- or payload.json",
+          },
+        ],
+        flags: [
+          {
+            key: "--quiet",
+            flag: "--quiet",
+            label: "Compact JSON output",
+            type: "boolean",
+          },
+        ],
+      },
+      {
+        id: "write-many",
+        inheritFlags: true,
+        label: "write-many",
+        summary: "Atomically save multiple documents via /api/together with strict base checks.",
+        args: [
+          {
+            key: "input",
+            label: "Batch JSON path (or '-' for stdin)",
+            type: "string",
+            required: true,
+            placeholder: "- or batch.json",
+          },
+        ],
+        flags: [
+          {
+            key: "--quiet",
+            flag: "--quiet",
+            label: "Compact JSON output",
+            type: "boolean",
+          },
         ],
       },
     ],
@@ -1174,7 +1229,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         inheritFlags: true,
         label: "status",
         summary: "Read catalog coverage, resumable chunks and the shared daily request budget.",
-        flags: [assetManifestFlag],
+        flags: [assetManifestFlag, semanticObjectKindFlag],
       },
       {
         id: "eval",
@@ -1184,6 +1239,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
           "Compare cached lexical, semantic and hybrid retrieval; report missing data separately without API calls.",
         args: [{ key: "cases", label: "Labeled cases JSON", type: "string", required: true }],
         flags: [
+          semanticObjectKindFlag,
           {
             key: "--out",
             flag: "--out",
@@ -1388,6 +1444,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Export selected notes without Jev lesson lookup",
       },
       {
+        key: "--no-lessons",
+        flag: "--no-lessons",
+        label: "Skip Lesson Lookup",
+        type: "boolean",
+        tier: "common",
+        hint: "Print text note details without running Jev lesson lookup",
+      },
+      {
         key: "--cam",
         flag: "--cam",
         label: "Include Film Cam Line",
@@ -1398,7 +1462,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     meta: {
       effect: "read",
       cost: "optional-paid",
-      costHint: "List and --json are free. Text detail runs Jev lesson lookup when configured.",
+      costHint:
+        "List, --json, and --no-lessons are free. Text detail runs Jev lesson lookup when configured.",
       speed: "instant",
       cancellable: true,
       helpMode: "flag",
@@ -3577,11 +3642,19 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
       {
         key: "CHECK",
-        label: "CHECK (motion/seen/touch/text/order)",
+        label: "CHECK (motion/seen/touch/text/order/probe)",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
-        placeholder: "motion:cam,81,83 or order:20,25 or text",
+        placeholder: "motion:cam,81,83 or probe:4 or order:20,25 or text",
+      },
+      {
+        key: "RENDER_FRESH_CACHE",
+        label: "Fresh Chrome profile (bypass shader cache)",
+        type: "boolean",
+        visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        tier: "advanced",
+        hint: "Bypass renders/.chrome-cache/ and launch headless Chrome with an ephemeral temp profile.",
       },
       {
         key: "SAMPLES",
@@ -3603,9 +3676,20 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "INSPECT",
         label: "INSPECT (px,py,pz,lx,ly,lz,fov)",
         type: "string",
+        exclusiveGroup: "render-camera",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "advanced",
         placeholder: "0,2,5,0,1,0,50",
+      },
+      {
+        key: "VIEWS",
+        label: "VIEWS (Multi-angle stills spec or @json)",
+        type: "string",
+        exclusiveGroup: "render-camera",
+        visibleWhen: { field: "target", in: ["stills", "poster"] },
+        tier: "advanced",
+        placeholder: "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50",
+        hint: "Render multiple named Free Cam viewpoints in a single Chrome boot (writes renders/view_<name>_<t>s.jpg; .png for poster).",
       },
       {
         key: "ENTRY",
@@ -3646,7 +3730,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "sheet",
     category: "render",
     summary:
-      "Inspect file pictures: bounded overview, exact native frames, shot/cut sheets, or rendered stills.",
+      "Inspect file pictures: bounded overview, exact native frames, shot/cut sheets, rendered stills, or explicit image lists.",
     runner: "bun-script",
     target: "sheet",
     cwdModes: ["film"],
@@ -3656,37 +3740,67 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Video (Omit = Still PNGs)",
         type: "string",
         choiceSource: "renders",
+        visibleWhen: { field: "images", nonEmpty: false },
         placeholder: "renders/draft_video.mp4",
       },
       {
         key: "target",
         label: "Times / overview / frames / shots / cut",
         type: "string",
-        requiredWhen: { field: "video", nonEmpty: true },
+        visibleWhen: { field: "images", nonEmpty: false },
+        requiredWhen: { field: "video", nonEmpty: true, and: { field: "images", nonEmpty: false } },
         placeholder: "overview, frames, shots, cut, or 10,20,30",
       },
       {
         key: "cutIndex",
         label: "Cut # (with 'cut')",
         type: "number",
-        visibleWhen: { field: "target", in: ["cut"] },
-        requiredWhen: { field: "target", in: ["cut"] },
+        visibleWhen: { field: "target", in: ["cut"], and: { field: "images", nonEmpty: false } },
+        requiredWhen: { field: "target", in: ["cut"], and: { field: "images", nonEmpty: false } },
         placeholder: "4",
       },
       {
         key: "frameTimes",
         label: "Native Frame Times",
         type: "string",
-        visibleWhen: { field: "target", in: ["frames"] },
-        requiredWhen: { field: "target", in: ["frames"] },
+        visibleWhen: { field: "target", in: ["frames"], and: { field: "images", nonEmpty: false } },
+        requiredWhen: {
+          field: "target",
+          in: ["frames"],
+          and: { field: "images", nonEmpty: false },
+        },
         placeholder: "12.2-12.6/12",
       },
       {
         key: "overviewRange",
         label: "Overview Range (Optional)",
         type: "string",
-        visibleWhen: { field: "target", in: ["overview"] },
+        visibleWhen: {
+          field: "target",
+          in: ["overview"],
+          and: { field: "images", nonEmpty: false },
+        },
         placeholder: "10-20/16",
+      },
+      {
+        key: "images",
+        label: "Image Files (Multi-image contact sheet)",
+        type: "string",
+        multi: true,
+        visibleWhen: { field: "video", nonEmpty: false },
+        placeholder: "renders/view_a.png renders/view_b.png",
+        hint: "Pass 1+ PNG/JPG/WEBP paths (instead of video) to stitch a captioned contact sheet.",
+      },
+    ],
+    flags: [
+      {
+        key: "--out",
+        flag: "--out",
+        label: "Output Sheet Path (Image-list mode)",
+        type: "string",
+        tier: "common",
+        visibleWhen: { field: "images", nonEmpty: true, and: { field: "video", nonEmpty: false } },
+        placeholder: "renders/views_sheet.jpg",
       },
     ],
     env: [
@@ -3694,6 +3808,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "START",
         label: "START (Video Start Sec)",
         type: "string",
+        visibleWhen: { field: "images", nonEmpty: false },
         tier: "advanced",
         placeholder: "60",
       },
@@ -4195,11 +4310,22 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     cwdModes: ["root"],
     flags: [
       {
+        key: "--vault-zip",
+        flag: "--vault-zip",
+        label: "Vault Archive Zip / Link (Repeatable)",
+        type: "string",
+        multi: true,
+        multiStyle: "repeat",
+        tier: "common",
+        placeholder: "D:/mc-films-vault-core.zip",
+        hint: "Repeat for split core + heavy archives from bun run pack:vault.",
+      },
+      {
         key: "--sound-zip",
         flag: "--sound-zip",
-        label: "Sound Archive Zip / Link",
+        label: "Legacy Sound Archive Zip / Link",
         type: "string",
-        tier: "common",
+        tier: "advanced",
         placeholder: "D:/mc-films-sound.zip",
       },
     ],
@@ -4211,7 +4337,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       helpMode: "flag",
       confirm: {
         mode: "always",
-        message: "Runs bun install, vault bootstrap downloads/builds, and film symlinks.",
+        message: "Runs bun install, vault bootstrap downloads/builds, and film asset links.",
       },
     },
   },
@@ -4225,11 +4351,22 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     cwdModes: ["root"],
     flags: [
       {
+        key: "--vault-zip",
+        flag: "--vault-zip",
+        label: "Vault Archive Zip / Link (Repeatable)",
+        type: "string",
+        multi: true,
+        multiStyle: "repeat",
+        tier: "common",
+        placeholder: "D:/mc-films-vault-core.zip",
+        hint: "Repeat for split core + heavy archives from bun run pack:vault.",
+      },
+      {
         key: "--sound-zip",
         flag: "--sound-zip",
-        label: "Sound Archive Zip / Link",
+        label: "Legacy Sound Archive Zip / Link",
         type: "string",
-        tier: "common",
+        tier: "advanced",
       },
     ],
     meta: {
@@ -4352,7 +4489,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "asset",
     category: "daily",
     summary:
-      "Pick/unpick MC pack assets, place and edit 2D lanes or 3D placed objects, or copy Global props into src/props/.",
+      "Pick/unpick MC pack assets, preview 3D models beside Steve, place and edit 2D lanes or 3D placed objects, or copy Global props into src/props/.",
     runner: "bun-script",
     target: "asset",
     cwdModes: ["root", "film"],
@@ -4420,6 +4557,64 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         ],
         meta: { effect: "write" as const },
       })),
+      {
+        id: "preview",
+        label: "preview",
+        summary:
+          "Render a labelled 3D Front + 3/4 sheet of blocks/items beside a 1.875m Steve scale figure",
+        inheritFlags: true,
+        args: [
+          {
+            key: "id",
+            label: "Block/Item ID(s) (optional; defaults to pack/picks.json)",
+            type: "string" as const,
+            multi: true,
+            placeholder: "block:minecraft:oak_stairs item:minecraft:iron_sword",
+          },
+        ],
+        flags: [
+          {
+            key: "--kind",
+            flag: "--kind",
+            label: "Asset type filter / default",
+            type: "enum" as const,
+            options: ["block", "item"],
+          },
+          {
+            key: "--source",
+            flag: "--source",
+            label: "Pack slug or jar (disambiguate unpicked vault assets)",
+            type: "string" as const,
+            placeholder: "modern-furniture",
+          },
+          {
+            key: "--out",
+            flag: "--out",
+            label: "Output filename in renders/",
+            type: "string" as const,
+            placeholder: "asset_preview.jpg",
+          },
+          {
+            key: "--size",
+            flag: "--size",
+            label: "Item scale (default 0.42)",
+            type: "number" as const,
+          },
+          {
+            key: "--limit",
+            flag: "--limit",
+            label: "Max assets per sheet (1-36)",
+            type: "number" as const,
+          },
+          {
+            key: "--no-scale",
+            flag: "--no-scale",
+            label: "Hide 1.875m Steve scale figure",
+            type: "boolean" as const,
+          },
+        ],
+        meta: { effect: "write" as const, speed: "short" as const },
+      },
       {
         id: "plan",
         label: "plan",
@@ -4652,6 +4847,53 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
   {
+    id: "pack:vault",
+    label: "pack:vault",
+    category: "setup",
+    summary:
+      "Archive pure static vault assets into split private core + heavy zips (excludes tools/ and cache/).",
+    runner: "bun-script",
+    target: "pack:vault",
+    cwdModes: ["root"],
+    args: [
+      {
+        key: "out",
+        label: "Output Directory or Zip Path (Optional)",
+        type: "string",
+        placeholder: "D:/backup",
+      },
+    ],
+    flags: [
+      {
+        key: "--part",
+        flag: "--part",
+        label: "Archive Part",
+        type: "enum",
+        options: ["split", "core", "heavy", "all"],
+        tier: "common",
+        hint: "split writes core (~1.2 GB) and heavy (~13.8 GB) archives; core/heavy/all writes one zip.",
+      },
+      {
+        key: "--json",
+        flag: "--json",
+        label: "JSON Output",
+        type: "boolean",
+        tier: "advanced",
+      },
+    ],
+    meta: {
+      effect: "write",
+      cost: "free",
+      speed: "long",
+      cancellable: true,
+      helpMode: "flag",
+      confirm: {
+        mode: "always",
+        message: "Packs pure static vault assets into private zip archive(s).",
+      },
+    },
+  },
+  {
     id: "pack:sound",
     label: "pack:sound",
     category: "setup",
@@ -4697,6 +4939,17 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
       { key: "port", label: "Studio Port (1024-65535)", type: "number", placeholder: "47920" },
     ],
+    flags: [
+      {
+        key: "--ratio",
+        flag: "--ratio",
+        label: "Aspect Ratio",
+        type: "enum",
+        options: ["16:9", "9:16"],
+        tier: "common",
+        hint: "Set live-studio.ratio on creation (default 16:9; use 9:16 for Shorts).",
+      },
+    ],
     meta: {
       effect: "write",
       cost: "free",
@@ -4713,7 +4966,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "link",
     label: "link",
     category: "setup",
-    summary: "Symlink vault assets into all films (or selected films) and build pack picks zips.",
+    summary: "Copy vault assets into all films (or selected films) and build pack picks ZIPs.",
     runner: "bun-script",
     target: "link",
     cwdModes: ["root"],
@@ -4772,6 +5025,30 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     cwdModes: ["film"],
     flags: [
       { key: "--lan", flag: "--lan", label: "Bind LAN (0.0.0.0)", type: "boolean", tier: "common" },
+      {
+        key: "--detach",
+        flag: "--detach",
+        label: "Start Detached (Background)",
+        type: "boolean",
+        exclusiveGroup: "studio-mode",
+        tier: "common",
+      },
+      {
+        key: "--status",
+        flag: "--status",
+        label: "Check Running Status",
+        type: "boolean",
+        exclusiveGroup: "studio-mode",
+        tier: "common",
+      },
+      {
+        key: "--stop",
+        flag: "--stop",
+        label: "Stop Recorded Studio",
+        type: "boolean",
+        exclusiveGroup: "studio-mode",
+        tier: "common",
+      },
     ],
     meta: {
       effect: "daemon",
@@ -5734,10 +6011,20 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     id: "timeline:fmt",
     label: "timeline:fmt",
     category: "pipeline",
-    summary: "Format a film's src/timeline/*.json files using compactJson.",
+    summary:
+      "Format src/timeline/*.json files using compactJson (skips Studio-protected files when no targets are passed).",
     runner: "bun-file",
     target: "scripts/timeline_fmt.ts",
     cwdModes: ["film"],
+    args: [
+      {
+        key: "target",
+        label: "Optional timeline stem(s) or path(s)",
+        type: "string",
+        multi: true,
+        placeholder: "cast lights or src/timeline/cast.json",
+      },
+    ],
     meta: { effect: "write", cost: "free", speed: "instant", cancellable: false, helpMode: "flag" },
   },
   {
@@ -5807,6 +6094,7 @@ export function isFieldVisible(
   values: Record<string, CliArgValue>,
 ): boolean {
   if (!rule) return true;
+  if (rule.and && !isFieldVisible(rule.and, values)) return false;
   const items = normalizeConditionValues(values[rule.field]);
   if (rule.nonEmpty !== undefined && (rule.nonEmpty ? items.length === 0 : items.length > 0)) {
     return false;
@@ -6132,6 +6420,18 @@ export function buildCliInvocation(
         validationErrors.push("Enter Needed Capability before logging a gap.");
       }
     }
+    if (command.id === "sheet" && isActiveValue(args.video) && isActiveValue(args.images)) {
+      validationErrors.push("Give Video or Image Files, not both.");
+    }
+    if (
+      command.id === "studio" &&
+      isBooleanActive(flags["--lan"]) &&
+      (isBooleanActive(flags["--stop"]) || isBooleanActive(flags["--status"]))
+    ) {
+      validationErrors.push(
+        "--lan only applies when starting the studio (not with --status or --stop).",
+      );
+    }
   }
   const exclusiveConflicts: string[] = [];
 
@@ -6294,6 +6594,14 @@ export function buildCliInvocation(
     if (!guardReason && command.id === "catalog:review" && isActiveValue(flags["--page"])) {
       guardReason =
         "catalog:review --page N requires verdict JSON on piped stdin; use --missing or --fix from Studio, or run python packages/clip-catalog/catalog_review.py --page N < notes.json in terminal.";
+    }
+    if (
+      !guardReason &&
+      command.id === "collab" &&
+      (chain.resolvedPath[0] === "write" || chain.resolvedPath[0] === "write-many") &&
+      String(args.input ?? "").trim() === "-"
+    ) {
+      guardReason = `collab ${chain.resolvedPath[0]} - reads JSON from piped stdin; pass a file path in Studio, or pipe stdin in a terminal.`;
     }
     if (!guardReason && cwdMode === "film" && !resolvedFilm && context) {
       guardReason = "No film workspace available in films/ for this film-scoped command.";

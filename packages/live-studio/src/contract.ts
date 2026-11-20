@@ -5,6 +5,7 @@
 import { LIGHT_PRESET_IDS } from "film-stage/lights-meta";
 import * as z from "zod";
 
+import { isMcPackFilename } from "../../mc-assets/src/picks-manifest.ts";
 import { findTarget, targetHelp } from "../render/target.ts";
 import {
   ADJUSTMENT_KEYS,
@@ -888,7 +889,7 @@ export const PlacedObjectSchema = z.looseObject({
 export const PlacedTimeline = z.record(z.string().min(1), PlacedObjectSchema);
 export const PickEntrySchema = z
   .looseObject({
-    jar: z.string().min(1),
+    jar: z.string().refine(isMcPackFilename, "expected a .jar or .zip filename in vault/packs"),
     namespace: z.string().min(1),
     blocks: z.array(z.string().min(1)).optional(),
     items: z.array(z.string().min(1)).optional(),

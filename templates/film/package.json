@@ -45,6 +45,7 @@
     "fetch:sfx": "bun node_modules/live-studio/wrong-place.mjs fetch:sfx",
     "fetch:openfilm": "bun node_modules/live-studio/wrong-place.mjs fetch:openfilm",
     "setup": "bun node_modules/live-studio/wrong-place.mjs setup",
+    "pack:vault": "bun node_modules/live-studio/wrong-place.mjs pack:vault",
     "pack:sound": "bun node_modules/live-studio/wrong-place.mjs pack:sound",
     "fetch:sound-raw": "bun node_modules/live-studio/wrong-place.mjs fetch:sound-raw",
     "eval:find": "bun node_modules/live-studio/wrong-place.mjs eval:find",

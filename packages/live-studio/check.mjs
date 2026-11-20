@@ -11,13 +11,19 @@ import { TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TRANSITIONS } from "film-stage/transitions";
 
 import { LOCAL, vaultPath } from "../../scripts/vault.mjs";
+import { pickedZipState } from "../mc-assets/pick.mjs";
 import {
+  blockPropertyWarnings,
+  collectVanillaBlockOverrides,
+  collectVanillaItemOverrides,
   extractBlockstateProps,
-  readZipCatalog,
+  readPackCatalog,
   readZipMembers,
   scanGohansPack,
+  zipJsonReader,
 } from "../mc-assets/src/catalog.ts";
 import { cliArgs, envTypos, needFilm } from "./src/cli.mjs";
+import { nestedTimedArrayPaths } from "./src/contract-keys.ts";
 import {
   ADJUSTMENT_KEYS,
   CAM_KEYS,
@@ -62,7 +68,7 @@ every "look" and "handheld" preset name and misspelt keys, every sound name in t
 options) against the sounds the studio can play (with the nearest names or the other film whose own sound it is), and that
 every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
 both "mm" and "fov", shot "hits[].t" outside its shot, unpicked mod blocks, invalid blockstate property values, stale picked.zip,
-and on-screen text too brief to read or too small for a phone; where it sits and how it reads over the picture: CHECK=text bun run render stills.
+and on-screen text too brief to read or too small for a phone, plus keyFiles arrays hiding nested {t} rows that Studio cannot load; where text sits and how it reads over the picture: CHECK=text bun run render stills.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound, 3D object or preset: bun run find <words>.`;
 
@@ -860,7 +866,7 @@ if (
     }
     try {
       const buf = readFileSync(absPath);
-      const entry = { buf, cd: readZipCatalog(buf) };
+      const entry = { buf, cd: readPackCatalog(buf) };
       zipCache.set(absPath, entry);
       return entry;
     } catch (error) {
@@ -893,35 +899,9 @@ if (
   const validPicks = [];
   if (Array.isArray(picksData)) {
     const vanillaForRp = hasVanillaJar ? loadZip(vanillaJarPath) : null;
-    const vanillaRpModels = new Map();
-    const hasRpVanillaModel = (z, bid) => {
-      if (z.cd.has(`assets/minecraft/models/block/${bid}.json`)) return true;
-      if (!vanillaForRp) return false;
-      const bsPath = `assets/minecraft/blockstates/${bid}.json`;
-      if (!vanillaForRp.cd.has(bsPath)) return false;
-      let refs = vanillaRpModels.get(bsPath);
-      if (!refs) {
-        refs = [];
-        try {
-          const raw = readZipMembers(vanillaForRp.buf, vanillaForRp.cd, [bsPath]).get(bsPath);
-          if (raw) {
-            const parsed = JSON.parse(Buffer.from(raw).toString("utf8"));
-            const pushModels = (node) => {
-              for (const one of Array.isArray(node) ? node : [node]) {
-                if (typeof one?.model === "string") {
-                  const clean = one.model.includes(":") ? one.model.split(":")[1] : one.model;
-                  refs.push(`assets/minecraft/models/${clean}.json`);
-                }
-              }
-            };
-            for (const v of Object.values(parsed?.variants ?? {})) pushModels(v);
-            for (const m of parsed?.multipart ?? []) if (m?.apply) pushModels(m.apply);
-          }
-        } catch {}
-        vanillaRpModels.set(bsPath, refs);
-      }
-      return refs.some((r) => z.cd.has(r));
-    };
+    const vanillaJson = vanillaForRp
+      ? zipJsonReader(vanillaForRp.buf, vanillaForRp.cd)
+      : () => undefined;
     picksData.forEach((p, i) => {
       if (!p || typeof p !== "object") return;
       keyTypos(
@@ -930,20 +910,6 @@ if (
           ([k, near]) => `[${i}] "${k}": no key pick reads; did you mean "${near}"?`,
         ),
       );
-      if (
-        !p.jar ||
-        p.jar.includes("..") ||
-        p.jar.includes("/") ||
-        p.jar.includes("\\") ||
-        p.jar.includes(":") ||
-        isAbsolute(p.jar)
-      ) {
-        found.push({
-          where: picksRel,
-          issue: `✖ [${i}] invalid jar filename "${p.jar}"`,
-        });
-        return;
-      }
       if (hasPacksDir) {
         const jarAbs = join(packsDir, p.jar);
         const z = loadZip(jarAbs);
@@ -958,42 +924,51 @@ if (
           return;
         }
         validPicks.push(p);
+        const packJson = zipJsonReader(z.buf, z.cd);
         for (const bid of p.blocks ?? []) {
           const bs = `assets/${p.namespace}/blockstates/${bid}.json`;
-          const rpFallback = p.namespace === "minecraft" && hasRpVanillaModel(z, bid);
-          if (!z.cd.has(bs) && !rpFallback) {
-            found.push({
-              where: picksRel,
-              issue: `✖ [${i}] "${p.jar}" has no blockstate ${bs}`,
-            });
+          if (z.cd.has(bs)) continue;
+          if (p.namespace === "minecraft") {
+            const { models, textures } = collectVanillaBlockOverrides(
+              bid,
+              vanillaJson,
+              packJson,
+              (path) => z.cd.has(path),
+            );
+            if (models.size || textures.size) continue;
           }
+          found.push({
+            where: picksRel,
+            issue: `✖ [${i}] "${p.jar}" has no blockstate ${bs} or vanilla block override`,
+          });
         }
         for (const iid of p.items ?? []) {
           const def = `assets/${p.namespace}/items/${iid}.json`;
           const mod = `assets/${p.namespace}/models/item/${iid}.json`;
-          if (!z.cd.has(def) && !z.cd.has(mod)) {
-            found.push({
-              where: picksRel,
-              issue: `✖ [${i}] "${p.jar}" has no item definition (${def}) or model (${mod})`,
-            });
+          if (z.cd.has(def) || z.cd.has(mod)) continue;
+          if (p.namespace === "minecraft") {
+            const { models, textures } = collectVanillaItemOverrides(
+              iid,
+              vanillaJson,
+              packJson,
+              (path) => z.cd.has(path),
+            );
+            if (models.size || textures.size) continue;
           }
+          found.push({
+            where: picksRel,
+            issue: `✖ [${i}] "${p.jar}" has no item definition (${def}), model (${mod}) or vanilla item override`,
+          });
         }
       } else {
         validPicks.push(p);
       }
     });
-    if (picksData.length > 0) {
-      const zipPath = join(PROJECT, "assets/public/picked.zip");
-      if (!existsSync(zipPath)) {
-        warnings.push(
-          `⚠ ${picksRel}: assets/public/picked.zip is missing; rebuild with bun run asset pick or bun run link`,
-        );
-      } else if (statSync(zipPath).mtimeMs + 50 < statSync(picksAbs).mtimeMs) {
-        warnings.push(
-          `⚠ ${picksRel}: pack/picks.json is newer than assets/public/picked.zip; rebuild with bun run asset pick or bun run link`,
-        );
-      }
-    }
+    const zip = pickedZipState(PROJECT, picksData);
+    if (zip.stale)
+      warnings.push(
+        `⚠ ${picksRel}: assets/public/picked.zip ${zip.exists ? "does not match the current picks or needs rebuilding" : "is missing"}; rebuild with bun run link`,
+      );
   }
 
   const placedRel = placedRelOf(conf);
@@ -1048,17 +1023,8 @@ if (
             validProps === undefined
           )
             return;
-          for (const [k, val] of Object.entries(obj.properties)) {
-            const allowed = validProps[k];
-            if (!allowed) {
-              warnings.push(
-                `⚠ ${placedRel} "${objName}": property "${k}" not in blockstate (known: ${Object.keys(validProps).join(", ") || "none"})`,
-              );
-            } else if (!allowed.includes(String(val))) {
-              warnings.push(
-                `⚠ ${placedRel} "${objName}": property ${k}="${val}" not in blockstate (allowed: ${allowed.join("|")})`,
-              );
-            }
+          for (const problem of blockPropertyWarnings(obj.properties, validProps)) {
+            warnings.push(`⚠ ${placedRel} "${objName}": ${problem}`);
           }
         };
 
@@ -1191,6 +1157,19 @@ if (
         }
       }
     }
+  }
+}
+
+// Key files whose arrays of objects hide nested timed {t} arrays are invisible to Studio's keyRows()
+for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
+  if (editKey === "placed") continue;
+  const data = readJson(rel);
+  if (!data) continue;
+  for (const path of nestedTimedArrayPaths(data)) {
+    const at = path.length ? ` "${path.join(".")}"` : " (root array)";
+    warnings.push(
+      `⚠ ${rel}${at}: array of objects hides nested timed {t} rows that Studio's keyRows() cannot load; key each actor by name in an object map (e.g. { "boss": { moves: [...] } }) instead of an array`,
+    );
   }
 }
 

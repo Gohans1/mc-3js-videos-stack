@@ -1,10 +1,10 @@
 import { afterAll, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { strToU8, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 
 import { favoriteLists } from "../../packages/live-studio/src/favorites.mjs";
 import { allEntries, objectEntries, run as findRun } from "../find";
@@ -201,6 +201,114 @@ test("allEntries keeps object kinds isolated while objectEntries loads block/ite
   expect(objs.some((x) => x.kind === "mob" && x.id === "mob:armadillo")).toBe(true);
   expect(objs.some((x) => x.kind === "prop" && x.id === "prop:global:signs/neon_sign")).toBe(true);
   expect(objs.some((x) => x.kind === "prop" && x.id === "prop:film:cafe_table")).toBe(true);
+});
+
+test("find and pick trace variant models and texture-only overrides in resource packs", () => {
+  const { vault, film, runCli } = makeFindEnv();
+  writeFileSync(
+    join(vault, "packs/painted-barrel.zip"),
+    zipSync({
+      "assets/minecraft/models/block/barrel_open.json": strToU8(
+        '{"parent":"minecraft:block/barrel"}',
+      ),
+    }),
+  );
+  writeFileSync(
+    join(vault, "packs/blue-barrel.zip"),
+    zipSync({
+      "Blue Barrel/pack.mcmeta": strToU8('{"pack":{"description":"Blue barrel"}}'),
+      "Blue Barrel/assets/minecraft/textures/block/barrel_side.png": new Uint8Array([9, 8]),
+      "Blue Barrel/assets/minecraft/textures/block/unrelated.png": new Uint8Array([4]),
+    }),
+  );
+
+  for (const [source, asset] of [
+    ["painted-barrel", "assets/minecraft/models/block/barrel_open.json"],
+    ["blue-barrel", "assets/minecraft/textures/block/barrel_side.png"],
+  ] as const) {
+    const show = runCli(["--offline", "--show", "block:minecraft:barrel", "--source", source]);
+    expect(show.status, show.stderr).toBe(0);
+    expect(show.stdout).toContain("facing: north|west");
+    expect(show.stdout).toContain(`--source ${source}`);
+    writeFileSync(join(film, "pack/picks.json"), "[]");
+    const pick = spawnSync(
+      "bun",
+      [join(ROOT, "scripts/asset.mjs"), "pick", "block:minecraft:barrel", "--source", source],
+      {
+        cwd: film,
+        env: { ...process.env, MC_VAULT_ROOT: vault },
+        encoding: "utf8",
+        timeout: 20000,
+      },
+    );
+    expect(pick.status, pick.stderr).toBe(0);
+    const files = unzipSync(readFileSync(join(film, "assets/public/picked.zip")));
+    expect(files[asset]).toBeDefined();
+    expect(files["assets/minecraft/blockstates/barrel.json"]).toBeUndefined();
+    expect(files["assets/minecraft/textures/block/unrelated.png"]).toBeUndefined();
+  }
+});
+
+test("find show preserves a mod source when its block lives in the minecraft namespace", () => {
+  const { vault, runCli } = makeFindEnv();
+  writeFileSync(
+    join(vault, "packs/custom.jar"),
+    zipSync({
+      "assets/minecraft/blockstates/mod_table.json": strToU8(
+        '{"variants":{"":{"model":"custom:block/table"}}}',
+      ),
+      "assets/custom/models/block/table.json": strToU8('{"elements":[]}'),
+    }),
+  );
+  const show = runCli(["--show", "block:minecraft:mod_table", "--source", "custom"]);
+  expect(show.status, show.stderr).toBe(0);
+  expect(show.stdout).toMatch(/use: .*block:minecraft:mod_table.*--source custom/);
+});
+
+test("find and pick use a resource-pack texture through a vanilla item definition", () => {
+  const { film, vault, runCli } = makeFindEnv();
+  const texture = "assets/minecraft/textures/item/iron_sword.png";
+  writeFileSync(join(vault, "packs/blue-sword.zip"), zipSync({ [texture]: new Uint8Array([9]) }));
+  const target = "item:minecraft:iron_sword";
+  const show = runCli(["--show", target, "--source", "blue-sword.zip"]);
+  expect(show.status, show.stderr).toBe(0);
+  expect(show.stdout).toMatch(/pick: .*item:minecraft:iron_sword.*--source blue-sword.zip/);
+
+  const pick = spawnSync(
+    "bun",
+    [join(ROOT, "scripts/asset.mjs"), "pick", target, "--source", "blue-sword.zip"],
+    { cwd: film, env: { ...process.env, MC_VAULT_ROOT: vault }, encoding: "utf8", timeout: 20000 },
+  );
+  expect(pick.status, pick.stderr).toBe(0);
+  const files = unzipSync(readFileSync(join(film, "assets/public/picked.zip")));
+  expect(files[texture]).toEqual(new Uint8Array([9]));
+  expect(files["assets/minecraft/items/iron_sword.json"]).toBeUndefined();
+});
+
+test("semantic index plan can select 3D Minecraft blocks without embedding them", () => {
+  const { film, vault } = makeFindEnv();
+  const key = JSON.stringify(["block", "decor-mod.jar", "block:decor:oak_chair"]);
+  const db = join(film, "blocks.sqlite");
+  const result = spawnSync(
+    "bun",
+    [
+      "--no-env-file",
+      join(ROOT, "scripts/asset-search.ts"),
+      "plan",
+      "--kind",
+      "block",
+      "--key",
+      key,
+      "--db",
+      db,
+    ],
+    { cwd: film, env: { ...process.env, MC_VAULT_ROOT: vault }, encoding: "utf8", timeout: 20000 },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  const plan = JSON.parse(result.stdout);
+  expect(plan.assets).toBe(1);
+  expect(plan.sample[0].key).toBe(key);
+  expect(existsSync(db)).toBe(false);
 });
 
 test("find --kind object/block/item/mob/prop searches, folds variants, and filters broken/edition/license/source", () => {
