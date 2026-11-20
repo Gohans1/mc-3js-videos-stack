@@ -4,6 +4,7 @@
   bun run media ocr reference.mp4 --at 0:05,0:10
   bun run media ocr reference.mp4 --from 10 --to 30 --frames 12
   bun run media ocr image.png --language vi --config config.yaml
+  bun run media ocr reference.mp4 --from 0 --to 60 --frames 120 --crop 0,0.7,1,0.2
 
 --at, --from and --to use input-file seconds, without film offsets or speed changes.
 Default: 12 evenly spaced video frames; images have no timestamp. Source frames,
@@ -12,6 +13,8 @@ Scores are model estimates, not verified correctness. No uploads or paid APIs.
 First inference may download official model files; later runs use the kept cache.
 --config preserves RapidOCR's native model/engine options; --language selects the
 recognizer language route. Models/default routes follow RapidOCR 3.10.0.
+--crop x,y,w,h (fractions of the picture) reads only that band, as a caption strip: a full 1080x1920
+frame takes about 2.4 s, the band about 1 s. Text boxes stay in the whole picture's pixels.
 --dry-run validates and prints the plan without loading OCR or writing files.
 """
 import argparse
@@ -35,6 +38,16 @@ def second(value):
     if number is None or not math.isfinite(number):
         raise argparse.ArgumentTypeError("takes a finite file second, e.g. 1:05.250")
     return number
+
+
+def crop_band(value):
+    try:
+        x, y, w, h = (float(v) for v in value.split(","))
+    except ValueError:
+        raise argparse.ArgumentTypeError("takes x,y,w,h fractions of the picture, e.g. 0,0.7,1,0.2") from None
+    if not (0 <= x < 1 and 0 <= y < 1 and 0 < w <= 1 - x + 1e-9 and 0 < h <= 1 - y + 1e-9):
+        raise argparse.ArgumentTypeError(f"{value} leaves the picture: x+w and y+h must stay within 1")
+    return [x, y, w, h]
 
 
 def frame_times(start, end, count, pins, duration):
@@ -61,6 +74,7 @@ def main():
     parser.add_argument("--score", type=float)
     parser.add_argument("--language")
     parser.add_argument("--config", type=Path)
+    parser.add_argument("--crop", type=crop_band)
     parser.add_argument("--out", type=Path, default=os.environ.get("MC_MEDIA_RUN_DIR"))
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
@@ -91,7 +105,7 @@ def main():
         parser.error(str(error))
     plan = {"source": str(source), "clock": "input-file seconds; images have null time", "times": times,
             "language": args.language, "config": str(args.config.resolve()) if args.config else None,
-            "scoreThreshold": args.score}
+            "scoreThreshold": args.score, "crop": args.crop}
     if args.dry_run:
         print(json.dumps(plan, ensure_ascii=False))
         return 0
@@ -126,18 +140,27 @@ def main():
         with source.open("rb") as stream:
             result["sourceSha256"] = hashlib.file_digest(stream, "sha256").hexdigest()
         save()
+        origin = None
         with (out / "frames.jsonl").open("a", encoding="utf-8") as evidence:
             for index, at in enumerate(times):
                 file = frames / f"frame-{index:04d}{source.suffix.lower() if image else '.png'}"
-                if image:
+                band = (["-vf", "crop=w=trunc(iw*{2}):h=trunc(ih*{3}):x=trunc(iw*{0}):y=trunc(ih*{1})".format(*args.crop)]
+                        if args.crop else [])
+                if image and not band:
                     shutil.copyfile(source, file)
                 else:
-                    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", "-ss", str(at), "-i", str(source),
-                                    "-frames:v", "1", "-update", "1", file.name], cwd=frames, check=True, timeout=30)
+                    subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *([] if image else ["-ss", str(at)]), "-i", str(source),
+                                    *band, "-frames:v", "1", "-update", "1", file.name], cwd=frames, check=True, timeout=30)
+                if band and origin is None:
+                    size = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+                                           "stream=width,height", "-of", "csv=p=0", str(source)],
+                                          capture_output=True, text=True, check=True, timeout=15).stdout.split(",")
+                    origin = (int(int(size[0]) * args.crop[0]), int(int(size[1]) * args.crop[1]))
                 started = time.monotonic()
                 read = engine(str(file))
                 result["backend"]["config"] = OmegaConf.to_container(engine.cfg, resolve=True, enum_to_str=True)
-                text = [{"text": txt, "score": float(score), "box": box.tolist()}
+                dx, dy = origin or (0, 0)
+                text = [{"text": txt, "score": float(score), "box": [[x + dx, y + dy] for x, y in box.tolist()]}
                         for txt, score, box in zip(read.txts or (), read.scores or (), read.boxes if read.boxes is not None else ())]
                 row = {"sourceSecond": at, "frame": file.relative_to(out).as_posix(), "text": text,
                        "secondsElapsed": round(time.monotonic() - started, 4)}

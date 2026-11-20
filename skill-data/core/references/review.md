@@ -85,6 +85,7 @@ Narration comes from `voice:cues` once and is timeline context, not verified enc
 | --- | --- |
 | Discover/install | bun run media list; media doctor ocr; media setup ocr installs an independent CPU environment with uv |
 | Read images or video | bun run media ocr image.png; media ocr video.mp4 --at 5,10; --frames samples a range, all times belong to the input file |
+| Captions only | --crop 0,0.7,1,0.2 reads just that band (about twice as fast, boxes still in whole-picture pixels); split a long video into spans under the 5-minute deadline |
 | Choose model/language | --language vi; --config native.yaml keeps upstream model/engine configuration, --score overrides only when explicitly passed |
 | Keep evidence | Fresh run-* keeps job.json/process.log, original frames, frames.jsonl and result.json; model cache survives interruptions |
 | Verify | Compare text and polygons against retained frames; scores are estimates and Vietnamese diacritics/small game text can be wrong |

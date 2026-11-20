@@ -33,6 +33,8 @@ test("OCR rejects impossible source times and bad options before writing evidenc
     [source, "--score", "1.1"],
     [source, "--at", "1"],
     [source, "--bogus"],
+    [source, "--crop", "0,0.7,1,0.5"],
+    [source, "--crop", "0,0.7,1"],
   ]) {
     const r = python([SCRIPT, ...args, "--out", join(dir, "out")]);
     assert.equal(r.status, 2, r.stderr);
@@ -51,4 +53,14 @@ test("OCR dry run does not override a native config's score unless explicitly re
   const r = python([SCRIPT, source, "--config", config, "--dry-run"]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(JSON.parse(r.stdout).scoreThreshold, null);
+});
+
+test("OCR reads only a --crop band of each frame and plans it in source pixels' fractions", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-crop-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const source = join(dir, "image.png");
+  writeFileSync(source, "not decoded by dry run");
+  const r = python([SCRIPT, source, "--crop", "0,0.7,1,0.2", "--dry-run"]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).crop, [0, 0.7, 1, 0.2]);
 });
