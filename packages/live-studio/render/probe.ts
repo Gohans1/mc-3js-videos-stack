@@ -271,40 +271,72 @@ export function collectProbeTargets(
   }
 
   // Disambiguate colliding base names (e.g. two actors both exposing a "Head" bone)
-  const counts = new Map<string, number>();
-  for (const entry of out) counts.set(entry.name, (counts.get(entry.name) ?? 0) + 1);
+  const countNames = (list: { name: string }[]) => {
+    const map = new Map<string, number>();
+    for (const entry of list) map.set(entry.name, (map.get(entry.name) ?? 0) + 1);
+    return map;
+  };
+  const counts = countNames(out);
   if ([...counts.values()].some((c) => c > 1)) {
-    const findOwner = (obj: THREE.Object3D): string | null => {
+    const findOwner = (obj: THREE.Object3D): { obj: THREE.Object3D; label: string } | null => {
       for (let p = obj.parent; p; p = p.parent) {
         const label = objectLabels.get(p);
-        if (label) return label;
+        if (label) return { obj: p, label };
       }
       return null;
     };
-    const findNamedParent = (obj: THREE.Object3D): string | null => {
-      for (let p = obj.parent; p; p = p.parent) {
+    const findNamedParent = (
+      obj: THREE.Object3D,
+      stopAt: THREE.Object3D | null = null,
+    ): string | null => {
+      for (let p = obj.parent; p && p !== stopAt; p = p.parent) {
         if (p.name) return p.name;
       }
       return null;
     };
-    for (const entry of out) {
-      if ((counts.get(entry.name) ?? 0) <= 1) continue;
+    const baseNames = out.map((entry) => entry.name);
+    for (let i = 0; i < out.length; i++) {
+      const entry = out[i];
+      if ((counts.get(baseNames[i]) ?? 0) <= 1) continue;
       const owner = findOwner(entry.obj);
       if (owner) {
-        entry.name = `${owner}.${entry.name}`;
+        entry.name = `${owner.label}.${baseNames[i]}`;
         continue;
       }
-      const uniqueBone = boneNames.get(entry.obj)?.find((k) => k !== entry.name);
+      const uniqueBone = boneNames.get(entry.obj)?.find((k) => k !== baseNames[i]);
       if (uniqueBone) {
         entry.name = uniqueBone;
         continue;
       }
       const parentName = findNamedParent(entry.obj);
-      if (parentName) entry.name = `${parentName}.${entry.name}`;
+      if (parentName) entry.name = `${parentName}.${baseNames[i]}`;
+    }
+    const afterCounts = countNames(out);
+    if ([...afterCounts.values()].some((c) => c > 1)) {
+      for (let i = 0; i < out.length; i++) {
+        const entry = out[i];
+        if ((afterCounts.get(entry.name) ?? 0) <= 1) continue;
+        const uniqueBone = boneNames.get(entry.obj)?.find((k) => k !== baseNames[i]);
+        if (uniqueBone) {
+          entry.name = uniqueBone;
+          continue;
+        }
+        const owner = findOwner(entry.obj);
+        const parentName = findNamedParent(entry.obj, owner?.obj ?? null);
+        if (owner && parentName) entry.name = `${owner.label}.${parentName}.${baseNames[i]}`;
+      }
     }
   }
   return out;
 }
+
+const isFiniteBox = (b: THREE.Box3): boolean =>
+  Number.isFinite(b.min.x) &&
+  Number.isFinite(b.min.y) &&
+  Number.isFinite(b.min.z) &&
+  Number.isFinite(b.max.x) &&
+  Number.isFinite(b.max.y) &&
+  Number.isFinite(b.max.z);
 
 // Compute world AABB over visible descendants while still measuring the root target itself
 // (so probing a hidden root reports its bounds with visible: false), recomputing dynamic bounds.
@@ -312,31 +344,37 @@ export function computeVisibleBounds(obj: THREE.Object3D): THREE.Box3 {
   obj.updateWorldMatrix(true, true);
   const out = new THREE.Box3();
   const tmp = new THREE.Box3();
+  const unionBox = (box: THREE.Box3 | null, matrix: THREE.Matrix4) => {
+    if (!box || box.isEmpty()) return;
+    tmp.copy(box).applyMatrix4(matrix);
+    if (isFiniteBox(tmp)) out.union(tmp);
+  };
   const visit = (node: THREE.Object3D) => {
     if ((node as THREE.SkinnedMesh).isSkinnedMesh) {
       const sm = node as THREE.SkinnedMesh;
-      sm.skeleton?.bones.forEach((b) => b.updateWorldMatrix(true, false));
-      sm.computeBoundingBox();
-      if (sm.boundingBox && !sm.boundingBox.isEmpty()) {
-        tmp.copy(sm.boundingBox).applyMatrix4(sm.matrixWorld);
-        out.union(tmp);
+      if (
+        sm.skeleton &&
+        sm.geometry?.getAttribute("position") &&
+        sm.geometry.getAttribute("skinIndex") &&
+        sm.geometry.getAttribute("skinWeight")
+      ) {
+        sm.updateMatrixWorld(true);
+        if (sm.matrixWorld.determinant() !== 0) {
+          sm.skeleton.bones.forEach((b) => b.updateWorldMatrix(true, false));
+          sm.computeBoundingBox();
+          unionBox(sm.boundingBox, sm.matrixWorld);
+        }
       }
     } else if ((node as THREE.InstancedMesh).isInstancedMesh) {
       const im = node as THREE.InstancedMesh;
       if (im.count > 0) {
         im.computeBoundingBox();
-        if (im.boundingBox && !im.boundingBox.isEmpty()) {
-          tmp.copy(im.boundingBox).applyMatrix4(im.matrixWorld);
-          out.union(tmp);
-        }
+        unionBox(im.boundingBox, im.matrixWorld);
       }
     } else if ((node as THREE.BatchedMesh).isBatchedMesh) {
       const bm = node as THREE.BatchedMesh;
       bm.computeBoundingBox();
-      if (bm.boundingBox && !bm.boundingBox.isEmpty()) {
-        tmp.copy(bm.boundingBox).applyMatrix4(bm.matrixWorld);
-        out.union(tmp);
-      }
+      unionBox(bm.boundingBox, bm.matrixWorld);
     } else if (
       (node as THREE.Mesh).isMesh ||
       (node as THREE.Line).isLine ||
@@ -346,10 +384,7 @@ export function computeVisibleBounds(obj: THREE.Object3D): THREE.Box3 {
       const geom = (node as THREE.Mesh | THREE.Line | THREE.Points | THREE.Sprite).geometry;
       if (geom) {
         if (!geom.boundingBox) geom.computeBoundingBox();
-        if (geom.boundingBox && !geom.boundingBox.isEmpty()) {
-          tmp.copy(geom.boundingBox).applyMatrix4(node.matrixWorld);
-          out.union(tmp);
-        }
+        unionBox(geom.boundingBox, node.matrixWorld);
       }
     }
     for (const child of node.children) {

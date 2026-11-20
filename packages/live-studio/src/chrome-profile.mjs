@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   openSync,
   readFileSync,
+  renameSync,
   rmSync,
   statSync,
   unlinkSync,
@@ -79,7 +80,19 @@ const tryCreateLock = (lockPath, payload) => {
   return { ok: true, code: null };
 };
 
-const acquireReclaimGuard = (reclaimPath, payload, now, staleGraceMs) => {
+const releaseOwnedLock = (lockPath, token) => {
+  try {
+    const current = JSON.parse(readFileSync(lockPath, "utf8"));
+    if (current?.token !== token) return;
+  } catch {
+    return;
+  }
+  try {
+    unlinkSync(lockPath);
+  } catch {}
+};
+
+const acquireReclaimGuard = (reclaimPath, payload, token, now, staleGraceMs) => {
   const first = tryCreateLock(reclaimPath, payload);
   if (first.ok) return true;
   if (first.code !== "EEXIST") return false;
@@ -91,11 +104,15 @@ const acquireReclaimGuard = (reclaimPath, payload, now, staleGraceMs) => {
     return false;
   }
   if (!expired) return false;
+  const claimed = `${reclaimPath}.expired.${token}`;
   try {
-    unlinkSync(reclaimPath);
+    renameSync(reclaimPath, claimed);
   } catch (err) {
     if (err?.code !== "ENOENT") return false;
   }
+  try {
+    unlinkSync(claimed);
+  } catch {}
   return tryCreateLock(reclaimPath, payload).ok;
 };
 
@@ -158,7 +175,7 @@ export function acquireChromeProfile(
         attempt = tryCreateLock(lockPath, payload);
       } else if (state === "stale") {
         const reclaimPath = `${lockPath}.reclaim`;
-        if (acquireReclaimGuard(reclaimPath, payload, now, staleGraceMs)) {
+        if (acquireReclaimGuard(reclaimPath, payload, token, now, staleGraceMs)) {
           try {
             const rechecked = inspectLock(lockPath, isAlive, now, staleGraceMs);
             if (rechecked === "stale") {
@@ -172,9 +189,7 @@ export function acquireChromeProfile(
               attempt = tryCreateLock(lockPath, payload);
             }
           } finally {
-            try {
-              unlinkSync(reclaimPath);
-            } catch {}
+            releaseOwnedLock(reclaimPath, token);
           }
         }
       }
@@ -188,9 +203,7 @@ export function acquireChromeProfile(
     try {
       mkdirSync(dir, { recursive: true });
     } catch {
-      try {
-        unlinkSync(lockPath);
-      } catch {}
+      releaseOwnedLock(lockPath, token);
       return makeEphemeral();
     }
 
@@ -203,15 +216,7 @@ export function acquireChromeProfile(
       release() {
         if (released) return;
         released = true;
-        try {
-          const current = JSON.parse(readFileSync(lockPath, "utf8"));
-          if (current?.token !== token) return;
-        } catch {
-          return;
-        }
-        try {
-          unlinkSync(lockPath);
-        } catch {}
+        releaseOwnedLock(lockPath, token);
       },
     };
   }

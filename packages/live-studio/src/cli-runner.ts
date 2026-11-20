@@ -335,22 +335,28 @@ function listFilmChoices(filmDir: string | null): {
     }
   }
 
-  // Renders (.mp4)
+  // Renders (.mp4) — skip dot-prefixed internal directories (.chrome-cache, .prev)
   let renders: string[] = [];
   const rendersDir = join(filmDir, "renders");
   if (existsSync(rendersDir)) {
-    try {
-      renders = readdirSync(rendersDir, { recursive: true, withFileTypes: true })
-        .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".mp4"))
-        .map((e) => {
-          const full = join(e.parentPath, e.name);
-          return `renders/${relative(rendersDir, full).replaceAll("\\", "/")}`;
-        })
-        .toSorted()
-        .slice(0, 60);
-    } catch {
-      renders = [];
-    }
+    const walkRenders = (dir: string) => {
+      let entries;
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const e of entries) {
+        if (e.name.startsWith(".")) continue;
+        const full = join(dir, e.name);
+        if (e.isDirectory()) walkRenders(full);
+        else if (e.isFile() && e.name.toLowerCase().endsWith(".mp4")) {
+          renders.push(`renders/${relative(rendersDir, full).replaceAll("\\", "/")}`);
+        }
+      }
+    };
+    walkRenders(rendersDir);
+    renders = renders.toSorted().slice(0, 60);
   }
 
   // Labs (lab/*.ts|tsx)

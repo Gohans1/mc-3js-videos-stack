@@ -105,7 +105,7 @@ CHECK=probe:4 bun run render stills                   # single-frame world posit
 CHECK="probe:dish|elon.head,4" bun run render stills  # filter by |-separated names, dot-paths, or "*" (quote | and * in shell)
 ```
 
-A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back. `seen` and `text` always measure the film's own camera (and warn if `INSPECT` or `VIEWS` is set); `probe` honors `INSPECT=`.
+A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back. `seen` and `text` always measure the film's own camera (and warn if `INSPECT` or `VIEWS` is set); `probe` honors `INSPECT=` (and warns under `VIEWS=`).
 
 ## Words on the picture
 

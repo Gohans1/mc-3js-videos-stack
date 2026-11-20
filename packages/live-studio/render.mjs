@@ -127,14 +127,15 @@ const ENV_OPTIONS = [
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const flagged = process.argv
   .slice(2)
-  .map((a, i, all) => [/^--?([a-z0-9_]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
-  .find(([m]) => m && ENV_OPTIONS.includes(m[1].toUpperCase()));
+  .map((a, i, all) => [/^--?([a-z0-9_-]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
+  .find(([m]) => m && ENV_OPTIONS.includes(m[1].replaceAll("-", "_").toUpperCase()));
 if (flagged) {
   const [m, next] = flagged;
+  const envName = m[1].replaceAll("-", "_").toUpperCase();
   const value =
     m[2] ?? (next && !next.startsWith("-") && !TARGETS.includes(next) ? next : "<value>");
   console.error(
-    `${m[1].toUpperCase()} is an environment variable here, not a flag: ${m[1].toUpperCase()}=${value} bun run render ${process.argv.slice(2).find((a) => TARGETS.includes(a)) ?? "stills"}`,
+    `${envName} is an environment variable here, not a flag: ${envName}=${value} bun run render ${process.argv.slice(2).find((a) => TARGETS.includes(a)) ?? "stills"}`,
   );
   process.exit(2);
 }

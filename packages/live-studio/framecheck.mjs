@@ -39,14 +39,27 @@ const readJson = (file) => {
     process.exit(1);
   }
 };
+const listRenderVideos = (rootDir) => {
+  const found = [];
+  const walk = (dir, prefix = "") => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const rel = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(join(dir, e.name), rel);
+      else if (e.isFile() && e.name.endsWith(".mp4")) found.push(`renders/${rel}`);
+    }
+  };
+  walk(rootDir);
+  return found.toSorted((a, b) => (a < b ? -1 : a > b ? 1 : 0)).slice(0, 8);
+};
 if (!existsSync(video)) {
-  const videos = existsSync(RENDERS)
-    ? readdirSync(RENDERS, { recursive: true })
-        .map((f) => `renders/${String(f).replaceAll("\\", "/")}`)
-        .filter((f) => f.endsWith(".mp4"))
-        .toSorted()
-        .slice(0, 8)
-    : [];
+  const videos = existsSync(RENDERS) ? listRenderVideos(RENDERS) : [];
   console.error(
     `no ${videoArg ?? "renders/draft_video.mp4"} (the videos here: ${videos.join(", ") || "none yet"}); a new one: bun run render clip`,
   );

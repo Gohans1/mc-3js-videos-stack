@@ -26,11 +26,12 @@ import {
   probeCheck,
   projectBoundsToScreen,
 } from "../render/probe.ts";
-import { acquireChromeProfile, inspectLock } from "../src/chrome-profile.mjs";
+import { acquireChromeProfile, inspectLock, isPidAlive } from "../src/chrome-profile.mjs";
 import { STUDIO } from "../src/film.mjs";
 import { setTiming } from "../src/timing-state.mjs";
 
 const RENDER = fileURLToPath(new URL("../render.mjs", import.meta.url));
+const FRAMECHECK = fileURLToPath(new URL("../framecheck.mjs", import.meta.url));
 
 const copyDemo = (dir) => {
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -315,6 +316,38 @@ test("chrome-profile handles ENOENT between EEXIST and inspectLock without unlin
   acquired.release();
 });
 
+test("chrome-profile rejects non-positive PIDs in isPidAlive and recovers expired .reclaim guards", (t) => {
+  assert.equal(isPidAlive(0), false);
+  assert.equal(isPidAlive(-1), false);
+  assert.equal(isPidAlive(NaN), false);
+  assert.equal(isPidAlive(process.pid), true);
+
+  const root = makeTempDir(t, "chrome-profile-expired-reclaim-");
+  const rendersDir = join(root, "renders");
+  const cacheDir = join(rendersDir, ".chrome-cache");
+  mkdirSync(cacheDir, { recursive: true });
+  const slot0Lock = join(cacheDir, "slot-0.lock");
+  const reclaimGuard = `${slot0Lock}.reclaim`;
+
+  const fixedNow = Date.now();
+  const expired = new Date(fixedNow - 10_000);
+  writeFileSync(
+    slot0Lock,
+    JSON.stringify({ pid: 99999999, startedAt: "2020-01-01T00:00:00.000Z" }),
+  );
+  writeFileSync(reclaimGuard, JSON.stringify({ pid: 99999999, token: "crashed-reclaimer" }));
+  utimesSync(reclaimGuard, expired, expired);
+
+  const recovered = acquireChromeProfile(rendersDir, {
+    now: () => fixedNow,
+    staleGraceMs: 5000,
+  });
+  assert.equal(recovered.persistent, true);
+  assert.equal(recovered.slot, 0, "expired .reclaim guard must be claimed and slot-0 reclaimed");
+  assert.ok(!existsSync(reclaimGuard), ".reclaim guard must be cleaned up after recovery");
+  recovered.release();
+});
+
 // ---------------- probe.ts unit tests ----------------
 
 test("measureProbeTarget excludes hidden descendants while still measuring a hidden root target itself", () => {
@@ -393,6 +426,69 @@ test("measureProbeTarget recomputes re-posed SkinnedMesh and updated InstancedMe
   assert.equal(instEmpty.bounds, null);
 });
 
+test("measureProbeTarget handles zero-scale, moved-root/sibling-bone, unbound SkinnedMesh, and BatchedMesh bounds", () => {
+  const camera = makePerspectiveCamera();
+  const makeSkinnedGeo = () => {
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    const count = geo.attributes.position.count;
+    const indices = new Uint16Array(count * 4);
+    const weights = new Float32Array(count * 4);
+    for (let i = 0; i < count; i++) weights[i * 4] = 1;
+    geo.setAttribute("skinIndex", new THREE.BufferAttribute(indices, 4));
+    geo.setAttribute("skinWeight", new THREE.BufferAttribute(weights, 4));
+    return geo;
+  };
+
+  // 1. Zero-scale SkinnedMesh inside a group must NOT NaN-poison valid sibling geometry
+  const group = new THREE.Group();
+  const validCube = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
+  validCube.position.set(1, 0, 0);
+  const zeroBone = new THREE.Bone();
+  const zeroSkinned = new THREE.SkinnedMesh(makeSkinnedGeo(), new THREE.MeshBasicMaterial());
+  zeroSkinned.add(zeroBone);
+  zeroSkinned.bind(new THREE.Skeleton([zeroBone]));
+  zeroSkinned.scale.set(0, 0, 0);
+  group.add(validCube, zeroSkinned);
+
+  const groupResult = measureProbeTarget(group, "safeGroup", camera);
+  assert.deepEqual(groupResult.bounds?.min, [0, -1, -1]);
+  assert.deepEqual(groupResult.bounds?.max, [2, 1, 1]);
+
+  // 2. Moved-root attached SkinnedMesh with sibling bone called directly (no 2x translation)
+  const rigRoot = new THREE.Group();
+  const sibBone = new THREE.Bone();
+  const attached = new THREE.SkinnedMesh(makeSkinnedGeo(), new THREE.MeshBasicMaterial());
+  rigRoot.add(attached, sibBone);
+  rigRoot.updateMatrixWorld(true);
+  attached.bind(new THREE.Skeleton([sibBone]));
+  rigRoot.position.set(10, 0, 0);
+
+  const movedResult = measureProbeTarget(attached, "moved", camera);
+  assert.deepEqual(movedResult.bounds?.min, [9.5, -0.5, -0.5]);
+  assert.deepEqual(movedResult.bounds?.max, [10.5, 0.5, 0.5]);
+
+  // 3. Unbound SkinnedMesh degrades cleanly without throwing
+  const unbound = new THREE.SkinnedMesh(makeSkinnedGeo(), new THREE.MeshBasicMaterial());
+  const unboundResult = measureProbeTarget(unbound, "unbound", camera);
+  assert.equal(unboundResult.bounds, null);
+
+  // 4. BatchedMesh recomputes updated instance matrices and returns null when emptied
+  const batched = new THREE.BatchedMesh(4, 100, 200, new THREE.MeshBasicMaterial());
+  const gid = batched.addGeometry(new THREE.BoxGeometry(1, 1, 1));
+  const iid = batched.addInstance(gid);
+  batched.setMatrixAt(iid, new THREE.Matrix4().makeTranslation(0, 0, 0));
+  batched.computeBoundingBox(); // prime stale boundingBox
+
+  batched.setMatrixAt(iid, new THREE.Matrix4().makeTranslation(4, 2, 0));
+  const batchedUpdated = measureProbeTarget(batched, "batched", camera);
+  assert.deepEqual(batchedUpdated.bounds?.min, [3.5, 1.5, -0.5]);
+  assert.deepEqual(batchedUpdated.bounds?.max, [4.5, 2.5, 0.5]);
+
+  batched.deleteInstance(iid);
+  const batchedEmpty = measureProbeTarget(batched, "batched", camera);
+  assert.equal(batchedEmpty.bounds, null);
+});
+
 test("collectProbeTargets disambiguates duplicate bone names and handles case-insensitive, dot-path, and missing filters", () => {
   const scene = new THREE.Scene();
   const steve = new THREE.Group();
@@ -441,6 +537,24 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
   assert.deepEqual(
     bothGrips.map((x) => x.name),
     ["gripLeft", "gripRight"],
+  );
+
+  // Same-owner sibling name collisions fall back to owner.parentName.name
+  const leftArm = new THREE.Group();
+  leftArm.name = "leftArm";
+  const leftJoint = new THREE.Bone();
+  leftJoint.name = "Joint";
+  leftArm.add(leftJoint);
+  const rightArm = new THREE.Group();
+  rightArm.name = "rightArm";
+  const rightJoint = new THREE.Bone();
+  rightJoint.name = "Joint";
+  rightArm.add(rightJoint);
+  steve.add(leftArm, rightArm);
+  const sameOwnerJoints = collectProbeTargets(tools, "joint");
+  assert.deepEqual(
+    sameOwnerJoints.map((x) => x.name),
+    ["Steve.leftArm.Joint", "Steve.rightArm.Joint"],
   );
 
   // Missing filter returns empty list cleanly
@@ -616,6 +730,10 @@ test(
     assert.equal(flagForm.status, 2, flagForm.stdout + flagForm.stderr);
     assert.match(flagForm.stderr, /RENDER_FRESH_CACHE is an environment variable/);
 
+    const hyphenFlag = run(["--render-fresh-cache=1", "stills"]);
+    assert.equal(hyphenFlag.status, 2, hyphenFlag.stdout + hyphenFlag.stderr);
+    assert.match(hyphenFlag.stderr, /RENDER_FRESH_CACHE is an environment variable/);
+
     const envTypo = run(["stills"], { RENDER_FRESH_CACH: "1" });
     assert.equal(envTypo.status, 2, envTypo.stdout + envTypo.stderr);
     assert.match(envTypo.stderr, /did you mean RENDER_FRESH_CACHE=1/);
@@ -626,6 +744,28 @@ test(
     assert.match(help.stdout, /RENDER_FRESH_CACHE/);
   },
 );
+
+test("framecheck missing-video scan skips dot-directories like .chrome-cache and .prev", (t) => {
+  const dir = makeTempDir(t, "framecheck-dotdir-");
+  copyDemo(dir);
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  mkdirSync(join(dir, "renders/.chrome-cache/slot-0"), { recursive: true });
+  mkdirSync(join(dir, "renders/.prev"), { recursive: true });
+  mkdirSync(join(dir, "renders/chunks"), { recursive: true });
+  writeFileSync(join(dir, "renders/.chrome-cache/slot-0/cache.mp4"), "ignored");
+  writeFileSync(join(dir, "renders/.prev/old.mp4"), "ignored");
+  writeFileSync(join(dir, "renders/chunks/c00.mp4"), "listed");
+
+  const out = spawnSync("bun", [FRAMECHECK, "renders/missing.mp4"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 20000,
+    env: { ...process.env, LIVE_PROJECT: dir },
+  });
+  assert.equal(out.status, 2, out.stdout + out.stderr);
+  assert.match(out.stderr, /renders\/chunks\/c00\.mp4/);
+  assert.doesNotMatch(out.stderr, /\.chrome-cache|\.prev/);
+});
 
 // ---------------- Live headless Chrome verification ----------------
 
