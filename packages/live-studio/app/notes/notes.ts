@@ -864,6 +864,7 @@ const saveNoteNow = async () => {
     cam: camLine(),
     freeCam: tools.free.on || undefined,
     finalLook: get().final || undefined,
+    ...(get().newBuild ? { staleBuild: true } : {}),
     context: noteContext(compose),
     text: body,
     done: false,

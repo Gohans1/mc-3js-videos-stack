@@ -1001,7 +1001,7 @@ test("note-detail prints srcT when diverged, prints pen key vertices and box cor
   assert.ok(voicedSilence.includes("voice: silent here"), voicedSilence);
 });
 
-test("notes.mjs prints (local film) instead of parent-repo git hash for gitignored films", (t) => {
+test("notes.mjs prints local-<8hex> fingerprint instead of parent-repo git hash for local/untracked films and updates when src/ changes", (t) => {
   const repo = mkdtempSync(join(tmpdir(), "notes-gitignore-"));
   t.after(() => rmSync(repo, { recursive: true, force: true }));
 
@@ -1029,26 +1029,43 @@ test("notes.mjs prints (local film) instead of parent-repo git hash for gitignor
   // Gitignored film folder inside parent repo
   const ignoredFilm = join(repo, "films/my-local-film");
   mkdirSync(join(ignoredFilm, "notes"), { recursive: true });
+  mkdirSync(join(ignoredFilm, "src"), { recursive: true });
+  writeFileSync(join(ignoredFilm, "package.json"), JSON.stringify({ name: "my-local-film" }));
+  writeFileSync(join(ignoredFilm, "src/scene.ts"), "export const v = 1;\n");
   writeFileSync(join(ignoredFilm, "notes/notes.jsonl"), `${sampleNote}\n`);
 
-  const ignoredOut = execFileSync(process.execPath, [NOTES_SCRIPT], {
+  const ignoredOut1 = execFileSync(process.execPath, [NOTES_SCRIPT], {
     cwd: ignoredFilm,
     encoding: "utf8",
     env: { ...process.env, MC_LESSONS: join(repo, "no-lessons") },
   });
-  assert.ok(ignoredOut.includes("Film now: (local film)."), ignoredOut);
-  assert.ok(!ignoredOut.includes(commitHash), `should not leak parent hash:\n${ignoredOut}`);
+  const m1 = /Film now: (local-[0-9a-f]{8})\./.exec(ignoredOut1);
+  assert.ok(m1, `expected local-<8hex>:\n${ignoredOut1}`);
+  assert.ok(!ignoredOut1.includes(commitHash), `should not leak parent hash:\n${ignoredOut1}`);
 
-  // Untracked local film folder inside parent repo (not in .gitignore) also prints (local film)
+  // Changing a file in src/ immediately changes the local version stamp
+  writeFileSync(join(ignoredFilm, "src/scene.ts"), "export const v = 2;\n");
+  const ignoredOut2 = execFileSync(process.execPath, [NOTES_SCRIPT], {
+    cwd: ignoredFilm,
+    encoding: "utf8",
+    env: { ...process.env, MC_LESSONS: join(repo, "no-lessons") },
+  });
+  const m2 = /Film now: (local-[0-9a-f]{8})\./.exec(ignoredOut2);
+  assert.ok(m2, `expected local-<8hex>:\n${ignoredOut2}`);
+  assert.notEqual(m2[1], m1[1], "changing src/ must update local version stamp");
+
+  // Untracked local film folder inside parent repo (not in .gitignore) also prints local-<8hex>
   const untrackedFilm = join(repo, "local-films/untracked-film");
   mkdirSync(join(untrackedFilm, "notes"), { recursive: true });
+  mkdirSync(join(untrackedFilm, "src"), { recursive: true });
+  writeFileSync(join(untrackedFilm, "src/scene.ts"), "export const u = 1;\n");
   writeFileSync(join(untrackedFilm, "notes/notes.jsonl"), `${sampleNote}\n`);
   const untrackedOut = execFileSync(process.execPath, [NOTES_SCRIPT], {
     cwd: untrackedFilm,
     encoding: "utf8",
     env: { ...process.env, MC_LESSONS: join(repo, "no-lessons") },
   });
-  assert.ok(untrackedOut.includes("Film now: (local film)."), untrackedOut);
+  assert.match(untrackedOut, /Film now: local-[0-9a-f]{8}\./);
   assert.ok(!untrackedOut.includes(commitHash), `should not leak parent hash:\n${untrackedOut}`);
 
   // Tracked folder in the same repo still prints the git describe hash

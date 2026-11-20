@@ -4,7 +4,23 @@ import { join, relative, resolve } from "node:path";
 import { noteLessonFormat, toLearn } from "./note-format.mjs";
 import { noteState, noteThread, WORD_NEAR } from "./note-state.mjs";
 
-export const noteDetailFormat = ({ root: ROOT, dir, projectDir, config, topics }) => {
+const shortTimestamp = (at) => {
+  if (typeof at === "number" && Number.isFinite(at)) {
+    const d = new Date(at);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().replace(/\.\d+Z$/, "Z");
+  }
+  if (typeof at !== "string" || !at.trim()) return "";
+  return at.trim().replace(/\.\d+(?=(?:Z|[+-]\d{2}:?\d{2})$)/, "");
+};
+
+export const noteDetailFormat = ({
+  root: ROOT,
+  dir,
+  projectDir,
+  config,
+  topics,
+  currentVersion,
+}) => {
   const posix = (rel) => join(ROOT, rel).replaceAll("\\", "/");
   const pct = (x) => `${Math.round(x * 100) + 0}%`;
   const list = (v) => `[${v.join(", ")}]`;
@@ -201,7 +217,19 @@ export const noteDetailFormat = ({ root: ROOT, dir, projectDir, config, topics }
     }
     if (n.freeCam) lines.push(`seen through the free camera${n.cam ? `: ${n.cam.line}` : ""}`);
     if (n.finalLook) lines.push("seen in final quality");
-    if (n.version) lines.push(`said about version: ${n.version}`);
+    const writtenAt = shortTimestamp(n.at);
+    if (n.version) {
+      const diff =
+        currentVersion && n.version !== currentVersion
+          ? ` (differs from current ${currentVersion})`
+          : "";
+      lines.push(`said about version: ${n.version}${diff}${writtenAt ? `, at ${writtenAt}` : ""}`);
+    } else if (writtenAt) {
+      lines.push(`written at ${writtenAt}`);
+    }
+    if (n.staleBuild === true) {
+      lines.push("⚠ captured on an older Studio build before reload");
+    }
     // the thread after the note itself, oldest first: what was tried or asked, what the creator said back or reworded
     for (const m of thread.slice(1)) {
       lines.push(

@@ -1,9 +1,9 @@
 // The creator's notes for the AI about to act on them; HELP below
-import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
 import { cliArgs, needFilm, numberArg } from "./src/cli.mjs";
+import { filmVersion } from "./src/film-version.mjs";
 import { readLessonConfig } from "./src/lesson-settings.mjs";
 import { LESSONS, lessonsFor } from "./src/lessons.mjs";
 import { recordNoteReads } from "./src/note-cli.mjs";
@@ -59,54 +59,9 @@ const SORT = {
   newest: { label: "newest first", cmp: (a, b) => byNumber(b, a) },
 };
 
-const canonicalDir = (p) => {
-  try {
-    return realpathSync(p);
-  } catch {
-    return resolve(p);
-  }
-};
-
-const sameDir = (a, b) => {
-  const ca = canonicalDir(a),
-    cb = canonicalDir(b);
-  return process.platform === "win32" ? ca.toLowerCase() === cb.toLowerCase() : ca === cb;
-};
-
-const filmNow = () => {
-  try {
-    const ignored = spawnSync("git", ["check-ignore", "-q", "."], {
-      cwd: ROOT,
-      windowsHide: true,
-    });
-    if (ignored.status === 0) return "(local film)";
-    const top = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-      cwd: ROOT,
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    if (top.status !== 0 || !(top.stdout ?? "").trim()) return "(not in git)";
-    if (!sameDir(top.stdout.trim(), ROOT)) {
-      const tracked = spawnSync("git", ["ls-files", "--", "."], {
-        cwd: ROOT,
-        encoding: "utf8",
-        windowsHide: true,
-      });
-      if (tracked.status === 0 && !(tracked.stdout ?? "").trim()) return "(local film)";
-    }
-    const r = spawnSync("git", ["describe", "--tags", "--always", "--dirty"], {
-      cwd: ROOT,
-      encoding: "utf8",
-      windowsHide: true,
-    });
-    return (r.stdout ?? "").trim() || "(not in git)";
-  } catch {
-    return "(not in git)";
-  }
-};
-
 const oneLine = (n) => {
   const tags = [];
+  if (n.staleBuild === true) tags.push("older build");
   if (n.pin) tags.push(`tap ${n.pin.what ?? "?"}`);
   if (n.marks?.length)
     tags.push(`drew ${n.marks.length}${n.range ? ` over ${n.range[0]}-${n.range[1]}s` : ""}`);
@@ -327,11 +282,13 @@ const { learnPrompt } = noteLessonFormat({
   config: lessonConfig,
 });
 
+const currentVersion = filmVersion(ROOT);
 const formatDetail = noteDetailFormat({
   root: ROOT,
   dir: LESSONS,
   projectDir: PROJECT_LESSONS,
   config: lessonConfig,
+  currentVersion,
 });
 const detail = (n, showCam, lessons) => console.log(formatDetail(n, showCam, lessons).join("\n"));
 
@@ -410,7 +367,7 @@ if (ids.length || shot !== null) {
     ...(backCount ? [`${backCount} back to you`] : []),
   ];
   console.log(
-    `${ordered.length} ${noteNoun(ordered.length, done)} of ${notes.length}${deleted ? ` (#N counts the ${deleted} the creator deleted too, so a number never moves to another note)` : ""}, ${SORT[sort].label}${meta.length ? ` (${meta.join("; ")})` : ""}. Film now: ${filmNow()}. Detail: bun run notes ID ...\n`,
+    `${ordered.length} ${noteNoun(ordered.length, done)} of ${notes.length}${deleted ? ` (#N counts the ${deleted} the creator deleted too, so a number never moves to another note)` : ""}, ${SORT[sort].label}${meta.length ? ` (${meta.join("; ")})` : ""}. Film now: ${currentVersion}. Detail: bun run notes ID ...\n`,
   );
   for (const n of shown) console.log(oneLine(n));
   if (hidden.length) console.log(`\n${hiddenSummary(hidden, { done, shot: null, sort })}`);
