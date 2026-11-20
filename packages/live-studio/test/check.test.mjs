@@ -598,7 +598,7 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
 // on-screen words have to be read before they go, and a line too small is mush on a phone: both warnings, never refusals
 // captions cut per spoken phrase, as a Short's are, run faster than a subtitle: one line for them all, not one each,
 // so the warnings under them still get read
-test("check says many captions too brief to read in one warning, naming the first three", (t) => {
+test("check says many captions too brief to read in one line, naming the first three; --json lists each", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -609,24 +609,38 @@ test("check says many captions too brief to read in one warning, naming the firs
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
   );
-  const items = [1, 2, 3, 4, 5].map((n) => ({
-    kind: "text",
-    text: `word ${n}`,
-    from: n,
-    to: n + 0.4,
-  }));
-  items.push({ kind: "text", text: "tiny", size: 24, from: 7, to: 9 });
-  writeFileSync(join(dir, "src/timeline/text.json"), JSON.stringify({ items }));
-  const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
-  assert.equal(r.status, 0, r.stdout + r.stderr);
-  const { warnings } = JSON.parse(r.stdout);
-  const pace = warnings.filter((w) => /Netflix's subtitle pace/.test(w));
-  assert.equal(pace.length, 1, pace.join("\n"));
+  const brief = (count) => {
+    const items = Array.from({ length: count }, (_, n) => ({
+      kind: "text",
+      text: `word ${n + 1}`,
+      from: n + 1,
+      to: n + 1.4,
+    }));
+    items.push({ kind: "text", text: "tiny", size: 24, from: 8, to: 9.5 });
+    writeFileSync(join(dir, "src/timeline/text.json"), JSON.stringify({ items }));
+    const run = (args) =>
+      spawnSync("bun", [CHECK, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
+    const text = run([]),
+      json = run(["--json"]);
+    assert.equal(text.status, 0, text.stdout + text.stderr);
+    const pace = (lines) => lines.filter((w) => /Netflix's subtitle pace/.test(w));
+    return {
+      said: pace(text.stdout.split("\n")),
+      listed: pace(JSON.parse(json.stdout).warnings),
+      text,
+    };
+  };
+  const many = brief(5);
+  assert.equal(many.said.length, 1, many.said.join("\n"));
   assert.match(
-    pace[0],
+    many.said[0],
     /^⚠ src\/timeline\/text\.json 5 items show for less than a reader needs .*: items\[0\] "word 1" at 1\.00 heard, 0\.40 s of 0\.83; items\[1\] "word 2" at 2\.00 heard, 0\.40 s of 0\.83; items\[2\] "word 3" at 3\.00 heard, 0\.40 s of 0\.83; and 2 more/,
   );
-  assert.ok(warnings.some((w) => /items\[5\] "tiny" .*size 24/.test(w)));
+  assert.match(many.text.stdout, /items\[5\] "tiny" .*size 24/);
+  // a reader of --json fixes each one: every item keeps its own line there
+  assert.equal(many.listed.length, 5);
+  // three are said one by one
+  assert.equal(brief(3).said.length, 3);
 });
 
 test("check warns of text shown too briefly to read and text too small for a phone, each with the seconds it plays", (t) => {

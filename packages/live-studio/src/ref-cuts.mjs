@@ -81,8 +81,8 @@ export const referenceCopy = (project, file) => {
   if (!size || !existsSync(dir)) return null;
   let own = null;
   for (const name of readdirSync(dir)) {
-    const st = statSync(join(dir, name));
-    if (!st.isFile() || st.size !== size) continue;
+    const st = statSync(join(dir, name), { throwIfNoEntry: false });
+    if (!st?.isFile() || st.size !== size) continue;
     own ??= digest(file);
     if (digest(join(dir, name)) === own) return `references/${name}`;
   }

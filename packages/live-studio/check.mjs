@@ -825,8 +825,9 @@ if (Array.isArray(textRead?.items)) {
       },
     );
   });
-  // a Short's captions, cut per phrase, run faster than subtitles: past three, one line says them all
-  const folded = new Set(brief.length > 3 ? brief.map((b) => b.line) : []);
+  // a Short's captions, cut per phrase, run faster than subtitles: past three, one line says them all to a reader;
+  // --json keeps each, for the one fixing them
+  const folded = new Set(brief.length > 3 && !json ? brief.map((b) => b.line) : []);
   const lines = [
     ...(folded.size
       ? [
