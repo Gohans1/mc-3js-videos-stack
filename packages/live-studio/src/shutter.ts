@@ -76,3 +76,24 @@ export const apertureSamples = (count: number, time = 0): (ApertureSample | unde
   }
   return result;
 };
+
+// A whip turns the camera so far between two shutter samples that each prints as its own copy of the picture: such a
+// frame takes samples until one sample's turn moves the picture GAP_PX at most (food-eat-more's 20°-a-frame whips ghosted
+// at 8 and smeared clean at 32). `before` and `after` are the camera's facing at its first two samples.
+const GAP_PX = 12;
+export const MAX_SHUTTER_SAMPLES = 64;
+export const samplesForTurn = (
+  samples: number,
+  before: readonly number[],
+  after: readonly number[],
+  fovDeg: number,
+  height: number,
+) => {
+  const dot = before[0] * after[0] + before[1] * after[1] + before[2] * after[2];
+  const turn = Math.acos(
+    Math.min(1, Math.max(-1, dot / (Math.hypot(...before) * Math.hypot(...after)))),
+  );
+  const px = (turn / ((fovDeg * Math.PI) / 180)) * height;
+  if (!(px > GAP_PX)) return samples;
+  return Math.min(MAX_SHUTTER_SAMPLES, Math.ceil((samples * px) / GAP_PX));
+};
