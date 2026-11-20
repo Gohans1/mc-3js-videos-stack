@@ -54,6 +54,7 @@ import { noteNudge } from "./src/note-cli.mjs";
 import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
+import { refCutsWarning } from "./src/ref-cuts.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
@@ -1173,6 +1174,23 @@ for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
       `⚠ ${rel}${at}: array of objects hides nested timed {t} rows that Studio's keyRows() cannot load; key each actor by name in an object map (e.g. { "boss": { moves: [...] } }) instead of an array`,
     );
   }
+}
+
+// the camera's cuts in heard seconds, against the reference's (bun run reference study): a remake's cut the reference
+// lacks is the jump mid-move that CHECK=motion:cam would show
+const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =>
+  Number.isFinite(k?.t),
+);
+if (camKeys?.length && filmEnds()) {
+  const camClock = clockForTimeline("cam");
+  const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
+  const [first, ...rest] = refCutsWarning(
+    PROJECT,
+    camKeys.flatMap((k, i) => (i > 0 && k.cut ? [heard(k.t)] : [])),
+    heard(Math.max(...camKeys.map((k) => k.t))),
+  ).split("\n");
+  if (first) warnings.push(first);
+  hints.push(...rest);
 }
 
 const toolsWarning = ownToolsWarning(PROJECT);
