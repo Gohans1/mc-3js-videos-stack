@@ -94,3 +94,103 @@ test("a --crop band's offset is in the picture as shown: a phone video's rotatio
   // shown 90 wide and 160 tall
   assert.deepEqual(origin(rotated), [45, 120]);
 });
+
+// two captions popping on and off over a grey picture, as burnt-in captions do: white 0.5-1.5 s, yellow 2-2.8 s
+const captionVideo = (dir) => {
+  const file = join(dir, "captions.mp4");
+  const made = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=gray:s=160x284:d=3:r=30,drawbox=x=20:y=220:w=120:h=20:color=white:t=fill:enable='between(t,0.5,1.5)',drawbox=x=30:y=215:w=100:h=25:color=yellow:t=fill:enable='between(t,2,2.8)'",
+      "-pix_fmt",
+      "yuv420p",
+      file,
+    ],
+    { encoding: "utf8", timeout: 15_000 },
+  );
+  assert.equal(made.status, 0, made.stderr);
+  return file;
+};
+
+test("--captions reads the band every quarter second over the span, and needs a band", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-captions-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const video = captionVideo(dir);
+  const r = python([
+    SCRIPT,
+    video,
+    "--captions",
+    "--crop",
+    "0,0.7,1,0.2",
+    "--to",
+    "1",
+    "--dry-run",
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout).times, [0.125, 0.375, 0.625, 0.875]);
+  for (const args of [["--crop", "0,0.7,1,0.2", "--at", "1"], []]) {
+    const bad = python([SCRIPT, video, "--captions", ...args, "--dry-run"]);
+    assert.equal(bad.status, 2, bad.stderr);
+    assert.match(bad.stderr, /--captions reads a --crop band/);
+  }
+});
+
+test("the band's change peaks on the first frame a caption pops on or off", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-captions-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const r = python([
+    "-c",
+    "import runpy,sys,json; m=runpy.run_path(sys.argv[1]); print(json.dumps(m['band_changes'](sys.argv[2],[0,0.7,1,0.2],0,3)))",
+    SCRIPT,
+    captionVideo(dir),
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  const changes = JSON.parse(r.stdout);
+  const peaks = changes
+    .filter(([, change]) => change > 1)
+    .map(([at]) => at)
+    .toSorted((a, b) => a - b);
+  // on from frame 15, off from frame 46 (1.5 s is still on), on again at 60, off from 85
+  assert.deepEqual(peaks, [0.5, 1.533, 2, 2.833]);
+});
+
+// "He made" until 0.6 s, the band blank until 0.7 s, then "real cookies"; a prop's "SALT" label shares the band, and the
+// read at 0.375 caught a caption mid-animation; at 0.5 a watermark glues letters on ("madems"). The band's pixels change most at 0.5 and 0.8 (the background brightening)
+const CAPTIONS = `import runpy,sys,json
+m=runpy.run_path(sys.argv[1])
+box=lambda x,y,h=20:[[x,y],[x+40,y],[x+40,y+h],[x,y+h]]
+word=lambda t,x,y=100,s=0.9,h=20:{"text":t,"score":s,"box":box(x,y,h)}
+shown=lambda t:[word("made",60),word("He",10)] if t<0.5 else [word("madems",60),word("He",10)] if t<0.6 else [] if t<0.7 else [word("real",10,s=0.8),word("cookies",60,s=0.8)]
+reads=[{"at":0.125,"text":shown(0.125)+[word("SALT",10,60,1,8)]},
+ {"at":0.375,"text":[word("He mode",10,s=0.6)]},
+ {"at":0.625,"text":shown(0.625)},
+ {"at":0.875,"text":shown(0.875)}]
+changes=[[0.4,1.0],[0.5,30.0],[0.6,2.0],[0.7,3.0],[0.8,25.0]]
+asked=[]
+def read(t):
+    asked.append(t)
+    return shown(t)
+print(json.dumps([m["captions_from"](reads,changes,0,1),m["captions_from"](reads,changes,0,1,read),asked]))`;
+
+test("caption reads keep the caption's line, join alike, and land each change on the first frame of the next", () => {
+  const r = python(["-c", CAPTIONS, SCRIPT]);
+  assert.equal(r.status, 0, r.stderr);
+  const [byChange, byRead, asked] = JSON.parse(r.stdout);
+  // without frame reads, the frame of most change stands
+  assert.deepEqual(byChange, [
+    { from: 0, to: 0.5, text: "He made", score: 0.9 },
+    { from: 0.8, to: 1, text: "real cookies", score: 0.8 },
+  ]);
+  // with them, each change is the first frame not showing the caption before it
+  assert.deepEqual(byRead, [
+    { from: 0, to: 0.6, text: "He made", score: 0.9 },
+    { from: 0.7, to: 1, text: "real cookies", score: 0.8 },
+  ]);
+  // only frames between two reads that differ
+  assert.ok(asked.every((t) => [0.4, 0.5, 0.6, 0.7, 0.8].includes(t)));
+});
