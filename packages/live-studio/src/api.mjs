@@ -93,6 +93,7 @@ const NoteIn = z.object({
     id: z.string().regex(/^[a-z0-9]+$/),
     t: z.number().refine(Number.isFinite),
     text: z.string(),
+    staleBuild: z.boolean().optional(),
   }),
   img: jpeg,
   crop: jpeg,
@@ -154,8 +155,9 @@ const TextSave = SoundSave;
 const TogetherSave = z.object({
   files: z
     .array(z.object({ name: z.string(), base: z.string(), data: z.unknown() }))
-    .min(2)
+    .min(1)
     .refine((fs) => new Set(fs.map((f) => f.name)).size === fs.length, "each file once"),
+  actor: z.enum(["person", "agent"]).optional(),
 });
 const KeySave = z.object({
   base: z.string(),
@@ -1465,8 +1467,9 @@ export const createApi = (
   });
   // Files edited in one go (a cut moved on the camera row changes cam.json and shots.json), named as their own routes name them:
   // every one is checked before any is written, so a 409 on one never leaves the others half saved
-  const named = (name) =>
-    new Map([
+  const named = (name) => {
+    const keyFiles = film.keyFiles ?? [];
+    const byName = new Map([
       ["sound", film.sound],
       ["cam", film.cam],
       ["lights", film.lights],
@@ -1475,18 +1478,34 @@ export const createApi = (
       ["adjustment", film.adjustment],
       ["openfilm", openfilm],
       ["timing", film.timing],
-      ...film.keyFiles.map((k, i) => [`keys/${i}`, k]),
-    ]).get(name);
+      ...keyFiles.map((k, i) => [`keys/${i}`, k]),
+    ]);
+    if (byName.has(name)) return byName.get(name);
+    const matches = keyFiles.filter((k) => k?.edit === name);
+    return matches.length === 1 ? matches[0] : undefined;
+  };
   mountCollaboration(app, named);
   mountHistory(app, film);
   app.post("/api/together", zValidator("json", TogetherSave), (c) => {
-    const files = c.req.valid("json").files.map((f) => ({ ...f, file: named(f.name) }));
+    const { files: rawFiles, actor } = c.req.valid("json");
+    const files = rawFiles.map((f) => ({ ...f, file: named(f.name) }));
     if (files.some((f) => !f.file)) return noSound(c);
-    const nos = files.map((f) => f.file.check(f.base, f.data));
-    if (nos.some((no) => no?.conflict)) return c.body(null, 409);
+    if (new Set(files.map((f) => f.file)).size !== files.length)
+      return c.json({ problems: ["each file once"] }, 400);
+    const isAgent = actor === "agent";
+    const writeOpts = isAgent ? { actor: "agent" } : undefined;
+    const nos = files.map((f) => {
+      if (isAgent) {
+        const current = f.file.read();
+        if (current && current.version !== f.base) return { conflict: true };
+      }
+      return f.file.check(f.base, f.data);
+    });
+    if (nos.some((no) => no?.conflict))
+      return isAgent ? c.json({ conflict: true }, 409) : c.body(null, 409);
     if (nos.some(Boolean))
       return c.json({ problems: nos.flatMap((no) => no?.problems ?? []) }, 400);
-    const saved = files.map((f) => ({ name: f.name, ...f.file.write(f.base, f.data) }));
+    const saved = files.map((f) => ({ name: f.name, ...f.file.write(f.base, f.data, writeOpts) }));
     return c.json({
       versions: Object.fromEntries(saved.map((f) => [f.name, f.version])),
       files: Object.fromEntries(saved.map((f) => [f.name, f.data])),

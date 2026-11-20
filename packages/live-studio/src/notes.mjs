@@ -203,6 +203,8 @@ export const createNotes = (project) => {
       "learned",
     ])
       delete note[k];
+    if (note.staleBuild === true) note.staleBuild = true;
+    else delete note.staleBuild;
     note.img = picture ? `notes/img/${note.id}.jpg` : undefined;
     if (picture) savePicture(note.id, picture);
     for (const [kind, pic] of [

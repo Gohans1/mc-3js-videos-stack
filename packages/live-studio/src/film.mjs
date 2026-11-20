@@ -37,6 +37,7 @@ import {
   TimingTimeline,
   Trials,
 } from "./contract.ts";
+import { filmVersionAsync } from "./film-version.mjs";
 import { ratioOf } from "./frame.ts";
 import { openFilmHistory } from "./history.mjs";
 import { createNotes, watchNotesFile } from "./notes.mjs";
@@ -380,16 +381,8 @@ export const openFilm = (projectDir, { send, activity }) => {
       .filter((l) => l.trim())
       .map((l) => l.match(/\/\/ (.*)$/)?.[1] ?? "");
   };
-  // Which version of the film a note was said about, when the film is in git
-  const stamp = () =>
-    new Promise((done) =>
-      execFile(
-        "git",
-        ["describe", "--tags", "--always", "--dirty"],
-        { cwd: PROJECT, encoding: "utf8" },
-        (e, out) => done({ version: e ? undefined : out.trim() }),
-      ),
-    );
+  // Which version of the film a note was said about (git describe when tracked, local-<8hex> otherwise)
+  const stamp = async () => ({ version: await filmVersionAsync(PROJECT) });
 
   // ---------- Files that are swapped in whole while a page may be reading them
   // Windows won't replace a file someone is still reading. A mix swaps in by cutting its readers off: the page fetches the new one right after

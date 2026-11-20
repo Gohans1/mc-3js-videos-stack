@@ -8,11 +8,96 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { applyEdits, changes, equalJson, overlapping, pointer } from "./merge-edits.mjs";
 
 const noticeKey = (notice) => (notice ? (notice.id ?? notice.at ?? "__legacy__") : null);
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const unescapeSeg = (seg) => seg.replaceAll("~1", "/").replaceAll("~0", "~");
+const shortRowId = (id) => (UUID_RE.test(id) || id.length > 16 ? id.slice(0, 8) : id);
+
+const lookupRowAt = (candidateDocs, prefixSegs, id) => {
+  for (const doc of candidateDocs) {
+    if (doc == null || typeof doc !== "object") continue;
+    let cur = doc;
+    for (const seg of prefixSegs) {
+      if (cur == null || typeof cur !== "object") {
+        cur = undefined;
+        break;
+      }
+      if (Array.isArray(cur) && seg.startsWith("@")) {
+        cur = cur.find((row) => row && typeof row === "object" && row.id === seg.slice(1));
+      } else if (!Array.isArray(cur) && Object.hasOwn(cur, seg)) {
+        cur = cur[seg];
+      } else {
+        cur = undefined;
+        break;
+      }
+    }
+    if (Array.isArray(cur)) {
+      const hit = cur.find((row) => row && typeof row === "object" && row.id === id);
+      if (hit) return hit;
+    }
+  }
+  return undefined;
+};
+
+export const formatProtectedPointer = (ptr, candidateDocs = []) => {
+  if (typeof ptr !== "string" || !ptr.startsWith("/") || ptr === "/") return String(ptr ?? "");
+  const rawSegs = ptr.slice(1).split("/");
+  const unescaped = rawSegs.map(unescapeSeg);
+  let foundTime;
+  const displaySegs = rawSegs.map((raw, i) => {
+    const seg = unescaped[i];
+    if (!seg.startsWith("@")) return raw;
+    const id = seg.slice(1);
+    const row = lookupRowAt(candidateDocs, unescaped.slice(0, i), id);
+    if (typeof row?.t === "number" && Number.isFinite(row.t)) foundTime = +row.t.toFixed(3);
+    const shortId = shortRowId(id);
+    return shortId === id ? raw : `@${shortId.replaceAll("~", "~0").replaceAll("/", "~1")}`;
+  });
+  const label = `/${displaySegs.join("/")}`;
+  return foundTime === undefined ? label : `${label} (t=${foundTime}s)`;
+};
+
+export const summarizeNotice = (notice, candidateDocs = [], { full = false } = {}) => {
+  const paths = Array.isArray(notice?.retained) ? notice.retained : [];
+  const docs = [...candidateDocs, notice?.incoming];
+  const pathLabels = paths.map((p) => formatProtectedPointer(p, docs));
+  const kind = notice?.kind ?? (notice?.problems?.length ? "rejected" : "retained");
+  if (full) {
+    return {
+      ...notice,
+      kind,
+      paths,
+      pathLabels,
+    };
+  }
+  return {
+    ...(notice?.id !== undefined ? { id: notice.id } : {}),
+    ...(notice?.file !== undefined ? { file: notice.file } : {}),
+    ...(notice?.at !== undefined ? { at: notice.at } : {}),
+    kind,
+    paths,
+    pathLabels,
+    ...(notice?.problems?.length ? { problems: notice.problems } : {}),
+  };
+};
+
+const readDiskDoc = (project, rel) => {
+  if (typeof rel !== "string" || !rel) return undefined;
+  try {
+    const root = resolve(project);
+    const target = resolve(root, rel);
+    const r = relative(root, target);
+    if (!r || r.split(/[\\/]/)[0] === ".." || isAbsolute(r) || !existsSync(target))
+      return undefined;
+    return JSON.parse(readFileSync(target, "utf8"));
+  } catch {
+    return undefined;
+  }
+};
 
 export const openEditProtection = (
   project,
@@ -191,9 +276,17 @@ export const warnProtectedEdits = (project) => {
       state.guards.length &&
       notice &&
       noticeKey(notice) !== (state.acknowledgedNoticeId ?? null)
-    )
+    ) {
+      const candidateDocs = [
+        readDiskDoc(project, notice.file),
+        state.latest?.data,
+        notice.incoming,
+        ...(Array.isArray(state.versions) ? state.versions.toReversed().map((v) => v?.data) : []),
+      ];
+      const labels = (notice.retained ?? []).map((p) => formatProtectedPointer(p, candidateDocs));
       console.error(
-        `Studio retained human edits in ${notice.file}: ${(notice.retained ?? []).join(", ")}. Read the file again; use collab read/write to intentionally revise protected fields.`,
+        `Studio retained human edits in ${notice.file}: ${labels.join(", ")}. Read the file again; use collab read/write to intentionally revise protected fields.`,
       );
+    }
   }
 };

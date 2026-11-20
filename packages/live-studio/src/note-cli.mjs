@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
@@ -6,6 +5,7 @@ import { isAbsolute, join, resolve } from "node:path";
 // writers would lose a note), or straight into the file when no studio is running
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
+import { filmVersion } from "./film-version.mjs";
 import { noteState, wholeNote } from "./note-state.mjs";
 import { createNotes, deletedSaid, findNote, noteNumbers } from "./notes.mjs";
 import { studioPort } from "./tell.mjs";
@@ -96,17 +96,7 @@ export const parseFixTime = (raw) => {
   return v;
 };
 
-const version = (project) => {
-  try {
-    return execFileSync("git", ["describe", "--tags", "--always", "--dirty"], {
-      cwd: project,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-  } catch {
-    return "no git";
-  }
-};
+const version = (project) => filmVersion(project);
 
 // A note named by its id or by the #N bun run notes shows (notes.mjs findNote)
 export const resolveNote = (project, key) => {

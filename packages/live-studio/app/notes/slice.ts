@@ -43,6 +43,7 @@ export interface Note {
   done: boolean;
   pin?: Pin | null;
   freeCam?: boolean;
+  staleBuild?: boolean;
   img?: string;
   fixes?: Fix[];
   state?: NoteState;
