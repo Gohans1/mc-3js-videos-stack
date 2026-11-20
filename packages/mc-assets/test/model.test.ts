@@ -12,6 +12,7 @@ import {
   modelBounds,
   type ModelJsonLike,
   type ModelRendererApi,
+  texture,
 } from "../src/model";
 
 const GOHANS_PACK_ROOT = resolve(import.meta.dir, "../pack");
@@ -382,6 +383,33 @@ describe("modelBounds", () => {
     expect(syncBounds!.size[0]).toBeGreaterThan(0);
     expect(syncBounds!.size[1]).toBeGreaterThan(0);
     expect(syncBounds!.size[2]).toBeGreaterThan(0);
+  });
+});
+
+// films unzipped the jar themselves to texture hand-built props (a copy in each film's src/mc.ts), skipping resource packs
+describe("texture", () => {
+  test("reads a texture through the asset stack as a pixel-sharp sRGB texture, and names a missing one", async () => {
+    const read: string[] = [];
+    const image = { width: 16, height: 16 };
+    const renderer = {
+      async readTexture(path: string) {
+        read.push(path);
+        return path.includes("missing") ? null : { image };
+      },
+    } as unknown as ModelRendererApi;
+    const t = await texture([], "block/iron_block", { renderer });
+    expect(t.image).toBe(image);
+    expect(t.magFilter).toBe(THREE.NearestFilter);
+    expect(t.colorSpace).toBe(THREE.SRGBColorSpace);
+    expect(t.wrapS).toBe(THREE.RepeatWrapping);
+    await texture([], "mymod:item/mug", { renderer });
+    expect(read).toEqual([
+      "assets/minecraft/textures/block/iron_block.png",
+      "assets/mymod/textures/item/mug.png",
+    ]);
+    await expect(texture([], "block/missing_thing", { renderer })).rejects.toThrow(
+      "assets/minecraft/textures/block/missing_thing.png",
+    );
   });
 });
 

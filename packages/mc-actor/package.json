@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./player": "./src/player.ts",
+    "./skin-paint": "./src/skin-paint.ts",
     "./mocap": "./src/mocap.ts",
     "./clips": "./src/clips.ts",
     "./ease": "./src/ease.ts",

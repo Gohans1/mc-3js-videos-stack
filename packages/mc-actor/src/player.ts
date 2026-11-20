@@ -14,31 +14,11 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 
 import { clamp01, smooth } from "./ease";
 import { updaterTo } from "./matrices";
+import { BOX, facesOf } from "./skin-paint";
 
 export const PX = 1.875 / 32; // one skin pixel at the size the game draws a player
-const uvBox = (ox, oy, w, h, d) => ({
-  top: [ox + d, oy, w, d],
-  bottom: [ox + d + w, oy, w, d],
-  right: [ox, oy + d, d, h],
-  front: [ox + d, oy + d, w, h],
-  left: [ox + d + w, oy + d, d, h],
-  back: [ox + d + w + d, oy + d, w, h],
-});
 // Standard 64x64 Steve skin UV rects ([x, y, w, h]) for all 6 inner Layer-1 and 6 outer Layer-2 body boxes
-export const SKIN_UV = {
-  head: uvBox(0, 0, 8, 8, 8),
-  hat: uvBox(32, 0, 8, 8, 8),
-  body: uvBox(16, 16, 8, 12, 4),
-  jacket: uvBox(16, 32, 8, 12, 4),
-  armR: uvBox(40, 16, 4, 12, 4),
-  sleeveR: uvBox(40, 32, 4, 12, 4),
-  armL: uvBox(32, 48, 4, 12, 4),
-  sleeveL: uvBox(48, 48, 4, 12, 4),
-  legR: uvBox(0, 16, 4, 12, 4),
-  pantR: uvBox(0, 32, 4, 12, 4),
-  legL: uvBox(16, 48, 4, 12, 4),
-  pantL: uvBox(0, 48, 4, 12, 4),
-};
+export const SKIN_UV = Object.fromEntries(Object.entries(BOX).map(([k, box]) => [k, facesOf(box)]));
 const D = Math.PI / 180;
 const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
 // GLTFLoader strips ":" from node names (PropertyBinding.sanitizeNodeName), so "Arm:Left:Upper" is "ArmLeftUpper"

@@ -43,6 +43,7 @@ export interface ModelRendererApi {
     model: ResolvedModel,
     args?: LoadModelArgs,
   ) => Promise<THREE.Group>;
+  readTexture?: (path: string, assets: AssetsInput) => Promise<{ image: unknown } | null>;
 }
 
 export interface ModelLoadOptions {
@@ -188,4 +189,32 @@ export async function itemModel(
   applyShadows(inner, opts.shadows ?? true);
   holder.add(inner);
   return holder;
+}
+
+/**
+ * A texture by name through the asset stack (resource packs first, then the jar), e.g. "block/iron_block",
+ * "item/sugar" or "mymod:block/x": pixel-sharp, sRGB, repeating, the first frame of an animated one.
+ * A new THREE.Texture each call, so its repeat/offset are the caller's own.
+ */
+export async function texture(
+  sources: AssetsInput,
+  name: string,
+  opts: { renderer?: ModelRendererApi } = {},
+): Promise<THREE.Texture> {
+  const colon = name.indexOf(":");
+  const path = `assets/${colon >= 0 ? name.slice(0, colon) : "minecraft"}/textures/${name.slice(colon + 1)}.png`;
+  const bmr = opts.renderer ?? (await loadBmr());
+  const data = await bmr.readTexture!(path, sources);
+  if (!data) throw new Error(`no texture ${path} in the asset sources`);
+  const t = new THREE.Texture(data.image as THREE.Texture["image"]);
+  Object.assign(t, {
+    magFilter: THREE.NearestFilter,
+    minFilter: THREE.NearestMipmapLinearFilter,
+    colorSpace: THREE.SRGBColorSpace,
+    wrapS: THREE.RepeatWrapping,
+    wrapT: THREE.RepeatWrapping,
+    anisotropy: 8,
+  });
+  t.needsUpdate = true;
+  return t;
 }
