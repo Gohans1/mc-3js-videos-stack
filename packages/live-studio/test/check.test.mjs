@@ -356,8 +356,8 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
   assert.doesNotMatch(r.stdout, /"zoomRate"/);
 });
 
-// coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
-test("check --json gives the reference coverage, matching sound hits with effects only, and warns of a guide sound", (t) => {
+// a film with the demo's scene, a 10 s reference study of these hits and these sound effects ("line" is its narration)
+const coverageFilm = (t, hits, sfx) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -374,25 +374,13 @@ test("check --json gives the reference coverage, matching sound hits with effect
   mkdirSync(join(dir, "renders/reference/ref/run-1"), { recursive: true });
   writeFileSync(
     join(dir, "renders/reference/ref/run-1/study.json"),
-    JSON.stringify({
-      fps: 30,
-      duration: 10,
-      picture: { cuts: [] },
-      sound: { hits: [{ at: 0 }, { at: 2 }, { at: 6 }] },
-    }),
+    JSON.stringify({ fps: 30, duration: 10, picture: { cuts: [] }, sound: { hits } }),
   );
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
-    JSON.stringify({
-      beds: [],
-      narration: "line",
-      sfx: [
-        { name: "line", at: 0, gain: 0, guide: true },
-        { name: "door_slam", at: 2, gain: 0 },
-      ],
-    }),
+    JSON.stringify({ beds: [], narration: "line", sfx }),
   );
   writeFileSync(
     join(dir, "src/timeline/cam.json"),
@@ -413,13 +401,45 @@ test("check --json gives the reference coverage, matching sound hits with effect
   );
   const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const { coverage, warnings } = JSON.parse(r.stdout);
+  return JSON.parse(r.stdout);
+};
+
+// coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
+test("check --json gives the reference coverage, matching sound hits with effects only, and warns of a guide sound", (t) => {
+  const { coverage, warnings } = coverageFilm(
+    t,
+    [{ at: 0 }, { at: 2 }, { at: 6 }],
+    [
+      { name: "line", at: 0, gain: 0, guide: true },
+      { name: "door_slam", at: 2, gain: 0 },
+    ],
+  );
   assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
   assert.ok(
     warnings.some((w) => /guide sound "line": drafts play it; bun run mix refuses a final/.test(w)),
   );
   assert.ok(!warnings.some((w) => /"guide": no key the studio reads/.test(w)));
   assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
+});
+
+// a study hears every onset, the voice's syllables too: only its strong accents are the cues a remake must hit
+test("coverage asks for the reference's strong hits only, met by an effect starting up to half a second early", (t) => {
+  const { coverage } = coverageFilm(
+    t,
+    [
+      { at: 2, strength: 0.9 },
+      { at: 4, strength: 0.2 },
+      { at: 6, strength: 0.7 },
+      { at: 8, strength: 0.6 },
+    ],
+    [
+      { name: "door_slam", at: 1.6, gain: 0 },
+      { name: "door_slam", at: 4, gain: 0 },
+      { name: "door_slam", at: 7.2, gain: 0 },
+    ],
+  );
+  // a whoosh starts before the beat its peak lands on (1.6 for 2); 7.2 is too early for 8
+  assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
 });
 
 // the build throws on an unknown tone map; check is where an AI looks after editing edit.json

@@ -56,7 +56,7 @@ import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
 import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
 import { formatCoverage, refCoverage } from "./src/ref-coverage.mjs";
-import { refCutsWarning } from "./src/ref-cuts.mjs";
+import { refCutsWarning, referenceCopy, unstudiedWarning } from "./src/ref-cuts.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
@@ -1224,7 +1224,21 @@ if (guides.length)
   warnings.push(
     `⚠ ${conf.soundTimeline} guide sound ${[...new Set(guides)].map((n) => `"${n}"`).join(", ")}: drafts play it; bun run mix refuses a final until the film's own sound replaces it`,
   );
+const copies = new Map();
+for (const list of ["beds", "sfx"])
+  for (const e of Array.isArray(lanesRead?.[list]) ? lanesRead[list] : []) {
+    if (e?.guide === true || typeof e?.name !== "string" || copies.has(e.name)) continue;
+    const file = sound?.fileOf(e.name);
+    const copy = file ? referenceCopy(PROJECT, file) : null;
+    if (copy) copies.set(e.name, copy);
+  }
+for (const [name, copy] of copies)
+  warnings.push(
+    `⚠ ${conf.soundTimeline} "${name}" is ${copy} byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
+  );
 
+const unstudied = unstudiedWarning(PROJECT);
+if (unstudied) warnings.push(unstudied);
 const toolsWarning = ownToolsWarning(PROJECT);
 if (toolsWarning) warnings.push(toolsWarning);
 

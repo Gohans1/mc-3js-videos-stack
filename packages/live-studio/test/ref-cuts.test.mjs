@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { latestStudy, refCutsWarning } from "../src/ref-cuts.mjs";
+import { latestStudy, refCutsWarning, referenceCopy, unstudiedWarning } from "../src/ref-cuts.mjs";
 
 const study = (dir, name, run, cuts, when) => {
   const folder = join(dir, "renders/reference", name, run);
@@ -51,5 +51,35 @@ test("no study, no warning", () => {
   assert.equal(
     refCutsWarning(mkdtempSync(join(tmpdir(), "ref-cuts-")), "src/timeline/cam.json", [2.62], 10),
     "",
+  );
+});
+
+test("a reference with no study is named, since the cut check and the coverage are silent without one", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
+  assert.equal(unstudiedWarning(dir), "");
+  mkdirSync(join(dir, "references"));
+  writeFileSync(join(dir, "references/ref.mp4"), "");
+  writeFileSync(join(dir, "references/vox.wav"), "");
+  assert.equal(
+    unstudiedWarning(dir),
+    "⚠ references/ref.mp4 has no study, so check can neither match its cuts nor count coverage: bun run reference study references/ref.mp4",
+  );
+  study(dir, "ref", "run-1", [cut(1)], new Date());
+  assert.equal(unstudiedWarning(dir), "");
+});
+
+test("a sound file that is a reference's own audio, byte for byte, is named by the reference file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
+  mkdirSync(join(dir, "references"));
+  mkdirSync(join(dir, "sound"));
+  writeFileSync(join(dir, "references/vox.wav"), "RIFF voice");
+  writeFileSync(join(dir, "sound/ref-vox.wav"), "RIFF voice");
+  writeFileSync(join(dir, "sound/door.wav"), "RIFF door!");
+  assert.equal(referenceCopy(dir, join(dir, "sound/ref-vox.wav")), "references/vox.wav");
+  assert.equal(referenceCopy(dir, join(dir, "sound/door.wav")), null, "same size, other bytes");
+  assert.equal(
+    referenceCopy(join(dir, "sound"), join(dir, "sound/door.wav")),
+    null,
+    "no references/",
   );
 });
