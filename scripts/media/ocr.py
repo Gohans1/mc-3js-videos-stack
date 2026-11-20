@@ -19,7 +19,7 @@ frame takes about 2.4 s, the band about 1 s. Text boxes stay in the whole pictur
 caption's own line (a label on a prop or a watermark is left out); reads alike join, and each change of text is then
 read down to its first frame. captions.json lists {from, to, text, score} in input-file seconds, rewritten after every
 read ("complete": false and "readUntil" until the frames are read); a caption shown under 0.25 s can fall between
-reads. A minute of video takes 6 to 10 minutes: pass --minutes 15.
+reads. About 2 s a read, some 13 minutes for a minute of video: pass --minutes 15 for each minute.
 --dry-run validates and prints the plan without loading OCR or writing files.
 """
 import argparse
@@ -104,15 +104,21 @@ def _middle(box):
     return sum(y for _, y in box["box"]) / 4
 
 
-def reading_order(boxes):
-    """A frame's text as read: lines top to bottom (box middles within half a box's height), each left to right."""
+def text_lines(boxes):
+    """A frame's boxes as lines top to bottom (middles within half the shorter box's height), each left to right."""
     lines = []
     for box in sorted(boxes, key=_middle):
-        if lines and abs(_middle(box) - lines[-1][0]) < _height(box) / 2:
-            lines[-1][1].append(box)
+        first = lines[-1][0] if lines else None
+        if first and abs(_middle(box) - _middle(first)) < min(_height(box), _height(first)) / 2:
+            lines[-1].append(box)
         else:
-            lines.append((_middle(box), [box]))
-    return [b for _, line in lines for b in sorted(line, key=lambda b: min(x for x, _ in b["box"]))]
+            lines.append([box])
+    return [sorted(line, key=lambda b: min(x for x, _ in b["box"])) for line in lines]
+
+
+def reading_order(boxes):
+    """A frame's text as read: lines top to bottom, each left to right."""
+    return [b for line in text_lines(boxes) for b in line]
 
 
 def caption_row(reads):
@@ -126,15 +132,47 @@ def caption_row(reads):
     return height, middles[len(middles) // 2]
 
 
-# A word read below this is a caption caught mid-animation (popping in, scaling): no answer, so a change of text is
-# looked for over the wider gap around it
+def caption_block(boxes, row):
+    """The caption's own words in one frame: the full-height line nearest the caption row, and lines stacked a line
+    apart above or below it, centred or left-aligned with it. A word overlapping the caption's line from off it,
+    shorter, or off its middle (a watermark, a label on a prop) is left out."""
+    if not row:
+        return []
+    height, middle = row
+    lines = text_lines([b for b in boxes if _height(b) >= 0.6 * height])
+    tall = lambda line: max(_height(b) for b in line) >= 0.8 * height
+    mid = lambda line: sum(_middle(b) for b in line) / len(line)
+    left = lambda line: min(x for b in line for x, _ in b["box"])
+    centre = lambda line: (left(line) + max(x for b in line for x, _ in b["box"])) / 2
+    near = [line for line in lines if tall(line) and abs(mid(line) - middle) <= 0.75 * height]
+    if not near:
+        return []
+    block = [min(near, key=lambda line: abs(mid(line) - middle))]
+    for line in lines:
+        gaps = [abs(mid(line) - mid(kept)) for kept in block]
+        aligned = any(abs(centre(line) - centre(kept)) <= height or abs(left(line) - left(kept)) <= height
+                      for kept in block)
+        if line not in block and tall(line) and aligned and 0.8 * height <= min(gaps) <= 1.6 * height:
+            block.append(line)
+    return reading_order([b for line in block for b in line])
+
+
+# A read with a word below this is a caption caught mid-animation (popping in, scaling), unless the read next to it
+# reads alike (a stylised font reads low every time)
 SURE = 0.8
 # Neighbouring reads this alike are one caption misread by a letter; "more sugar" and "more salt" are two
 ALIKE = 0.9
 
 
 def _likeness(a, b):
-    return 1.0 if a.lower() == b.lower() else difflib.SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    # OCR glues stray letters onto a caption ("that t made", "to makey e your"): one-letter words are left out of it
+    a, b = (" ".join(w for w in x.lower().split() if len(w) > 1) or x.lower() for x in (a, b))
+    return 1.0 if a == b else difflib.SequenceMatcher(None, a, b).ratio()
+
+
+def _strays(text):
+    """Letters OCR glued on as words of their own ("One was s spicier"); a and I are words."""
+    return sum(len(w) == 1 and w.isalpha() and w.lower() not in ("a", "i") for w in text.split())
 
 
 def _alike(a, b):
@@ -142,28 +180,26 @@ def _alike(a, b):
 
 
 def captions_from(reads, changes, start, end, read=None):
-    """Reads [{at, text: OCR boxes}] in time order into captions: neighbours read alike join, keeping the surer
-    reading. Each change of text lands on the first frame showing the next caption, found by read(frame second) ->
+    """Reads [{at, text: OCR boxes}] in time order into captions: neighbours read alike join, keeping the reading
+    with fewest stray letters, then the surer. Each change of text lands on the first frame showing the next caption, found by read(frame second) ->
     OCR boxes: the frame where the band changes most, checked with the frame before it, else halving the gap. Without
     read, the frame of most change stands (a background brightening under the band can win it)."""
     row = caption_row(reads)
 
     def caption(boxes):
-        kept = [b for b in boxes if row and _height(b) >= 0.6 * row[0] and abs(_middle(b) - row[1]) <= 0.3 * row[0]]
-        if any(b["score"] < SURE for b in kept):
-            return None, 0
-        kept = reading_order(kept)
-        return " ".join(" ".join(b["text"] for b in kept).split()), round(min((b["score"] for b in kept), default=0), 3)
+        kept = caption_block(boxes, row)
+        return " ".join(" ".join(b["text"] for b in kept).split()), round(min((b["score"] for b in kept), default=1), 3)
 
+    read_texts = [caption(r["text"]) for r in reads]
     runs = []
-    for r in reads:
-        text, score = caption(r["text"])
-        if text is None:
+    for i, (r, (text, score)) in enumerate(zip(reads, read_texts)):
+        beside = [read_texts[j][0] for j in (i - 1, i + 1) if 0 <= j < len(reads)]
+        if score < SURE and not any(_alike(text, other) for other in beside):
             continue
         last = runs[-1] if runs else None
         if last and _alike(last["text"], text):
             last["last"] = r["at"]
-            if score > last["score"]:
+            if (_strays(text), -score) < (_strays(last["text"]), -last["score"]):
                 last.update(text=text, score=score)
         else:
             runs.append({"first": r["at"], "last": r["at"], "text": text, "score": score})
@@ -180,7 +216,7 @@ def captions_from(reads, changes, start, end, read=None):
         # nearer the caption before than the one after: a frame misread by a letter or two still counts
         def shows_before(i):
             text, _ = caption(read(frames[i]))
-            return text is not None and _likeness(text, before["text"]) > _likeness(text, after["text"])
+            return _likeness(text, before["text"]) > _likeness(text, after["text"])
 
         if not shows_before(top) and (top == 0 or shows_before(top - 1)):
             return frames[top]

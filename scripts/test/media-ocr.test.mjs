@@ -160,7 +160,7 @@ test("the band's change peaks on the first frame a caption pops on or off", (t) 
 });
 
 // "He made" until 0.6 s, the band blank until 0.7 s, then "real cookies"; a prop's "SALT" label shares the band, and the
-// read at 0.375 caught a caption mid-animation; at 0.5 a watermark glues letters on ("madems"). The band's pixels change most at 0.5 and 0.8 (the background brightening)
+// read at 0.375 caught a caption mid-animation; at 0.5 a watermark glues letters on ("madems"), and at 0.95 stray ones ("reall s cookies e"). The band's pixels change most at 0.5 and 0.8 (the background brightening)
 const CAPTIONS = `import runpy,sys,json
 m=runpy.run_path(sys.argv[1])
 box=lambda x,y,h=20:[[x,y],[x+40,y],[x+40,y+h],[x,y+h]]
@@ -169,7 +169,8 @@ shown=lambda t:[word("made",60),word("He",10)] if t<0.5 else [word("madems",60),
 reads=[{"at":0.125,"text":shown(0.125)+[word("SALT",10,60,1,8)]},
  {"at":0.375,"text":[word("He mode",10,s=0.6)]},
  {"at":0.625,"text":shown(0.625)},
- {"at":0.875,"text":shown(0.875)}]
+ {"at":0.875,"text":shown(0.875)},
+ {"at":0.95,"text":[word("reall s cookies e",10,s=0.8)]}]
 changes=[[0.4,1.0],[0.5,30.0],[0.6,2.0],[0.7,3.0],[0.8,25.0]]
 asked=[]
 def read(t):
@@ -193,4 +194,35 @@ test("caption reads keep the caption's line, join alike, and land each change on
   ]);
   // only frames between two reads that differ
   assert.ok(asked.every((t) => [0.4, 0.5, 0.6, 0.7, 0.8].includes(t)));
+});
+
+// Shorts stack a long caption in two lines and move one up or down; a stylised font can read under 0.8 every time; a
+// watermark as tall as the caption a line under it sits off the caption's middle; of two readings, the one without a
+// stray letter is the caption
+const STACKED = `import runpy,sys,json
+m=runpy.run_path(sys.argv[1])
+box=lambda x,y,h=20:[[x,y],[x+40,y],[x+40,y+h],[x,y+h]]
+word=lambda t,x=10,y=100,s=0.95:{"text":t,"score":s,"box":box(x,y)}
+reads=[{"at":0.125,"text":[word("first")]},
+ {"at":0.375,"text":[word("HE MADE",y=88),word("REAL COOKIES",y=112)]},
+ {"at":0.625,"text":[word("HE MADE",y=88),word("REAL COOKIES",y=112)]},
+ {"at":0.875,"text":[word("lower",y=108),word("ZACKD",x=300,y=130)]},
+ {"at":1.125,"text":[word("SECOND",s=0.79)]},
+ {"at":1.375,"text":[word("SECOND",s=0.79)]},
+ {"at":1.625,"text":[word("third")]},
+ {"at":1.875,"text":[word("was s spicier",s=0.99)]},
+ {"at":2.125,"text":[word("was spicier")]}]
+print(json.dumps([c["text"] for c in m["captions_from"](reads,[],0,2.5)]))`;
+
+test("a caption stacked in two lines, set lower, or read unsure in every frame is still a caption", () => {
+  const r = python(["-c", STACKED, SCRIPT]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), [
+    "first",
+    "HE MADE REAL COOKIES",
+    "lower",
+    "SECOND",
+    "third",
+    "was spicier",
+  ]);
 });
