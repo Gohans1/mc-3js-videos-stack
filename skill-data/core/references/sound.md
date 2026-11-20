@@ -27,7 +27,7 @@ find discovers assets; earshot find locates a region in a selected file. asset e
 | Place | bun run asset use <id> --from 12 --to 15 --props-file controls.json; JSON identifies the written file, data and cue target |
 | Read/revise | bun run asset timeline --lane audio; bun run asset edit <target> --props-file changes.json; bun run asset remove <target> removes the cue and keeps its source file |
 | Check data | bun run check validates names/schema; it does not prove the sound fits |
-| Time to a reference's voice | Copy it under sound/sfx and give its row "guide": true (it may be the narration). Drafts and the studio play it, bun run check warns, and bun run mix refuses a final until the film's own sound replaces it |
+| Time to a reference's voice | Copy it under sound/sfx and give its row "guide": true (it may be the narration). Drafts and the studio play it, bun run check warns (also of a row without it whose file is a references/ file byte for byte), and bun run mix refuses a final until the film's own sound replaces it |
 | Make a draft with sound | bun run mix renders/draft_video.mp4; open renders/draft.mp4, since draft_video.mp4 has no soundtrack |
 | Measure/locate | bun run listen; read renders/listen.json, then bun run at 12.4 to locate active rows |
 | Preserve source tracks | Mix creates a video from the picture tracks and new AAC audio. It reports subtitle, data, and other tracks and leaves them in the source file. |
