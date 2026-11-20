@@ -357,7 +357,7 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
 });
 
 // coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
-test("check --json gives the reference coverage, matching sound hits with effects only", (t) => {
+test("check --json gives the reference coverage, matching sound hits with effects only, and warns of a guide sound", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
@@ -389,7 +389,7 @@ test("check --json gives the reference coverage, matching sound hits with effect
       beds: [],
       narration: "line",
       sfx: [
-        { name: "line", at: 0, gain: 0 },
+        { name: "line", at: 0, gain: 0, guide: true },
         { name: "door_slam", at: 2, gain: 0 },
       ],
     }),
@@ -413,8 +413,12 @@ test("check --json gives the reference coverage, matching sound hits with effect
   );
   const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const { coverage } = JSON.parse(r.stdout);
+  const { coverage, warnings } = JSON.parse(r.stdout);
   assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
+  assert.ok(
+    warnings.some((w) => /guide sound "line": drafts play it; bun run mix refuses a final/.test(w)),
+  );
+  assert.ok(!warnings.some((w) => /"guide": no key the studio reads/.test(w)));
   assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
 });
 

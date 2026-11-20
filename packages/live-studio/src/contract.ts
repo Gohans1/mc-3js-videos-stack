@@ -589,6 +589,8 @@ const Bed = z
     fadeOut: z.number().nonnegative(),
     start: z.number().nonnegative().optional(),
     duck: z.number().nonnegative().optional(),
+    // scratch audio (a reference's voice to time against): studio and drafts play it, mix.py refuses a final with it
+    guide: z.boolean().optional(),
     pan: z.number().min(-1).max(1).optional(),
     try: z.array(name).optional(),
     filters: z.array(audioFilter).optional(),
@@ -608,6 +610,7 @@ const Shot1 = z.looseObject({
   length: z.number().positive().max(MAX_FILM_SECONDS).optional(),
   fadeIn: z.number().nonnegative().optional(),
   fadeOut: z.number().nonnegative().optional(),
+  guide: z.boolean().optional(),
   pan: z.number().min(-1).max(1).optional(),
   try: z.array(name).optional(),
   filters: z.array(audioFilter).optional(),

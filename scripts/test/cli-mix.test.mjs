@@ -821,6 +821,32 @@ test("a damaged source cannot replace the last good draft or its review data", (
   );
 });
 
+// a remake played the reference's own voice as its narration to time to: a guide sound is heard in drafts, never shipped
+test("a guide sound plays in a draft mix and stops the final's, naming it", (t) => {
+  const dir = setupFilm(t, "mix-guide-", {
+    audio: {
+      voice: false,
+      beds: [],
+      narration: "ref-vox",
+      sfx: [
+        { name: "ref-vox", at: 0, gain: 0, guide: true },
+        { name: "hit", at: 1, gain: 0 },
+      ],
+    },
+  });
+  makeWav(join(dir, "sound/sfx/hit.wav"), { dur: 0.25 });
+  makeWav(join(dir, "sound/sfx/ref-vox.wav"), { dur: 2 });
+  makeMp4(join(dir, "renders/draft_video.mp4"), { dur: 2 });
+  makeMp4(join(dir, "renders/final_video.mp4"), { dur: 2 });
+  const draft = runMix(dir, ["renders/draft_video.mp4"]);
+  assert.equal(draft.status, 0, draft.stdout + draft.stderr);
+  assert.ok(sliceRms(readSamples(join(dir, "renders/draft.mp4")), 0.2, 0.8) > 0.01);
+  const final = runMix(dir, ["renders/final_video.mp4"]);
+  assert.equal(final.status, 1, final.stdout + final.stderr);
+  assert.match(final.stderr, /guide sound.*"ref-vox".*not for release/);
+  assert.equal(existsSync(join(dir, "renders/final.mp4")), false);
+});
+
 test("the final measures silence when planned sound falls beyond the picture", (t) => {
   const dir = setupFilm(t, "mix-audio-tail-", {
     edit: { end: 5, voice: { lines: [], warp: [] } },

@@ -1215,6 +1215,16 @@ if (camKeys?.length && filmEnds()) {
 
 const coverage = camKeys?.length && filmEnds() ? refCoverage(PROJECT, covered) : null;
 
+const guides = ["beds", "sfx"].flatMap((list) =>
+  (Array.isArray(lanesRead?.[list]) ? lanesRead[list] : []).flatMap((e) =>
+    e?.guide === true && typeof e.name === "string" ? [e.name] : [],
+  ),
+);
+if (guides.length)
+  warnings.push(
+    `⚠ ${conf.soundTimeline} guide sound ${[...new Set(guides)].map((n) => `"${n}"`).join(", ")}: drafts play it; bun run mix refuses a final until the film's own sound replaces it`,
+  );
+
 const toolsWarning = ownToolsWarning(PROJECT);
 if (toolsWarning) warnings.push(toolsWarning);
 
