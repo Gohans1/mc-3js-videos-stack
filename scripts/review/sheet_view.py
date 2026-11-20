@@ -374,7 +374,25 @@ def pair_with_reference(ours, reference, dest):
     pair.save(dest, quality=92)
 
 
-def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock, vs=None):
+def rule_grid(frame, step, crop):
+    """The frame cut to crop (x0, y0, x1, y1 in its pixels) with a line every step px, each labelled with its own pixel."""
+    from PIL import Image, ImageDraw, ImageFont
+    x0, y0, x1, y1 = crop
+    with Image.open(frame) as opened:
+        picture = opened.convert("RGB").crop((x0, y0, x1, y1))
+    draw = ImageDraw.Draw(picture, "RGBA")
+    font = load_caption_font(ImageFont, 12)
+    for x in range(-(-x0 // step) * step, x1, step):
+        draw.line([(x - x0, 0), (x - x0, y1 - y0)], fill=(255, 255, 255, 170))
+        draw.text((x - x0 + 2, 1), str(x), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
+    for y in range(-(-y0 // step) * step, y1, step):
+        draw.line([(0, y - y0), (x1 - x0, y - y0)], fill=(255, 255, 255, 170))
+        if y - y0 >= 14:  # the top row holds the x labels
+            draw.text((2, y - y0 + 1), str(y), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
+    picture.save(frame, quality=92)
+
+
+def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock, vs=None, grid=None):
     try:
         times = samples(spec, mode, start + first, stop - first, clock)
     except ValueError as e:
@@ -382,6 +400,14 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
         raise SystemExit(2)
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
+    if grid:
+        width, height = display_size(stream)
+        crop = grid["crop"] or [0, 0, width, height]
+        if not (0 <= crop[0] < crop[2] <= width and 0 <= crop[1] < crop[3] <= height):
+            print(f"--crop {','.join(map(str, crop))} must lie inside the {width}x{height} picture, x0 < x1 and y0 < y1",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        grid = {"step": grid["step"], "crop": crop}
     context, lines, cuts = timeline_context(render_context, clock)
     if context["status"] != "ready":
         print(f"context {context['status']}: {context['reason']}", file=sys.stderr)
@@ -413,6 +439,8 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
             entry.update({"sheet": str(out / f"overview_{i // 16 + 1:02d}.jpg"), "cell": i % 16 + 1})
         else:
             entry["frame"] = str(out / f"frame_{i:03d}.jpg")
+            if grid:
+                entry["grid"] = grid
             if vs:
                 entry["vs"] = str(out / f"vs_{i:03d}.jpg")
         data["entries"].append(entry)
@@ -442,6 +470,8 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
                                                           compact=mode == "overview", canvas=canvas, aspect=aspect)
             if mode == "overview" and canvas is None:
                 canvas = image_dimensions(dest)
+            if grid:
+                rule_grid(dest, grid["step"], grid["crop"])
             if vs:
                 seek = ref_seeks.get(entry["requestedTime"])
                 ref_dest = out / f"reference_{i:03d}.jpg"

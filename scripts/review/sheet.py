@@ -13,6 +13,10 @@
   bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4
                                                  each frame beside the reference's at the same heard second (its file
                                                  second, its exact frame), reference | ours, to vs_*.jpg; overview takes it too
+  bun run sheet references/ref.mp4 frames 7.2 --grid 50 [--crop 100,500,1000,1600]
+                                                 each frame ruled every 50 px and labelled in the video's own pixels
+                                                 (--crop x0,y0,x1,y1 keeps that region at full size): read where a
+                                                 landmark sits for bun run reference solve's uv
   bun run sheet renders/draft_video.mp4 cut 4    a transition up close: 6 frames from 0.25 s before cut 4 to 0.35 s after,
                                                  naming the shots either side (cut 4: shot 4 into 5, numbered from 0 as everywhere)
                                                  and the transition between them (shotsTimeline row 5 .transition)
@@ -235,6 +239,8 @@ USE = "bun run sheet, bun run sheet <img1> [<img2> ...] [--out <path>], or bun r
 pos = []
 out_arg = None
 vs_arg = None
+grid_arg = None
+crop_arg = None
 i = 0
 while i < len(args):
     a = args[i]
@@ -243,6 +249,15 @@ while i < len(args):
         if not vs_arg:
             usage("--vs needs the reference video: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
         i += 1 if "=" in a else 2
+        continue
+    if a in ("--grid", "--crop"):
+        if i + 1 >= len(args):
+            usage(f"{a} needs a value: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")
+        if a == "--grid":
+            grid_arg = args[i + 1]
+        else:
+            crop_arg = args[i + 1]
+        i += 2
         continue
     if a == "--out":
         if out_arg is not None:
@@ -290,6 +305,20 @@ if vs_arg is not None:
         import PIL  # noqa: F401
     except ImportError as e:
         usage(f"Pillow (PIL) is required to label --vs pairs: {e}", 1)
+grid = None
+if crop_arg is not None and grid_arg is None:
+    usage("--crop goes with --grid: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")
+if grid_arg is not None:
+    if mode != "frames" or vs_arg is not None:
+        usage("--grid goes with frames, one video at a time (no --vs): bun run sheet references/ref.mp4 frames 7.2 --grid 50")
+    if not re.fullmatch(r"[1-9]\d*", grid_arg):
+        usage(f"--grid takes a pixel step, as --grid 50; got {grid_arg}")
+    crop = None
+    if crop_arg is not None:
+        if not re.fullmatch(r"\d+,\d+,\d+,\d+", crop_arg):
+            usage(f"--crop takes x0,y0,x1,y1 in the video's pixels, as 100,500,1000,1600; got {crop_arg}")
+        crop = [int(n) for n in crop_arg.split(",")]
+    grid = {"step": int(grid_arg), "crop": crop}
 if not valid_count:
     why = ("cut takes a number: bun run sheet <video> cut 4" if mode == "cut" else
            "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words")
@@ -331,7 +360,7 @@ if args:
     end = math.nextafter(picture_to, -math.inf)
 
     if mode in ("overview", "frames"):
-        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock, vs=vs_arg)
+        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock, vs=vs_arg, grid=grid)
         raise SystemExit
 
     if mode == "shots":

@@ -97,6 +97,7 @@ const SOLVE_HELP = `Solve one reference shot's camera from points of our set (a 
 The shot file names reference seconds (from, to), the lens (fov in degrees, or null to fit it) and 4 or more
 points of our set: xyz in world metres and where each shows in the reference, uv {second: [x, y]} in video pixels,
 followed frame to frame between those seconds. Every field: scripts/media/camera_solve.py.
+Read a uv off bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600 (the video's own pixels).
 Writes solve.json (cam.json keys, the error of each frame) and sheet.jpg (cyan crosses solved, yellow rings tracked)
 to a fresh renders/reference/solve/<name>/run-* folder; needs bun run media setup camera.
 --write puts the keys into the film's camera timeline, a reference second as a heard second (a remake keeps the

@@ -674,3 +674,39 @@ test("--vs pairs the reference's frame at the same heard second beside ours, bla
     assert.match(bad.stderr, why);
   }
 });
+
+test("--grid rules each native frame in the video's own pixels, and --crop keeps just that region at full size", (t) => {
+  const f = fixture(t);
+  const { data } = indexOf(f.run("frames", "0.5", "--grid", "50"));
+  const [whole] = data.entries;
+  assert.deepEqual(dimensions(whole.frame), [320, 180]);
+  assert.deepEqual(whole.grid, { step: 50, crop: [0, 0, 320, 180] });
+  // a ruled line lightens the red picture where it runs
+  const onLine = rgb(whole.frame, "crop=4:40:98:100,scale=1:1:flags=area");
+  const between = rgb(whole.frame, "crop=4:40:122:100,scale=1:1:flags=area");
+  assert.ok(onLine[1] > between[1] + 40, `${onLine} vs ${between}`);
+
+  const cropped = indexOf(f.run("frames", "1.5", "--grid", "50", "--crop", "100,40,300,180")).data
+    .entries[0];
+  assert.deepEqual(dimensions(cropped.frame), [200, 140]);
+  assert.deepEqual(cropped.grid, { step: 50, crop: [100, 40, 300, 180] });
+  // the line at the video's 150 px falls 50 px into the crop
+  assert.ok(
+    rgb(cropped.frame, "crop=4:40:48:80,scale=1:1:flags=area")[1] >
+      rgb(cropped.frame, "crop=4:40:72:80,scale=1:1:flags=area")[1] + 40,
+  );
+
+  for (const [args, why] of [
+    [["frames", "0.5", "--grid", "0"], /--grid takes a pixel step/],
+    [["frames", "0.5", "--crop", "0,0,10,10"], /--crop goes with --grid/],
+    [
+      ["frames", "0.5", "--grid", "50", "--crop", "0,0,400,10"],
+      /--crop .* inside the 320x180 picture/,
+    ],
+    [["overview", "--grid", "50"], /--grid goes with frames/],
+  ]) {
+    const bad = f.run(...args);
+    assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+    assert.match(bad.stderr, why);
+  }
+});
