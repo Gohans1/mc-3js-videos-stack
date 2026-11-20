@@ -45,7 +45,7 @@ test("each track's share of the reference: picture keyed, cuts and sound hits ma
   });
   assert.equal(
     formatCoverage(c),
-    "coverage of the reference (renders/reference/ref/run-1/study.json, 20 s): picture keyed 10 s (50%), cuts 1 of 3, sound hits with an sfx 2 of 4 (50%), on-screen text 7 s (35%)",
+    "coverage of the reference (renders/reference/ref/run-1/study.json, 20 s): picture keyed 10 s (50%), cuts 1 of 3, strong sound hits with an sfx 2 of 4 (50%), on-screen text 7 s (35%)",
   );
 });
 

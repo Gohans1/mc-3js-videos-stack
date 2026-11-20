@@ -212,7 +212,7 @@ When the creator asks for a film that matches a reference shot for shot, measure
 | --- | --- |
 | Measure it | `bun run reference add <video>`, then `bun run reference study references/ref.mp4`: cuts, whip pans, sound hits in `study.json` |
 | Cut where it cuts | Set `"cut": true` only at the reference's cuts and change the layout only there; a whip transition is a keyed pan into the cut key mid-swing. `bun run check` names every cut the reference lacks |
-| Know how far it is | `bun run check` prints coverage of the reference: picture keyed, cuts matched, sound hits with an sfx, seconds of on-screen text (`--json`: `coverage`). A track at 0% is not done, whatever is left for polish |
+| Know how far it is | `bun run check` prints coverage of the reference: picture keyed, cuts matched, the strong sound hits with an sfx starting up to 0.5 s before each, seconds of on-screen text (`--json`: `coverage`). A track at 0% is not done, whatever is left for polish |
 | Same second, side by side | `REF=references/ref.mp4 AT=<s> bun run render poster` writes `renders/vs_*.jpg` and a sharpness ratio; a soft subject in a poster is focus or DOF, not the draft size |
 | Focus | Focus on the face of the subject turned to the camera (a jar's front, not its centre); a close-up that is only soft at the subject is DOF |
 | Fast moves | The studio draws no motion blur and the reference's whips are smeared: judge them on `SPAN=<a>,<b> SAMPLES=8 bun run render clip` (a whip frame takes up to 64 samples by itself), not studio playback, then `bun run sheet renders/span_<a>-<b>.mp4 frames <a>-<b>/12 --vs references/ref.mp4` puts each frame beside the reference's |
