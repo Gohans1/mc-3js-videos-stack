@@ -514,13 +514,19 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS))
+if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS)) {
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
       preservedThisRun.add(f);
       rmSync(join(RENDERS, f), { force: true });
     }
+  const moved = [...preservedThisRun];
+  if (moved.length)
+    console.log(
+      `moved the last run's ${moved.length === 1 ? "still" : `${moved.length} stills`} to renders/.prev/ (${moved.slice(0, 8).join(", ")}${moved.length > 8 ? `, ${moved.length - 8} more` : ""}): renders/ keeps only this run's`,
+    );
+}
 const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
