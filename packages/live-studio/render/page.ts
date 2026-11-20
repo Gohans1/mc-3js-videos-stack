@@ -12,6 +12,7 @@ import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
 import { orderCheck } from "./order";
+import { probeCheck } from "./probe";
 import { seenCheck } from "./seen";
 import { textCheck } from "./text";
 import { touchCheck } from "./touch";
@@ -87,6 +88,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     seen: seenCheck(render, cfg),
     touch: touchCheck(render),
     text: textCheck(render, cfg),
+    probe: probeCheck(render, cfg, post),
   };
   for (const [name, args] of cfg.checks ?? []) {
     const fn = render.checks?.[name] ?? builtin[name];
@@ -98,7 +100,12 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     }
     const t1 = performance.now();
     // which shots the seconds asked for are, numbered as bun run at numbers them: a scene second given by mistake shows here
-    if (builtin[name] && !render.checks?.[name] && args[2] > args[1]) {
+    if (
+      builtin[name] &&
+      !render.checks?.[name] &&
+      typeof args[2] === "number" &&
+      args[2] > args[1]
+    ) {
       const a = shotAt(args[1]),
         b = shotAt(args[2] - 1e-3);
       log(

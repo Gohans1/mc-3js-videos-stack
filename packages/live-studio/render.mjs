@@ -18,10 +18,12 @@ import { stripVTControlCharacters } from "node:util";
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
+import { acquireChromeProfile } from "./src/chrome-profile.mjs";
 import { cliArgs, envTypos, jsonFile, needFilm, numberArg, secondArg } from "./src/cli.mjs";
 import { computeCropView, parseCropRect } from "./src/crop.mjs";
 import { heardLength, STUDIO, threeFromOf, voiceMapOf } from "./src/film.mjs";
 import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
+import { killProcessTree } from "./src/kill-process.mjs";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
 import { openFilmResource } from "./src/openfilm.mjs";
@@ -93,7 +95,11 @@ Nothing is written outside the film. Options are environment variables:
                              Finds history-dependent pictures without changing how you author the scene.
                              Writes renders/order.json and the first failing pair as lossless PNGs; 2/255 tolerance
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
+  CHECK=probe:<t>, CHECK=probe:<filter>,<t>  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
+                             or |-separated case-insensitive names/dot-paths like dish|elon.head or *); honors INSPECT,
+                             logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts)
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
+  RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
   AT=12,30.5 LIST=1 bun run render stills
   CHUNKS=3 bun run render clip
@@ -116,6 +122,7 @@ const ENV_OPTIONS = [
   "SAMPLES",
   "RES",
   "CROP",
+  "RENDER_FRESH_CACHE",
 ];
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const flagged = process.argv
@@ -142,6 +149,17 @@ if (
 }
 const compare =
   rawArgs.includes("--compare") || process.env.COMPARE === "1" || process.env.COMPARE === "true";
+if (
+  process.env.RENDER_FRESH_CACHE !== undefined &&
+  !["0", "1", "true", "false"].includes(process.env.RENDER_FRESH_CACHE)
+) {
+  console.error(
+    `RENDER_FRESH_CACHE is 1 (true) or 0 (false), got ${JSON.stringify(process.env.RENDER_FRESH_CACHE)}`,
+  );
+  process.exit(2);
+}
+const freshCache =
+  process.env.RENDER_FRESH_CACHE === "1" || process.env.RENDER_FRESH_CACHE === "true";
 envTypos([...ENV_OPTIONS, "COMPARE", "LIVE_PROJECT"]); // any LAB_* goes to the lab page as is
 // a clip takes minutes and a final far longer: each is only ever made when asked for by name
 if (!TARGETS.includes(what)) {
@@ -269,7 +287,7 @@ const numbers = (name, limits) =>
   env[name].split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
 // CHECK=<name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
 // them; a minus is kept so the range check below can say the film starts at 0); a film's own take what it takes
-const BUILT_IN = ["motion", "seen", "touch", "text", "order"];
+const BUILT_IN = ["motion", "seen", "touch", "text", "order", "probe"];
 const CHECKS = (env.CHECK ?? "")
   .split(";")
   .filter(Boolean)
@@ -292,6 +310,25 @@ const CHECKS = (env.CHECK ?? "")
       }
       const span = args.map((v, k) => secondArg(`CHECK ${c}: ${k ? "to" : "from"}`, v));
       return { c, name, args: ["", ...(span.length ? span : [0, Infinity])] };
+    }
+    if (name === "probe") {
+      if (args.length !== 1 && args.length !== 2) {
+        console.error(
+          `CHECK ${c}: probe takes <t> or <filter>,<t> (heard second); got ${args.length} values (bun run render --help)`,
+        );
+        process.exit(2);
+      }
+      if (args.length === 2) {
+        const filter = args[0];
+        if (!filter || filter.split("|").some((part) => !part.trim())) {
+          console.error(
+            `CHECK ${c}: probe filter cannot be empty (use CHECK=probe:<t>, CHECK=probe:*,<t>, or |-separated names)`,
+          );
+          process.exit(2);
+        }
+        return { c, name, args: [filter, secondArg(`CHECK ${c}: time`, args[1])] };
+      }
+      return { c, name, args: ["", secondArg(`CHECK ${c}: time`, args[0])] };
     }
     if (!BUILT_IN.includes(name))
       return { c, name, args: args.map((a) => (a !== "" && !isNaN(+a) ? +a : a)) };
@@ -401,6 +438,16 @@ if (ends) {
   }
 }
 for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name))) {
+  if (name === "probe") {
+    const [, t] = args;
+    if (ends && t > ends.layers + 0.05) {
+      console.error(
+        `CHECK ${c}: time ${t} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+      );
+      process.exit(2);
+    }
+    continue;
+  }
   if (["text", "order"].includes(name) && args[2] === Infinity)
     args[2] = ends ? +ends.layers.toFixed(2) : 1e9;
   const [, from, to] = args;
@@ -434,6 +481,16 @@ if (!existsSync(CHROME)) {
     `no headless Chrome at ${CHROME}: name it in package.json "live-studio": { "chrome": "..." }`,
   );
   process.exit(1);
+}
+if (inspect || views) {
+  const filmCamChecks = [
+    ...new Set(CHECKS.filter((x) => x.name === "seen" || x.name === "text").map((x) => x.name)),
+  ];
+  if (filmCamChecks.length) {
+    console.error(
+      `warning: CHECK=${filmCamChecks.join(",")} measures the film's own camera and ignores INSPECT/VIEWS`,
+    );
+  }
 }
 const stillsWritten = [];
 const preservedThisRun = new Set();
@@ -651,7 +708,7 @@ const stamp = (() => {
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
 if (!cfg.checks.length && what !== "poster")
   console.log(
-    "if needed: CHECK=motion|seen|touch:<target>,<from s>,<to s>, CHECK=text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
+    "if needed: CHECK=motion|seen|touch:<target>,<from s>,<to s>, CHECK=probe:<t>, CHECK=text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
   );
 
 // ---------- Serve it to a headless Chrome and keep what it posts back
@@ -803,13 +860,37 @@ const server = Bun.serve({
     });
   },
 });
-// a profile per attempt: a killed Chrome's helper processes can hold the last one's lock for a while
+// a fresh profile slot per attempt: a killed Chrome's helper processes can hold the last one's lock for a while
 const profiles = [];
+const chromeProcs = [];
 const stopping = new WeakSet();
+const stopChrome = (proc) => {
+  if (!proc) return;
+  stopping.add(proc);
+  if (proc.exitCode !== null || proc.signalCode !== null) return;
+  if (proc.pid) killProcessTree(proc.pid, () => proc.kill());
+  else {
+    try {
+      proc.kill();
+    } catch {}
+  }
+};
+const waitForChromeExit = (proc, timeoutMs = 2000) => {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((done) => {
+    const timer = setTimeout(done, timeoutMs);
+    proc.once("exit", () => {
+      clearTimeout(timer);
+      done();
+    });
+  });
+};
+const releaseProfiles = () => {
+  for (const profile of profiles) profile.release();
+};
 const launch = () => {
-  const profile = join(tmpdir(), `live_render_${process.pid}_${profiles.length}`);
+  const profile = acquireChromeProfile(RENDERS, { fresh: freshCache });
   profiles.push(profile);
-  mkdirSync(profile, { recursive: true });
   const proc = spawn(
     CHROME,
     [
@@ -823,12 +904,13 @@ const launch = () => {
       "--no-first-run",
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",
-      `--user-data-dir=${profile}`,
+      `--user-data-dir=${profile.dir}`,
       `http://127.0.0.1:${server.port}/`,
     ],
-    // its helper processes outlive kill() for a moment: run from the profile, never holding the film's folder open
-    { stdio: "ignore", cwd: profile },
+    // its helper processes outlive kill() for a moment: run from tmpdir, never holding the film's folder open
+    { stdio: "ignore", cwd: tmpdir() },
   );
+  chromeProcs.push(proc);
   proc.on("error", (err) => {
     if (closing || stopping.has(proc)) return;
     stopping.add(proc);
@@ -841,7 +923,7 @@ const launch = () => {
   });
   return proc;
 };
-let chrome = launch(),
+let chrome = null,
   attempt = 1;
 const stuck = (why) => {
   if (cfg.clip && attempt < 3) {
@@ -850,8 +932,7 @@ const stuck = (why) => {
       `${why}: Chrome restarted (attempt ${attempt} of 3), the chunks finished so far are kept`,
     );
     lastAlive = null;
-    stopping.add(chrome);
-    chrome.kill();
+    stopChrome(chrome);
     chrome = launch();
   } else {
     console.error(
@@ -878,17 +959,35 @@ const watchdog = setInterval(() => {
     );
   }
 }, 10e3);
-await finished;
-clearInterval(watchdog);
-chrome.kill();
-server.stop(true);
-for (const profile of profiles)
+const onSignal = (sig) => {
+  closing = true;
+  clearInterval(watchdog);
+  for (const proc of chromeProcs) stopChrome(proc);
   try {
-    rmSync(profile, { recursive: true, force: true });
-  } catch {
-    /* Chrome may still hold it for a moment */
-  }
-rmSync(OUT, { recursive: true, force: true });
+    server.stop(true);
+  } catch {}
+  releaseProfiles();
+  try {
+    rmSync(OUT, { recursive: true, force: true });
+  } catch {}
+  process.exit(sig === "SIGINT" ? 130 : 143);
+};
+process.on("SIGINT", onSignal);
+process.on("SIGTERM", onSignal);
+process.on("exit", releaseProfiles);
+try {
+  chrome = launch();
+  await finished;
+} finally {
+  process.off("SIGINT", onSignal);
+  process.off("SIGTERM", onSignal);
+  clearInterval(watchdog);
+  for (const proc of chromeProcs) stopChrome(proc);
+  await Promise.all(chromeProcs.map((proc) => waitForChromeExit(proc)));
+  server.stop(true);
+  releaseProfiles();
+  rmSync(OUT, { recursive: true, force: true });
+}
 console.log(`render ${what}: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 const posterView = crop ? computeCropView(W, H, crop) : { outWidth: W, outHeight: H };
 const nextHint =

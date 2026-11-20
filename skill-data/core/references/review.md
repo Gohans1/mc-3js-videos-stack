@@ -12,6 +12,7 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 | Visible frame | Run bun run sheet FILE overview to choose a span, then sheet FILE frames 12.2-12.6/12 to save source images and decoded timestamps. Read clock, context, and complete in the index. Words and timeline rows use requested seconds, and images record the displayed frame's PTS. |
 | Cuts, dissolves, and object pops | Run bun run sheet FILE cut N on the current render, or use frames for custom timestamps. Run bun run framecheck FILE --json to detect anomalies and save evidence from the encoded picture. |
 | Easing, camera motion, and animation | Run CHECK=motion:cam,12,14 bun run render stills to measure the scene path. Replace cam with the target to inspect, then compare encoded frames at the start, middle, and end with sheet frames. |
+| 3D positions, bounds, and framing | Run CHECK=probe:4 bun run render stills (or CHECK=probe:dish\|elon.head,4, or * for all named nodes) for a single-frame world-space snapshot in renders/probe_4s.json. Honors INSPECT=; CHECK=seen and CHECK=text measure the film's own camera. |
 | Text overlap, flicker, and legibility | Use CHECK=text across camera or lighting changes, then inspect exported frames with sheet frames. Use media OCR to locate text and timestamps, and read the source images to confirm important lines. |
 | Inspect sync below one frame | Read video frame PTS and audio/video offset from probe. For an isolated hit, ffmpeg -copyts -i FILE -map 0:a:0 -af silencedetect=n=-26dB:d=0.02 -f null - reports onset PTS at silence_end. Subtract the file start time from ffprobe -v error -show_entries format=start_time -of default=nw=1:nk=1 FILE to get file seconds. Earshot's one-frame estimate can change after a remux. |
 | Music beats and SFX hits | Run bun run media beat for beats and downbeats in file seconds. Use earshot timeline FILE --from 10 --to 16 --detail low to inspect mixed events. Take the cut timestamp from sheet, locate the row with at, and measure the same span after editing. |
@@ -100,9 +101,11 @@ CHECK=motion:cam,40,48 bun run render stills     # speed graph, peaks, pops, dea
 CHECK=motion:handR,40,48 bun run render stills   # the same for a bone, with an onion skin of the move
 CHECK=seen:Steve,40,48 bun run render stills     # frame share, hidden behind what, cut off, too dark, BLURRED by shallow DOF
 CHECK=touch:handR,81,83 bun run render stills    # sinking into things, hanging just off them (one shot, not a whole film)
+CHECK=probe:4 bun run render stills              # single-frame world positions, Box3 bounds, distances, and screen rects (renders/probe_4s.json; honors INSPECT=)
+CHECK=probe:dish|elon.head,4 bun run render stills  # filter by |-separated names, dot-paths, or * for all named scene nodes and bones
 ```
 
-A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back.
+A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back. `seen` and `text` always measure the film's own camera (and warn if `INSPECT` or `VIEWS` is set); `probe` honors `INSPECT=`.
 
 ## Words on the picture
 
