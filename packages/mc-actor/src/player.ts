@@ -453,7 +453,7 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
     });
   // Keep near-white emissive restrained to skin glow (<= 0.08) so eyes/teeth never trip BloomEffect
   const whiteGlow = Math.min(0.08, Math.max(0, Number.isFinite(glow) ? glow : 0.08));
-  const white = layer(flat("#f4f4f4", whiteGlow), 0),
+  const white = layer(flat(faceColors?.white ?? "#f4f4f4", whiteGlow), 0),
     iris = layer(flat(initCol.irisCol, 0.12), 1),
     dark = layer(flat("#120d1c", 0), 2),
     lid = layer(flat(initCol.lidCol, 0.1), 3);
@@ -584,7 +584,15 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       rect(corners[0], -cw, cy, cSize, cSize);
       rect(corners[1], cw, cy, cSize, cSize);
     },
-    { meshes, recolor },
+    {
+      meshes,
+      recolor,
+      // a hidden head hides the face; per-mesh visible is the face's own, set on every call
+      show: (on) => {
+        for (const m of [white, iris, dark, lid, browMat, mouthMat, teethMat, tongueMat])
+          m.visible = on;
+      },
+    },
   );
 };
 
@@ -607,6 +615,39 @@ export const FACES = [
   // game face's eyes would cover
   { id: "skin", title: "the skin's own face, nothing over it" },
 ];
+// Each body part's inner box and its second layer, for showParts
+const PART_LAYERS = {
+  head: ["head", "hat"],
+  body: ["body", "jacket"],
+  armR: ["armR", "sleeveR"],
+  armL: ["armL", "sleeveL"],
+  legR: ["legR", "pantR"],
+  legL: ["legL", "pantL"],
+};
+const skinRects = (ctx, box) => {
+  const s = Math.max(1, Math.round(ctx.canvas.width / 64));
+  return Object.values(box).map(([x, y, w, h]) => [x * s, y * s, w * s, h * s]);
+};
+const tintSkin = (ctx, tint) => {
+  for (const [box, hex] of tint)
+    for (const [x, y, w, h] of skinRects(ctx, box)) {
+      const img = ctx.getImageData(x, y, w, h),
+        d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = Math.round((d[i] * ((hex >> 16) & 255)) / 255);
+        d[i + 1] = Math.round((d[i + 1] * ((hex >> 8) & 255)) / 255);
+        d[i + 2] = Math.round((d[i + 2] * (hex & 255)) / 255);
+      }
+      ctx.putImageData(img, x, y);
+    }
+};
+const hideSkinParts = (ctx, shown) => {
+  for (const [part, layers] of Object.entries(PART_LAYERS))
+    if (!shown.has(part))
+      for (const k of layers)
+        for (const [x, y, w, h] of skinRects(ctx, SKIN_UV[k])) ctx.clearRect(x, y, w, h);
+};
+
 // Paint face f's eye-row pixels onto ctx using the cheek tone sampled from immutable baseCtx
 const paintFacePixels = (ctx, baseCtx, f) => {
   if (!f.colour) return;
@@ -646,6 +687,7 @@ export type FaceColorValue =
   string | number | { readonly isColor: true; r: number; g: number; b: number };
 
 export interface FaceColorOverrides {
+  white?: FaceColorValue | null;
   lid?: FaceColorValue | null;
   iris?: FaceColorValue | null;
   brow?: FaceColorValue | null;
@@ -663,6 +705,7 @@ export async function makePlayer(
 ) {
   const savedFaceColors = faceColors
     ? {
+        white: faceColors.white != null ? new THREE.Color(faceColors.white) : null,
         lid: faceColors.lid != null ? new THREE.Color(faceColors.lid) : null,
         iris: faceColors.iris != null ? new THREE.Color(faceColors.iris) : null,
         brow: faceColors.brow != null ? new THREE.Color(faceColors.brow) : null,
@@ -695,6 +738,9 @@ export async function makePlayer(
   };
   let faceId = initialFace;
   let overlayFn = null;
+  let tint = null,
+    shown = null,
+    gameFace = null;
   let liveMap = skinTex(canvas);
   const redrawSkin = () => {
     const f = FACES.find((x) => x.id === faceId);
@@ -705,6 +751,7 @@ export async function makePlayer(
       ctx.clearRect?.(0, 0, canvas.width, canvas.height);
       ctx.drawImage(baseCanvas, 0, 0);
       if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+      if (tint) tintSkin(ctx, tint);
       if (overlayFn) {
         ctx.save?.();
         try {
@@ -715,10 +762,13 @@ export async function makePlayer(
           ctx.restore?.();
         }
       }
+      if (shown) hideSkinParts(ctx, shown);
     } finally {
       ctx.restore?.();
     }
     liveMap.needsUpdate = true;
+    // lids and mouth take the skin as drawn, so a tinted or overlaid face blinks in its own colour
+    gameFace?.recolor(ctx);
   };
   redrawSkin();
   // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
@@ -770,8 +820,12 @@ export async function makePlayer(
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
-  let gameFace = null;
-  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, baseCtx, glow, savedFaceColors));
+  const ensureGameFace = () => {
+    if (gameFace) return gameFace;
+    gameFace = makeFace(rig, b.head, ctx, glow, savedFaceColors);
+    gameFace.show(!shown || shown.has("head"));
+    return gameFace;
+  };
   if (initialFace === "game") ensureGameFace();
   const setFace = (id) => {
     const f = FACES.find((x) => x.id === id);
@@ -815,10 +869,33 @@ export async function makePlayer(
       prevMap.dispose();
     }
     redrawSkin();
-    gameFace?.recolor(baseCtx);
   };
   const paintSkinOverlay = (drawFn) => {
     overlayFn = typeof drawFn === "function" ? drawFn : null;
+    redrawSkin();
+  };
+  // parts: { [SKIN_UV name]: colour } multiplies those boxes' pixels, alpha kept (a face going red is { head: "#ff8a78" });
+  // null clears. It is drawn under paintSkinOverlay and kept across setSkin
+  const tintParts = (parts) => {
+    for (const k of Object.keys(parts ?? {}))
+      if (!SKIN_UV[k])
+        throw new Error(`tintParts: no part "${k}" (SKIN_UV: ${Object.keys(SKIN_UV).join(", ")})`);
+    const list = Object.entries(parts ?? {}).filter(([, c]) => c != null);
+    tint = list.length ? list.map(([k, c]) => [SKIN_UV[k], new THREE.Color(c).getHex()]) : null;
+    redrawSkin();
+  };
+  // Draws only these parts (each with its second layer), e.g. ["armR"] for a hand in close-up; null draws all again
+  const showParts = (parts) => {
+    for (const k of parts ?? [])
+      if (!PART_LAYERS[k])
+        throw new Error(`showParts: no part "${k}" (${Object.keys(PART_LAYERS).join(", ")})`);
+    shown = parts ? new Set(parts) : null;
+    const cut = shown ? 0.5 : 0;
+    if (inner.alphaTest !== cut) {
+      inner.alphaTest = cut;
+      inner.needsUpdate = true;
+    }
+    gameFace?.show(!shown || shown.has("head"));
     redrawSkin();
   };
   if (initMeta.hold) ensureGameFace()(...initMeta.hold);
@@ -1207,6 +1284,8 @@ export async function makePlayer(
     skin: ctx,
     setSkin,
     paintSkinOverlay,
+    tintParts,
+    showParts,
     red,
     setFace,
   };

@@ -24,7 +24,13 @@ interface PixelContext {
   clearRect: (x: number, y: number, w: number, h: number) => void;
   fillRect: (x: number, y: number, w: number, h: number) => void;
   drawImage: (src: PixelCanvas, dx: number, dy: number) => void;
-  getImageData: (x: number, y: number, w: number, h: number) => { data: Uint8ClampedArray };
+  getImageData: (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ) => { data: Uint8ClampedArray; width: number };
+  putImageData: (img: { data: Uint8ClampedArray; width: number }, x: number, y: number) => void;
 }
 
 function parseColor(style: string): [number, number, number, number] {
@@ -158,7 +164,14 @@ function makePixelCanvas(w = 64, h = 64, fill?: [number, number, number, number]
           out[di + 3] = data[si + 3] ?? 0;
         }
       }
-      return { data: out };
+      return { data: out, width: rw };
+    },
+    putImageData(img, x, y) {
+      const rh = img.data.length / 4 / img.width;
+      for (let py = 0; py < rh; py++)
+        for (let px = 0; px < img.width; px++)
+          for (let c = 0; c < 4; c++)
+            data[((y + py) * width + (x + px)) * 4 + c] = img.data[(py * img.width + px) * 4 + c]!;
     },
   };
   return canvas;
@@ -665,6 +678,58 @@ describe("mc-actor player rig primitives", () => {
       eager.browMat,
       new THREE.Color("rgb(240,240,240)").multiplyScalar(0.75).getHexString(),
     );
+  });
+
+  // a close-up of a hand needed a second, scaled chef with all his skin but one arm wiped by hand, and a red face needed
+  // a raw pixel rect painted over the head: both are the player's own now
+  test("faceColors.white colours the eye whites; tintParts and showParts act on SKIN_UV parts and survive setSkin", async () => {
+    installPixelDocument();
+    const rig = await loadPlayerTemplate();
+    const skin = () => {
+      const c = makePixelCanvas(64, 64, [200, 160, 120, 255]);
+      c.getContext().clearRect(32, 0, 32, 16); // the hat layer empty, as most skins have it
+      return c;
+    };
+    const p = await makePlayer(rig, skin(), { faceColors: { white: "#ddeeff" } });
+    const faceMats = getHeadFaceMaterials(p);
+    expect(faceMats.some((m) => m.color.getHexString() === "ddeeff")).toBe(true);
+    expect(faceMats.some((m) => m.color.getHexString() === "f4f4f4")).toBe(false);
+
+    p.tintParts({ head: "#ff8000" });
+    expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]); // head front
+    expect(readPixel(p.skin, 44, 12)).toEqual([0, 0, 0, 0]); // hat front stays see-through
+    expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]); // body front
+    const lid = faceMats.find((m) => m.polygonOffsetFactor === -4)!;
+    expect(lid.color.getHexString()).toBe(
+      new THREE.Color("rgb(200,80,0)").multiplyScalar(0.9).getHexString(),
+    );
+    p.setSkin(skin());
+    expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]);
+    p.tintParts(null);
+    expect(readPixel(p.skin, 12, 12)).toEqual([200, 160, 120, 255]);
+
+    const { inner } = getSkinMaterials(p);
+    p.showParts(["armR"]);
+    expect(readPixel(p.skin, 44, 24)).toEqual([200, 160, 120, 255]); // right arm front
+    expect(readPixel(p.skin, 44, 40)).toEqual([200, 160, 120, 255]); // its sleeve
+    for (const [x, y] of [
+      [12, 12], // head
+      [24, 24], // body
+      [36, 52], // left arm
+      [4, 24], // right leg
+      [24, 40], // jacket
+    ] as const)
+      expect(readPixel(p.skin, x, y)[3]).toBe(0);
+    expect(inner.alphaTest).toBe(0.5);
+    expect(faceMats.every((m) => !m.visible)).toBe(true);
+    p.setSkin(skin());
+    expect(readPixel(p.skin, 24, 24)[3]).toBe(0);
+    p.showParts(null);
+    expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]);
+    expect(inner.alphaTest).toBe(0);
+    expect(faceMats.every((m) => m.visible)).toBe(true);
+    expect(() => p.showParts(["hand"])).toThrow(/head, body, armR, armL, legR, legL/);
+    expect(() => p.tintParts({ hands: "#fff" })).toThrow(/SKIN_UV/);
   });
 
   test("SKIN_UV maps canonical 64x64 Steve UV rects for all 12 Layer-1 and Layer-2 boxes with zero overlap", () => {
