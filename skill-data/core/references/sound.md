@@ -27,6 +27,7 @@ find discovers assets; earshot find locates a region in a selected file. asset e
 | Place | bun run asset use <id> --from 12 --to 15 --props-file controls.json; JSON identifies the written file, data and cue target |
 | Read/revise | bun run asset timeline --lane audio; bun run asset edit <target> --props-file changes.json; bun run asset remove <target> removes the cue and keeps its source file |
 | Check data | bun run check validates names/schema; it does not prove the sound fits |
+| Time to a reference's voice | Copy it under sound/sfx and give its row "guide": true (it may be the narration). Drafts and the studio play it, bun run check warns, and bun run mix refuses a final until the film's own sound replaces it |
 | Make a draft with sound | bun run mix renders/draft_video.mp4; open renders/draft.mp4, since draft_video.mp4 has no soundtrack |
 | Measure/locate | bun run listen; read renders/listen.json, then bun run at 12.4 to locate active rows |
 | Preserve source tracks | Mix creates a video from the picture tracks and new AAC audio. It reports subtitle, data, and other tracks and leaves them in the source file. |
@@ -80,6 +81,8 @@ bun run skills path earshot returns the skill directory; open SKILL.md and its r
 | Assess recording versus synthesis | earshot realness <file>; supporting evidence, not proof of provenance or license |
 | Inspect timing and cuts | earshot timeline renders/draft.mp4 --cues renders/cuts.json --from 25 --to 40 --detail low; omit --cues if absent |
 | Inspect sound with pictures | earshot sheet renders/draft.mp4 -o renders/ear_sheet.png --from 25 --to 40; open the PNG |
+| Many files or cues | One Python process loads the models once: earshot's own interpreter (~/.local/share/earshot-venv/Scripts/python.exe on Windows, bin/python elsewhere) runs `from earshot import api`; a CLI call per file reloads them |
+| Pick music against a reference | Separate the reference's music stem first (bun run media separate references/ref.mp4); with its voice and effects in, every candidate reads as an outlier |
 | Compare before/after | Keep renders/before.mp4 before remixing; earshot ab renders/before.mp4 renders/draft.mp4 --query "<sound description>" --a-start 30 --a-end 36 --b-start 30 --b-end 36 |
 | Synthesize when appropriate | earshot sfx list --kind hit, then earshot sfx render <id> -o sound/sfx/<name>.wav; label this synthesized audio |
 

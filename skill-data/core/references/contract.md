@@ -31,7 +31,7 @@ To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never sh
 
 | File        | Key fields                                                                                                                                                                                 |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| cam.json    | Hard cuts place `cut: true` on the incoming key; Studio links the closing hold key before a cut via `tailId` when present                                                                  |
+| cam.json    | Hard cuts place `cut: true` on the incoming key; Studio links the closing hold key before a cut via `tailId` when present; `roll` is radians (0.1 is about 6 degrees), `fov` degrees     |
 | timing.json | `speeds` use `from`, `to`, and either `rate` or `curve` pairs `[progress, speed]` with optional per-segment `handles`                                                                      |
 | timing.json | `freezes` use `at`, `duration`, and optional `frame` to hold another source second; `layerKinds` stores `base` and `changes` per `text`, `overlays`, `adjustment`, `audio`, `sfx`, `voice` |
 | text.json   | `items` use `kind`, `from`, `to`, and optional `text`, `track`, `align`, `bold`, `size`, `spacing`, `stroke { color, width }`, `background { color, opacity }`, `shadow`, `in`, `out`      |
