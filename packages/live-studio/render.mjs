@@ -619,10 +619,22 @@ const cfg = {
   choices: choicesFile ? readJson(choicesFile, {}) : {},
   lab: Object.fromEntries(
     Object.entries(env)
-      .filter(([k]) => k.startsWith("LAB_"))
+      .filter(([k]) => k.startsWith("LAB_") && k.toUpperCase() !== "LAB_PREVIEW_OVERLAY")
       .map(([k, v]) => [k.slice(4).toLowerCase(), v]),
   ),
 };
+
+const previewOverlayZip = (() => {
+  if (!env.ENTRY || !env.LAB_PREVIEW_OVERLAY) return null;
+  const p = resolve(PROJECT, env.LAB_PREVIEW_OVERLAY);
+  if (!/\.zip$/i.test(p) || !statSync(p, { throwIfNoEntry: false })?.isFile()) {
+    console.error(
+      `LAB_PREVIEW_OVERLAY must point to an existing .zip file (got ${JSON.stringify(env.LAB_PREVIEW_OVERLAY)})`,
+    );
+    process.exit(2);
+  }
+  return p;
+})();
 
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
@@ -871,6 +883,12 @@ const server = Bun.serve({
       return new Response(JSON.stringify(pageConfig()), {
         headers: { "content-type": "application/json" },
       });
+    if (url === "/_preview_overlay.zip") {
+      if (!previewOverlayZip) return new Response(null, { status: 404 });
+      return new Response(Bun.file(previewOverlayZip), {
+        headers: { "content-type": "application/zip" },
+      });
+    }
     const file =
       url === "/page.js" || url.startsWith("/_render/")
         ? join(OUT, url)

@@ -24,14 +24,20 @@ const uvBox = (ox, oy, w, h, d) => ({
   left: [ox + d + w, oy + d, d, h],
   back: [ox + d + w + d, oy + d, w, h],
 });
-// Standard 64x64 Steve skin UV rects ([x, y, w, h]) for each inner body part
+// Standard 64x64 Steve skin UV rects ([x, y, w, h]) for all 6 inner Layer-1 and 6 outer Layer-2 body boxes
 export const SKIN_UV = {
   head: uvBox(0, 0, 8, 8, 8),
+  hat: uvBox(32, 0, 8, 8, 8),
   body: uvBox(16, 16, 8, 12, 4),
+  jacket: uvBox(16, 32, 8, 12, 4),
   armR: uvBox(40, 16, 4, 12, 4),
+  sleeveR: uvBox(40, 32, 4, 12, 4),
   armL: uvBox(32, 48, 4, 12, 4),
+  sleeveL: uvBox(48, 48, 4, 12, 4),
   legR: uvBox(0, 16, 4, 12, 4),
+  pantR: uvBox(0, 32, 4, 12, 4),
   legL: uvBox(16, 48, 4, 12, 4),
+  pantL: uvBox(0, 48, 4, 12, 4),
 };
 const D = Math.PI / 180;
 const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
@@ -414,7 +420,7 @@ const faceFrame = (root, head) => {
   return { px, localPx, up, right, add, box };
 };
 
-const makeFace = (root, head, skin, glow = 0.08) => {
+const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
   const { px, localPx, up, right, add } = faceFrame(root, head);
   const sampleFaceColors = (skinCtx) => {
     const s = Math.max(1, Math.round(skinCtx.canvas.width / 64));
@@ -426,10 +432,10 @@ const makeFace = (root, head, skin, glow = 0.08) => {
     };
     const skinCol = pix(1, 5);
     return {
-      lidCol: skinCol.clone().multiplyScalar(0.9),
-      irisCol: pix(2, 4),
-      browCol: pix(3, 0).multiplyScalar(0.75),
-      mouthCol: pix(3, 6).multiplyScalar(0.35),
+      lidCol: faceColors?.lid ? faceColors.lid.clone() : skinCol.clone().multiplyScalar(0.9),
+      irisCol: faceColors?.iris ? faceColors.iris.clone() : pix(2, 4),
+      browCol: faceColors?.brow ? faceColors.brow.clone() : pix(3, 0).multiplyScalar(0.75),
+      mouthCol: faceColors?.mouth ? faceColors.mouth.clone() : pix(3, 6).multiplyScalar(0.35),
     };
   };
   const initCol = sampleFaceColors(skin);
@@ -636,11 +642,33 @@ export const centroidUv = (m) => {
 };
 
 // ---- one character ----
+export type FaceColorValue =
+  string | number | { readonly isColor: true; r: number; g: number; b: number };
+
+export interface FaceColorOverrides {
+  lid?: FaceColorValue | null;
+  iris?: FaceColorValue | null;
+  brow?: FaceColorValue | null;
+  mouth?: FaceColorValue | null;
+}
+
 export async function makePlayer(
   template,
   skinUrl,
-  { glow = 0.08, face: initialFace = "game" } = {},
+  {
+    glow = 0.08,
+    face: initialFace = "game",
+    faceColors,
+  }: { glow?: number; face?: string; faceColors?: FaceColorOverrides | null } = {},
 ) {
+  const savedFaceColors = faceColors
+    ? {
+        lid: faceColors.lid != null ? new THREE.Color(faceColors.lid) : null,
+        iris: faceColors.iris != null ? new THREE.Color(faceColors.iris) : null,
+        brow: faceColors.brow != null ? new THREE.Color(faceColors.brow) : null,
+        mouth: faceColors.mouth != null ? new THREE.Color(faceColors.mouth) : null,
+      }
+    : null;
   const initMeta = FACES.find((f) => f.id === initialFace);
   if (!initMeta)
     throw new Error(`no face "${initialFace}" (FACES: ${FACES.map((f) => f.id).join(", ")})`);
@@ -742,8 +770,9 @@ export async function makePlayer(
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
-  let gameFace = initialFace === "game" ? makeFace(rig, b.head, baseCtx, glow) : null;
-  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, baseCtx, glow));
+  let gameFace = null;
+  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, baseCtx, glow, savedFaceColors));
+  if (initialFace === "game") ensureGameFace();
   const setFace = (id) => {
     const f = FACES.find((x) => x.id === id);
     if (!f) throw new Error(`no face "${id}" (FACES: ${FACES.map((x) => x.id).join(", ")})`);

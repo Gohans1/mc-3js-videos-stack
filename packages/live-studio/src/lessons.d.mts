@@ -25,6 +25,7 @@ export type LessonJudge = (
   text: string,
   pool: LessonFile[],
   show: number,
+  config?: LessonJevConfig,
 ) => Promise<[number, LessonFile, number?][]>;
 export declare const lessonTopics: (dir?: string) => string[];
 export declare function lessonsFor(
@@ -35,6 +36,7 @@ export declare function lessonsFor(
     cache?: string | null;
     judge?: LessonJudge;
     config?: Partial<LessonJevConfig>;
+    concurrency?: number;
   },
 ): Promise<
   Map<string, { picks: LessonPick[]; why?: undefined } | { why: string; picks?: undefined }>

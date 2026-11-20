@@ -144,6 +144,7 @@ const HELP = `The creator's notes from the studio, for the AI about to act on th
   --limit N                     max notes printed (default ${DEFAULT_LIMIT}; 0 for all)
   --deleted                     list recoverable deleted notes (restore with bun run note restore ID)
   --json                        return { notes, total } without spending on lesson lookup
+  --no-lessons                  skip Jev lesson lookups when reading note details in text mode
   --done                        fixed notes too            --cam   the film camera's line too (a free-camera note
                                                                    always prints the one it was seen through)
 A fixed note waits for the creator's check in the studio; their answer brings it back here with their words.
@@ -166,6 +167,7 @@ const args = cliArgs(HELP, [
   "--done",
   "--cam",
   "--json",
+  "--no-lessons",
   "--deleted",
 ]);
 let shot = null;
@@ -174,6 +176,7 @@ let limitArg;
 let done = false;
 let cam = false;
 let json = false;
+let noLessons = false;
 let archived = false;
 const ids = [];
 for (let i = 0; i < args.length; i++) {
@@ -181,13 +184,14 @@ for (let i = 0; i < args.length; i++) {
   if (a === "--done") done = true;
   else if (a === "--cam") cam = true;
   else if (a === "--json") json = true;
+  else if (a === "--no-lessons") noLessons = true;
   else if (a === "--deleted") archived = true;
   else if (a === "--shot") shot = numberArg("--shot", args[++i], { min: 0, int: true });
   else if (a === "--limit") limitArg = numberArg("--limit", args[++i], { min: 0, int: true });
   else if (a === "--sort") sort = validateSort(args[++i]);
   else if (a.startsWith("-")) {
     console.error(
-      `unknown option ${a}: bun run notes [ID ... | --shot N] [--sort MODE] [--limit N] [--done] [--cam] [--json] [--deleted] (--help for more)`,
+      `unknown option ${a}: bun run notes [ID ... | --shot N] [--sort MODE] [--limit N] [--done] [--cam] [--json] [--no-lessons] [--deleted] (--help for more)`,
     );
     process.exit(2);
   } else ids.push(a);
@@ -301,15 +305,17 @@ if (shot !== null && !pick.length) {
 if (ids.length || shot !== null) {
   // only here, where one note is read in full: the list stays one line a note, and Jev is paid only once a note's words change.
   // A note to remember too, answered or not: its rule joins the file Jev picks
-  const lessons = await lessonsFor(
-    shown.filter((n) => isOpen(n) || toLearn(n)),
-    {
-      dir: LESSONS,
-      ...(hasProjectLessons ? { projectDir: PROJECT_LESSONS } : {}),
-      cache: join(ROOT, "notes/lessons-cache.json"),
-      config: lessonConfig,
-    },
-  );
+  const lessons = noLessons
+    ? new Map()
+    : await lessonsFor(
+        shown.filter((n) => isOpen(n) || toLearn(n)),
+        {
+          dir: LESSONS,
+          ...(hasProjectLessons ? { projectDir: PROJECT_LESSONS } : {}),
+          cache: join(ROOT, "notes/lessons-cache.json"),
+          config: lessonConfig,
+        },
+      );
   for (const n of shown) detail(n, cam, lessons.get(n.id));
   if (hidden.length) console.log(`\n${hiddenSummary(hidden, { done, shot, sort })}`);
   const nums = shown.map((n) => `#${n.n}`);

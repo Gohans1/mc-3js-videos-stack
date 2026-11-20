@@ -560,16 +560,142 @@ describe("mc-actor player rig primitives", () => {
     assertAll(expA);
   });
 
-  test("SKIN_UV maps canonical 64x64 Steve UV rects for all 6 limbs with zero overlap", () => {
-    const parts = ["head", "body", "armR", "armL", "legR", "legL"] as const;
+  test("makePlayer faceColors overrides selected game-face channels and persists across setSkin and lazy setFace", async () => {
+    installPixelDocument();
+    const rig = await loadPlayerTemplate();
+
+    const makeDistinctSkin = (colors: {
+      cheek: [number, number, number];
+      iris: [number, number, number];
+      brow: [number, number, number];
+      mouth: [number, number, number];
+    }) => {
+      const c = makePixelCanvas(64, 64, [20, 20, 20, 255]);
+      const setPx = (x: number, y: number, rgb: [number, number, number]) => {
+        const i = (y * 64 + x) * 4;
+        c.data[i] = rgb[0];
+        c.data[i + 1] = rgb[1];
+        c.data[i + 2] = rgb[2];
+        c.data[i + 3] = 255;
+      };
+      setPx(9, 13, colors.cheek);
+      setPx(10, 12, colors.iris);
+      setPx(11, 8, colors.brow);
+      setPx(11, 14, colors.mouth);
+      return c;
+    };
+
+    const skinBald = makeDistinctSkin({
+      cheek: [210, 160, 120],
+      iris: [40, 110, 210],
+      brow: [210, 160, 120], // bald forehead: skin-colored (3,0) pixel
+      mouth: [180, 90, 80],
+    });
+    const skinNext = makeDistinctSkin({
+      cheek: [140, 100, 80],
+      iris: [30, 180, 90],
+      brow: [240, 240, 240],
+      mouth: [120, 40, 40],
+    });
+
+    // Lazy creation: start in "skin" face, switch to "game" later (and prove caller mutations don't leak)
+    const irisCol = new THREE.Color("#2288ee");
+    const lazyFaceColors = { brow: "#3a2518", iris: irisCol };
+    const p = await makePlayer(rig, skinBald, {
+      face: "skin",
+      faceColors: lazyFaceColors,
+    });
+    lazyFaceColors.brow = "#ff0000";
+    irisCol.set("#00ff00");
+    p.setFace("game");
+
+    const pickMats = (player: Awaited<ReturnType<typeof makePlayer>>) => {
+      const mats = getHeadFaceMaterials(player);
+      return {
+        lidMat: mats.find((m) => m.polygonOffsetFactor === -4)!,
+        irisMat: mats.find(
+          (m) =>
+            m.polygonOffsetFactor === -2 &&
+            m.color.getHexString() !== "efeee4" &&
+            m.color.getHexString() !== "b9534f",
+        )!,
+        browMat: mats.find((m) => !m.polygonOffset)!,
+        mouthMat: mats.find(
+          (m) => m.polygonOffsetFactor === -1 && m.color.getHexString() !== "f4f4f4",
+        )!,
+      };
+    };
+    const expectMat = (mat: THREE.MeshStandardMaterial, hex: string) => {
+      expect(mat.color.getHexString()).toBe(hex);
+      expect(mat.emissive.getHexString()).toBe(hex);
+    };
+
+    const lazy = pickMats(p);
+    // Overridden channels keep exact requested hex; omitted channels auto-sample skin
+    expectMat(lazy.browMat, new THREE.Color("#3a2518").getHexString());
+    expectMat(lazy.irisMat, new THREE.Color("#2288ee").getHexString());
+    expectMat(lazy.lidMat, new THREE.Color("rgb(210,160,120)").multiplyScalar(0.9).getHexString());
+    expectMat(lazy.mouthMat, new THREE.Color("rgb(180,90,80)").multiplyScalar(0.35).getHexString());
+
+    // After setSkin, overridden brow/iris remain locked while lid/mouth re-sample skinNext
+    p.setSkin(skinNext);
+    expectMat(lazy.browMat, new THREE.Color("#3a2518").getHexString());
+    expectMat(lazy.irisMat, new THREE.Color("#2288ee").getHexString());
+    expectMat(lazy.lidMat, new THREE.Color("rgb(140,100,80)").multiplyScalar(0.9).getHexString());
+    expectMat(lazy.mouthMat, new THREE.Color("rgb(120,40,40)").multiplyScalar(0.35).getHexString());
+
+    // Default eager face: "game" with lid & numeric 0x000000 mouth overrides
+    const eagerPlayer = await makePlayer(rig, skinBald, {
+      faceColors: { lid: "#aabbcc", mouth: 0x000000 },
+    });
+    const eager = pickMats(eagerPlayer);
+    expectMat(eager.lidMat, new THREE.Color("#aabbcc").getHexString());
+    expectMat(eager.mouthMat, "000000");
+    expectMat(eager.irisMat, new THREE.Color("rgb(40,110,210)").getHexString());
+    expectMat(
+      eager.browMat,
+      new THREE.Color("rgb(210,160,120)").multiplyScalar(0.75).getHexString(),
+    );
+
+    eagerPlayer.setSkin(skinNext);
+    expectMat(eager.lidMat, new THREE.Color("#aabbcc").getHexString());
+    expectMat(eager.mouthMat, "000000");
+    expectMat(eager.irisMat, new THREE.Color("rgb(30,180,90)").getHexString());
+    expectMat(
+      eager.browMat,
+      new THREE.Color("rgb(240,240,240)").multiplyScalar(0.75).getHexString(),
+    );
+  });
+
+  test("SKIN_UV maps canonical 64x64 Steve UV rects for all 12 Layer-1 and Layer-2 boxes with zero overlap", () => {
+    const parts = [
+      "head",
+      "hat",
+      "body",
+      "jacket",
+      "armR",
+      "sleeveR",
+      "armL",
+      "sleeveL",
+      "legR",
+      "pantR",
+      "legL",
+      "pantL",
+    ] as const;
     const faces = ["top", "bottom", "right", "front", "left", "back"] as const;
 
     expect(SKIN_UV.head.front).toEqual([8, 8, 8, 8]);
+    expect(SKIN_UV.hat.front).toEqual([40, 8, 8, 8]);
     expect(SKIN_UV.body.front).toEqual([20, 20, 8, 12]);
+    expect(SKIN_UV.jacket.front).toEqual([20, 36, 8, 12]);
     expect(SKIN_UV.armR.front).toEqual([44, 20, 4, 12]);
+    expect(SKIN_UV.sleeveR.front).toEqual([44, 36, 4, 12]);
     expect(SKIN_UV.armL.front).toEqual([36, 52, 4, 12]);
+    expect(SKIN_UV.sleeveL.front).toEqual([52, 52, 4, 12]);
     expect(SKIN_UV.legR.front).toEqual([4, 20, 4, 12]);
+    expect(SKIN_UV.pantR.front).toEqual([4, 36, 4, 12]);
     expect(SKIN_UV.legL.front).toEqual([20, 52, 4, 12]);
+    expect(SKIN_UV.pantL.front).toEqual([4, 52, 4, 12]);
 
     const rects: Array<{ name: string; r: readonly [number, number, number, number] }> = [];
     for (const part of parts) {
@@ -583,7 +709,7 @@ describe("mc-actor player rig primitives", () => {
         expect(h).toBeGreaterThan(0);
         expect(x + w).toBeLessThanOrEqual(64);
         expect(y + h).toBeLessThanOrEqual(64);
-        rects.push({ name: `${part}.${face}`, r });
+        rects.push({ name: `${part}.${face}`, r: [x, y, w, h] });
       }
     }
 

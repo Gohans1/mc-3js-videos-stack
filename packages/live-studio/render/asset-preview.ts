@@ -316,11 +316,24 @@ function disposeObject(root: THREE.Object3D): void {
     await log(`ERROR asset-preview: ${err instanceof Error ? err.message : err}`);
     return;
   }
+  const stagingErrors = new Map<string, string>();
+  if (
+    rawSpec.stagingErrors &&
+    typeof rawSpec.stagingErrors === "object" &&
+    !Array.isArray(rawSpec.stagingErrors)
+  ) {
+    for (const [k, v] of Object.entries(rawSpec.stagingErrors as Record<string, unknown>)) {
+      if (typeof v === "string") stagingErrors.set(k, v);
+    }
+  }
   const spec = {
     items: validatedItems,
     out: outName,
     size: itemSize,
     showScale: rawSpec.showScale !== false,
+    hasOverlay: rawSpec.hasOverlay === true,
+    skipPicked: rawSpec.skipPicked === true,
+    stagingErrors,
   };
 
   configure({ THREE, assetsUrl: "vendor/bmr_assets.zip" });
@@ -333,18 +346,29 @@ function disposeObject(root: THREE.Object3D): void {
   }
   const jarBytes = new Uint8Array(await jarResp.arrayBuffer());
   const packList: unknown[] = [sharedProps];
-  let hasPickedZip = false;
-  try {
-    const pickedResp = await fetch("picked.zip");
-    if (pickedResp.ok) {
-      const pickedBytes = new Uint8Array(await pickedResp.arrayBuffer());
-      if (pickedBytes.byteLength > 0) {
-        packList.push(pickedBytes);
-        hasPickedZip = true;
-      }
+  if (spec.hasOverlay) {
+    const overlayResp = await fetch("_preview_overlay.zip");
+    if (!overlayResp.ok) {
+      await log("ERROR asset-preview failed to fetch staged vault pack overlay");
+      return;
     }
-  } catch {
-    // picked.zip is optional when previewing vanilla/shared blocks
+    const overlayBytes = new Uint8Array(await overlayResp.arrayBuffer());
+    if (overlayBytes.byteLength > 0) packList.push(overlayBytes);
+  }
+  let hasPickedZip = false;
+  if (!spec.skipPicked) {
+    try {
+      const pickedResp = await fetch("picked.zip");
+      if (pickedResp.ok) {
+        const pickedBytes = new Uint8Array(await pickedResp.arrayBuffer());
+        if (pickedBytes.byteLength > 0) {
+          packList.push(pickedBytes);
+          hasPickedZip = true;
+        }
+      }
+    } catch {
+      // picked.zip is optional when previewing vanilla/shared blocks
+    }
   }
   packList.push(jarBytes);
   let sources;
@@ -469,32 +493,37 @@ function disposeObject(root: THREE.Object3D): void {
       max: [number, number, number];
     } | null = null;
 
-    try {
-      missing = await checkAssetMissing(sources, item.kind, item.id);
-      if (!missing) {
-        model =
-          item.kind === "block"
-            ? await blockModel(sources, item.id, {}, { shadows: true, animate: false })
-            : await itemModel(sources, item.id, spec.size, { shadows: true, animate: false });
-        model.updateMatrixWorld(true);
-        const rawBox = computeVisibleBounds(model);
-        if (rawBox.isEmpty()) {
-          missing = true;
-        } else {
-          const sizeVec = rawBox.getSize(new THREE.Vector3());
-          boundsMeta = {
-            size: [round4(sizeVec.x), round4(sizeVec.y), round4(sizeVec.z)],
-            min: [round4(rawBox.min.x), round4(rawBox.min.y), round4(rawBox.min.z)],
-            max: [round4(rawBox.max.x), round4(rawBox.max.y), round4(rawBox.max.z)],
-          };
-          const cx = (rawBox.min.x + rawBox.max.x) / 2;
-          const cz = (rawBox.min.z + rawBox.max.z) / 2;
-          model.position.set(-cx, -rawBox.min.y, -cz);
+    if (spec.stagingErrors.has(item.label)) {
+      missing = true;
+      error = spec.stagingErrors.get(item.label) || "failed to stage vault asset";
+    } else {
+      try {
+        missing = await checkAssetMissing(sources, item.kind, item.id);
+        if (!missing) {
+          model =
+            item.kind === "block"
+              ? await blockModel(sources, item.id, {}, { shadows: true, animate: false })
+              : await itemModel(sources, item.id, spec.size, { shadows: true, animate: false });
+          model.updateMatrixWorld(true);
+          const rawBox = computeVisibleBounds(model);
+          if (rawBox.isEmpty()) {
+            missing = true;
+          } else {
+            const sizeVec = rawBox.getSize(new THREE.Vector3());
+            boundsMeta = {
+              size: [round4(sizeVec.x), round4(sizeVec.y), round4(sizeVec.z)],
+              min: [round4(rawBox.min.x), round4(rawBox.min.y), round4(rawBox.min.z)],
+              max: [round4(rawBox.max.x), round4(rawBox.max.y), round4(rawBox.max.z)],
+            };
+            const cx = (rawBox.min.x + rawBox.max.x) / 2;
+            const cz = (rawBox.min.z + rawBox.max.z) / 2;
+            model.position.set(-cx, -rawBox.min.y, -cz);
+          }
+          scene.add(model);
         }
-        scene.add(model);
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
       }
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
     }
 
     const assetHalfW = boundsMeta ? boundsMeta.size[0] / 2 : 0.5;

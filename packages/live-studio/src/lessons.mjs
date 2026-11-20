@@ -185,6 +185,7 @@ export async function lessonsFor(
     cache = null,
     judge = jevLessons,
     config: rawConfig = {},
+    concurrency = 4,
   } = {},
 ) {
   const config = LessonJevConfigSchema.parse(rawConfig);
@@ -194,8 +195,21 @@ export async function lessonsFor(
   if (!pool.length) return out;
   const kept = readCache(cache),
     byKey = new Map(pool.map((x) => [x.key, x]));
+  const maxWorkers = Number.isFinite(concurrency) && concurrency >= 1 ? Math.floor(concurrency) : 4;
   let inspected;
   let changed = false;
+
+  const toStoredPicks = (voted) =>
+    voted
+      .filter(([, , fit]) => fit !== undefined && fit >= config.fitNo)
+      .map(([, x, fit]) =>
+        dual
+          ? { pick: x.key, sure: fit >= config.fitYes }
+          : { path: x.path, sure: fit >= config.fitYes },
+      );
+
+  const plan = [];
+  const pendingByKey = new Map();
   for (const n of notes) {
     // the creator's answers after it as well: "and the hinge squeak is missing" may need another lesson than the note's words
     const words = [n.text, ...(n.asks ?? []).map((a) => a.text)].join("\n"),
@@ -206,54 +220,87 @@ export async function lessonsFor(
       entry?.key === key &&
       Array.isArray(entry.picks) &&
       entry.picks.every((p) => typeof (dual ? p?.pick : p?.path) === "string");
-    if (!valid) {
-      inspected ??= cache ? readCache(join(dirname(cache), "lessons-inspect-cache.json")) : [];
-      const reuse = Array.isArray(inspected)
-        ? inspected.find((e) => e.key === key && Array.isArray(e.ranked))
-        : null;
-      if (!config.enabled && !reuse) {
-        out.set(n.id, { why: "Jev disabled in Lessons / AI Inspector settings" });
+    if (valid) {
+      plan.push({ n, key, status: "cached" });
+      continue;
+    }
+    inspected ??= cache ? readCache(join(dirname(cache), "lessons-inspect-cache.json")) : [];
+    const reuse = Array.isArray(inspected)
+      ? inspected.find((e) => e.key === key && Array.isArray(e.ranked))
+      : null;
+    if (reuse) {
+      const voted = reuse.ranked.flatMap((r) =>
+        byKey.has(r.key) ? [[r.vote, byKey.get(r.key), r.fit]] : [],
+      );
+      kept[n.id] = { key, picks: toStoredPicks(voted) };
+      changed = true;
+      plan.push({ n, key, status: "cached" });
+      continue;
+    }
+    if (!config.enabled) {
+      plan.push({ n, key, status: "disabled" });
+      continue;
+    }
+    if (!pendingByKey.has(key)) pendingByKey.set(key, words);
+    plan.push({ n, key, status: "pending" });
+  }
+
+  const judged = new Map();
+  if (pendingByKey.size > 0) {
+    const tasks = [...pendingByKey.entries()];
+    const showCount = Math.min(config.show, pool.length);
+    let cursor = 0;
+    const workers = Array.from({ length: Math.min(maxWorkers, tasks.length) }, async () => {
+      while (true) {
+        const idx = cursor++;
+        if (idx >= tasks.length) break;
+        const [key, words] = tasks[idx];
+        try {
+          const voted = await judge(words, pool, showCount, config);
+          judged.set(key, { ok: true, picks: toStoredPicks(voted) });
+        } catch (e) {
+          judged.set(key, { ok: false, why: e instanceof Error ? e.message : String(e) });
+        }
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  for (const item of plan) {
+    const { n, key, status } = item;
+    if (status === "disabled") {
+      out.set(n.id, { why: "Jev disabled in Lessons / AI Inspector settings" });
+      continue;
+    }
+    if (status === "pending") {
+      const res = judged.get(key);
+      if (!res?.ok) {
+        out.set(n.id, { why: res?.why || "lesson lookup failed" });
         continue;
       }
-      try {
-        const voted = reuse
-          ? reuse.ranked.flatMap((r) =>
-              byKey.has(r.key) ? [[r.vote, byKey.get(r.key), r.fit]] : [],
-            )
-          : await judge(words, pool, Math.min(config.show, pool.length), config);
-        kept[n.id] = {
-          key,
-          // the files, not their heading lines: an edit under a heading moves them without asking Jev again
-          picks: voted
-            .filter(([, , fit]) => fit !== undefined && fit >= config.fitNo)
-            .map(([, x, fit]) =>
-              dual
-                ? { pick: x.key, sure: fit >= config.fitYes }
-                : { path: x.path, sure: fit >= config.fitYes },
-            ),
-        };
-        changed = true;
-      } catch (e) {
-        out.set(n.id, { why: e.message });
-        continue;
-      }
+      kept[n.id] = {
+        key,
+        // the files, not their heading lines: an edit under a heading moves them without asking Jev again
+        picks: res.picks.map((p) => ({ ...p })),
+      };
+      changed = true;
     }
     out.set(n.id, {
       picks: kept[n.id].picks.flatMap((p) => {
-        const item = byKey.get(dual ? p.pick : p.path);
-        if (!item) return [];
+        const found = byKey.get(dual ? p.pick : p.path);
+        if (!found) return [];
         return dual
           ? [
               {
-                scope: item.scope,
-                rel: item.rel,
-                path: item.path,
-                file: item.file,
+                scope: found.scope,
+                rel: found.rel,
+                path: found.path,
+                file: found.file,
                 sure: !!p.sure,
-                heads: item.heads,
+                heads: found.heads,
               },
             ]
-          : [{ path: item.path, sure: !!p.sure, heads: item.heads }];
+          : [{ path: found.path, sure: !!p.sure, heads: found.heads }];
       }),
     });
   }

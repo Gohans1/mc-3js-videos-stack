@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { lessonsFor, lessonTopics } from "../src/lessons.mjs";
 
@@ -345,4 +347,113 @@ test("lessonsFor and lessonTopics recurse into nested subfolders across both sco
       ["all", "sound/foley/steps.md", join(globalDir, "sound/foley/steps.md")],
     ],
   );
+});
+
+test("lessonsFor runs uncached note lookups concurrently with bounded pool, deduplicates identical queries, preserves order, and isolates failures", async () => {
+  const { dir, cache } = lessons({ "hands.md": HANDS, "cuts.md": CUTS });
+  const input = [
+    note("n1", "alpha"),
+    note("n2", "beta"),
+    note("n3", "fail-me"),
+    note("n4", "gamma"),
+    note("n5", "alpha"), // duplicate text of n1 -> must dedupe judge call
+    note("n6", "delta"),
+    note("n7", "epsilon"),
+  ];
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const called = [];
+  const gates = new Map();
+  let releaseFirstWave;
+  const firstWaveReady = new Promise((r) => {
+    releaseFirstWave = r;
+  });
+
+  const judge = async (words, pool) => {
+    called.push(words);
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    if (inFlight === 4) releaseFirstWave();
+    await new Promise((r) => {
+      const timer = setTimeout(
+        r,
+        inFlight >= 4 || words === "delta" || words === "epsilon" ? 15 : 150,
+      );
+      gates.set(words, () => {
+        clearTimeout(timer);
+        r();
+      });
+    });
+    inFlight--;
+    if (words === "fail-me") throw new Error("jev unreachable");
+    return pool.map((x) => [0.9, x, x.path === "lessons/hands.md" ? 0.95 : 0.1]);
+  };
+
+  const runPromise = lessonsFor(input, { dir, cache, judge, concurrency: 4 });
+  let waitTimer;
+  await Promise.race([
+    firstWaveReady,
+    new Promise((r) => {
+      waitTimer = setTimeout(r, 500);
+    }),
+  ]);
+  clearTimeout(waitTimer);
+  for (const r of [...gates.values()].reverse()) r();
+  const got = await runPromise;
+
+  assert.equal(maxInFlight, 4, `expected 4 concurrent Jev lookups, saw ${maxInFlight}`);
+  assert.equal(called.length, 6, "duplicate text note n5 must share n1 judge call");
+  assert.deepEqual([...got.keys()], ["n1", "n2", "n3", "n4", "n5", "n6", "n7"]);
+  assert.deepEqual(got.get("n3"), { why: "jev unreachable" });
+  assert.equal(got.get("n1")?.picks?.[0]?.path, "lessons/hands.md");
+  assert.equal(got.get("n5")?.picks?.[0]?.path, "lessons/hands.md");
+  const saved = JSON.parse(readFileSync(cache, "utf8"));
+  assert.equal(Object.keys(saved).length, 6);
+  assert.equal(saved.n3, undefined);
+});
+
+test("notes CLI --no-lessons skips Jev lookup in text mode while printing full note detail", () => {
+  const notesCli = join(dirname(fileURLToPath(import.meta.url)), "../notes.mjs");
+  const root = mkdtempSync(join(tmpdir(), "notes-nolessons-"));
+  try {
+    mkdirSync(join(root, "notes"), { recursive: true });
+    mkdirSync(join(root, "lessons"), { recursive: true });
+    mkdirSync(join(root, "src"), { recursive: true });
+    writeFileSync(join(root, "src/scene.ts"), "export const DURATION = 10;\n");
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ name: "tmp-film", "live-studio": {} }),
+    );
+    writeFileSync(join(root, "lessons/hands.md"), HANDS);
+    writeFileSync(
+      join(root, "notes/notes.jsonl"),
+      `${JSON.stringify({ id: "n1", n: 1, t: 2, time: "0:02.0", shot: 0, text: "hands clip desk", at: "2026-11-20T00:00:00Z" })}\n`,
+    );
+    writeFileSync(join(root, "notes/lessons-config.json"), JSON.stringify({ enabled: false }));
+    const cleanEnv = Object.fromEntries(
+      Object.entries(process.env).filter(([k]) => k.toUpperCase() !== "LIVE_PROJECT"),
+    );
+    const withLessons = spawnSync(process.execPath, [notesCli, "n1"], {
+      cwd: root,
+      env: cleanEnv,
+      encoding: "utf8",
+      timeout: 15_000,
+      windowsHide: true,
+    });
+    assert.equal(withLessons.status, 0, withLessons.stderr);
+    assert.match(withLessons.stdout, /Jev disabled/);
+
+    const withoutLessons = spawnSync(process.execPath, [notesCli, "n1", "--no-lessons"], {
+      cwd: root,
+      env: cleanEnv,
+      encoding: "utf8",
+      timeout: 15_000,
+      windowsHide: true,
+    });
+    assert.equal(withoutLessons.status, 0, withoutLessons.stderr);
+    assert.match(withoutLessons.stdout, /hands clip desk/);
+    assert.doesNotMatch(withoutLessons.stdout, /Jev disabled|lessons:/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
