@@ -1468,6 +1468,7 @@ export const createApi = (
   // Files edited in one go (a cut moved on the camera row changes cam.json and shots.json), named as their own routes name them:
   // every one is checked before any is written, so a 409 on one never leaves the others half saved
   const named = (name) => {
+    if (typeof name !== "string" || !name) return undefined;
     const keyFiles = film.keyFiles ?? [];
     const byName = new Map([
       ["sound", film.sound],
@@ -1481,7 +1482,7 @@ export const createApi = (
       ...keyFiles.map((k, i) => [`keys/${i}`, k]),
     ]);
     if (byName.has(name)) return byName.get(name);
-    const matches = keyFiles.filter((k) => k?.edit === name);
+    const matches = keyFiles.filter((k) => k?.edit && k.edit === name);
     return matches.length === 1 ? matches[0] : undefined;
   };
   mountCollaboration(app, named);
@@ -1490,8 +1491,17 @@ export const createApi = (
     const { files: rawFiles, actor } = c.req.valid("json");
     const files = rawFiles.map((f) => ({ ...f, file: named(f.name) }));
     if (files.some((f) => !f.file)) return noSound(c);
-    if (new Set(files.map((f) => f.file)).size !== files.length)
-      return c.json({ problems: ["each file once"] }, 400);
+    const seenFiles = new Set();
+    for (const f of files) {
+      const fileId =
+        typeof f.file.FILE === "string"
+          ? process.platform === "win32"
+            ? f.file.FILE.toLowerCase()
+            : f.file.FILE
+          : f.file;
+      if (seenFiles.has(fileId)) return c.json({ problems: ["each file once"] }, 400);
+      seenFiles.add(fileId);
+    }
     const isAgent = actor === "agent";
     const writeOpts = isAgent ? { actor: "agent" } : undefined;
     const nos = files.map((f) => {

@@ -5076,3 +5076,34 @@ test("Segmented Focus mode stays Tab-reachable in point mode and Target mode wor
     if (window.__savedObjectsForTargetTest) { u.S.tools.objects = window.__savedObjectsForTargetTest; delete window.__savedObjectsForTargetTest; }
   })()`);
 });
+
+test("saveNote records staleBuild: true only when newBuild is active", async () => {
+  const res = await page.evaluate(`(async () => {
+    const u = window.__UX_TEST__;
+    const prevNewBuild = u.get().newBuild;
+    u.resetNotes();
+    try {
+      u.set({ newBuild: true });
+      await u.openNote(null, false);
+      u.setDraft("captured on older build");
+      await u.saveNote();
+      const staleNote = u.savedNotes().at(-1);
+
+      u.set({ newBuild: false });
+      await u.openNote(null, false);
+      u.setDraft("captured on current build");
+      await u.saveNote();
+      const cleanNote = u.savedNotes().at(-1);
+
+      return {
+        staleFlag: staleNote?.staleBuild,
+        cleanHasStale: cleanNote ? "staleBuild" in cleanNote : null,
+      };
+    } finally {
+      u.set({ newBuild: prevNewBuild });
+    }
+  })()`);
+
+  expect(res.staleFlag).toBe(true);
+  expect(res.cleanHasStale).toBe(false);
+});

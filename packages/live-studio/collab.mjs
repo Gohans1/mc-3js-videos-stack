@@ -76,17 +76,25 @@ const describeAvailable = (keyFiles) => {
 };
 
 const resolveDoc = (rawName, keyFiles) => {
-  if (BUILTIN_SET.has(rawName)) return { ok: true, target: rawName };
-  if (/^keys\/\d+$/.test(rawName)) {
+  if (typeof rawName !== "string" || !rawName) {
+    return {
+      ok: false,
+      error: `unknown document ${JSON.stringify(rawName ?? "")}. Available: ${describeAvailable(keyFiles)}`,
+    };
+  }
+  if (BUILTIN_SET.has(rawName)) return { ok: true, canonical: rawName, wire: rawName };
+  if (/^keys\/(?:0|[1-9]\d*)$/.test(rawName)) {
     const index = Number(rawName.slice(5));
-    if (index >= 0 && index < keyFiles.length) return { ok: true, target: rawName };
+    if (index >= 0 && index < keyFiles.length)
+      return { ok: true, canonical: rawName, wire: rawName };
     return {
       ok: false,
       error: `unknown document "${rawName}" (film has ${keyFiles.length} keyFile${keyFiles.length === 1 ? "" : "s"}). Available: ${describeAvailable(keyFiles)}`,
     };
   }
-  const matches = keyFiles.filter((k) => k.edit === rawName);
-  if (matches.length === 1) return { ok: true, target: `keys/${matches[0].index}` };
+  const matches = keyFiles.filter((k) => k.edit && k.edit === rawName);
+  if (matches.length === 1)
+    return { ok: true, canonical: `keys/${matches[0].index}`, wire: rawName };
   if (matches.length > 1) {
     return {
       ok: false,
@@ -141,10 +149,10 @@ const parseWriteMany = (rawText, keyFiles) => {
       usageFail(`write-many entry "${entry.key}" needs string "base" and "data"`);
     const resolved = resolveDoc(entry.key, keyFiles);
     if (!resolved.ok) usageFail(resolved.error);
-    if (seenTargets.has(resolved.target))
-      usageFail(`duplicate target "${resolved.target}" in write-many`);
-    seenTargets.add(resolved.target);
-    return { key: entry.key, target: resolved.target, base: entry.base, data: entry.data };
+    if (seenTargets.has(resolved.canonical))
+      usageFail(`duplicate target "${resolved.canonical}" in write-many`);
+    seenTargets.add(resolved.canonical);
+    return { key: entry.key, wire: resolved.wire, base: entry.base, data: entry.data };
   });
 };
 
@@ -181,7 +189,7 @@ if (action === "read" || action === "write") {
   docLabel = arg1;
   const resolved = resolveDoc(arg1, keyFiles);
   if (!resolved.ok) usageFail(resolved.error);
-  targetDoc = resolved.target;
+  targetDoc = resolved.wire;
 }
 
 let writeBody;
@@ -210,7 +218,7 @@ try {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         actor: "agent",
-        files: manyPlan.map(({ target, base, data }) => ({ name: target, base, data })),
+        files: manyPlan.map(({ wire, base, data }) => ({ name: wire, base, data })),
       }),
       signal: AbortSignal.timeout(10000),
     });
@@ -222,13 +230,13 @@ try {
     } else {
       const parsed = JSON.parse(text);
       const versions = Object.fromEntries(
-        manyPlan.map(({ key, target }) => [key, parsed.versions?.[target]]),
+        manyPlan.map(({ key, wire }) => [key, parsed.versions?.[wire]]),
       );
       if (quiet) {
         console.log(JSON.stringify({ ok: true, versions, retained: parsed.retained ?? [] }));
       } else {
         const files = Object.fromEntries(
-          manyPlan.map(({ key, target }) => [key, parsed.files?.[target]]),
+          manyPlan.map(({ key, wire }) => [key, parsed.files?.[wire]]),
         );
         console.log(JSON.stringify({ ...parsed, versions, files }));
       }

@@ -236,6 +236,23 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     ).join("\n");
     assert.ok(versionlessOut.includes("written at 2026-11-19T19:00:05Z"), versionlessOut);
 
+    // Out-of-range finite numeric timestamp must not throw RangeError
+    const badAtOut = sameFmt(
+      {
+        n: 4,
+        id: "ba1",
+        t: 1,
+        time: "00:01.000",
+        shot: 0,
+        at: 1e20,
+        text: "invalid numeric date",
+      },
+      false,
+      undefined,
+    ).join("\n");
+    assert.ok(badAtOut.includes("NOTE: invalid numeric date"), badAtOut);
+    assert.ok(!badAtOut.includes("written at"), badAtOut);
+
     // 4) Modify src/scene.ts -> filmVersion changes to v2 -> notes.mjs CLI flags mismatch & staleBuild & timestamp
     writeFileSync(join(dir, "src/scene.ts"), "export const rev = 2;\n");
     const v2 = filmVersion(dir);
@@ -389,6 +406,7 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.ok(leanNotice.id);
     assert.ok(leanNotice.at);
     assert.equal(leanNotice.kind, "retained");
+    assert.deepEqual(leanNotice.retained, [`/@${camUuid}/p`]);
     assert.deepEqual(leanNotice.paths, [`/@${camUuid}/p`]);
     assert.deepEqual(leanNotice.pathLabels, ["/@550e8400/p (t=13.7s)"]);
 
@@ -456,9 +474,11 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.match(badName.stderr, /cast/);
     assert.match(badName.stderr, /placed/);
 
-    // 6) Invalid flag combinations exit 2
+    // 6) Invalid flag combinations and malformed doc names exit 2
     assert.equal((await runCollab(["read", "cam", "--quiet"], { cwd: dir })).status, 2);
     assert.equal((await runCollab(["write", "cam", "-", "--full"], { cwd: dir })).status, 2);
+    assert.equal((await runCollab(["read", ""], { cwd: dir })).status, 2);
+    assert.equal((await runCollab(["read", "keys/00"], { cwd: dir })).status, 2);
 
     // 7) Atomic collab write-many updates cam + shots + cast together via /api/together
     const curCam = JSON.parse((await runCollab(["read", "cam"], { cwd: dir })).stdout);
@@ -488,7 +508,7 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.equal(readFileSync(camFile, "utf8"), camBefore);
     assert.equal(readFileSync(shotsFile, "utf8"), shotsBefore);
 
-    // 7b) Duplicate canonical target (cast + keys/0) exits 2 before calling Studio
+    // 7b) Duplicate canonical target (cast + keys/0) and leading-zero keys/00 exit 2 before calling Studio
     const dupMany = await runCollab(["write-many", "-"], {
       cwd: dir,
       stdin: JSON.stringify({
@@ -499,6 +519,16 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
       }),
     });
     assert.equal(dupMany.status, 2);
+    const leadingZeroMany = await runCollab(["write-many", "-"], {
+      cwd: dir,
+      stdin: JSON.stringify({
+        writes: {
+          "keys/0": { base: curCast.version, data: curCast.data },
+          "keys/00": { base: curCast.version, data: curCast.data },
+        },
+      }),
+    });
+    assert.equal(leadingZeroMany.status, 2);
 
     // 7c) Valid write-many --quiet atomically shifts cut across cam + shots + cast
     const okMany = await runCollab(["write-many", "-", "--quiet"], {
@@ -536,8 +566,287 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     // 7d) write-many uses actor:"agent", so its edits are NOT locked as human-protected
     assert.equal(film.shots.collaboration().protected.length, 0);
     assert.equal(film.keyFiles[0].collaboration().protected.length, 0);
+
+    // 7e) Non-quiet write-many and {"files":[...]} input format remap versions & files keys cleanly
+    const afterManyCam = JSON.parse((await runCollab(["read", "cam"], { cwd: dir })).stdout);
+    const afterManyCast = JSON.parse((await runCollab(["read", "cast"], { cwd: dir })).stdout);
+    const nonQuietFiles = await runCollab(["write-many", "-"], {
+      cwd: dir,
+      stdin: JSON.stringify({
+        files: [
+          {
+            name: "cam",
+            base: afterManyCam.version,
+            data: [afterManyCam.data[0], { ...afterManyCam.data[1], fov: 58 }],
+          },
+          {
+            name: "cast",
+            base: afterManyCast.version,
+            data: { elon: [{ t: 0, x: 11, z: 12 }] },
+          },
+        ],
+      }),
+    });
+    assert.equal(nonQuietFiles.status, 0, nonQuietFiles.stderr);
+    const nonQuietOut = JSON.parse(nonQuietFiles.stdout);
+    assert.equal(typeof nonQuietOut.versions.cam, "string");
+    assert.equal(typeof nonQuietOut.versions.cast, "string");
+    assert.equal(nonQuietOut.files.cam[1].fov, 58);
+    assert.deepEqual(nonQuietOut.files.cast, { elon: [{ t: 0, x: 11, z: 12 }] });
   } finally {
     server.stop(true);
+    film.stop?.();
+  }
+});
+
+test("collab sends edit names on the wire so live Studio stays accurate after package.json keyFiles reorder, and /api/together handles aliases, schema aborts, selective guard clearing, and person-merge compatibility", async (t) => {
+  const dir = makeDir(t, "collab-wire-");
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  mkdirSync(join(dir, "renders/live"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "export {};\n");
+  const pkgPath = join(dir, "package.json");
+  writeFileSync(
+    pkgPath,
+    JSON.stringify({
+      name: "collab-wire",
+      "live-studio": {
+        camTimeline: "src/timeline/cam.json",
+        shotsTimeline: "src/timeline/shots.json",
+        keyFiles: {
+          "src/timeline/cast.json": "cast",
+          "src/timeline/placed.json": "placed",
+        },
+      },
+    }),
+  );
+
+  const camFile = join(dir, "src/timeline/cam.json");
+  const shotsFile = join(dir, "src/timeline/shots.json");
+  const castFile = join(dir, "src/timeline/cast.json");
+  const placedFile = join(dir, "src/timeline/placed.json");
+  const k0 = { id: "k0", t: 0, p: [0, 1, 5], l: [0, 1, 0], fov: 45 };
+  const k1 = { id: "k1", t: 4, cut: true, p: [1, 1, 5], l: [0, 1, 0], fov: 50 };
+  writeFileSync(camFile, JSON.stringify([k0, k1]));
+  writeFileSync(
+    shotsFile,
+    JSON.stringify([
+      { id: "s0", t: 0, name: "open" },
+      { id: "s1", t: 4, name: "cut" },
+    ]),
+  );
+  writeFileSync(castFile, JSON.stringify({ elon: [{ t: 0, x: 1 }] }));
+  writeFileSync(placedFile, JSON.stringify({}));
+
+  const activity = createActivity(() => {});
+  const film = openFilm(dir, { send: () => {}, activity });
+  const app = createApi(film, { page: { dir, html: () => "" }, events: new Set(), activity });
+  const server = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: app.fetch });
+
+  try {
+    writeFileSync(
+      join(dir, "renders/live/studio.json"),
+      JSON.stringify({ project: dir, port: server.port }),
+    );
+
+    // 1) Direct HTTP GET /api/collaboration/<editName> resolves cast directly
+    const directCast = await app.request("/api/collaboration/cast?full=0");
+    assert.equal(directCast.status, 200);
+    assert.deepEqual((await directCast.json()).data, { elon: [{ t: 0, x: 1 }] });
+
+    // 2) Reorder keyFiles in package.json on disk while Studio is STILL running (cast moves index 0 -> 1 on disk)
+    writeFileSync(
+      pkgPath,
+      JSON.stringify({
+        name: "collab-wire",
+        "live-studio": {
+          camTimeline: "src/timeline/cam.json",
+          shotsTimeline: "src/timeline/shots.json",
+          keyFiles: {
+            "src/timeline/placed.json": "placed",
+            "src/timeline/cast.json": "cast",
+          },
+        },
+      }),
+    );
+    const afterReorderRead = await runCollab(["read", "cast"], { cwd: dir });
+    assert.equal(afterReorderRead.status, 0, afterReorderRead.stderr);
+    const castRead = JSON.parse(afterReorderRead.stdout);
+    assert.deepEqual(castRead.data, { elon: [{ t: 0, x: 1 }] });
+
+    const afterReorderWrite = await runCollab(["write", "cast", "-", "--quiet"], {
+      cwd: dir,
+      stdin: JSON.stringify({ base: castRead.version, data: { elon: [{ t: 0, x: 7 }] } }),
+    });
+    assert.equal(afterReorderWrite.status, 0, afterReorderWrite.stderr);
+    assert.deepEqual(JSON.parse(readFileSync(castFile, "utf8")), { elon: [{ t: 0, x: 7 }] });
+    assert.deepEqual(JSON.parse(readFileSync(placedFile, "utf8")), {});
+
+    // 3) Direct HTTP POST /api/together rejects duplicate alias (cast + keys/0 -> 400) without writing
+    const curCast = film.keyFiles[0].read();
+    const dupAlias = await app.request("/api/together", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        actor: "agent",
+        files: [
+          { name: "cast", base: curCast.version, data: { elon: [{ t: 0, x: 99 }] } },
+          { name: "keys/0", base: curCast.version, data: { elon: [{ t: 0, x: 99 }] } },
+        ],
+      }),
+    });
+    assert.equal(dupAlias.status, 400);
+    assert.deepEqual(JSON.parse(readFileSync(castFile, "utf8")), { elon: [{ t: 0, x: 7 }] });
+
+    // 4) Direct HTTP POST /api/together with actor:"agent" aborts atomically on schema 400
+    const camNow = film.cam.read();
+    const shotsNow = film.shots.read();
+    const camBefore = readFileSync(camFile, "utf8");
+    const shotsBefore = readFileSync(shotsFile, "utf8");
+    const badSchema = await app.request("/api/together", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        actor: "agent",
+        files: [
+          { name: "cam", base: camNow.version, data: [k0, { ...k1, t: 5 }] },
+          {
+            name: "shots",
+            base: shotsNow.version,
+            data: [
+              { id: "s0", t: 0 },
+              { id: "s1", t: 0 },
+            ],
+          },
+        ],
+      }),
+    });
+    assert.equal(badSchema.status, 400);
+    assert.equal(readFileSync(camFile, "utf8"), camBefore);
+    assert.equal(readFileSync(shotsFile, "utf8"), shotsBefore);
+
+    // 5) write-many clears a modified human-protected field (fov) while keeping an untouched human field (p) protected
+    const h0 = film.cam.read();
+    film.cam.write(h0.version, [k0, { ...k1, p: [9, 2, 6], fov: 65 }]);
+    // Direct write triggers a pending notice
+    writeFileSync(camFile, JSON.stringify([k0, k1]));
+    film.cam.read();
+    assert.equal(captureWarnings(dir).length, 1);
+
+    const h1 = film.cam.read();
+    const sh1 = film.shots.read();
+    const selective = await runCollab(["write-many", "-", "--quiet"], {
+      cwd: dir,
+      stdin: JSON.stringify({
+        writes: {
+          cam: { base: h1.version, data: [h1.data[0], { ...h1.data[1], fov: 72 }] },
+          shots: { base: sh1.version, data: [sh1.data[0], { ...sh1.data[1], name: "updated" }] },
+        },
+      }),
+    });
+    assert.equal(selective.status, 0, selective.stderr);
+    assert.deepEqual(captureWarnings(dir), [], "agent write-many acknowledges pending warning");
+    // Direct write afterwards can change acknowledged fov, while untouched human p stays retained!
+    const afterSel = film.cam.read().data;
+    writeFileSync(
+      camFile,
+      JSON.stringify([afterSel[0], { ...afterSel[1], p: [0, 0, 0], fov: 33 }]),
+    );
+    const reconciled = film.cam.read().data;
+    assert.deepEqual(reconciled[1].p, [9, 2, 6], "untouched human p remains protected");
+    assert.equal(reconciled[1].fov, 33, "agent-revised fov guard was cleared");
+
+    // 6) Studio UI backward compatibility: POST /api/together without actor merges against a historical ancestor base as "person"
+    const ancCam = film.cam.read();
+    const ancShots = film.shots.read();
+    // External write modifies k0.fov and s0.name after ancCam/ancShots
+    writeFileSync(camFile, JSON.stringify([{ ...ancCam.data[0], fov: 48 }, ancCam.data[1]]));
+    writeFileSync(
+      shotsFile,
+      JSON.stringify([{ ...ancShots.data[0], name: "ext-open" }, ancShots.data[1]]),
+    );
+    const personMerge = await app.request("/api/together", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        files: [
+          {
+            name: "cam",
+            base: ancCam.version,
+            data: [ancCam.data[0], { ...ancCam.data[1], t: 6 }],
+          },
+          {
+            name: "shots",
+            base: ancShots.version,
+            data: [ancShots.data[0], { ...ancShots.data[1], t: 6 }],
+          },
+        ],
+      }),
+    });
+    assert.equal(personMerge.status, 200);
+    const mergedJson = await personMerge.json();
+    assert.equal(mergedJson.files.cam[0].fov, 48, "external non-conflicting cam edit preserved");
+    assert.equal(mergedJson.files.cam[1].t, 6, "person cam edit applied");
+    assert.equal(mergedJson.files.shots[0].name, "ext-open", "external shots edit preserved");
+    assert.equal(mergedJson.files.shots[1].t, 6, "person shots edit applied");
+  } finally {
+    server.stop(true);
+    film.stop?.();
+  }
+});
+
+test("GET /api/collaboration/:name resolves human-deleted row timestamps in protectedLabels before any collision and in later notices' pathLabels", async (t) => {
+  const dir = makeDir(t, "collab-del-");
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  writeFileSync(join(dir, "src/scene.ts"), "export {};\n");
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      name: "collab-del",
+      "live-studio": { shotsTimeline: "src/timeline/shots.json" },
+    }),
+  );
+  const deletedUuid = "deadbeef-0000-1111-2222-333344445555";
+  const shotsFile = join(dir, "src/timeline/shots.json");
+  writeFileSync(
+    shotsFile,
+    JSON.stringify([
+      { id: "s0", t: 0, name: "open" },
+      { id: deletedUuid, t: 8.25, name: "cut" },
+    ]),
+  );
+
+  const activity = createActivity(() => {});
+  const film = openFilm(dir, { send: () => {}, activity });
+  const app = createApi(film, { page: { dir, html: () => "" }, events: new Set(), activity });
+
+  try {
+    const s0 = film.shots.read();
+    // Human deletes deletedUuid AND renames s0 -> "human-open"
+    film.shots.write(s0.version, [{ id: "s0", t: 0, name: "human-open" }]);
+
+    // BEFORE any collision, GET /api/collaboration/shots?full=0 resolves deletedUuid's timestamp from history snapshots!
+    const beforeCollision = await (await app.request("/api/collaboration/shots?full=0")).json();
+    assert.equal(beforeCollision.notices.length, 0);
+    assert.ok(
+      beforeCollision.protectedLabels.includes("/@deadbeef (t=8.25s)"),
+      JSON.stringify(beforeCollision.protectedLabels),
+    );
+
+    // Later direct write collides on s0.name WITHOUT mentioning deletedUuid in incoming at all
+    writeFileSync(shotsFile, JSON.stringify([{ id: "s0", t: 0, name: "agent-open" }]));
+    const afterCollision = await (await app.request("/api/collaboration/shots?full=0")).json();
+    assert.equal(afterCollision.notices.length, 1);
+    const n = afterCollision.notices[0];
+    assert.equal("incoming" in n, false);
+    assert.ok(
+      Array.isArray(n.retained) && n.retained.includes(`/@${deletedUuid}`),
+      JSON.stringify(n),
+    );
+    assert.ok(
+      n.pathLabels.includes("/@deadbeef (t=8.25s)"),
+      `deleted row timestamp must resolve in later notice pathLabels: ${JSON.stringify(n.pathLabels)}`,
+    );
+  } finally {
     film.stop?.();
   }
 });

@@ -13,6 +13,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 import { applyEdits, changes, equalJson, overlapping, pointer } from "./merge-edits.mjs";
 
 const noticeKey = (notice) => (notice ? (notice.id ?? notice.at ?? "__legacy__") : null);
+export const COLLAB_SNAPSHOTS = Symbol("collab.snapshots");
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const unescapeSeg = (seg) => seg.replaceAll("~1", "/").replaceAll("~0", "~");
 const shortRowId = (id) => (UUID_RE.test(id) || id.length > 16 ? id.slice(0, 8) : id);
@@ -79,6 +80,7 @@ export const summarizeNotice = (notice, candidateDocs = [], { full = false } = {
     ...(notice?.file !== undefined ? { file: notice.file } : {}),
     ...(notice?.at !== undefined ? { at: notice.at } : {}),
     kind,
+    retained: paths,
     paths,
     pathLabels,
     ...(notice?.problems?.length ? { problems: notice.problems } : {}),
@@ -231,7 +233,14 @@ export const openEditProtection = (
       }
       return data;
     },
-    report: () => ({ protected: state.guards.map((g) => pointer(g.path)), notices: state.notices }),
+    report: () => {
+      const out = { protected: state.guards.map((g) => pointer(g.path)), notices: state.notices };
+      Object.defineProperty(out, COLLAB_SNAPSHOTS, {
+        value: [state.latest?.data, ...state.versions.toReversed().map((v) => v.data)],
+        enumerable: false,
+      });
+      return out;
+    },
     reload() {
       if (existsSync(file)) state = readState();
     },

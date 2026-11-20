@@ -1,7 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import * as z from "zod";
 
-import { formatProtectedPointer, summarizeNotice } from "./edit-protection.mjs";
+import { COLLAB_SNAPSHOTS, formatProtectedPointer, summarizeNotice } from "./edit-protection.mjs";
 
 export const mountCollaboration = (app, named) => {
   app.get("/api/collaboration/:name{.+}", (c) => {
@@ -11,13 +11,17 @@ export const mountCollaboration = (app, named) => {
     const current = file.read();
     const collab = file.collaboration();
     const rawNotices = Array.isArray(collab?.notices) ? collab.notices : [];
-    const docs = [
-      ...(current?.data !== undefined ? [current.data] : []),
-      ...rawNotices.toReversed().map((n) => n?.incoming),
-    ];
+    const historyDocs = Array.isArray(collab?.[COLLAB_SNAPSHOTS]) ? collab[COLLAB_SNAPSHOTS] : [];
+    const currentDocs = current?.data !== undefined ? [current.data] : [];
+    const noticeIncomings = rawNotices.toReversed().map((n) => n?.incoming);
+    const docs = [...currentDocs, ...historyDocs, ...noticeIncomings];
     const protectedPaths = Array.isArray(collab?.protected) ? collab.protected : [];
     const notices = rawNotices.map((notice) =>
-      summarizeNotice(notice, current?.data !== undefined ? [current.data] : [], { full: !lean }),
+      summarizeNotice(
+        notice,
+        [...currentDocs, notice?.incoming, ...historyDocs, ...noticeIncomings],
+        { full: !lean },
+      ),
     );
     c.header("cache-control", "no-store");
     return c.json({

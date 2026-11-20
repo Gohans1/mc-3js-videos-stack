@@ -6,7 +6,8 @@ import { noteState, noteThread, WORD_NEAR } from "./note-state.mjs";
 
 const shortTimestamp = (at) => {
   if (typeof at === "number" && Number.isFinite(at)) {
-    return new Date(at).toISOString().replace(/\.\d+Z$/, "Z");
+    const d = new Date(at);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().replace(/\.\d+Z$/, "Z");
   }
   if (typeof at !== "string" || !at.trim()) return "";
   return at.trim().replace(/\.\d+(?=(?:Z|[+-]\d{2}:?\d{2})$)/, "");
