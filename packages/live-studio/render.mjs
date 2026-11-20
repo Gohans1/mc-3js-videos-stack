@@ -78,6 +78,10 @@ Nothing is written outside the film. Options are environment variables:
                              renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
                              view_*.jpg; also accepts VIEWS=@views.json ({ name: [7 nums] } or [{ name, cam }])
   CROP=x,y,w,h               stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
+  REF=references/ref.mp4     stills/poster only: each picture beside the reference's frame at the same second (its exact
+                             frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
+                             sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
+                             says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well
   COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
@@ -124,6 +128,8 @@ const ENV_OPTIONS = [
   "SAMPLES",
   "RES",
   "CROP",
+  "REF",
+  "REF_REGION",
   "RENDER_FRESH_CACHE",
 ];
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
@@ -234,6 +240,29 @@ if (
   console.error(
     `ENTRY=${process.env.ENTRY} is no file in the film (${lab.length ? `its pages: ${lab.map((f) => `lab/${f}`).join(", ")}` : "it has no lab/ pages yet"}); without ENTRY it renders the film itself`,
   );
+  process.exit(2);
+}
+// REF: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
+const vsVideo = process.env.REF ? resolve(PROJECT, process.env.REF) : null;
+if (process.env.REF !== undefined) {
+  const why = !process.env.REF
+    ? "names no video"
+    : !statSync(vsVideo, { throwIfNoEntry: false })?.isFile()
+      ? `${process.env.REF} is no file in the film`
+      : !["stills", "poster"].includes(what)
+        ? "goes with stills or poster"
+        : ["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined)
+          ? `and ${["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined)} draw another picture than the reference's`
+          : null;
+  if (why) {
+    console.error(
+      `REF ${why}: REF=references/ref.mp4 AT=2.5 bun run render stills (or poster, the upload's size, for sharpness)`,
+    );
+    process.exit(2);
+  }
+}
+if (process.env.REF_REGION !== undefined && !vsVideo) {
+  console.error("REF_REGION goes with REF=<reference video>");
   process.exit(2);
 }
 const FPS = 30,
@@ -1093,6 +1122,37 @@ if (!failed && compare && stillsWritten.length) {
       } catch {
         console.log(`compare ${rel} -> renders/${diffName}`);
       }
+    }
+  }
+}
+
+if (!failed && vsVideo && stillsWritten.length) {
+  const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
+  for (const rel of stillsWritten) {
+    const second = /_(\d+(?:\.\d+)?)s\.(?:jpg|png)$/.exec(rel)?.[1];
+    if (!second) continue;
+    const out = `renders/vs_${basename(rel, extname(rel))}.jpg`;
+    const r = spawnSync(
+      process.execPath,
+      [
+        qcCli,
+        "vs",
+        vsVideo,
+        join(PROJECT, rel),
+        "--at",
+        second,
+        "--picture-height",
+        String(H),
+        "--out",
+        join(PROJECT, out),
+        ...(process.env.REF_REGION ? ["--region", process.env.REF_REGION] : []),
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 180_000 },
+    );
+    if (r.status === 0) console.log(r.stdout.trimEnd().replace(join(PROJECT, out), out));
+    else {
+      console.log(`ERROR vs ${rel}: ${(r.stderr || r.error?.message || "qc vs failed").trim()}`);
+      failed = true;
     }
   }
 }
