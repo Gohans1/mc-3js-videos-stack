@@ -1277,6 +1277,13 @@ test("batch resume records each outcome and recovers saved items despite an inde
   const partial = await run(["resume", checkpoint, "--wait", "2"], options);
   expect(partial.code).toBe(1);
   expect(history).toEqual(["remote_failed", "remote_ready"]);
+  // a provider outage read as a Studio fault was retried blind, with no word on what it had cost
+  const failure = JSON.parse(partial.errors);
+  expect(failure.failed).toEqual([
+    { id: "missing", error: expect.any(String), credits: "not reported" },
+    { id: "failed", error: "Task is not ready (failed)", credits: 7 },
+  ]);
+  expect(failure.next).toMatch(/^The provider failed these jobs, not the Studio/);
   expect(JSON.parse(readFileSync(checkpoint, "utf8"))).toMatchObject({
     items: [stored, { id: "recovered_take", creditsDeducted: 17 }],
     jobs: [
