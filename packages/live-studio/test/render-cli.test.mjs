@@ -149,7 +149,7 @@ test("SPAN is refused before any build when it is misplaced, backwards, or start
   assert.doesNotMatch(tail.stdout + tail.stderr, /build/i);
 });
 
-test("captions and final refuse the options they would ignore", (t) => {
+test("captions, final and stills refuse the options they would ignore", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
@@ -173,6 +173,9 @@ test("captions and final refuse the options they would ignore", (t) => {
   const captions = render("captions", { AT: "4" });
   assert.equal(captions.status, 2, captions.stdout + captions.stderr);
   assert.match(captions.stderr, /AT does nothing for render captions/);
+  const captionsBlur = render("captions", { SAMPLES: "8" });
+  assert.equal(captionsBlur.status, 2, captionsBlur.stdout + captionsBlur.stderr);
+  assert.match(captionsBlur.stderr, /SAMPLES does nothing for render captions/);
 
   // a final takes half an hour and is the upload: a check goes on the stills before it
   const final = render("final", { CHECK: "motion:cam,1,2" });
@@ -544,11 +547,17 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
   };
   const sharp = film.render("stills", { AT: "1" });
   assert.equal(sharp.status, 0, sharp.stdout + sharp.stderr);
-  assert.ok(Math.abs(red() - 128) <= 3, `one instant: expected red 128, got ${red()}`);
+  assert.doesNotMatch(sharp.stdout, /sub-frames/);
+  const instant = red();
+  assert.ok(Math.abs(instant - 128) <= 3, `one instant: expected red 128, got ${instant}`);
   const blurred = film.render("stills", { AT: "1", SAMPLES: "8" });
   assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
   assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(stills: 8 sub-frames\)/);
-  assert.ok(Math.abs(red() - 153) <= 4, `the shutter's average: expected red 153, got ${red()}`);
+  const averaged = red();
+  assert.ok(
+    Math.abs(averaged - 153) <= 4,
+    `the shutter's average: expected red 153, got ${averaged}`,
+  );
 }, 60000);
 
 test("native async frames preserve source time and layer clocks through Speed and Freeze", (t) => {
