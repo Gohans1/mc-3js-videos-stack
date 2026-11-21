@@ -5,55 +5,85 @@ description: Discover mc-films commands, build and verify films, understand the 
 
 # mc-films
 
-The CLI and live studio are starting tools for creating, previewing and receiving feedback. Write custom Three.js code, tools or checks when useful; keep draw(t) able to reproduce any time independently.
+The CLI and live studio are starting tools for creating, previewing and receiving feedback. Write custom Three.js code, tools or checks whenever useful; keep `draw(t)` able to reproduce any time independently.
+
+## The core loop
+
+Run repo commands at the root and film commands in `films/<name>`:
+
+```bash
+bun run studio --detach             # 1. live preview + timeline + notes (--status / --stop)
+bun run find <words>                # 2. discover sounds, mocap, 2D presets & 3D assets (--kind object)
+bun run check                       # 3. validate timelines/assets after any JSON edit
+AT=12,30 bun run render stills      # 4. render stills and inspect the printed images
+bun run render clip                 # 5. draft video; then bun run mix renders/draft_video.mp4
+bun run notes                       # 6. read creator notes; answer with bun run note done
+```
+
+`VAR=x bun run ...` uses POSIX/Bun Shell syntax. In PowerShell use `$env:AT='12,30'; bun run render stills; Remove-Item Env:AT`.
+
+## Load more when you need it
+
+Load one topic on demand with `bun run skills get core --ref <topic>` (repeat `--ref` for more, or `--full` for everything at once):
+
+| Core reference                | When needed                                                    |
+| ----------------------------- | -------------------------------------------------------------- |
+| references/film.md            | New films, file maps, vault and isolated test films            |
+| references/contract.md        | Scene hooks, effects, custom HTML, open schemas and extensions |
+| references/review.md          | Picture/text/pacing checks, frame order and reference videos   |
+| references/render.md          | Rendering, cache, output configuration and encode checks       |
+| references/sound.md           | Sound selection, mixing, levels and earshot                    |
+| references/voice.md           | Takes, generation, alignment, lip sync and assembly            |
+| references/voice-providers.md | Provider setup, capabilities, and verification status          |
+| references/notes.md           | Feedback, note states and lessons                              |
+| references/cli.md             | CLI changes and keeping discovery, help and guides aligned     |
+
+Separate repo skills and docs (open directly; `skills get` does not serve them):
+
+- `bun run skills path earshot` or `bun run skills path real-sound` — open `SKILL.md` in the returned directory.
+- `.claude/skills/gohans-3js-videos-skills/SKILL.md` — creator taste and filmmaking rules.
+- `INSTALL.md` — machine setup, vault, tools and licenses; `docs/research/media-tools.md` — media tool research and verification notes.
 
 ## Find the right information
 
-| Need                                                     | Read                                                                                                   |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Commands grouped by job; a film also prints its file map | bun run help                                                                                           |
-| Where a command runs                                     | bun run help <command>                                                                                 |
-| All catalog IDs, including direct maintenance tools      | bun run help --json; bun run help direct for a text list                                               |
-| One command's arguments, flags, effects and cost         | bun run help <id> --json; its executable's --help is authoritative                                     |
-| Current syntax and runnable examples                     | bun run <command> --help; direct tools: bun run help <id>                                              |
-| Media tool research and current verification             | docs/research/media-tools.md at repo root; open directly                                               |
-| Shared workflow                                          | bun run skills get core                                                                                |
-| One topic                                                | bun run skills get core --ref sound; repeat --ref for more                                             |
-| Guide and all references                                 | bun run skills get core --full; do not combine with --ref                                              |
-| Structured guide discovery or content                    | Add --json to skills list, get or path; success output is a single JSON value                          |
-| A separate skill's resources                             | bun run skills path earshot or bun run skills path real-sound; open SKILL.md in the returned directory |
+| Need                                                     | Read                                                                          |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Commands grouped by job; a film also prints its file map | bun run help                                                                  |
+| Where a command runs                                     | bun run help <command>                                                        |
+| All catalog IDs, including direct maintenance tools      | bun run help --json; bun run help direct for a text list                      |
+| One command's arguments, flags, effects and cost         | bun run help <id> --json; its executable's --help is authoritative            |
+| Current syntax and runnable examples                     | bun run <command> --help; direct tools: bun run help <id>                     |
+| Structured guide discovery or content                    | Add --json to skills list, get or path; success output is a single JSON value |
 
-Run repo commands at the root and film commands in films/<name>. Maintained repo entry points print help before work with -h, --help or a leading help; package scripts and separate CLIs follow their own help conventions.
+Maintained repo entry points print help before work with `-h`, `--help` or a leading `help`; package scripts and separate CLIs follow their own help conventions.
 
 ## Choose steps for the current task
 
 Use the steps that serve the current scene or change. Measurements and presets support creative choices; they do not dictate pacing, pictures or sound.
 
-| Task                            | Command or file                                                                                                                                                              |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Find assets and presets         | bun run find <words> searches sounds, mocap and 2D presets (+ OpenFilm); add --kind object (or block, item, mob, prop) for 3D MC assets; --json, --offline supported         |
-| Keep an edit direction          | Film → Versions, or bun run history --film films/<name> --help                                                                                                               |
+| Task                            | Command or file                                                                                                                                                                                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Find assets and presets         | bun run find <words> searches sounds, mocap and 2D presets (+ OpenFilm); add --kind object (or block, item, mob, prop) for 3D MC assets; --json, --offline supported                                                                                                      |
+| Keep an edit direction          | Film → Versions, or bun run history --film films/<name> --help                                                                                                                                                                                                            |
 | Discover, pick and place assets | bun run find --kind transition\|object; --show <id> inspects recipes/properties/clips; preview 3D picks/blocks/items beside a 1.875m Steve scale figure with bun run asset preview; place, pick/unpick or copy Global props with bun run asset --help; see --ref contract |
-| Build a custom scene or effect  | src/scene.ts; bun run skills get core --ref contract                                                                                                                         |
-| Edit data                       | Timeline files named by the film's package.json; run bun run check after editing                                                                                             |
-| Inspect one heard second        | bun run at 35.6; AT=35.6 bun run render stills; open the printed image                                                                                                       |
-| Inspect motion                  | SPAN=40,44 bun run render clip; open the video                                                                                                                               |
-| Inspect multiple frames         | bun run sheet                                                                                                                                                                |
-| Detect reference cuts/fades     | bun run scenes clip.mp4; optional CPU, JSON/CSV/images in source-file seconds                                                                                                |
-| Read text in reference frames   | bun run media ocr clip.mp4 --at 5,10; text boxes, scores, frames and source timestamps                                                                                       |
-| Local media tools               | bun run media list / doctor — audio (separate, beat, locate, vad, ced, denoise, effects, melody, midi, tts, fingerprint, caption, foley, metadata), visual (ocr, vision, tapir, track), timeline, qc, ffmpeg; see --ref sound and --ref review |
-| Discover media and NLE tools    | Run bun run media ffmpeg list, then schema cut for the native parser. Pass native arguments after --. Use bun run media qc --contract to find optional checks.               |
-| Choose a review check           | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion.                                                                 |
-| Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps.                            |
-| Check arbitrary seeking         | CHECK=order bun run render stills; optional sampled comparison of two capture orders                                                                                         |
-| Study a reference video         | bun run reference inspect <video-or-URL> for frames, captions and search; study/compare for timing; pair with scenes, media and earshot; see --ref review                     |
-| Select, place and edit sound    | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound                                                                                    |
-| Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                               |
-| Measure audio levels            | bun run listen; level measurements cannot identify a sound or decide whether it fits                                                                                         |
-| Hear and evaluate sound         | earshot is a separate CLI; see --ref sound                                                                                                                                   |
-| Receive feedback                | bun run studio --detach (background; --status / --stop); open the link and read bun run notes                                                                                |
-
-VAR=x bun run ... examples use POSIX or Bun Shell syntax. In PowerShell use $env:AT='35.6', run the command, then remove Env:AT or restore its previous value.
+| Build a custom scene or effect  | src/scene.ts; bun run skills get core --ref contract                                                                                                                                                                                                                      |
+| Edit data                       | Timeline files named by the film's package.json; run bun run check after editing                                                                                                                                                                                          |
+| Inspect one heard second        | bun run at 35.6; AT=35.6 bun run render stills; open the printed image                                                                                                                                                                                                    |
+| Inspect motion                  | SPAN=40,44 bun run render clip; open the video                                                                                                                                                                                                                            |
+| Inspect multiple frames         | bun run sheet                                                                                                                                                                                                                                                             |
+| Detect reference cuts/fades     | bun run scenes clip.mp4; optional CPU, JSON/CSV/images in source-file seconds                                                                                                                                                                                             |
+| Read text in reference frames   | bun run media ocr clip.mp4 --at 5,10; text boxes, scores, frames and source timestamps                                                                                                                                                                                    |
+| Local media tools               | bun run media --help / media list / media doctor — local audio stems/beats/locate/VAD/denoise, OCR/vision/tracking, OTIO, QC and FFmpeg; see --ref sound and --ref review                                                                                                 |
+| Discover media and NLE tools    | Run bun run media ffmpeg list, then schema cut for the native parser. Pass native arguments after --. Use bun run media qc --contract to find optional checks.                                                                                                            |
+| Choose a review check           | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion.                                                                                                                                                              |
+| Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps.                                                                                                                         |
+| Check arbitrary seeking         | CHECK=order bun run render stills; optional sampled comparison of two capture orders                                                                                                                                                                                      |
+| Study a reference video         | bun run reference inspect <video-or-URL> for frames, captions and search; study/compare for timing; pair with scenes, media and earshot; see --ref review                                                                                                                 |
+| Select, place and edit sound    | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound                                                                                                                                                                                 |
+| Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                                                                                                                            |
+| Measure audio levels            | bun run listen; level measurements cannot identify a sound or decide whether it fits                                                                                                                                                                                      |
+| Hear and evaluate sound         | earshot is a separate CLI; see --ref sound                                                                                                                                                                                                                                |
+| Receive feedback                | bun run studio --detach (background; --status / --stop); open the link and read bun run notes                                                                                                                                                                             |
 
 ## The three clocks
 
@@ -105,19 +135,3 @@ Exit 0 means the command completed; 1 usually indicates a job/data failure, and 
 | earshot unavailable                       | earshot doctor; read INSTALL.md                                                        |
 
 Gap reporting does not gate creativity or automatically justify another command. Logs belong to the current checkout; commit and synchronize them separately when sharing is needed.
-
-## Load the relevant topic
-
-| Core reference                | When needed                                                    |
-| ----------------------------- | -------------------------------------------------------------- |
-| references/film.md            | New films, file maps, vault and isolated test films            |
-| references/contract.md        | Scene hooks, effects, custom HTML, open schemas and extensions |
-| references/review.md          | Picture/text/pacing checks, frame order and reference videos   |
-| references/render.md          | Rendering, cache, output configuration and encode checks       |
-| references/sound.md           | Sound selection, mixing, levels and earshot                    |
-| references/voice.md           | Takes, generation, alignment, lip sync and assembly            |
-| references/voice-providers.md | Provider setup, capabilities, and verification status          |
-| references/notes.md           | Feedback, note states and lessons                              |
-| references/cli.md             | CLI changes and keeping discovery, help and guides aligned     |
-
-INSTALL.md is a root file about installation, vault and licenses; open it directly, not with --ref. Creative direction lives in .claude/skills/gohans-3js-videos-skills/SKILL.md; skills get does not serve that separate skill.

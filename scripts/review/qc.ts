@@ -71,9 +71,9 @@ Video QC options:
   -h, --help          Show this help and exit 0
 
 Exit codes:
-  0  Pass (or report generated without --strict failure)
+  0  Pass (or report generated without --strict failure; motion always returns 0 once analyzed)
   1  QC check failed (or warn with --strict)
-  2  Bad arguments, missing explicit input file, or unreadable metrics`;
+  2  Bad arguments, missing explicit input file, unreadable metrics, or all requested checks skipped`;
 
 function failUsage(msg: string): never {
   console.error(`error: ${msg}`);

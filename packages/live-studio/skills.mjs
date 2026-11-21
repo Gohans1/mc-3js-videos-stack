@@ -68,7 +68,7 @@ if (!verb || verb === "list") {
   if (json) emit(visible.map(({ name, description }) => ({ name, description })));
   else {
     for (const g of visible) console.log(`${g.name.padEnd(12)}${g.description}`);
-    console.log("next: bun run skills get core");
+    console.log("next: bun run skills get core  (or --ref <topic>, --full, path <skill>)");
   }
   process.exit(0);
 }

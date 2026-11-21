@@ -373,9 +373,13 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
   test("every command has unique id, valid category, unique subcommands, and valid visibleWhen refs", () => {
     const categoryIds = new Set(CLI_CATEGORIES.map((c) => c.id));
     const seenCmdIds = new Set();
-    const checkRule = (rule, names) => {
+    const checkRule = (rule, defsByKey) => {
       for (let cur = rule; cur; cur = cur.and) {
-        expect(names.has(cur.field)).toBe(true);
+        expect(defsByKey.has(cur.field)).toBe(true);
+        const target = defsByKey.get(cur.field);
+        if (target?.type === "enum" && target.options && cur.in) {
+          for (const val of cur.in) expect(target.options.includes(val)).toBe(true);
+        }
       }
     };
 
@@ -387,14 +391,14 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         seenSub.add(sub.id);
         const nextPath = [...subPath, sub.id];
         const chain = resolveSubcommandChain(cmd, nextPath);
-        const visibleFieldNames = new Set([
-          ...chain.argsDef.map((f) => f.key),
-          ...chain.flagsDef.map((f) => f.key),
-          ...chain.envDef.map((f) => f.key),
-        ]);
-        for (const def of [...chain.argsDef, ...chain.flagsDef, ...chain.envDef]) {
-          if (def.visibleWhen) checkRule(def.visibleWhen, visibleFieldNames);
-          if (def.requiredWhen) checkRule(def.requiredWhen, visibleFieldNames);
+        const visibleFields = [...chain.argsDef, ...chain.flagsDef, ...chain.envDef];
+        const defsByKey = new Map(visibleFields.map((f) => [f.key, f]));
+        for (const def of visibleFields) {
+          if (def.visibleWhen) checkRule(def.visibleWhen, defsByKey);
+          if (def.requiredWhen) checkRule(def.requiredWhen, defsByKey);
+        }
+        if (sub.subcommandRequired && chain.flagsDef.length && sub.subcommands?.length) {
+          expect(sub.subcommands.some((child) => child.inheritFlags)).toBe(true);
         }
         checkNode(cmd, nextPath, sub.subcommands);
       }
@@ -405,14 +409,14 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       seenCmdIds.add(cmd.id);
       expect(categoryIds.has(cmd.category)).toBe(true);
 
-      const fieldNames = new Set([
-        ...(cmd.args ?? []).map((f) => f.key),
-        ...(cmd.flags ?? []).map((f) => f.key),
-        ...(cmd.env ?? []).map((f) => f.key),
-      ]);
-      for (const def of [...(cmd.args ?? []), ...(cmd.flags ?? []), ...(cmd.env ?? [])]) {
-        if (def.visibleWhen) checkRule(def.visibleWhen, fieldNames);
-        if (def.requiredWhen) checkRule(def.requiredWhen, fieldNames);
+      const topFields = [...(cmd.args ?? []), ...(cmd.flags ?? []), ...(cmd.env ?? [])];
+      const defsByKey = new Map(topFields.map((f) => [f.key, f]));
+      for (const def of topFields) {
+        if (def.visibleWhen) checkRule(def.visibleWhen, defsByKey);
+        if (def.requiredWhen) checkRule(def.requiredWhen, defsByKey);
+      }
+      if (cmd.subcommandRequired && cmd.flags?.length && cmd.subcommands?.length) {
+        expect(cmd.subcommands.some((s) => s.inheritFlags)).toBe(true);
       }
       checkNode(cmd, [], cmd.subcommands);
     }
@@ -500,6 +504,19 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     for (const cmd of CLI_COMMANDS) {
       if (cmd.runner === "bun-script") {
         expect(allKnownBunTargets.has(cmd.target)).toBe(true);
+        const runnableInRoot =
+          Boolean(rootPkg.scripts?.[cmd.target]) &&
+          !String(rootPkg.scripts[cmd.target]).includes("wrong-place.mjs");
+        const runnableInTemplate =
+          Boolean(templatePkg.scripts?.[cmd.target]) &&
+          !String(templatePkg.scripts[cmd.target]).includes("wrong-place.mjs");
+        if (runnableInRoot || runnableInTemplate) {
+          const expectedModes = [
+            ...(runnableInRoot ? ["root"] : []),
+            ...(runnableInTemplate ? ["film"] : []),
+          ].toSorted();
+          expect([...cmd.cwdModes].toSorted()).toEqual(expectedModes);
+        }
         if (rootPkg.scripts?.[cmd.target]) recordScriptBody(rootPkg.scripts[cmd.target]);
         for (const m of filmScriptMaps) {
           if (m[cmd.target] && !String(m[cmd.target]).includes("wrong-place.mjs")) {
@@ -583,7 +600,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "scripts/sound/spatial.py",
         "3D spatial audio math library imported by scripts/sound/mix.py",
       ],
-      ["scripts/studio_tell.py", "shared Studio activity reporter library imported by Python CLIs"],
       [
         "scripts/voice/words.py",
         "internal WHISPERX_PYTHON GPU alignment worker spawned by scripts/voice/align.ts",
@@ -1868,5 +1884,223 @@ describe("cli-catalog resolver rules", () => {
     );
     expect(fmtTarget.validationErrors).toEqual([]);
     expect(fmtTarget.argvTokens).toEqual(["cast", "lights"]);
+  });
+
+  test("preserves inherited flags, confirmation gates, and context rules on voice:playground and openfilm", () => {
+    const ttsPaid = buildCliInvocation(
+      {
+        commandId: "voice:playground",
+        subcommandPath: ["generate", "tts"],
+        flags: { "--input-file": "req.json", "--yes": true, "--scope": "project" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(ttsPaid.validationErrors).toEqual([]);
+    expect(ttsPaid.argvTokens).toEqual([
+      "generate",
+      "tts",
+      "--input-file",
+      "req.json",
+      "--scope",
+      "project",
+      "--yes",
+    ]);
+    expect(ttsPaid.requiresConfirm).toBe(true);
+
+    const ctxConflict = buildCliInvocation(
+      {
+        commandId: "voice:playground",
+        subcommandPath: ["items", "list"],
+        flags: { "--server": "http://127.0.0.1:3333", "--project": "films/demo" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(ctxConflict.exclusiveConflicts).toEqual([
+      "Mutually exclusive options set together: --server + --project",
+    ]);
+    expect(ctxConflict.validationErrors).toEqual(ctxConflict.exclusiveConflicts);
+
+    const resumeInherited = buildCliInvocation(
+      {
+        commandId: "voice:playground",
+        subcommandPath: ["resume"],
+        args: { checkpoint: "ckpt.json" },
+        flags: { "--dry-run": true, "--wait": 120 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(resumeInherited.validationErrors).toEqual([]);
+    expect(resumeInherited.argvTokens).toEqual([
+      "resume",
+      "ckpt.json",
+      "--dry-run",
+      "--wait",
+      "120",
+    ]);
+
+    const schemaHelp = buildCliInvocation(
+      { commandId: "voice:playground", subcommandPath: ["schema"], mode: "help" },
+      BASE_CONTEXT,
+    );
+    expect(schemaHelp.validationErrors).toEqual([
+      "voice:playground has no --help mode; inspect summary and fields instead.",
+    ]);
+
+    const openfilmUse = buildCliInvocation(
+      {
+        commandId: "openfilm",
+        subcommandPath: ["use"],
+        args: { id: "openfilm:effects/snow" },
+        flags: { "--film": "films/demo", "--from": 2, "--to": 5 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(openfilmUse.validationErrors).toEqual([]);
+    expect(openfilmUse.argvTokens).toEqual([
+      "use",
+      "openfilm:effects/snow",
+      "--film",
+      "films/demo",
+      "--from",
+      "2",
+      "--to",
+      "5",
+    ]);
+
+    const openfilmPropsConflict = buildCliInvocation(
+      {
+        commandId: "openfilm",
+        subcommandPath: ["use"],
+        args: { id: "openfilm:effects/snow" },
+        flags: { "--props": '{"a":1}', "--props-file": "props.json" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(openfilmPropsConflict.exclusiveConflicts).toEqual([
+      "Mutually exclusive options set together: --props + --props-file",
+    ]);
+    expect(openfilmPropsConflict.validationErrors).toEqual(
+      openfilmPropsConflict.exclusiveConflicts,
+    );
+  });
+
+  test("exposes note ask, find, eval:load, catalog:eval, and catalog:check flags cleanly", () => {
+    const noteAsk = buildCliInvocation(
+      {
+        commandId: "note",
+        subcommandPath: ["ask"],
+        args: { id: "3", text: "Keep this angle?" },
+        flags: { "--after": "renders/still_4s.jpg", "--t": "4" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(noteAsk.validationErrors).toEqual([]);
+    expect(noteAsk.argvTokens).toEqual([
+      "ask",
+      "3",
+      "Keep this angle?",
+      "--after",
+      "renders/still_4s.jpg",
+      "--t",
+      "4",
+    ]);
+
+    const findStyle = buildCliInvocation(
+      {
+        commandId: "find",
+        flags: { "--kind": "mocap", "--style": "natural", "--origin": "unknown" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(findStyle.validationErrors).toEqual([]);
+    expect(findStyle.argvTokens).toEqual([
+      "--kind",
+      "mocap",
+      "--origin",
+      "unknown",
+      "--style",
+      "natural",
+    ]);
+
+    const evalLoad = buildCliInvocation(
+      {
+        commandId: "eval:load",
+        flags: { "--panels": true, "--frames": "0,2.4", "--audio": true, "--playback": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(evalLoad.validationErrors).toEqual([]);
+    expect(evalLoad.argvTokens).toEqual(["--panels", "--frames", "0,2.4", "--audio", "--playback"]);
+
+    const catEval = buildCliInvocation(
+      {
+        commandId: "catalog:eval",
+        args: { out: "renders/eval.txt" },
+        flags: { "--limit": 5, "--resume": true, "--scenes": "custom.txt", "--timeout": 120 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(catEval.validationErrors).toEqual([]);
+    expect(catEval.argvTokens).toEqual([
+      "renders/eval.txt",
+      "--scenes",
+      "custom.txt",
+      "--limit",
+      "5",
+      "--timeout",
+      "120",
+      "--resume",
+    ]);
+
+    const catCheck = buildCliInvocation(
+      { commandId: "catalog:check", flags: { "--fights": true } },
+      BASE_CONTEXT,
+    );
+    expect(catCheck.validationErrors).toEqual([]);
+    expect(catCheck.argvTokens).toEqual(["--fights"]);
+  });
+
+  test("enforces catalog:review --page/--notes/--missing rules, reference auth exclusivity, and history/collab subcommandRequired", () => {
+    const catPageNotes = buildCliInvocation(
+      { commandId: "catalog:review", flags: { "--page": 0, "--notes": "notes.json" } },
+      BASE_CONTEXT,
+    );
+    expect(catPageNotes.validationErrors).toEqual([]);
+    expect(catPageNotes.guardReason).toBeNull();
+    expect(catPageNotes.argvTokens).toEqual(["--page", "0", "--notes", "notes.json"]);
+
+    const catMissingDropsNotes = buildCliInvocation(
+      { commandId: "catalog:review", flags: { "--missing": "style", "--notes": "notes.json" } },
+      BASE_CONTEXT,
+    );
+    expect(catMissingDropsNotes.validationErrors).toEqual([]);
+    expect(catMissingDropsNotes.argvTokens).toEqual(["--missing", "style"]);
+
+    const catModeConflict = buildCliInvocation(
+      { commandId: "catalog:review", flags: { "--page": 0, "--missing": "style" } },
+      BASE_CONTEXT,
+    );
+    expect(catModeConflict.exclusiveConflicts).toEqual([
+      "Mutually exclusive options set together: --page + --missing",
+    ]);
+    expect(catModeConflict.validationErrors).toEqual(catModeConflict.exclusiveConflicts);
+
+    const refConflict = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "inspect", reference: "https://example.com/v" },
+        flags: { "--cookies": "c.txt", "--cookies-from-browser": "chrome" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(refConflict.exclusiveConflicts).toEqual([
+      "Mutually exclusive options set together: --cookies + --cookies-from-browser",
+    ]);
+    expect(refConflict.validationErrors).toEqual(refConflict.exclusiveConflicts);
+
+    const historyBare = buildCliInvocation({ commandId: "history" }, BASE_CONTEXT);
+    expect(historyBare.validationErrors).toEqual(["Choose a history subcommand first."]);
+    const collabBare = buildCliInvocation({ commandId: "collab" }, BASE_CONTEXT);
+    expect(collabBare.validationErrors).toEqual(["Choose a collab subcommand first."]);
   });
 });

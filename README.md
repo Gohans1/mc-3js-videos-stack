@@ -6,9 +6,9 @@ Minecraft films built with Three.js. Shared code lives in packages/, films in fi
 
 Follow [INSTALL.md](INSTALL.md), then create a film with bun run new-film <name> [port].
 
-Read [AGENTS.md](AGENTS.md) for repo instructions. Run bun run skills get core for the Studio workflow, or add --ref contract for the film contract.
+Read [AGENTS.md](AGENTS.md) for repo instructions. Run bun run help for commands, bun run skills get core for the workflow, or add --ref contract for the film contract.
 
-Run bun run studio from the film folder. Check the picture and sound, and open the rendered frames before reporting completion.
+Run bun run studio --detach (or bun run studio) from the film folder. Check the picture and sound, and open the rendered frames before reporting completion.
 
 ## Resources
 

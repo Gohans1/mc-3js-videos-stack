@@ -16,7 +16,7 @@ This file is a discovery stub, not the usage guide. Before running any `bun run`
 bun run skills get core             # start here: the loop, the three clocks, costly commands, troubleshooting
 ```
 
-The core guide ends with a table of references to load for each area (`bun run skills get core --ref sound`). Use `bun run skills get core --full` only when you need every reference at once; it is several times larger.
+The core guide routes to focused references near the top (`bun run skills get core --ref sound`). Use `bun run skills get core --full` only when you need every reference at once; it is several times larger.
 
 The CLI serves guides that match the code checked out next to them. This stub cannot follow the code, which is why it only points at `skills get core`.
 

@@ -23,6 +23,7 @@ const flags: CliFlagDef[] = [
     flag: "--server",
     label: "Running Studio URL",
     type: "string",
+    exclusiveGroup: "context",
     placeholder: "http://127.0.0.1:3333",
     hint: "Use the intended Studio while it is open; no port is guessed.",
   },
@@ -32,6 +33,7 @@ const flags: CliFlagDef[] = [
     label: "Headless film",
     type: "choice",
     choiceSource: "filmDirs",
+    exclusiveGroup: "context",
     hint: "Use --server while this project is open in Studio.",
   },
   {
@@ -82,6 +84,7 @@ const nodes = (prefix: string[] = []): CliSubcommand[] => {
           label: word,
           summary: `${word} commands`,
           subcommandRequired: true,
+          inheritFlags: true,
           subcommands: nodes(path),
         };
       const paid = leaf.effect === "paid" || leaf.name === "region edit";
@@ -89,6 +92,7 @@ const nodes = (prefix: string[] = []): CliSubcommand[] => {
         id: word,
         label: word,
         summary: leaf.description,
+        inheritFlags: true,
         args: leaf.argument
           ? [{ key: "id", label: leaf.argument, type: "string", required: true }]
           : [],
@@ -115,7 +119,7 @@ export const PLAYGROUND_CLI_COMMAND: CliCommand = {
     "GenVoice casting, pricing, Project/Global archives, templates, versions and section repair; full JSON schemas for AI.",
   runner: "bun-script",
   target: "voice:playground",
-  cwdModes: ["root"],
+  cwdModes: ["root", "film"],
   subcommandRequired: true,
   flags,
   meta: {
@@ -140,6 +144,7 @@ export const PLAYGROUND_CLI_COMMAND: CliCommand = {
         effect: "read",
         cost: "free",
         speed: "instant",
+        helpMode: "none",
         confirm: { mode: "none", message: "" },
       },
     },
@@ -147,6 +152,7 @@ export const PLAYGROUND_CLI_COMMAND: CliCommand = {
       id: "resume",
       label: "resume",
       summary: "Continue a checkpoint without generating again.",
+      inheritFlags: true,
       args: [{ key: "checkpoint", label: "Checkpoint file", type: "string", required: true }],
       meta: {
         effect: "write",

@@ -184,3 +184,22 @@ test("a film's help names earshot beside its sound commands, and where the guide
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("help direct formats clean single-slash paths without duplicating active scripts, and help has no ungrouped Other commands", () => {
+  const rootHelp = spawnSync("bun", [HELP], { encoding: "utf8", timeout: 10000 });
+  expect(rootHelp.status, rootHelp.stderr).toBe(0);
+  expect(rootHelp.stdout).not.toContain("\nOther\n");
+
+  const filmHelp = spawnSync("bun", [HELP], {
+    cwd: join(import.meta.dir, "../../../templates/film"),
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  expect(filmHelp.status, filmHelp.stderr).toBe(0);
+  expect(filmHelp.stdout).not.toContain("\nOther\n");
+
+  const direct = spawnSync("bun", [HELP, "direct"], { encoding: "utf8", timeout: 10000 });
+  expect(direct.status, direct.stderr).toBe(0);
+  expect(direct.stdout.replace(/https?:\/\//g, "")).not.toContain("//");
+  expect(direct.stdout).not.toMatch(/^(?:history|collab|assets:semantic|qc|earshot): /m);
+});

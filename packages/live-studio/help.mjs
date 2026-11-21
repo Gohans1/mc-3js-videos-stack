@@ -11,7 +11,8 @@ const GROUPS = [
   [
     "Start here",
     {
-      skills: "bun run skills get core for the workflow, film clocks, and command costs",
+      skills:
+        "Start here (for AI): bun run skills get core — version-matched workflow, clocks, costs and --ref topics",
       gap: 'keep a missing capability and what you tried (or why blocked): bun run gap "<need>" --did "<outcome>"; bare, historical reports',
     },
   ],
@@ -162,7 +163,12 @@ const scripts = existsSync(pkgFile)
   : {};
 const film = existsSync(join(process.cwd(), "src/scene.ts"));
 const scope = film ? "film" : "root";
-const direct = CLI_COMMANDS.filter((c) => c.runner !== "bun-script");
+const direct = CLI_COMMANDS.filter(
+  (c) =>
+    c.runner !== "bun-script" &&
+    c.runner !== "earshot" &&
+    !(Object.hasOwn(scripts, c.id) && !String(scripts[c.id]).includes("wrong-place.mjs")),
+);
 const known = CLI_COMMANDS.find((c) => c.id === asked);
 if (argv.includes("--json")) {
   if (asked && asked !== "direct" && !known && !Object.hasOwn(scripts, asked)) {
@@ -218,7 +224,9 @@ const describe = (command) => {
           { commandId: helpId, mode: "help" },
           {
             activeFilm: film ? "." : null,
-            repoRoot: fileURLToPath(new URL("../..", import.meta.url)).replaceAll("\\", "/"),
+            repoRoot: fileURLToPath(new URL("../..", import.meta.url))
+              .replaceAll("\\", "/")
+              .replace(/\/+$/, ""),
           },
         );
   const directory = command.packageDir ?? invocation?.cwdMode ?? command.cwdModes.join(" or ");

@@ -465,6 +465,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "bun-file",
     target: "packages/live-studio/history.mjs",
     cwdModes: ["film", "root"],
+    subcommandRequired: true,
     flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
     subcommands: [
       {
@@ -509,6 +510,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "bun-file",
     target: "packages/live-studio/collab.mjs",
     cwdModes: ["root", "film"],
+    subcommandRequired: true,
     flags: [{ key: "--film", flag: "--film", label: "Film path", type: "string" }],
     subcommands: [
       {
@@ -833,7 +835,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--origin",
         label: "Origin",
         type: "enum",
-        options: ["real", "synth"],
+        options: ["real", "synth", "unknown"],
         optionalValue: true,
         ...bareListCopy("origin values"),
         tier: "advanced",
@@ -1102,6 +1104,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Prop",
         type: "string",
         placeholder: "chair",
+        visibleWhen: { field: "--kind", unsetOrStartsWith: ["mocap"] },
+        tier: "advanced",
+      },
+      {
+        key: "--style",
+        flag: "--style",
+        label: "Style",
+        type: "string",
+        placeholder: "natural",
         visibleWhen: { field: "--kind", unsetOrStartsWith: ["mocap"] },
         tier: "advanced",
       },
@@ -1563,6 +1574,35 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             type: "string",
             required: true,
             placeholder: "Should Steve stay sitting?",
+          },
+        ],
+        flags: [
+          {
+            key: "--after",
+            flag: "--after",
+            label: "Reference Image",
+            type: "string",
+            tier: "advanced",
+            placeholder: "renders/still_12s.jpg",
+            hint: "Optional image attached to your question.",
+          },
+          {
+            key: "--cam",
+            flag: "--cam",
+            label: "Custom Camera View",
+            type: "string",
+            tier: "advanced",
+            placeholder: "px,py,pz,lx,ly,lz,fov",
+            hint: "Optional FreeCam pose to inspect alongside the question.",
+          },
+          {
+            key: "--t",
+            flag: "--t",
+            label: "Timestamp",
+            type: "string",
+            tier: "advanced",
+            placeholder: "12.5",
+            hint: "Optional heard second or mm:ss for the attached view.",
           },
         ],
       },
@@ -3505,6 +3545,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--cookies",
         label: "Explicit URL Cookie Jar",
         type: "string",
+        exclusiveGroup: "reference-auth",
         visibleWhen: { field: "operation", in: ["inspect"] },
       },
       {
@@ -3512,6 +3553,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--cookies-from-browser",
         label: "Explicit URL Browser / Profile",
         type: "string",
+        exclusiveGroup: "reference-auth",
         visibleWhen: { field: "operation", in: ["inspect"] },
       },
       {
@@ -3519,6 +3561,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--js-runtime",
         label: "URL JavaScript Runtime",
         type: "string",
+        visibleWhen: { field: "operation", in: ["inspect"] },
+      },
+      {
+        key: "--expect-source-sha256",
+        flag: "--expect-source-sha256",
+        label: "Expected Local Source SHA-256",
+        type: "string",
+        tier: "advanced",
         visibleWhen: { field: "operation", in: ["inspect"] },
       },
       {
@@ -3571,21 +3621,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         required: true,
         options: renderTargetValues,
         default: "stills",
-      },
-      {
-        key: "frameTimes",
-        label: "Native Frame Times",
-        type: "string",
-        visibleWhen: { field: "target", in: ["frames"] },
-        requiredWhen: { field: "target", in: ["frames"] },
-        placeholder: "12.2-12.6/12",
-      },
-      {
-        key: "overviewRange",
-        label: "Overview Range (Optional)",
-        type: "string",
-        visibleWhen: { field: "target", in: ["overview"] },
-        placeholder: "10-20/16",
       },
     ],
     env: [
@@ -3979,7 +4014,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "doctor",
         label: "doctor",
-        summary: "Check installed package versions without loading models.",
+        summary: "Check installed packages, binaries and runtimes without loading models.",
         args: [{ key: "tool", label: "Tool (optional)", type: "string", placeholder: "ocr" }],
         flags: [{ key: "--json", flag: "--json", label: "JSON", type: "boolean" }],
       },
@@ -4751,7 +4786,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       "Compatibility alias for asset actions with the OpenFilm source selected; discover with find.",
     runner: "bun-script",
     target: "openfilm",
-    cwdModes: ["root"],
+    cwdModes: ["root", "film"],
     subcommandRequired: true,
     flags: [
       {
@@ -4761,38 +4796,142 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "choice",
         choiceSource: "filmDirs",
       },
-      {
-        key: "--kind",
-        flag: "--kind",
-        label: "Asset type",
-        type: "enum",
-        options: ["transition", "effect", "text", "filter", "sticker", "template"],
-      },
-      { key: "--from", flag: "--from", label: "From (heard seconds)", type: "number" },
-      { key: "--to", flag: "--to", label: "To (heard seconds)", type: "number" },
-      { key: "--shot", flag: "--shot", label: "Cut before shot", type: "number" },
-      { key: "--props", flag: "--props", label: "Creative controls (JSON)", type: "string" },
-      {
-        key: "--props-file",
-        flag: "--props-file",
-        label: "Creative controls file",
-        type: "string",
-      },
+      { key: "--json", flag: "--json", label: "JSON output", type: "boolean", tier: "advanced" },
     ],
     meta: { effect: "read", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
     subcommands: [
-      ...["timeline", "validate"].map((id) => ({
-        id,
-        label: id,
-        summary: `${id} OpenFilm data`,
-      })),
-      ...["plan", "use", "edit", "remove"].map((id) => ({
-        id,
-        label: id,
-        summary: `${id} an OpenFilm asset or layer`,
+      {
+        id: "timeline",
+        label: "timeline",
+        summary: "Read OpenFilm or native lane data in heard seconds",
+        inheritFlags: true,
+        flags: [
+          {
+            key: "--lane",
+            flag: "--lane",
+            label: "Lane",
+            type: "enum",
+            options: ["effects", "text", "adjustment", "transitions", "audio", "placed", "picks"],
+          },
+          {
+            key: "--duration",
+            flag: "--duration",
+            label: "Code-defined source duration (scene seconds)",
+            type: "number",
+          },
+        ],
+      },
+      {
+        id: "validate",
+        label: "validate",
+        summary: "Validate configured OpenFilm and native lanes",
+        inheritFlags: true,
+      },
+      {
+        id: "plan",
+        label: "plan",
+        summary: "Preview an OpenFilm template plan without writing",
+        inheritFlags: true,
         args: [{ key: "id", label: "Asset or layer ID", type: "string" as const, required: true }],
-        ...(["use", "edit", "remove"].includes(id) && { meta: { effect: "write" as const } }),
-      })),
+        flags: [
+          {
+            key: "--kind",
+            flag: "--kind",
+            label: "Asset type",
+            type: "enum",
+            options: ["transition", "effect", "text", "filter", "sticker", "template"],
+          },
+          { key: "--from", flag: "--from", label: "From (heard seconds)", type: "number" },
+          { key: "--to", flag: "--to", label: "To (heard seconds)", type: "number" },
+        ],
+      },
+      {
+        id: "use",
+        label: "use",
+        summary: "Place an OpenFilm asset or layer",
+        inheritFlags: true,
+        args: [{ key: "id", label: "Asset or layer ID", type: "string" as const, required: true }],
+        flags: [
+          {
+            key: "--kind",
+            flag: "--kind",
+            label: "Asset type",
+            type: "enum",
+            options: ["transition", "effect", "text", "filter", "sticker", "template", "sound"],
+          },
+          { key: "--from", flag: "--from", label: "From (heard seconds)", type: "number" },
+          { key: "--to", flag: "--to", label: "To (heard seconds)", type: "number" },
+          { key: "--shot", flag: "--shot", label: "Cut before shot", type: "number" },
+          {
+            key: "--duration",
+            flag: "--duration",
+            label: "Code-defined source duration (scene seconds)",
+            type: "number",
+          },
+          {
+            key: "--props",
+            flag: "--props",
+            label: "Creative controls (JSON)",
+            type: "string",
+            exclusiveGroup: "openfilm-props",
+          },
+          {
+            key: "--props-file",
+            flag: "--props-file",
+            label: "Creative controls file",
+            type: "string",
+            exclusiveGroup: "openfilm-props",
+          },
+        ],
+        meta: { effect: "write" as const },
+      },
+      {
+        id: "edit",
+        label: "edit",
+        summary: "Edit a saved OpenFilm layer target",
+        inheritFlags: true,
+        args: [{ key: "id", label: "Asset or layer ID", type: "string" as const, required: true }],
+        flags: [
+          { key: "--from", flag: "--from", label: "From (heard seconds)", type: "number" },
+          {
+            key: "--duration",
+            flag: "--duration",
+            label: "Code-defined source duration (scene seconds)",
+            type: "number",
+          },
+          {
+            key: "--props",
+            flag: "--props",
+            label: "Creative controls (JSON)",
+            type: "string",
+            exclusiveGroup: "openfilm-props",
+          },
+          {
+            key: "--props-file",
+            flag: "--props-file",
+            label: "Creative controls file",
+            type: "string",
+            exclusiveGroup: "openfilm-props",
+          },
+        ],
+        meta: { effect: "write" as const },
+      },
+      {
+        id: "remove",
+        label: "remove",
+        summary: "Remove a saved OpenFilm layer target",
+        inheritFlags: true,
+        args: [{ key: "id", label: "Asset or layer ID", type: "string" as const, required: true }],
+        flags: [
+          {
+            key: "--duration",
+            flag: "--duration",
+            label: "Code-defined source duration (scene seconds)",
+            type: "number",
+          },
+        ],
+        meta: { effect: "write" as const },
+      },
     ],
   },
   {
@@ -5421,6 +5560,35 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "boolean",
         tier: "advanced",
       },
+      {
+        key: "--panels",
+        flag: "--panels",
+        label: "Measure Cold Settings Open",
+        type: "boolean",
+        tier: "advanced",
+      },
+      {
+        key: "--frames",
+        flag: "--frames",
+        label: "Capture Canvas Seconds",
+        type: "string",
+        placeholder: "0,2.4,4.7",
+        tier: "advanced",
+      },
+      {
+        key: "--audio",
+        flag: "--audio",
+        label: "Offline Audio RMS (0-15s)",
+        type: "boolean",
+        tier: "advanced",
+      },
+      {
+        key: "--playback",
+        flag: "--playback",
+        label: "Measure 8s Play/Pause & Note Cancel",
+        type: "boolean",
+        tier: "advanced",
+      },
       { key: "--note", flag: "--note", label: "History Note", type: "string", tier: "advanced" },
     ],
     meta: {
@@ -5759,6 +5927,36 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "boolean",
         tier: "common",
       },
+      {
+        key: "--scenes",
+        flag: "--scenes",
+        label: "Scenes File",
+        type: "string",
+        placeholder: "catalog_eval.txt",
+        tier: "advanced",
+      },
+      {
+        key: "--limit",
+        flag: "--limit",
+        label: "Max Pending Scenes",
+        type: "number",
+        tier: "common",
+      },
+      {
+        key: "--timeout",
+        flag: "--timeout",
+        label: "Seconds per Scene",
+        type: "number",
+        placeholder: "180",
+        tier: "advanced",
+      },
+      {
+        key: "--resume",
+        flag: "--resume",
+        label: "Resume Checkpoint",
+        type: "boolean",
+        tier: "common",
+      },
     ],
     meta: {
       effect: "write",
@@ -5845,17 +6043,30 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         key: "--page",
         flag: "--page",
-        label: "Page Number (stdin)",
+        label: "Page Number (stdin or --notes)",
         type: "number",
+        exclusiveGroup: "catalog-review-mode",
         tier: "advanced",
         placeholder: "0",
-        hint: "Read JSON slot verdicts from stdin for review page N",
+        hint: "Read JSON slot verdicts from stdin or --notes for review page N",
+      },
+      {
+        key: "--notes",
+        flag: "--notes",
+        label: "Page Notes JSON File",
+        type: "string",
+        visibleWhen: { field: "--page", nonEmpty: true },
+        tier: "common",
+        placeholder: "notes.json",
+        hint: "PowerShell-friendly verdict JSON file for --page; omits stdin.",
       },
       {
         key: "--missing",
         flag: "--missing",
         label: "Pages Missing Field",
-        type: "string",
+        type: "enum",
+        options: ["desc", "mood", "prop", "style", "flaw"],
+        exclusiveGroup: "catalog-review-mode",
         tier: "common",
         placeholder: "style",
       },
@@ -5866,6 +6077,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         multi: true,
         multiStyle: "args",
+        exclusiveGroup: "catalog-review-mode",
         tier: "advanced",
         placeholder: 'mixamo/X {"end":"kneel"}',
       },
@@ -5880,6 +6092,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     runner: "python-file",
     target: "packages/clip-catalog/catalog_check.py",
     cwdModes: ["root"],
+    flags: [
+      {
+        key: "--fights",
+        flag: "--fights",
+        label: "Include Weapons & Fights",
+        type: "boolean",
+        tier: "common",
+      },
+    ],
     meta: { effect: "read", cost: "free", speed: "short", cancellable: true, helpMode: "flag" },
   },
   {
@@ -6580,9 +6801,14 @@ export function buildCliInvocation(
         guardReason = effectiveMeta.guard.reason;
       }
     }
-    if (!guardReason && command.id === "catalog:review" && isActiveValue(flags["--page"])) {
+    if (
+      !guardReason &&
+      command.id === "catalog:review" &&
+      isActiveValue(flags["--page"]) &&
+      !isActiveValue(flags["--notes"])
+    ) {
       guardReason =
-        "catalog:review --page N requires verdict JSON on piped stdin; use --missing or --fix from Studio, or run python packages/clip-catalog/catalog_review.py --page N < notes.json in terminal.";
+        "catalog:review --page N without --notes requires verdict JSON on piped stdin; pass --notes <file>, use --missing or --fix from Studio, or pipe stdin in a terminal.";
     }
     if (
       !guardReason &&

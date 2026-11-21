@@ -25,5 +25,5 @@
 | packages/clip-catalog                   | Kho mocap.                                                                                                      |
 | templates/film                          | Phim mẫu; bun run new-film.                                                                                     |
 | films/                                  | Phim thật.                                                                                                      |
-| scripts/                                | Voice, sound, find, asset, review (reference, scenes, qc), media (21 công cụ local: bun run media list), vault. |
+| scripts/                                | Voice, sound, find, asset, review (reference, scenes, qc), media (công cụ local: bun run media list), vault.    |
 | INSTALL.md                              | Cài đặt, kho, giấy phép.                                                                                        |

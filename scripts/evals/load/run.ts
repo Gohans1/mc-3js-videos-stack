@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url)),
   ROOT = join(HERE, "../../..");
 
-const HELP = `Usage: bun run eval:load [--film <name>] [--runs N] [--only desk|phone] [--note "<what changed>"] [--profile] [--panels]
+const HELP = `Usage: bun run eval:load [--film <name>] [--runs N] [--only desk|phone] [--note "<what changed>"] [--profile] [--panels] [--frames <s,...>] [--audio] [--playback]
 Starts the studio for films/<name> (default cell-break) on port 4391, opens it N times (default 5) per profile in
 headless Chrome, and prints the medians:
   server     ms from bun run studio to "live at" (the page's build)

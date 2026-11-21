@@ -1634,7 +1634,7 @@ Options:
   mocap by body:   --from <posture> (at its start) --to <posture> (at its end) --has <posture> (anywhere in it)
                    --still (stays within 0.3 m) | --moves, --loop, --energy 10-40 (deg/s: idle ~10, walk ~30,
                    jump 200), --dur; hands: --head (at his head) --up (above it) --ground (on the floor), --bend
-                   (bent over), --air yes|no, --look 45 (head turn, deg); --mood scared, --prop chair (clips checked
+                   (bent over), --air yes|no, --look 45 (head turn, deg); --mood scared, --prop chair, --style natural (clips checked
                    by eye only; a wrong one lists them); --fights keeps weapons and fights (left out by default).
                    With words or --jev "<scene>"; a wrong posture lists them
   Any filter alone (--kind, --source, --group, --origin, --edition, --license, --dur, --fav) lists what it keeps.

@@ -25,9 +25,9 @@ const HELP = `The AI's answer on a creator's note; run inside the film. ID: as b
                                             lasting rule you drew and where you kept it (this film: src or lessons/,
                                             every film: ../../lessons/, nested .md ok), shown on their note
   bun run note restore NOTE_ID              recover a deleted note using its stable ID from bun run notes --deleted
-Options for done (and optional on ask):
+Options for done (ask also accepts --after, --cam, --t; not --no-after):
   --after <path>                            After proof picture copied into notes/img/ alongside the note's Before shot
-  --no-after "<reason>"                     Required when omitting --after on done: explain why no visual After image fits
+  --no-after "<reason>"                     done only: required when omitting --after to explain why no visual After image fits
   --cam px,py,pz,lx,ly,lz[,fov[,roll]]      Custom FreeCam pose for clicking After when the fixed view shifted
   --t <seconds|mm:ss>                       Custom playback second for After when timing/position shifted
 If the creator added new notes while you worked on this note, done and ask print them automatically (closest to this moment first).
