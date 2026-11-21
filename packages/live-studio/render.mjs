@@ -61,7 +61,7 @@ A clip or final run keeps every chunk already rendered from the same film code, 
 after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
 edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
 when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: ms a camera sample per
-stretch between cuts (its median frame), naming one over twice the median of the others (a heavy set to profile first).
+stretch between cuts (its median frame), naming one over twice the median of the others and 33 ms (a heavy set to look into).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options are environment variables:
   AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)
