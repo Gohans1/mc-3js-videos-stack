@@ -785,6 +785,19 @@ test(
     assert.equal(typo.status, 2, typo.stdout + typo.stderr);
     assert.match(typo.stderr, /unknown option --fresh-cach/);
 
+    // a second --check would drop the first: it is refused with the one-flag form that runs both
+    const twice = run(["stills"], ["--check", "text", "--check", "order"]);
+    assert.equal(twice.status, 2, twice.stdout + twice.stderr);
+    assert.match(
+      twice.stderr,
+      /--check is given twice: once, with every value in it \(--check "text;order"\)/,
+    );
+
+    // only an --entry page reads cfg.lab: the film itself would ignore it
+    const lab = run(["stills"], ["--lab", "view=desk"]);
+    assert.equal(lab.status, 2, lab.stdout + lab.stderr);
+    assert.match(lab.stderr, /--lab reaches only an --entry page/);
+
     const help = run(["--help"]);
     assert.equal(help.status, 0);
     assert.match(help.stdout, /--check probe:<t>/);

@@ -6,7 +6,7 @@ import { loadSource } from "mc-actor/clips";
 // his front and his left: renders/clip_<n>_<front|left>.jpg (python ../../packages/clip-catalog/sheet_clip.py: contact sheets). Logs where the
 // clip leaves him, for the next key's at and yaw.
 // bun run render stills --lab clip=mixamo/Kneeling_Idle_c9cd9c47 --entry lab/clip.ts  (--lab at=x,z floor spot, --lab fps=4,
-// LAB_T0=film second it starts at: the set's light is the film's at that time)
+// --lab t0=film second it starts at: the set's light is the film's at that time)
 import * as THREE from "three";
 
 import { EDIT } from "../src/edit";

@@ -360,7 +360,6 @@ export function setActiveCommandSubcommand(level: number, subId: string) {
         subcommandPath: nextPath,
         args,
         flags,
-        env: {},
         pendingInputs: {},
       },
     },
@@ -394,7 +393,7 @@ export function updatePendingInput(commandId: string, key: string, value: string
 
 export function updateDraftField(
   commandId: string,
-  bucket: "args" | "flags" | "env",
+  bucket: "args" | "flags",
   key: string,
   value: CliArgValue,
   spec: Parameters<typeof setDraftFieldWithExclusiveClear>[1],
@@ -621,7 +620,6 @@ export async function commitSaveTemplate(input: {
       subcommandPath: input.draft.subcommandPath,
       args: input.draft.args,
       flags: input.draft.flags,
-      env: input.draft.env,
       targetFilm: input.targetFilm,
     });
     cliStore.setState({
@@ -667,7 +665,6 @@ export async function restoreDeletedTemplate(tpl: CliTemplate): Promise<boolean>
       subcommandPath: tpl.subcommandPath,
       args: tpl.args,
       flags: tpl.flags,
-      env: tpl.env,
       targetFilm: tpl.targetFilm,
       pinned: tpl.pinned,
     });

@@ -7,7 +7,6 @@ import {
   type CliCategoryId,
   type CliCommand,
   type CliContext,
-  type CliEnvDef,
   type CliFlagDef,
   type CliMeta,
   type CliRunRequest,
@@ -25,7 +24,6 @@ export interface CliCommandDraft {
   targetFilm: string;
   args: Record<string, CliArgValue>;
   flags: Record<string, CliArgValue>;
-  env: Record<string, CliArgValue>;
   pendingInputs: Record<string, string>;
 }
 
@@ -52,13 +50,11 @@ export function resolvePendingInputs(command: CliCommand, draft: CliCommandDraft
     ...draft,
     args: { ...draft.args },
     flags: { ...draft.flags },
-    env: { ...draft.env },
     pendingInputs: {},
   };
   for (const [bucket, fields] of [
     ["args", chain.argsDef],
     ["flags", chain.flagsDef],
-    ["env", chain.envDef],
   ] as const) {
     for (const field of fields) {
       const text = draft.pendingInputs[`${bucket}:${field.key}`];
@@ -107,7 +103,6 @@ export function createInitialDraft(
     targetFilm,
     args,
     flags,
-    env: {},
     pendingInputs: {},
   };
 }
@@ -119,13 +114,12 @@ export function draftFromTemplate(template: CliTemplate, command: CliCommand): C
     targetFilm: template.targetFilm || (command.cwdModes.includes("film") ? "active" : "root"),
     args: { ...template.args },
     flags: { ...template.flags },
-    env: { ...template.env },
     pendingInputs: {},
   };
 }
 
 export function getFieldOptions(
-  def: Pick<CliArgDef | CliFlagDef | CliEnvDef, "options" | "choiceSource">,
+  def: Pick<CliArgDef | CliFlagDef, "options" | "choiceSource">,
   context: CliContext | null,
 ): SelectOptionItem[] {
   const seen = new Set<string>();
@@ -150,13 +144,11 @@ export function resolveFieldTextSearch(cmd: CliCommand): string {
       parts.push(s.id, s.label, s.summary);
       if (s.flags) for (const f of s.flags) parts.push(f.flag, f.label);
       if (s.args) for (const a of s.args) parts.push(a.key, a.label);
-      if (s.env) for (const e of s.env) parts.push(e.key, e.label);
       walkSubs(s.subcommands);
     }
   };
   if (cmd.flags) for (const f of cmd.flags) parts.push(f.flag, f.label);
   if (cmd.args) for (const a of cmd.args) parts.push(a.key, a.label);
-  if (cmd.env) for (const e of cmd.env) parts.push(e.key, e.label);
   walkSubs(cmd.subcommands);
   return parts.join(" ").toLowerCase();
 }
@@ -196,21 +188,18 @@ export function isFieldValueActive(value: CliArgValue, optionalValue?: boolean):
 }
 
 export function hasFieldValidationError(
-  def: Pick<CliArgDef | CliFlagDef | CliEnvDef, "key" | "label"> & { flag?: string },
+  def: Pick<CliArgDef | CliFlagDef, "key" | "label"> & { flag?: string },
   errors: readonly string[],
 ): boolean {
   return errors.some(
-    (error) =>
-      error === `Missing required env: ${def.key}` ||
-      error.includes(def.label) ||
-      (def.flag !== undefined && error.includes(def.flag)),
+    (error) => error.includes(def.label) || (def.flag !== undefined && error.includes(def.flag)),
   );
 }
 
 export function setDraftFieldWithExclusiveClear(
   draft: CliCommandDraft,
-  spec: Pick<ResolvedCliSpec, "argsDef" | "flagsDef" | "envDef">,
-  bucket: "args" | "flags" | "env",
+  spec: Pick<ResolvedCliSpec, "argsDef" | "flagsDef">,
+  bucket: "args" | "flags",
   key: string,
   value: CliArgValue,
   exclusiveGroup?: string,
@@ -220,7 +209,6 @@ export function setDraftFieldWithExclusiveClear(
     ...draft,
     args: { ...draft.args },
     flags: { ...draft.flags },
-    env: { ...draft.env },
     pendingInputs: { ...draft.pendingInputs },
   };
 
@@ -247,13 +235,6 @@ export function setDraftFieldWithExclusiveClear(
         delete next.pendingInputs[`flags:${def.key}`];
       }
     }
-    for (const def of spec.envDef) {
-      if (def.exclusiveGroup === exclusiveGroup && !(bucket === "env" && def.key === key)) {
-        if (isFieldValueActive(next.env[def.key])) cleared.push(def.key);
-        delete next.env[def.key];
-        delete next.pendingInputs[`env:${def.key}`];
-      }
-    }
   }
 
   return { next, cleared };
@@ -261,7 +242,7 @@ export function setDraftFieldWithExclusiveClear(
 
 export interface ActiveLegoToken {
   id: string;
-  bucket: "args" | "flags" | "env";
+  bucket: "args" | "flags";
   key: string;
   text: string;
   removable: boolean;
@@ -274,23 +255,8 @@ export function listActiveLegoTokens(
   const combined: Record<string, CliArgValue> = {
     ...draft.args,
     ...draft.flags,
-    ...draft.env,
   };
   const tokens: ActiveLegoToken[] = [];
-
-  for (const def of spec.envDef) {
-    if (!isFieldVisible(def.visibleWhen, combined)) continue;
-    const raw = draft.env[def.key];
-    if (!isFieldValueActive(raw)) continue;
-    const val = def.type === "boolean" ? "1" : String(raw).trim();
-    tokens.push({
-      id: `env:${def.key}`,
-      bucket: "env",
-      key: def.key,
-      text: `${def.key}=${val}`,
-      removable: true,
-    });
-  }
 
   for (const def of spec.argsDef) {
     if (!isFieldVisible(def.visibleWhen, combined)) continue;
@@ -319,7 +285,11 @@ export function listActiveLegoTokens(
         if (csv) text = `${def.flag} ${csv}`;
       } else if (def.multi) {
         const list = Array.isArray(raw) ? raw.map(String) : tokenizeWords(String(raw));
-        if (list.length) text = `${def.flag} ${list.join(" ")}`;
+        if (list.length)
+          text =
+            def.multiStyle === "repeat"
+              ? list.map((v) => `${def.flag} ${v}`).join(" ")
+              : `${def.flag} ${list.join(" ")}`;
       } else {
         text = `${def.flag} ${String(raw).trim()}`;
       }
@@ -346,7 +316,6 @@ export function buildTemplatePreviewCommand(
       subcommandPath: template.subcommandPath,
       args: template.args,
       flags: template.flags,
-      env: template.env,
       targetFilm: template.targetFilm,
       mode: "execute",
     };

@@ -295,6 +295,8 @@ while i < len(args):
     i += 1
 
 is_image_list = any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos)
+if start_arg is not None and (is_image_list or not pos):
+    usage("--start goes with a video: bun run sheet renders/clip.mp4 frames 62 --start 60")
 if is_image_list:
     build_image_sheet(pos, out_arg)
     raise SystemExit

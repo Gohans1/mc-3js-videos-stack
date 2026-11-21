@@ -83,7 +83,6 @@ test("QC exposes native inspection commands and render preserves evidence settin
   );
   expect(render.validationErrors).toEqual([]);
   expect(render.argvTokens).toEqual(["stills", "--crop", "0,0,0.5,0.5", "--compare"]);
-  expect(render.envEntries).toEqual([]);
 });
 
 test("media setup preserves custom deadline and evidence parent in catalog argv", () => {
@@ -389,7 +388,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         seenSub.add(sub.id);
         const nextPath = [...subPath, sub.id];
         const chain = resolveSubcommandChain(cmd, nextPath);
-        const visibleFields = [...chain.argsDef, ...chain.flagsDef, ...chain.envDef];
+        const visibleFields = [...chain.argsDef, ...chain.flagsDef];
         const defsByKey = new Map(visibleFields.map((f) => [f.key, f]));
         for (const def of visibleFields) {
           if (def.visibleWhen) checkRule(def.visibleWhen, defsByKey);
@@ -1000,10 +999,14 @@ describe("cli-catalog resolver rules", () => {
     expect(entryDef?.visibleWhen).toBeDefined();
     expect(labDef?.visibleWhen).toBeDefined();
     expect(isFieldVisible(entryDef?.visibleWhen, { target: "captions" })).toBe(false);
-    expect(isFieldVisible(labDef?.visibleWhen, { target: "captions" })).toBe(false);
+    expect(
+      isFieldVisible(labDef?.visibleWhen, { target: "captions", "--entry": "lab/prop.ts" }),
+    ).toBe(false);
     for (const target of ["stills", "clip", "poster", "all", "final"]) {
       expect(isFieldVisible(entryDef?.visibleWhen, { target })).toBe(true);
-      expect(isFieldVisible(labDef?.visibleWhen, { target })).toBe(true);
+      // only an --entry page reads cfg.lab
+      expect(isFieldVisible(labDef?.visibleWhen, { target })).toBe(false);
+      expect(isFieldVisible(labDef?.visibleWhen, { target, "--entry": "lab/prop.ts" })).toBe(true);
     }
     const labRun = buildCliInvocation(
       {
@@ -1702,7 +1705,6 @@ describe("cli-catalog resolver rules", () => {
         images: ["renders/a.png"],
       },
       flags: { "--out": "renders/out.jpg" },
-      env: {},
       targetFilm: "active",
     };
     const sheetBothConflict = buildCliInvocation(

@@ -532,7 +532,6 @@ describe("CLI tab model & dependent lego logic", () => {
       subcommandPath: [],
       args: { ids: "intro" },
       flags: { "--yes": true },
-      env: {},
       targetFilm: "active",
       createdAt: 1,
       updatedAt: 1,
@@ -558,7 +557,6 @@ describe("CLI tab SSR UI rendering", () => {
         subcommandPath: [],
         args: { ids: "intro" },
         flags: { "--yes": true },
-        env: {},
         targetFilm: "active",
         createdAt: 1,
         updatedAt: 1,
@@ -983,7 +981,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "sealed-room",
         createdAt: 1,
         updatedAt: 1,
@@ -1138,7 +1135,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
             subcommandPath: [],
             args: { ids: "intro" },
             flags: { "--yes": true },
-            env: {},
             targetFilm: "active",
             createdAt: 1,
             updatedAt: 1,
@@ -1163,7 +1159,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       subcommandPath: [],
       args: {},
       flags: {},
-      env: {},
       targetFilm: "active",
       createdAt: 1,
       updatedAt: 1,
@@ -1580,7 +1575,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       subcommandPath: [],
       args: {},
       flags: {},
-      env: {},
       targetFilm: "root",
       createdAt: 1,
       updatedAt: 1,
@@ -2094,7 +2088,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         targetFilm: "active",
         flags: {},
         args: { query: "rain" },
-        env: {},
         createdAt: 1,
         updatedAt: 1,
       },
@@ -2106,7 +2099,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         targetFilm: "demo-film",
         flags: { "--yes": true },
         args: {},
-        env: {},
         createdAt: 2,
         updatedAt: 2,
       },
@@ -2210,7 +2202,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "root",
         createdAt: 1,
         updatedAt: 1,
@@ -2222,7 +2213,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "root",
         createdAt: 2,
         updatedAt: 2,
@@ -2455,7 +2445,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
               subcommandPath: [],
               args: {},
               flags: {},
-              env: {},
               targetFilm: "root",
               createdAt: 1,
               updatedAt: 1,
@@ -2529,11 +2518,10 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       ),
       false,
     );
-    // Image-list mode shows --out inside Options and hides Environment overrides (START)
+    // Image-list mode shows --out inside Options
     const imagesHtml = renderSheet({ images: ["renders/view_a.png"] });
     assert.equal(imagesHtml.includes('aria-label="Options"'), true);
     assert.equal(imagesHtml.includes("Output Sheet Path"), true);
-    assert.equal(imagesHtml.includes('aria-label="Environment overrides"'), false);
     // Conflict (both video + images) hides --out -> Options collapses closed again
     assert.equal(
       renderSheet({

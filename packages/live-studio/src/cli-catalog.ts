@@ -82,21 +82,6 @@ export interface CliFlagDef {
   tier?: "common" | "advanced";
 }
 
-export interface CliEnvDef {
-  key: string;
-  label: string;
-  type: CliFieldType;
-  required?: boolean;
-  requiredWhen?: CliVisibleWhen;
-  options?: readonly string[];
-  choiceSource?: CliChoiceSource;
-  placeholder?: string;
-  hint?: string;
-  visibleWhen?: CliVisibleWhen;
-  exclusiveGroup?: string;
-  tier?: "common" | "advanced";
-}
-
 export interface CliGuard {
   disabled?: boolean;
   disabledWhenToolsUnset?: boolean;
@@ -140,7 +125,6 @@ export interface CliSubcommand {
   subcommandRequired?: boolean;
   args?: readonly CliArgDef[];
   flags?: readonly CliFlagDef[];
-  env?: readonly CliEnvDef[];
   inheritFlags?: boolean;
   meta?: Partial<CliMeta>;
   subcommands?: readonly CliSubcommand[];
@@ -158,7 +142,6 @@ export interface CliCommand {
   subcommandRequired?: boolean;
   args?: readonly CliArgDef[];
   flags?: readonly CliFlagDef[];
-  env?: readonly CliEnvDef[];
   meta: CliMeta;
   subcommands?: readonly CliSubcommand[];
 }
@@ -191,7 +174,6 @@ export interface CliRunRequest {
   subcommandPath?: readonly string[];
   args?: Record<string, CliArgValue>;
   flags?: Record<string, CliArgValue>;
-  env?: Record<string, CliArgValue>;
   targetFilm?: string;
   mode?: "execute" | "help";
   confirmed?: boolean;
@@ -229,7 +211,6 @@ export interface CliTemplate {
   subcommandPath: string[];
   args: Record<string, CliArgValue>;
   flags: Record<string, CliArgValue>;
-  env: Record<string, CliArgValue>;
   targetFilm: string;
   pinned?: boolean;
   createdAt: number;
@@ -250,11 +231,9 @@ export interface ResolvedCliSpec {
   cwdMode: CliCwdMode;
   argsDef: readonly CliArgDef[];
   flagsDef: readonly CliFlagDef[];
-  envDef: readonly CliEnvDef[];
   meta: CliMeta;
   baseMeta: CliMeta;
   argvTokens: string[];
-  envEntries: [string, string][];
   displayCommand: string;
   copyCommand: string;
   requiresConfirm: boolean;
@@ -1778,15 +1757,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Omit to align unaligned takes",
       },
     ],
-    env: [
-      {
-        key: "WHISPERX_PYTHON",
-        label: "WHISPERX_PYTHON",
-        type: "string",
-        tier: "advanced",
-        placeholder: "vault/tools/whisperx/...",
-      },
-    ],
     meta: {
       effect: "write",
       cost: "free",
@@ -1812,15 +1782,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         multi: true,
         choiceSource: "takes",
         hint: "Omit for takes missing or older than audio",
-      },
-    ],
-    env: [
-      {
-        key: "RHUBARB",
-        label: "RHUBARB Binary Path",
-        type: "string",
-        tier: "advanced",
-        placeholder: "vault/tools/rhubarb/rhubarb.exe",
       },
     ],
     meta: {
@@ -3790,7 +3751,11 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         multi: true,
         multiStyle: "repeat",
-        visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        visibleWhen: {
+          field: "--entry",
+          nonEmpty: true,
+          and: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        },
         tier: "advanced",
         placeholder: "view=desk",
         hint: "Reaches the --entry page as cfg.lab.<key>.",
@@ -3982,14 +3947,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         tier: "advanced",
       },
     ],
-    env: [
-      {
-        key: "SCENEDETECT_PYTHON",
-        label: "Python with PySceneDetect",
-        type: "string",
-        tier: "advanced",
-      },
-    ],
     meta: {
       effect: "write",
       cost: "free",
@@ -4142,14 +4099,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
           { key: "--dry-run", flag: "--dry-run", label: "Validate Only", type: "boolean" },
         ],
         meta: { effect: "write", speed: "long" },
-      },
-    ],
-    env: [
-      {
-        key: "MC_MEDIA_HOME",
-        label: "Environment and Model Cache",
-        type: "string",
-        tier: "advanced",
       },
     ],
     meta: {
@@ -6357,7 +6306,6 @@ export function resolveSubcommandChain(
   resolvedPath: string[];
   argsDef: readonly CliArgDef[];
   flagsDef: readonly CliFlagDef[];
-  envDef: readonly CliEnvDef[];
   meta: CliMeta;
   summary: string;
 } {
@@ -6365,7 +6313,6 @@ export function resolveSubcommandChain(
   const resolvedPath: string[] = [];
   let argsDef: readonly CliArgDef[] = command.args ?? [];
   let flagsDef: readonly CliFlagDef[] = command.flags ?? [];
-  let envDef: readonly CliEnvDef[] = command.env ?? [];
   let meta: CliMeta = { ...command.meta };
   let summary = command.summary;
   let children = command.subcommands;
@@ -6379,12 +6326,11 @@ export function resolveSubcommandChain(
     summary = hit.summary || summary;
     argsDef = hit.args ?? [];
     flagsDef = hit.inheritFlags ? [...flagsDef, ...(hit.flags ?? [])] : (hit.flags ?? []);
-    envDef = hit.env ?? envDef;
     if (hit.meta) meta = { ...meta, ...hit.meta };
     children = hit.subcommands;
   }
 
-  return { subcommands, resolvedPath, argsDef, flagsDef, envDef, meta, summary };
+  return { subcommands, resolvedPath, argsDef, flagsDef, meta, summary };
 }
 
 function normalizeConditionValues(raw: CliArgValue): string[] {
@@ -6631,11 +6577,10 @@ function computeEffectiveMeta(
 function formatCliCopyCommand(
   cwd: string,
   argv: readonly string[],
-  env: readonly [string, string][],
   shell: "powershell" | "posix",
 ): string {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-  const command = `cd ${quote(cwd)} && ${env.map(([key, value]) => `${key}=${quote(value)} `).join("")}${argv.map(quote).join(" ")}`;
+  const command = `cd ${quote(cwd)} && ${argv.map(quote).join(" ")}`;
   if (shell === "posix") return `env -u LIVE_PROJECT bun exec ${quote(command)}`;
   return [
     "& {",
@@ -6676,7 +6621,6 @@ export function buildCliInvocation(
   const chain = resolveSubcommandChain(command, request.subcommandPath);
   const args = request.args ?? {};
   const flags = request.flags ?? {};
-  const env = request.env ?? {};
 
   // Match Studio init-like behavior when resolving relative targetFilm for runner display
   const filmOnly = command.cwdModes.length === 1 && command.cwdModes[0] === "film";
@@ -6694,7 +6638,7 @@ export function buildCliInvocation(
         ? "film"
         : "root";
 
-  const combinedFieldValues: Record<string, CliArgValue> = { ...args, ...flags, ...env };
+  const combinedFieldValues: Record<string, CliArgValue> = { ...args, ...flags };
   const effectiveMeta = computeEffectiveMeta(
     command.id,
     chain.resolvedPath,
@@ -6742,7 +6686,6 @@ export function buildCliInvocation(
   const exclusiveConflicts: string[] = [];
 
   const argvTokens: string[] = [];
-  const envEntries: [string, string][] = [];
 
   if (mode === "help") {
     if (effectiveMeta.helpMode === "none") {
@@ -6766,7 +6709,7 @@ export function buildCliInvocation(
       }
     }
 
-    // Track exclusive groups across args, flags, env
+    // Track exclusive groups across args and flags
     const groupHits = new Map<string, string[]>();
     const trackExclusive = (group: string | undefined, label: string, active: boolean) => {
       if (!group || !active) return;
@@ -6852,25 +6795,6 @@ export function buildCliInvocation(
       if (valStr) {
         validateArgumentTokens(def, [valStr], validationErrors);
         argvTokens.push(def.flag, valStr);
-      }
-    }
-
-    for (const def of chain.envDef) {
-      if (!isFieldVisible(def.visibleWhen, combinedFieldValues)) continue;
-      const raw = env[def.key];
-      const active = isFieldValueActive(def, raw);
-      trackExclusive(def.exclusiveGroup, def.key, active);
-      if (isFieldRequired(def, combinedFieldValues) && !active) {
-        validationErrors.push(`Missing required env: ${def.key}`);
-        continue;
-      }
-      if (!active) continue;
-      if (def.type === "boolean") {
-        envEntries.push([def.key, "1"]);
-      } else {
-        const valStr = String(raw).trim();
-        validateNumberTokens(def, [valStr], validationErrors);
-        envEntries.push([def.key, valStr]);
       }
     }
 
@@ -6965,7 +6889,6 @@ export function buildCliInvocation(
     }
   }
 
-  const envPrefix = envEntries.map(([k, v]) => `${k}=${formatShellToken(v)} `).join("");
   const targetToken =
     cwdMode === "film"
       ? context?.repoRoot
@@ -6995,8 +6918,8 @@ export function buildCliInvocation(
   const cmdString = [...baseParts, ...argvTokens].map(formatShellToken).join(" ");
   const displayCommand =
     command.runner === "package-script" && command.packageDir
-      ? `(cd ${formatShellToken(command.packageDir)} && ${envPrefix}${cmdString})`
-      : `${envPrefix}${cmdString}`;
+      ? `(cd ${formatShellToken(command.packageDir)} && ${cmdString})`
+      : cmdString;
   const copyCwd =
     cwdMode === "film"
       ? context?.projectRoot
@@ -7004,12 +6927,7 @@ export function buildCliInvocation(
         ? `${context.repoRoot}/${command.packageDir}`
         : context?.repoRoot;
   const copyCommand = copyCwd
-    ? formatCliCopyCommand(
-        copyCwd,
-        [...baseParts, ...argvTokens],
-        envEntries,
-        context?.copyShell ?? "posix",
-      )
+    ? formatCliCopyCommand(copyCwd, [...baseParts, ...argvTokens], context?.copyShell ?? "posix")
     : displayCommand;
 
   return {
@@ -7020,11 +6938,9 @@ export function buildCliInvocation(
     cwdMode,
     argsDef: chain.argsDef,
     flagsDef: chain.flagsDef,
-    envDef: chain.envDef,
     meta: effectiveMeta,
     baseMeta: chain.meta,
     argvTokens,
-    envEntries,
     displayCommand,
     copyCommand,
     requiresConfirm,

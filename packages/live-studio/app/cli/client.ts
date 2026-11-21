@@ -161,7 +161,6 @@ export async function saveCliTemplate(input: {
   subcommandPath?: string[];
   args?: Record<string, CliArgValue>;
   flags?: Record<string, CliArgValue>;
-  env?: Record<string, CliArgValue>;
   targetFilm?: string;
   pinned?: boolean;
 }): Promise<{ template: CliTemplate; templates: CliTemplate[] }> {

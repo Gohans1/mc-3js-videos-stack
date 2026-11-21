@@ -260,31 +260,21 @@ for (const shell of copyShells)
       request: { commandId: "help", args: { command: copyPayload } },
       target: "project",
       args: [copyPayload],
-      rhubarb: "before-value",
     },
     {
       request: { commandId: "render", args: { target: "poster" }, flags: { "--at": "5" } },
       target: "project",
       args: ["poster", "--at", "5"],
-      rhubarb: "before-value",
-    },
-    {
-      request: { commandId: "voice:lips", env: { RHUBARB: "rhubarb.exe" } },
-      target: "project",
-      args: [],
-      rhubarb: "rhubarb.exe",
     },
     {
       request: { commandId: "timeline:fmt" },
       target: "project",
       args: [],
-      rhubarb: "before-value",
     },
     {
       request: { commandId: "live-studio:lint" },
       target: "package",
       args: [],
-      rhubarb: "before-value",
     },
   ])
     test(`${shell.label} copy of ${copyCase.request.commandId} preserves project, literals and caller environment`, async () => {
@@ -292,13 +282,13 @@ for (const shell of copyShells)
       const project = tempDir("copy project 'quoted'-");
       const unrelated = tempDir("copy-unrelated-");
       const echo =
-        "console.log(JSON.stringify({cwd:process.cwd(),project:process.env.LIVE_PROJECT??process.cwd(),args:process.argv.slice(2),rhubarb:process.env.RHUBARB??null}));";
+        "console.log(JSON.stringify({cwd:process.cwd(),project:process.env.LIVE_PROJECT??process.cwd(),args:process.argv.slice(2)}));";
       writeFileSync(join(project, "echo.mjs"), echo);
       writeFileSync(
         join(project, "package.json"),
         JSON.stringify({
           type: "module",
-          scripts: { help: "bun echo.mjs", render: "bun echo.mjs", "voice:lips": "bun echo.mjs" },
+          scripts: { help: "bun echo.mjs", render: "bun echo.mjs" },
         }),
       );
       writeFileSync(join(root, "scripts/timeline_fmt.ts"), echo);
@@ -314,13 +304,13 @@ for (const shell of copyShells)
       const oldProject = "previous-studio-project";
       const callerCheck =
         shell.kind === "powershell"
-          ? "\nif ($env:LIVE_PROJECT -ne 'previous-studio-project' -or $env:RHUBARB -ne 'before-value') { throw 'Caller environment changed' }"
-          : '\n[ "$LIVE_PROJECT" = previous-studio-project ] && [ "$RHUBARB" = before-value ] || exit 97';
+          ? "\nif ($env:LIVE_PROJECT -ne 'previous-studio-project') { throw 'Caller environment changed' }"
+          : '\n[ "$LIVE_PROJECT" = previous-studio-project ] || exit 97';
       const child = Bun.spawnSync(
         [shell.exe, ...shell.args, (shell.prefix ?? "") + spec.copyCommand + callerCheck],
         {
           cwd: unrelated,
-          env: { ...process.env, RHUBARB: "before-value", LIVE_PROJECT: oldProject },
+          env: { ...process.env, LIVE_PROJECT: oldProject },
           stdout: "pipe",
           stderr: "pipe",
           windowsHide: true,
@@ -332,7 +322,6 @@ for (const shell of copyShells)
       expect(actual.cwd.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
       expect(actual.project.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
       expect(actual.args).toEqual(copyCase.args);
-      expect(actual.rhubarb).toBe(copyCase.rhubarb);
     });
 
 test("Studio catalogs and runs only its own project, including projects outside films", async () => {
@@ -1036,7 +1025,7 @@ describe("/api/cli routes, security & process runtime", () => {
         body: JSON.stringify({
           commandId: "render",
           args: { target: "stills" },
-          flags: { "--lab": ["view=mb-overflow"] },
+          flags: { "--entry": "lab/custom.ts", "--lab": ["view=mb-overflow"] },
         }),
       }),
     );

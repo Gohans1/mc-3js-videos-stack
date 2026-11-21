@@ -160,6 +160,18 @@ test("sheet lays out the render's stills and leaves any other still_*.jpg out", 
   assert.match(r.stdout, /renders\/sheet_0\.jpg {2}1s, 2\.5s\r?\n/);
 });
 
+test("--start without a video is refused, never read as the stills' clock", (t) => {
+  const sheet = film(t, []);
+  for (const args of [
+    ["--start", "60"],
+    ["a.png", "--start", "60"],
+  ]) {
+    const r = sheet(...args);
+    assert.equal(r.status, 2, r.stdout + r.stderr);
+    assert.match(r.stderr, /--start goes with a video/);
+  }
+});
+
 test("--help after the video still prints the help", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "sheet-help-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

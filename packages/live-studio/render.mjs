@@ -81,7 +81,7 @@ Nothing is written outside the film. Options come after the target:
   --inspect px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
   --views "a:px,py,pz,lx,ly,lz,fov;b:..."  stills/poster only: batch multiple named cameras in one Chrome boot to
                              renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
-                             view_*.jpg; also accepts --views @views.json ({ name: [7 nums] } or [{ name, cam }])
+                             view_*.jpg; also accepts --views "@views.json" ({ name: [7 nums] } or [{ name, cam }])
   --crop x,y,w,h             stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
   --ref references/ref.mp4   stills/poster only: each picture beside the reference's frame at the same second (its exact
                              frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
@@ -163,10 +163,21 @@ for (let i = 0; i < rawArgs.length; i++) {
       console.error(`--lab takes key=value for the lab page (cfg.lab.key), got ${rawArgs[i]}`);
       process.exit(2);
     }
+    if (opt.lab[key.toLowerCase()] !== undefined) {
+      console.error(`--lab ${key} is given twice: one value a key`);
+      process.exit(2);
+    }
     opt.lab[key.toLowerCase()] = rest.join("=");
   } else if (VALUE_FLAGS[a]) {
     if (opt[VALUE_FLAGS[a]] !== undefined) {
-      console.error(`${a} is given twice: once, with every value in it (${a} 12,30.5)`);
+      const all = {
+        "--at": "--at 12,30.5",
+        "--chunks": "--chunks 3,4",
+        "--check": '--check "text;order"',
+      }[a];
+      console.error(
+        `${a} is given twice: ${all ? `once, with every value in it (${all})` : "once is all it takes"}`,
+      );
       process.exit(2);
     }
     opt[VALUE_FLAGS[a]] = rawArgs[++i];
@@ -209,22 +220,24 @@ const misplaced =
                       ? "--views is for render stills or poster"
                       : opt.inspect && opt.views !== undefined
                         ? "--inspect and --views cannot be used together: use one or the other"
-                        : (video || what === "captions") && compare
-                          ? "--compare is for render stills or poster"
-                          : what === "captions"
-                            ? Object.entries({
-                                at: "--at",
-                                list: "--list",
-                                check: "--check",
-                                inspect: "--inspect",
-                                views: "--views",
-                                entry: "--entry",
-                                crop: "--crop",
-                                samples: "--samples",
-                              })
-                                .filter(([k]) => opt[k] !== undefined)
-                                .map(([, flag]) => `${flag} does nothing for render captions`)[0]
-                            : null;
+                        : Object.keys(opt.lab).length && !opt.entry
+                          ? "--lab reaches only an --entry page (cfg.lab.<key>): bun run render stills --entry lab/prop.ts --lab view=desk"
+                          : (video || what === "captions") && compare
+                            ? "--compare is for render stills or poster"
+                            : what === "captions"
+                              ? Object.entries({
+                                  at: "--at",
+                                  list: "--list",
+                                  check: "--check",
+                                  inspect: "--inspect",
+                                  views: "--views",
+                                  entry: "--entry",
+                                  crop: "--crop",
+                                  samples: "--samples",
+                                })
+                                  .filter(([k]) => opt[k] !== undefined)
+                                  .map(([, flag]) => `${flag} does nothing for render captions`)[0]
+                              : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);

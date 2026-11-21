@@ -32,7 +32,6 @@ export const CliTemplateUpsertSchema = z.object({
   subcommandPath: z.array(z.string().min(1).max(60)).max(4).optional().default([]),
   args: RecordOfArgsSchema.optional().default({}),
   flags: RecordOfArgsSchema.optional().default({}),
-  env: RecordOfArgsSchema.optional().default({}),
   targetFilm: z.string().trim().min(1).max(120).optional().default("active"),
   pinned: z.boolean().optional(),
 });
@@ -44,7 +43,6 @@ const StoredTemplateSchema = z.object({
   subcommandPath: z.array(z.string()).default([]),
   args: RecordOfArgsSchema.default({}),
   flags: RecordOfArgsSchema.default({}),
-  env: RecordOfArgsSchema.default({}),
   targetFilm: z.string().default("active"),
   pinned: z.boolean().optional(),
   createdAt: z.number(),
@@ -146,7 +144,6 @@ export function openCliTemplates(file = defaultCliTemplatesFile()) {
         subcommandPath: parsed.subcommandPath,
         args: parsed.args,
         flags: parsed.flags,
-        env: parsed.env,
         targetFilm: parsed.targetFilm,
         ...(parsed.pinned !== undefined
           ? { pinned: parsed.pinned }

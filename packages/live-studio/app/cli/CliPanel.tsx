@@ -139,7 +139,6 @@ export function CliPanel() {
       subcommandPath: draft.subcommandPath,
       args: effectiveDraft.args,
       flags: effectiveDraft.flags,
-      env: effectiveDraft.env,
       targetFilm: draft.targetFilm,
       createdAt: 0,
       updatedAt: 0,
@@ -159,7 +158,6 @@ export function CliPanel() {
       subcommandPath: tpl.subcommandPath,
       args: tpl.args,
       flags: tpl.flags,
-      env: tpl.env,
       targetFilm: tpl.targetFilm,
       mode: "execute" as const,
     };

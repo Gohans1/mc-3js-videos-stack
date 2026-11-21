@@ -63,7 +63,7 @@ export const cliArgs = (
   return argv;
 };
 
-// A number from an argument or an environment variable, or exit 2 saying what it takes
+// A number from an argument, or exit 2 saying what it takes
 export const numberArg = (name, text, { min = -Infinity, max = Infinity, int = false } = {}) => {
   const n = Number(text);
   if (

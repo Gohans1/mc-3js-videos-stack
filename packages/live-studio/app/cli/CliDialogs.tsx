@@ -61,7 +61,6 @@ export function CliHelpDialog({
   const groups = [
     { title: "Arguments", fields: spec.argsDef },
     { title: "Options", fields: spec.flagsDef },
-    { title: "Environment variables", fields: spec.envDef },
   ];
   return (
     <Dialog open={open} onOpenChange={(next) => !next && onClose()}>

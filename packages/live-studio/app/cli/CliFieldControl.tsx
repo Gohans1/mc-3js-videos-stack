@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
-import type {
-  CliArgDef,
-  CliArgValue,
-  CliContext,
-  CliEnvDef,
-  CliFlagDef,
-} from "../../src/cli-catalog.ts";
+import type { CliArgDef, CliArgValue, CliContext, CliFlagDef } from "../../src/cli-catalog.ts";
 import {
   asTokenArray,
   commitMultiTokens,
@@ -31,7 +25,7 @@ import {
   stopCliInputHotkeyPropagation,
 } from "./model";
 
-type AnyFieldDef = CliArgDef | CliFlagDef | CliEnvDef;
+type AnyFieldDef = CliArgDef | CliFlagDef;
 type PendingInput = { value: string; onChange: (value: string) => void };
 
 const UNSET_TOKEN = "__cli_unset__";
