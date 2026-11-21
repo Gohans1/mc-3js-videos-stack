@@ -504,6 +504,43 @@ export function buildScene(canvas, W, H) {
   assert.match(fail.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
 }, 60000);
 
+test("SAMPLES gives a still the shutter's motion blur; without it a still is the one instant", (t) => {
+  const film = chromeFilm(t, 2);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  // red climbs 3000 a second from 128 at 1 s: the half-frame shutter after 1 s averages to about 153
+  writeFileSync(
+    join(film.dir, "src/scene.ts"),
+    `export const DURATION=2, SHOTS_OUT=[];
+export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=canvas.getContext('2d');return (t)=>{g.fillStyle='rgb('+Math.min(255,Math.max(0,Math.round(128+(t-1)*3000)))+',0,0)';g.fillRect(0,0,W,H);};}`,
+  );
+  const red = () => {
+    const pixel = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        join(film.dir, "renders/still_1s.jpg"),
+        "-vf",
+        "format=rgb24,crop=1:1:0:0",
+        "-f",
+        "rawvideo",
+        "-",
+      ],
+      { timeout: 10000 },
+    );
+    assert.equal(pixel.status, 0, pixel.stderr.toString());
+    return pixel.stdout[0];
+  };
+  const sharp = film.render("stills", { AT: "1" });
+  assert.equal(sharp.status, 0, sharp.stdout + sharp.stderr);
+  assert.ok(Math.abs(red() - 128) <= 3, `one instant: expected red 128, got ${red()}`);
+  const blurred = film.render("stills", { AT: "1", SAMPLES: "8" });
+  assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
+  assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(8 sub-frames\)/);
+  assert.ok(Math.abs(red() - 153) <= 4, `the shutter's average: expected red 153, got ${red()}`);
+}, 400000);
+
 test("native async frames preserve source time and layer clocks through Speed and Freeze", (t) => {
   const film = chromeFilm(t, 2, { timingTimeline: "src/timing.json" });
   assert.ok(film, "headless Chrome is required for async timing verification");
