@@ -60,9 +60,9 @@ function framesOf(pid: number): bigint[] {
 
 /**
  * For every frame of the Chrome process pid whose normal position is hidden (left at hiddenLeft): shields it and
- * un-minimizes it without activating it (Chrome's own restore, which CDP windowState
- * "normal" triggers, takes the keyboard from the user's window). Frames on screen (--show, to log in by hand) lose the
- * shield and are left as they are, minimized or not.
+ * un-minimizes it without activating it (Chrome's own restore, which CDP windowState "normal" triggers, takes the
+ * keyboard from the user's window). Frames on screen (--show, to log in by hand) lose the shield and are left as they
+ * are, minimized or not.
  */
 export function guardWindows(pid: number, hiddenLeft: number) {
   let restored = 0;
@@ -90,12 +90,13 @@ export function guardWindows(pid: number, hiddenLeft: number) {
  * Runs fn with every app barred from taking the foreground (LockSetForegroundWindow, made for this): Chrome activates a
  * window when agent-browser switches to its tab or a new session opens its blank tab, and Windows allows it when the
  * user has been idle a while or works in the agent's parent app. A user click or Alt lifts the lock early by design.
+ * Only one process holds the lock: while another command holds it, locked is false and that command's unlock ends it.
  */
-export async function withForegroundLocked<T>(fn: () => Promise<T>): Promise<T> {
-  user32.LockSetForegroundWindow(LSFW_LOCK);
+export async function withForegroundLocked<T>(fn: (locked: boolean) => Promise<T>): Promise<T> {
+  const locked = user32.LockSetForegroundWindow(LSFW_LOCK) !== 0;
   try {
-    return await fn();
+    return await fn(locked);
   } finally {
-    user32.LockSetForegroundWindow(LSFW_UNLOCK);
+    if (locked) user32.LockSetForegroundWindow(LSFW_UNLOCK);
   }
 }

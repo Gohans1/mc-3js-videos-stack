@@ -130,8 +130,15 @@ export async function pollUntil(
       lastTick = now;
       onTick(now - start);
     }
-    await Bun.sleep(1_000);
+    await pollPause();
   }
+}
+
+/** One poll interval. Waits can last an hour, and a window Win+D minimizes meanwhile is hidden to the page (AI Studio
+ * stalls its answer) and sits as a clickable bar near Start, so the windows are guarded every second. */
+async function pollPause() {
+  guard();
+  await Bun.sleep(1_000);
 }
 
 /** pollUntil that answers whether the condition came true in time. */
@@ -381,9 +388,10 @@ const guard = () =>
  * run settings panel) and moves it off-screen, or on-screen with show (to log in by hand). No app can take the
  * foreground meanwhile, so the tab switch cannot hand Chrome the user's keyboard.
  */
-export const prepareTab = (show = false) => withForegroundLocked(() => placeTab(show));
+export const prepareTab = (show = false) =>
+  withForegroundLocked((locked) => placeTab(show, locked));
 
-async function placeTab(show: boolean): Promise<string> {
+async function placeTab(show: boolean, locked: boolean): Promise<string> {
   const tabs = readTabs();
   let info = tabs[tab];
   const opened = !info || !(await pageTargets()).some((p) => p.id === info!.id);
@@ -453,12 +461,19 @@ async function placeTab(show: boolean): Promise<string> {
   );
   if (placed.left !== at.left || placed.top !== at.top)
     throw new StepError(`the window is at ${placed.left},${placed.top}, not ${at.left},${at.top}`);
-  const [w, h, vis, lang] = js<[number, number, string, string]>(
-    `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
-  );
+  const page = () =>
+    js<[number, number, string, string]>(
+      `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
+    );
+  let [w, h, vis, lang] = page();
+  // Another tab in front of ours in its window (a link opened in a new tab) leaves the session bound but the page hidden.
+  if (vis !== "visible" && bound === id) {
+    ab("tab", id);
+    [w, h, vis, lang] = page();
+  }
   if (vis !== "visible") throw new StepError(`page is "${vis}" after restoring the window`);
   const english = !lang || lang.startsWith("en");
-  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
+  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : "; WARNING foreground lock held by another command, Chrome could take the keyboard"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
 }
 
 /** Every page in the same Chrome window as targetId, that one included. */
@@ -754,7 +769,7 @@ export async function waitForAnswer(opts: {
       lastTick = now;
       console.error(`  … still generating (${secs(now - start)})`);
     }
-    await Bun.sleep(1_000);
+    await pollPause();
   }
   const generated = secs(Date.now() - start);
   // AI Studio saves a new chat (and gives it a /prompts/<id> link) up to about a minute after the first answer.
