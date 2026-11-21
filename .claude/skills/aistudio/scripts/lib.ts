@@ -473,7 +473,7 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
   }
   if (vis !== "visible") throw new StepError(`page is "${vis}" after restoring the window`);
   const english = !lang || lang.startsWith("en");
-  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : "; WARNING foreground lock held by another command, Chrome could take the keyboard"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
+  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : ", foreground not locked (Windows refused)"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
 }
 
 /** Every page in the same Chrome window as targetId, that one included. */

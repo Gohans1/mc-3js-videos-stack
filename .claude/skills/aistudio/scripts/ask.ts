@@ -79,6 +79,7 @@ Options:
   --thinking <level>         e.g. ${THINKING.join(" | ")}; each model has its own list (new chat on ${DEFAULT_MODEL}: ${DEFAULT_THINKING}; otherwise the chat's own)
   --media <resolution>       ${MEDIA.join(" | ")} (new chat default ${DEFAULT_MEDIA}; follow-up keeps the chat's)
   --system "<text>"          replace the chat's system instructions before sending ("" clears; saved with the chat on Run)
+  --system-file <file>       the same, read from a file (e.g. one of the skill's system/*.md)
   --tool <name>=<on|off>     switch a tool before sending, repeatable: ${Object.keys(TOOLS).join(" | ")} or its full name
                              (AI Studio carries the Google Search switch over to every new chat, so set it when it matters)
 Video files only (${VIDEO_EXT.join(" ")}):
@@ -109,6 +110,7 @@ function parse() {
         thinking: { type: "string" },
         media: { type: "string" },
         system: { type: "string" },
+        "system-file": { type: "string" },
         tool: { type: "string", multiple: true },
         fps: { type: "string" },
         start: { type: "string" },
@@ -149,6 +151,14 @@ const tools = (opts.tool ?? []).map((t) => {
   return { name, on: state === "on" };
 });
 if (new Set(tools.map((t) => t.name)).size < tools.length) usage("--tool names a tool twice");
+const systemFile = opts["system-file"];
+if (systemFile !== undefined && opts.system !== undefined)
+  usage("--system and --system-file both set the system instructions; pick one");
+if (systemFile !== undefined && !existsSync(systemFile))
+  usage(`system file not found: ${systemFile}`);
+const system = systemFile === undefined ? opts.system : readFileSync(systemFile, "utf8");
+// An empty file is a template not written yet; clearing the instructions takes --system "".
+if (systemFile !== undefined && !system!.trim()) usage(`system file is empty: ${systemFile}`);
 
 if (opts.collect) {
   if (
@@ -158,7 +168,7 @@ if (opts.collect) {
     opts.model ||
     opts.thinking ||
     opts.media ||
-    opts.system !== undefined ||
+    system !== undefined ||
     tools.length ||
     videoOptions
   ) {
@@ -189,7 +199,7 @@ if (opts.collect) {
   }
   if (opts.chat && !args.length && promptFile === undefined) {
     mode = "collect";
-    if (opts.thinking || opts.media || opts.system !== undefined || tools.length || videoOptions)
+    if (opts.thinking || opts.media || system !== undefined || tools.length || videoOptions)
       usage("collect mode sends nothing, so it takes no settings");
   } else {
     if (!prompt.trim()) usage("the prompt is empty");
@@ -320,9 +330,12 @@ if (mode === "new") {
 
 if (thinking) add("set thinking level", () => selectOption("thinking", thinking));
 if (media) add("set media resolution", () => selectOption("media", media));
-if (opts.system !== undefined) {
-  const text = opts.system;
-  add("set system instructions", async () => `${(await systemInstructions(text)).length} chars`);
+if (system !== undefined) {
+  add(
+    "set system instructions",
+    async () =>
+      `${(await systemInstructions(system)).length} chars${systemFile === undefined ? "" : ` from ${systemFile}`}`,
+  );
 }
 for (const { name, on } of tools) add(`turn ${name} ${on ? "on" : "off"}`, () => setTool(name, on));
 
