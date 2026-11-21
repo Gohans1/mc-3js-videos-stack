@@ -268,6 +268,32 @@ test("qc vs measures sharpness on both at the same size, over the whole frame an
   }
 }, 30_000);
 
+// a set lit or painted off the reference's: the same part of both, in numbers rather than by eye
+test("qc vs --region gives that part's mean colour and brightness beside the reference's", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const video = greyReference(dir);
+    const ours = join(dir, "still_0.5s.jpg");
+    makePng(
+      ours,
+      "img = Image.new('RGB', (90, 160), (120, 120, 120))\nImageDraw.Draw(img).rectangle([0, 0, 44, 79], fill=(240, 120, 60))",
+    );
+    const res = runQc(["vs", video, ours, "--at", "0.5", "--region", "0,0,0.5,0.5", "--json"]);
+    expect(res.status).toBe(0);
+    const { region } = JSON.parse(res.stdout);
+    expect(region.rgb.ours[0]).toBeGreaterThan(230);
+    expect(region.rgb.ours[2]).toBeLessThan(70);
+    for (const channel of region.rgb.reference) expect(Math.abs(channel - 120)).toBeLessThan(6);
+    expect(region.lumaRatio).toBeGreaterThan(1.1);
+    const said = runQc(["vs", video, ours, "--at", "0.5", "--region", "0,0,0.5,0.5"]);
+    expect(said.stdout).toMatch(
+      /in 0,0,0\.5,0\.5: rgb ours 2\d\d[.\d]*,1\d\d[.\d]*,\d+[.\d]* reference 1\d\d/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test("qc vs refuses a second past the reference's end", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
   try {

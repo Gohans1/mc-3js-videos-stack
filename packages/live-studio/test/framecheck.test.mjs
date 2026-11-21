@@ -81,17 +81,46 @@ const flip = (file) => {
   ]);
 };
 
+// a remake copies its reference's moves: a jump the reference makes at the same heard second is not the first to look at
+test("a jump the reference makes too is said so; one it does not is OURS ONLY", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  mkdirSync(join(dir, "references"));
+  flip(join(dir, "references/ref.mp4"));
+  const same = framecheck(dir);
+  assert.equal(same.status, 0, same.stdout + same.stderr);
+  assert.match(same.stdout, /JUMP 1\.00: .*; ref jumps too/);
+  media(join(dir, "calm.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const calm = framecheck(dir, "--vs", "calm.mp4", "--json");
+  assert.equal(calm.status, 0, calm.stdout + calm.stderr);
+  const report = JSON.parse(calm.stdout);
+  assert.equal(report.reference, "calm.mp4");
+  const jump = report.findings.find((f) => f.kind === "JUMP");
+  assert.equal(jump.reference.ours, true);
+  assert.match(jump.reference.said, /^OURS ONLY: the reference changes 0\.0% a frame here$/);
+});
+
 test("a SPAN run's video is measured on the film's clock, with only the cuts inside it", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/span_9-11.mp4"));
-  writeFileSync(join(dir, "renders/cuts.json"), "[3, 50]");
+  const cuts = join(dir, "renders/cuts.json");
+  writeFileSync(cuts, "[3, 50]");
+  // written before the span, the list is the render's own
+  const before = new Date(Date.now() - 60_000);
+  utimesSync(cuts, before, before);
   const out = framecheck(dir, "renders/span_9-11.mp4");
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /film seconds from 9 s on \(the span's start\)/);
   assert.match(out.stdout, /0 cuts known/);
   assert.match(out.stdout, /JUMP 10\.00/);
-  // cuts.json is newer than the span: its cuts are not this video's, and the hint says none was left out
-  assert.match(out.stdout, /(a planned cut or freeze is fine)/);
+  assert.match(out.stdout, /\(the render records no cut here; a planned freeze or pop can stay\)/);
 });
 
 test("a fault's picture is the frame before it, the frame, and the frame after", (t) => {

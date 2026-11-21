@@ -4208,6 +4208,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     ],
     flags: [
       { key: "--json", flag: "--json", label: "JSON Report", type: "boolean", tier: "common" },
+      {
+        key: "--vs",
+        flag: "--vs",
+        label: "Reference Video (default references/)",
+        type: "string",
+        tier: "advanced",
+        placeholder: "references/ref.mp4",
+      },
     ],
     env: [
       {

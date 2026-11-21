@@ -247,9 +247,16 @@ def cmd_vs(
     if not (0 <= x < 1 and 0 <= y < 1 and 0 < rw <= 1 - x + 1e-9 and 0 < rh <= 1 - y + 1e-9):
       raise ValueError(f"--region {region_raw}: x,y,w,h in 0..1 inside the frame")
     box = (round(x * w), round(y * h), max(round(x * w) + 3, round((x + rw) * w)), max(round(y * h) + 3, round((y + rh) * h)))
-    sr = _sharpness(_luma(arr_r[box[1]:box[3], box[0]:box[2]]))
-    so = _sharpness(_luma(arr_o[box[1]:box[3], box[0]:box[2]]))
-    out["region"] = {"rect": region_raw, "reference": round(sr, 2), "ours": round(so, 2), "sharpnessRatio": _ratio(so, sr)}
+    part_r, part_o = arr_r[box[1]:box[3], box[0]:box[2]], arr_o[box[1]:box[3], box[0]:box[2]]
+    sr, so = _sharpness(_luma(part_r)), _sharpness(_luma(part_o))
+    rgb = lambda a: [round(float(v), 1) for v in a.reshape(-1, 3).mean(axis=0)]  # noqa: E731
+    lr, lo = float(_luma(part_r).mean()), float(_luma(part_o).mean())
+    out["region"] = {
+      "rect": region_raw, "reference": round(sr, 2), "ours": round(so, 2), "sharpnessRatio": _ratio(so, sr),
+      # a set lit or painted off the reference's shows here: the mean colour and brightness of the same part
+      "rgb": {"reference": rgb(part_r), "ours": rgb(part_o)},
+      "luma": {"reference": round(lr, 1), "ours": round(lo, 1)}, "lumaRatio": _ratio(lo, lr),
+    }
   if out_path:
     header_h, gap = 36, 12
     diff = Image.fromarray(np.clip(np.abs(arr_o - arr_r) * 3, 0, 255).astype(np.uint8))
@@ -291,7 +298,7 @@ def main() -> int:
   p_vs.add_argument("ours", help="Our still or poster")
   p_vs.add_argument("--out", help="Output path for the reference | ours | diff sheet")
   p_vs.add_argument("--picture-height", type=int, help="Lines of picture in ours, above a draft's strip")
-  p_vs.add_argument("--region", help="x,y,w,h in 0..1: sharpness of the subject there too")
+  p_vs.add_argument("--region", help="x,y,w,h in 0..1: sharpness, mean colour and brightness there too")
 
   args = parser.parse_args()
   try:

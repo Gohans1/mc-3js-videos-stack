@@ -66,7 +66,9 @@ Builds the film with the studio's own bundler, opens it in headless Chrome on th
 Nothing is written outside the film. Options are environment variables:
   AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)
   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
-                             A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
+                             A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot. The
+                             picture is the frame's top at the film's ratio (720x1280 of a 9:16 draft's 720x1352):
+                             crop=iw:iw*16/9:0:0 (16:9: iw*9/16); framecheck, reference compare and REF= cut it off
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
   SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
@@ -82,7 +84,8 @@ Nothing is written outside the film. Options are environment variables:
   REF=references/ref.mp4     stills/poster only: each picture beside the reference's frame at the same second (its exact
                              frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
                              sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
-                             says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well
+                             says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
+                             brightness ours/reference
   COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
@@ -1090,7 +1093,7 @@ const nextHint =
       : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
@@ -1161,6 +1164,11 @@ if (!failed && vsVideo && stillsWritten.length) {
       failed = true;
     }
   }
+  // the pairs come after the stills: the next step stays the last line
+  if (!failed && !chunks && !span)
+    console.log(
+      `next: open ${stillsWritten.length > 1 ? "the renders/vs_*.jpg pictures" : `renders/vs_${basename(stillsWritten[0], extname(stillsWritten[0]))}.jpg`} to look (reference | ours | diff)${nextHint}`,
+    );
 }
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {

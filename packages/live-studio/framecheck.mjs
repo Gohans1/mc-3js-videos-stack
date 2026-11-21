@@ -4,9 +4,10 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { basename, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
-import { meter } from "./checks/frames.mjs";
+import { JUMP_MIN, meter } from "./checks/frames.mjs";
 import { cliArgs, envTypos, jsonFile, needFilm, secondArg } from "./src/cli.mjs";
 import { ratioOf, sizeOf } from "./src/frame.ts";
+import { referenceVideo } from "./src/ref-cuts.mjs";
 import { staleVideo } from "./src/stale.mjs";
 import { startJob } from "./src/tell.mjs";
 import { filmVideo, probeVideo, renderCuts } from "./src/video.mjs";
@@ -18,11 +19,16 @@ flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs).
                                              (c02: 60 s, span_40-44.mp4: 40 s), START=60 says it for any other video
 A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, the whole picture.
   bun run framecheck [video] --json          JSON report on stdout; progress on stderr
+  bun run framecheck [video] --vs <ref.mp4>  weigh each JUMP and FLASH against the reference at the same heard second
+                                             (a current render does it by itself with the film's references/ video):
+                                             "ref jumps too" is a move the remake copies, "OURS ONLY" a pop to look at
+                                             first; OURS ONLY faults get the strips first
 Saves each run's report and up to 12 fault strips in renders/framecheck_*/. A current render can use its own cut metadata to skip abrupt changes near planned cuts. External files use file seconds and the full frame.
 START gives a manual time offset. Use sheet <video> frames for native image detail at a precise requested time.
 Render without LIST=1: the shot list changes the picture. Exit 0 means measurement finished; read the findings.`;
-const args = cliArgs(HELP, ["--json"], 1);
-const videoArg = args.find((a) => a !== "--json");
+const args = cliArgs(HELP, ["--json", "--vs <video>"], 1);
+const vsAt = args.indexOf("--vs");
+const videoArg = args.find((a, i) => !a.startsWith("--") && (vsAt < 0 || i !== vsAt + 1));
 const log = args.includes("--json") ? console.error : console.log;
 envTypos(["START", "LIVE_PROJECT"]);
 needFilm(process.env.LIVE_PROJECT);
@@ -102,6 +108,53 @@ const [w, h] = sizeOf(ratio, 192);
 const tall = ratio === "9:16" ? "16/9" : "9/16";
 const crop = useLayout ? `crop=iw:min(ih\\,trunc(iw*${tall}/2)*2):0:0,` : "";
 const filter = `showinfo=checksum=0,${crop}scale=${w}:${h}:flags=area`;
+// the reference's frame-to-frame change (mean per pixel, 0-1) at the film's rate from `from` s, filled to this shape
+function refChanges(file, from, seconds) {
+  const r = meter(w, h);
+  return new Promise((done, fail) => {
+    const ff = spawn("ffmpeg", [
+      "-v",
+      "error",
+      "-ss",
+      String(from),
+      "-t",
+      String(seconds),
+      "-i",
+      file,
+      "-an",
+      "-vf",
+      `fps=${fps},scale=${w}:${h}:force_original_aspect_ratio=increase:flags=area,crop=${w}:${h}`,
+      "-f",
+      "rawvideo",
+      "-pix_fmt",
+      "rgb24",
+      "-",
+    ]);
+    const limit = setTimeout(() => {
+      ff.kill();
+      fail(new Error("ffmpeg took over 5 minutes"));
+    }, 300e3);
+    let held = Buffer.alloc(0),
+      said = "";
+    ff.stdout.on("data", (d) => {
+      held = Buffer.concat([held, d]);
+      while (held.length >= size) {
+        r.push(held.subarray(0, size));
+        held = held.subarray(size);
+      }
+    });
+    ff.stderr.on("data", (d) => (said = (said + d).slice(-500)));
+    ff.on("error", (err) => {
+      clearTimeout(limit);
+      fail(err);
+    });
+    ff.on("close", (code) => {
+      clearTimeout(limit);
+      if (code !== 0) fail(new Error(`ffmpeg exited ${code}: ${said.trim()}`));
+      else done(r.report(fps).D);
+    });
+  });
+}
 const cutInfo = timeline ? renderCuts(PROJECT, video) : null;
 if (cutInfo?.reason) log(cutInfo.reason);
 const cuts = (cutInfo?.times ?? []).map((c) => c - START);
@@ -184,7 +237,57 @@ try {
 
 // only the cuts this video holds (nearCut in checks/frames.mjs reaches 1.5 frames either side)
 const activeCuts = cuts.filter((c) => c >= times[0] - 1.5 / fps && c <= times.at(-1) + 2.5 / fps);
-const { lines, faults } = m.report(fps, activeCuts, times, lastDuration);
+const { lines, faults, D } = m.report(fps, activeCuts, times, lastDuration);
+// the reference at the same heard seconds: a jump or flash it has too is a move the remake copies, one it has not is ours
+const refFile =
+  vsAt >= 0 ? resolve(PROJECT, args[vsAt + 1]) : timeline ? referenceVideo(PROJECT) : null;
+const refShown = vsAt >= 0 ? args[vsAt + 1] : refFile;
+const sudden = faults.filter((x) => x.kind === "JUMP" || x.kind === "FLASH");
+if (refFile && sudden.length) {
+  const path = resolve(PROJECT, refFile);
+  if (!existsSync(path)) {
+    console.error(`no ${refShown}: --vs takes the reference video, as references/ref.mp4`);
+    process.exit(2);
+  }
+  const from = Math.max(0, START + times[0] - 0.5);
+  let refD = [];
+  try {
+    refD = await refChanges(path, from, START + times.at(-1) + 0.5 - from);
+  } catch (e) {
+    log(`the reference could not be read (${e.message}); faults are not weighed against it`);
+  }
+  for (const x of refD.length ? sudden : []) {
+    const k = Math.round((x.t + START - from) * fps);
+    const near = refD.slice(Math.max(1, k - 3), k + 4);
+    if (!near.length) {
+      x.ref = { said: "the reference ends before here" };
+      continue;
+    }
+    const peak = Math.max(...near);
+    const around = [
+      ...refD.slice(Math.max(1, k - 12), Math.max(1, k - 3)),
+      ...refD.slice(k + 4, k + 13),
+    ].toSorted((a, b) => a - b);
+    const median = Math.max(around[Math.floor(around.length / 2)] ?? 0, 0.002);
+    // ours: the change of the frame flagged (a flash's way back too)
+    const i = times.indexOf(x.t);
+    const own = x.kind === "FLASH" ? Math.max(D[i] ?? 0, D[i + 1] ?? 0) : (D[i] ?? 0);
+    const spike = peak > JUMP_MIN && peak > 3 * median;
+    const asMuch = peak >= 0.75 * own;
+    const pct = `${(peak * 100).toFixed(1)}%`;
+    x.ref = {
+      change: peak,
+      times: peak / median,
+      ours: !spike && !asMuch,
+      said: spike
+        ? `ref jumps too (${pct}, x${(peak / median).toFixed(1)} its median)`
+        : asMuch
+          ? `the reference moves as much here (${pct} a frame)`
+          : `OURS ONLY: the reference changes ${pct} a frame here`,
+    };
+  }
+  for (const [i, x] of faults.entries()) if (x.ref) lines[i + 1] += `; ${x.ref.said}`;
+}
 // film seconds in what is printed and in the file names; the video's own seconds to seek in it
 const film = (s) => (s + START).toFixed(2);
 const exact = (s) => (s + START).toFixed(9).replace(/\.?0+$/, "");
@@ -199,7 +302,11 @@ mkdirSync(RENDERS, { recursive: true });
 const out = mkdtempSync(join(RENDERS, "framecheck_"));
 const strips = new Map();
 const artifacts = [];
-const stripFaults = faults.slice(0, 12);
+// a pop the reference does not have is the one to look at first
+const stripFaults = faults
+  .toSorted((a, b) => Number(Boolean(b.ref?.ours)) - Number(Boolean(a.ref?.ours)))
+  .slice(0, 12)
+  .toSorted((a, b) => a.t - b.t);
 const formats = new Map();
 let formatError;
 if (stripFaults.length) {
@@ -386,6 +493,7 @@ const report = {
   timeline: timeline ? "current" : stale ? "stale" : render ? "manual-offset" : "external",
   stale,
   cuts: cutInfo,
+  reference: refFile && sudden.length ? refShown.replaceAll("\\", "/") : null,
   cutsUsed: activeCuts.map((c) => c + START),
   findings: faults.map((x) => ({
     kind: x.kind,
@@ -393,6 +501,7 @@ const report = {
     time: x.t + START,
     ...(x.to !== undefined && { fileEnd: x.to, end: x.to + START }),
     detail: x.say,
+    ...(x.ref && { reference: x.ref }),
     strip: strips.get(x) ?? null,
   })),
   artifactErrors: artifacts,

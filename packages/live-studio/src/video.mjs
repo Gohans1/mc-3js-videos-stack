@@ -108,6 +108,22 @@ export const filmVideo = (root, video) => {
   };
 };
 
+// The picture of a film render a draft's strip (heard time, shot) sits under: its top { width, height } at the film's
+// ratio (package.json "live-studio".ratio, 16:9 by default), or null when the video is no film render or has no strip
+export const filmPicture = (root, video) => {
+  const file = resolve(root, video);
+  if (!filmVideo(root, file)) return null;
+  const size = probeVideo(file);
+  if (!size) return null;
+  let ratio = "16:9";
+  try {
+    ratio =
+      JSON.parse(readFileSync(join(root, "package.json"), "utf8"))?.["live-studio"]?.ratio ?? ratio;
+  } catch {}
+  const height = Math.trunc((size.width * (ratio === "9:16" ? 16 / 9 : 9 / 16)) / 2) * 2;
+  return height < size.height ? { width: size.width, height } : null;
+};
+
 // A video's stream as ffprobe reads it ({ width, height, fps }), or null for a picture (ffprobe reads one as a one-frame
 // video stream: image2, png_pipe, ...) or a file it cannot read
 export const probeVideo = (file) => {

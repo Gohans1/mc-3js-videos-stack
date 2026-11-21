@@ -20,6 +20,7 @@ import { killProcessTree } from "../../packages/live-studio/src/kill-process.mjs
 import { startJob } from "../../packages/live-studio/src/tell.mjs";
 import { compactJson } from "../../packages/live-studio/src/timeline_file.mjs";
 import { clockForTimeline } from "../../packages/live-studio/src/timing-state.mjs";
+import { filmPicture } from "../../packages/live-studio/src/video.mjs";
 import { writeAtomicSync } from "../../packages/live-studio/src/voice-map.mjs";
 import { mediaPython } from "../media/home.mjs";
 
@@ -408,12 +409,53 @@ console.error(
 const ended = await startJob(process.cwd(), `reference ${command}`, {
   say: `Measuring ${basename(files[0])}`,
 });
+// a film draft is its picture over a strip naming the heard time and shot: the measure compares the picture alone
+const measured = files.map((f) => resolve(f));
+const picture = command === "compare" ? filmPicture(process.cwd(), measured[1]) : null;
+if (picture) {
+  const cropped = join(out, `${basename(files[1], extname(files[1]))}-picture.mp4`);
+  const c = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-y",
+      "-i",
+      measured[1],
+      "-map",
+      "0:V:0",
+      "-map",
+      "0:a?",
+      "-vf",
+      `crop=${picture.width}:${picture.height}:0:0`,
+      "-c:v",
+      "libx264",
+      "-crf",
+      "12",
+      "-preset",
+      "veryfast",
+      "-c:a",
+      "copy",
+      cropped,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: minutes * 60_000 },
+  );
+  if (c.status === 0) {
+    measured[1] = cropped;
+    console.error(
+      `reference: comparing ${files[1]}'s picture (${picture.width}x${picture.height}), without the draft's strip under it`,
+    );
+  } else
+    console.error(
+      `reference: could not cut the draft's strip off (${(c.stderr || c.error?.message || `exit ${c.status}`).trim()}); comparing the whole frame`,
+    );
+}
 const { status, stopped } = await runWorker(
   process.execPath,
   [
     worker,
     command,
-    ...files.map((f) => resolve(f)),
+    ...measured,
     "--out",
     out,
     ...(values.fit ? ["--fit"] : []),

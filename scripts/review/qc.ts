@@ -65,8 +65,9 @@ Subcommands:
   compare <before> <after>   Pixel diff stats + side-by-side PNG (--out <path>, --threshold 0..255, default 4)
   vs <reference> <image>     The reference's frame at --at seconds (its exact frame index, not ffmpeg -ss rounding)
                              beside ours at ours' size: luma p5/p50/p95, saturation p50/p95, sharpness (Laplacian
-                             variance; ours/reference under 1 is softer) for the frame and --region (0..1), and a
-                             reference | ours | diff sheet (--out). --picture-height drops a draft still's strip
+                             variance; ours/reference under 1 is softer) for the frame and --region (0..1; with its
+                             mean rgb and brightness ours/reference, for a set lit or painted off the reference's),
+                             and a reference | ours | diff sheet (--out). --picture-height drops a draft still's strip
   motion                     Audit camera/key speeds & pops from cam.json (--cam <file>, --from/--to <s>)
 
 Video QC options:
@@ -524,7 +525,12 @@ function formatVs(r: {
   size: { width: number; height: number };
   sharpnessRatio: number | null;
   meanAbsDelta: number;
-  region?: { rect: string; sharpnessRatio: number | null };
+  region?: {
+    rect: string;
+    sharpnessRatio: number | null;
+    rgb: { reference: number[]; ours: number[] };
+    lumaRatio: number | null;
+  };
   out?: string;
 }): string {
   const tones = (m: Tones) =>
@@ -538,6 +544,11 @@ function formatVs(r: {
     `  reference ${tones(r.reference.metrics)}`,
     `  ours      ${tones(r.ours.metrics)} (luma p5/p50/p95, sat p50/p95)`,
     `  sharpness ours/reference ${soft(r.sharpnessRatio)}${r.region ? `; in ${r.region.rect} ${soft(r.region.sharpnessRatio)}` : ""}; mean delta ${r.meanAbsDelta}`,
+    ...(r.region
+      ? [
+          `  in ${r.region.rect}: rgb ours ${r.region.rgb.ours.join(",")} reference ${r.region.rgb.reference.join(",")}, brightness ours/reference ${r.region.lumaRatio ?? "n/a"}`,
+        ]
+      : []),
     ...(r.out ? [`  wrote ${r.out}`] : []),
   ].join("\n");
 }
