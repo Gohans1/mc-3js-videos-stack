@@ -50,7 +50,8 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
   bun run render stills       stills only, to renders/still_<s>s.jpg (the last run's stills are cleared first)
   bun run render clip         the film as 30 s H.264 chunks in renders/chunks/, joined into renders/draft_video.mp4
   bun run render captions     renders/draft_video.srt alone, in a second
-  bun run render poster --at 12  renders/poster_12s.png: one frame as the upload draws it (its size, no strip, 8 sub-frames),
+  bun run render poster --at 12
+                              renders/poster_12s.png: one frame as the upload draws it (its size, no strip, 8 sub-frames),
                               lossless; a thumbnail, or a close look at a detail the 1280 draft blurs
   bun run render final        the film for upload, only when the creator asks for it (a 30 s chunk at 16 sub-frames took
                               4.5 min on an RTX 2060, against 10 s for a draft one; the GPU fan runs loud meanwhile):

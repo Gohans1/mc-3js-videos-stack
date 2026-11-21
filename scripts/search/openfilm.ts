@@ -72,7 +72,7 @@ export const openFilmSearch = async (
     return { ...result, notes: ["OpenFilm skipped: query needs 1–2048 UTF-8 bytes"] };
   const file =
     options.cache ?? resolve(ROOT, process.env.MC_FIND_CACHE || ".studio/openfilm-search.sqlite");
-  const offline = options.offline ?? process.env.MC_FIND_OFFLINE === "1";
+  const offline = options.offline ?? false;
   if (offline && !existsSync(file))
     return { ...result, notes: ["OpenFilm offline: no search cache"] };
   let db: Database | undefined;

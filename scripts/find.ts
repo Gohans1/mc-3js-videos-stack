@@ -3669,7 +3669,7 @@ export async function run(
   ) {
     const found = candidates.some((entry) => openFilmCategory(entry))
       ? await lookup(query, candidates, {
-          offline: set.has("--offline") || process.env.MC_FIND_OFFLINE === "1",
+          offline: set.has("--offline"),
         })
       : { hits: [], categories: [], notes: [] };
     return dualSearchOutput(query, matches, found, {
