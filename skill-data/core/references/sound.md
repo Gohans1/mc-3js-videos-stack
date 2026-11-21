@@ -84,7 +84,7 @@ bun run skills path earshot returns the skill directory; open SKILL.md and its r
 | Many files or cues | One Python process loads the models once: earshot's own interpreter (~/.local/share/earshot-venv/Scripts/python.exe on Windows, bin/python elsewhere) runs `from earshot import api`; a CLI call per file reloads them |
 | Pick music against a reference | Separate the reference's music stem first (bun run media separate references/ref.mp4); with its voice and effects in, every candidate reads as an outlier |
 | Compare before/after | Keep renders/before.mp4 before remixing; earshot ab renders/before.mp4 renders/draft.mp4 --query "<sound description>" --a-start 30 --a-end 36 --b-start 30 --b-end 36 |
-| Synthesize when appropriate | earshot sfx list --kind hit, then earshot sfx render <id> -o sound/sfx/<name>.wav; label this synthesized audio |
+| Make or build a sound | earshot make "<words>" -o sound/sfx/<name>.wav (922 designs, no model) or earshot build "<words>" -o sound/sfx/<name>.wav --part "..." for missing sounds; earshot sfx list/render for the 252-sound bank; label made audio |
 
 Describe sound in English, such as "a heavy iron door slamming in a stone room", rather than its story role. Rank candidates together to avoid repeated model loads; file caching does not imply the model stays loaded between CLI calls.
 

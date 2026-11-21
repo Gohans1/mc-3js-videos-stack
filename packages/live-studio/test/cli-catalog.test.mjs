@@ -2134,4 +2134,103 @@ describe("cli-catalog resolver rules", () => {
     const collabBare = buildCliInvocation({ commandId: "collab" }, BASE_CONTEXT);
     expect(collabBare.validationErrors).toEqual(["Choose a collab subcommand first."]);
   });
+
+  test("resolves earshot 1.0 make, sounds, recipe, build, and pack subcommands", () => {
+    const makePlain = buildCliInvocation(
+      {
+        commandId: "earshot",
+        subcommandPath: ["make"],
+        args: { want: "a soft wooden knock" },
+        flags: { "-o": "sound/sfx/knock.wav", "--n": 3 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(makePlain.validationErrors).toEqual([]);
+    expect(makePlain.meta.effect).toBe("write");
+    expect(makePlain.meta.speed).toBe("short");
+    expect(makePlain.argvTokens).toEqual([
+      "make",
+      "a soft wooden knock",
+      "-o",
+      "sound/sfx/knock.wav",
+      "--n",
+      "3",
+    ]);
+
+    const makeListen = buildCliInvocation(
+      {
+        commandId: "earshot",
+        subcommandPath: ["make"],
+        args: { want: "a soft wooden knock" },
+        flags: { "-o": "sound/sfx/knock.wav", "--listen": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(makeListen.meta.speed).toBe("long");
+
+    const buildParts = buildCliInvocation(
+      {
+        commandId: "earshot",
+        subcommandPath: ["build"],
+        args: { want: "a stampede of horses" },
+        flags: {
+          "-o": "sound/sfx/stampede.wav",
+          "--part": ["hundreds of hoofbeats", "a low rumble"],
+          "--without": ["thunder/roll", "horse"],
+          "--no-listen": true,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(buildParts.validationErrors).toEqual([]);
+    expect(buildParts.meta.speed).toBe("short");
+    expect(buildParts.argvTokens).toEqual([
+      "build",
+      "a stampede of horses",
+      "-o",
+      "sound/sfx/stampede.wav",
+      "--part",
+      "hundreds of hoofbeats",
+      "--part",
+      "a low rumble",
+      "--without",
+      "thunder/roll",
+      "horse",
+      "--no-listen",
+    ]);
+
+    const soundsSearch = buildCliInvocation(
+      { commandId: "earshot", subcommandPath: ["sounds"], flags: { "--search": "footstep" } },
+      BASE_CONTEXT,
+    );
+    expect(soundsSearch.validationErrors).toEqual([]);
+    expect(soundsSearch.meta.effect).toBe("read");
+
+    const recipeList = buildCliInvocation(
+      { commandId: "earshot", subcommandPath: ["recipe"], flags: { "--list": true } },
+      BASE_CONTEXT,
+    );
+    expect(recipeList.validationErrors).toEqual([]);
+    expect(recipeList.meta.effect).toBe("read");
+
+    const packSprite = buildCliInvocation(
+      {
+        commandId: "earshot",
+        subcommandPath: ["pack"],
+        args: { files: ["a.wav", "b.wav"] },
+        flags: { "-o": "sprite.ogg", "--gap": 0.1 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(packSprite.validationErrors).toEqual([]);
+    expect(packSprite.argvTokens).toEqual([
+      "pack",
+      "a.wav",
+      "b.wav",
+      "-o",
+      "sprite.ogg",
+      "--gap",
+      "0.1",
+    ]);
+  });
 });

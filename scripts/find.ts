@@ -1769,7 +1769,7 @@ const BGM_MOOD =
 
 // What to do when nothing in the vault fits, for the kinds asked
 const MAKE_SOUND =
-  'a sound, in the film folder: bun run sfx:get find "<words>" (a Freesound CC0 recording; pin it, then bun run sfx:get), or earshot sfx list --kind hit then earshot sfx render <id> -o sound/sfx/<name>.wav (made in code); more: the real-sound skill (licensed recordings), the earshot skill (earshot forge), bun run skills get core --ref sound';
+  'a sound, in the film folder: bun run sfx:get find "<words>" (a Freesound CC0 recording; pin it, then bun run sfx:get), earshot make "<words>" -o sound/sfx/<name>.wav (922 designs, no model; earshot build if missing), or earshot sfx list --kind hit then earshot sfx render <id> -o sound/sfx/<name>.wav (bank); more: the real-sound skill (licensed recordings), the earshot skill (earshot make/build/forge), bun run skills get core --ref sound';
 const MAKE_MUSIC =
   "music: the real-sound skill (licensed tracks from composer libraries, cut at bar lines), saved in the film's own sound folder under bgm/ (sound/sfx/bgm/<group>/<name>.wav: a bed names it), its licence a row of sound/sfx/SOURCES.json; more: bun run skills get core --ref sound";
 const MAKE_MOCAP =
