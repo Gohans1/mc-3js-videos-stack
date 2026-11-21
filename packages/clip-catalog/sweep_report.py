@@ -1,6 +1,6 @@
 """Ranks clip-catalog/sweep.sh's retarget numbers: for each check, how many clips pass its limit and the worst ones (clip, value,
-second), so a retarget bug shows as a cluster to open in the lab (ENTRY=../../packages/clip-catalog/mocap.ts LAB_LIB=mixamo
-LAB_CLIP=<clip> LAB_FROM=<s-0.5> LAB_TO=<s+0.5>). Spins and jumps also rise on falls and flips where the source's shorter
+second), so a retarget bug shows as a cluster to open in the lab (--entry ../../packages/clip-catalog/mocap.ts --lab lib=mixamo
+--lab clip=<clip> --lab from=<s-0.5> --lab to=<s+0.5>). Spins and jumps also rise on falls and flips where the source's shorter
 limbs don't reach the floor yet: judge those by eye.
 python ../../packages/clip-catalog/sweep_report.py [lib] [--top N] [--only clip1,clip2]
 python ../../packages/clip-catalog/sweep_report.py --diff OLD.jsonl    regression check after a change to mc-actor/mocap.ts: move the
@@ -67,7 +67,7 @@ def main():
             diff(rows, a.diff)
         except (OSError, ValueError) as e:
             ap.error(str(e))
-        print("next: inspect changed clips with ENTRY=../../packages/clip-catalog/mocap.ts bun run render stills")
+        print("next: inspect changed clips with bun run render stills --entry ../../packages/clip-catalog/mocap.ts")
         return 0
     errors = [r for r in rows if "error" in r]
     rows = [r for r in rows if "error" not in r and (a.fights or not FIGHT.search(r["clip"]))]

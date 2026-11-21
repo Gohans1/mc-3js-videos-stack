@@ -592,7 +592,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   }, composite);
   draw.velocity = true;
   draw.velocityEffects = velocityEffect.effects;
-  // A draft frame's list (LIST=1): what is going on at t and which file holds it
+  // A draft frame's list (--list): what is going on at t and which file holds it
   draw.describe = (t) => {
     const idx = Math.max(0, shotAt(t)),
       s = SHOTS_OUT[idx],

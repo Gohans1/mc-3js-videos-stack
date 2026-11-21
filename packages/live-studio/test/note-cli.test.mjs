@@ -377,7 +377,7 @@ test("done enforces --after <image> or --no-after <reason>, stores custom cam/t,
   const missing = answer(dir, "done", "1", "moved bench right");
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /--after.*--no-after/);
-  assert.match(missing.stderr, /INSPECT=.*--cam/);
+  assert.match(missing.stderr, /--inspect .*--cam/);
 
   // Both --after and --no-after -> exit 2
   const both = answer(

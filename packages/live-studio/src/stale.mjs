@@ -231,8 +231,8 @@ export const staleVideo = (root, video) => {
   const again = where?.final
     ? "bun run render final draws it again"
     : where?.kind === "span"
-      ? `SPAN=${where.span.join(",")} bun run render clip draws it again`
-      : "bun run render clip draws it again (CHUNKS=<n> for one 30 s chunk only)";
+      ? `bun run render clip --span ${where.span.join(",")} draws it again`
+      : "bun run render clip draws it again (--chunks <n> for one 30 s chunk only)";
   if (!newest) return { file: sound, message: `${shown}: ${moved}; ${again}` };
   return {
     file: newest.rel,

@@ -138,7 +138,6 @@ console.log(await run(process.argv.slice(2), [entry], async()=>{throw new Error(
           BUN_OPTIONS: "--no-env-file",
           MC_VAULT_ROOT: join(root, "vault"),
           MC_VAULT_EXTERNAL: join(root, "vault"),
-          MC_FIND_OFFLINE: "0",
         },
         encoding: "utf8",
         timeout: 15000,

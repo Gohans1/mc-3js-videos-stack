@@ -177,7 +177,7 @@ def timeline_context(render_context, clock):
         context.update(status="stale", reason=render_context["stale"]["message"])
         return context, [], []
     if clock == "manual":
-        context.update(status="manual-offset", reason="START changes this render's offset; timeline associations omitted")
+        context.update(status="manual-offset", reason="--start changes this render's offset; timeline associations omitted")
         return context, [], []
     context["timeline"] = "fresh"
     scripts = Path(__file__).resolve().parents[1]
@@ -429,10 +429,9 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
     for i, t in enumerate(times):
         entry = {"requestedTime": t}
         entry["commands"] = {"frames": {
-            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t),
+            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t), "--start", seconds(start),
                      *(["--vs", str(Path(vs).resolve())] if vs else []),
                      *(["--grid", str(grid["step"]), "--crop", ",".join(map(str, grid["crop"]))] if grid else [])],
-            "env": {"START": seconds(start)},
         }}
         if t < at_end:
             entry["commands"]["at"] = {"argv": ["bun", "run", "at", seconds(t)]}

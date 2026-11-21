@@ -16,8 +16,8 @@ export const chunksOf = (duration: number, chunk: number, fps: number): [number,
     Math.min(frames, (i + 1) * per) - 1,
   ]);
 };
-// A SPAN=<from>,<to> run's frames, and its file named at the seconds its first frame and its end show, so framecheck and
-// sheet read the video's start from its name exactly (SPAN=10.01 starts on frame 300, 10 s: span_10-...). It ends on the
+// A --span <from>,<to> run's frames, and its file named at the seconds its first frame and its end show, so framecheck and
+// sheet read the video's start from its name exactly (--span 10.01 starts on frame 300, 10 s: span_10-...). It ends on the
 // film's last frame at the latest, as the page draws it
 export const spanOf = ([from, to]: [number, number], fps: number, lastFrame = Infinity) => {
   const first = Math.round(from * fps),

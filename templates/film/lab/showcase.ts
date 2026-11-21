@@ -63,7 +63,7 @@ const samples = {
 };
 const wanted = cfg.lab.demo;
 if (wanted && !Object.hasOwn(samples, wanted))
-  throw new Error("LAB_DEMO must be one of: " + Object.keys(samples).join(", "));
+  throw new Error("--lab demo= must be one of: " + Object.keys(samples).join(", "));
 for (const [name, setup] of Object.entries(samples)) {
   if (wanted && wanted !== name) continue;
   Object.assign(EDIT, structuredClone(original));

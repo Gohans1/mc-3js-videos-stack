@@ -1,5 +1,5 @@
 // @ts-nocheck
-// CHECK=text[:<from>,<to>], built in for every film: can each line of on-screen text be read where it sits? render.mjs
+// --check text[:<from>,<to>], built in for every film: can each line of on-screen text be read where it sits? render.mjs
 // hands over the lines to read (cfg.text: index, heard second fully on screen, size, colour); for each, the film is drawn
 // at that second with only that line, then with none, and checks/text.mjs measures the difference: its box against the
 // safe area (EBU R95's, or what YouTube's player covers in a Short), and the contrast of its letters against what is just around them. Reading time and size are

@@ -1181,7 +1181,7 @@ const TextItem = z
     at: z.tuple([z.number(), z.number(), z.number()]).optional(),
     in: TextFx.optional(),
     out: TextFx.optional(),
-    // false: decor not meant to be read (a sign in the world, a glitch); bun run check and CHECK=text leave it alone
+    // false: decor not meant to be read (a sign in the world, a glitch); bun run check and --check text leave it alone
     read: z.boolean().optional(),
   })
   .refine((it: any) => it.to > it.from, "to must come after from");

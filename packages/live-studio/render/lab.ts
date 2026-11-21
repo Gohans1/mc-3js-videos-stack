@@ -1,5 +1,5 @@
 // @ts-nocheck
-// What a page run by render.mjs talks to: the studio's own render page, or a film's lab page (ENTRY=lab/x.ts), which imports
+// What a page run by render.mjs talks to: the studio's own render page, or a film's lab page (--entry lab/x.ts), which imports
 // this as "live-studio/lab". The page runs in a headless Chrome; everything it says comes back to the terminal.
 export const post = (url, body) => fetch(url, { method: "POST", body });
 // lines go out one after another, so the terminal prints them in the order the page logged them

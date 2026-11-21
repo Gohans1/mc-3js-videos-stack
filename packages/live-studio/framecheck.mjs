@@ -16,7 +16,7 @@ const HELP = `Measure encoded picture faults: black frames, one-frame
 flashes, jumps away from cuts, shimmering, frozen stretches (checks/frames.mjs). Run inside the film.
   bun run framecheck                        renders/draft_video.mp4 (make it with bun run render clip)
   bun run framecheck renders/chunks/c02.mp4  any video of the film; a chunk or a span starts at its film second by itself
-                                             (c02: 60 s, span_40-44.mp4: 40 s), START=60 says it for any other video
+                                             (c02: 60 s, span_40-44.mp4: 40 s), --start 60 says it for any other video
 A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, the whole picture.
   bun run framecheck [video] --json          JSON report on stdout; progress on stderr
   bun run framecheck [video] --vs <ref.mp4>  weigh each JUMP and FLASH against the reference at the same heard second
@@ -26,14 +26,19 @@ A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, 
                                              beside them while the reference keeps moving (a stutter); those get
                                              the strips first
 Saves each run's report and up to 12 fault strips in renders/framecheck_*/. A render skips abrupt changes at the cuts it
-was drawn with, also a CHUNKS draft joining older chunks (stale: only its timeline links wait for a full render clip). External files use file seconds and the full frame.
-START gives a manual time offset. Use sheet <video> frames for native image detail at a precise requested time.
-Render without LIST=1: the shot list changes the picture. Exit 0 means measurement finished; read the findings.`;
-const args = cliArgs(HELP, ["--json", "--vs <video>"], 1);
+was drawn with, also a --chunks draft joining older chunks (stale: only its timeline links wait for a full render clip). External files use file seconds and the full frame.
+--start gives a manual time offset. Use sheet <video> frames for native image detail at a precise requested time.
+Render without --list: the shot list changes the picture. Exit 0 means measurement finished; read the findings.`;
+const args = cliArgs(HELP, ["--json", "--vs <video>", "--start <seconds>"], 1);
 const vsAt = args.indexOf("--vs");
-const videoArg = args.find((a, i) => !a.startsWith("--") && (vsAt < 0 || i !== vsAt + 1));
+const startAt = args.indexOf("--start");
+const startArg = startAt < 0 ? undefined : args[startAt + 1];
+const videoArg = args.find(
+  (a, i) =>
+    !a.startsWith("--") && (vsAt < 0 || i !== vsAt + 1) && (startAt < 0 || i !== startAt + 1),
+);
 const log = args.includes("--json") ? console.error : console.log;
-envTypos(["START", "LIVE_PROJECT"]);
+envTypos(["LIVE_PROJECT"]);
 needFilm(process.env.LIVE_PROJECT);
 
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
@@ -91,18 +96,17 @@ const shown = (videoArg ?? "renders/draft_video.mp4").replaceAll("\\", "/");
 const render = filmVideo(PROJECT, video);
 const stale = staleVideo(PROJECT, video);
 const where = render ?? { start: 0, final: false, mixed: false };
-const requestedStart =
-  process.env.START !== undefined ? secondArg("START", process.env.START) : where.start;
+const requestedStart = startArg !== undefined ? secondArg("--start", startArg) : where.start;
 const manual = Math.abs(requestedStart - where.start) > 1e-6;
 const START = manual ? requestedStart : where.start;
 const timeline = Boolean(render && !stale && !manual);
-// a render's own record holds for its frames however the film changed since (a CHUNKS run joins older chunks): its
+// a render's own record holds for its frames however the film changed since (a --chunks run joins older chunks): its
 // cuts, its picture's shape and its reference; the timeline rows and the studio marks are the current film's
 const ownRecord = Boolean(render && !manual);
 const clock = manual ? "manual" : render ? "film" : "file";
 if (START)
   log(
-    `${clock === "manual" ? "manual seconds" : "film seconds"} from ${START} s on (${process.env.START !== undefined ? "START" : `the ${where.kind}'s start`})`,
+    `${clock === "manual" ? "manual seconds" : "film seconds"} from ${START} s on (${startArg !== undefined ? "--start" : `the ${where.kind}'s start`})`,
   );
 else log(`Reading ${clock} seconds from 0`);
 if (stale) log(`STALE: ${stale.message}`);
@@ -565,8 +569,8 @@ await ended(
     : { say: `Frames of ${shown}: no black, flash, jump, shimmer or freeze`, level: "ok" },
 );
 // a mixed video (draft.mp4, final.mp4) gets its new picture through the mix again; the upload's picture goes on to deliver
-// a START said by hand goes on with the commands that read the same video's seconds
-const again = process.env.START !== undefined ? `START=${START} ` : "";
+// a --start said by hand goes on with the commands that read the same video's seconds
+const again = startArg !== undefined ? ` --start ${START}` : "";
 const mixed = where.mixed;
 const remix =
   where.final || mixed
@@ -585,7 +589,7 @@ const focus =
   faults[0];
 if (!timeline) {
   log(
-    `next: ${again}bun run sheet ${showVideo} ${focus ? `frames ${exact(focus.t)}` : "overview"} (inspect the encoded picture)`,
+    `next: bun run sheet ${showVideo} ${focus ? `frames ${exact(focus.t)}` : "overview"}${again} (inspect the encoded picture)`,
   );
 } else if (focus) {
   const time = exact(focus.t);
@@ -596,10 +600,10 @@ if (!timeline) {
   } catch {}
   const context = rows
     ? `bun run at ${time} names the timeline rows`
-    : `AT=${time} LIST=1 bun run render stills shows the live scene`;
+    : `bun run render stills --at ${time} --list shows the live scene`;
   const redraw = where.span
-    ? `SPAN=${where.span.join(",")} bun run render clip`
-    : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final" : "clip"}${remix}: chunk N is N*30 s on`;
+    ? `bun run render clip --span ${where.span.join(",")}`
+    : `bun run render ${where.final ? "final" : "clip"} --chunks ${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")}${remix}: chunk N is N*30 s on`;
   // checks/frames.mjs skips a flash or jump at a cut the render recorded, not a black or frozen run
   const cutsSaid = !cutInfo?.times
     ? "a planned cut or freeze is fine"
@@ -607,8 +611,8 @@ if (!timeline) {
       ? `a flash or jump at the render's ${activeCuts.length === 1 ? "cut" : `${activeCuts.length} cuts`} here is left out already; a planned freeze or pop can stay`
       : "the render records no cut here; a planned freeze or pop can stay";
   log(
-    `next: look at ${strips.has(focus) ? `${strips.get(focus)} first, the other strips beside it` : "the strips"}; ${context} (${cutsSaid}); if unintended, fix the scene and re-render that stretch (${redraw}), then ${again}bun run framecheck${videoArg ? ` ${showVideo}` : ""} again`,
+    `next: look at ${strips.has(focus) ? `${strips.get(focus)} first, the other strips beside it` : "the strips"}; ${context} (${cutsSaid}); if unintended, fix the scene and re-render that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${showVideo}` : ""}${again} again`,
   );
 }
 // a clean file is not a good one: what the meter cannot judge is left to the eye
-else log(`next: inspect the picture: ${again}bun run sheet ${showVideo} overview${upload}`);
+else log(`next: inspect the picture: bun run sheet ${showVideo} overview${again}${upload}`);

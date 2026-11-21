@@ -13,7 +13,7 @@ test("render cost names the stretch between cuts that draws over twice the media
   }
   assert.equal(
     cost.line(),
-    "cost: 30 ms a sample, the median of 3 of 4 stretches between cuts, the ones not named here; 4.00-5.97 s draws 110 ms (x3.7): AT=4.00 LIST=1 bun run render stills shows what is in view there",
+    "cost: 30 ms a sample, the median of 3 of 4 stretches between cuts, the ones not named here; 4.00-5.97 s draws 110 ms (x3.7): bun run render stills --at 4.00 --list shows what is in view there",
   );
 });
 
@@ -38,13 +38,13 @@ test("render cost over one stretch says its ms alone, and nothing when nothing w
   assert.equal(renderCost([1]).line(), "");
 });
 
-// a SPAN across one cut draws two stretches: the heavy one is judged against the other, not against itself
+// a --span across one cut draws two stretches: the heavy one is judged against the other, not against itself
 test("render cost names the heavy one of two stretches, and weighs a whip's stretch a sample", () => {
   const two = renderCost([3]);
   for (let f = 0; f < 180; f++) two.add(f / 30, f < 90 ? 30 : 110, 1);
   assert.equal(
     two.line(),
-    "cost: 30 ms a sample, the median of 1 of 2 stretches between cuts, the ones not named here; 3.00-5.97 s draws 110 ms (x3.7): AT=3.00 LIST=1 bun run render stills shows what is in view there",
+    "cost: 30 ms a sample, the median of 1 of 2 stretches between cuts, the ones not named here; 3.00-5.97 s draws 110 ms (x3.7): bun run render stills --at 3.00 --list shows what is in view there",
   );
   // a whip stretch drawn at 8 samples a frame costs 8 times a frame, and the same a sample
   const whip = renderCost([3]);
@@ -61,7 +61,7 @@ test("render cost names every heavy stretch when they outnumber the light ones",
   for (let f = 0; f < 180; f++) cost.add(f / 30, f < 60 ? 30 : 110, 1);
   assert.equal(
     cost.line(),
-    "cost: 30 ms a sample, the median of 1 of 3 stretches between cuts, the ones not named here; 2.00-3.97 s draws 110 ms (x3.7), 4.00-5.97 s draws 110 ms (x3.7): AT=2.00 LIST=1 bun run render stills shows what is in view there",
+    "cost: 30 ms a sample, the median of 1 of 3 stretches between cuts, the ones not named here; 2.00-3.97 s draws 110 ms (x3.7), 4.00-5.97 s draws 110 ms (x3.7): bun run render stills --at 2.00 --list shows what is in view there",
   );
 });
 

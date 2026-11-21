@@ -77,15 +77,12 @@ test("QC exposes native inspection commands and render preserves evidence settin
     {
       commandId: "render",
       args: { target: "stills" },
-      env: { CROP: "0,0,0.5,0.5", COMPARE: true },
+      flags: { "--crop": "0,0,0.5,0.5", "--compare": true },
     },
     BASE_CONTEXT,
   );
   expect(render.validationErrors).toEqual([]);
-  expect(render.envEntries).toEqual([
-    ["CROP", "0,0,0.5,0.5"],
-    ["COMPARE", "1"],
-  ]);
+  expect(render.argvTokens).toEqual(["stills", "--crop", "0,0,0.5,0.5", "--compare"]);
 });
 
 test("media setup preserves custom deadline and evidence parent in catalog argv", () => {
@@ -340,6 +337,19 @@ test("rejects options hidden in argument and flag values while preserving negati
   const negative = buildCliInvocation({ commandId: "find", flags: { "-n": "-2" } }, BASE_CONTEXT);
   expect(negative.validationErrors).toEqual([]);
   expect(negative.argvTokens).toEqual(["-n", "-2"]);
+  // a camera pose left of the origin is a list of numbers, not an option
+  const pose = buildCliInvocation(
+    { commandId: "render", args: { target: "stills" }, flags: { "--inspect": "-5,2,3,0,1,0,50" } },
+    BASE_CONTEXT,
+  );
+  expect(pose.validationErrors).toEqual([]);
+  expect(pose.argvTokens).toEqual(["stills", "--inspect", "-5,2,3,0,1,0,50"]);
+  // PowerShell reads a bare @word as splatting: the shown command quotes it
+  const views = buildCliInvocation(
+    { commandId: "render", args: { target: "stills" }, flags: { "--views": "@views.json" } },
+    BASE_CONTEXT,
+  );
+  expect(views.displayCommand).toEndWith('--views "@views.json"');
 });
 
 function readJson(file) {
@@ -391,7 +401,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         seenSub.add(sub.id);
         const nextPath = [...subPath, sub.id];
         const chain = resolveSubcommandChain(cmd, nextPath);
-        const visibleFields = [...chain.argsDef, ...chain.flagsDef, ...chain.envDef];
+        const visibleFields = [...chain.argsDef, ...chain.flagsDef];
         const defsByKey = new Map(visibleFields.map((f) => [f.key, f]));
         for (const def of visibleFields) {
           if (def.visibleWhen) checkRule(def.visibleWhen, defsByKey);
@@ -763,31 +773,31 @@ describe("cli-catalog resolver rules", () => {
     expect(deliverSpanYt.argvTokens).toEqual(["--youtube", "9-15"]);
   });
 
-  test("enforces exclusiveGroup conflicts across env and flags", () => {
+  test("enforces exclusiveGroup conflicts among flags", () => {
     const renderConflict = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "clip" },
-        env: { SPAN: "0,4", CHUNKS: "0,1" },
+        flags: { "--span": "0,4", "--chunks": "0,1" },
       },
       BASE_CONTEXT,
     );
     expect(renderConflict.exclusiveConflicts.length).toBeGreaterThan(0);
     expect(renderConflict.validationErrors.length).toBeGreaterThan(0);
 
-    // SPAN is clip-only (render.mjs exits 2 on render all when SPAN is set)
+    // --span is clip-only (render.mjs exits 2 on render all with --span)
     const renderAllSpan = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "all" },
-        env: { SPAN: "0,4" },
+        flags: { "--span": "0,4" },
       },
       BASE_CONTEXT,
     );
-    expect(renderAllSpan.envEntries).toEqual([]);
-    const spanEnvDef = renderAllSpan.envDef.find((e) => e.key === "SPAN");
-    expect(isFieldVisible(spanEnvDef?.visibleWhen, { target: "all" })).toBe(false);
-    expect(isFieldVisible(spanEnvDef?.visibleWhen, { target: "clip" })).toBe(true);
+    expect(renderAllSpan.argvTokens).toEqual(["all"]);
+    const spanDef = renderAllSpan.flagsDef.find((e) => e.key === "--span");
+    expect(isFieldVisible(spanDef?.visibleWhen, { target: "all" })).toBe(false);
+    expect(isFieldVisible(spanDef?.visibleWhen, { target: "clip" })).toBe(true);
 
     const findConflict = buildCliInvocation(
       {
@@ -816,12 +826,12 @@ describe("cli-catalog resolver rules", () => {
     expect(findSfxWithStaleFrom.argvTokens).toEqual(["--kind", "sfx"]);
 
     const renderCmd = findCliCommand("render");
-    const spanEnv = renderCmd.env.find((e) => e.key === "SPAN");
-    const resEnv = renderCmd.env.find((e) => e.key === "RES");
-    expect(isFieldVisible(spanEnv.visibleWhen, { target: "clip" })).toBe(true);
-    expect(isFieldVisible(spanEnv.visibleWhen, { target: "stills" })).toBe(false);
-    expect(isFieldVisible(resEnv.visibleWhen, { target: "final" })).toBe(true);
-    expect(isFieldVisible(resEnv.visibleWhen, { target: "stills" })).toBe(false);
+    const spanDef = renderCmd.flags.find((e) => e.key === "--span");
+    const resDef = renderCmd.flags.find((e) => e.key === "--res");
+    expect(isFieldVisible(spanDef.visibleWhen, { target: "clip" })).toBe(true);
+    expect(isFieldVisible(spanDef.visibleWhen, { target: "stills" })).toBe(false);
+    expect(isFieldVisible(resDef.visibleWhen, { target: "final" })).toBe(true);
+    expect(isFieldVisible(resDef.visibleWhen, { target: "stills" })).toBe(false);
   });
 
   test("enforces subcommandRequired and helpMode: none", () => {
@@ -974,38 +984,60 @@ describe("cli-catalog resolver rules", () => {
     ).toBeNull();
   });
 
-  test("enforces render AT requiredWhen poster, captions env visibility, eval:load default guard, catalog:review --page, film-relative bun-file displayCommand, and partial context", () => {
+  test("enforces render --at requiredWhen poster, captions flag visibility, eval:load default guard, catalog:review --page, film-relative bun-file displayCommand, and partial context", () => {
     const posterNoAt = buildCliInvocation(
       { commandId: "render", args: { target: "poster" } },
       BASE_CONTEXT,
     );
-    expect(posterNoAt.validationErrors).toContain("Missing required env: AT");
+    expect(posterNoAt.validationErrors).toContain("Missing required option: --at");
 
     const posterWithAt = buildCliInvocation(
-      { commandId: "render", args: { target: "poster" }, env: { AT: "12" } },
+      { commandId: "render", args: { target: "poster" }, flags: { "--at": "12" } },
       BASE_CONTEXT,
     );
     expect(posterWithAt.validationErrors).toEqual([]);
+    expect(posterWithAt.argvTokens).toEqual(["poster", "--at", "12"]);
 
     const captions = buildCliInvocation(
       { commandId: "render", args: { target: "captions" } },
       BASE_CONTEXT,
     );
-    const atDef = captions.envDef.find((d) => d.key === "AT");
+    const atDef = captions.flagsDef.find((d) => d.key === "--at");
     expect(isFieldRequired(atDef, { target: "poster" })).toBe(true);
     expect(isFieldRequired(atDef, { target: "stills" })).toBe(false);
     expect(isFieldRequired({ required: true }, {})).toBe(true);
     expect(isFieldRequired({}, {})).toBe(false);
-    const entryDef = captions.envDef.find((d) => d.key === "ENTRY");
-    const labViewDef = captions.envDef.find((d) => d.key === "LAB_VIEW");
+    const entryDef = captions.flagsDef.find((d) => d.key === "--entry");
+    const labDef = captions.flagsDef.find((d) => d.key === "--lab");
     expect(entryDef?.visibleWhen).toBeDefined();
-    expect(labViewDef?.visibleWhen).toBeDefined();
+    expect(labDef?.visibleWhen).toBeDefined();
     expect(isFieldVisible(entryDef?.visibleWhen, { target: "captions" })).toBe(false);
-    expect(isFieldVisible(labViewDef?.visibleWhen, { target: "captions" })).toBe(false);
+    expect(
+      isFieldVisible(labDef?.visibleWhen, { target: "captions", "--entry": "lab/prop.ts" }),
+    ).toBe(false);
     for (const target of ["stills", "clip", "poster", "all", "final"]) {
       expect(isFieldVisible(entryDef?.visibleWhen, { target })).toBe(true);
-      expect(isFieldVisible(labViewDef?.visibleWhen, { target })).toBe(true);
+      // only an --entry page reads cfg.lab
+      expect(isFieldVisible(labDef?.visibleWhen, { target })).toBe(false);
+      expect(isFieldVisible(labDef?.visibleWhen, { target, "--entry": "lab/prop.ts" })).toBe(true);
     }
+    const labRun = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        flags: { "--entry": "lab/prop.ts", "--lab": ["view=desk", "zoom=2"] },
+      },
+      BASE_CONTEXT,
+    );
+    expect(labRun.argvTokens).toEqual([
+      "stills",
+      "--entry",
+      "lab/prop.ts",
+      "--lab",
+      "view=desk",
+      "--lab",
+      "zoom=2",
+    ]);
 
     // Studio checks the current film before launching a second Studio.
     expect(
@@ -1550,50 +1582,55 @@ describe("cli-catalog resolver rules", () => {
     ]);
   });
 
-  test("supports render VIEWS (stills/poster, INSPECT conflict, clip hidden) and new-film --ratio", () => {
+  test("supports render --views (stills/poster, --inspect conflict, clip hidden) and new-film --ratio", () => {
     const renderViews = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "stills" },
-        env: { VIEWS: "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50" },
+        flags: { "--views": "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50" },
       },
       BASE_CONTEXT,
     );
     expect(renderViews.validationErrors).toEqual([]);
-    expect(renderViews.envEntries).toEqual([
-      ["VIEWS", "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50"],
+    expect(renderViews.argvTokens).toEqual([
+      "stills",
+      "--views",
+      "front:0,2,5,0,1,0,50;top:0,8,0.1,0,0,0,50",
     ]);
 
     const posterViews = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "poster" },
-        env: { AT: "4", VIEWS: "hero:0,2,5,0,1,0,50" },
+        flags: { "--at": "4", "--views": "hero:0,2,5,0,1,0,50" },
       },
       BASE_CONTEXT,
     );
     expect(posterViews.validationErrors).toEqual([]);
-    expect(posterViews.envEntries).toEqual([
-      ["AT", "4"],
-      ["VIEWS", "hero:0,2,5,0,1,0,50"],
+    expect(posterViews.argvTokens).toEqual([
+      "poster",
+      "--at",
+      "4",
+      "--views",
+      "hero:0,2,5,0,1,0,50",
     ]);
 
     const clipViews = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "clip" },
-        env: { VIEWS: "hero:0,2,5,0,1,0,50" },
+        flags: { "--views": "hero:0,2,5,0,1,0,50" },
       },
       BASE_CONTEXT,
     );
     expect(clipViews.validationErrors).toEqual([]);
-    expect(clipViews.envEntries).toEqual([]);
+    expect(clipViews.argvTokens).toEqual(["clip"]);
 
     const viewsInspectConflict = buildCliInvocation(
       {
         commandId: "render",
         args: { target: "stills" },
-        env: { INSPECT: "0,2,5,0,1,0,50", VIEWS: "a:0,2,5,0,1,0,50" },
+        flags: { "--inspect": "0,2,5,0,1,0,50", "--views": "a:0,2,5,0,1,0,50" },
       },
       BASE_CONTEXT,
     );
@@ -1628,12 +1665,11 @@ describe("cli-catalog resolver rules", () => {
       "renders/views_sheet.jpg",
     ]);
 
-    // Stale video-submode target/cutIndex/overviewRange/START must stay hidden in resolver, UI, and Lego bar
+    // Stale video-submode target/cutIndex/overviewRange/--start must stay hidden in resolver, UI, and Lego bar
     const staleCutDraft = {
       subcommandPath: [],
       args: { target: "cut", cutIndex: 4, images: ["renders/a.png"] },
-      flags: { "--out": "renders/out.jpg" },
-      env: { START: "60" },
+      flags: { "--out": "renders/out.jpg", "--start": "60" },
       targetFilm: "active",
     };
     const sheetStaleCut = buildCliInvocation(
@@ -1641,28 +1677,22 @@ describe("cli-catalog resolver rules", () => {
         commandId: "sheet",
         args: staleCutDraft.args,
         flags: staleCutDraft.flags,
-        env: staleCutDraft.env,
       },
       BASE_CONTEXT,
     );
     expect(sheetStaleCut.validationErrors).toEqual([]);
     expect(sheetStaleCut.argvTokens).toEqual(["renders/a.png", "--out", "renders/out.jpg"]);
-    expect(sheetStaleCut.envEntries).toEqual([]);
-    const staleCutCombined = {
-      ...staleCutDraft.args,
-      ...staleCutDraft.flags,
-      ...staleCutDraft.env,
-    };
+    const staleCutCombined = { ...staleCutDraft.args, ...staleCutDraft.flags };
     expect(
       sheetStaleCut.argsDef
         .filter((d) => isFieldVisible(d.visibleWhen, staleCutCombined))
         .map((d) => d.key),
     ).toEqual(["images"]);
     expect(
-      sheetStaleCut.envDef
+      sheetStaleCut.flagsDef
         .filter((d) => isFieldVisible(d.visibleWhen, staleCutCombined))
         .map((d) => d.key),
-    ).toEqual([]);
+    ).toEqual(["--out"]);
     expect(listActiveLegoTokens(sheetStaleCut, staleCutDraft).map((t) => t.id)).toEqual([
       "args:images",
       "flags:--out",
@@ -1688,7 +1718,6 @@ describe("cli-catalog resolver rules", () => {
         images: ["renders/a.png"],
       },
       flags: { "--out": "renders/out.jpg" },
-      env: {},
       targetFilm: "active",
     };
     const sheetBothConflict = buildCliInvocation(
@@ -1859,15 +1888,12 @@ describe("cli-catalog resolver rules", () => {
       {
         commandId: "render",
         args: { target: "stills" },
-        env: { CHECK: "probe:4", RENDER_FRESH_CACHE: true },
+        flags: { "--check": "probe:4", "--fresh-cache": true },
       },
       BASE_CONTEXT,
     );
     expect(renderFresh.validationErrors).toEqual([]);
-    expect(renderFresh.envEntries).toEqual([
-      ["CHECK", "probe:4"],
-      ["RENDER_FRESH_CACHE", "1"],
-    ]);
+    expect(renderFresh.argvTokens).toEqual(["stills", "--check", "probe:4", "--fresh-cache"]);
 
     const notesFast = buildCliInvocation(
       {

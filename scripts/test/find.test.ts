@@ -1036,7 +1036,7 @@ test("--show says where a film makes its own of that kind, and a mark gets a lin
   expect(arrow).toMatch(
     /text\.json items\[\]: \{"kind": "arrow", "x": 0\.5, "y": 0\.5, "size": 160/,
   );
-  expect(arrow).toMatch(/see it:.*AT=.*bun run render stills/);
+  expect(arrow).toMatch(/see it: bun run render stills --at /);
 });
 
 test("the mocap hint names every body filter, and says how to list the moods and props", async () => {
@@ -3037,15 +3037,15 @@ test("find usage points to the film's configured timeline files", async () => {
   }
 });
 
-test("render hints pass their environment through the native shell", async () => {
+test("render hints pass their flags through the native shell", async () => {
   const dir = mkdtempSync(join(tmpdir(), "find-render-hints-"));
   try {
     const windows = process.platform === "win32";
     writeFileSync(
       join(dir, windows ? "bun.cmd" : "bun"),
       windows
-        ? '@echo off\r\necho {"at":"%AT%","clip":"%LAB_CLIP%","entry":"%ENTRY%","args":"%*"}\r\n'
-        : '#!/bin/sh\nprintf \'{"at":"%s","clip":"%s","entry":"%s","args":"%s"}\\n\' "$AT" "$LAB_CLIP" "$ENTRY" "$*"\n',
+        ? '@echo off\r\necho {"args":"%*"}\r\n'
+        : '#!/bin/sh\nprintf \'{"args":"%s"}\\n\' "$*"\n',
       { mode: 0o755 },
     );
     const clip = e("mixamo/Idle_12345678", "Idle", "", "mocap", "stand");
@@ -3065,9 +3065,6 @@ test("render hints pass their environment through the native shell", async () =>
         env: {
           ...process.env,
           PATH: [dir, process.env.PATH].join(delimiter),
-          AT: "",
-          LAB_CLIP: "",
-          ENTRY: "",
         },
       };
       const result = windows
@@ -3085,8 +3082,8 @@ test("render hints pass their environment through the native shell", async () =>
       expect(result.status, result.stderr).toBe(0);
       expect(JSON.parse(result.stdout)).toEqual(
         entry === "dissolve"
-          ? { at: "1.25", clip: "", entry: "", args: "run render stills" }
-          : { at: "", clip: clip.id, entry: "lab/clip.ts", args: "run render stills" },
+          ? { args: "run render stills --at 1.25" }
+          : { args: `run render stills --entry lab/clip.ts --lab clip=${clip.id}` },
       );
     }
   } finally {

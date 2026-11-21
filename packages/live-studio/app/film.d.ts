@@ -182,7 +182,7 @@ declare module "film/scene" {
     inspectOpenFilm?: () => import("film-stage/openfilm").OverlayInspection[];
     tools: Tools;
     describe?: (t: number) => ReviewSection[];
-    checks?: Record<string, (...args: number[]) => string | string[]>; // CHECK=name:args in a draft render (render.mjs)
+    checks?: Record<string, (...args: number[]) => string | string[]>; // --check name:args in a draft render (render.mjs)
     variants?: Variant[];
     eases?: Record<string, (x: number) => number>; // the camera keys' named eases (film-stage EASES), for the camera row
     keyEases?: { edit: string; path: string[]; names: string[] }[];

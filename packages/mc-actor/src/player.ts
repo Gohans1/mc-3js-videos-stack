@@ -884,7 +884,7 @@ export async function makePlayer(
     if (faceId === "game") ensureGameFace()(...a);
   };
   const hand = new THREE.Group(); // the right hand's grip, for held items
-  hand.name = "handR"; // so live-studio's CHECK=motion:handR,from,to finds it
+  hand.name = "handR"; // so live-studio's --check motion:handR,from,to finds it
   hand.position.set(-6 * PX, 12 * PX, 2 * PX); // vanilla: the right shoulder pivot (-5, 22, 0) px, then 10 down the arm, 2 forward, 1 out
   rig.add(hand);
   b.laR.attach(hand);

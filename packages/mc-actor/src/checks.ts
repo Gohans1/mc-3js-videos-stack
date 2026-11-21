@@ -1,5 +1,5 @@
 // @ts-nocheck
-// What a film's draw.checks runs for an actor's feet (CHECK=slide:0,108 bun run render stills), which stills cannot show.
+// What a film's draw.checks runs for an actor's feet (bun run render stills --check slide:0,108), which stills cannot show.
 //   draw.checks = footChecks({ perform, steve, now })  perform(t): poses the actor at film time t and leaves its planted
 //   soles in now.feet (feet.ts makeFeet's result for t); steve: makePlayer's actor.
 import * as THREE from "three";

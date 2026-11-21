@@ -3,7 +3,7 @@
 // pages only show it: nothing here moves the playhead, reloads a page or touches what the creator is writing
 import * as z from "zod";
 
-// at/to: heard seconds, as bun run at and SPAN take them. job: a long command (a render) sends one line as it starts and one
+// at/to: heard seconds, as bun run at and --span take them. job: a long command (a render) sends one line as it starts and one
 // with end: true as it stops, so the studio shows it busy in between; its pid lets the studio end it for a command killed
 // before its end line (an agent's timeout, a closed terminal: Windows runs no exit handler then)
 export const Activity = z.object({

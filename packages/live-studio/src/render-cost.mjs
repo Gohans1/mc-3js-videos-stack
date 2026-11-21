@@ -44,7 +44,7 @@ export const renderCost = (cuts) => {
           : `${judged.length} stretches between cuts`
       }; ${
         named.length
-          ? `${named.join(", ")}: AT=${heavy[0].from.toFixed(2)} LIST=1 bun run render stills shows what is in view there`
+          ? `${named.join(", ")}: bun run render stills --at ${heavy[0].from.toFixed(2)} --list shows what is in view there`
           : `none past twice that and ${FRAME_MS} ms`
       }`;
     },

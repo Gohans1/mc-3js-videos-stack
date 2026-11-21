@@ -8,7 +8,7 @@ import { loadRig, makePlayer } from "mc-actor/player";
 // squares), framed on his body, so posture, floor contact and hands read at a glance. renders/sheet_<lib>__<clip>.jpg;
 // clip-catalog/catalog_review.py captions them with their tags and stacks them into review pages. Many clips per run (one build):
 // clip-catalog/catalog_review.sh.
-// ENTRY=../../packages/clip-catalog/catalog_sheet.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
+// bun run render stills --entry ../../packages/clip-catalog/catalog_sheet.ts --lab lib=mixamo --lab clips=a,b,c
 import * as THREE from "three";
 
 (async () => {

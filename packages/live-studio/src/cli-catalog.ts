@@ -82,21 +82,6 @@ export interface CliFlagDef {
   tier?: "common" | "advanced";
 }
 
-export interface CliEnvDef {
-  key: string;
-  label: string;
-  type: CliFieldType;
-  required?: boolean;
-  requiredWhen?: CliVisibleWhen;
-  options?: readonly string[];
-  choiceSource?: CliChoiceSource;
-  placeholder?: string;
-  hint?: string;
-  visibleWhen?: CliVisibleWhen;
-  exclusiveGroup?: string;
-  tier?: "common" | "advanced";
-}
-
 export interface CliGuard {
   disabled?: boolean;
   disabledWhenToolsUnset?: boolean;
@@ -140,7 +125,6 @@ export interface CliSubcommand {
   subcommandRequired?: boolean;
   args?: readonly CliArgDef[];
   flags?: readonly CliFlagDef[];
-  env?: readonly CliEnvDef[];
   inheritFlags?: boolean;
   meta?: Partial<CliMeta>;
   subcommands?: readonly CliSubcommand[];
@@ -158,7 +142,6 @@ export interface CliCommand {
   subcommandRequired?: boolean;
   args?: readonly CliArgDef[];
   flags?: readonly CliFlagDef[];
-  env?: readonly CliEnvDef[];
   meta: CliMeta;
   subcommands?: readonly CliSubcommand[];
 }
@@ -191,7 +174,6 @@ export interface CliRunRequest {
   subcommandPath?: readonly string[];
   args?: Record<string, CliArgValue>;
   flags?: Record<string, CliArgValue>;
-  env?: Record<string, CliArgValue>;
   targetFilm?: string;
   mode?: "execute" | "help";
   confirmed?: boolean;
@@ -229,7 +211,6 @@ export interface CliTemplate {
   subcommandPath: string[];
   args: Record<string, CliArgValue>;
   flags: Record<string, CliArgValue>;
-  env: Record<string, CliArgValue>;
   targetFilm: string;
   pinned?: boolean;
   createdAt: number;
@@ -250,11 +231,9 @@ export interface ResolvedCliSpec {
   cwdMode: CliCwdMode;
   argsDef: readonly CliArgDef[];
   flagsDef: readonly CliFlagDef[];
-  envDef: readonly CliEnvDef[];
   meta: CliMeta;
   baseMeta: CliMeta;
   argvTokens: string[];
-  envEntries: [string, string][];
   displayCommand: string;
   copyCommand: string;
   requiresConfirm: boolean;
@@ -1526,7 +1505,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             label: "After Image",
             type: "string",
             placeholder: "renders/still_12s.jpg",
-            hint: "Proof frame after fixing (PNG/JPG/WebP). Capture a custom INSPECT angle if the target moved.",
+            hint: "Proof frame after fixing (PNG/JPG/WebP). Capture a custom --inspect angle if the target moved.",
           },
           {
             key: "--no-after",
@@ -1543,7 +1522,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             type: "string",
             tier: "advanced",
             placeholder: "px,py,pz,lx,ly,lz,fov",
-            hint: "Custom FreeCam pose (same 6-7 numbers as INSPECT) to fly creator straight to fixed spot.",
+            hint: "Custom FreeCam pose (same 6-7 numbers as render --inspect) to fly creator straight to fixed spot.",
           },
           {
             key: "--t",
@@ -1778,15 +1757,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Omit to align unaligned takes",
       },
     ],
-    env: [
-      {
-        key: "WHISPERX_PYTHON",
-        label: "WHISPERX_PYTHON",
-        type: "string",
-        tier: "advanced",
-        placeholder: "vault/tools/whisperx/...",
-      },
-    ],
     meta: {
       effect: "write",
       cost: "free",
@@ -1812,15 +1782,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         multi: true,
         choiceSource: "takes",
         hint: "Omit for takes missing or older than audio",
-      },
-    ],
-    env: [
-      {
-        key: "RHUBARB",
-        label: "RHUBARB Binary Path",
-        type: "string",
-        tier: "advanced",
-        placeholder: "vault/tools/rhubarb/rhubarb.exe",
       },
     ],
     meta: {
@@ -3643,7 +3604,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "render",
     category: "render",
     summary:
-      "Render draft stills, video chunks, captions, lossless poster, final upload, VIEWS/CROP batches, or motion/probe/text/order checks.",
+      "Render draft stills, video chunks, captions, lossless poster, final upload, view/crop batches, or motion/probe/text/order checks.",
     runner: "bun-script",
     target: "render",
     cwdModes: ["film"],
@@ -3657,10 +3618,11 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         default: "stills",
       },
     ],
-    env: [
+    flags: [
       {
-        key: "AT",
-        label: "AT (Heard Seconds)",
+        key: "--at",
+        flag: "--at",
+        label: "Heard Seconds",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "poster", "all"] },
         requiredWhen: { field: "target", in: ["poster"] },
@@ -3669,16 +3631,18 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Comma-separated heard seconds (e.g. 40,41.5 or 0:40,0:41.5)",
       },
       {
-        key: "LIST",
-        label: "LIST=1 (Describe Overlay)",
+        key: "--list",
+        flag: "--list",
+        label: "Describe Overlay",
         type: "boolean",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
         hint: "Draw scene description HUD on stills (leave off before framecheck)",
       },
       {
-        key: "SPAN",
-        label: "SPAN (from,to sec)",
+        key: "--span",
+        flag: "--span",
+        label: "Span (from,to sec)",
         type: "string",
         exclusiveGroup: "render-slice",
         visibleWhen: { field: "target", in: ["clip"] },
@@ -3686,8 +3650,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "40,44",
       },
       {
-        key: "CHUNKS",
-        label: "CHUNKS (0-based idx)",
+        key: "--chunks",
+        flag: "--chunks",
+        label: "Chunks (0-based idx)",
         type: "string",
         exclusiveGroup: "render-slice",
         visibleWhen: { field: "target", in: ["clip", "all", "final"] },
@@ -3695,7 +3660,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "3,4",
       },
       {
-        key: "CROP",
+        key: "--crop",
+        flag: "--crop",
         label: "Native crop (x,y,w,h)",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "poster"] },
@@ -3703,22 +3669,25 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Normalized rectangle within the frame, rendered at native pixel density.",
       },
       {
-        key: "COMPARE",
+        key: "--compare",
+        flag: "--compare",
         label: "Compare with previous still",
         type: "boolean",
         visibleWhen: { field: "target", in: ["stills", "poster"] },
         hint: "Keep the old frame under renders/.prev/ and write a before/after comparison.",
       },
       {
-        key: "CHECK",
-        label: "CHECK (motion/seen/touch/text/order/probe)",
+        key: "--check",
+        flag: "--check",
+        label: "Check (motion/seen/touch/text/order/probe)",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
         placeholder: "motion:cam,81,83 or probe:4 or order:20,25 or text",
       },
       {
-        key: "RENDER_FRESH_CACHE",
+        key: "--fresh-cache",
+        flag: "--fresh-cache",
         label: "Fresh Chrome profile (bypass shader cache)",
         type: "boolean",
         visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
@@ -3726,8 +3695,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Bypass renders/.chrome-cache/ and launch headless Chrome with an ephemeral temp profile.",
       },
       {
-        key: "SAMPLES",
-        label: "SAMPLES (1-64 sub-frames)",
+        key: "--samples",
+        flag: "--samples",
+        label: "Sub-frames (1-64)",
         type: "number",
         visibleWhen: { field: "target", in: ["stills", "clip", "final", "poster", "all"] },
         tier: "advanced",
@@ -3735,16 +3705,18 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Motion blur: stills and clip default to 1, final and poster to 8.",
       },
       {
-        key: "RES",
-        label: "RES (Height Lines)",
+        key: "--res",
+        flag: "--res",
+        label: "Height Lines",
         type: "enum",
         options: ["1080", "1440", "2160"],
         visibleWhen: { field: "target", in: ["final", "poster"] },
         tier: "advanced",
       },
       {
-        key: "INSPECT",
-        label: "INSPECT (px,py,pz,lx,ly,lz,fov)",
+        key: "--inspect",
+        flag: "--inspect",
+        label: "Free Cam (px,py,pz,lx,ly,lz,fov)",
         type: "string",
         exclusiveGroup: "render-camera",
         visibleWhen: { field: "target", in: ["stills", "all"] },
@@ -3752,8 +3724,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "0,2,5,0,1,0,50",
       },
       {
-        key: "VIEWS",
-        label: "VIEWS (Multi-angle stills spec or @json)",
+        key: "--views",
+        flag: "--views",
+        label: "Views (multi-angle spec or @json)",
         type: "string",
         exclusiveGroup: "render-camera",
         visibleWhen: { field: "target", in: ["stills", "poster"] },
@@ -3762,8 +3735,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Render multiple named Free Cam viewpoints in a single Chrome boot (writes renders/view_<name>_<t>s.jpg; .png for poster).",
       },
       {
-        key: "ENTRY",
-        label: "ENTRY (Custom Lab Page)",
+        key: "--entry",
+        flag: "--entry",
+        label: "Custom Lab Page",
         type: "string",
         choiceSource: "labs",
         visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
@@ -3771,12 +3745,20 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "lab/prop.ts",
       },
       {
-        key: "LAB_VIEW",
-        label: "LAB_VIEW",
+        key: "--lab",
+        flag: "--lab",
+        label: "Lab Values (key=value)",
         type: "string",
-        visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        multi: true,
+        multiStyle: "repeat",
+        visibleWhen: {
+          field: "--entry",
+          nonEmpty: true,
+          and: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        },
         tier: "advanced",
-        placeholder: "desk",
+        placeholder: "view=desk",
+        hint: "Reaches the --entry page as cfg.lab.<key>.",
       },
     ],
     meta: {
@@ -3872,11 +3854,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         visibleWhen: { field: "images", nonEmpty: true, and: { field: "video", nonEmpty: false } },
         placeholder: "renders/views_sheet.jpg",
       },
-    ],
-    env: [
       {
-        key: "START",
-        label: "START (Video Start Sec)",
+        key: "--start",
+        flag: "--start",
+        label: "Video Start (film sec)",
         type: "string",
         visibleWhen: { field: "images", nonEmpty: false },
         tier: "advanced",
@@ -3963,14 +3944,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--no-images",
         label: "Skip Images and HTML",
         type: "boolean",
-        tier: "advanced",
-      },
-    ],
-    env: [
-      {
-        key: "SCENEDETECT_PYTHON",
-        label: "Python with PySceneDetect",
-        type: "string",
         tier: "advanced",
       },
     ],
@@ -4128,14 +4101,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         meta: { effect: "write", speed: "long" },
       },
     ],
-    env: [
-      {
-        key: "MC_MEDIA_HOME",
-        label: "Environment and Model Cache",
-        type: "string",
-        tier: "advanced",
-      },
-    ],
     meta: {
       effect: "read",
       cost: "free",
@@ -4252,11 +4217,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         tier: "advanced",
         placeholder: "references/ref.mp4",
       },
-    ],
-    env: [
       {
-        key: "START",
-        label: "START (Video Start Sec)",
+        key: "--start",
+        flag: "--start",
+        label: "Video Start (film sec)",
         type: "string",
         tier: "advanced",
         placeholder: "60",
@@ -6342,7 +6306,6 @@ export function resolveSubcommandChain(
   resolvedPath: string[];
   argsDef: readonly CliArgDef[];
   flagsDef: readonly CliFlagDef[];
-  envDef: readonly CliEnvDef[];
   meta: CliMeta;
   summary: string;
 } {
@@ -6350,7 +6313,6 @@ export function resolveSubcommandChain(
   const resolvedPath: string[] = [];
   let argsDef: readonly CliArgDef[] = command.args ?? [];
   let flagsDef: readonly CliFlagDef[] = command.flags ?? [];
-  let envDef: readonly CliEnvDef[] = command.env ?? [];
   let meta: CliMeta = { ...command.meta };
   let summary = command.summary;
   let children = command.subcommands;
@@ -6364,12 +6326,11 @@ export function resolveSubcommandChain(
     summary = hit.summary || summary;
     argsDef = hit.args ?? [];
     flagsDef = hit.inheritFlags ? [...flagsDef, ...(hit.flags ?? [])] : (hit.flags ?? []);
-    envDef = hit.env ?? envDef;
     if (hit.meta) meta = { ...meta, ...hit.meta };
     children = hit.subcommands;
   }
 
-  return { subcommands, resolvedPath, argsDef, flagsDef, envDef, meta, summary };
+  return { subcommands, resolvedPath, argsDef, flagsDef, meta, summary };
 }
 
 function normalizeConditionValues(raw: CliArgValue): string[] {
@@ -6460,7 +6421,9 @@ export function tokenizeWords(input: string): string[] {
 }
 
 const formatShellToken = (tok: string): string =>
-  tok === "" || /[\s"'\\$`|&;<>()!*?#]/.test(tok) ? `"${tok.replaceAll('"', '\\"')}"` : tok;
+  tok === "" || tok.startsWith("@") || /[\s"'\\$`|&;<>()!*?#]/.test(tok)
+    ? `"${tok.replaceAll('"', '\\"')}"`
+    : tok;
 
 const isActiveValue = (val: CliArgValue): boolean => {
   if (val === undefined || val === null || val === false) return false;
@@ -6500,7 +6463,12 @@ const validateArgumentTokens = (
   validationErrors: string[],
 ) => {
   for (const token of tokens) {
-    if (token.startsWith("-") && token !== "-" && !Number.isFinite(Number(token))) {
+    const numbers = token.split(",");
+    if (
+      token.startsWith("-") &&
+      token !== "-" &&
+      !numbers.every((n) => n.trim() !== "" && Number.isFinite(Number(n)))
+    ) {
       validationErrors.push(
         `${def.label}: "${token}" looks like an option. Use its option control, or prefix a file path with "./".`,
       );
@@ -6616,11 +6584,10 @@ function computeEffectiveMeta(
 function formatCliCopyCommand(
   cwd: string,
   argv: readonly string[],
-  env: readonly [string, string][],
   shell: "powershell" | "posix",
 ): string {
   const quote = (value: string) => `'${value.replaceAll("'", "'\\''")}'`;
-  const command = `cd ${quote(cwd)} && ${env.map(([key, value]) => `${key}=${quote(value)} `).join("")}${argv.map(quote).join(" ")}`;
+  const command = `cd ${quote(cwd)} && ${argv.map(quote).join(" ")}`;
   if (shell === "posix") return `env -u LIVE_PROJECT bun exec ${quote(command)}`;
   return [
     "& {",
@@ -6661,7 +6628,6 @@ export function buildCliInvocation(
   const chain = resolveSubcommandChain(command, request.subcommandPath);
   const args = request.args ?? {};
   const flags = request.flags ?? {};
-  const env = request.env ?? {};
 
   // Match Studio init-like behavior when resolving relative targetFilm for runner display
   const filmOnly = command.cwdModes.length === 1 && command.cwdModes[0] === "film";
@@ -6679,7 +6645,7 @@ export function buildCliInvocation(
         ? "film"
         : "root";
 
-  const combinedFieldValues: Record<string, CliArgValue> = { ...args, ...flags, ...env };
+  const combinedFieldValues: Record<string, CliArgValue> = { ...args, ...flags };
   const effectiveMeta = computeEffectiveMeta(
     command.id,
     chain.resolvedPath,
@@ -6727,7 +6693,6 @@ export function buildCliInvocation(
   const exclusiveConflicts: string[] = [];
 
   const argvTokens: string[] = [];
-  const envEntries: [string, string][] = [];
 
   if (mode === "help") {
     if (effectiveMeta.helpMode === "none") {
@@ -6751,7 +6716,7 @@ export function buildCliInvocation(
       }
     }
 
-    // Track exclusive groups across args, flags, env
+    // Track exclusive groups across args and flags
     const groupHits = new Map<string, string[]>();
     const trackExclusive = (group: string | undefined, label: string, active: boolean) => {
       if (!group || !active) return;
@@ -6837,25 +6802,6 @@ export function buildCliInvocation(
       if (valStr) {
         validateArgumentTokens(def, [valStr], validationErrors);
         argvTokens.push(def.flag, valStr);
-      }
-    }
-
-    for (const def of chain.envDef) {
-      if (!isFieldVisible(def.visibleWhen, combinedFieldValues)) continue;
-      const raw = env[def.key];
-      const active = isFieldValueActive(def, raw);
-      trackExclusive(def.exclusiveGroup, def.key, active);
-      if (isFieldRequired(def, combinedFieldValues) && !active) {
-        validationErrors.push(`Missing required env: ${def.key}`);
-        continue;
-      }
-      if (!active) continue;
-      if (def.type === "boolean") {
-        envEntries.push([def.key, "1"]);
-      } else {
-        const valStr = String(raw).trim();
-        validateNumberTokens(def, [valStr], validationErrors);
-        envEntries.push([def.key, valStr]);
       }
     }
 
@@ -6950,7 +6896,6 @@ export function buildCliInvocation(
     }
   }
 
-  const envPrefix = envEntries.map(([k, v]) => `${k}=${formatShellToken(v)} `).join("");
   const targetToken =
     cwdMode === "film"
       ? context?.repoRoot
@@ -6980,8 +6925,8 @@ export function buildCliInvocation(
   const cmdString = [...baseParts, ...argvTokens].map(formatShellToken).join(" ");
   const displayCommand =
     command.runner === "package-script" && command.packageDir
-      ? `(cd ${formatShellToken(command.packageDir)} && ${envPrefix}${cmdString})`
-      : `${envPrefix}${cmdString}`;
+      ? `(cd ${formatShellToken(command.packageDir)} && ${cmdString})`
+      : cmdString;
   const copyCwd =
     cwdMode === "film"
       ? context?.projectRoot
@@ -6989,12 +6934,7 @@ export function buildCliInvocation(
         ? `${context.repoRoot}/${command.packageDir}`
         : context?.repoRoot;
   const copyCommand = copyCwd
-    ? formatCliCopyCommand(
-        copyCwd,
-        [...baseParts, ...argvTokens],
-        envEntries,
-        context?.copyShell ?? "posix",
-      )
+    ? formatCliCopyCommand(copyCwd, [...baseParts, ...argvTokens], context?.copyShell ?? "posix")
     : displayCommand;
 
   return {
@@ -7005,11 +6945,9 @@ export function buildCliInvocation(
     cwdMode,
     argsDef: chain.argsDef,
     flagsDef: chain.flagsDef,
-    envDef: chain.envDef,
     meta: effectiveMeta,
     baseMeta: chain.meta,
     argvTokens,
-    envEntries,
     displayCommand,
     copyCommand,
     requiresConfirm,

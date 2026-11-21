@@ -50,7 +50,7 @@ def main():
         for r in bad:
             print(f"    {r['ref']}  {r['dur']}s  {'>'.join(r['seq'])}  reach {r['reach']} air {r['air']} hips {r['hips']}")
     print(f"{bad_total} of {total} named clips disagree; {len(errors)} clips failed to load" + "".join(f"\n    {e['ref']}: {e['error']}" for e in errors))
-    print("next: inspect flagged clips with LAB_CLIP=<lib/name> ENTRY=lab/clip.ts bun run render stills; correct tags with catalog_review.py --fix")
+    print("next: inspect flagged clips with bun run render stills --lab clip=<lib/name> --entry lab/clip.ts; correct tags with catalog_review.py --fix")
     return int(bool(bad_total or errors))
 
 

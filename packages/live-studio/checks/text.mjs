@@ -113,7 +113,7 @@ export function verdict({ i, text, at, px }, m, ratio = "16:9") {
     return {
       faults: ["NONE"],
       lines: [
-        `  NONE ${name}: drew nothing there (a hidden track, or the film draws its text its own way): AT=${at.toFixed(2)} bun run render stills`,
+        `  NONE ${name}: drew nothing there (a hidden track, or the film draws its text its own way): bun run render stills --at ${at.toFixed(2)}`,
       ],
     };
   const faults = [],
@@ -165,5 +165,5 @@ export const summary = (n, faulty) => [
         `  decor not meant to be read (a sign in the world, a glitch) takes "read": false and is never judged`,
       ]
     : []),
-  `next: ${faulty ? "fix each in src/timeline/text.json, then CHECK=text bun run render stills again" : "bun run check for reading time and size"}`,
+  `next: ${faulty ? "fix each in src/timeline/text.json, then bun run render stills --check text again" : "bun run check for reading time and size"}`,
 ];

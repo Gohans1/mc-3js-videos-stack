@@ -24,8 +24,8 @@ In Live Studio (`templates/film` / `packages/live-studio`), `bun run render` cap
 
 | Mode                     | Command                                                                                               | What happens                                                                                                                        | Relative cost |
 | ------------------------ | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------- |
-| Stills                   | `AT=0.5,2.0,4.5 bun run render stills`                                                                | captures exact heard seconds as draft JPEG stills (time and shot under each) for fast framing and lighting checks                              | seconds       |
-| Excerpt / clip           | `SPAN=4,8 bun run render clip`                                                                        | renders only those heard seconds to `renders/span_4-8.mp4` so you can iterate on one beat or seam in seconds                        | ~0.2×         |
+| Stills                   | `bun run render stills --at 0.5,2.0,4.5`                                                                | captures exact heard seconds as draft JPEG stills (time and shot under each) for fast framing and lighting checks                              | seconds       |
+| Excerpt / clip           | `bun run render clip --span 4,8`                                                                        | renders only those heard seconds to `renders/span_4-8.mp4` so you can iterate on one beat or seam in seconds                        | ~0.2×         |
 | Preview / draft          | `bun run render clip`                                                                                 | the 1280-wide draft with its time strip, for pacing, camera continuity and `bun run sheet renders/draft_video.mp4 shots`            | ~0.3×         |
 | Sharp master             | `bun run render final`, then `bun run mix renders/final_video.mp4`                                    | 1440p H.264 BT.709 with 8 sub-frames of motion blur, then the soundtrack; `bun run deliver` checks it against YouTube's spec        | 1×            |
 | Sub-frame shutter master | sharp pass → `python3 scripts/measure-speed.py` → sub-frame capture → `python3 scripts/accumulate.py` | averages sub-frames in 32-bit float and quantises once with ±1 LSB TPDF dither in smooth ramps                                      | 3–8× typical  |
@@ -35,9 +35,9 @@ In Live Studio (`templates/film` / `packages/live-studio`), `bun run render` cap
 
 A run delivers a complete film inside its budget, on a busy machine too. The order that guarantees it:
 
-1. **The ending early.** Capture the closing seconds first (`AT=... bun run render stills`): the extruded 3D mark, the lockup landing and its hold must read cleanly before rendering the full timeline.
+1. **The ending early.** Capture the closing seconds first (`bun run render stills --at ...`): the extruded 3D mark, the lockup landing and its hold must read cleanly before rendering the full timeline.
 2. **A whole draft early.** Render a fast half-size pass and cut contact sheets directly from the MP4 with `python3 scripts/sheet.py out/draft.mp4 --out out/qa/draft-sheet.png` (or `--frames A-B --every N` for one act) and `bash scripts/grab.sh out/draft.mp4 120,480` for exact full frames.
-3. **Targeted excerpts for fixes.** Re-render only the edited window (`SPAN=A,B bun run render clip`) while tuning camera curves, optical transitions or directional shutter smear (`film-stage/velocity.ts`).
+3. **Targeted excerpts for fixes.** Re-render only the edited window (`bun run render clip --span A,B`) while tuning camera curves, optical transitions or directional shutter smear (`film-stage/velocity.ts`).
 4. **Master + gates at the end.** Render the full master once, attach the mastered `-14 LUFS / -1.5 dBTP` soundtrack, and run `python3 scripts/probe.py`, `python3 scripts/check-sync.py` and `python3 scripts/forensics.py`.
 
 ### Fast by default
@@ -47,7 +47,7 @@ Renders on an ordinary workstation are bounded by WebGL frame capture and readba
 | Look or render         | Command                                                     | What makes it fast                                                                                                                |
 | ---------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | New film scaffold      | `bun run new-film <slug>`                                   | clones `templates/film` with workspace links (`film-stage`, `film-kit`, `mc-actor`, `mc-assets`, `live-studio`) ready immediately |
-| Spot stills            | `AT=1.0,3.5,8.0 bun run render stills`                      | one headless Chromium session seeks to each timestamp `t` deterministically                                                       |
+| Spot stills            | `bun run render stills --at 1.0,3.5,8.0`                      | one headless Chromium session seeks to each timestamp `t` deterministically                                                       |
 | Contact sheet from MP4 | `python3 scripts/sheet.py out/film.mp4 --every 30 --out out/qa/sheet.png` | extracts frames directly from the rendered video with frame + timestamp labels                                                    |
 | Automated frame QA     | `bun run framecheck`                                        | checks black frames, NaN transforms and WebGL errors before full master encoding                                                  |
 | Spec & sync gate       | `python3 scripts/probe.py out/film.mp4 --spec 1920x1080@60` | verifies exact resolution, fps, `yuv420p`, `bt709/bt709/bt709/tv` tags and stream duration                                        |
@@ -58,7 +58,7 @@ Renders on an ordinary workstation are bounded by WebGL frame capture and readba
 
 **Spend heavy passes once.**
 
-- **Iterate in Live Studio & short excerpts.** Scrub live in `bun run studio` and render short `SPAN=<from>,<to>` clips during look-dev (`references/review-loop.md` §1).
+- **Iterate in Live Studio & short excerpts.** Scrub live in `bun run studio` and render short `--span <from>,<to>` clips during look-dev (`references/review-loop.md` §1).
 - **Run full masters in the background** when rendering long 60 fps timelines, and prepare audio credits or delivery notes meanwhile.
 - **Re-render only changed act ranges** and splice on clean act boundaries (§7) when fixing a single late shot.
 
@@ -308,8 +308,8 @@ ffmpeg -i picture.mp4 -ss <offset> -i public/audio/soundtrack.wav -map 0:v:0 -ma
 - **Re-render only what changed.** `bun run render clip` already draws the film in 30 s chunks, keeps every chunk whose code, data and settings are unchanged, and joins them into `renders/draft_video.mp4` by lossless stream copy (each chunk starts on a keyframe). Try a fix on its own seconds first, then redraw its chunk, then put the soundtrack on once.
 
 ```bash
-SPAN=40,44 bun run render clip        # just those heard seconds: renders/span_40-44.mp4
-CHUNKS=1 bun run render clip          # the chunk holding them (1 is 0:30-1:00), joined with the others
+bun run render clip --span 40,44        # just those heard seconds: renders/span_40-44.mp4
+bun run render clip --chunks 1          # the chunk holding them (1 is 0:30-1:00), joined with the others
 bun run mix renders/draft_video.mp4   # the soundtrack on the joined picture
 ```
 
@@ -321,7 +321,7 @@ Before shipping deliverables with music or recorded SFX, run `python3 scripts/au
 
 | Deliverable       | How                                                                                                     | Spec and budget                                                                                   |
 | ----------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Poster            | `AT=<end_sec> bun run render poster` (lossless PNG at the upload's size, never decoded from 4:2:0 H.264) | `poster.png` (lossless, full chroma) + `poster.jpg`; design the final frame to work as the poster |
+| Poster            | `bun run render poster --at <end_sec>` (lossless PNG at the upload's size, never decoded from 4:2:0 H.264) | `poster.png` (lossless, full chroma) + `poster.jpg`; design the final frame to work as the poster |
 | Web loop, MP4     | `-an -movflags +faststart` + `python3 scripts/forensics.py --loop`                                      | muted, `+faststart`, loop-seam check                                                              |
 | Web loop, WebM    | `-c:v libvpx-vp9 -crf 32 -b:v 0`                                                                        | VP9 CRF 32, BT.709 tagged, Opus audio unless muted loop                                           |
 | GIF               | ffmpeg `palettegen` + `paletteuse` at 25 fps, 960 px wide                                               | two-pass palette; keep short loops under 8 MB                                                     |
@@ -329,7 +329,7 @@ Before shipping deliverables with music or recorded SFX, run `python3 scripts/au
 | Aspect variants   | dedicated 9:16, 1:1 or 4:5 camera/title framing, never blind center-crops of 16:9                       | each verified with `python3 scripts/probe.py`                                                     |
 | Brand palette     | `python3 scripts/palette.py --accent "#..."`                                                            | perceptually uniform OKLCH ink, paper, surface and accent tokens                                  |
 
-- **Poster source.** A frame decoded from an H.264 4:2:0 master softens coloured type edges and carries macroblock artefacts (§5). Always capture the poster directly as a lossless PNG still (`AT=<t> bun run render poster`).
+- **Poster source.** A frame decoded from an H.264 4:2:0 master softens coloured type edges and carries macroblock artefacts (§5). Always capture the poster directly as a lossless PNG still (`bun run render poster --at <t>`).
 - **Loop seam.** The step from the last frame back to frame 0 must look like the steps around it: seam difference ≤ max(0.4, 1.5× the median of the 8 steps at each end), verified by `python3 scripts/forensics.py out/loop.mp4 --loop`. Design the loop on whole musical bars (`SKILL.md`), and do not duplicate frame 0 as the final frame, which hitches.
 - **GIF.** Frame delays are whole hundredths of a second, so 25 fps (4 cs) and 50 fps (2 cs) play at the true rate while 30 fps plays 11% fast. Keep GIFs to short, clean loops at 480–960 px and prefer WebM or MP4 wherever video is supported.
 - **Alpha.** Render with transparent WebGL clear alpha (`0`) to PNG frames and encode `-c:v prores_ks -profile:v 4444 -pix_fmt yuva444p10le` (or VP9 `-pix_fmt yuva420p`). Verify with `python3 scripts/probe.py --vcodec prores --pix-fmt yuva444p10le,yuva444p12le`.

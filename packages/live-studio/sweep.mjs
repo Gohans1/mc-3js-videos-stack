@@ -202,7 +202,7 @@ if (n) {
       kind: r.ratio > 1 ? "brighter" : "darker",
       weight: 3,
       size: (r.to - r.from) * Math.abs(Math.log(r.ratio)),
-      say: `the whole picture is ${pct(r.ratio)} ${r.ratio > 1 ? "brighter" : "darker"} than the reference; measure one part of it with: REF=${reference} AT=${+((r.from + r.to) / 2).toFixed(2)} REF_REGION=x,y,w,h bun run render stills`,
+      say: `the whole picture is ${pct(r.ratio)} ${r.ratio > 1 ? "brighter" : "darker"} than the reference; measure one part of it with: bun run render stills --ref ${reference} --at ${+((r.from + r.to) / 2).toFixed(2)} --ref-region x,y,w,h`,
     });
 } else if (!reference)
   notes.push(

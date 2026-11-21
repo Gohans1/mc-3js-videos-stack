@@ -6,16 +6,16 @@ import { bodyBoxes, retargeter, skeletonSource } from "mc-actor/mocap";
 import { loadRig, makePlayer, MOODS } from "mc-actor/player";
 // Lab: a human clip onto Steve (mc-actor/mocap), judged from every side and by numbers. Quaternius UAL1/UAL2 (CC0) or
 // Mixamo FBX, in the vault's motion/ (bun run link), served to the page as motion/.
-//   ENTRY=../../packages/clip-catalog/mocap.ts LAB_CLIP=Interact bun run render stills
+//   bun run render stills --entry ../../packages/clip-catalog/mocap.ts --lab clip=Interact
 //     renders/mocap_<clip>_NNN.jpg, 4 x 2 panels that follow the hips: top row source and Steve from the front, source and
 //     Steve from their left; bottom row Steve from behind, his right, above, the floor. Then the numbers (CHECKS below),
 //     worst frame of each
-//   LAB_LIB=ual2: UAL2 (motion/ual2/UAL2_Standard.glb) instead of UAL1; LAB_LIB=mixamo LAB_CLIP=<file stem in
-//   motion/mixamo>: a Mixamo FBX (no skin: drawn as a stick skeleton); LAB_FPS=6 fewer stills; LAB_NUMBERS=1 numbers
-//   only; LAB_RAW=1 without the floor and own-body fixes; LAB_LOG=1 every frame's numbers; LAB_ZOOM=3 the panels close on
-//   the head; LAB_FROM / LAB_TO seconds: only stills in that window
-//   LAB_CLIPS=all: numbers only, every clip of the library (Mixamo: the stems in motion/mixamo/_tools/clips.json), one
-//   "ROW {json}" line each with the worst of every check, for a sweep (LAB_CLIPS=a,b: those)
+//   --lab lib=ual2: UAL2 (motion/ual2/UAL2_Standard.glb) instead of UAL1; --lab lib=mixamo --lab clip=<file stem in
+//   motion/mixamo>: a Mixamo FBX (no skin: drawn as a stick skeleton); --lab fps=6 fewer stills; --lab numbers=1 numbers
+//   only; --lab raw=1 without the floor and own-body fixes; --lab log=1 every frame's numbers; --lab zoom=3 the panels close on
+//   the head; --lab from=, --lab to= seconds: only stills in that window
+//   --lab clips=all: numbers only, every clip of the library (Mixamo: the stems in motion/mixamo/_tools/clips.json), one
+//   "ROW {json}" line each with the worst of every check, for a sweep (--lab clips=a,b: those)
 import * as THREE from "three";
 
 const D = 180 / Math.PI;

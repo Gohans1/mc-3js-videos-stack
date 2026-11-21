@@ -80,12 +80,11 @@ const ArgValueSchema: z.ZodType<CliArgValue> = z.union([
   z.array(z.string().max(4000)).max(200),
 ]);
 
-export const CliRunRequestSchema = z.object({
+export const CliRunRequestSchema = z.strictObject({
   commandId: z.string().trim().min(1).max(80),
   subcommandPath: z.array(z.string().trim().min(1).max(60)).max(4).optional().default([]),
   args: z.record(z.string().max(120), ArgValueSchema).optional().default({}),
   flags: z.record(z.string().max(120), ArgValueSchema).optional().default({}),
-  env: z.record(z.string().max(120), ArgValueSchema).optional().default({}),
   targetFilm: z.string().trim().min(1).max(120).optional(),
   mode: z.enum(["execute", "help"]).optional().default("execute"),
   confirmed: z.boolean().optional().default(false),
@@ -694,7 +693,6 @@ export function createCliRunner(
     for (const [k, v] of Object.entries(req.args ?? {})) assertSafeValue(v, `arg:${k}`, false);
     for (const [k, v] of Object.entries(req.flags ?? {}))
       assertSafeValue(v, `flag:${k}`, k === "--prompt");
-    for (const [k, v] of Object.entries(req.env ?? {})) assertSafeValue(v, `env:${k}`, false);
 
     if (req.targetFilm && req.targetFilm !== "active" && req.targetFilm !== "root") {
       if (!/^[a-z0-9][a-z0-9-]*$/.test(req.targetFilm)) {
@@ -772,13 +770,6 @@ export function createCliRunner(
       );
     }
 
-    // Enforce declared env keys
-    const allowedEnvKeys = new Set(spec.envDef.map((e) => e.key));
-    for (const k of Object.keys(req.env ?? {})) {
-      if (!allowedEnvKeys.has(k)) {
-        throw new CliRunHttpError(400, "INVALID_ARGS", `Disallowed env override: ${k}`);
-      }
-    }
     const childEnv: Record<string, string | undefined> = {
       ...process.env,
       PYTHONIOENCODING: "utf-8",
@@ -787,12 +778,6 @@ export function createCliRunner(
       FORCE_COLOR: "0",
     };
     delete childEnv.LIVE_PROJECT;
-    for (const [k, v] of spec.envEntries) {
-      if (!allowedEnvKeys.has(k)) {
-        throw new CliRunHttpError(400, "INVALID_ARGS", `Disallowed env override: ${k}`);
-      }
-      childEnv[k] = v;
-    }
 
     // Resolve authoritative cwd inside repoRoot
     let resolvedCwd = repoRoot;
@@ -822,9 +807,9 @@ export function createCliRunner(
       resolvedCwd = pkgPath;
     }
 
-    const assertViewsEnv = (raw: unknown) => {
+    const assertViewsFlag = (raw: unknown) => {
       if (typeof raw !== "string") {
-        throw new CliRunHttpError(400, "INVALID_ARGS", "VIEWS must be a string.");
+        throw new CliRunHttpError(400, "INVALID_ARGS", "--views must be a string.");
       }
       const trimmed = raw.trim();
       if (trimmed.startsWith("@")) {
@@ -833,33 +818,22 @@ export function createCliRunner(
           resolvedCwd,
           resolvedCwd,
           repoRoot,
-          "VIEWS",
+          "--views",
         );
       }
     };
-    if (
-      req.env &&
-      Object.hasOwn(req.env, "ENTRY") &&
-      req.env.ENTRY !== undefined &&
-      req.env.ENTRY !== false
-    ) {
-      assertContainedRelativePath(req.env.ENTRY, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
+    const entryFlag = req.flags?.["--entry"];
+    if (entryFlag !== undefined && entryFlag !== false) {
+      assertContainedRelativePath(entryFlag, resolvedCwd, resolvedCwd, repoRoot, "--entry");
     }
-    if (
-      req.env &&
-      Object.hasOwn(req.env, "VIEWS") &&
-      req.env.VIEWS !== undefined &&
-      req.env.VIEWS !== false
-    ) {
-      assertViewsEnv(req.env.VIEWS);
-    }
-    for (const [k, v] of spec.envEntries) {
-      if (k === "ENTRY") {
-        assertContainedRelativePath(v, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
-      } else if (k === "VIEWS") {
-        assertViewsEnv(v);
-      }
-    }
+    const viewsFlag = req.flags?.["--views"];
+    if (viewsFlag !== undefined && viewsFlag !== false) assertViewsFlag(viewsFlag);
+    spec.argvTokens.forEach((token, i) => {
+      const value = spec.argvTokens[i + 1];
+      if (token === "--entry" && value !== undefined) {
+        assertContainedRelativePath(value, resolvedCwd, resolvedCwd, repoRoot, "--entry");
+      } else if (token === "--views" && value !== undefined) assertViewsFlag(value);
+    });
 
     // Build exact exe + argv cleanly from allowlisted catalog entry
     const resolveRepoScript = (target: string): string => {

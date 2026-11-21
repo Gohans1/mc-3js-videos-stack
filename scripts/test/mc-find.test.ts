@@ -180,9 +180,9 @@ function makeFindEnv() {
   );
 
   const runCli = (args: string[], cwd = film) =>
-    spawnSync("bun", [FIND_TS, ...args], {
+    spawnSync("bun", [FIND_TS, ...(args.includes("--offline") ? args : ["--offline", ...args])], {
       cwd,
-      env: { ...process.env, MC_VAULT_ROOT: vault, MC_FIND_OFFLINE: "1" },
+      env: { ...process.env, MC_VAULT_ROOT: vault },
       encoding: "utf8",
       timeout: 20000,
     });

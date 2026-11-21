@@ -121,7 +121,7 @@ export function CliWorkbench({
   onSelectSubcommand: (level: number, subId: string) => void;
   onSelectTargetFilm: (target: string) => void;
   onUpdateField: (
-    bucket: "args" | "flags" | "env",
+    bucket: "args" | "flags",
     key: string,
     value: CliArgValue,
     spec: ReturnType<typeof buildCliInvocation>,
@@ -147,7 +147,7 @@ export function CliWorkbench({
   const drawerScopeKey = `${command.id}:${subPathKey}`;
   const validationAttempted = validationScopeKey === drawerScopeKey;
   const moreOpen = openDrawerKey === drawerScopeKey;
-  const pendingInput = (bucket: "args" | "flags" | "env", key: string) => ({
+  const pendingInput = (bucket: "args" | "flags", key: string) => ({
     value: draft.pendingInputs[`${bucket}:${key}`] ?? "",
     onChange: (value: string) => onUpdatePendingInput(`${bucket}:${key}`, value),
   });
@@ -174,7 +174,6 @@ export function CliWorkbench({
           subcommandPath: draft.subcommandPath,
           args: effectiveDraft.args,
           flags: effectiveDraft.flags,
-          env: effectiveDraft.env,
           targetFilm: draft.targetFilm,
           mode: "execute",
         },
@@ -198,17 +197,13 @@ export function CliWorkbench({
   );
 
   const combinedValues = useMemo<Record<string, CliArgValue>>(
-    () => ({ ...effectiveDraft.args, ...effectiveDraft.flags, ...effectiveDraft.env }),
+    () => ({ ...effectiveDraft.args, ...effectiveDraft.flags }),
     [effectiveDraft],
   );
 
   const visibleArgs = useMemo(
     () => spec.argsDef.filter((a) => isFieldVisible(a.visibleWhen, combinedValues)),
     [spec.argsDef, combinedValues],
-  );
-  const visibleEnv = useMemo(
-    () => spec.envDef.filter((e) => isFieldVisible(e.visibleWhen, combinedValues)),
-    [spec.envDef, combinedValues],
   );
   const commonFlags = useMemo(
     () => spec.flagsDef.filter((f) => f.tier !== "advanced"),
@@ -319,7 +314,6 @@ export function CliWorkbench({
       subcommandPath: draft.subcommandPath,
       args: effectiveDraft.args,
       flags: effectiveDraft.flags,
-      env: effectiveDraft.env,
       targetFilm: draft.targetFilm,
       mode: "execute",
     };
@@ -348,8 +342,7 @@ export function CliWorkbench({
     });
   };
 
-  const noFieldsAtAll =
-    spec.argsDef.length === 0 && spec.envDef.length === 0 && spec.flagsDef.length === 0;
+  const noFieldsAtAll = spec.argsDef.length === 0 && spec.flagsDef.length === 0;
 
   const legoBar = (
     <CliLegoBar
@@ -431,42 +424,6 @@ export function CliWorkbench({
                         requiredOverride={isFieldRequired(arg, combinedValues)}
                         onChange={(v) =>
                           onUpdateField("args", arg.key, v, spec, arg.exclusiveGroup)
-                        }
-                      />
-                    ))}
-                  </div>
-                </section>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          {spec.envDef.length > 0 && (
-            <Collapsible open={visibleEnv.length > 0}>
-              <CollapsibleContent>
-                <section
-                  aria-label="Environment overrides"
-                  className="flex min-w-0 flex-col gap-1.5"
-                >
-                  <h3 className="text-heading-foreground px-1 text-base font-semibold">
-                    Environment overrides
-                  </h3>
-                  <div className="bg-card border-hairline grid min-w-0 grid-cols-1 gap-4 rounded-xl border p-3 @min-[480px]/cli-form:grid-cols-2">
-                    {spec.envDef.map((envDef) => (
-                      <CliFieldControl
-                        key={`${command.id}:${subPathKey}:env:${envDef.key}`}
-                        def={envDef}
-                        pendingInput={pendingInput("env", envDef.key)}
-                        invalid={
-                          validationAttempted &&
-                          hasFieldValidationError(envDef, spec.validationErrors)
-                        }
-                        errorId={validationErrorId}
-                        visible={isFieldVisible(envDef.visibleWhen, combinedValues)}
-                        value={draft.env[envDef.key]}
-                        context={catalog.context}
-                        requiredOverride={isFieldRequired(envDef, combinedValues)}
-                        onChange={(v) =>
-                          onUpdateField("env", envDef.key, v, spec, envDef.exclusiveGroup)
                         }
                       />
                     ))}

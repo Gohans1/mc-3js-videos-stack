@@ -89,7 +89,7 @@ test("a film draft's picture is its top at the film's ratio; a final or a video 
   assert.equal(filmPicture(dir, "draft_video.mp4"), null);
 });
 
-// a CHUNKS run joins chunks drawn at different times: each brings the cuts it was drawn with over its own 30 s
+// a --chunks run joins chunks drawn at different times: each brings the cuts it was drawn with over its own 30 s
 test("a joined draft's cuts are each chunk's own over its seconds, or none when a chunk recorded none", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "joined-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

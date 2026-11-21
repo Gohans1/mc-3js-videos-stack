@@ -877,7 +877,7 @@ if (isMain) {
     console.error(
       got.length > 0
         ? `the film is ${got.length.toFixed(3)} s long: give a second before that`
-        : `no headless timeline duration: set src/edit.json end or run AT=${t} LIST=1 bun run render stills for the live scene`,
+        : `no headless timeline duration: set src/edit.json end or run bun run render stills --at ${t} --list for the live scene`,
     );
     process.exit(2);
   }
@@ -943,7 +943,7 @@ if (isMain) {
       };
     } catch (e) {
       console.error(
-        `--pixel at ${t}: ${(e as Error).message}; place it by eye with CHECK=probe instead`,
+        `--pixel at ${t}: ${(e as Error).message}; place it by eye with --check probe instead`,
       );
       process.exit(1);
     }
@@ -1150,7 +1150,7 @@ if (isMain) {
         : `pixel ${pixel.at.join(",")} never meets ${pixel.plane}: its ray runs parallel to it or away from it`,
     );
   out.push(
-    `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,
+    `next: look at it with the film's own list over it (bun run render stills --at ${t} --list), change the rows named, then bun run check`,
   );
   const notesWaiting = noteNudge(film);
   if (notesWaiting) out.push(notesWaiting);

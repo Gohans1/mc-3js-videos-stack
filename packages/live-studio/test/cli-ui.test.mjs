@@ -96,17 +96,20 @@ const makeContext = (overrides = {}) => ({
   ...overrides,
 });
 
-test("poster validation identifies AT by its env key when the label includes units", () => {
+test("poster validation marks the --at field by its flag, not by its label", () => {
   const spec = buildCliInvocation(
     { commandId: "render", args: { target: "poster" } },
     makeContext(),
   );
-  const at = spec.envDef.find((field) => field.key === "AT");
+  const at = spec.flagsDef.find((field) => field.key === "--at");
   assert.ok(at);
-  assert.ok(spec.validationErrors.includes("Missing required env: AT"));
+  assert.ok(spec.validationErrors.includes("Missing required option: --at"));
   assert.ok(cliModel.hasFieldValidationError(at, spec.validationErrors));
   assert.ok(
-    !cliModel.hasFieldValidationError({ key: "ENTRY", label: "Entry file" }, spec.validationErrors),
+    !cliModel.hasFieldValidationError(
+      { key: "--entry", flag: "--entry", label: "Custom Lab Page" },
+      spec.validationErrors,
+    ),
   );
 });
 
@@ -464,33 +467,33 @@ describe("CLI tab model & dependent lego logic", () => {
     const initial = createInitialDraft(renderCmd, ctx);
     const spec = buildCliInvocation({ commandId: "render" }, ctx);
 
-    const spanDef = spec.envDef.find((e) => e.key === "SPAN");
-    const chunksDef = spec.envDef.find((e) => e.key === "CHUNKS");
+    const spanDef = spec.flagsDef.find((e) => e.key === "--span");
+    const chunksDef = spec.flagsDef.find((e) => e.key === "--chunks");
     assert.ok(spanDef?.exclusiveGroup);
     assert.equal(spanDef?.exclusiveGroup, chunksDef?.exclusiveGroup);
 
     const first = setDraftFieldWithExclusiveClear(
       initial,
       spec,
-      "env",
-      "SPAN",
+      "flags",
+      "--span",
       "0-4",
       spanDef?.exclusiveGroup,
     );
-    assert.equal(first.next.env.SPAN, "0-4");
+    assert.equal(first.next.flags["--span"], "0-4");
     assert.equal(first.cleared.length, 0);
 
     const second = setDraftFieldWithExclusiveClear(
       first.next,
       spec,
-      "env",
-      "CHUNKS",
+      "flags",
+      "--chunks",
       "2",
       chunksDef?.exclusiveGroup,
     );
-    assert.equal(second.next.env.CHUNKS, "2");
-    assert.equal(second.next.env.SPAN, undefined);
-    assert.ok(second.cleared.includes("SPAN"));
+    assert.equal(second.next.flags["--chunks"], "2");
+    assert.equal(second.next.flags["--span"], undefined);
+    assert.ok(second.cleared.includes("--span"));
   });
 
   test("visibleWhen hides mocap-only flags when --kind is non-mocap and keeps them hidden from lego tokens", () => {
@@ -529,7 +532,6 @@ describe("CLI tab model & dependent lego logic", () => {
       subcommandPath: [],
       args: { ids: "intro" },
       flags: { "--yes": true },
-      env: {},
       targetFilm: "active",
       createdAt: 1,
       updatedAt: 1,
@@ -555,7 +557,6 @@ describe("CLI tab SSR UI rendering", () => {
         subcommandPath: [],
         args: { ids: "intro" },
         flags: { "--yes": true },
-        env: {},
         targetFilm: "active",
         createdAt: 1,
         updatedAt: 1,
@@ -980,7 +981,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "sealed-room",
         createdAt: 1,
         updatedAt: 1,
@@ -1135,7 +1135,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
             subcommandPath: [],
             args: { ids: "intro" },
             flags: { "--yes": true },
-            env: {},
             targetFilm: "active",
             createdAt: 1,
             updatedAt: 1,
@@ -1160,7 +1159,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       subcommandPath: [],
       args: {},
       flags: {},
-      env: {},
       targetFilm: "active",
       createdAt: 1,
       updatedAt: 1,
@@ -1261,13 +1259,13 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     const ctx = makeContext();
     const renderCmd = findCliCommand("render");
     assert.ok(renderCmd);
-    const atEnv = renderCmd.env?.find((e) => e.key === "AT");
-    assert.ok(atEnv);
+    const atDef = renderCmd.flags?.find((e) => e.key === "--at");
+    assert.ok(atDef);
 
     const html = renderToStaticMarkup(
       wrapTree(
         createElement(CliFieldControl, {
-          def: atEnv,
+          def: atDef,
           value: undefined,
           context: ctx,
           requiredOverride: true,
@@ -1344,7 +1342,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     }
   });
 
-  test("CliWorkbench renders conditional AT Required on render poster, hides ENTRY/LAB_VIEW on captions, and preserves ../../scripts/timeline_fmt.ts", () => {
+  test("CliWorkbench renders conditional --at Required on render poster, and preserves ../../scripts/timeline_fmt.ts", () => {
     const ctx = makeContext();
     const catalog = { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context: ctx };
     const renderCmd = findCliCommand("render");
@@ -1381,27 +1379,18 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     const posterHtml = renderToStaticMarkup(
       wrapTree(createElement(CliWorkbench, { ...commonProps, draft: posterDraft })),
     );
-    const posterAtIdx = posterHtml.indexOf("AT (Heard Seconds)");
+    const posterAtIdx = posterHtml.indexOf("Heard Seconds");
     assert.ok(posterAtIdx >= 0);
     assert.ok(posterHtml.slice(posterAtIdx, posterAtIdx + 240).includes("Required"));
-    assert.ok(posterHtml.includes("ENTRY"));
 
     const stillsDraft = createInitialDraft(renderCmd, ctx);
     stillsDraft.args.target = "stills";
     const stillsHtml = renderToStaticMarkup(
       wrapTree(createElement(CliWorkbench, { ...commonProps, draft: stillsDraft })),
     );
-    const stillsAtIdx = stillsHtml.indexOf("AT (Heard Seconds)");
+    const stillsAtIdx = stillsHtml.indexOf("Heard Seconds");
     assert.ok(stillsAtIdx >= 0);
     assert.ok(!stillsHtml.slice(stillsAtIdx, stillsAtIdx + 240).includes("Required"));
-
-    const captionsDraft = createInitialDraft(renderCmd, ctx);
-    captionsDraft.args.target = "captions";
-    const captionsHtml = renderToStaticMarkup(
-      wrapTree(createElement(CliWorkbench, { ...commonProps, draft: captionsDraft })),
-    );
-    assert.ok(!captionsHtml.includes("ENTRY"));
-    assert.ok(!captionsHtml.includes("LAB_VIEW"));
 
     const fmtSpec = buildCliInvocation({ commandId: "timeline:fmt", targetFilm: "active" }, ctx);
     assert.ok(fmtSpec.displayCommand.includes("../../scripts/timeline_fmt.ts"));
@@ -1586,7 +1575,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       subcommandPath: [],
       args: {},
       flags: {},
-      env: {},
       targetFilm: "root",
       createdAt: 1,
       updatedAt: 1,
@@ -2100,7 +2088,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         targetFilm: "active",
         flags: {},
         args: { query: "rain" },
-        env: {},
         createdAt: 1,
         updatedAt: 1,
       },
@@ -2112,7 +2099,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         targetFilm: "demo-film",
         flags: { "--yes": true },
         args: {},
-        env: {},
         createdAt: 2,
         updatedAt: 2,
       },
@@ -2216,7 +2202,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "root",
         createdAt: 1,
         updatedAt: 1,
@@ -2228,7 +2213,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         subcommandPath: [],
         args: {},
         flags: {},
-        env: {},
         targetFilm: "root",
         createdAt: 2,
         updatedAt: 2,
@@ -2461,7 +2445,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
               subcommandPath: [],
               args: {},
               flags: {},
-              env: {},
               targetFilm: "root",
               createdAt: 1,
               updatedAt: 1,
@@ -2535,11 +2518,10 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       ),
       false,
     );
-    // Image-list mode shows --out inside Options and hides Environment overrides (START)
+    // Image-list mode shows --out inside Options
     const imagesHtml = renderSheet({ images: ["renders/view_a.png"] });
     assert.equal(imagesHtml.includes('aria-label="Options"'), true);
     assert.equal(imagesHtml.includes("Output Sheet Path"), true);
-    assert.equal(imagesHtml.includes('aria-label="Environment overrides"'), false);
     // Conflict (both video + images) hides --out -> Options collapses closed again
     assert.equal(
       renderSheet({

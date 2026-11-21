@@ -1,12 +1,12 @@
 """Contact sheets for self-review, 6 pictures each (3 x 2, 640 wide), in time order.
-  bun run sheet                                  every renders/still_*.jpg (make them: AT=1,4 bun run render stills),
+  bun run sheet                                  every renders/still_*.jpg (make them: bun run render stills --at 1,4),
                                                  to renders/sheet_<n>.jpg; a draft still carries its time and shot under it
   bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg]
                                                  explicit images (.jpg, .jpeg, .png, .webp) into one captioned grid
                                                  (default renders/sheet_custom.jpg; --out must stay inside the film folder)
   bun run sheet renders/draft_video.mp4 10,20,30  only those seconds of a video, to renders/sheet_<video>_<n>.jpg
   bun run sheet renders/chunks/c02.mp4 62,70     film seconds, as framecheck prints them: a chunk or a span starts at its
-                                                 film second by itself (c02: 60 s, span_40-44: 40 s), START=60 for any other
+                                                 film second by itself (c02: 60 s, span_40-44: 40 s), --start 60 for any other
   bun run sheet renders/draft_video.mp4 shots    the whole film at a glance: one frame from the middle of every shot
   bun run sheet renders/draft_video.mp4 overview bounded compact overview, or overview 10-20/16 for a closer look
   bun run sheet renders/draft_video.mp4 frames 10,20-21/8  persistent native frames; no render, download or model
@@ -22,7 +22,7 @@
                                                  starts and camera keys with cut: true); when the cuts are the shots' starts alone it
                                                  names the shots either side (cut 4: shot 4 into 5, from 0) and the transition
                                                  between them (shotsTimeline row 5 .transition); shots shows each stretch between cuts
-Use film seconds for film renders, file seconds for other videos, or START for a manual offset. TIMES accepts 65, 1:05
+Use film seconds for film renders, file seconds for other videos, or --start for a manual offset. TIMES accepts 65, 1:05
 or 01:05.250. The shots and cut modes require a current film render at its original offset. Worth a look: a note's (bun run notes), a line's (bun run voice:cues),
 a fault's (bun run framecheck), either side of a cut (renders/cuts.json).
 Prints each sheet with the seconds on it; open them to look. Run inside the film.
@@ -33,7 +33,7 @@ frames TIMES: comma-separated heard seconds and A-B[/N] ranges (4 per range by d
   At most 96 samples per run; range endpoints must be inside the source (B may equal its end).
 New modes keep their outputs in a fresh renders/review_<name>_<id>/ with index.json: source, requestedTime,
   decoded frame time/sourceTime, sheet/cell (1-16, left to right then down) or native JPEG, and timeline context.
-Follow-up commands contain argv and optional env: apply both, including START, even in a new shell.
+Follow-up commands are argv, --start included: run them as given, even in a new shell.
 Open every sheet, then use commands.frames from the index for details; never read small text from a tile.
   Speech and shots come from the current timeline. Stale, external and manually re-aligned files omit those links.
 Local only, no credits or model. Up to 96 seeks; extraction and timeline-context subprocesses time out after 30 s.
@@ -242,6 +242,7 @@ out_arg = None
 vs_arg = None
 grid_arg = None
 crop_arg = None
+start_arg = None
 i = 0
 while i < len(args):
     a = args[i]
@@ -262,6 +263,14 @@ while i < len(args):
             grid_arg = args[i + 1]
         else:
             crop_arg = args[i + 1]
+        i += 2
+        continue
+    if a == "--start":
+        if start_arg is not None:
+            usage("--start may only be passed once")
+        if i + 1 >= len(args):
+            usage("--start needs the film second the video starts at: bun run sheet renders/clip.mp4 frames 62 --start 60")
+        start_arg = args[i + 1]
         i += 2
         continue
     if a == "--out":
@@ -286,6 +295,8 @@ while i < len(args):
     i += 1
 
 is_image_list = any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos)
+if start_arg is not None and (is_image_list or not pos):
+    usage("--start goes with a video: bun run sheet renders/clip.mp4 frames 62 --start 60")
 if is_image_list:
     build_image_sheet(pos, out_arg)
     raise SystemExit
@@ -339,14 +350,14 @@ if args:
         usage(f"no {video} (the videos here: {videos}); a new one: bun run render clip")
     context = render_context(video)
     render = context["render"]
-    if "START" in os.environ:
-        start = heard_second(os.environ["START"])
+    if start_arg is not None:
+        start = heard_second(start_arg)
         if start is None or not 0 <= start < 1e6:
-            usage(f"START takes the film second the video starts at (65, 1:05 or 01:05.250), got {os.environ['START']!r}")
+            usage(f"--start takes the film second the video starts at (65, 1:05 or 01:05.250), got {start_arg!r}")
     else:
         start = render["start"] if render else 0.0
         if start >= 1e6:
-            usage(f"{video} starts at film second {start:.15g} by its name, past any film: START=<s> says where it starts")
+            usage(f"{video} starts at film second {start:.15g} by its name, past any film: --start <s> says where it starts")
     native_start = render["start"] if render else 0
     manual = abs(start - native_start) > 0.000001
     if not manual:
@@ -405,7 +416,7 @@ if args:
             meet = f': from shot {n} "{a.get("name", "")}" into shot {n + 1} "{b.get("name", "")}", {fx}'
         header = f"cut {n} at {c:.2f} s{meet}; frames from 0.25 s before to 0.35 s after"
         after = (f"; bun run at {seconds(c)} names every row that places it" if c < timeline_length(Path.cwd())
-                 else f"; AT={seconds(c)} LIST=1 bun run render stills shows the live scene there")
+                 else f"; bun run render stills --at {seconds(c)} --list shows the live scene there")
 
     else:
         secs = [heard_second(s) for s in args[1].split(",")]
@@ -416,7 +427,7 @@ if args:
             usage(f"{video} holds {clock} seconds {seconds(picture_from)}-{seconds(picture_to)}; outside it: {', '.join(f'{s:g}' for s in out)}")
     secs = sorted({round(min(s, end), 9) for s in secs})
     if start:
-        label = "START" if "START" in os.environ else f"the {render['kind']}'s start"
+        label = "--start" if start_arg is not None else f"the {render['kind']}'s start"
         print(f"{clock} seconds from {start:g} s on ({label})")
     elif clock != "film":
         print(f"{clock} seconds from 0")
@@ -452,7 +463,7 @@ try:
     at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
     files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))
     if not files:
-        usage("no renders/still_*.jpg to lay out: AT=1,4,8 bun run render stills first, or bun run sheet <video> 10,20,30")
+        usage("no renders/still_*.jpg to lay out: bun run render stills --at 1,4,8 first, or bun run sheet <video> 10,20,30")
     R.mkdir(exist_ok=True)
     for old in R.glob(f"{name}*.jpg"):
         if re.fullmatch(re.escape(name) + r"\d+\.jpg", old.name):

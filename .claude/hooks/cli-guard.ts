@@ -20,7 +20,7 @@ const TEE = /^(?:tee|Tee-Object)(?=\s|$)/i;
 const ASSIGN = /^\$[\w:]+\s*=\s*/;
 
 const REASON =
-  "Nothing in this command ran, not even the parts before or after the film command: run them again once it is fixed. Read the repo's film commands whole (find, render, check, framecheck, listen...): never pipe them (head, tail, grep, Select-Object...), send them or their errors to a file, or catch them in a variable. Faults, written files and next: lines sit anywhere; a cut loses them. Narrow with the command's own options (-n, --kind, AT=, CHECK=), or --json (check, at, voice:cues) for a script.";
+  "Nothing in this command ran, not even the parts before or after the film command: run them again once it is fixed. Read the repo's film commands whole (find, render, check, framecheck, listen...): never pipe them (head, tail, grep, Select-Object...), send them or their errors to a file, or catch them in a variable. Faults, written files and next: lines sit anywhere; a cut loses them. Narrow with the command's own options (-n, --kind, --at, --check), or --json (check, at, voice:cues) for a script.";
 
 // quoted text and heredoc bodies are data, not commands: blanked before the command is read
 const blank = (cmd: string) =>

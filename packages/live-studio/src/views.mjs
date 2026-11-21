@@ -38,14 +38,14 @@ export function parseViews(raw, projectDir = process.cwd()) {
   const text = String(raw ?? "").trim();
   if (!text) {
     throw new Error(
-      'empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json',
+      'empty spec; use --views "name:px,py,pz,lx,ly,lz,fov;..." or --views "@path/to/views.json"',
     );
   }
   const seen = new Set();
   if (text.startsWith("@")) {
     const fileSpec = text.slice(1).trim();
     if (!fileSpec) {
-      throw new Error("@ requires a JSON file path, e.g. VIEWS=@views.json");
+      throw new Error('@ requires a JSON file path, e.g. --views "@views.json"');
     }
     const filePath = resolve(projectDir, fileSpec);
     if (!statSync(filePath, { throwIfNoEntry: false })?.isFile()) {
@@ -80,7 +80,7 @@ export function parseViews(raw, projectDir = process.cwd()) {
   const trimmed = text.replace(/;\s*$/, "");
   if (!trimmed) {
     throw new Error(
-      'empty spec; use VIEWS="name:px,py,pz,lx,ly,lz,fov;..." or VIEWS=@path/to/views.json',
+      'empty spec; use --views "name:px,py,pz,lx,ly,lz,fov;..." or --views "@path/to/views.json"',
     );
   }
   return trimmed.split(";").map((rawPart, idx) => {

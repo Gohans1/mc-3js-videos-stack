@@ -22,7 +22,7 @@ bun run note ask 3 "your question"           # unsure what they want: the questi
 bun run note learned 3 "the rule, where kept"   # for a note they asked you to remember, once the rule is kept
 ```
 
-`bun run note done` refuses without proof (`--after <image>`) or an explicit explanation (`--no-after "<reason>"`). Pass only one of the two. If the creator asked to move something or the issue's original spot changed so the note's saved angle no longer frames the fix well, capture the After picture from a suitable custom view (`INSPECT=px,py,pz,lx,ly,lz,fov AT=<s> bun run render stills`) and pass `--cam px,py,pz,lx,ly,lz[,fov] --t <s>`: hovering the note shows Before & After side-by-side and clicking After flies the creator directly to your custom camera pose. If new notes arrive while you worked after reading a note (`bun run notes ID`), `done` and `ask` list them automatically (closest to that moment first).
+`bun run note done` refuses without proof (`--after <image>`) or an explicit explanation (`--no-after "<reason>"`). Pass only one of the two. If the creator asked to move something or the issue's original spot changed so the note's saved angle no longer frames the fix well, capture the After picture from a suitable custom view (`bun run render stills --inspect px,py,pz,lx,ly,lz,fov --at <s>`) and pass `--cam px,py,pz,lx,ly,lz[,fov] --t <s>`: hovering the note shows Before & After side-by-side and clicking After flies the creator directly to your custom camera pose. If new notes arrive while you worked after reading a note (`bun run notes ID`), `done` and `ask` list them automatically (closest to that moment first).
 
 ## States
 

@@ -7,7 +7,7 @@ import { loadRig, makePlayer } from "mc-actor/player";
 // Lab: tags for a clip library, measured on Steve himself (each clip retargeted and baked as the film does, mc-actor/clips,
 // at 30 fps): one "ROW {json}" line per clip, which clip-catalog/catalog.sh appends to vault/motion/catalog/<lib>.jsonl and
 // clip-catalog/catalog.py searches. No stills.
-// ENTRY=../../packages/clip-catalog/catalog.ts LAB_LIB=mixamo LAB_CLIPS=a,b,c bun run render stills
+// bun run render stills --entry ../../packages/clip-catalog/catalog.ts --lab lib=mixamo --lab clips=a,b,c
 // Fields: dur s; start/end posture and the posture runs (POSTURE below, each run at least RUN s); travel (end x, z in his
 // frame, m: x his left, z his front), reach (furthest from the start, m), turn (end ry, deg to his left); loop (first
 // against last frame: worst joint deg, hips cm); energy (mean joint turn speed, deg/s); look (head twist on the neck,

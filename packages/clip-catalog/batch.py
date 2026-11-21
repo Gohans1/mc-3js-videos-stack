@@ -54,7 +54,7 @@ def clip_names(lib):
         gltf = json.loads(raw[20:20 + struct.unpack("<I", raw[12:16])[0]] if raw[:4] == b"glTF" else raw)
         names = [a["name"] for a in gltf["animations"]]
     if any(not isinstance(n, str) or not n or "," in n or "/" in n or "\\" in n for n in names):
-        raise ValueError(f"{path}: clip names must be nonempty basenames without commas (LAB_CLIPS separator)")
+        raise ValueError(f"{path}: clip names must be nonempty basenames without commas (the --lab clips= separator)")
     return list(dict.fromkeys(names))
 
 
@@ -71,14 +71,13 @@ def run_batch(command, cwd, output, mode, lib, names, timeout):
     log_dir = output.parent / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / f"{mode}_{lib}_{time.time_ns()}.log"
-    env = {k: v for k, v in os.environ.items() if not k.startswith("LAB_")}
-    env.update(ENTRY=str(HERE / ENTRIES[mode]), LAB_LIB=lib, LAB_CLIPS=",".join(names))
+    command = [*command, "--entry", str(HERE / ENTRIES[mode]), "--lab", f"lib={lib}", "--lab", f"clips={','.join(names)}"]
     if mode == "sheets":
         for name in names:
             (cwd / "renders" / f"sheet_{lib}__{name}.jpg").unlink(missing_ok=True)
     reason = None
     with log_path.open("w", encoding="utf8") as log:
-        proc = subprocess.Popen(command, cwd=cwd, env=env, stdout=log, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen(command, cwd=cwd, stdout=log, stderr=subprocess.STDOUT,
                                 start_new_session=os.name != "nt",
                                 creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0)
         try:

@@ -40,7 +40,7 @@ export function PreviewControls() {
         <div className="flex items-center justify-between gap-2">
           <PopoverTitle>Preview</PopoverTitle>
           <Button size="sm" variant="quiet" onClick={copyCameraInspection}>
-            Copy INSPECT
+            Copy camera
           </Button>
           <Button
             size="sm"

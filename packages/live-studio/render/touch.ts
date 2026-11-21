@@ -1,5 +1,5 @@
 // @ts-nocheck
-// CHECK=touch:<target>,<from>,<to> (heard seconds), built in for every film: does the target sink into things, or hang just off
+// --check touch:<target>,<from>,<to> (heard seconds), built in for every film: does the target sink into things, or hang just off
 // them, every frame? Every vertex and triangle middle of the target's meshes, posed (a target with no
 // mesh, like mc-actor's handR grip: its own position), is measured against every other visible mesh within 15 cm with
 // three-mesh-bvh: the closest point on the surface; inside when it lies behind the face there and the mesh closes around it
@@ -99,10 +99,10 @@ export const touchCheck = (render) => {
 
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
-      return ["ERROR usage: CHECK=touch:<target>,<from s>,<to s>"];
+      return ["ERROR usage: --check touch:<target>,<from s>,<to s>"];
     const tools = render.tools ?? {};
     if (!tools.scene || !tools.camera)
-      return ["ERROR CHECK=touch requires draw.tools.scene and draw.tools.camera on the film"];
+      return ["ERROR --check touch requires draw.tools.scene and draw.tools.camera on the film"];
     const { scene, camera, objects, bones } = tools;
     const obj = findTarget(tools, target);
     if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
