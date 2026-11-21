@@ -701,6 +701,42 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
   }
 });
 
+// a soft target is a focus question: where the lens focused and how blurred each target is, in a 1920-wide frame's px
+test("probeCheck says where the lens focuses and how blurred each target is", async () => {
+  const scene = new THREE.Scene();
+  const camera = makePerspectiveCamera();
+  const near = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial());
+  near.position.set(0, 1, 3);
+  const far = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial());
+  far.position.set(0, 1, 0);
+  scene.add(near, far);
+  const optics = { mm: 50, fstop: 2, focusM: 2, focusTarget: "near" };
+  const objects = [
+    [near, "near"],
+    [far, "far"],
+  ];
+  const probe = (tools) =>
+    probeCheck(
+      Object.assign(() => {}, { tools }),
+      {},
+      async () => {},
+    )("*", 1);
+  const lines = await probe({ scene, camera, optics, objects });
+  assert.match(lines[0], / focus 2\.00 m on near, f\/2, 50 mm /);
+  // the focus distance is the near box's: it is sharp; 5 m off, the far box blurs by blurPx's circle of confusion
+  assert.match(
+    lines.find((l) => l.startsWith("  near")),
+    / blur 0\.0 px/,
+  );
+  assert.match(
+    lines.find((l) => l.startsWith("  far")),
+    / blur 20\.5 px/,
+  );
+  // with no aperture the lens is all sharp, and nothing is said of focus
+  const pinhole = await probe({ scene, camera, optics: { ...optics, fstop: 0 }, objects });
+  assert.doesNotMatch(pinhole.join("\n"), /focus|blur/);
+});
+
 // ---------------- render CLI validation tests ----------------
 
 test(

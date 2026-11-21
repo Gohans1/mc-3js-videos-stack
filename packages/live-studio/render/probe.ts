@@ -1,8 +1,10 @@
 // CHECK=probe:<t> or CHECK=probe:<filter>,<t> (heard seconds), built in for every film:
 // evaluates draw(t) once (honoring INSPECT= Free Cam when set) and reports world positions, Box3 bounds,
 // bone/empty local +Y/+Z axes, camera distances, and normalized [0..1] screen rects to renders/probe_<t>s.json.
+import { blurPx } from "film-kit/lens";
 import * as THREE from "three";
 
+import { type Ratio, sizeOf } from "../src/frame.ts";
 import { cameraTimesAt, timingClock } from "../src/timing-state.mjs";
 
 export type Vec3Tuple = [number, number, number];
@@ -32,6 +34,8 @@ export interface ProbeTarget {
   axes?: { y: Vec3Tuple; z: Vec3Tuple };
   cameraDist: number;
   screen: ProbeScreen;
+  /** the depth of field's blur circle at the target's distance, in px of a frame 1920 on its long side */
+  blurPx?: number;
 }
 
 export interface ProbeReport {
@@ -42,6 +46,8 @@ export interface ProbeReport {
     l: Vec3Tuple;
     fov: number | null;
     mode: "inspect" | "film";
+    /** the lens's focus when its aperture blurs (fstop > 0): draw.tools.optics */
+    focus?: { m: number; target: string | null; fstop: number; mm: number };
   };
   targets: ProbeTarget[];
 }
@@ -59,6 +65,7 @@ export interface ProbeTools {
   look?: THREE.Vector3 | { x: number; y: number; z: number };
   objects?: [THREE.Object3D, string][];
   bones?: Record<string, THREE.Object3D>;
+  optics?: { mm?: number; fstop?: number; focusM?: number; focusTarget?: string };
 }
 
 type ProbeRender = ((t: number) => void | Promise<void>) & {
@@ -68,6 +75,7 @@ type ProbeRender = ((t: number) => void | Promise<void>) & {
 
 interface ProbeConfig {
   inspect?: [number, number, number, number, number, number, number] | null;
+  ratio?: Ratio;
 }
 
 const round4 = (n: number): number => {
@@ -455,11 +463,12 @@ const formatTargetLine = (item: ProbeTarget): string => {
   const past = Object.entries(item.screen.past ?? {})
     .map(([edge, by]) => ` past ${edge} ${by.toFixed(2)}`)
     .join("");
+  const blur = item.blurPx !== undefined ? ` blur ${item.blurPx.toFixed(1)} px` : "";
   if (item.bounds) {
-    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}] size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m screen=${scr}${past}`;
+    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}] size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m${blur} screen=${scr}${past}`;
   }
   const axesText = item.axes ? ` +Y=[${fmt3(item.axes.y)}] +Z=[${fmt3(item.axes.z)}]` : "";
-  return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${axesText} dist=${item.cameraDist.toFixed(2)}m screen=${scr}${past}`;
+  return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${axesText} dist=${item.cameraDist.toFixed(2)}m${blur} screen=${scr}${past}`;
 };
 
 export const probeCheck =
@@ -523,9 +532,18 @@ export const probeCheck =
           : null;
       const sceneT = round4(timingClock.duration > 0 ? cameraTimesAt(t).world : t);
 
-      const targets = collectProbeTargets(tools, filter).map(({ obj, name }) =>
-        measureProbeTarget(obj, name, camera),
-      );
+      const { mm = 0, fstop = 0, focusM = 0, focusTarget } = tools.optics ?? {};
+      const focus =
+        fstop > 0 && focusM > 0 ? { m: focusM, target: focusTarget ?? null, fstop, mm } : undefined;
+      const [width] = sizeOf(cfg.ratio ?? "16:9", 1920);
+      const targets = collectProbeTargets(tools, filter).map(({ obj, name }) => {
+        const target = measureProbeTarget(obj, name, camera);
+        if (focus)
+          target.blurPx = round4(
+            blurPx({ mm, fstop, focus: focusM, dist: target.cameraDist, width }),
+          );
+        return target;
+      });
       report = {
         t: round4(t),
         sceneT,
@@ -534,6 +552,7 @@ export const probeCheck =
           l: camLook,
           fov,
           mode: cfg.inspect ? "inspect" : "film",
+          ...(focus && { focus }),
         },
         targets,
       };
@@ -548,7 +567,8 @@ export const probeCheck =
     const fileName = `probe_${t}s.json`;
     await postFn(`/still/${fileName}`, JSON.stringify(report, null, 2));
 
-    const header = `probe t=${t}s (scene ${report.sceneT}s) cam=${report.camera.mode} p=[${fmt3(report.camera.p)}] l=[${fmt3(report.camera.l)}] fov=${report.camera.fov ?? "ortho"} (${report.targets.length} target${report.targets.length === 1 ? "" : "s"})`;
+    const lens = report.camera.focus;
+    const header = `probe t=${t}s (scene ${report.sceneT}s) cam=${report.camera.mode} p=[${fmt3(report.camera.p)}] l=[${fmt3(report.camera.l)}] fov=${report.camera.fov ?? "ortho"}${lens ? ` focus ${lens.m.toFixed(2)} m${lens.target ? ` on ${lens.target}` : ""}, f/${lens.fstop}, ${lens.mm} mm` : ""} (${report.targets.length} target${report.targets.length === 1 ? "" : "s"})`;
     const lines = [header, ...report.targets.map(formatTargetLine)];
     if (!report.targets.length && filter.trim()) {
       const available = (tools.objects ?? []).map(([, label]) => label).join(", ") || "none";
