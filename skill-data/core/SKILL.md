@@ -105,8 +105,8 @@ Exit 0 means the command completed; 1 usually indicates a job/data failure, and 
 | earshot unavailable                       | earshot doctor; read INSTALL.md                                                        |
 | Editing a file                            | The Edit tool, not sed -i or a python replace: a pattern that matches nothing changes nothing and says nothing |
 | A long Python job                         | python -u and write results as it goes, with a deadline; a timeout loses whatever was not written |
-| A one-off Python script                   | uv run --no-project --with numpy python -I script.py; python3 is a Store stub, and another tool's venv (earshot's) is its own |
-| Shortlisting pack assets                  | bun run asset pick each one as it is chosen: pack/picks.json outlives a compacted context, a list in chat does not |
+| A one-off Python script                   | uv run --no-project --with numpy python -I script.py states its packages; another tool's venv (earshot's) is its own |
+| Shortlisting pack assets                  | bun run asset pick <ids> --no-build as each is chosen, unpick the rejects, then bun run link <film> at the repo root builds once: pack/picks.json outlives a compacted context, a list in chat does not |
 
 Gap reporting does not gate creativity or automatically justify another command. Logs belong to the current checkout; commit and synchronize them separately when sharing is needed.
 

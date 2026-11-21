@@ -1459,7 +1459,7 @@ export async function runVoicePlaygroundCli(argv, options = {}) {
           code === 2
             ? "Use command --help or schema <command> to check its input."
             : error.failedJobs
-              ? "failed[].error says where each job failed: a provider code (provider_under_maintenance, a quota) fails every retry until the provider clears it and needs nothing from the Studio or project; any other error names what to check. failed[].credits is what each job cost, null when no figure came back (read the balance on the provider's site)."
+              ? "failed[].error says where each job failed: a provider code (provider_under_maintenance, an empty quota) fails every retry until the provider is back or the account topped up, and needs nothing from the Studio or project; any other error names what to check. failed[].credits is what each job cost, null when no figure came back (read the balance on the provider's site)."
               : "Check the selected project/server and saved progress before retrying.",
       }),
     );
