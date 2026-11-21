@@ -6421,7 +6421,9 @@ export function tokenizeWords(input: string): string[] {
 }
 
 const formatShellToken = (tok: string): string =>
-  tok === "" || /[\s"'\\$`|&;<>()!*?#]/.test(tok) ? `"${tok.replaceAll('"', '\\"')}"` : tok;
+  tok === "" || tok.startsWith("@") || /[\s"'\\$`|&;<>()!*?#]/.test(tok)
+    ? `"${tok.replaceAll('"', '\\"')}"`
+    : tok;
 
 const isActiveValue = (val: CliArgValue): boolean => {
   if (val === undefined || val === null || val === false) return false;
@@ -6461,7 +6463,12 @@ const validateArgumentTokens = (
   validationErrors: string[],
 ) => {
   for (const token of tokens) {
-    if (token.startsWith("-") && token !== "-" && !Number.isFinite(Number(token))) {
+    const numbers = token.split(",");
+    if (
+      token.startsWith("-") &&
+      token !== "-" &&
+      !numbers.every((n) => n.trim() !== "" && Number.isFinite(Number(n)))
+    ) {
       validationErrors.push(
         `${def.label}: "${token}" looks like an option. Use its option control, or prefix a file path with "./".`,
       );

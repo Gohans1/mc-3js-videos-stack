@@ -337,6 +337,19 @@ test("rejects options hidden in argument and flag values while preserving negati
   const negative = buildCliInvocation({ commandId: "find", flags: { "-n": "-2" } }, BASE_CONTEXT);
   expect(negative.validationErrors).toEqual([]);
   expect(negative.argvTokens).toEqual(["-n", "-2"]);
+  // a camera pose left of the origin is a list of numbers, not an option
+  const pose = buildCliInvocation(
+    { commandId: "render", args: { target: "stills" }, flags: { "--inspect": "-5,2,3,0,1,0,50" } },
+    BASE_CONTEXT,
+  );
+  expect(pose.validationErrors).toEqual([]);
+  expect(pose.argvTokens).toEqual(["stills", "--inspect", "-5,2,3,0,1,0,50"]);
+  // PowerShell reads a bare @word as splatting: the shown command quotes it
+  const views = buildCliInvocation(
+    { commandId: "render", args: { target: "stills" }, flags: { "--views": "@views.json" } },
+    BASE_CONTEXT,
+  );
+  expect(views.displayCommand).toEndWith('--views "@views.json"');
 });
 
 function readJson(file) {

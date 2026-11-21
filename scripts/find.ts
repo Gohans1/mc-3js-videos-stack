@@ -1641,7 +1641,7 @@ Options:
 
 Ordinary search returns BM25 first, then independent OpenFilm semantic candidates when those assets pass your filters.
 OpenFilm receives only query text/category/limit, no files or keys; each category waits at most 2.5 s, two at a time.
-Responses are cached for 24 h in MC_FIND_CACHE or .studio/openfilm-search.sqlite; MC_FIND_OFFLINE=1 disables requests.
+Responses are cached for 24 h in MC_FIND_CACHE or .studio/openfilm-search.sqlite; --offline makes no requests.
 API/cache errors keep BM25 intact. No prepared embedding index, Gemini, OpenRouter or Jev is used by default.
 MC_FIND_CACHE paths start at the repo root; --offline uses fresh cache entries only. --kind mc never calls OpenFilm.
 The semantic service always returns nearest candidates, even for nonsense: listen/view; no result is a fit guarantee.
