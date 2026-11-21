@@ -5,7 +5,7 @@ import { loadSource } from "mc-actor/clips";
 // second's blend into the clip, the clip (held 2 s at least), its crossfade into standing where it left him, seen from
 // his front and his left: renders/clip_<n>_<front|left>.jpg (python ../../packages/clip-catalog/sheet_clip.py: contact sheets). Logs where the
 // clip leaves him, for the next key's at and yaw.
-// LAB_CLIP=mixamo/Kneeling_Idle_c9cd9c47 ENTRY=lab/clip.ts bun run render stills  (LAB_AT=x,z floor spot, LAB_FPS=4,
+// bun run render stills --lab clip=mixamo/Kneeling_Idle_c9cd9c47 --entry lab/clip.ts  (--lab at=x,z floor spot, --lab fps=4,
 // LAB_T0=film second it starts at: the set's light is the film's at that time)
 import * as THREE from "three";
 

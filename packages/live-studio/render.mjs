@@ -50,7 +50,7 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
   bun run render stills       stills only, to renders/still_<s>s.jpg (the last run's stills are cleared first)
   bun run render clip         the film as 30 s H.264 chunks in renders/chunks/, joined into renders/draft_video.mp4
   bun run render captions     renders/draft_video.srt alone, in a second
-  AT=12 bun run render poster renders/poster_12s.png: one frame as the upload draws it (its size, no strip, 8 sub-frames),
+  bun run render poster --at 12  renders/poster_12s.png: one frame as the upload draws it (its size, no strip, 8 sub-frames),
                               lossless; a thumbnail, or a close look at a detail the 1280 draft blurs
   bun run render final        the film for upload, only when the creator asks for it (a 30 s chunk at 16 sub-frames took
                               4.5 min on an RTX 2060, against 10 s for a draft one; the GPU fan runs loud meanwhile):
@@ -63,127 +63,123 @@ edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft.
 when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: wall ms a camera sample per
 stretch between cuts (its median frame), naming one over twice the median of the others and 33 ms (a heavy set to look into).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
-Nothing is written outside the film. Options are environment variables:
-  AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)
-  LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
+Nothing is written outside the film. Options come after the target:
+  --at 40,41.5               stills at these heard seconds, or as notes print them: --at 0:40,0:41.5 (default 1)
+  --list                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot. The
                              picture is the frame's top at the film's ratio (720x1280 of a 9:16 draft's 720x1352):
-                             crop=iw:iw*16/9:0:0 (16:9: iw*9/16); framecheck, reference compare and REF= cut it off
-  CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
-  SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
+                             crop=iw:iw*16/9:0:0 (16:9: iw*9/16); framecheck, reference compare and --ref cut it off
+  --chunks 3,4               re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
+  --span 40,44               clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
-  SAMPLES=16                 temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
+  --samples 16               temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
                              poster 8): more is smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by
-                             itself, up to 64. SAMPLES=8 on stills (render all's too) gives a moving moment the final's
+                             itself, up to 64. --samples 8 on stills (render all's too) gives a moving moment the final's
                              motion blur at the draft's size; leave stills at 1 to check a pose, a contact or where things are
-  RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
+  --res 2160                 final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
-  INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
-  VIEWS="a:px,py,pz,lx,ly,lz,fov;b:..."  stills/poster only: batch multiple named cameras in one Chrome boot to
+  --inspect px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
+  --views "a:px,py,pz,lx,ly,lz,fov;b:..."  stills/poster only: batch multiple named cameras in one Chrome boot to
                              renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
-                             view_*.jpg; also accepts VIEWS=@views.json ({ name: [7 nums] } or [{ name, cam }])
-  CROP=x,y,w,h               stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
-  REF=references/ref.mp4     stills/poster only: each picture beside the reference's frame at the same second (its exact
+                             view_*.jpg; also accepts --views @views.json ({ name: [7 nums] } or [{ name, cam }])
+  --crop x,y,w,h             stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
+  --ref references/ref.mp4   stills/poster only: each picture beside the reference's frame at the same second (its exact
                              frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
                              sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
-                             says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
+                             says it too); --ref-region x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
                              brightness ours/reference. The reference is filmed with motion blur: on a moving moment give the
-                             stills SAMPLES=8 too, or ours reads sharper than it is
-  COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
-  CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
-  CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
-                             between two HEARD seconds as AT takes them, not the scene seconds of src/timeline rows
+                             stills --samples 8 too, or ours reads sharper than it is
+  --compare                  stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
+  --check "slide:0,108;trace:50,51,0.1"  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
+  --check motion:handR,81,83 built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
+                             between two HEARD seconds as --at takes them, not the scene seconds of src/timeline rows
                              (bun run at <s> converts and names the shot; the result says which shots it spans):
                              motion  speed graph, onion skin + speed-coloured path, pops, dead stops (render/motion.ts);
                                      cam also: turn and zoom in °/s, a frame width in how many seconds (7-second rule), impulse spans
                              seen    how much of the frame it fills, hidden behind what, cut off, too dark, BLURRED (render/seen.ts)
                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
-  CHECK=text, CHECK=text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
+  --check text, --check text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
                              fully shown: OUTSIDE the safe area (5% in; a Short's clears YouTube's buttons and title),
                              LOW contrast around its letters; renders/text_<i>.jpg
                              for each fault (render/text.ts). Reading time and size: bun run check
-  CHECK=order, CHECK=order:20,25  draw up to 48 times twice in different orders, including subframes and sampled cuts.
+  --check order, --check order:20,25  draw up to 48 times twice in different orders, including subframes and sampled cuts.
                              Finds history-dependent pictures without changing how you author the scene.
                              Writes renders/order.json and the first failing pair as lossless PNGs; 2/255 tolerance
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
-  CHECK=probe:<t>, CHECK="probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
+  --check probe:<t>, --check "probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
                              or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
-                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
+                             quote | and * in shell); honors --inspect, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
                              screen=[x0,y0..x1,y1] in 0..1 of the frame, "past top 0.12": that far beyond the edge, in frames;
                              with an aperture (fstop > 0) the header says where the lens focuses and each target its blur in px:
                              the lens's own, as a final with shutter.apertureSamples shows it; the DOF post pass (drafts, and finals without it) tops out short of strong blur
-  ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
-  RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
+  --entry lab/prop.ts        run a page of the film's own instead (it imports "live-studio/lab")
+  --lab view=desk            reaches an --entry page as cfg.lab.view; one --lab per key
+  --fresh-cache              use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
-  AT=12,30.5 LIST=1 bun run render stills
-  CHUNKS=3 bun run render clip
-  SPAN=40,44 bun run render clip
-  $env:AT='12,30.5'; bun run render stills; Remove-Item Env:AT     the same in PowerShell, where VAR=x cmd is no syntax
+  bun run render stills --at 12,30.5 --list
+  bun run render clip --chunks 3
+  bun run render clip --span 40,44
   bun run render final        then bun run mix renders/final_video.mp4 puts the soundtrack on it
 package.json "live-studio": { "chrome": path } names the headless Chrome (default tools/chrome-headless-shell/...);
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
 Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
-// its options are environment variables: --at 12 is the flag form an AI tries first
-const ENV_OPTIONS = [
-  "AT",
-  "LIST",
-  "CHUNKS",
-  "SPAN",
-  "INSPECT",
-  "VIEWS",
-  "CHECK",
-  "ENTRY",
-  "SAMPLES",
-  "RES",
-  "CROP",
-  "REF",
-  "REF_REGION",
-  "RENDER_FRESH_CACHE",
-];
+
+// Every option is a flag after the target; the value ones take the next word
+const VALUE_FLAGS = {
+  "--at": "at",
+  "--chunks": "chunks",
+  "--span": "span",
+  "--inspect": "inspect",
+  "--views": "views",
+  "--check": "check",
+  "--entry": "entry",
+  "--samples": "samples",
+  "--res": "res",
+  "--crop": "crop",
+  "--ref": "ref",
+  "--ref-region": "refRegion",
+};
+const SWITCHES = { "--list": "list", "--compare": "compare", "--fresh-cache": "freshCache" };
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
-const flagged = process.argv
-  .slice(2)
-  .map((a, i, all) => [/^--?([a-z0-9_-]+)(?:=(.*))?$/i.exec(a), all[i + 1]])
-  .find(([m]) => m && ENV_OPTIONS.includes(m[1].replaceAll("-", "_").toUpperCase()));
-if (flagged) {
-  const [m, next] = flagged;
-  const envName = m[1].replaceAll("-", "_").toUpperCase();
-  const value =
-    m[2] ?? (next && !next.startsWith("-") && !TARGETS.includes(next) ? next : "<value>");
-  console.error(
-    `${envName} is an environment variable here, not a flag: ${envName}=${value} bun run render ${process.argv.slice(2).find((a) => TARGETS.includes(a)) ?? "stills"}`,
-  );
-  process.exit(2);
+const rawArgs = cliArgs(
+  HELP,
+  [
+    ...Object.keys(SWITCHES),
+    ...Object.keys(VALUE_FLAGS).map((f) => `${f} <value>`),
+    "--lab <key=value>",
+  ],
+  1,
+);
+let what;
+const opt = { lab: {} };
+for (let i = 0; i < rawArgs.length; i++) {
+  const a = rawArgs[i];
+  if (!a.startsWith("-")) what = a;
+  else if (SWITCHES[a]) opt[SWITCHES[a]] = true;
+  else if (a === "--lab") {
+    const [key, ...rest] = rawArgs[++i].split("=");
+    if (!/^[a-z][a-z0-9_]*$/i.test(key) || !rest.length) {
+      console.error(`--lab takes key=value for the lab page (cfg.lab.key), got ${rawArgs[i]}`);
+      process.exit(2);
+    }
+    opt.lab[key.toLowerCase()] = rest.join("=");
+  } else if (VALUE_FLAGS[a]) {
+    if (opt[VALUE_FLAGS[a]] !== undefined) {
+      console.error(`${a} is given twice: once, with every value in it (${a} 12,30.5)`);
+      process.exit(2);
+    }
+    opt[VALUE_FLAGS[a]] = rawArgs[++i];
+  }
 }
-const rawArgs = cliArgs(HELP, ["--compare"], 1);
-const what = rawArgs.find((a) => !a.startsWith("-"));
-if (
-  process.env.COMPARE !== undefined &&
-  !["0", "1", "true", "false"].includes(process.env.COMPARE)
-) {
-  console.error(`COMPARE is 1 (true) or 0 (false), got ${JSON.stringify(process.env.COMPARE)}`);
-  process.exit(2);
-}
-const compare =
-  rawArgs.includes("--compare") || process.env.COMPARE === "1" || process.env.COMPARE === "true";
-if (
-  process.env.RENDER_FRESH_CACHE !== undefined &&
-  !["0", "1", "true", "false"].includes(process.env.RENDER_FRESH_CACHE)
-) {
-  console.error(
-    `RENDER_FRESH_CACHE is 1 (true) or 0 (false), got ${JSON.stringify(process.env.RENDER_FRESH_CACHE)}`,
-  );
-  process.exit(2);
-}
-const freshCache =
-  process.env.RENDER_FRESH_CACHE === "1" || process.env.RENDER_FRESH_CACHE === "true";
-envTypos([...ENV_OPTIONS, "COMPARE", "LIVE_PROJECT"]); // any LAB_* goes to the lab page as is
+const compare = Boolean(opt.compare);
+const freshCache = Boolean(opt.freshCache);
+envTypos(["LIVE_PROJECT"]);
 // a clip takes minutes and a final far longer: each is only ever made when asked for by name
 if (!TARGETS.includes(what)) {
   const near = what && TARGETS.find((t) => t.startsWith(what.slice(0, 3).toLowerCase()));
   console.error(
-    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : `which render?${process.env.CHECK || process.env.AT ? ` (${process.env.CHECK ? "CHECK" : "AT"} goes with stills)` : ""}`}: bun run render stills (seconds), clip (minutes), captions, all, final (the upload) or poster (one frame at its size; --help for everything)`,
+    `${what ? `unknown target ${what}${near ? ` (did you mean ${near}?)` : ""}` : `which render?${opt.check || opt.at ? ` (${opt.check ? "--check" : "--at"} goes with stills)` : ""}`}: bun run render stills (seconds), clip (minutes), captions, all, final (the upload) or poster (one frame at its size; --help for everything)`,
   );
   process.exit(2);
 }
@@ -191,43 +187,43 @@ const video = what === "clip" || what === "all" || what === "final";
 // drawn as the upload is: its size, no strip under the picture, sub-frames for motion blur
 const full = what === "final" || what === "poster";
 const misplaced =
-  !video && process.env.CHUNKS
-    ? "CHUNKS is for render clip or final"
-    : what !== "clip" && process.env.SPAN
-      ? "SPAN is for render clip"
-      : process.env.SPAN && process.env.CHUNKS
-        ? "SPAN and CHUNKS each pick what to draw: one at a time"
-        : (what === "clip" || what === "final") && process.env.AT
-          ? "AT is for render stills"
-          : !full && process.env.RES
-            ? "RES is for render final or poster"
-            : full && process.env.LIST === "1"
-              ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
-              : ["poster", "final", "clip"].includes(what) && process.env.CHECK
-                ? "CHECK goes with render stills"
-                : what === "poster" && !process.env.AT
-                  ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
-                  : video && process.env.CROP !== undefined
-                    ? "CROP is for render stills or poster"
-                    : video && process.env.VIEWS !== undefined
-                      ? "VIEWS is for render stills or poster"
-                      : process.env.INSPECT && process.env.VIEWS !== undefined
-                        ? "INSPECT and VIEWS cannot be used together: use one or the other"
+  !video && opt.chunks
+    ? "--chunks is for render clip or final"
+    : what !== "clip" && opt.span
+      ? "--span is for render clip"
+      : opt.span && opt.chunks
+        ? "--span and --chunks each pick what to draw: one at a time"
+        : (what === "clip" || what === "final") && opt.at
+          ? "--at is for render stills or poster"
+          : !full && opt.res
+            ? "--res is for render final or poster"
+            : full && opt.list
+              ? `--list draws over drafts only; a ${what} is the picture alone`
+              : ["poster", "final", "clip"].includes(what) && opt.check
+                ? "--check goes with render stills"
+                : what === "poster" && !opt.at
+                  ? "poster takes --at <s>, the heard second to draw: bun run render poster --at 12"
+                  : video && opt.crop !== undefined
+                    ? "--crop is for render stills or poster"
+                    : video && opt.views !== undefined
+                      ? "--views is for render stills or poster"
+                      : opt.inspect && opt.views !== undefined
+                        ? "--inspect and --views cannot be used together: use one or the other"
                         : (video || what === "captions") && compare
-                          ? "COMPARE is for render stills or poster"
+                          ? "--compare is for render stills or poster"
                           : what === "captions"
-                            ? [
-                                "AT",
-                                "LIST",
-                                "CHECK",
-                                "INSPECT",
-                                "VIEWS",
-                                "ENTRY",
-                                "CROP",
-                                "SAMPLES",
-                              ]
-                                .filter((k) => process.env[k] !== undefined)
-                                .map((k) => `${k} does nothing for render captions`)[0]
+                            ? Object.entries({
+                                at: "--at",
+                                list: "--list",
+                                check: "--check",
+                                inspect: "--inspect",
+                                views: "--views",
+                                entry: "--entry",
+                                crop: "--crop",
+                                samples: "--samples",
+                              })
+                                .filter(([k]) => opt[k] !== undefined)
+                                .map(([, flag]) => `${flag} does nothing for render captions`)[0]
                             : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
@@ -246,28 +242,29 @@ const readJson = (file, fallback) => {
   }
 };
 // a page of the film's own: a wrong path would only fail deep in the bundler
-if (
-  process.env.ENTRY &&
-  !statSync(resolve(PROJECT, process.env.ENTRY), { throwIfNoEntry: false })?.isFile()
-) {
+if (opt.entry && !statSync(resolve(PROJECT, opt.entry), { throwIfNoEntry: false })?.isFile()) {
   const lab = existsSync(join(PROJECT, "lab"))
     ? readdirSync(join(PROJECT, "lab")).filter((f) => /\.[jt]s$/.test(f))
     : [];
   console.error(
-    `ENTRY=${process.env.ENTRY} is no file in the film (${lab.length ? `its pages: ${lab.map((f) => `lab/${f}`).join(", ")}` : "it has no lab/ pages yet"}); without ENTRY it renders the film itself`,
+    `--entry ${opt.entry} is no file in the film (${lab.length ? `its pages: ${lab.map((f) => `lab/${f}`).join(", ")}` : "it has no lab/ pages yet"}); without --entry it renders the film itself`,
   );
   process.exit(2);
 }
-// REF: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
-const vsVideo = process.env.REF ? resolve(PROJECT, process.env.REF) : null;
-if (process.env.REF !== undefined) {
-  const other =
-    ["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined) ??
-    (process.env.LIST === "1" ? "LIST=1" : null);
-  const why = !process.env.REF
+// --ref: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
+const vsVideo = opt.ref ? resolve(PROJECT, opt.ref) : null;
+if (opt.ref !== undefined) {
+  const other = Object.entries({
+    inspect: "--inspect",
+    views: "--views",
+    crop: "--crop",
+    entry: "--entry",
+    list: "--list",
+  }).find(([k]) => opt[k] !== undefined)?.[1];
+  const why = !opt.ref
     ? "names no video"
     : !statSync(vsVideo, { throwIfNoEntry: false })?.isFile()
-      ? `${process.env.REF} is no file in the film`
+      ? `${opt.ref} is no file in the film`
       : !["stills", "poster"].includes(what)
         ? "goes with stills or poster"
         : other
@@ -275,13 +272,13 @@ if (process.env.REF !== undefined) {
           : null;
   if (why) {
     console.error(
-      `REF ${why}: REF=references/ref.mp4 AT=2.5 bun run render stills (or poster, the upload's size, for sharpness)`,
+      `--ref ${why}: bun run render stills --ref references/ref.mp4 --at 2.5 (or poster, the upload's size, for sharpness)`,
     );
     process.exit(2);
   }
 }
-if (process.env.REF_REGION !== undefined && !vsVideo) {
-  console.error("REF_REGION goes with REF=<reference video>");
+if (opt.refRegion !== undefined && !vsVideo) {
+  console.error("--ref-region goes with --ref <reference video>");
   process.exit(2);
 }
 const FPS = 30,
@@ -332,14 +329,13 @@ const CHROME = resolve(
   PROJECT,
   pkg["live-studio"]?.chrome ?? "tools/chrome-headless-shell/chrome-headless-shell.exe",
 );
-const env = process.env;
 // a typo here once hung the render for good: every number is checked before Chrome opens
-const numbers = (name, limits) =>
-  env[name].split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
-// CHECK=<name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
+const numbers = (name, value, limits) =>
+  value.split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
+// --check <name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
 // them; a minus is kept so the range check below can say the film starts at 0); a film's own take what it takes
 const BUILT_IN = ["motion", "seen", "touch", "text", "order", "probe"];
-const CHECKS = (env.CHECK ?? "")
+const CHECKS = (opt.check ?? "")
   .split(";")
   .filter(Boolean)
   .map((c) => {
@@ -355,17 +351,17 @@ const CHECKS = (env.CHECK ?? "")
     if (name === "text" || name === "order") {
       if (args.length !== 0 && args.length !== 2) {
         console.error(
-          `CHECK ${c}: ${name} takes nothing (whole film) or <from s>,<to s>; got ${args.length} values (bun run render --help)`,
+          `--check ${c}: ${name} takes nothing (whole film) or <from s>,<to s>; got ${args.length} values (bun run render --help)`,
         );
         process.exit(2);
       }
-      const span = args.map((v, k) => secondArg(`CHECK ${c}: ${k ? "to" : "from"}`, v));
+      const span = args.map((v, k) => secondArg(`--check ${c}: ${k ? "to" : "from"}`, v));
       return { c, name, args: ["", ...(span.length ? span : [0, Infinity])] };
     }
     if (name === "probe") {
       if (args.length !== 1 && args.length !== 2) {
         console.error(
-          `CHECK ${c}: probe takes <t> or <filter>,<t> (heard second); got ${args.length} values (bun run render --help)`,
+          `--check ${c}: probe takes <t> or <filter>,<t> (heard second); got ${args.length} values (bun run render --help)`,
         );
         process.exit(2);
       }
@@ -373,95 +369,91 @@ const CHECKS = (env.CHECK ?? "")
         const filter = args[0];
         if (!filter || filter.split("|").some((part) => !part.trim())) {
           console.error(
-            `CHECK ${c}: probe filter cannot be empty (use CHECK=probe:<t>, CHECK=probe:*,<t>, or |-separated names)`,
+            `--check ${c}: probe filter cannot be empty (use --check probe:<t>, --check probe:*,<t>, or |-separated names)`,
           );
           process.exit(2);
         }
-        return { c, name, args: [filter, secondArg(`CHECK ${c}: time`, args[1])] };
+        return { c, name, args: [filter, secondArg(`--check ${c}: time`, args[1])] };
       }
-      return { c, name, args: ["", secondArg(`CHECK ${c}: time`, args[0])] };
+      return { c, name, args: ["", secondArg(`--check ${c}: time`, args[0])] };
     }
     if (!BUILT_IN.includes(name))
       return { c, name, args: args.map((a) => (a !== "" && !isNaN(+a) ? +a : a)) };
     if (args.length !== 3) {
       console.error(
-        `CHECK ${c}: ${name} takes 3 values, <target>,<from s>,<to s>; got ${args.length} (bun run render --help)`,
+        `--check ${c}: ${name} takes 3 values, <target>,<from s>,<to s>; got ${args.length} (bun run render --help)`,
       );
       process.exit(2);
     }
-    const sec = (which, v) => (/^-\d/.test(v) ? +v : secondArg(`CHECK ${c}: ${which}`, v));
+    const sec = (which, v) => (/^-\d/.test(v) ? +v : secondArg(`--check ${c}: ${which}`, v));
     return { c, name, args: [args[0], sec("from", args[1]), sec("to", args[2])] };
   });
-if (env.LIST !== undefined && !["0", "1"].includes(env.LIST)) {
-  console.error(`LIST is 1 (the list over the picture) or 0, got ${JSON.stringify(env.LIST)}`);
-  process.exit(2);
-}
-const inspect = env.INSPECT ? numbers("INSPECT") : null;
+const inspect = opt.inspect ? numbers("--inspect", opt.inspect) : null;
 if (inspect && inspect.length !== 7) {
-  console.error(`INSPECT takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
+  console.error(`--inspect takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
   process.exit(2);
 }
 let views = null;
-if (env.VIEWS !== undefined) {
+if (opt.views !== undefined) {
   try {
-    views = parseViews(env.VIEWS, PROJECT);
+    views = parseViews(opt.views, PROJECT);
   } catch (e) {
-    console.error(`VIEWS: ${e.message}`);
+    console.error(`--views: ${e.message}`);
     process.exit(2);
   }
 }
 let crop = null;
-if (env.CROP !== undefined) {
+if (opt.crop !== undefined) {
   try {
-    crop = parseCropRect(env.CROP);
+    crop = parseCropRect(opt.crop);
   } catch (e) {
-    console.error(`CROP: ${e.message}`);
+    console.error(`--crop: ${e.message}`);
     process.exit(2);
   }
 }
-// a CHECK or custom ENTRY lab run writes its own outputs; a still at 1 s beside them would only crowd bun run sheet
+// a --check or --entry lab run writes its own outputs; a still at 1 s beside them would only crowd bun run sheet
 const at =
   what === "clip" || what === "final"
     ? []
-    : env.AT === undefined
-      ? (env.CHECK || env.ENTRY) && !views
+    : opt.at === undefined
+      ? (opt.check || opt.entry) && !views
         ? []
         : [1]
-      : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
-if (what === "stills" && env.SAMPLES && (env.ENTRY || !at.length)) {
+      : opt.at.split(",").map((x, i) => secondArg(`--at item ${i + 1}`, x));
+if (what === "stills" && opt.samples && (opt.entry || !at.length)) {
   console.error(
-    env.ENTRY
-      ? "SAMPLES blurs the film's stills, and an ENTRY page draws its own pictures (--help for which option goes with which)"
-      : "SAMPLES blurs stills, and a CHECK run without AT draws none: add AT=<s> for a still beside it (--help for which option goes with which)",
+    opt.entry
+      ? "--samples blurs the film's stills, and an --entry page draws its own pictures (--help for which option goes with which)"
+      : "--samples blurs stills, and a --check run without --at draws none: add --at <s> for a still beside it (--help for which option goes with which)",
   );
   process.exit(2);
 }
-const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
-const span = env.SPAN
-  ? env.SPAN.split(",").map((x, i) => secondArg(`SPAN item ${i + 1}`, x))
+const only = opt.chunks ? numbers("--chunks", opt.chunks, { min: 0, int: true }) : null;
+const span = opt.span
+  ? opt.span.split(",").map((x, i) => secondArg(`--span item ${i + 1}`, x))
   : null;
 if (span && (span.length !== 2 || span[0] >= span[1])) {
   console.error(
-    `SPAN takes two heard seconds, the first before the second: SPAN=40,44 (or SPAN=0:40,0:44), got ${env.SPAN}`,
+    `--span takes two heard seconds, the first before the second: --span 40,44 (or --span 0:40,0:44), got ${opt.span}`,
   );
   process.exit(2);
 }
 const final = what === "final";
-const samples = env.SAMPLES
-  ? numberArg("SAMPLES", env.SAMPLES, { min: 1, max: 64, int: true })
+const samples = opt.samples
+  ? numberArg("--samples", opt.samples, { min: 1, max: 64, int: true })
   : full
     ? 8
     : 1;
 // YouTube's upload table for 30 fps (8, 16, 35-45 Mbps), doubled: the GPU's encoder spends bits less well than x264
 const FINAL_SIZES = { 1080: [1920, 16e6], 1440: [2560, 32e6], 2160: [3840, 60e6] };
-const res = env.RES ?? (ratioOf(pkg) === "9:16" ? "1080" : "1440");
+const res = opt.res ?? (ratioOf(pkg) === "9:16" ? "1080" : "1440");
 if (full && !FINAL_SIZES[res]) {
   console.error(
-    `RES is 1440 (the default; 1080 for Shorts), 2160 or 1080, got ${JSON.stringify(env.RES)}`,
+    `--res is 1440 (the default; 1080 for Shorts), 2160 or 1080, got ${JSON.stringify(opt.res)}`,
   );
   process.exit(2);
 }
-// A second past the end, or a CHECK range that runs backwards, is refused here: the page would say it too, after the scene build
+// A second past the end, or a --check range that runs backwards, is refused here: the page would say it too, after the scene build
 const ends = heardLength(PROJECT, pkg["live-studio"] ?? {});
 const lastFrame = ends ? chunksOf(ends.layers, CHUNK, FPS).at(-1)[1] : Infinity;
 const spanFrames = span && spanOf(span, FPS, lastFrame),
@@ -471,19 +463,19 @@ if (ends) {
   const past = at.filter((s) => Math.round(s * FPS) / FPS > ends.layers + 1e-9);
   if (past.length) {
     console.error(
-      `AT ${past.join(",")} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+      `--at ${past.join(",")} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
     process.exit(2);
   }
   if (span && span[1] > ends.layers + 0.05) {
     console.error(
-      `SPAN ${span.join(",")} runs past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard`,
+      `--span ${span.join(",")} runs past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard`,
     );
     process.exit(2);
   }
   if (span && spanFrames.first > lastFrame) {
     console.error(
-      `SPAN ${span.join(",")} starts after the film's last frame (${(lastFrame / FPS).toFixed(2)} s): SPAN=${Math.max(0, +(lastFrame / FPS - 1).toFixed(2))},${+(lastFrame / FPS).toFixed(2)} shows its last second`,
+      `--span ${span.join(",")} starts after the film's last frame (${(lastFrame / FPS).toFixed(2)} s): --span ${Math.max(0, +(lastFrame / FPS - 1).toFixed(2))},${+(lastFrame / FPS).toFixed(2)} shows its last second`,
     );
     process.exit(2);
   }
@@ -491,7 +483,7 @@ if (ends) {
   const beyond = (only ?? []).filter((i) => i >= count);
   if (beyond.length) {
     console.error(
-      `CHUNKS ${beyond.join(",")} is past the film's end: it has chunks 0-${count - 1} (${ends.layers.toFixed(2)} s, ${CHUNK} s each)`,
+      `--chunks ${beyond.join(",")} is past the film's end: it has chunks 0-${count - 1} (${ends.layers.toFixed(2)} s, ${CHUNK} s each)`,
     );
     process.exit(2);
   }
@@ -501,7 +493,7 @@ for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name)))
     const [, t] = args;
     if (ends && t > ends.layers + 0.05) {
       console.error(
-        `CHECK ${c}: time ${t} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+        `--check ${c}: time ${t} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
       );
       process.exit(2);
     }
@@ -512,25 +504,25 @@ for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name)))
   const [, from, to] = args;
   if (name === "order" && ends && from >= ends.layers) {
     console.error(
-      `CHECK ${c}: order range starts at or after the film's end (${ends.layers} s heard)`,
+      `--check ${c}: order range starts at or after the film's end (${ends.layers} s heard)`,
     );
     process.exit(2);
   }
   if (from < 0) {
     console.error(
-      `CHECK ${c}: from ${from} is before the film starts (0): CHECK=${name}:<target>,<from s>,<to s>, both in heard seconds`,
+      `--check ${c}: from ${from} is before the film starts (0): --check ${name}:<target>,<from s>,<to s>, both in heard seconds`,
     );
     process.exit(2);
   }
   if (from >= to) {
     console.error(
-      `CHECK ${c}: from ${from} must come before to ${to} (CHECK=${name}:<target>,<from s>,<to s>)`,
+      `--check ${c}: from ${from} must come before to ${to} (--check ${name}:<target>,<from s>,<to s>)`,
     );
     process.exit(2);
   }
   if (ends && to > ends.layers + 0.05) {
     console.error(
-      `CHECK ${c}: to ${to} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
+      `--check ${c}: to ${to} is past the film's end: it runs 0-${ends.layers.toFixed(2)} s heard (bun run at <second> reads the same clock)`,
     );
     process.exit(2);
   }
@@ -547,13 +539,13 @@ if (inspect || views) {
   ];
   if (filmCamChecks.length) {
     console.error(
-      `warning: CHECK=${filmCamChecks.join(",")} measures the film's own camera and ignores INSPECT/VIEWS`,
+      `warning: --check ${filmCamChecks.join(",")} measures the film's own camera and ignores --inspect/--views`,
     );
   }
 }
 if (views && CHECKS.some((x) => x.name === "probe")) {
   console.error(
-    "warning: CHECK=probe uses the film's own camera under VIEWS (it honors INSPECT= only)",
+    "warning: --check probe uses the film's own camera under --views (it honors --inspect only)",
   );
 }
 const stillsWritten = [];
@@ -571,7 +563,7 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS)) {
+if (at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS)) {
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
@@ -588,7 +580,7 @@ const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
 
-// CHECK=text: each line to be read, at the heard second it is fully on screen (the middle of what is left between its In
+// --check text: each line to be read, at the heard second it is fully on screen (the middle of what is left between its In
 // and its Out), worked out here where the film's clocks are already set (heardLength above)
 const textCheck = CHECKS.find((x) => x.name === "text");
 const textLines = [];
@@ -659,7 +651,7 @@ const cfg = {
     ? {
         chunk: CHUNK,
         only,
-        // the frames of a SPAN run, drawn as one video and none of the chunks
+        // the frames of a --span run, drawn as one video and none of the chunks
         span: spanFrames && [spanFrames.first, spanFrames.last],
         samples,
         bitrate: final ? FINAL_SIZES[res][1] : 4e6,
@@ -667,7 +659,7 @@ const cfg = {
         keyFrameInterval: final ? 0.5 : 2,
       }
     : null,
-  list: env.LIST === "1",
+  list: Boolean(opt.list),
   inspect,
   crop,
   camKeys: CHECKS.some((c) => c.name === "motion")
@@ -681,19 +673,15 @@ const cfg = {
   checks: CHECKS.map(({ name, args }) => [name, args]),
   text: textLines,
   choices: choicesFile ? readJson(choicesFile, {}) : {},
-  lab: Object.fromEntries(
-    Object.entries(env)
-      .filter(([k]) => k.startsWith("LAB_") && k.toUpperCase() !== "LAB_PREVIEW_OVERLAY")
-      .map(([k, v]) => [k.slice(4).toLowerCase(), v]),
-  ),
+  lab: Object.fromEntries(Object.entries(opt.lab).filter(([k]) => k !== "preview_overlay")),
 };
 
 const previewOverlayZip = (() => {
-  if (!env.ENTRY || !env.LAB_PREVIEW_OVERLAY) return null;
-  const p = resolve(PROJECT, env.LAB_PREVIEW_OVERLAY);
+  if (!opt.entry || !opt.lab.preview_overlay) return null;
+  const p = resolve(PROJECT, opt.lab.preview_overlay);
   if (!/\.zip$/i.test(p) || !statSync(p, { throwIfNoEntry: false })?.isFile()) {
     console.error(
-      `LAB_PREVIEW_OVERLAY must point to an existing .zip file (got ${JSON.stringify(env.LAB_PREVIEW_OVERLAY)})`,
+      `--lab preview_overlay=<file> must point to an existing .zip file (got ${JSON.stringify(opt.lab.preview_overlay)})`,
     );
     process.exit(2);
   }
@@ -701,14 +689,14 @@ const previewOverlayZip = (() => {
 })();
 
 // ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
-const entry = env.ENTRY ? resolve(PROJECT, env.ENTRY) : join(STUDIO, "render/page.ts");
+const entry = opt.entry ? resolve(PROJECT, opt.entry) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
 // the creator's studio shows the render busy, its build too, until the line at the end, or until this process is gone (src/tell.mjs)
 const ended = await startJob(PROJECT, `render ${what}`, {
   say: `Rendering ${what}${views ? ` (${views.length} view${views.length > 1 ? "s" : ""})` : ""}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
   ...(span ? { at: span[0], to: span[1] } : at.length ? { at: at[0] } : {}),
 });
-// Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and LIST=1's overlay
+// Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and --list's overlay
 // names its rows. A video is built with that part alone (seenSound), so a gain, a bed or an effect keeps every chunk's stamp
 // and render clip redraws nothing for it; the joined video keeps it in <chunks>/seen-sound.json for src/stale.mjs
 const soundPath = pkg["live-studio"]?.soundTimeline
@@ -773,7 +761,7 @@ const styles = (Array.isArray(built) ? built : [built])
   .join("");
 console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 // A chunk's stamp: the built page (the film's code and timelines, the packages) and every setting that changes a frame.
-// Equal stamps draw equal frames, so such a chunk is kept. Files under assets/public are not in it (CHUNKS= renders anew)
+// Equal stamps draw equal frames, so such a chunk is kept. Files under assets/public are not in it (--chunks renders anew)
 const stamp = (() => {
   const h = createHash("sha256");
   const walk = (dir) =>
@@ -790,7 +778,7 @@ const stamp = (() => {
 // stills alone cannot show motion, contact or flicker: say what can, where every render prints
 if (!cfg.checks.length && what !== "poster")
   console.log(
-    "if needed: CHECK=motion|seen|touch:<target>,<from s>,<to s>, CHECK=probe:<t>, CHECK=text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
+    "if needed: --check motion|seen|touch:<target>,<from s>,<to s>, --check probe:<t>, --check text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
   );
 
 // ---------- Serve it to a headless Chrome and keep what it posts back
@@ -824,7 +812,7 @@ try {
   stamps = JSON.parse(readFileSync(stampsFile, "utf8"));
 } catch {} // none yet, or from before stamps: every chunk renders
 const renderedNow = new Set();
-// asked again after a restart: what is left. A CHUNKS list is rendered as asked, the rest skips the chunks still current
+// asked again after a restart: what is left. A --chunks list is rendered as asked, the rest skips the chunks still current
 const pageConfig = () =>
   cfg.clip
     ? {
@@ -1056,13 +1044,15 @@ const stuck = (why) => {
   }
 };
 // Once frames flow the page says so every few seconds, and 4 minutes of quiet is a hang (a GPU reset, a lost context);
-// before that (building the scene, a long CHECK) only an hour of quiet ends the run
+// before that (building the scene, a long --check) only an hour of quiet ends the run
 let quietSince = Date.now();
 const watchdog = setInterval(() => {
   if (lastAlive !== null) quietSince = lastAlive;
   const quiet = Date.now() - quietSince;
   if (orderPending && quiet > 120e3) {
-    stuck("order check exceeded 2 minutes: use CHECK=order:<from s>,<to s> for a shorter stretch");
+    stuck(
+      "order check exceeded 2 minutes: use --check order:<from s>,<to s> for a shorter stretch",
+    );
     return;
   }
   if (lastAlive !== null ? quiet > 240e3 : quiet > 3600e3) {
@@ -1178,7 +1168,7 @@ if (!failed && vsVideo && stillsWritten.length) {
         String(H),
         "--out",
         join(PROJECT, out),
-        ...(process.env.REF_REGION ? ["--region", process.env.REF_REGION] : []),
+        ...(opt.refRegion ? ["--region", opt.refRegion] : []),
       ],
       { encoding: "utf8", windowsHide: true, timeout: 180_000 },
     );
@@ -1210,7 +1200,7 @@ if (!failed && chunks) {
   const folder = `renders/${CHUNKS.slice(RENDERS.length + 1).replaceAll("\\", "/")}`;
   if (missing.length)
     console.log(
-      `not joined into renders/${JOINED}: ${missing.length === 1 ? `chunk ${missing[0]} is` : `chunks ${missing.join(", ")} are`} not in ${folder} (a CHUNKS run joins the chunks it draws with the ones already there, and a copied or fresh film has none).\nnext: CHUNKS=${missing.join(",")} bun run render ${what} draws just ${missing.length === 1 ? "that one" : "those"}; bun run render ${what} draws every chunk not current`,
+      `not joined into renders/${JOINED}: ${missing.length === 1 ? `chunk ${missing[0]} is` : `chunks ${missing.join(", ")} are`} not in ${folder} (a --chunks run joins the chunks it draws with the ones already there, and a copied or fresh film has none).\nnext: bun run render ${what} --chunks ${missing.join(",")} draws just ${missing.length === 1 ? "that one" : "those"}; bun run render ${what} draws every chunk not current`,
     );
   else {
     writeFileSync(
@@ -1237,12 +1227,12 @@ if (!failed && chunks) {
       ],
       { stdio: "inherit" },
     );
-    // a CHUNKS run keeps the other chunks as they are, even those drawn before the film last changed
+    // a --chunks run keeps the other chunks as they are, even those drawn before the film last changed
     const old =
       only && j.status === 0 ? all.flatMap((_, i) => (stamps[i] === stamp ? [] : [i])) : [];
     if (old.length)
       console.log(
-        `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: CHUNKS=${old.join(",")} bun run render ${what} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
+        `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: bun run render ${what} --chunks ${old.join(",")} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
       );
     // the captions go with the joined video; its next: line stays the last one printed. A chunk joined as it was may show
     // older mouths: the record of the last whole draw stays, so src/stale.mjs still sees a narration moved since

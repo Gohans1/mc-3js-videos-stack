@@ -18,7 +18,7 @@ Use handheld presets in cam.json (find --kind shake) sparingly for intimate/tens
 
 ## Match focal length and aperture to story beats
 
-Drive focal length cleanly via mm in cam.json (find --kind lens: 24mm for space, 50-85mm for reaction). When using shallow DOF fstop + focus ("Steve.head"), verify subject sharpness with CHECK=seen.
+Drive focal length cleanly via mm in cam.json (find --kind lens: 24mm for space, 50-85mm for reaction). When using shallow DOF fstop + focus ("Steve.head"), verify subject sharpness with --check seen.
 
 ## Emotion = slow push-in on a face, never a fast zoom
 

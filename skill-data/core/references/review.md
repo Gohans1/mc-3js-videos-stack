@@ -2,7 +2,7 @@
 
 Never guess. Nothing is done until you have seen the new frames or video. Aim at the moments most likely to break: around cuts, where a character touches something, where the camera turns.
 
-Choose the checks below for the affected behavior; they are not a sequence to run after every edit. `CHECK=text` also applies when timing, camera, background or grading changes readability; `pace` is for editorial rhythm, while `framecheck` diagnoses encoded picture faults and belongs at a whole-draft checkpoint.
+Choose the checks below for the affected behavior; they are not a sequence to run after every edit. `--check text` also applies when timing, camera, background or grading changes readability; `pace` is for editorial rhythm, while `framecheck` diagnoses encoded picture faults and belongs at a whole-draft checkpoint.
 
 ## Choose evidence for the review
 
@@ -11,9 +11,9 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 | Intent and timeline | Run bun run check to validate structure and references. Run bun run at 12.4 --json to find the data rows, camera, text, and sound planned at film second 12.4. |
 | Visible frame | Run bun run sheet FILE overview to choose a span, then sheet FILE frames 12.2-12.6/12 to save source images and decoded timestamps. Read clock, context, and complete in the index. Words and timeline rows use requested seconds, and images record the displayed frame's PTS. |
 | Cuts, dissolves, and object pops | Run bun run sheet FILE cut N on the current render, or use frames for custom timestamps. Run bun run framecheck FILE --json to detect anomalies and save evidence from the encoded picture. |
-| Easing, camera motion, and animation | Run CHECK=motion:cam,12,14 bun run render stills to measure the scene path. Replace cam with the target to inspect, then compare encoded frames at the start, middle, and end with sheet frames. |
-| 3D positions, bounds, and framing | Run CHECK=probe:4 bun run render stills (or CHECK="probe:dish\|elon.head,4", or CHECK="probe:*,4" for all named nodes; quote \| and * in shell) for a single-frame world-space snapshot in renders/probe_4s.json; with an aperture it adds the focus distance, f-stop and each target's blur in px, for a soft subject (the lens's own blur, as a final with shutter.apertureSamples shows it; the DOF post pass of drafts, and of finals without it, tops out short of strong blur). Honors INSPECT=; CHECK=seen and CHECK=text measure the film's own camera. |
-| Text overlap, flicker, and legibility | Use CHECK=text across camera or lighting changes, then inspect exported frames with sheet frames. Use media OCR to locate text and timestamps, and read the source images to confirm important lines. |
+| Easing, camera motion, and animation | Run bun run render stills --check motion:cam,12,14 to measure the scene path. Replace cam with the target to inspect, then compare encoded frames at the start, middle, and end with sheet frames. |
+| 3D positions, bounds, and framing | Run bun run render stills --check probe:4 (or --check "probe:dish\|elon.head,4", or --check "probe:*,4" for all named nodes; quote \| and * in shell) for a single-frame world-space snapshot in renders/probe_4s.json; with an aperture it adds the focus distance, f-stop and each target's blur in px, for a soft subject (the lens's own blur, as a final with shutter.apertureSamples shows it; the DOF post pass of drafts, and of finals without it, tops out short of strong blur). Honors --inspect; --check seen and --check text measure the film's own camera. |
+| Text overlap, flicker, and legibility | Use --check text across camera or lighting changes, then inspect exported frames with sheet frames. Use media OCR to locate text and timestamps, and read the source images to confirm important lines. |
 | Inspect sync below one frame | Read video frame PTS and audio/video offset from probe. For an isolated hit, ffmpeg -copyts -i FILE -map 0:a:0 -af silencedetect=n=-26dB:d=0.02 -f null - reports onset PTS at silence_end. Subtract the file start time from ffprobe -v error -show_entries format=start_time -of default=nw=1:nk=1 FILE to get file seconds. Earshot's one-frame estimate can change after a remux. |
 | Music beats and SFX hits | Run bun run media beat for beats and downbeats in file seconds. Use earshot timeline FILE --from 10 --to 16 --detail low to inspect mixed events. Take the cut timestamp from sheet, locate the row with at, and measure the same span after editing. |
 | Dialogue, lip sync, and captions | Run bun run voice:cues for planned words. Use media ffmpeg caption --help for local speech recognition with an installed model, or voice:playground transcribe --help to submit audio to ElevenLabs Scribe with --yes. Pass the result to bun run reference inspect FILE --transcript SUB.srt. |
@@ -25,7 +25,7 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 | Explicit image sheet | Run bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg] to lay out .jpg/.jpeg/.png/.webp files into a captioned contact sheet (default renders/sheet_custom.jpg; --out must stay inside the film folder). |
 | Director's Eye and Color Script | In Studio, Shift+V toggles B&W/silhouette value check, Shift+O toggles the outgoing cut-boundary ghost overlay, and Shift+C toggles the Color Script strip. Ctrl+; toggles guides, Alt+; cycles guide layouts, Alt+M toggles Mute Test, and Shift+H toggles Blind Audio Test. |
 | Delivery and technical checks | Run bun run deliver to validate the project's upload profile. Use media ffmpeg probe/check or media qc for specific streams, properties, or rules. |
-| Time source | External files use seconds from the file start. Standard chunks and spans use film seconds. START sets an explicit origin, and sheet omits timeline links when the origin conflicts with the render. |
+| Time source | External files use seconds from the file start. Standard chunks and spans use film seconds. --start sets an explicit origin, and sheet omits timeline links when the origin conflicts with the render. |
 | Record verification | Save the file path, time range, expected result, and evidence after the edit. Use a model that can see or hear the result, or ask a person to confirm perceptual judgments. |
 
 ## Tools for external footage and additional measurements
@@ -41,7 +41,7 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 
 ```bash
 bun run at 35.6                              # what plays at a heard second (also 00:35.633, or '#3' for note 3, quoted)
-AT=12,30.5 bun run render stills             # frames, with the heard time and shot under each
+bun run render stills --at 12,30.5             # frames, with the heard time and shot under each
 bun run sheet                                # every still, six to a picture
 bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg --out renders/grid.jpg  # explicit images into a captioned grid
 bun run sheet renders/draft_video.mp4 shots  # the whole film at a glance: one frame from every shot
@@ -49,7 +49,7 @@ bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s bef
 bun run render clip                          # the draft video and renders/cuts.json
 bun run framecheck                           # black, one-frame flashes, jumps away from cuts (a mob teleporting, an item snapping), shimmer, freezes
 bun run pace                                 # shot lengths, and every stretch where the picture holds still
-CHECK=text bun run render stills             # each line of text: inside the safe area, readable over the picture
+bun run render stills --check text             # each line of text: inside the safe area, readable over the picture
 bun run deliver                              # the upload against YouTube's spec
 ```
 
@@ -61,9 +61,9 @@ bun run sheet renders/draft_video.mp4 overview 35-40/32 # look more closely with
 bun run sheet renders/draft_video.mp4 frames 35.6,38-39/8 # native JPEGs from the same encoded video
 ```
 
-Open every listed sheet, then read its index: cells run left to right, top to bottom; blank cells are padding. Use native frames before stating text, numbers or other details; sparse samples do not replace `framecheck` or `CHECK`.
+Open every listed sheet, then read its index: cells run left to right, top to bottom; blank cells are padding. Use native frames before stating text, numbers or other details; sparse samples do not replace `framecheck` or `--check`.
 
-Each new overview/frames run keeps its own folder under `renders/review_*`; only `complete: true` means extraction finished. The index distinguishes `requestedTime` from the returned frame's `time`, maps sheets/cells or frame paths, and provides follow-up commands: run their `argv` with their `env` (including `START`).
+Each new overview/frames run keeps its own folder under `renders/review_*`; only `complete: true` means extraction finished. The index distinguishes `requestedTime` from the returned frame's `time`, maps sheets/cells or frame paths, and provides follow-up commands: run their `argv` as given (`--start` included).
 
 Narration comes from `voice:cues` once and is timeline context, not verified encoded audio. Read the context status: muted, missing or unassembled speech is omitted; stale, foreign or manually shifted sources omit speech and shot links, and `commands.at` appears only for a fresh known timeline.
 
@@ -93,29 +93,29 @@ Narration comes from `voice:cues` once and is timeline context, not verified enc
 
 ## Measure a move
 
-`CHECK` runs a built-in check between two heard seconds and writes charts to `renders/`:
+`--check` runs a built-in check between two heard seconds and writes charts to `renders/`:
 
 ```bash
-CHECK=motion:cam,40,48 bun run render stills     # speed graph, peaks, pops, dead stops; for cam also turn and zoom in °/s against the 7-second panning rule, plus hit/impulse spans
-CHECK=motion:handR,40,48 bun run render stills   # the same for a bone, with an onion skin of the move
-CHECK=seen:Steve,40,48 bun run render stills     # frame share, hidden behind what, cut off, too dark, BLURRED by shallow DOF
-CHECK=touch:handR,81,83 bun run render stills    # sinking into things, hanging just off them (one shot, not a whole film)
-CHECK=probe:4 bun run render stills                   # single-frame world positions, Box3 bounds, distances, and screen rects (renders/probe_4s.json; honors INSPECT=)
-CHECK="probe:dish|elon.head,4" bun run render stills  # filter by |-separated names, dot-paths, or "*" (quote | and * in shell)
+bun run render stills --check motion:cam,40,48     # speed graph, peaks, pops, dead stops; for cam also turn and zoom in °/s against the 7-second panning rule, plus hit/impulse spans
+bun run render stills --check motion:handR,40,48   # the same for a bone, with an onion skin of the move
+bun run render stills --check seen:Steve,40,48     # frame share, hidden behind what, cut off, too dark, BLURRED by shallow DOF
+bun run render stills --check touch:handR,81,83    # sinking into things, hanging just off them (one shot, not a whole film)
+bun run render stills --check probe:4                   # single-frame world positions, Box3 bounds, distances, and screen rects (renders/probe_4s.json; honors --inspect)
+bun run render stills --check "probe:dish|elon.head,4"  # filter by |-separated names, dot-paths, or "*" (quote | and * in shell)
 ```
 
-A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back. `seen` and `text` always measure the film's own camera (and warn if `INSPECT` or `VIEWS` is set); `probe` honors `INSPECT=` (and warns under `VIEWS=`).
+A target is `cam`, a bone, an object's `.name`, a `draw.tools.objects` label, or a dot-path (`Steve.head`, `desk.drawer.handle`). `seen` and `touch` look at objects, not the camera. A wrong name gets the nearest names back. `seen` and `text` always measure the film's own camera (and warn under `--inspect` or `--views`); `probe` honors `--inspect` (and warns under `--views`).
 
 ## Words on the picture
 
 Subtitle standards are the published rules for words over moving pictures, so the checks borrow them. `bun run check` warns of a line shown too briefly to read (Netflix: up to 20 characters a second, at least 5/6 s on screen; half the In and half the Out count) and of one too small for a phone (under size 36, 3.3% of the frame height; BBC authors subtitles at 7-8% and lets a player shrink them about half).
 
 ```bash
-CHECK=text bun run render stills             # every line, at the second it is fully on screen
-CHECK=text:20,45 bun run render stills       # the lines between two heard seconds
+bun run render stills --check text             # every line, at the second it is fully on screen
+bun run render stills --check text:20,45       # the lines between two heard seconds
 ```
 
-`CHECK=text` draws each line alone and the frame without it, so it measures what is really drawn, wherever the line is anchored and however it animates. `OUTSIDE`: closer than 5% to an edge (EBU R95's graphics-safe area); in a Short, under what YouTube's player draws over it: 10% on the right (like and share), 25% at the bottom (title, channel, sound), 10% at the top, 5% on the left (Google's Shorts ad guidance). A size is a share of the frame's short side, a Short's width, so the same 36 floor holds for both: full screen, that side is the phone's. `LOW`: the letters against what is just around them, the worst tenth, under 4.5:1, or 3:1 from size 67.5 up (WCAG 1.4.3). A stroke or a shadow counts, since it is around the letters. Each fault writes `renders/text_<i>.jpg`, the line boxed in yellow and the safe area dashed. A line not meant to be read (a sign in the world, a glitch) takes `"read": false` and is never judged.
+`--check text` draws each line alone and the frame without it, so it measures what is really drawn, wherever the line is anchored and however it animates. `OUTSIDE`: closer than 5% to an edge (EBU R95's graphics-safe area); in a Short, under what YouTube's player draws over it: 10% on the right (like and share), 25% at the bottom (title, channel, sound), 10% at the top, 5% on the left (Google's Shorts ad guidance). A size is a share of the frame's short side, a Short's width, so the same 36 floor holds for both: full screen, that side is the phone's. `LOW`: the letters against what is just around them, the worst tenth, under 4.5:1, or 3:1 from size 67.5 up (WCAG 1.4.3). A stroke or a shadow counts, since it is around the letters. Each fault writes `renders/text_<i>.jpg`, the line boxed in yellow and the safe area dashed. A line not meant to be read (a sign in the world, a glitch) takes `"read": false` and is never judged.
 
 ## Reference motion tools
 
@@ -145,13 +145,13 @@ A new picture is a cut, or a third of the frame looking different from the last 
 
 | Rule                                        | Why                                                                                                        |
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `AT` and `CHECK` take heard seconds         | As notes and `at` print them; `bun run at` converts to the scene seconds of the row to edit                |
-| Render without `LIST=1` before `framecheck` | The text over the picture skews the measures                                                               |
+| `--at` and `--check` take heard seconds     | As notes and `at` print them; `bun run at` converts to the scene seconds of the row to edit                |
+| Render without `--list` before `framecheck` | The text over the picture skews the measures                                                               |
 | Distinguish intended cuts from JUMP | Framecheck prefers a matching .mp4.review.json sidecar. It uses cuts.json only when that file predates the video. Older videos and external footage still get measured, with no exemption for planned cuts. |
 | Read framecheck evidence | Open renders/framecheck_*/index.json for clock, findings, and image paths. Use --json to read the result from stdout. |
 | `STALE`                                     | The video predates `src/`; render it again as the line says (`clip`, or `final` for the upload), then look |
-| Trying a move or a fix                      | `SPAN=40,44 bun run render clip` draws just those seconds: `renders/span_40-44.mp4`                        |
-| One stretch changed                         | `CHUNKS=3 bun run render clip` re-renders only that 30 s chunk (3 is 1:30-2:00)                            |
+| Trying a move or a fix                      | `bun run render clip --span 40,44` draws just those seconds: `renders/span_40-44.mp4`                        |
+| One stretch changed                         | `bun run render clip --chunks 3` re-renders only that 30 s chunk (3 is 1:30-2:00)                            |
 | Commands only print paths                   | Open the pictures with your image viewer and look                                                          |
 | `framecheck` exits 0 even with faults        | Read its findings; a successful command does not mean the picture is clean                                  |
 
@@ -159,7 +159,7 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 
 ## Frame order
 
-`CHECK=order bun run render stills` compares the same times captured in two different orders; `CHECK=order:20,25` narrows the heard-second range, including subframes and either side of sampled cuts. Inspect `renders/order.json` and the PNG pair named on failure; this optional sampled diagnostic does not replace `framecheck` or prove every frame correct.
+`bun run render stills --check order` compares the same times captured in two different orders; `--check order:20,25` narrows the heard-second range, including subframes and either side of sampled cuts. Inspect `renders/order.json` and the PNG pair named on failure; this optional sampled diagnostic does not replace `framecheck` or prove every frame correct.
 
 ## Reference video
 
@@ -213,14 +213,14 @@ When the creator asks for a film that matches a reference shot for shot, measure
 | Measure it | `bun run reference add <video>`, then `bun run reference study references/ref.mp4`: cuts, whip pans, sound hits in `study.json` |
 | Cut where it cuts | Set `"cut": true` only at the reference's cuts and change the layout only there; a whip transition is a keyed pan into the cut key mid-swing. `bun run check` names every cut the reference lacks |
 | Know how far it is | `bun run check` prints coverage of the reference: picture keyed, cuts matched, the strong sound hits with an sfx starting up to 0.5 s before each, seconds of on-screen text (`--json`: `coverage`). A track at 0% is not done, whatever is left for polish. `bun run reference compare references/ref.mp4 renders/draft.mp4` measures what the render shows (cuts, rhythm, palette and layout a shot, SSIM, the least alike moments): track its numbers draft to draft, never as a percent; the reference's own sound in the remake (a guide voice) makes it say so and exit 1 |
-| Same second, side by side | `REF=references/ref.mp4 AT=<s> bun run render poster` writes `renders/vs_*.jpg` and a sharpness ratio; a soft subject in a poster is focus or DOF, not the draft size. `REF=` on `render stills` draws ours sharp at 1 sample, the reference blurred where it moves: add `SAMPLES=8` for a moving moment. `REF_REGION=x,y,w,h` adds that part's mean rgb and brightness ours/reference: a floor lit twice as bright shows there before it does by eye |
+| Same second, side by side | `bun run render poster --ref references/ref.mp4 --at <s>` writes `renders/vs_*.jpg` and a sharpness ratio; a soft subject in a poster is focus or DOF, not the draft size. `--ref ` on `render stills` draws ours sharp at 1 sample, the reference blurred where it moves: add `--samples 8` for a moving moment. `--ref-region x,y,w,h` adds that part's mean rgb and brightness ours/reference: a floor lit twice as bright shows there before it does by eye |
 | Focus | Focus on the face of the subject turned to the camera (a jar's front, not its centre); a close-up that is only soft at the subject is DOF |
-| Fast moves | The studio draws no motion blur and the reference's whips are smeared: judge them on `SPAN=<a>,<b> SAMPLES=8 bun run render clip` (a whip frame takes up to 64 samples by itself) or one moment of them on `SAMPLES=8 AT=<s> bun run render stills`, not studio playback, then `bun run sheet renders/span_<a>-<b>.mp4 frames <a>-<b>/12 --vs references/ref.mp4` puts each frame beside the reference's |
-| Look closely | One or two frames per image, or `CROP=x,y,w,h` on a still: a wide sheet is shrunk when read, a cell ends near 360 px |
-| Pops of ours | `bun run framecheck` on a draft (a CHUNKS one too) weighs each JUMP and FLASH against the film's references/ video (`--vs <video>` for another): "ref jumps too" is a move the remake copies, OURS ONLY a pop to fix first (a keyed hand snapping in one frame, a prop sliding back), OURS STEPS jumps of ours within three frames and a dead frame beside them while the reference keeps moving (props swapped in steps; a step slower than every third frame reads as separate pops); those get the strips first |
+| Fast moves | The studio draws no motion blur and the reference's whips are smeared: judge them on `bun run render clip --span <a>,<b> --samples 8` (a whip frame takes up to 64 samples by itself) or one moment of them on `bun run render stills --samples 8 --at <s>`, not studio playback, then `bun run sheet renders/span_<a>-<b>.mp4 frames <a>-<b>/12 --vs references/ref.mp4` puts each frame beside the reference's |
+| Look closely | One or two frames per image, or `--crop x,y,w,h` on a still: a wide sheet is shrunk when read, a cell ends near 360 px |
+| Pops of ours | `bun run framecheck` on a draft (a --chunks one too) weighs each JUMP and FLASH against the film's references/ video (`--vs <video>` for another): "ref jumps too" is a move the remake copies, OURS ONLY a pop to fix first (a keyed hand snapping in one frame, a prop sliding back), OURS STEPS jumps of ours within three frames and a dead frame beside them while the reference keeps moving (props swapped in steps; a step slower than every third frame reads as separate pops); those get the strips first |
 | What is left to fix | `bun run sweep` on the whole draft lists, heaviest first: our pops and stutters, 3/4 s or more blurrier or brighter than the reference, and cuts against its study (one inside a reference whip is a look). Fix from the top, render, sweep again: it marks what is new and names what went. Run it before calling the film done; a clean sweep still needs the eye |
-| Frame a block body | A block head is about 3 times a real one against the body: match the reference's eye line, head top and the lowest part of the body showing, not the head's width; scale a held prop up (about 1.5x) to keep it in proportion to the head. To size a subject, read its box in the reference with `sheet --grid --crop` and ours with `CHECK=probe`, then scale the camera's distance by ours over the reference's width |
-| Before calling a shot done | A poster at its key frame, a `SAMPLES=8` clip of it, `CHECK=motion:cam,<a>,<b>` over its moves, and `CHECK=seen:<subject>,<a>,<b>` and `CHECK=touch:<hand>,<a>,<b>` for a subject cut off or a hand through a prop (all `bun run render stills`) |
+| Frame a block body | A block head is about 3 times a real one against the body: match the reference's eye line, head top and the lowest part of the body showing, not the head's width; scale a held prop up (about 1.5x) to keep it in proportion to the head. To size a subject, read its box in the reference with `sheet --grid --crop` and ours with `--check probe`, then scale the camera's distance by ours over the reference's width |
+| Before calling a shot done | A poster at its key frame, a `--samples 8` clip of it, `--check motion:cam,<a>,<b>` over its moves, and `--check seen:<subject>,<a>,<b>` and `--check touch:<hand>,<a>,<b>` for a subject cut off or a hand through a prop (all `bun run render stills`) |
 | Points in the reference | `bun run sheet references/ref.mp4 frames <s> --grid 50 --crop x0,y0,x1,y1` rules a frame in the video's pixels to read a landmark's uv; `bun run media tapir references/ref.mp4 --point x,y` follows a point; `bun run media camera motion` gives the camera's move each frame; reading coordinates off a grid by eye drifts |
 | Captions like the reference's | `bun run media ocr references/ref.mp4 --captions --crop 0,<top>,1,<height> --minutes 15` (15 for each minute of video) writes captions.json: {from, to, text} in the reference's seconds, each change of text read to its frame; a caption stacked in two lines stays whole, words on props, watermarks and a handle in every frame are left out. A caption shown under 0.25 s can be missed: look the list over against the reference |
 | What makes each sound hit | study.md lists the strong hits; `bun run sheet references/ref.mp4 frames <h-0.1>-<h+0.3>/4,...` (one range a hit) shows the picture at each before an sfx is chosen |
@@ -228,5 +228,5 @@ When the creator asks for a film that matches a reference shot for shot, measure
 | Follow a moving actor | A camera key's `p` and `l` take `{ target, offset }` (film.md, Camera anchors), so the framing holds when the actor's path changes |
 | Put a prop where the reference has it | `bun run at <s> --pixel x,y --plane y=<table top>` gives the world point that pixel meets through our camera then (`--json`: `cam.pose` is the camera's p, l, fov, roll). Its camera line says which world axis the picture's right and up run along (`cam.screen`): a camera facing back along +z has its right on -x |
 | When to review | After each medium or large scene, one fast reviewer (a small model such as Haiku) on that scene alone; when the film is done, one on the whole video. Fix what checks out, then review only the spans a fix touched. Stop when a round's checked findings are only taste or wrong claims; a span failing three rounds goes to the creator as a question, not a fourth round. Before calling a round too slow to run, time the render, framecheck and review of the last one and give those seconds |
-| A reviewer's brief | Make the `sheet ... frames <a>-<b>/<n> --vs references/ref.mp4` pairs yourself, dense (12+ a second) over whips and cuts, cells near 360 px, and hand the reviewer their paths. Copy the video it reads to `renders/review/<round>.mp4` first: render clip and mix rewrite the drafts, so keep working while it reads. Say what is no finding: the block style, our own label for the reference's brand, no motion blur in a clip or still rendered without SAMPLES, the strip under ours (the draft's label), a block head wider than the reference's head. Ask for a second and a picture behind every claim, then check each one |
-| Before it ships | Brands, logos and a creator's name copied from the reference get our own label: `CHECK=text` lists only text.json, so read the textures too with `bun run media ocr renders/draft.mp4 --from 0 --to <end> --frames <n>` beside the same run on the reference; a `guide` sound (the reference's voice) is replaced, as `bun run mix` refuses a final with one |
+| A reviewer's brief | Make the `sheet ... frames <a>-<b>/<n> --vs references/ref.mp4` pairs yourself, dense (12+ a second) over whips and cuts, cells near 360 px, and hand the reviewer their paths. Copy the video it reads to `renders/review/<round>.mp4` first: render clip and mix rewrite the drafts, so keep working while it reads. Say what is no finding: the block style, our own label for the reference's brand, no motion blur in a clip or still rendered without --samples, the strip under ours (the draft's label), a block head wider than the reference's head. Ask for a second and a picture behind every claim, then check each one |
+| Before it ships | Brands, logos and a creator's name copied from the reference get our own label: `--check text` lists only text.json, so read the textures too with `bun run media ocr renders/draft.mp4 --from 0 --to <end> --frames <n>` beside the same run on the reference; a `guide` sound (the reference's voice) is replaced, as `bun run mix` refuses a final with one |

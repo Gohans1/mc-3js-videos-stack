@@ -73,7 +73,7 @@ every "look" and "handheld" preset name and misspelt keys, every sound name in t
 options) against the sounds the studio can play (with the nearest names or the other film whose own sound it is), and that
 every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
 both "mm" and "fov", shot "hits[].t" outside its shot, unpicked mod blocks, invalid blockstate property values, stale picked.zip,
-and on-screen text too brief to read or too small for a phone, plus keyFiles arrays hiding nested {t} rows that Studio cannot load; where text sits and how it reads over the picture: CHECK=text bun run render stills.
+and on-screen text too brief to read or too small for a phone, plus keyFiles arrays hiding nested {t} rows that Studio cannot load; where text sits and how it reads over the picture: bun run render stills --check text.
 Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
 Exit 0 ok, 1 problems found. Find a sound, 3D object or preset: bun run find <words>.`;
 
@@ -852,7 +852,7 @@ if (Array.isArray(textRead?.items)) {
   if (lines.length) {
     warnings.push(...lines);
     hints.push(
-      `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
+      `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: bun run render stills --check text`,
     );
   }
 }
@@ -1215,7 +1215,7 @@ for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
 }
 
 // the camera's cuts in heard seconds, against the reference's (bun run reference study): a remake's cut the reference
-// lacks is the jump mid-move that CHECK=motion:cam would show
+// lacks is the jump mid-move that --check motion:cam would show
 const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =>
   Number.isFinite(k?.t),
 );
@@ -1303,7 +1303,7 @@ if (json)
   );
 else if (!problems.length)
   console.log(
-    `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects\nnext: look at it: AT=<seconds> bun run render stills, or bun run studio`,
+    `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects\nnext: look at it: bun run render stills --at <seconds>, or bun run studio`,
   );
 else {
   const files = new Set(problems.map((p) => p.where.split(" ")[0]));

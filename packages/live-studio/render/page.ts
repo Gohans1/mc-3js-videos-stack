@@ -27,7 +27,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const past = (cfg.stills ?? []).filter((s) => s.frame / FPS > DURATION);
   if (past.length) {
     log(
-      `ERROR AT ${past.map((s) => s.frame / FPS).join(",")} is past the film's end: it runs 0-${DURATION.toFixed(2)} s`,
+      `ERROR --at ${past.map((s) => s.frame / FPS).join(",")} is past the film's end: it runs 0-${DURATION.toFixed(2)} s`,
     );
     return;
   }
@@ -36,7 +36,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const beyond = (cfg.clip?.only ?? []).filter((i) => i >= chunkCount);
   if (beyond.length) {
     log(
-      `ERROR CHUNKS ${beyond.join(",")} is past the film's end: it has chunks 0-${chunkCount - 1} (${DURATION.toFixed(2)} s, ${cfg.clip.chunk} s each)`,
+      `ERROR --chunks ${beyond.join(",")} is past the film's end: it has chunks 0-${chunkCount - 1} (${DURATION.toFixed(2)} s, ${cfg.clip.chunk} s each)`,
     );
     return;
   }
@@ -66,7 +66,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
-  // a shot's start or a camera key with cut: true: framecheck, the shutter, CHECK=motion/order and the cost line stop there
+  // a shot's start or a camera key with cut: true: framecheck, the shutter, --check motion/order and the cost line stop there
   const cuts = renderCutTimes(
     SHOTS.slice(1).map((s) => s.t),
     EDIT.cam,
@@ -79,7 +79,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         variants: (render.variants ?? []).map((v) => v.id),
       }),
     );
-  // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
+  // --check name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
   const builtin = {
     order: orderCheck(render, DURATION, [0, ...cuts]),
@@ -122,7 +122,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   }
   if (cfg.inspect) {
     if (!render.tools?.free) {
-      log("ERROR INSPECT requires draw.tools.free on the film");
+      log("ERROR --inspect requires draw.tools.free on the film");
       return;
     }
     const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
@@ -132,11 +132,11 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   }
   const hasViewCams = (cfg.stills ?? []).some((s) => s.cam);
   if (hasViewCams && !render.tools?.free) {
-    log("ERROR VIEWS requires draw.tools.free on the film");
+    log("ERROR --views requires draw.tools.free on the film");
     return;
   }
 
-  // The film's list of what is going on (draw.describe), over the picture of a draft with LIST=1: one backed box per section,
+  // The film's list of what is going on (draw.describe), over the picture of a draft with --list: one backed box per section,
   // wrapped into a new column when it would run off the bottom. Colours are the studio's
   const S = Math.max(10, Math.round(cfg.H * 0.019)),
     LH = Math.round(S * 1.35),
@@ -319,7 +319,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     }
     const cam = render.tools?.camera;
     if (!cam?.setViewOffset) {
-      log("WARN CROP requires draw.tools.camera on the film; rendering uncropped");
+      log("WARN --crop requires draw.tools.camera on the film; rendering uncropped");
       await still(s.name, await draw(s.frame, cfg.stillSamples ?? 1, s.view), cfg.quality);
       return;
     }
@@ -401,7 +401,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     beat = performance.now();
     post("/alive", String(f));
   };
-  // frames first-last as one mp4 starting on a keyframe: a chunk, or a SPAN run's video
+  // frames first-last as one mp4 starting on a keyframe: a chunk, or a --span run's video
   const encode = async (first, last, bitrate) => {
     const output = new Output({
       format: new Mp4OutputFormat({ fastStart: "in-memory" }),
@@ -437,14 +437,14 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     whips.frames = whips.most = 0;
     return said;
   };
-  // a SPAN run draws one video of just those frames and leaves every chunk as it is
+  // a --span run draws one video of just those frames and leaves every chunk as it is
   if (cfg.clip?.span) {
     const started = performance.now(),
       first = cfg.clip.span[0],
       last = Math.min(cfg.clip.span[1], ranges.at(-1)[1]);
     if (first > last) {
       log(
-        `ERROR SPAN starts at frame ${first}, after the film's last (${last}, ${(last / FPS).toFixed(2)} s): give it a second before that`,
+        `ERROR --span starts at frame ${first}, after the film's last (${last}, ${(last / FPS).toFixed(2)} s): give it a second before that`,
       );
       return;
     }
@@ -463,7 +463,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     const kept = todo.filter((i) => cfg.clip.unchanged?.includes(i));
     if (kept.length)
       log(
-        `${kept.length > 1 ? "chunks" : "chunk"} ${kept.join(", ")}: unchanged since rendered, kept (CHUNKS=${kept[0]} renders one again anyway)`,
+        `${kept.length > 1 ? "chunks" : "chunk"} ${kept.join(", ")}: unchanged since rendered, kept (--chunks ${kept[0]} renders one again anyway)`,
       );
     for (const index of todo.filter((i) => !kept.includes(i))) {
       if (index >= chunks) {

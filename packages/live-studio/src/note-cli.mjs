@@ -152,7 +152,7 @@ export const markDone = (project, id, what, opts = {}) => {
       throw new Error('pass either --after <image> or --no-after "<reason>", not both');
     if (!hasAfter && !hasAfterData && !hasReason)
       throw new Error(
-        'done needs --after <image> or --no-after "<reason>" (if the subject moved or the note view no longer fits, capture a custom frame via INSPECT=px,py,pz,lx,ly,lz,fov AT=<s> bun run render stills and pass --cam px,py,pz,lx,ly,lz,fov --t <s>)',
+        'done needs --after <image> or --no-after "<reason>" (if the subject moved or the note view no longer fits, capture a custom frame via bun run render stills --inspect px,py,pz,lx,ly,lz,fov --at <s> and pass --cam px,py,pz,lx,ly,lz,fov --t <s>)',
       );
   }
   const afterData = hasAfterData

@@ -1,4 +1,4 @@
-// Persistent Chrome shader-cache slots, CHECK=seen/text/probe + INSPECT/VIEWS warnings, and single-frame CHECK=probe
+// Persistent Chrome shader-cache slots, --check seen/text/probe + --inspect/--views warnings, and single-frame --check probe
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -659,7 +659,7 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
 
   setTiming({ speeds: [{ from: 0, to: 4, rate: 2 }], freezes: [{ at: 2, duration: 1 }] }, 4);
   try {
-    // 1. Normal run with INSPECT mutating free.roll during draw -> restores all fields cleanly
+    // 1. Normal run with --inspect mutating free.roll during draw -> restores all fields cleanly
     const renderOk = Object.assign(
       () => {
         assert.equal(free.on, true);
@@ -740,7 +740,7 @@ test("probeCheck says where the lens focuses and how blurred each target is", as
 // ---------------- render CLI validation tests ----------------
 
 test(
-  "render CLI validates CHECK=probe syntax, RENDER_FRESH_CACHE flag/typos, and help before Chrome boots",
+  "render CLI validates --check probe syntax, a misspelt --fresh-cache, and help before Chrome boots",
   { timeout: 30000 },
   (t) => {
     const dir = makeTempDir(t, "render-probe-cli-");
@@ -748,12 +748,12 @@ test(
     const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
     writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 5 }));
     writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-    const run = (args, env = {}) =>
-      spawnSync("bun", [RENDER, ...args], {
+    const run = (args, flags = []) =>
+      spawnSync("bun", [RENDER, ...args, ...flags], {
         cwd: dir,
         encoding: "utf8",
         timeout: 20000,
-        env: { ...process.env, LIVE_PROJECT: dir, ...env },
+        env: { ...process.env, LIVE_PROJECT: dir },
       });
 
     for (const badCheck of [
@@ -772,35 +772,23 @@ test(
       "probe:dish,1,2",
       "probe:dish,99",
     ]) {
-      const out = run(["stills"], { CHECK: badCheck });
+      const out = run(["stills"], ["--check", badCheck]);
       assert.equal(
         out.status,
         2,
-        `expected exit 2 for CHECK=${badCheck}: ${out.stdout + out.stderr}`,
+        `expected exit 2 for --check ${badCheck}: ${out.stdout + out.stderr}`,
       );
       assert.doesNotMatch(out.stdout + out.stderr, /built in/i);
     }
 
-    const badCacheFlag = run(["stills"], { RENDER_FRESH_CACHE: "maybe" });
-    assert.equal(badCacheFlag.status, 2, badCacheFlag.stdout + badCacheFlag.stderr);
-    assert.match(badCacheFlag.stderr, /RENDER_FRESH_CACHE/);
-
-    const flagForm = run(["--render_fresh_cache=1", "stills"]);
-    assert.equal(flagForm.status, 2, flagForm.stdout + flagForm.stderr);
-    assert.match(flagForm.stderr, /RENDER_FRESH_CACHE is an environment variable/);
-
-    const hyphenFlag = run(["--render-fresh-cache=1", "stills"]);
-    assert.equal(hyphenFlag.status, 2, hyphenFlag.stdout + hyphenFlag.stderr);
-    assert.match(hyphenFlag.stderr, /RENDER_FRESH_CACHE is an environment variable/);
-
-    const envTypo = run(["stills"], { RENDER_FRESH_CACH: "1" });
-    assert.equal(envTypo.status, 2, envTypo.stdout + envTypo.stderr);
-    assert.match(envTypo.stderr, /did you mean RENDER_FRESH_CACHE=1/);
+    const typo = run(["stills", "--fresh-cach"]);
+    assert.equal(typo.status, 2, typo.stdout + typo.stderr);
+    assert.match(typo.stderr, /unknown option --fresh-cach/);
 
     const help = run(["--help"]);
     assert.equal(help.status, 0);
-    assert.match(help.stdout, /CHECK=probe/);
-    assert.match(help.stdout, /RENDER_FRESH_CACHE/);
+    assert.match(help.stdout, /--check probe:<t>/);
+    assert.match(help.stdout, /--fresh-cache/);
   },
 );
 
@@ -934,28 +922,28 @@ export function buildScene(canvas, W, H) {
   return draw;
 }`,
   );
-  const render = (args, env = {}) =>
-    spawnSync("bun", [RENDER, ...args], {
+  const render = (args, flags = []) =>
+    spawnSync("bun", [RENDER, ...args, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 180000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
   return { dir, render };
 };
 
 test(
-  "CHECK=probe runs live in headless Chrome, honors INSPECT and restores free, preserves .chrome-cache, and warns on CHECK+INSPECT/VIEWS",
+  "--check probe runs live in headless Chrome, honors --inspect and restores free, preserves .chrome-cache, and warns on --check+--inspect/--views",
   { timeout: 180000 },
   (t) => {
     const chrome = findBrowser();
-    if (!chrome) return t.skip("no Chrome binary available for live CHECK=probe verification");
+    if (!chrome) return t.skip("no Chrome binary available for live --check probe verification");
     const { dir, render } = setupProbeFilm(t, chrome);
 
-    // 1. Unfiltered CHECK=probe:2 probes all draw.tools.objects at t=2 with film camera
-    const allRun = render(["stills"], { CHECK: "probe:2" });
+    // 1. Unfiltered --check probe:2 probes all draw.tools.objects at t=2 with film camera
+    const allRun = render(["stills"], ["--check", "probe:2"]);
     assert.equal(allRun.status, 0, allRun.stdout + allRun.stderr);
-    assert.doesNotMatch(allRun.stderr, /ignores INSPECT\/VIEWS/);
+    assert.doesNotMatch(allRun.stderr, /ignores --inspect\/--views/);
     assert.match(allRun.stdout, /wrote renders\/probe_2s\.json/);
 
     const reportAll = JSON.parse(readFileSync(join(dir, "renders/probe_2s.json"), "utf8"));
@@ -985,13 +973,13 @@ test(
     assert.ok(!existsSync(slot0Lock), "slot-0 lock should be released after render");
     writeFileSync(join(slot0Dir, "keep-cache.marker"), "persisted");
 
-    // 2. Filtered CHECK=probe:dish|elon.head,2 + INSPECT= honors Free Cam and reports bone axes
-    const inspectRun = render(["stills"], {
-      INSPECT: "1,1,9,1,1,0,40",
-      CHECK: "probe:dish|elon.head,2",
-    });
+    // 2. Filtered --check probe:dish|elon.head,2 + --inspect honors Free Cam and reports bone axes
+    const inspectRun = render(
+      ["stills"],
+      ["--inspect", "1,1,9,1,1,0,40", "--check", "probe:dish|elon.head,2"],
+    );
     assert.equal(inspectRun.status, 0, inspectRun.stdout + inspectRun.stderr);
-    assert.doesNotMatch(inspectRun.stderr, /ignores INSPECT\/VIEWS/);
+    assert.doesNotMatch(inspectRun.stderr, /ignores --inspect\/--views/);
 
     const reportInsp = JSON.parse(readFileSync(join(dir, "renders/probe_2s.json"), "utf8"));
     assert.equal(reportInsp.camera.mode, "inspect");
@@ -1007,26 +995,30 @@ test(
     assert.deepEqual(inspByName.head.axes.y, [0, 0, 1]);
     assert.deepEqual(inspByName.head.axes.z, [0, -1, 0]);
 
-    // 3. Backwards INSPECT probe followed by CHECK=seen in the SAME boot proves probe restores free
-    const chainedRun = render(["stills"], {
-      INSPECT: "0,1,5,0,1,10,50", // faces +Z away from dish
-      CHECK: "probe:dish,2;seen:dish,2,2.1",
-    });
+    // 3. Backwards --inspect probe followed by --check seen in the SAME boot proves probe restores free
+    const chainedRun = render(
+      ["stills"],
+      ["--inspect", "0,1,5,0,1,10,50", "--check", "probe:dish,2;seen:dish,2,2.1"],
+    );
     assert.equal(chainedRun.status, 0, chainedRun.stdout + chainedRun.stderr);
     assert.match(
       chainedRun.stderr,
-      /warning: CHECK=seen measures the film's own camera and ignores INSPECT\/VIEWS/,
+      /warning: --check seen measures the film's own camera and ignores --inspect\/--views/,
     );
     const chainedProbe = JSON.parse(readFileSync(join(dir, "renders/probe_2s.json"), "utf8"));
-    assert.equal(chainedProbe.targets[0].screen.behind, true, "probe saw dish behind INSPECT cam");
+    assert.equal(
+      chainedProbe.targets[0].screen.behind,
+      true,
+      "probe saw dish behind --inspect cam",
+    );
     assert.doesNotMatch(
       chainedRun.stdout,
       /OUT OF FRAME|0\.0% of the frame/,
       "seen ran after probe with free restored to film camera and saw dish in frame",
     );
 
-    // 4. Wildcard CHECK=probe:*,1 discovers named scene nodes outside draw.tools.objects
-    const wildRun = render(["stills"], { CHECK: "probe:*,1" });
+    // 4. Wildcard --check probe:*,1 discovers named scene nodes outside draw.tools.objects
+    const wildRun = render(["stills"], ["--check", "probe:*,1"]);
     assert.equal(wildRun.status, 0, wildRun.stdout + wildRun.stderr);
     const reportWild = JSON.parse(readFileSync(join(dir, "renders/probe_1s.json"), "utf8"));
     const wildNames = reportWild.targets.map((x) => x.name);
@@ -1034,28 +1026,28 @@ test(
     assert.ok(wildNames.includes("head"), `expected head bone in ${wildNames}`);
 
     // 5. Stills render cleans old stills without touching .chrome-cache
-    const stillRun = render(["stills"], { AT: "1" });
+    const stillRun = render(["stills"], ["--at", "1"]);
     assert.equal(stillRun.status, 0, stillRun.stdout + stillRun.stderr);
     assert.equal(readFileSync(join(slot0Dir, "keep-cache.marker"), "utf8"), "persisted");
 
-    // 6. CHECK=text and CHECK=probe with VIEWS= emit explicit stderr warnings
-    const viewsWarn = render(["stills"], {
-      VIEWS: "front:0,1,8,0,1,0,50",
-      CHECK: "text:0,1;probe:dish,1",
-    });
+    // 6. --check text and --check probe with --views emit explicit stderr warnings
+    const viewsWarn = render(
+      ["stills"],
+      ["--views", "front:0,1,8,0,1,0,50", "--check", "text:0,1;probe:dish,1"],
+    );
     assert.equal(viewsWarn.status, 0, viewsWarn.stdout + viewsWarn.stderr);
     assert.match(
       viewsWarn.stderr,
-      /warning: CHECK=text measures the film's own camera and ignores INSPECT\/VIEWS/,
+      /warning: --check text measures the film's own camera and ignores --inspect\/--views/,
     );
-    assert.match(viewsWarn.stderr, /warning: CHECK=probe uses the film's own camera under VIEWS/);
+    assert.match(
+      viewsWarn.stderr,
+      /warning: --check probe uses the film's own camera under --views/,
+    );
 
-    // 7. RENDER_FRESH_CACHE=1 bypasses renders/.chrome-cache cleanly
+    // 7. --fresh-cache bypasses renders/.chrome-cache cleanly
     rmSync(join(dir, "renders/.chrome-cache"), { recursive: true, force: true });
-    const freshRun = render(["stills"], {
-      RENDER_FRESH_CACHE: "1",
-      CHECK: "probe:dish,1",
-    });
+    const freshRun = render(["stills"], ["--fresh-cache", "--check", "probe:dish,1"]);
     assert.equal(freshRun.status, 0, freshRun.stdout + freshRun.stderr);
     assert.ok(!existsSync(join(dir, "renders/.chrome-cache")));
   },

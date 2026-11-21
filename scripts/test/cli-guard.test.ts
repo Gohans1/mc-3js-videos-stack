@@ -9,7 +9,7 @@ test("the guiding commands piped or sent to a file are stopped", () => {
     "bun run find door 2>&1 | tail -5",
     "cd films/x && bun run find --kind sfx | grep impact",
     "bun scripts/find.ts rain |& less",
-    "AT=3 bun run find door > out.txt",
+    "LIVE_PROJECT=films/x bun run find door > out.txt",
     "bun run find door >> notes.txt",
     "bun run find door | Select-Object -First 5",
   ])
@@ -19,7 +19,7 @@ test("the guiding commands piped or sent to a file are stopped", () => {
 test("every film command is guarded the same: checks, renders, sound, voice, notes", () => {
   for (const cmd of [
     // a grep that keeps "Head|move" drops the POP and DEAD STOP lines, head drops wrote/next:
-    "export MC_VAULT_EXTERNAL='D:/mc_vault'; CHECK=motion:Head,0,11.6 AT=1 bun run render stills 2>&1 | grep -E \"Head|move \" | head -30",
+    "export MC_VAULT_EXTERNAL='D:/mc_vault'; bun run render stills --check motion:Head,0,11.6 --at 1 2>&1 | grep -E \"Head|move \" | head -30",
     "bun run render stills | tail",
     "bun run render stills | grep -h foo",
     "bun run check 2>&1 | tail -1",
@@ -71,7 +71,7 @@ test("a film command called by its file, its errors thrown away, or its output c
     "out=$(bun run at 12)",
     "x=`bun run check`",
     "$r = bun run pace",
-    "time AT=1 bun run render stills | tail -3",
+    "time LIVE_PROJECT=films/x bun run render stills --at 1 | tail -3",
     "nohup bun run render clip > r.log",
     "bun run --silent check | tail -1",
     "(bun run check) | tail -1",
@@ -105,7 +105,7 @@ test("run bare, as JSON for a script, through tee alone, other commands, and wor
     "bun run find door",
     "bun run find door -n 30 2>&1",
     "bun run find door || echo failed",
-    "CHECK=motion:cam,40,48 bun run render stills 2>&1",
+    "bun run render stills --check motion:cam,40,48 2>&1",
     "bun run check --json | python -c 'import json,sys; print(json.load(sys.stdin)[\"ok\"])'",
     "bun ../../scripts/voice/cues.ts --json > cues.json",
     "bun run render clip 2>&1 | tee renders/log.txt",

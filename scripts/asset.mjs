@@ -81,7 +81,7 @@ Templates add overlays and music; their camera slots guide your own 3D scene, no
 Create freely in src/scene.ts or edit source; this catalog is a starting kit, not a limit.
 HTML/CSS/canvas recipes become Three.js textures; audio/cuts/grades keep their native lanes.
 Imported source: vault/openfilm/library. Reload after HTML edits; restart Studio after _definitions/catalog edits.
-Raw asset bytes are outside render stamps: force affected video chunks with CHUNKS=N after source edits.
+Raw asset bytes are outside render stamps: force affected video chunks with --chunks N after source edits.
 Studio groups assets under Audio, Text, Transitions, Adjustment, Effects and Objects; OpenFilm is a source filter.
 Pack/restore editable source, WAVs and licenses: bun run pack:sound; bun run setup --sound-zip <zip>.
 Legacy list/info forward to find's text output; plan/pick/unpick/preview/use/timeline/edit/remove/validate return JSON.
@@ -275,28 +275,8 @@ export async function runAsset(input = process.argv.slice(2), defaultSource) {
         const previewEntry = fileURLToPath(
           new URL("../packages/live-studio/render/asset-preview.ts", import.meta.url),
         );
-        const stripRenderEnv = new Set([
-          "AT",
-          "CHUNKS",
-          "SPAN",
-          "INSPECT",
-          "VIEWS",
-          "CROP",
-          "CHECK",
-          "COMPARE",
-          "LIST",
-          "SAMPLES",
-          "RES",
-          "LIVE_PROJECT",
-          "ENTRY",
-          "LAB_PREVIEW_SPEC",
-          "LAB_PREVIEW_OVERLAY",
-        ]);
-        const childEnv = Object.fromEntries(
-          Object.entries(process.env).filter(([k]) => !stripRenderEnv.has(k.toUpperCase())),
-        );
-        childEnv.ENTRY = previewEntry;
-        childEnv.LAB_PREVIEW_SPEC = JSON.stringify({
+        const { LIVE_PROJECT: _, ...childEnv } = process.env;
+        const previewSpec = JSON.stringify({
           ...spec,
           hasOverlay: Boolean(overlay.zipPath),
           skipPicked: Boolean(args.source),
@@ -308,14 +288,16 @@ export async function runAsset(input = process.argv.slice(2), defaultSource) {
               }
             : {}),
         });
-        if (overlay.zipPath) childEnv.LAB_PREVIEW_OVERLAY = overlay.zipPath;
-        run = spawnSync(process.execPath, [renderScript, "stills"], {
-          cwd: project,
-          env: childEnv,
-          encoding: "utf8",
-          timeout: 180_000,
-          windowsHide: true,
-        });
+        const labArgs = [
+          "--lab",
+          `preview_spec=${previewSpec}`,
+          ...(overlay.zipPath ? ["--lab", `preview_overlay=${overlay.zipPath}`] : []),
+        ];
+        run = spawnSync(
+          process.execPath,
+          [renderScript, "stills", "--entry", previewEntry, ...labArgs],
+          { cwd: project, env: childEnv, encoding: "utf8", timeout: 180_000, windowsHide: true },
+        );
       } finally {
         if (overlay.zipPath) {
           try {

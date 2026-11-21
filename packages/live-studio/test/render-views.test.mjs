@@ -1,4 +1,4 @@
-// Multi-angle batch VIEWS= rendering: pure parser unit tests, CLI validation, and real headless Chrome WebGL verification
+// Multi-angle batch --views rendering: pure parser unit tests, CLI validation, and real headless Chrome WebGL verification
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -169,58 +169,58 @@ test("parseViews parses inline specs and @json object/array files and enforces v
 });
 
 test(
-  "render CLI enforces VIEWS exit-2 guards, target restrictions, typos, flags, and help before Chrome boots",
+  "render CLI enforces --views exit-2 guards, target restrictions, typos, options before the target, and help before Chrome boots",
   { timeout: 30000 },
   (t) => {
     const dir = mkdtempSync(join(tmpdir(), "render-views-cli-"));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     copyDemo(dir);
     writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-    const run = (args, env = {}) =>
-      spawnSync("bun", [RENDER, ...args], {
+    const run = (args, flags = []) =>
+      spawnSync("bun", [RENDER, ...args, ...flags], {
         cwd: dir,
         encoding: "utf8",
         timeout: 20000,
-        env: { ...process.env, LIVE_PROJECT: dir, ...env },
+        env: { ...process.env, LIVE_PROJECT: dir },
       });
 
-    const combined = run(["stills"], {
-      INSPECT: "0,0,5,0,0,0,50",
-      VIEWS: "corner:0,0,5,0,0,0,50",
-    });
+    const combined = run(
+      ["stills"],
+      ["--inspect", "0,0,5,0,0,0,50", "--views", "corner:0,0,5,0,0,0,50"],
+    );
     assert.equal(combined.status, 2, combined.stdout + combined.stderr);
-    assert.match(combined.stderr, /INSPECT and VIEWS cannot be used together/);
+    assert.match(combined.stderr, /--inspect and --views cannot be used together/);
     assert.doesNotMatch(combined.stdout + combined.stderr, /built in/i);
 
     for (const target of ["clip", "final", "all"]) {
-      const wrongTarget = run([target], { VIEWS: "corner:0,0,5,0,0,0,50" });
+      const wrongTarget = run([target], ["--views", "corner:0,0,5,0,0,0,50"]);
       assert.equal(wrongTarget.status, 2, `${target}: ${wrongTarget.stderr}`);
-      assert.match(wrongTarget.stderr, /VIEWS is for render stills or poster/);
+      assert.match(wrongTarget.stderr, /--views is for render stills or poster/);
     }
 
-    const captionsTarget = run(["captions"], { VIEWS: "corner:0,0,5,0,0,0,50" });
+    const captionsTarget = run(["captions"], ["--views", "corner:0,0,5,0,0,0,50"]);
     assert.equal(captionsTarget.status, 2, captionsTarget.stderr);
-    assert.match(captionsTarget.stderr, /VIEWS does nothing for render captions/);
+    assert.match(captionsTarget.stderr, /--views does nothing for render captions/);
 
-    const badInline = run(["stills"], { VIEWS: "../evil:0,0,5,0,0,0,50" });
+    const badInline = run(["stills"], ["--views", "../evil:0,0,5,0,0,0,50"]);
     assert.equal(badInline.status, 2, badInline.stderr);
-    assert.match(badInline.stderr, /VIEWS:.*invalid view name/);
+    assert.match(badInline.stderr, /--views:.*invalid view name/);
 
-    const badJson = run(["stills"], { VIEWS: "@missing.json" });
+    const badJson = run(["stills"], ["--views", "@missing.json"]);
     assert.equal(badJson.status, 2, badJson.stderr);
-    assert.match(badJson.stderr, /VIEWS:.*missing\.json/);
+    assert.match(badJson.stderr, /--views:.*missing\.json/);
 
-    const typo = run(["stills"], { VIEW: "corner:0,0,5,0,0,0,50" });
+    const typo = run(["stills", "--view", "corner:0,0,5,0,0,0,50"]);
     assert.equal(typo.status, 2, typo.stderr);
-    assert.match(typo.stderr, /did you mean VIEWS=/);
+    assert.match(typo.stderr, /unknown option --view/);
 
-    const flag = run(["--views", "corner:0,0,5,0,0,0,50", "stills"]);
-    assert.equal(flag.status, 2, flag.stderr);
-    assert.match(flag.stderr, /VIEWS is an environment variable/);
+    const before = run(["--views", "corner:0,0,5,0,0,0,50", "--at", "1"]);
+    assert.equal(before.status, 2, before.stderr);
+    assert.match(before.stderr, /which render\?/);
 
     const help = run(["--help"]);
     assert.equal(help.status, 0);
-    assert.match(help.stdout, /VIEWS=/);
+    assert.match(help.stdout, /--views "a:px/);
   },
 );
 
@@ -302,33 +302,33 @@ export function buildScene(canvas, W, H) {
   return draw;
 }`;
   writeFileSync(sceneFile, makeScene(redHex, withFree));
-  const render = (args, env = {}) =>
-    spawnSync("bun", [RENDER, ...args], {
+  const render = (args, flags = []) =>
+    spawnSync("bun", [RENDER, ...args, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 180000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
   return { dir, sceneFile, makeScene, render };
 };
 
 test(
-  "VIEWS renders multiple distinct camera angles in one boot without wiping existing stills or unrelated views",
+  "--views renders multiple distinct camera angles in one boot without wiping existing stills or unrelated views",
   { timeout: 180000 },
   (t) => {
     const chrome = findBrowser();
-    if (!chrome) return t.skip("no Chrome binary available for live VIEWS verification");
+    if (!chrome) return t.skip("no Chrome binary available for live --views verification");
     const { dir, sceneFile, makeScene, render } = setupRoomFilm(t, chrome);
 
     mkdirSync(join(dir, "renders"), { recursive: true });
     writeFileSync(join(dir, "renders/still_1s.jpg"), "keep-still");
     writeFileSync(join(dir, "renders/view_prior_1s.jpg"), "keep-prior-view");
 
-    // 1. Inline VIEWS= across 2 camera angles x 2 timestamps in ONE Vite build + ONE Chrome boot
-    const batch = render(["stills"], {
-      AT: "0.5,1",
-      VIEWS: "east-red:0,0,0,6,0,0,50;west.blue_1:0,0,0,-6,0,0,50",
-    });
+    // 1. Inline --views across 2 camera angles x 2 timestamps in ONE Vite build + ONE Chrome boot
+    const batch = render(
+      ["stills"],
+      ["--at", "0.5,1", "--views", "east-red:0,0,0,6,0,0,50;west.blue_1:0,0,0,-6,0,0,50"],
+    );
     assert.equal(batch.status, 0, batch.stdout + batch.stderr);
     assert.equal((batch.stdout.match(/^built in /gm) ?? []).length, 1, "single Vite build");
     assert.equal((batch.stdout.match(/^scene built in /gm) ?? []).length, 1, "single scene build");
@@ -359,7 +359,7 @@ test(
     assert.equal(readFileSync(join(dir, "renders/still_1s.jpg"), "utf8"), "keep-still");
     assert.equal(readFileSync(join(dir, "renders/view_prior_1s.jpg"), "utf8"), "keep-prior-view");
 
-    // 2. VIEWS=@json (object format) + LIST=1 + COMPARE=1 preserves .prev/ and emits diff
+    // 2. --views @json (object format) + --list + --compare preserves .prev/ and emits diff
     writeFileSync(sceneFile, makeScene("0x11dddd"));
     writeFileSync(
       join(dir, "views_obj.json"),
@@ -368,12 +368,10 @@ test(
         south_green: [0, 0, 0, 0, 0, 6, 50],
       }),
     );
-    const cmpRun = render(["stills"], {
-      AT: "1",
-      LIST: "1",
-      COMPARE: "1",
-      VIEWS: "@views_obj.json",
-    });
+    const cmpRun = render(
+      ["stills"],
+      ["--at", "1", "--list", "--compare", "--views", "@views_obj.json"],
+    );
     assert.equal(cmpRun.status, 0, cmpRun.stdout + cmpRun.stderr);
     assert.ok(existsSync(join(dir, "renders/.prev/view_east-red_1s.jpg")));
     assert.ok(existsSync(join(dir, "renders/compare_view_east-red_1s.png")));
@@ -384,30 +382,27 @@ test(
       `expected green wall for south_green, got ${greenPx.rgb}`,
     );
 
-    // 3. VIEWS=@json (array format) + CROP= zooms into top-left yellow quad on -Z wall
+    // 3. --views @json (array format) + --crop zooms into top-left yellow quad on -Z wall
     writeFileSync(
       join(dir, "views_arr.json"),
       JSON.stringify([{ name: "north_quad", cam: [0, 0, 0, 0, 0, -6, 60] }]),
     );
-    const cropRun = render(["stills"], {
-      AT: "1",
-      CROP: "0,0,0.5,0.5",
-      VIEWS: "@views_arr.json",
-    });
+    const cropRun = render(
+      ["stills"],
+      ["--at", "1", "--crop", "0,0,0.5,0.5", "--views", "@views_arr.json"],
+    );
     assert.equal(cropRun.status, 0, cropRun.stdout + cropRun.stderr);
     const yellowPx = sampleRgb(join(dir, "renders/view_north_quad_1s.jpg"));
     assert.ok(
       yellowPx.rgb[0] > 180 && yellowPx.rgb[1] > 180 && yellowPx.rgb[2] < 60,
-      `expected yellow quad via CROP+VIEWS, got ${yellowPx.rgb}`,
+      `expected yellow quad via --crop+--views, got ${yellowPx.rgb}`,
     );
 
-    // 4. Poster mode + RES=1080 + VIEWS= writes full-size lossless PNG without strip
-    const posterRun = render(["poster"], {
-      AT: "1",
-      RES: "1080",
-      SAMPLES: "1",
-      VIEWS: "west_hi:0,0,0,-6,0,0,50",
-    });
+    // 4. Poster mode + --res 1080 + --views writes full-size lossless PNG without strip
+    const posterRun = render(
+      ["poster"],
+      ["--at", "1", "--res", "1080", "--samples", "1", "--views", "west_hi:0,0,0,-6,0,0,50"],
+    );
     assert.equal(posterRun.status, 0, posterRun.stdout + posterRun.stderr);
     const posterInfo = sampleRgb(join(dir, "renders/view_west_hi_1s.png"), 0.5, 0.5);
     assert.equal(posterInfo.codec, "png");
@@ -415,26 +410,20 @@ test(
     assert.equal(posterInfo.h, 1080);
     assert.ok(posterInfo.rgb[2] > 180 && posterInfo.rgb[0] < 60);
 
-    // 5. Existing single INSPECT= stays 100% backward-compatible
-    const inspectRun = render(["stills"], {
-      AT: "1",
-      INSPECT: "0,0,0,-6,0,0,50",
-    });
+    // 5. A single --inspect camera still renders
+    const inspectRun = render(["stills"], ["--at", "1", "--inspect", "0,0,0,-6,0,0,50"]);
     assert.equal(inspectRun.status, 0, inspectRun.stdout + inspectRun.stderr);
     const inspPx = sampleRgb(join(dir, "renders/still_1s.jpg"));
     assert.ok(inspPx.rgb[2] > 180 && inspPx.rgb[0] < 60);
   },
 );
 
-test("VIEWS fails cleanly when the film exposes no draw.tools.free", { timeout: 60000 }, (t) => {
+test("--views fails cleanly when the film exposes no draw.tools.free", { timeout: 60000 }, (t) => {
   const chrome = findBrowser();
-  if (!chrome) return t.skip("no Chrome binary available for live VIEWS verification");
+  if (!chrome) return t.skip("no Chrome binary available for live --views verification");
   const { render } = setupRoomFilm(t, chrome, { withFree: false });
 
-  const out = render(["stills"], {
-    AT: "1",
-    VIEWS: "corner:0,0,5,0,0,0,50",
-  });
+  const out = render(["stills"], ["--at", "1", "--views", "corner:0,0,5,0,0,0,50"]);
   assert.equal(out.status, 1, out.stdout + out.stderr);
-  assert.match(out.stderr, /ERROR VIEWS requires draw\.tools\.free/);
+  assert.match(out.stderr, /ERROR --views requires draw\.tools\.free/);
 });

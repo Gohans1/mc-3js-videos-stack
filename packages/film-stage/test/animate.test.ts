@@ -620,7 +620,7 @@ test("Cinetic whip, snap, and impact moves populate c.optics.impulse while activ
   expect(run({ out: { fx: "blackDip", len: 1 } }, 5.9).optics!.impulse).toBe("whip");
   expect(run({ in: { fx: "blackDip", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
 
-  // Combo whipDip/snapZoom only tags the high-velocity middle core so CHECK=motion keeps auditing entry & settle.
+  // Combo whipDip/snapZoom only tags the high-velocity middle core so render --check motion keeps auditing entry & settle.
   expect(run({ combo: { fx: "whipDipL" } }, 2.4).optics!.impulse).toBeUndefined();
   expect(run({ combo: { fx: "whipDipL" } }, 4.0).optics!.impulse).toBe("whip");
   expect(run({ combo: { fx: "whipDipL" } }, 5.6).optics!.impulse).toBeUndefined();

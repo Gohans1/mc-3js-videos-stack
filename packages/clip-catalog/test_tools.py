@@ -130,7 +130,7 @@ class Tools(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="catalog space ") as d:
             root = Path(d)
             out = root / "mixamo.jsonl"
-            code = 'import json,os,sys; print("ROW " + json.dumps({"ref":"mixamo/Walk Forward","clips":os.environ["LAB_CLIPS"]}), flush=True); sys.exit(1)'
+            code = 'import json,sys; clips = next(a[6:] for a in sys.argv if a.startswith("clips=")); print("ROW " + json.dumps({"ref":"mixamo/Walk Forward","clips":clips}), flush=True); sys.exit(1)'
             with self.assertRaises(RuntimeError):
                 run_batch([sys.executable, "-c", code], root, out, "catalog", "mixamo", ["Walk Forward", "Idle"], 15)
             row = json.loads(out.read_text(encoding="utf8"))

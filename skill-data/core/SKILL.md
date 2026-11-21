@@ -15,12 +15,10 @@ Run repo commands at the root and film commands in `films/<name>`:
 bun run studio --detach             # 1. live preview + timeline + notes (--status / --stop)
 bun run find <words>                # 2. discover sounds, mocap, 2D presets & 3D assets (--kind object)
 bun run check                       # 3. validate timelines/assets after any JSON edit
-AT=12,30 bun run render stills      # 4. render stills and inspect the printed images
+bun run render stills --at 12,30      # 4. render stills and inspect the printed images
 bun run render clip                 # 5. draft video; then bun run mix renders/draft_video.mp4
 bun run notes                       # 6. read creator notes; answer with bun run note done
 ```
-
-`VAR=x bun run ...` uses POSIX/Bun Shell syntax. In PowerShell use `$env:AT='12,30'; bun run render stills; Remove-Item Env:AT`.
 
 ## Load more when you need it
 
@@ -68,8 +66,8 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Discover, pick and place assets | bun run find --kind transition\|object; --show <id> inspects recipes/properties/clips; preview 3D picks/blocks/items beside a 1.875m Steve scale figure with bun run asset preview; place, pick/unpick or copy Global props with bun run asset --help; see --ref contract |
 | Build a custom scene or effect  | src/scene.ts; bun run skills get core --ref contract                                                                                                                                                                                                                      |
 | Edit data                       | Timeline files named by the film's package.json; run bun run check after editing                                                                                                                                                                                          |
-| Inspect one heard second        | bun run at 35.6; AT=35.6 bun run render stills; open the printed image                                                                                                                                                                                                    |
-| Inspect motion                  | SPAN=40,44 bun run render clip; open the video                                                                                                                                                                                                                            |
+| Inspect one heard second        | bun run at 35.6; bun run render stills --at 35.6; open the printed image                                                                                                                                                                                                    |
+| Inspect motion                  | bun run render clip --span 40,44; open the video                                                                                                                                                                                                                            |
 | Inspect multiple frames         | bun run sheet                                                                                                                                                                                                                                                             |
 | Detect reference cuts/fades     | bun run scenes clip.mp4; optional CPU, JSON/CSV/images in source-file seconds                                                                                                                                                                                             |
 | Read text in reference frames   | bun run media ocr clip.mp4 --at 5,10; text boxes, scores, frames and source timestamps                                                                                                                                                                                    |
@@ -77,7 +75,7 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Discover media and NLE tools    | Run bun run media ffmpeg list, then schema cut for the native parser. Pass native arguments after --. Use bun run media qc --contract to find optional checks.                                                                                                            |
 | Choose a review check           | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion.                                                                                                                                                              |
 | Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps. bun run sweep ranks a whole draft against the reference: pops, stutters, blur, light, cuts. |
-| Check arbitrary seeking         | CHECK=order bun run render stills; optional sampled comparison of two capture orders                                                                                                                                                                                      |
+| Check arbitrary seeking         | bun run render stills --check order; optional sampled comparison of two capture orders                                                                                                                                                                                      |
 | Study a reference video         | bun run reference add <video> puts it in references/ (H.264 copy when needed); inspect <video-or-URL> for frames, captions and search; study for cuts, whips and hits; compare <ref> <draft> for how alike the render is; solve <shot.json> matchmoves a shot's camera; pair with scenes, media and earshot; see --ref review                     |
 | Select, place and edit sound    | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound                                                                                                                                                                                 |
 | Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                                                                                                                            |
@@ -89,7 +87,7 @@ Use the steps that serve the current scene or change. Measurements and presets s
 
 | Clock                                  | Used by                                                                                                                                                                        |
 | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Film seconds, after Speed and Freeze   | notes, at, AT, CHECK, pace, listen, voice:cues, and asset. Sheet and framecheck use file seconds for external footage. Read the result clock before passing a timestamp to at. |
+| Film seconds, after Speed and Freeze   | notes, at, render --at and --check, pace, listen, voice:cues, and asset. Sheet and framecheck use file seconds for external footage. Read the result clock before passing a timestamp to at. |
 | Scene seconds, before Speed and Freeze | cam.json, key files, audio.json, text.json, adjust.json                                                                                                                        |
 | Narration seconds, before voice.warp   | t in shots.json and beats in edit.json                                                                                                                                         |
 

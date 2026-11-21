@@ -165,7 +165,7 @@ def apply(a):
         rv = load_review()
         rv[ref] = {**rv.get(ref, {}), **changes}
         save_review(rv)
-        print(f"{ref}: corrections saved\nnext: preview the corrected clip with ENTRY=lab/clip.ts LAB_CLIP={ref} bun run render stills")
+        print(f"{ref}: corrections saved\nnext: preview the corrected clip with bun run render stills --entry lab/clip.ts --lab clip={ref}")
     elif a.page is not None:
         refs = json.loads((OUT / "pages.json").read_text(encoding="utf-8"))[str(a.page)]
         notes = json.loads(a.notes.read_text(encoding="utf-8-sig") if a.notes else sys.stdin.read())

@@ -309,15 +309,11 @@ def _render_scene_samples(request: str):
     bun = shutil.which("bun")
     if not bun:
         raise RuntimeError("Bun is required to sample a film's named scene targets")
-    # A soundtrack export uses the film's own stage, independent of any manual frame-render options.
-    ignored = {"AT", "LIST", "CHECK", "CHUNKS", "SPAN", "INSPECT", "CROP", "COMPARE", "RES", "SAMPLES", "LIVE_PROJECT"}
-    env = {name: value for name, value in os.environ.items() if name not in ignored}
-    env["ENTRY"] = str(renderer / "render/spatial-samples.ts")
-    env["CHECK"] = "spatial-samples"
-    env["LAB_SPATIAL"] = request
+    env = {name: value for name, value in os.environ.items() if name != "LIVE_PROJECT"}
     try:
         run = subprocess.run(
-            [bun, str(renderer / "render.mjs"), "stills"],
+            [bun, str(renderer / "render.mjs"), "stills", "--entry", str(renderer / "render/spatial-samples.ts"),
+             "--check", "spatial-samples", "--lab", f"spatial={request}"],
             cwd=ROOT, env=env, capture_output=True, encoding="utf8", errors="replace", timeout=120,
         )
     except subprocess.TimeoutExpired as e:

@@ -822,9 +822,9 @@ export function createCliRunner(
       resolvedCwd = pkgPath;
     }
 
-    const assertViewsEnv = (raw: unknown) => {
+    const assertViewsFlag = (raw: unknown) => {
       if (typeof raw !== "string") {
-        throw new CliRunHttpError(400, "INVALID_ARGS", "VIEWS must be a string.");
+        throw new CliRunHttpError(400, "INVALID_ARGS", "--views must be a string.");
       }
       const trimmed = raw.trim();
       if (trimmed.startsWith("@")) {
@@ -833,33 +833,22 @@ export function createCliRunner(
           resolvedCwd,
           resolvedCwd,
           repoRoot,
-          "VIEWS",
+          "--views",
         );
       }
     };
-    if (
-      req.env &&
-      Object.hasOwn(req.env, "ENTRY") &&
-      req.env.ENTRY !== undefined &&
-      req.env.ENTRY !== false
-    ) {
-      assertContainedRelativePath(req.env.ENTRY, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
+    const entryFlag = req.flags?.["--entry"];
+    if (entryFlag !== undefined && entryFlag !== false) {
+      assertContainedRelativePath(entryFlag, resolvedCwd, resolvedCwd, repoRoot, "--entry");
     }
-    if (
-      req.env &&
-      Object.hasOwn(req.env, "VIEWS") &&
-      req.env.VIEWS !== undefined &&
-      req.env.VIEWS !== false
-    ) {
-      assertViewsEnv(req.env.VIEWS);
-    }
-    for (const [k, v] of spec.envEntries) {
-      if (k === "ENTRY") {
-        assertContainedRelativePath(v, resolvedCwd, resolvedCwd, repoRoot, "ENTRY");
-      } else if (k === "VIEWS") {
-        assertViewsEnv(v);
-      }
-    }
+    const viewsFlag = req.flags?.["--views"];
+    if (viewsFlag !== undefined && viewsFlag !== false) assertViewsFlag(viewsFlag);
+    spec.argvTokens.forEach((token, i) => {
+      const value = spec.argvTokens[i + 1];
+      if (token === "--entry" && value !== undefined) {
+        assertContainedRelativePath(value, resolvedCwd, resolvedCwd, repoRoot, "--entry");
+      } else if (token === "--views" && value !== undefined) assertViewsFlag(value);
+    });
 
     // Build exact exe + argv cleanly from allowlisted catalog entry
     const resolveRepoScript = (target: string): string => {

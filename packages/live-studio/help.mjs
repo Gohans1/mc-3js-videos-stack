@@ -63,7 +63,7 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills (AT=12,30 bun run render stills), the film as video (render clip), the upload (render final, only when asked), one frame at its size (AT=12 bun run render poster); CHECK=motion:cam,40,48 charts a move; CHECK=probe:4 logs live 3D bounds/screen coords; CHECK=order checks history-dependent frames; VIEWS, CROP and --compare inspect stills",
+        "draft stills (bun run render stills --at 12,30), the film as video (render clip), the upload (render final, only when asked), one frame at its size (bun run render poster --at 12); --check motion:cam,40,48 charts a move; --check probe:4 logs live 3D bounds/screen coords; --check order checks history-dependent frames; --views, --crop and --compare inspect stills",
       sheet:
         "contact sheets; overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence (--vs references/ref.mp4 sets each beside the reference's frame), or explicit image grids; each new run has index.json",
       scenes:

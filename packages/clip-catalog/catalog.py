@@ -13,7 +13,7 @@ python ../../packages/clip-catalog/catalog.py --jev "he searches the floor with 
 Postures (clip-catalog/catalog.ts POSTURE): stand crouch kneel sitSeat sitFloor allFours lie. Weapons and fights are left out unless
 --fights. Each line: ref, seconds, posture runs, travel (m to his left, m ahead), turn, hands, look, a loop mark. Tags
 checked by eye (clip-catalog/catalog_review.py) override the measured ones; "(unchecked)": nobody has looked yet. Then preview
-the picks in the cell: LAB_CLIP=<ref> ENTRY=lab/clip.ts bun run render stills && python ../../packages/clip-catalog/sheet_clip.py
+the picks in the cell: bun run render stills --lab clip=<ref> --entry lab/clip.ts && python ../../packages/clip-catalog/sheet_clip.py
 """
 import argparse, json, random, re, sys
 from concurrent.futures import ThreadPoolExecutor

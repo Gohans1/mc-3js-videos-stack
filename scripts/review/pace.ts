@@ -149,8 +149,8 @@ export const paceReport = ({
       ? `first 3 s: ${opening.length} new pictures, ${news[1] === undefined ? "the picture never changes" : `the picture first changes at ${s2(news[1])}`} (YouTube counts who stays past a Short's first seconds; viral Shorts change the picture within about 2 s)`
       : `first 30 s: ${opening.length} new pictures, ${firstCut === undefined ? "no cut" : `the first cut at ${s2(firstCut)}`} (YouTube judges an intro by who still watches at 30 s)`,
     slowOpen
-      ? `next: AT=1 bun run render stills shows the opening picture; a cut, a camera move or motion inside 2 s holds the swipe`
-      : `next: bun run at ${mid} names what plays in the longest still; AT=${mid} bun run render stills to look`,
+      ? `next: bun run render stills --at 1 shows the opening picture; a cut, a camera move or motion inside 2 s holds the swipe`
+      : `next: bun run at ${mid} names what plays in the longest still; bun run render stills --at ${mid} to look`,
   ];
 };
 

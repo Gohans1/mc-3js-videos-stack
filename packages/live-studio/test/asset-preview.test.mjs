@@ -449,7 +449,7 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     });
     writeFileSync(join(film, "assets/public/picked.zip"), pickedZip);
 
-    // Seed a sentinel still_1s.jpg to prove ENTRY= never wipes existing film stills
+    // Seed a sentinel still_1s.jpg to prove an --entry run never wipes existing film stills
     mkdirSync(join(film, "renders"), { recursive: true });
     writeFileSync(join(film, "renders/still_1s.jpg"), sentinel);
 
@@ -464,32 +464,17 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     if (film) rmSync(film, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
-  test("renders uppercase .PNG, special items, picked.zip blocks, and strips mixed-case caller render env vars", () => {
-    const r1 = runBun(
-      ASSET_SCRIPT,
-      [
-        "--film",
-        film,
-        "preview",
-        "block:minecraft:oak_stairs",
-        "item:minecraft:chest",
-        "block:badmod:good_crate",
-        "--out",
-        "upper_sheet.PNG",
-      ],
-      {
-        env: {
-          ...process.env,
-          AT: "999",
-          at: "888",
-          CHECK: "bogus:0,1",
-          check: "bogus:0,2",
-          VIEWS: "invalid",
-          views: "also-invalid",
-          entry: "lab/bogus.ts",
-        },
-      },
-    );
+  test("renders uppercase .PNG, special items and picked.zip blocks", () => {
+    const r1 = runBun(ASSET_SCRIPT, [
+      "--film",
+      film,
+      "preview",
+      "block:minecraft:oak_stairs",
+      "item:minecraft:chest",
+      "block:badmod:good_crate",
+      "--out",
+      "upper_sheet.PNG",
+    ]);
     expect(r1.status, r1.stderr || r1.stdout).toBe(0);
     const j1 = JSON.parse(r1.stdout);
     expect(j1.ok).toBe(true);
@@ -559,20 +544,17 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     expect(existsSync(join(film, "renders/missing_all.jpg"))).toBe(true);
   }, 60_000);
 
-  test("rejects unsafe direct LAB_PREVIEW_SPEC.out and over-limit specs while preserving still_1s.jpg", () => {
+  test("rejects an unsafe --lab preview_spec out and over-limit specs while preserving still_1s.jpg", () => {
     const escapedPath = join(film, "escaped.jpg");
-    const rBadSpec = runBun(RENDER_SCRIPT, ["stills"], {
-      cwd: film,
-      env: {
-        ...process.env,
-        AT: "1",
-        ENTRY: PREVIEW_ENTRY,
-        LAB_PREVIEW_SPEC: JSON.stringify({
-          items: [{ kind: "block", id: "minecraft:oak_stairs" }],
-          out: "..%2Fescaped.jpg",
-        }),
-      },
+    const badSpec = JSON.stringify({
+      items: [{ kind: "block", id: "minecraft:oak_stairs" }],
+      out: "..%2Fescaped.jpg",
     });
+    const rBadSpec = runBun(
+      RENDER_SCRIPT,
+      ["stills", "--at", "1", "--entry", PREVIEW_ENTRY, "--lab", `preview_spec=${badSpec}`],
+      { cwd: film },
+    );
     expect(rBadSpec.status).not.toBe(0);
     expect(`${rBadSpec.stdout}\n${rBadSpec.stderr}`).toContain("--out");
     expect(existsSync(escapedPath)).toBe(false);
@@ -582,14 +564,12 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       { length: MAX_PREVIEW_ITEMS + 1 },
       () => "block:minecraft:oak_stairs",
     );
-    const rTooMany = runBun(RENDER_SCRIPT, ["stills"], {
-      cwd: film,
-      env: {
-        ...process.env,
-        ENTRY: PREVIEW_ENTRY,
-        LAB_PREVIEW_SPEC: JSON.stringify({ items: tooMany, out: "too_many.jpg" }),
-      },
-    });
+    const tooManySpec = JSON.stringify({ items: tooMany, out: "too_many.jpg" });
+    const rTooMany = runBun(
+      RENDER_SCRIPT,
+      ["stills", "--entry", PREVIEW_ENTRY, "--lab", `preview_spec=${tooManySpec}`],
+      { cwd: film },
+    );
     expect(rTooMany.status).not.toBe(0);
     expect(`${rTooMany.stdout}\n${rTooMany.stderr}`).toContain("too many preview items");
     expect(existsSync(join(film, "renders/too_many.jpg"))).toBe(false);
@@ -607,9 +587,8 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
 })();
 `,
     );
-    const rTraversal = runBun(RENDER_SCRIPT, ["stills"], {
+    const rTraversal = runBun(RENDER_SCRIPT, ["stills", "--at", "1", "--entry", "lab/evil.ts"], {
       cwd: film,
-      env: { ...process.env, AT: "1", ENTRY: "lab/evil.ts" },
     });
     expect(rTraversal.status).not.toBe(0);
     expect(rTraversal.stderr).toContain("invalid still path");
@@ -617,17 +596,22 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     expect(readFileSync(join(film, "renders/still_1s.jpg"))).toEqual(sentinel);
   }, 60_000);
 
-  test("rejects invalid LAB_PREVIEW_OVERLAY paths and never leaks LAB_preview_overlay into /config", () => {
-    const rBadOverlay = runBun(RENDER_SCRIPT, ["stills"], {
-      cwd: film,
-      env: {
-        ...process.env,
-        ENTRY: PREVIEW_ENTRY,
-        LAB_PREVIEW_OVERLAY: join(film, "package.json"),
-      },
-    });
+  test("rejects an invalid --lab preview_overlay path and never leaks preview_overlay into /config", () => {
+    const rBadOverlay = runBun(
+      RENDER_SCRIPT,
+      [
+        "stills",
+        "--entry",
+        PREVIEW_ENTRY,
+        "--lab",
+        `preview_overlay=${join(film, "package.json")}`,
+      ],
+      { cwd: film },
+    );
     expect(rBadOverlay.status).toBe(2);
-    expect(rBadOverlay.stderr).toContain("LAB_PREVIEW_OVERLAY");
+    expect(rBadOverlay.stderr).toContain(
+      "--lab preview_overlay=<file> must point to an existing .zip",
+    );
 
     mkdirSync(join(film, "lab"), { recursive: true });
     writeFileSync(
@@ -640,15 +624,19 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
 })();
 `,
     );
-    const rLeakCheck = runBun(RENDER_SCRIPT, ["stills"], {
-      cwd: film,
-      env: {
-        ...process.env,
-        ENTRY: "lab/check-cfg.ts",
-        LAB_PING: "ok",
-        LAB_preview_overlay: join(film, "assets/public/picked.zip"),
-      },
-    });
+    const rLeakCheck = runBun(
+      RENDER_SCRIPT,
+      [
+        "stills",
+        "--entry",
+        "lab/check-cfg.ts",
+        "--lab",
+        "ping=ok",
+        "--lab",
+        `preview_overlay=${join(film, "assets/public/picked.zip")}`,
+      ],
+      { cwd: film },
+    );
     expect(rLeakCheck.status, rLeakCheck.stderr || rLeakCheck.stdout).toBe(0);
     const combined = `${rLeakCheck.stdout}\n${rLeakCheck.stderr}`;
     const match = combined.match(/CFG_LAB_KEYS:(\[[^\r\n]*\])/);

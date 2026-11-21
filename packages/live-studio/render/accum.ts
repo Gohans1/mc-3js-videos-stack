@@ -52,7 +52,7 @@ export const makeAccumulator = (
     });
   if (!gl?.getExtension("EXT_color_buffer_float"))
     throw new Error(
-      "motion blur (SAMPLES over 1) needs WebGL2 float render targets in this Chrome",
+      "motion blur (--samples over 1) needs WebGL2 float render targets in this Chrome",
     );
   const program = (frag: string) => {
     const p = gl.createProgram()!;

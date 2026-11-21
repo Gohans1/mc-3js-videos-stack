@@ -361,7 +361,7 @@ if (ids.length || shot !== null) {
   const hasCheck = ordered.some((n) => noteState(n) === "check");
   console.log(
     todo
-      ? `\nnext: where it is heard now and what the film has there, file and row: bun run at ${todo.id}; fix it, capture an after shot (AT=<sec> bun run render stills, or add INSPECT=px,py,pz,lx,ly,lz,fov if the target moved so you shoot a suitable custom view), then bun run note done ${todo.id} "what changed" --after renders/still_<sec>s.jpg [--cam px,py,pz,lx,ly,lz,fov --t <sec>] (or --no-after "<reason>" when non-visual)`
+      ? `\nnext: where it is heard now and what the film has there, file and row: bun run at ${todo.id}; fix it, capture an after shot (bun run render stills --at <sec>, or add --inspect px,py,pz,lx,ly,lz,fov if the target moved so you shoot a suitable custom view), then bun run note done ${todo.id} "what changed" --after renders/still_<sec>s.jpg [--cam px,py,pz,lx,ly,lz,fov --t <sec>] (or --no-after "<reason>" when non-visual)`
       : learn
         ? `\nnext: keep the rule as said above, then bun run note learned ${learn.id} "the rule, where"`
         : `\nnext: ${hasCheck ? "nothing here is yours until the creator answers in the studio; " : ordered.length ? "these notes are done; " : ""}the open notes: bun run notes`,

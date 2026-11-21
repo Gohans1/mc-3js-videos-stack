@@ -1,5 +1,5 @@
 // @ts-nocheck
-// CHECK=seen:<target>,<from>,<to> (heard seconds), built in for every film: can the audience see the target through the film's
+// --check seen:<target>,<from>,<to> (heard seconds), built in for every film: can the audience see the target through the film's
 // own camera, every frame? Measured the way engines test visibility (an ID buffer): a second
 // renderer draws every mesh in one flat colour per draw.tools.objects label, the target in its own, then the target alone,
 // through the film's camera with its view widened 3x, so what falls outside the real frame is counted too (beyond 3x: not). Counting
@@ -203,10 +203,10 @@ export const seenCheck = (render, cfg) => {
 
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
-      return ["ERROR usage: CHECK=seen:<target>,<from s>,<to s>"];
+      return ["ERROR usage: --check seen:<target>,<from s>,<to s>"];
     const tools = render.tools ?? {};
     if (!tools.scene || !tools.camera)
-      return ["ERROR CHECK=seen requires draw.tools.scene and draw.tools.camera on the film"];
+      return ["ERROR --check seen requires draw.tools.scene and draw.tools.camera on the film"];
     const obj = findTarget(tools, target);
     if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
     if (!tools.camera.isPerspectiveCamera)

@@ -6,7 +6,7 @@ import { ratioOf, sizeOf } from "./frame.ts";
 
 // Where a rendered video sits on the film's heard clock, read from its name (render.mjs names them so):
 //   renders/chunks/cNN.mp4, renders/final_chunks/cNN.mp4  NN*30 s on (render.mjs CHUNK)
-//   renders/span_<from>-<to>.mp4                           a SPAN run's, <from> s on
+//   renders/span_<from>-<to>.mp4                           a --span run's, <from> s on
 // anything else starts at 0. final: render final's picture (final_chunks, final_video.mp4, mix's final.mp4), which
 // render final draws again.
 export const videoStart = (video) => {
@@ -57,7 +57,7 @@ export const drawnCuts = (root, video, stale) => {
     : found;
 };
 
-// A CHUNKS run joins chunks drawn at different times (files in film order, length seconds each): each brings the cuts
+// A --chunks run joins chunks drawn at different times (files in film order, length seconds each): each brings the cuts
 // it was drawn with over its own seconds; null when one recorded none
 export const joinedCuts = (files, length) => {
   const cuts = [];

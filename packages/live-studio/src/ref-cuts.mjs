@@ -161,7 +161,7 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
     ]
       .filter(Boolean)
       .join("; ")}; reference cuts from ${where}.`,
-    `  a remake cuts only where its reference does: set "cut": true there and nowhere else, then CHECK=motion:cam,<from s>,<to s> bun run render stills over each changed span. A cut the study made of a whip or flash: look at the reference frames there before matching it`,
+    `  a remake cuts only where its reference does: set "cut": true there and nowhere else, then bun run render stills --check motion:cam,<from s>,<to s> over each changed span. A cut the study made of a whip or flash: look at the reference frames there before matching it`,
   ].join("\n");
 };
 

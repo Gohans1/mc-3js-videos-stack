@@ -35,7 +35,7 @@ def main():
         print(f"{path}: {len(tiles)} frames")
         count += len(tiles)
     if not count:
-        ap.error("no clip frames: inside a film run ENTRY=lab/clip.ts LAB_CLIP=<lib/name> bun run render stills first")
+        ap.error("no clip frames: inside a film run bun run render stills --entry lab/clip.ts --lab clip=<lib/name> first")
     print("next: open renders/clip_sheet_front.jpg and renders/clip_sheet_left.jpg; judge motion in the rendered clip too")
 
 

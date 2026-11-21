@@ -55,7 +55,7 @@ test("sheet cut N says which shots meet there and the transition between them; a
   assert.equal(gone.status, 2, gone.stdout + gone.stderr);
   assert.match(gone.stderr, /no renders\/nope\.mp4 \(the videos here: renders\/draft_video\.mp4\)/);
 
-  // seconds as notes print them, the clock bun run at and AT= read
+  // seconds as notes print them, the clock bun run at and render --at read
   const clock = sheet("renders/draft_video.mp4", "0:01,0:02.5");
   assert.equal(clock.status, 0, clock.stdout + clock.stderr);
   const bad = sheet("renders/draft_video.mp4", "0:75");
@@ -184,7 +184,7 @@ test("a span or a final chunk is read on the film's clock from its name", (t) =>
   assert.match(f.stdout, /film seconds from 60 s on \(the chunk's start\)/);
 });
 
-test("a span named past what START takes is a wrong word, not a crash", (t) => {
+test("a span named past what --start takes is a wrong word, not a crash", (t) => {
   const sheet = film(t, [], "renders/span_9999999-9999999.mp4");
   const r = sheet("renders/span_9999999-9999999.mp4", "1");
   assert.equal(r.status, 2, r.stdout + r.stderr);
@@ -251,14 +251,14 @@ test("a cuts.json of anything but a list of seconds is refused, never read as cu
   }
 });
 
-test("the last line says what to do next, a cut's row lookup included; START takes heard seconds", (t) => {
+test("the last line says what to do next, a cut's row lookup included; --start takes heard seconds", (t) => {
   const sheet = film(t, [1, 2]);
   mkdirSync(join(sheet.dir, "src"));
   writeFileSync(join(sheet.dir, "src/scene.ts"), "export const DURATION = 3;");
   utimesSync(join(sheet.dir, "src/scene.ts"), 1000, 1000);
   let cut = sheet("renders/draft_video.mp4", "cut", "1");
   assert.equal(cut.status, 0, cut.stdout + cut.stderr);
-  assert.match(cut.stdout, /AT=2 LIST=1 bun run render stills/);
+  assert.match(cut.stdout, /bun run render stills --at 2 --list/);
   assert.doesNotMatch(cut.stdout, /bun run at 2/);
   writeFileSync(join(sheet.dir, "src/edit.json"), '{"end":3}');
   utimesSync(join(sheet.dir, "src/scene.ts"), 1000, 1000);
@@ -270,14 +270,13 @@ test("the last line says what to do next, a cut's row lookup included; START tak
   );
   const plain = sheet("renders/draft_video.mp4", "1");
   assert.match(plain.stdout.trim().split(/\r?\n/).at(-1), /^next: open it to look/);
-  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "1:01"], {
+  const r = spawnSync("python", [SHEET, "renders/draft_video.mp4", "1:01", "--start", "1:00"], {
     cwd: sheet.dir,
     encoding: "utf8",
     timeout: 60000,
-    env: { ...process.env, START: "1:00" },
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /manual seconds from 60 s on \(START\)/);
+  assert.match(r.stdout, /manual seconds from 60 s on \(--start\)/);
 });
 
 test("sheet cut tolerates broken package.json or shotsTimeline metadata instead of crashing", (t) => {

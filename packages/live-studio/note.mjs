@@ -15,7 +15,7 @@ const HELP = `The AI's answer on a creator's note; run inside the film. ID: as b
   bun run note done ID "what changed" --after <image>
                                             fixed with an After picture proving the fix (.png, .jpg, .webp).
                                             If the target moved or the note's original angle no longer shows it,
-                                            capture from a custom pose (INSPECT=px,py,pz,lx,ly,lz,fov AT=<s> bun run render stills)
+                                            capture from a custom pose (bun run render stills --inspect px,py,pz,lx,ly,lz,fov --at <s>)
                                             and pass --cam px,py,pz,lx,ly,lz[,fov] --t <s> so clicking After flies straight there.
   bun run note done ID "what changed" --no-after "<reason>"
                                             fixed without an After image (e.g. sound-only or non-visual change): must state why.

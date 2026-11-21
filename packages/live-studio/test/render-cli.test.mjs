@@ -1,4 +1,4 @@
-// render.mjs refuses a second past the film's end, or a CHECK range that runs backwards, before it builds anything
+// render.mjs refuses a second past the film's end, or a --check range that runs backwards, before it builds anything
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -31,56 +31,56 @@ const copyDemo = (dir) => {
   );
 };
 
-test("render refuses AT past the end and a backwards CHECK at once, saying the film's length", (t) => {
+test("render refuses --at past the end and a backwards --check at once, saying the film's length", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const render = (env, what = "stills") =>
-    spawnSync("bun", [RENDER, what], {
+  const render = (flags, what = "stills") =>
+    spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
 
-  const late = render({ AT: "4,99" });
+  const late = render(["--at", "4,99"]);
   assert.equal(late.status, 2, late.stdout + late.stderr);
-  assert.match(late.stderr, /AT 99 is past the film's end: it runs 0-10\.00 s heard/);
+  assert.match(late.stderr, /--at 99 is past the film's end: it runs 0-10\.00 s heard/);
   assert.doesNotMatch(late.stdout + late.stderr, /build/i);
 
   // 10.02 s draws frame 301, past the last one: the page refuses it, so render does before clearing the old stills
-  const hair = render({ AT: "10.02" });
+  const hair = render(["--at", "10.02"]);
   assert.equal(hair.status, 2, hair.stdout + hair.stderr);
-  assert.match(hair.stderr, /AT 10\.02 is past the film's end/);
+  assert.match(hair.stderr, /--at 10\.02 is past the film's end/);
 
-  const chunk = render({ CHUNKS: "3" }, "clip");
+  const chunk = render(["--chunks", "3"], "clip");
   assert.equal(chunk.status, 2, chunk.stdout + chunk.stderr);
-  assert.match(chunk.stderr, /CHUNKS 3 is past the film's end: it has chunks 0-0/);
+  assert.match(chunk.stderr, /--chunks 3 is past the film's end: it has chunks 0-0/);
 
-  const back = render({ AT: "4", CHECK: "motion:cam,6,5" });
+  const back = render(["--at", "4", "--check", "motion:cam,6,5"]);
   assert.equal(back.status, 2, back.stdout + back.stderr);
-  assert.match(back.stderr, /CHECK motion:cam,6,5: from 6 must come before to 5/);
+  assert.match(back.stderr, /--check motion:cam,6,5: from 6 must come before to 5/);
 
   // the page crashed Chrome on a range before the film starts
-  const early = render({ AT: "4", CHECK: "motion:cam,-1,2" });
+  const early = render(["--at", "4", "--check", "motion:cam,-1,2"]);
   assert.equal(early.status, 2, early.stdout + early.stderr);
-  assert.match(early.stderr, /CHECK motion:cam,-1,2: from -1 is before the film starts \(0\)/);
+  assert.match(early.stderr, /--check motion:cam,-1,2: from -1 is before the film starts \(0\)/);
 
-  // seconds as notes print them: AT passes, and CHECK reads 0:06 and 0:05 as 6 and 5
-  const clock = render({ AT: "0:04", CHECK: "motion:cam,0:06,0:05" });
+  // seconds as notes print them: --at passes, and --check reads 0:06 and 0:05 as 6 and 5
+  const clock = render(["--at", "0:04", "--check", "motion:cam,0:06,0:05"]);
   assert.equal(clock.status, 2, clock.stdout + clock.stderr);
   assert.match(clock.stderr, /from 6 must come before to 5/);
 
-  const extra = render({ AT: "4", CHECK: "motion:cam,1,2,3" });
+  const extra = render(["--at", "4", "--check", "motion:cam,1,2,3"]);
   assert.equal(extra.status, 2, extra.stdout + extra.stderr);
   assert.match(
     extra.stderr,
-    /CHECK motion:cam,1,2,3: motion takes 3 values, <target>,<from s>,<to s>; got 4/,
+    /--check motion:cam,1,2,3: motion takes 3 values, <target>,<from s>,<to s>; got 4/,
   );
-  const empty = render({ CHECK: "order:10.01,10.04" });
+  const empty = render(["--check", "order:10.01,10.04"]);
   assert.equal(empty.status, 2, empty.stdout + empty.stderr);
   assert.match(empty.stderr, /order.*starts at or after the film's end/);
 });
@@ -101,11 +101,11 @@ test("a film whose code does not build is named by file and line, in plain words
   );
   const scene = join(dir, "src/scene.ts");
   writeFileSync(scene, `${readFileSync(scene, "utf8")}\nconst twice = 1;\nconst twice = 2;\n`);
-  const out = spawnSync("bun", [RENDER, "stills"], {
+  const out = spawnSync("bun", [RENDER, "stills", "--at", "1"], {
     cwd: dir,
     encoding: "utf8",
     timeout: 60000,
-    env: { ...process.env, LIVE_PROJECT: dir, AT: "1" },
+    env: { ...process.env, LIVE_PROJECT: dir },
   });
   const said = out.stdout + out.stderr;
   assert.equal(out.status, 1, said);
@@ -115,37 +115,37 @@ test("a film whose code does not build is named by file and line, in plain words
   assert.doesNotMatch(said, /node_modules|rolldown/);
 });
 
-test("SPAN is refused before any build when it is misplaced, backwards, or starts past the last frame", (t) => {
+test("--span is refused before any build when it is misplaced, backwards, or starts past the last frame", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const render = (env, what = "clip") =>
-    spawnSync("bun", [RENDER, what], {
+  const render = (flags, what = "clip") =>
+    spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
 
-  const stills = render({ SPAN: "1,2" }, "stills");
+  const stills = render(["--span", "1,2"], "stills");
   assert.equal(stills.status, 2, stills.stdout + stills.stderr);
-  assert.match(stills.stderr, /SPAN is for render clip/);
+  assert.match(stills.stderr, /--span is for render clip/);
 
-  const both = render({ SPAN: "1,2", CHUNKS: "0" });
+  const both = render(["--span", "1,2", "--chunks", "0"]);
   assert.equal(both.status, 2, both.stdout + both.stderr);
-  assert.match(both.stderr, /SPAN and CHUNKS each pick what to draw: one at a time/);
+  assert.match(both.stderr, /--span and --chunks each pick what to draw: one at a time/);
 
-  const back = render({ SPAN: "4,2" });
+  const back = render(["--span", "4,2"]);
   assert.equal(back.status, 2, back.stdout + back.stderr);
-  assert.match(back.stderr, /SPAN takes two heard seconds, the first before the second/);
+  assert.match(back.stderr, /--span takes two heard seconds, the first before the second/);
 
   // a 10 s film's last frame shows 9.967 s: a span from 9.99 would draw no frame at all
-  const tail = render({ SPAN: "9.99,10.04" });
+  const tail = render(["--span", "9.99,10.04"]);
   assert.equal(tail.status, 2, tail.stdout + tail.stderr);
-  assert.match(tail.stderr, /SPAN 9\.99,10\.04 starts after the film's last frame \(9\.97 s\)/);
+  assert.match(tail.stderr, /--span 9\.99,10\.04 starts after the film's last frame \(9\.97 s\)/);
   assert.doesNotMatch(tail.stdout + tail.stderr, /build/i);
 });
 
@@ -154,69 +154,72 @@ test("captions, final and stills refuse the options they would ignore", (t) => {
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const render = (what, env) =>
-    spawnSync("bun", [RENDER, what], {
+  const render = (what, flags = []) =>
+    spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
 
-  const clip = render("clip", { CHECK: "motion:cam,1,2" });
+  const clip = render("clip", ["--check", "motion:cam,1,2"]);
   assert.equal(clip.status, 2, clip.stdout + clip.stderr);
-  assert.match(clip.stderr, /CHECK goes with render stills/);
+  assert.match(clip.stderr, /--check goes with render stills/);
 
-  const alone = render("captions", {});
+  const alone = render("captions");
   assert.equal(alone.status, 0, alone.stdout + alone.stderr);
   assert.match(alone.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
 
-  const captions = render("captions", { AT: "4" });
+  const captions = render("captions", ["--at", "4"]);
   assert.equal(captions.status, 2, captions.stdout + captions.stderr);
-  assert.match(captions.stderr, /AT does nothing for render captions/);
-  const captionsBlur = render("captions", { SAMPLES: "8" });
+  assert.match(captions.stderr, /--at does nothing for render captions/);
+  const captionsBlur = render("captions", ["--samples", "8"]);
   assert.equal(captionsBlur.status, 2, captionsBlur.stdout + captionsBlur.stderr);
-  assert.match(captionsBlur.stderr, /SAMPLES does nothing for render captions/);
+  assert.match(captionsBlur.stderr, /--samples does nothing for render captions/);
 
   // a final takes half an hour and is the upload: a check goes on the stills before it
-  const final = render("final", { CHECK: "motion:cam,1,2" });
+  const final = render("final", ["--check", "motion:cam,1,2"]);
   assert.equal(final.status, 2, final.stdout + final.stderr);
-  assert.match(final.stderr, /CHECK goes with render stills/);
+  assert.match(final.stderr, /--check goes with render stills/);
 
-  // SAMPLES blurs the film's stills: a CHECK run without AT draws none, an ENTRY page draws its own
-  const blurNone = render("stills", { CHECK: "motion:cam,1,2", SAMPLES: "8" });
+  // --samples blurs the film's stills: a --check run without --at draws none, an --entry page draws its own
+  const blurNone = render("stills", ["--check", "motion:cam,1,2", "--samples", "8"]);
   assert.equal(blurNone.status, 2, blurNone.stdout + blurNone.stderr);
-  assert.match(blurNone.stderr, /SAMPLES blurs stills, and a CHECK run without AT draws none/);
+  assert.match(
+    blurNone.stderr,
+    /--samples blurs stills, and a --check run without --at draws none/,
+  );
   mkdirSync(join(dir, "lab"));
   writeFileSync(join(dir, "lab/page.ts"), "");
-  const blurLab = render("stills", { ENTRY: "lab/page.ts", AT: "1", SAMPLES: "8" });
+  const blurLab = render("stills", ["--entry", "lab/page.ts", "--at", "1", "--samples", "8"]);
   assert.equal(blurLab.status, 2, blurLab.stdout + blurLab.stderr);
-  assert.match(blurLab.stderr, /an ENTRY page draws its own pictures/);
+  assert.match(blurLab.stderr, /an --entry page draws its own pictures/);
 });
 
-test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
+test("render poster refuses a missing --at, --list and an unknown --res", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const render = (env) =>
-    spawnSync("bun", [RENDER, "poster"], {
+  const render = (flags) =>
+    spawnSync("bun", [RENDER, "poster", ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
 
-  const none = render({});
+  const none = render([]);
   assert.equal(none.status, 2, none.stdout + none.stderr);
-  assert.match(none.stderr, /poster takes AT=<s>, the heard second to draw/);
+  assert.match(none.stderr, /poster takes --at <s>, the heard second to draw/);
 
-  const list = render({ AT: "1", LIST: "1" });
+  const list = render(["--at", "1", "--list"]);
   assert.equal(list.status, 2, list.stdout + list.stderr);
-  assert.match(list.stderr, /LIST=1 draws over drafts only/);
+  assert.match(list.stderr, /--list draws over drafts only/);
 
-  const res = render({ AT: "1", RES: "720" });
+  const res = render(["--at", "1", "--res", "720"]);
   assert.equal(res.status, 2, res.stdout + res.stderr);
-  assert.match(res.stderr, /RES is 1440 \(the default; 1080 for Shorts\), 2160 or 1080/);
+  assert.match(res.stderr, /--res is 1440 \(the default; 1080 for Shorts\), 2160 or 1080/);
 });
 
 test("render poster draws one frame at the upload's size, no strip under it, and keeps the draft stills", (t) => {
@@ -234,11 +237,11 @@ test("render poster draws one frame at the upload's size, no strip under it, and
   );
   mkdirSync(join(dir, "renders"));
   writeFileSync(join(dir, "renders/still_4s.jpg"), "");
-  const out = spawnSync("bun", [RENDER, "poster"], {
+  const out = spawnSync("bun", [RENDER, "poster", "--at", "1", "--res", "1080", "--samples", "2"], {
     cwd: dir,
     encoding: "utf8",
     timeout: 180000,
-    env: { ...process.env, LIVE_PROJECT: dir, AT: "1", RES: "1080", SAMPLES: "2" },
+    env: { ...process.env, LIVE_PROJECT: dir },
   });
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /wrote renders\/poster_1s\.png \(1920x1080, 2 sub-frames\)/);
@@ -281,12 +284,12 @@ const chromeFilm = (t, end, conf = {}) => {
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome), ...conf } }),
   );
-  const render = (what, env = {}) =>
-    spawnSync("bun", [RENDER, what], {
+  const render = (what, flags = []) =>
+    spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 180000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
   return { dir, render };
 };
@@ -294,7 +297,7 @@ const chromeFilm = (t, end, conf = {}) => {
 test("a render that fails ends on what to do next", (t) => {
   const film = chromeFilm(t, 16);
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
-  const out = film.render("stills", { CHECK: "motion:nope,1,2" });
+  const out = film.render("stills", ["--check", "motion:nope,1,2"]);
   assert.equal(out.status, 1, out.stdout + out.stderr);
   assert.match(out.stderr, /ERROR no "nope"/);
   assert.match(out.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
@@ -303,7 +306,7 @@ test("a render that fails ends on what to do next", (t) => {
 test("render final's captions are named as the upload's picture, never as the draft", (t) => {
   const film = chromeFilm(t, 1);
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
-  const out = film.render("final", { RES: "1080", SAMPLES: "1" });
+  const out = film.render("final", ["--res", "1080", "--samples", "1"]);
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.ok(existsSync(join(film.dir, "renders/final_video.srt")), out.stdout);
   assert.ok(
@@ -312,7 +315,7 @@ test("render final's captions are named as the upload's picture, never as the dr
   );
 });
 
-test("a CHUNKS run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
+test("a --chunks run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
   // the mouths follow the narration clips: a scene that reads the sound timeline draws them
   const film = chromeFilm(t, 31, { soundTimeline: "src/timeline/audio.json" });
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
@@ -338,7 +341,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
     );
   const { staleVideo } = await import("../src/stale.mjs");
   audio(1);
-  const span = film.render("clip", { SPAN: "0.12,0.8" });
+  const span = film.render("clip", ["--span", "0.12,0.8"]);
   assert.equal(span.status, 0, span.stdout + span.stderr);
   const file = "renders/span_0.13-0.8.mp4";
   assert.ok(span.stdout.includes(`bun run sheet ${file} overview`));
@@ -351,7 +354,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
   const { renderCuts } = await import("../src/video.mjs");
   assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "bound");
   audio(30.2);
-  const part = film.render("clip", { CHUNKS: "0" });
+  const part = film.render("clip", ["--chunks", "0"]);
   assert.equal(part.status, 0, part.stdout + part.stderr);
   assert.match(part.stdout, /chunk 1 was drawn before the film's last change/);
   assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "unavailable");
@@ -361,7 +364,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
   );
 });
 
-test("ENTRY=folder and running outside a film exit 2 before any build, and a dead Chrome fails fast instead of hanging", (t) => {
+test("--entry folder and running outside a film exit 2 before any build, and a dead Chrome fails fast instead of hanging", (t) => {
   const empty = mkdtempSync(join(tmpdir(), "render-empty-"));
   t.after(() => rmSync(empty, { recursive: true, force: true }));
   const outside = spawnSync("bun", [RENDER, "stills"], {
@@ -381,27 +384,27 @@ test("ENTRY=folder and running outside a film exit 2 before any build, and a dea
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { chrome: process.execPath } }),
   );
-  const badEntry = spawnSync("bun", [RENDER, "stills"], {
+  const badEntry = spawnSync("bun", [RENDER, "stills", "--entry", "lab"], {
     cwd: dir,
     encoding: "utf8",
     timeout: 20000,
-    env: { ...process.env, LIVE_PROJECT: dir, ENTRY: "lab" },
+    env: { ...process.env, LIVE_PROJECT: dir },
   });
   assert.equal(badEntry.status, 2, badEntry.stdout + badEntry.stderr);
-  assert.match(badEntry.stderr, /ENTRY=lab is no file in the film/);
+  assert.match(badEntry.stderr, /--entry lab is no file in the film/);
 
-  const deadChrome = spawnSync("bun", [RENDER, "stills"], {
+  const deadChrome = spawnSync("bun", [RENDER, "stills", "--at", "1"], {
     cwd: dir,
     encoding: "utf8",
     timeout: 20000,
-    env: { ...process.env, LIVE_PROJECT: dir, AT: "1" },
+    env: { ...process.env, LIVE_PROJECT: dir },
   });
   assert.equal(deadChrome.status, 1, deadChrome.stdout + deadChrome.stderr);
   assert.match(deadChrome.stderr, /ERROR Chrome exited/);
   assert.match(deadChrome.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
 });
 
-test("CHECK=motion:cam works without draw.tools.free, and seen/touch name missing hooks instead of crashing", (t) => {
+test("--check motion:cam works without draw.tools.free, and seen/touch name missing hooks instead of crashing", (t) => {
   const film = chromeFilm(t, 1);
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   const scene = join(film.dir, "src/scene.ts");
@@ -417,7 +420,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
   return Object.assign((t: number) => { camera.position.x = t; renderer.render(scene, camera); }, { tools: { scene, camera } });
 };`,
   );
-  const cam = film.render("stills", { CHECK: "motion:cam,0,0.4" });
+  const cam = film.render("stills", ["--check", "motion:cam,0,0.4"]);
   assert.equal(cam.status, 0, cam.stdout + cam.stderr);
 
   writeFileSync(
@@ -432,17 +435,17 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
 };`,
   );
   for (const kind of ["seen", "touch"]) {
-    const out = film.render("stills", { CHECK: `${kind}:hero,0,0.4` });
+    const out = film.render("stills", ["--check", `${kind}:hero,0,0.4`]);
     assert.equal(out.status, 1, out.stdout + out.stderr);
     assert.match(
       out.stderr,
-      new RegExp(`ERROR CHECK=${kind} requires draw\\.tools\\.scene and draw\\.tools\\.camera`),
+      new RegExp(`ERROR --check ${kind} requires draw\\.tools\\.scene and draw\\.tools\\.camera`),
     );
     assert.doesNotMatch(out.stderr, /TypeError/);
   }
 });
 
-test("CHECK=motion:cam attributes the active camera FOV snap during Freeze to the output-clock key", (t) => {
+test("--check motion:cam attributes the active camera FOV snap during Freeze to the output-clock key", (t) => {
   const film = chromeFilm(t, 4, {
     camTimeline: "src/cam.json",
     timingTimeline: "src/timing.json",
@@ -477,14 +480,14 @@ export function buildScene(canvas, W, H) {
 }`,
   );
 
-  const result = film.render("stills", { CHECK: "motion:cam,2,2.4" });
+  const result = film.render("stills", ["--check", "motion:cam,2,2.4"]);
   const output = result.stdout + result.stderr;
   assert.equal(result.status, 0, output);
   assert.match(output, /POP 2\.25: field of view jumps 30\.0.*cam keys \[2->3\] row 2/);
   assert.ok(existsSync(join(film.dir, "renders/motion_cam_2-2.4_turn.jpg")));
 }, 30000);
 
-test("CHECK=order awaits custom frames, writes evidence for state leaks and leaves the film's video alone", (t) => {
+test("--check order awaits custom frames, writes evidence for state leaks and leaves the film's video alone", (t) => {
   const film = chromeFilm(t, 1);
   assert.ok(film, "headless Chrome is required for order verification");
   const scene = join(film.dir, "src/scene.ts");
@@ -498,7 +501,7 @@ export function buildScene(canvas, W, H) {
   });
 }`;
   writeFileSync(scene, source(false));
-  const pass = film.render("stills", { CHECK: "order:0:00,0:00.8" });
+  const pass = film.render("stills", ["--check", "order:0:00,0:00.8"]);
   assert.equal(pass.status, 0, pass.stdout + pass.stderr);
   const file = join(film.dir, "renders/order.json");
   const report = JSON.parse(readFileSync(file, "utf8"));
@@ -508,7 +511,7 @@ export function buildScene(canvas, W, H) {
   assert.ok(!existsSync(join(film.dir, "renders/draft_video.mp4")));
 
   writeFileSync(scene, source(true));
-  const fail = film.render("stills", { CHECK: "order:0,0.8" });
+  const fail = film.render("stills", ["--check", "order:0,0.8"]);
   assert.equal(fail.status, 1, fail.stdout + fail.stderr);
   assert.match(fail.stderr, /ERROR order:.*depend on draw order/);
   const bad = JSON.parse(readFileSync(file, "utf8"));
@@ -517,7 +520,7 @@ export function buildScene(canvas, W, H) {
   assert.match(fail.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
 }, 60000);
 
-test("SAMPLES gives a still the shutter's motion blur; without it a still is the one instant", (t) => {
+test("--samples gives a still the shutter's motion blur; without it a still is the one instant", (t) => {
   const film = chromeFilm(t, 2);
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   // red climbs 3000 a second from 128 at 1 s: the half-frame shutter after 1 s averages to about 153
@@ -545,12 +548,12 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
     assert.equal(pixel.status, 0, pixel.stderr.toString());
     return pixel.stdout[0];
   };
-  const sharp = film.render("stills", { AT: "1" });
+  const sharp = film.render("stills", ["--at", "1"]);
   assert.equal(sharp.status, 0, sharp.stdout + sharp.stderr);
   assert.doesNotMatch(sharp.stdout, /sub-frames/);
   const instant = red();
   assert.ok(Math.abs(instant - 128) <= 3, `one instant: expected red 128, got ${instant}`);
-  const blurred = film.render("stills", { AT: "1", SAMPLES: "8" });
+  const blurred = film.render("stills", ["--at", "1", "--samples", "8"]);
   assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
   assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(stills: 8 sub-frames\)/);
   const averaged = red();
@@ -572,7 +575,7 @@ test("native async frames preserve source time and layer clocks through Speed an
     `export const DURATION=2, SHOTS_OUT=[];
 export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=canvas.getContext('2d');return Object.assign(()=>{throw Error('use async hook')},{async renderFrame(t,clocks){if(!clocks)throw Error('missing layer clocks');await Promise.resolve();g.fillStyle='rgb('+Math.round(t*100)+',0,0)';g.fillRect(0,0,W,H);}});}`,
   );
-  const rendered = film.render("stills", { AT: "0.25,0.75" });
+  const rendered = film.render("stills", ["--at", "0.25,0.75"]);
   assert.equal(rendered.status, 0, rendered.stdout + rendered.stderr);
   for (const [heard, red] of [
     [0.25, 50],
@@ -601,46 +604,38 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
   }
 }, 30000);
 
-test("render rejects invalid CROP rects and CROP/COMPARE on video targets", (t) => {
+test("render rejects invalid --crop rects and --crop/--compare on video targets", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
-  const run = (args, env = {}) =>
-    spawnSync("bun", [RENDER, ...args], {
+  const run = (args, flags = []) =>
+    spawnSync("bun", [RENDER, ...args, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
 
-  const badCrop = run(["stills"], { CROP: "0.8,0,0.5,0.5" });
+  const badCrop = run(["stills"], ["--crop", "0.8,0,0.5,0.5"]);
   assert.equal(badCrop.status, 2);
-  assert.match(badCrop.stderr, /CROP:.*0\.\.1/);
+  assert.match(badCrop.stderr, /--crop:.*0\.\.1/);
 
-  const cropClip = run(["clip"], { CROP: "0.25,0.25,0.5,0.5" });
+  const cropClip = run(["clip"], ["--crop", "0.25,0.25,0.5,0.5"]);
   assert.equal(cropClip.status, 2);
-  assert.match(cropClip.stderr, /CROP is for render stills or poster/);
+  assert.match(cropClip.stderr, /--crop is for render stills or poster/);
 
   const cmpClip = run(["--compare", "clip"]);
   assert.equal(cmpClip.status, 2);
-  assert.match(cmpClip.stderr, /COMPARE is for render stills or poster/);
+  assert.match(cmpClip.stderr, /--compare is for render stills or poster/);
 
-  const cmpEnvFinal = run(["final"], { COMPARE: "1" });
-  assert.equal(cmpEnvFinal.status, 2);
-  assert.match(cmpEnvFinal.stderr, /COMPARE is for render stills or poster/);
+  const cmpFinal = run(["final", "--compare"]);
+  assert.equal(cmpFinal.status, 2);
+  assert.match(cmpFinal.stderr, /--compare is for render stills or poster/);
 
-  const cmpCaptionsFlag = run(["--compare", "captions"]);
-  assert.equal(cmpCaptionsFlag.status, 2);
-  assert.match(cmpCaptionsFlag.stderr, /COMPARE is for render stills or poster/);
-
-  const cmpCaptionsEnv = run(["captions"], { COMPARE: "1" });
-  assert.equal(cmpCaptionsEnv.status, 2);
-  assert.match(cmpCaptionsEnv.stderr, /COMPARE is for render stills or poster/);
-
-  const badCompareEnv = run(["stills"], { COMPARE: "maybe" });
-  assert.equal(badCompareEnv.status, 2);
-  assert.match(badCompareEnv.stderr, /COMPARE is 1 \(true\) or 0 \(false\)/);
+  const cmpCaptions = run(["--compare", "captions"]);
+  assert.equal(cmpCaptions.status, 2);
+  assert.match(cmpCaptions.stderr, /--compare is for render stills or poster/);
 });
 
 const findBrowser = () => {
@@ -727,22 +722,22 @@ export function buildScene(canvas, W, H) {
   }, { tools: { scene, get camera() { return camera; } } });
 }`;
   writeFileSync(sceneFile, makeScene(tlHex));
-  const render = (args, env = {}) =>
-    spawnSync("bun", [RENDER, ...args], {
+  const render = (args, flags = []) =>
+    spawnSync("bun", [RENDER, ...args, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 180000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
   return { dir, sceneFile, makeScene, render };
 };
 
-test("render CROP zooms quadrant RGB pixels and sizes non-square and poster crops", (t) => {
+test("render --crop zooms quadrant RGB pixels and sizes non-square and poster crops", (t) => {
   const chrome = findBrowser();
-  if (!chrome) return t.skip("no Chrome binary available for live CROP verification");
+  if (!chrome) return t.skip("no Chrome binary available for live --crop verification");
   const { dir, render } = setupQuadFilm(t, chrome);
 
-  const tl = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  const tl = render(["stills"], ["--at", "1", "--crop", "0,0,0.5,0.5"]);
   assert.equal(tl.status, 0, tl.stdout + tl.stderr);
   const tlInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
   assert.ok(
@@ -750,7 +745,7 @@ test("render CROP zooms quadrant RGB pixels and sizes non-square and poster crop
     `expected red, got ${tlInfo.rgb}`,
   );
 
-  const br = render(["stills"], { AT: "1", CROP: "0.5,0.5,0.5,0.5" });
+  const br = render(["stills"], ["--at", "1", "--crop", "0.5,0.5,0.5,0.5"]);
   assert.equal(br.status, 0, br.stdout + br.stderr);
   const brInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
   assert.ok(
@@ -758,61 +753,70 @@ test("render CROP zooms quadrant RGB pixels and sizes non-square and poster crop
     `expected yellow, got ${brInfo.rgb}`,
   );
 
-  const tall = render(["stills"], { AT: "1", CROP: "0.5,0,0.25,0.5" });
+  const tall = render(["stills"], ["--at", "1", "--crop", "0.5,0,0.25,0.5"]);
   assert.equal(tall.status, 0, tall.stdout + tall.stderr);
   const tallInfo = sampleCenterRgb(join(dir, "renders/still_1s.jpg"));
   assert.equal(tallInfo.w, 640);
   assert.equal(tallInfo.h, 760);
   assert.ok(tallInfo.rgb[1] > 170 && tallInfo.rgb[0] < 60, `expected green, got ${tallInfo.rgb}`);
 
-  const poster = render(["poster"], { AT: "1", RES: "1080", SAMPLES: "1", CROP: "0.5,0,0.25,0.5" });
+  const poster = render(
+    ["poster"],
+    ["--at", "1", "--res", "1080", "--samples", "1", "--crop", "0.5,0,0.25,0.5"],
+  );
   assert.equal(poster.status, 0, poster.stdout + poster.stderr);
   assert.match(poster.stdout, /wrote renders\/poster_1s\.png \(960x1080, 1 sub-frames\)/);
 });
 
 test("render --compare preserves renders/.prev/, emits diff sheet, and surfaces corrupt .prev error", (t) => {
   const chrome = findBrowser();
-  if (!chrome) return t.skip("no Chrome binary available for live COMPARE verification");
+  if (!chrome) return t.skip("no Chrome binary available for live --compare verification");
   const { dir, sceneFile, makeScene, render } = setupQuadFilm(t, chrome);
 
-  const tlBefore = render(["stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  const tlBefore = render(["stills"], ["--at", "1", "--crop", "0,0,0.5,0.5"]);
   assert.equal(tlBefore.status, 0, tlBefore.stdout + tlBefore.stderr);
 
   writeFileSync(sceneFile, makeScene("0x11dddd"));
-  const tlAfter = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  const tlAfter = render(["--compare", "stills"], ["--at", "1", "--crop", "0,0,0.5,0.5"]);
   assert.equal(tlAfter.status, 0, tlAfter.stdout + tlAfter.stderr);
   assert.ok(existsSync(join(dir, "renders/.prev/still_1s.jpg")));
   assert.ok(existsSync(join(dir, "renders/compare_still_1s.png")));
   assert.match(tlAfter.stdout, /compare renders\/still_1s\.jpg: .* changed/);
 
   writeFileSync(join(dir, "renders/still_1s.jpg"), "not-an-image");
-  const corrupt = render(["--compare", "stills"], { AT: "1", CROP: "0,0,0.5,0.5" });
+  const corrupt = render(["--compare", "stills"], ["--at", "1", "--crop", "0,0,0.5,0.5"]);
   assert.equal(corrupt.status, 1, corrupt.stdout + corrupt.stderr);
   assert.match(corrupt.stderr, /compare renders\/still_1s\.jpg failed/);
 });
 
-test("REF refuses what would not put our picture beside the reference's frame, before building anything", (t) => {
+test("--ref refuses what would not put our picture beside the reference's frame, before building anything", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
   writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
   mkdirSync(join(dir, "references"));
   writeFileSync(join(dir, "references/ref.mp4"), "");
-  const render = (env, what = "stills") =>
-    spawnSync("bun", [RENDER, what], {
+  const render = (flags, what = "stills") =>
+    spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 20000,
-      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+      env: { ...process.env, LIVE_PROJECT: dir },
     });
   const refused = (env, why, what) => {
     const run = render(env, what);
     assert.equal(run.status, 2, run.stdout + run.stderr);
     assert.match(run.stderr, why);
   };
-  refused({ REF: "references/missing.mp4" }, /REF references\/missing\.mp4 is no file in the film/);
-  refused({ REF: "references/ref.mp4" }, /REF goes with stills or poster/, "clip");
-  refused({ REF: "references/ref.mp4", CROP: "0,0,1,1" }, /REF and CROP draw another picture/);
-  refused({ REF: "references/ref.mp4", LIST: "1" }, /REF and LIST=1 draw another picture/);
-  refused({ REF_REGION: "0,0,0.5,0.5" }, /REF_REGION goes with REF=<reference video>/);
+  refused(
+    ["--ref", "references/missing.mp4"],
+    /--ref references\/missing\.mp4 is no file in the film/,
+  );
+  refused(["--ref", "references/ref.mp4"], /--ref goes with stills or poster/, "clip");
+  refused(
+    ["--ref", "references/ref.mp4", "--crop", "0,0,1,1"],
+    /--ref and --crop draw another picture/,
+  );
+  refused(["--ref", "references/ref.mp4", "--list"], /--ref and --list draw another picture/);
+  refused(["--ref-region", "0,0,0.5,0.5"], /--ref-region goes with --ref <reference video>/);
 });

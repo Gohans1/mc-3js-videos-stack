@@ -159,7 +159,7 @@ const planEnd = (plan) =>
       )
     : 0;
 
-// Source duration fallback when edit.json omits end, so setTiming compiles all timing and text spans for CHECK=text.
+// Source duration fallback when edit.json omits end, so setTiming compiles all timing and text spans for --check text.
 export const fallbackTimingDuration = (items = [], timing = {}) => {
   const histories = [timing.layers, ...Object.values(timing.layerKinds ?? {})].filter(Boolean);
   const plans = [

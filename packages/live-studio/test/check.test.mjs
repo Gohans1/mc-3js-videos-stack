@@ -76,7 +76,7 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   // the last line is next:, as every film command's (skill-data/core/references/cli.md)
   assert.match(
     good.stdout.trim().split("\n").at(-1),
-    /^next: look at it: AT=<seconds> bun run render stills/,
+    /^next: look at it: bun run render stills --at <seconds>/,
   );
   assert.match(
     bad.stderr.trim().split("\n").at(-1),
@@ -1063,7 +1063,7 @@ test("LIVE_PROJECT spelt one letter off stops check, never checking the folder i
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(
     r.stderr,
-    /LIVE_PROJCT=films\/x is no option here: did you mean LIVE_PROJECT=films\/x\?/,
+    /LIVE_PROJCT is set in the environment, one letter off LIVE_PROJECT that this command reads: did you mean LIVE_PROJECT\?/,
   );
 });
 

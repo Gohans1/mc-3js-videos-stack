@@ -729,7 +729,7 @@ function runMotionCmd(argv: string[]): number {
   const pose =
     pos && turn
       ? `pos peak ${pos.v.toFixed(2)} m/s at ${pos.t.toFixed(2)}s (row ${pos.keyRow}) | turn peak ${turn.v.toFixed(1)} deg/s at ${turn.t.toFixed(2)}s (keys [${turn.span[0]}->${turn.span[1]}], row ${turn.keyRow})`
-      : "scene-dependent pose: use CHECK=motion:cam bun run render stills for position and turn";
+      : "scene-dependent pose: use bun run render stills --check motion:cam for position and turn";
   const fov = report.fovPeak;
   console.log(
     `cam-motion (${report.status.toUpperCase()}): ${pose} | FOV peak ${fov.v.toFixed(1)} deg/s at ${fov.t.toFixed(2)}s (row ${fov.keyRow})`,
@@ -1091,7 +1091,7 @@ function runUnifiedQc(argv: string[]): number {
               ? m.faults[0]
               : m.posPeak && m.turnPeak
                 ? `ok (pos ${m.posPeak.v.toFixed(2)} m/s, turn ${m.turnPeak.v.toFixed(1)} deg/s, FOV peak ${m.fovPeak.v.toFixed(1)} deg/s)`
-                : `FOV peak ${m.fovPeak.v.toFixed(1)} deg/s (scene-dependent pose needs CHECK=motion:cam)`,
+                : `FOV peak ${m.fovPeak.v.toFixed(1)} deg/s (scene-dependent pose needs --check motion:cam)`,
             metrics: {
               poseSource: m.poseSource,
               posPeak: m.posPeak,

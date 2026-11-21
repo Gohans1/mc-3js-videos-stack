@@ -1,5 +1,5 @@
-// CHECK=probe:<t> or CHECK=probe:<filter>,<t> (heard seconds), built in for every film:
-// evaluates draw(t) once (honoring INSPECT= Free Cam when set) and reports world positions, Box3 bounds,
+// --check probe:<t> or --check probe:<filter>,<t> (heard seconds), built in for every film:
+// evaluates draw(t) once (honoring the --inspect Free Cam when given) and reports world positions, Box3 bounds,
 // bone/empty local +Y/+Z axes, camera distances, and normalized [0..1] screen rects to renders/probe_<t>s.json.
 import { blurPx } from "film-kit/lens";
 import * as THREE from "three";
@@ -479,14 +479,14 @@ export const probeCheck =
   ) =>
   async (filter = "", t = NaN): Promise<string[]> => {
     if (typeof filter !== "string" || !Number.isFinite(t) || t < 0) {
-      return ["ERROR usage: CHECK=probe:<t> or CHECK=probe:<filter>,<t>"];
+      return ["ERROR usage: --check probe:<t> or --check probe:<filter>,<t>"];
     }
     const tools = render.tools ?? {};
     if (!tools.scene || !tools.camera) {
-      return ["ERROR CHECK=probe requires draw.tools.scene and draw.tools.camera on the film"];
+      return ["ERROR --check probe requires draw.tools.scene and draw.tools.camera on the film"];
     }
     if (cfg.inspect && !tools.free) {
-      return ["ERROR INSPECT requires draw.tools.free on the film"];
+      return ["ERROR --inspect requires draw.tools.free on the film"];
     }
 
     const free = cfg.inspect ? tools.free : null;

@@ -141,6 +141,6 @@ export const copyCameraInspection = () => {
   const text = [tag, c.line, cameraMonitor(S.t).text].filter(Boolean).join("\n");
   void navigator.clipboard
     .writeText(text)
-    .then(() => say("Camera INSPECT copied"))
+    .then(() => say("Camera copied"))
     .catch(showError);
 };

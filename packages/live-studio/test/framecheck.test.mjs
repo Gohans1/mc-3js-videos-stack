@@ -136,7 +136,7 @@ test("a --vs video that is not there stops framecheck before it measures", (t) =
   assert.doesNotMatch(out.stdout, /frames,/);
 });
 
-test("a SPAN run's video is measured on the film's clock, with only the cuts inside it", (t) => {
+test("a --span run's video is measured on the film's clock, with only the cuts inside it", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/span_9-11.mp4"));
   const cuts = join(dir, "renders/cuts.json");
@@ -213,7 +213,7 @@ test("a foreign chunk name cannot borrow the film's cut or clock", (t) => {
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /JUMP 1\.00/);
   assert.match(out.stdout, /file seconds/);
-  assert.doesNotMatch(out.stdout, /bun run at |CHUNKS=/);
+  assert.doesNotMatch(out.stdout, /bun run at |--chunks/);
 });
 
 test("a stale picture is measured without jump exemptions from the current edit", (t) => {
@@ -260,7 +260,7 @@ test("jumps with a still frame between them while the reference keeps moving are
     );
 });
 
-// CHUNKS=1 bun run render clip joins chunk 0 as it was drawn: the draft is stale for the timeline, while the cuts it was
+// bun run render clip --chunks 1 joins chunk 0 as it was drawn: the draft is stale for the timeline, while the cuts it was
 // drawn with, the reference and the strip under the picture are still its own
 test("a draft joining an older chunk keeps its recorded cuts and its reference", (t) => {
   const dir = film(t, "16:9");
@@ -287,12 +287,12 @@ test("a fault in the upload's picture is drawn again by render final, never by r
   const chunk = framecheck(dir, "renders/final_chunks/c01.mp4");
   assert.equal(chunk.status, 0, chunk.stdout + chunk.stderr);
   assert.match(chunk.stdout, /JUMP 31\.00/);
-  assert.match(chunk.stdout, /CHUNKS=1 bun run render final/);
+  assert.match(chunk.stdout, /bun run render final --chunks 1/);
   flip(join(dir, "renders/final_video.mp4"));
   const whole = framecheck(dir, "renders/final_video.mp4");
   assert.match(
     whole.stdout,
-    /CHUNKS=0 bun run render final, then bun run mix renders\/final_video\.mp4/,
+    /bun run render final --chunks 0, then bun run mix renders\/final_video\.mp4/,
   );
 });
 
@@ -384,23 +384,21 @@ test("what comes after a clean upload picture is the mix and deliver; a fault in
   );
   flip(join(dir, "renders/draft.mp4"));
   const mixed = framecheck(dir, "renders/draft.mp4");
-  assert.match(mixed.stdout, /bun run render clip, then bun run mix renders\/draft_video\.mp4/);
+  assert.match(
+    mixed.stdout,
+    /bun run render clip --chunks 0, then bun run mix renders\/draft_video\.mp4/,
+  );
 });
 
-test("START takes heard seconds as notes print them", (t) => {
+test("--start takes heard seconds as notes print them", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/draft_video.mp4"));
-  const out = spawnSync("bun", [FRAMECHECK], {
-    cwd: dir,
-    encoding: "utf8",
-    timeout: 60000,
-    env: { ...process.env, LIVE_PROJECT: dir, START: "1:00" },
-  });
+  const out = framecheck(dir, "--start", "1:00");
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /JUMP 61\.00/);
-  // the commands it hands on read the same seconds only with the same START
+  // the commands it hands on read the same seconds only with the same --start
   assert.match(
     out.stdout.trim().split(/\r?\n/).at(-1),
-    /next: START=60 bun run sheet renders\/draft_video\.mp4 frames 61/,
+    /next: bun run sheet renders\/draft_video\.mp4 frames 61 --start 60/,
   );
 });

@@ -1839,13 +1839,7 @@ const qArg = (s: string) => {
   const legacy = `"${s.replace(/(\\*)"/g, '$1$1""').replace(/\\+$/g, "$&$&")}"`;
   return `$(if ($PSVersionTable.PSVersion -ge [version]'7.3' -and $PSNativeCommandArgumentPassing -ne 'Legacy') { ${psLiteral(s)} } else { ${psLiteral(legacy)} })`;
 };
-const renderStills = (env: Record<string, string>) =>
-  process.platform === "win32"
-    ? // cmd.exe keeps legacy parsing in PowerShell's default Windows mode.
-      `cmd /d /c ${psLiteral([...Object.entries(env).map(([key, value]) => `set "${key}=${value}"`), "bun run render stills"].join("&"))}`
-    : `${Object.entries(env)
-        .map(([key, value]) => `${key}=${qArg(value)}`)
-        .join(" ")} bun run render stills`;
+const renderStills = (args: string[]) => `bun run render stills ${args.map(qArg).join(" ")}`;
 const hearThem = (what: string, files: string[]) =>
   `hear them (you cannot): earshot rank ${qArg(what)} ${files.slice(0, HEAR_MAX).map(qArg).join(" ")} --top 3${files.length > HEAR_MAX ? `  (the first ${HEAR_MAX} of ${files.length})` : ""}`;
 
@@ -2041,7 +2035,7 @@ function details(x: Entry): string[] {
       `moves[]: {"t": <scene seconds, not heard: bun run at <heard s> gives them>, "at": [x, 0, z], "yaw": 0, "clip": "${x.id}"}  (+ "from" seconds into the clip, "rate" its speed (0 holds the frame at from), "loop": true, "blend" seconds of crossfade into the next key, default 0.4). The next key's at = at + the end offset above turned by yaw`,
     );
     out.push(
-      `see it: ${renderStills({ LAB_CLIP: x.id, ENTRY: "lab/clip.ts" })}  (in a film folder)`,
+      `see it: ${renderStills(["--entry", "lab/clip.ts", "--lab", `clip=${x.id}`])}  (in a film folder)`,
     );
   } else if (x.kind === "transition") {
     const glsl = typeof d.glsl === "string" ? d.glsl : "";
@@ -2054,7 +2048,7 @@ function details(x: Entry): string[] {
     out.push(`settings: ${knobs.join("; ")}`);
     use("shots.json", `the shot after the cut: "transition": {"fx": "${x.id}", "len": 0.5}`);
     out.push(
-      `see it: ${renderStills({ AT: "<cut time>" })}  (in a film folder), or the Studio's Shot inspector`,
+      `see it: ${renderStills(["--at", "<cut time>"])}  (in a film folder), or the Studio's Shot inspector`,
     );
   } else if (x.kind.startsWith("anim-") && x.kind !== "anim-curve") {
     out.push(
@@ -2066,7 +2060,7 @@ function details(x: Entry): string[] {
         ? `shot: "anim": {"combo": {"fx": "${x.id}"}}`
         : `shot: "anim": {"${side}": {"fx": "${x.id}", "len": ${num(d.len) ?? 1}}}`,
     );
-    out.push(`see it: ${renderStills({ AT: "<shot time>" })}  (in a film folder)`);
+    out.push(`see it: ${renderStills(["--at", "<shot time>"])}  (in a film folder)`);
   } else if (x.kind.startsWith("text-") || x.kind.startsWith("shape-")) {
     const knobs = [
       `"len" seconds (default ${num(d.len) ?? 0.5})`,
@@ -2084,7 +2078,7 @@ function details(x: Entry): string[] {
       "text.json",
       `items[]: ${item}, "${side}": {"fx": "${x.id}", "len": ${num(d.len) ?? 0.5}}}`,
     );
-    out.push(`see it: ${renderStills({ AT: "<time>" })}  (in a film folder)`);
+    out.push(`see it: ${renderStills(["--at", "<time>"])}  (in a film folder)`);
   } else if (x.kind === "font") {
     out.push(`face: ${d.css}`);
     use("text.json", `items[]: {..., "font": "${x.id}"}`);
@@ -2302,7 +2296,7 @@ function details(x: Entry): string[] {
   }
   if (!SOUND.includes(x.kind) && !out.some((l) => l.startsWith("see it:")))
     out.push(
-      `see it: ${renderStills({ AT: "<a second it is on screen>" })}  (in a film folder), or the Studio at that second`,
+      `see it: ${renderStills(["--at", "<a second it is on screen>"])}  (in a film folder), or the Studio at that second`,
     );
   return out;
 }

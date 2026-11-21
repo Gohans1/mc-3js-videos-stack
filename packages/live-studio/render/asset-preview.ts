@@ -1,7 +1,7 @@
 // @ts-nocheck
 // Standalone headless WebGL preview sheet for Minecraft blocks & items:
 // renders Front + 3/4 views beside a 1.875m Steve scale figure in ONE Chrome boot.
-// Invoked by `bun run asset preview [id...] --film films/<name>` via render.mjs ENTRY=.
+// Invoked by `bun run asset preview [id...] --film films/<name>` via render.mjs --entry.
 import {
   configure,
   parseBlockstate,
@@ -276,7 +276,7 @@ function disposeObject(root: THREE.Object3D): void {
   try {
     rawSpec = JSON.parse(cfg.lab?.preview_spec ?? "");
   } catch {
-    await log("ERROR asset-preview: missing or invalid LAB_PREVIEW_SPEC");
+    await log("ERROR asset-preview: missing or invalid --lab preview_spec");
     return;
   }
   if (

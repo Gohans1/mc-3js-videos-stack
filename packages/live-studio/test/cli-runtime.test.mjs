@@ -138,11 +138,13 @@ function makeFixtureRepo() {
   writeFileSync(
     join(root, "emit_render.mjs"),
     [
-      'if (process.env.LAB_VIEW === "mb-overflow") {',
+      "const argv = process.argv.slice(2);",
+      'const flag = (name) => { const i = argv.indexOf(name); return i < 0 ? "" : argv[i + 1]; };',
+      'if (flag("--lab") === "view=mb-overflow") {',
       '  process.stdout.write("a" + "😀".repeat(600000));',
       "} else {",
-      '  console.log("render-entry=" + (process.env.ENTRY ?? ""));',
-      '  console.log("render-views=" + (process.env.VIEWS ?? ""));',
+      '  console.log("render-entry=" + flag("--entry"));',
+      '  console.log("render-views=" + flag("--views"));',
       "}",
     ].join("\n"),
   );
@@ -258,29 +260,45 @@ for (const shell of copyShells)
       request: { commandId: "help", args: { command: copyPayload } },
       target: "project",
       args: [copyPayload],
-      at: "before-value",
+      rhubarb: "before-value",
     },
     {
-      request: { commandId: "render", args: { target: "poster" }, env: { AT: "5" } },
+      request: { commandId: "render", args: { target: "poster" }, flags: { "--at": "5" } },
       target: "project",
-      args: ["poster"],
-      at: "5",
+      args: ["poster", "--at", "5"],
+      rhubarb: "before-value",
     },
-    { request: { commandId: "timeline:fmt" }, target: "project", args: [], at: "before-value" },
-    { request: { commandId: "live-studio:lint" }, target: "package", args: [], at: "before-value" },
+    {
+      request: { commandId: "voice:lips", env: { RHUBARB: "rhubarb.exe" } },
+      target: "project",
+      args: [],
+      rhubarb: "rhubarb.exe",
+    },
+    {
+      request: { commandId: "timeline:fmt" },
+      target: "project",
+      args: [],
+      rhubarb: "before-value",
+    },
+    {
+      request: { commandId: "live-studio:lint" },
+      target: "package",
+      args: [],
+      rhubarb: "before-value",
+    },
   ])
     test(`${shell.label} copy of ${copyCase.request.commandId} preserves project, literals and caller environment`, async () => {
       const { root } = makeFixtureRepo();
       const project = tempDir("copy project 'quoted'-");
       const unrelated = tempDir("copy-unrelated-");
       const echo =
-        "console.log(JSON.stringify({cwd:process.cwd(),project:process.env.LIVE_PROJECT??process.cwd(),args:process.argv.slice(2),at:process.env.AT??null}));";
+        "console.log(JSON.stringify({cwd:process.cwd(),project:process.env.LIVE_PROJECT??process.cwd(),args:process.argv.slice(2),rhubarb:process.env.RHUBARB??null}));";
       writeFileSync(join(project, "echo.mjs"), echo);
       writeFileSync(
         join(project, "package.json"),
         JSON.stringify({
           type: "module",
-          scripts: { help: "bun echo.mjs", render: "bun echo.mjs" },
+          scripts: { help: "bun echo.mjs", render: "bun echo.mjs", "voice:lips": "bun echo.mjs" },
         }),
       );
       writeFileSync(join(root, "scripts/timeline_fmt.ts"), echo);
@@ -296,13 +314,13 @@ for (const shell of copyShells)
       const oldProject = "previous-studio-project";
       const callerCheck =
         shell.kind === "powershell"
-          ? "\nif ($env:LIVE_PROJECT -ne 'previous-studio-project' -or $env:AT -ne 'before-value') { throw 'Caller environment changed' }"
-          : '\n[ "$LIVE_PROJECT" = previous-studio-project ] && [ "$AT" = before-value ] || exit 97';
+          ? "\nif ($env:LIVE_PROJECT -ne 'previous-studio-project' -or $env:RHUBARB -ne 'before-value') { throw 'Caller environment changed' }"
+          : '\n[ "$LIVE_PROJECT" = previous-studio-project ] && [ "$RHUBARB" = before-value ] || exit 97';
       const child = Bun.spawnSync(
         [shell.exe, ...shell.args, (shell.prefix ?? "") + spec.copyCommand + callerCheck],
         {
           cwd: unrelated,
-          env: { ...process.env, AT: "before-value", LIVE_PROJECT: oldProject },
+          env: { ...process.env, RHUBARB: "before-value", LIVE_PROJECT: oldProject },
           stdout: "pipe",
           stderr: "pipe",
           windowsHide: true,
@@ -314,7 +332,7 @@ for (const shell of copyShells)
       expect(actual.cwd.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
       expect(actual.project.toLowerCase()).toBe(realpathSync(cwd).toLowerCase());
       expect(actual.args).toEqual(copyCase.args);
-      expect(actual.at).toBe(copyCase.at);
+      expect(actual.rhubarb).toBe(copyCase.rhubarb);
     });
 
 test("Studio catalogs and runs only its own project, including projects outside films", async () => {
@@ -390,7 +408,7 @@ describe("cli-templates atomic persistence & integrity", () => {
       name: "Quick Stills",
       commandId: "render",
       args: { target: "stills" },
-      env: { AT: "12,24" },
+      flags: { "--at": "12,24" },
       targetFilm: "active",
       pinned: true,
     });
@@ -403,7 +421,7 @@ describe("cli-templates atomic persistence & integrity", () => {
       name: "Quick Stills v2",
       commandId: "render",
       args: { target: "stills" },
-      env: { AT: "12,24,36" },
+      flags: { "--at": "12,24,36" },
       targetFilm: "active",
     });
     expect(updated.template.createdAt).toBe(created.template.createdAt);
@@ -499,7 +517,7 @@ describe("/api/cli routes, security & process runtime", () => {
     const badEntry = await postRun({
       commandId: "render",
       args: { target: "stills" },
-      env: { ENTRY: "../../etc/passwd" },
+      flags: { "--entry": "../../etc/passwd" },
     });
     expect(badEntry.status).toBe(400);
     expect((await badEntry.json()).code).toBe("INVALID_ARGS");
@@ -874,7 +892,7 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(readEnvStatus().OPENCODE_API_KEY).toBe(true);
   });
 
-  test("enforces ENTRY symlink/drive/empty containment inside resolvedCwd and runs film-cwd bun-file from repoRoot", async () => {
+  test("enforces --entry symlink/drive/empty containment inside resolvedCwd and runs film-cwd bun-file from repoRoot", async () => {
     const { root, filmDir } = makeFixtureRepo();
     const outsideDir = tempDir("cli-entry-outside-");
     symlinkSync(outsideDir, join(filmDir, "escape-link"), "junction");
@@ -905,7 +923,7 @@ describe("/api/cli routes, security & process runtime", () => {
       const res = await postRun({
         commandId: "render",
         args: { target: "stills" },
-        env: { ENTRY: badEntry },
+        flags: { "--entry": badEntry },
       });
       expect(res.status).toBe(400);
       expect((await res.json()).code).toBe("INVALID_ARGS");
@@ -913,7 +931,7 @@ describe("/api/cli routes, security & process runtime", () => {
       const badViews = await postRun({
         commandId: "render",
         args: { target: "stills" },
-        env: { VIEWS: `@${badEntry}` },
+        flags: { "--views": `@${badEntry}` },
       });
       expect(badViews.status).toBe(400);
       expect((await badViews.json()).code).toBe("INVALID_ARGS");
@@ -929,7 +947,7 @@ describe("/api/cli routes, security & process runtime", () => {
       const res = await postRun({
         commandId: "render",
         args: { target: extraBadViews.target },
-        env: { VIEWS: extraBadViews.views },
+        flags: { "--views": extraBadViews.views },
       });
       expect(res.status).toBe(400);
       expect((await res.json()).code).toBe("INVALID_ARGS");
@@ -939,7 +957,7 @@ describe("/api/cli routes, security & process runtime", () => {
       const viewsRes = await postRun({
         commandId: "render",
         args: { target: "stills" },
-        env: { VIEWS: okViews },
+        flags: { "--views": okViews },
       });
       expect(viewsRes.status).toBe(202);
       const viewsRun = await viewsRes.json();
@@ -960,7 +978,7 @@ describe("/api/cli routes, security & process runtime", () => {
     const okRender = await postRun({
       commandId: "render",
       args: { target: "stills" },
-      env: { ENTRY: "lab/custom.ts" },
+      flags: { "--entry": "lab/custom.ts" },
     });
     expect(okRender.status).toBe(202);
     const renderRun = await okRender.json();
@@ -1018,7 +1036,7 @@ describe("/api/cli routes, security & process runtime", () => {
         body: JSON.stringify({
           commandId: "render",
           args: { target: "stills" },
-          env: { LAB_VIEW: "mb-overflow" },
+          flags: { "--lab": ["view=mb-overflow"] },
         }),
       }),
     );

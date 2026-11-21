@@ -162,7 +162,7 @@ test("a span or a final chunk older than a picture change names the render that 
     }
     at("src/scene.ts", 3600);
     expect(staleVideo(dir, "renders/span_40-44.mp4")?.message).toMatch(
-      /SPAN=40,44 bun run render clip draws it again/,
+      /bun run render clip --span 40,44 draws it again/,
     );
     expect(staleVideo(dir, "renders/final_chunks/c02.mp4")?.message).toMatch(
       /bun run render final draws it again/,

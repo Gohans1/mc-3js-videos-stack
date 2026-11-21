@@ -103,8 +103,8 @@ export const secondArg = (name, text, { min = 0, max = Infinity } = {}) => {
   return t;
 };
 
-// An environment option spelt one letter off (ATT=1 for AT=1) would be ignored without a word: it stops the command
-// (exit 2). One off in its first letter only warns, since a machine may carry such a variable for itself (a PAT token)
+// A machine setting spelt one letter off (LIVE_PROJCT for LIVE_PROJECT) would be ignored without a word: it stops the
+// command (exit 2). One off in its first letter only warns, since a machine may carry such a variable for itself (a PAT token)
 export const envTypos = (known, env = process.env) => {
   let stop = false;
   const off = (a, b) => {
@@ -121,7 +121,7 @@ export const envTypos = (known, env = process.env) => {
       const typo = key[0] === near[0];
       stop ||= typo;
       console.error(
-        `${key}=${env[key]} is no option here: did you mean ${near}=${env[key]}? (--help for the options)${typo ? "" : " Going on, in case it is the machine's own."}`,
+        `${key} is set in the environment, one letter off ${near} that this command reads: did you mean ${near}?${typo ? "" : " Going on, in case it is the machine's own."}`,
       );
     }
   if (stop) process.exit(2);

@@ -164,9 +164,7 @@ test("overview maps compact cells to the red and blue moments; a range narrows t
   assert.ok(rgb(data.entries[0].sheet, "crop=320:180:0:0,scale=1:1")[0] > 220);
   assert.ok(rgb(data.entries[15].sheet, "crop=320:180:960:540,scale=1:1")[2] > 220);
   assert.ok(
-    data.entries.every(
-      (e) => !e.frame && e.commands.frames.argv.at(-1) === String(e.requestedTime),
-    ),
+    data.entries.every((e) => !e.frame && e.commands.frames.argv[5] === String(e.requestedTime)),
   );
   const range = indexOf(f.run("overview", "1-2/32")).data;
   assert.equal(range.entries.length, 32);
@@ -430,28 +428,23 @@ test("muted, missing, stale and foreign context never asserts speech or invented
   }
 });
 
-test("generated follow-up carries START into a clean shell", (t) => {
+test("generated follow-up carries --start into its own argv", (t) => {
   const f = fixture(t, "renders/custom.mp4");
   writeFileSync(
     join(f.dir, "package.json"),
     JSON.stringify({ scripts: { sheet: `python "${SHEET}"` } }),
   );
   const first = indexOf(
-    spawnSync("python", [SHEET, f.video, "overview", "60-61/1"], {
+    spawnSync("python", [SHEET, f.video, "overview", "60-61/1", "--start", "60"], {
       cwd: f.dir,
       encoding: "utf8",
       timeout: 25000,
-      env: { ...process.env, START: "60" },
     }),
   );
   const cmd = first.data.entries[0].commands.frames;
-  const env = { ...process.env };
-  delete env.START;
-  Object.assign(env, cmd.env);
   const next = indexOf(
     spawnSync(cmd.argv[0], cmd.argv.slice(1), {
       cwd: f.dir,
-      env,
       encoding: "utf8",
       timeout: 25000,
     }),

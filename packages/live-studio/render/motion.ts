@@ -1,7 +1,7 @@
 // @ts-nocheck
-// CHECK=motion:<target>,<from>,<to>, built in for every film: how one thing moves between two heard seconds, seen the way an
+// --check motion:<target>,<from>,<to>, built in for every film: how one thing moves between two heard seconds, seen the way an
 // animator checks a move in a graph editor and with onion skins, with no film wiring. Writes to renders/:
-//   motion_<target>_<from>-<to>_trail.jpg  ghosts of the move from one fixed camera (INSPECT's, else the film's at the middle
+//   motion_<target>_<from>-<to>_trail.jpg  ghosts of the move from one fixed camera (--inspect's, else the film's at the middle
 //     second), its path drawn over them coloured by speed (blue slow, red fast), a dot every 0.1 s and the time every 0.5 s:
 //     dots bunched up = slow, spread out = fast; POP and STOP marks where it jumps or stops dead
 //   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
@@ -25,14 +25,15 @@ export const motionCheck =
     const draw = render.renderFrame?.bind(render) ?? render;
     if (typeof target !== "string" || !(to > from))
       return [
-        "ERROR usage: CHECK=motion:<target>,<from s>,<to s> (target: cam, a bone, an object name or label)",
+        "ERROR usage: --check motion:<target>,<from s>,<to s> (target: cam, a bone, an object name or label)",
       ];
     const isCam = target === "cam";
-    if (!render.tools?.camera) return ["ERROR CHECK=motion requires draw.tools.camera on the film"];
+    if (!render.tools?.camera)
+      return ["ERROR --check motion requires draw.tools.camera on the film"];
     const obj = isCam ? null : findTarget(render.tools, target);
     if (!isCam && !obj) return [targetHelp(render.tools, target)];
     if (!isCam && !free)
-      return ["ERROR CHECK=motion on an object requires draw.tools.free on the film"];
+      return ["ERROR --check motion on an object requires draw.tools.free on the film"];
 
     // one fixed camera for the whole move, so ghosts and the path line up; put back afterwards
     const saved =

@@ -23,7 +23,7 @@ about a take's own length on a CPU; each take is kept as it finishes, so a stopp
   bun run voice:lips          the takes with no shapes yet, or newer audio than their shapes
   bun run voice:lips 03 07    these takes, again
 A take whose "language" is not English is heard by sound, less precisely. RHUBARB names another Rhubarb program.
-Next: AT=<a second it speaks> bun run render stills, and look at the mouth.`;
+Next: --at <a second it speaks> bun run render stills, and look at the mouth.`;
 
 function existsOrLink(path: string): boolean {
   try {
@@ -243,5 +243,5 @@ if (failed.length) {
 }
 
 console.log(
-  `next: AT=<a second ${who[0]} speaks> bun run render stills and look at the mouth (bun run voice:cues gives the seconds)`,
+  `next: --at <a second ${who[0]} speaks> bun run render stills and look at the mouth (bun run voice:cues gives the seconds)`,
 );
