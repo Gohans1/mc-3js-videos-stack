@@ -51,7 +51,7 @@ def frame_times(start, end, count, pins, duration):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False,
+    parser = argparse.ArgumentParser(prog="bun run media ocr", description=__doc__, allow_abbrev=False,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=Path)
     parser.add_argument("--at", default="")

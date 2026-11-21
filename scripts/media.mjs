@@ -11,6 +11,56 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLS = JSON.parse(readFileSync(join(ROOT, "scripts/media/tools.json"), "utf8"));
 const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"));
 const PYTHON_STDIO = { PYTHONIOENCODING: "utf-8" };
+const BUNDLED = {
+  id: "ffmpeg",
+  name: "ffmpeg-skill",
+  version: "3.10.1",
+  codeLicense: "MIT",
+  summary:
+    "Bundled optional footage finishing/QC tools; media ffmpeg list and contract for native arguments.",
+  source: "https://github.com/kajisho5/ffmpeg-skill/tree/v3.10.1",
+};
+const TOOL_GROUPS = [
+  [
+    "Audio",
+    [
+      "separate",
+      "beat",
+      "locate",
+      "vad",
+      "ced",
+      "denoise",
+      "effects",
+      "melody",
+      "midi",
+      "tts",
+      "fingerprint",
+      "caption",
+      "foley",
+      "metadata",
+    ],
+  ],
+  ["Visual", ["ocr", "vision", "tapir", "track"]],
+  ["Finish", ["ffmpeg", "qc", "timeline"]],
+];
+const ALL_TOOL_IDS = [...Object.keys(TOOLS), BUNDLED.id];
+const GROUPED_IDS = new Set(TOOL_GROUPS.flatMap(([, ids]) => ids));
+const EXTRA_TOOL_IDS = ALL_TOOL_IDS.filter((id) => !GROUPED_IDS.has(id));
+const TOOL_LABELS = {
+  ffmpeg: "ffmpeg (ffmpeg list / schema <tool>)",
+  qc: "qc (--contract)",
+  timeline: "timeline (OTIO)",
+};
+const TOOL_LINES = [
+  ...TOOL_GROUPS.map(([label, ids]) => [label, ids.filter((id) => ALL_TOOL_IDS.includes(id))]),
+  ...(EXTRA_TOOL_IDS.length ? [["Other", EXTRA_TOOL_IDS]] : []),
+]
+  .filter(([, ids]) => ids.length)
+  .map(
+    ([label, ids]) =>
+      `  ${`${label}:`.padEnd(9)}${ids.map((id) => TOOL_LABELS[id] ?? id).join(", ")}`,
+  )
+  .join("\n");
 const HELP = `Optional local media tools for AI, with independent environments and retained evidence.
   bun run media list [--json]             Available tools and upstream/license information
   bun run media doctor [tool] [--json]    Installed packages, binaries and runtimes; does not load/download models
@@ -21,9 +71,7 @@ const HELP = `Optional local media tools for AI, with independent environments a
   --out DIR       Parent for fresh run-* evidence folders (default renders/media/<tool>)
   --minutes N     Wall-clock deadline (default 5; setup default 10). Logs and finished files survive failure.
 Tools (bun run media <tool> --help for syntax and limits):
-  Audio:   separate, beat, locate, vad, ced, denoise, effects, melody, midi, tts, fingerprint, caption, foley, metadata
-  Visual:  ocr, vision, tapir, track
-  Finish:  ffmpeg (ffmpeg list / schema <tool>), qc (--contract), timeline (OTIO)
+${TOOL_LINES}
 MC_MEDIA_HOME overrides the environment/model cache root (default vault/tools/media).
 setup uses the network; execution is local, free and does not upload media. First model
 use may download official weights, as each tool's help says. Models remain cached.
@@ -54,15 +102,6 @@ const runtimeVersions = (binaries) =>
     }),
   );
 const [verb, ...rest] = process.argv.slice(2);
-const BUNDLED = {
-  id: "ffmpeg",
-  name: "ffmpeg-skill",
-  version: "3.10.1",
-  codeLicense: "MIT",
-  summary:
-    "Bundled optional footage finishing/QC tools; media ffmpeg list and contract for native arguments.",
-  source: "https://github.com/kajisho5/ffmpeg-skill/tree/v3.10.1",
-};
 
 if (verb === "ffmpeg") {
   await ffmpegCli(rest);

@@ -21,7 +21,7 @@ from native import digest
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(prog="bun run media foley", description=__doc__, allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", choices=("index", "search", "status", "describe"))
     parser.add_argument("value", nargs="?", help="quoted search phrase, or asset ID/relative path")
     parser.add_argument("--config", type=Path, required=True)

@@ -33,12 +33,39 @@ from ocr import second
 from timeline import process_timeline, validate_timeline
 
 
+def _help_for(kind):
+    common = (
+        "CLI --out DIR is the parent of a fresh run-* folder; --minutes N bounds the worker\n"
+        "(default 5). Models stay in the tool cache; inference never uploads media or edits timelines."
+    )
+    audio_clock = (
+        "Audio --from/--to and output timestamps use seconds in the source file.\n"
+        "Evidence WAV keeps track offsets on the container clock; read audioCoverage when range outlasts audio."
+    )
+    details = {
+        "beat": f"Local SDK media tool: beat — find music beats and downbeats on CPU (Beat This!).\n{audio_clock}\n--config forwards native backend JSON; output paths/device stay owned by the adapter.\n{common}",
+        "effects": f"Local SDK media tool: effects — render a Pedalboard plugin chain with retained tail.\n{audio_clock}\n--config is required: JSON array of {{name, parameters}}. Keeps float PCM until plugins run and exports PCM24.\n{common}",
+        "vad": f"Local SDK media tool: vad — find speech intervals on CPU (Silero VAD, no words or speaker IDs).\n{audio_clock}\n--config forwards native Silero settings JSON.\n{common}",
+        "melody": f"Local SDK media tool: melody — extract notes/MIDI from a melody on CPU (Basic Pitch).\n{audio_clock}\nPolyphonic mixes and repeated notes may be misread; MIDI stays local to the selected excerpt.\n{common}",
+        "separate": f"Local SDK media tool: separate — split vocals/instrumental stems on CPU (Audio Separator / Kim Vocal 2).\n{audio_clock}\n--config forwards Separator parameters (except owned paths/device); --model selects a cached model.\n{common}",
+        "locate": f"Local SDK media tool: locate — locate described sounds with PE-A-Frame Small (40 ms logits).\n{audio_clock}\nRepeat --query for multiple phrases; scores/spans are uncalibrated hypotheses, not verified labels.\n{common}",
+        "timeline": f"Local SDK media tool: timeline — inspect or roundtrip OpenTimelineIO (.otio) handoffs.\nAccepts .otio to inspect, or JSON {{fps, tracks:[{{kind, clips:[{{url, start, duration, metadata}} or {{gap:true, duration}}]}}]}}; ranges use frame units.\n{common}",
+    }
+    return details.get(kind, __doc__)
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("tool", choices=("beat", "effects", "vad", "melody", "separate", "locate", "timeline"))
+    valid_tools = ("beat", "effects", "vad", "melody", "separate", "locate", "timeline")
+    kind = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in valid_tools else None
+    parser = argparse.ArgumentParser(
+        prog=f"bun run media {kind}" if kind else None,
+        description=_help_for(kind),
+        allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    if not kind:
+        parser.add_argument("tool", choices=valid_tools)
     parser.add_argument("source", type=Path)
-    kind = sys.argv[1] if len(sys.argv) > 1 else None
     parser.set_defaults(start=0.0, end=None, config=None, model=None, query=[], threshold=0.0, tail=2.0, threads=2)
     if kind != "timeline":
         parser.add_argument("--from", dest="start", type=second, default=0.0)
@@ -56,7 +83,9 @@ def main():
         parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--out", type=Path, default=os.environ.get("MC_MEDIA_RUN_DIR"))
     parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[2:] if kind else None)
+    if kind:
+        args.tool = kind
     source = args.source.resolve()
     root = Path(__file__).resolve().parents[2]
     profile = json.loads((root / "scripts/media/tools.json").read_text(encoding="utf-8")).get(args.tool, {})

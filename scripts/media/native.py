@@ -37,13 +37,37 @@ def digest(file):
     return checksum.hexdigest()
 
 
+def _help_for(kind):
+    details = {
+        "denoise": "Enhance noisy speech locally at 48 kHz; --from/--to use input-file seconds.",
+        "ced": "Classify audio with tiny AudioSet CPU model; --from/--to use input-file seconds. Scores are independent, not onset times.",
+        "midi": "Render editable MIDI into offline WAV audio with FluidSynth and a licensed SoundFont.",
+        "fingerprint": "Generate local Chromaprint audio fingerprints without network lookup; --from/--to/--length use input-file seconds.",
+        "tts": "Generate local English/other supported voice drafts with Kokoro CPU (no Vietnamese preset or forced alignment).",
+        "caption": "Experimental local audio captioning (MiDashengLM CPU); --from/--to use input-file seconds. Treat text as unverified.",
+        "vision": "Experimental local single-frame description (SmolVLM2 CPU); --at uses input-file seconds. Verify text against retained frames.",
+        "metadata": "Read and export Broadcast WAV metadata XML with BWF MetaEdit without modifying the source.",
+    }
+    return (
+        f"Structured adapters for pinned local native media tools: {kind}.\n"
+        f"{details[kind]}\n"
+        "Each result retains its native stdout, input hash, parameters and artifacts.\n"
+        "Native binaries/models are installed by media setup, never downloaded by this worker.\n"
+        "No film clock conversions or source edits."
+    )
+
+
 def main():
     kinds = ("denoise", "ced", "midi", "fingerprint", "tts", "caption", "vision", "metadata")
     if len(sys.argv) < 2 or sys.argv[1] not in kinds:
         raise SystemExit("native adapter requires a tool id; use bun run media list")
     kind = sys.argv[1]
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False,
-                                     formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog=f"bun run media {kind}",
+        description=_help_for(kind),
+        allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     if kind != "tts":
         parser.add_argument("source", type=Path)
     parser.add_argument("--out", type=Path, default=os.environ.get("MC_MEDIA_RUN_DIR"))

@@ -89,9 +89,39 @@ def predict(args, model_path, frames, out):
                                      for box, cls, score, identity in zip(tracked.xyxy, tracked.class_id, tracked.confidence, tracked.tracker_id)]}
 
 
+TOOL_HELP = {
+    "tapir": (
+        "Track one or more reference points across frames on CPU (--point x,y, repeatable).\n"
+        "--query-frame indexes the sampled frames, not the source frame number; points use original pixels."
+    ),
+    "track": (
+        "Detect and track COCO object boxes across frames on CPU with RF-DETR Nano + ByteTrack.\n"
+        "Filter with --threshold and repeatable --class <coco-id>."
+    ),
+}
+
+
+def _help_for(kind):
+    if kind not in TOOL_HELP:
+        return __doc__
+    return (
+        f"{TOOL_HELP[kind]}\n"
+        "Frames/JSONL retain actual input-file timestamps, images and unverified model predictions.\n"
+        "Defaults sample 16 frames at up to 5 fps; raise --frames for a longer span. Models come from media setup."
+    )
+
+
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("tool", choices=("tapir", "track"))
+    valid_tools = ("tapir", "track")
+    kind = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1] in valid_tools else None
+    parser = argparse.ArgumentParser(
+        prog=f"bun run media {kind}" if kind else None,
+        description=_help_for(kind),
+        allow_abbrev=False,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    if not kind:
+        parser.add_argument("tool", choices=valid_tools)
     parser.add_argument("source", type=Path)
     parser.add_argument("--from", dest="start", type=second, default=0.0)
     parser.add_argument("--to", dest="end", type=second)
@@ -99,7 +129,7 @@ def main():
     parser.add_argument("--frames", type=int, default=16)
     parser.add_argument("--threads", type=int, default=2)
     parser.add_argument("--model", type=Path)
-    if len(sys.argv) > 1 and sys.argv[1] == "tapir":
+    if kind == "tapir":
         parser.add_argument("--point", type=point, action="append", required=True)
         parser.add_argument("--query-frame", type=int, default=0)
     else:
@@ -107,7 +137,9 @@ def main():
         parser.add_argument("--class", dest="classes", type=int, action="append", default=[])
     parser.add_argument("--out", type=Path, default=os.environ.get("MC_MEDIA_RUN_DIR"))
     parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+    args = parser.parse_args(sys.argv[2:] if kind else None)
+    if kind:
+        args.tool = kind
     source = args.source.resolve()
     if not source.is_file():
         parser.error("source must be a local video file")

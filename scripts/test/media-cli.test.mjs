@@ -19,8 +19,17 @@ test("media discovery and tool help work without installed environments or downl
   t.after(() => rmSync(home, { recursive: true, force: true }));
   const list = run(["list", "--json"], { MC_MEDIA_HOME: join(home, "empty") });
   assert.equal(list.status, 0, list.stderr);
-  assert.equal(JSON.parse(list.stdout).find((tool) => tool.id === "ocr").name, "RapidOCR");
-  assert.equal(Object.hasOwn(JSON.parse(list.stdout)[0], "installed"), false);
+  const listedTools = JSON.parse(list.stdout);
+  assert.equal(listedTools.find((tool) => tool.id === "ocr").name, "RapidOCR");
+  assert.equal(Object.hasOwn(listedTools[0], "installed"), false);
+  const topHelp = run(["--help"], { MC_MEDIA_HOME: join(home, "empty") });
+  assert.equal(topHelp.status, 0, topHelp.stderr);
+  for (const tool of listedTools)
+    assert.match(
+      topHelp.stdout,
+      new RegExp(`\\b${tool.id}\\b`),
+      `${tool.id} missing from media --help`,
+    );
   for (const args of [
     ["ocr", "--help"],
     ["ocr", "help"],
@@ -85,10 +94,40 @@ test("native tool help and doctor do not require a Python package environment", 
   const dir = mkdtempSync(join(tmpdir(), "media-native-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const home = join(dir, "empty");
-  for (const id of ["denoise", "ced", "midi", "fingerprint", "tts", "caption", "vision"]) {
+  for (const id of [
+    "denoise",
+    "ced",
+    "midi",
+    "fingerprint",
+    "tts",
+    "caption",
+    "vision",
+    "metadata",
+  ]) {
     const help = run([id, "--help"], { MC_MEDIA_HOME: home });
     assert.equal(help.status, 0, help.stderr);
     assert.match(help.stdout, /Structured adapters/);
+    assert.match(help.stdout, new RegExp(`^usage: bun run media ${id} `));
+  }
+  for (const [id, marker] of [
+    ["beat", /beats and downbeats/],
+    ["effects", /Pedalboard/],
+    ["vad", /speech intervals/],
+    ["melody", /Basic Pitch/],
+    ["separate", /vocals\/instrumental/],
+    ["locate", /PE-A-Frame/],
+    ["timeline", /OpenTimelineIO/],
+    ["ocr", /RapidOCR/],
+    ["tapir", /--point/],
+    ["track", /COCO object boxes/],
+    ["foley", /Foley/],
+    ["qc", /--contract/],
+  ]) {
+    const help = run([id, "--help"], { MC_MEDIA_HOME: home });
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, new RegExp(`^usage: bun run media ${id} `), help.stdout);
+    assert.match(help.stdout, marker, help.stdout);
+    if (id === "track") assert.doesNotMatch(help.stdout, /--point|--query-frame/, help.stdout);
   }
   const doctor = run(["doctor", "ced", "--json"], { MC_MEDIA_HOME: home });
   assert.equal(doctor.status, 1, doctor.stderr);

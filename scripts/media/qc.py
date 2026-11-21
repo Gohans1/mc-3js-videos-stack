@@ -27,6 +27,7 @@ from qc_skill.schemas import parse_request
 
 def main():
     parser = argparse.ArgumentParser(
+        prog="bun run media qc",
         description=__doc__,
         allow_abbrev=False,
         formatter_class=argparse.RawDescriptionHelpFormatter,
