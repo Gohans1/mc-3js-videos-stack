@@ -9,7 +9,7 @@ import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
 import { renderCost } from "../src/render-cost.mjs";
 import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
-import { cameraCutSeconds, timingClock } from "../src/timing-state.mjs";
+import { renderCutTimes, timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
@@ -66,11 +66,11 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
-  // framecheck skips a jump at a cut: a shot's start, or a camera key with cut: true inside a shot
-  const camKeys = Array.isArray(EDIT.cam) ? EDIT.cam : EDIT.cam?.keys;
-  const cuts = [...SHOTS.slice(1).map((s) => s.t), ...cameraCutSeconds(camKeys)]
-    .sort((a, b) => a - b)
-    .filter((t, i, all) => !i || t - all[i - 1] > 1e-6);
+  // a shot's start or a camera key with cut: true: framecheck, the shutter, CHECK=motion/order and the cost line stop there
+  const cuts = renderCutTimes(
+    SHOTS.slice(1).map((s) => s.t),
+    EDIT.cam,
+  );
   if (cfg.clip)
     await post(
       "/cuts",

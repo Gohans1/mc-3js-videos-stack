@@ -13,7 +13,7 @@ test("render cost names the stretch between cuts that draws over twice the media
   }
   assert.equal(
     cost.line(),
-    "cost: 30 ms a sample, the median of 4 stretches between cuts; 4.00-5.97 s draws 110 ms (x3.7): profile what it shows there",
+    'cost: 30 ms a sample, the median of 4 stretches between cuts; 4.00-5.97 s draws 110 ms (x3.7): CHECK="probe:*,4.00" bun run render stills lists what it draws',
   );
 });
 
@@ -27,7 +27,7 @@ test("render cost is not swayed by a slow first frame, and names no stretch too 
   }
   assert.equal(
     cost.line(),
-    "cost: 30 ms a sample, the median of 3 stretches between cuts; none past twice that",
+    "cost: 30 ms a sample, the median of 3 stretches between cuts; none past twice that and 33 ms",
   );
 });
 
@@ -44,13 +44,33 @@ test("render cost names the heavy one of two stretches, and weighs a whip's stre
   for (let f = 0; f < 180; f++) two.add(f / 30, f < 90 ? 30 : 110, 1);
   assert.equal(
     two.line(),
-    "cost: 30 ms a sample, the median of 2 stretches between cuts; 3.00-5.97 s draws 110 ms (x3.7): profile what it shows there",
+    'cost: 30 ms a sample, the median of 2 stretches between cuts; 3.00-5.97 s draws 110 ms (x3.7): CHECK="probe:*,3.00" bun run render stills lists what it draws',
   );
   // a whip stretch drawn at 8 samples a frame costs 8 times a frame, and the same a sample
   const whip = renderCost([3], 6);
   for (let f = 0; f < 180; f++) whip.add(f / 30, f < 90 ? 30 : 240, f < 90 ? 1 : 8);
   assert.equal(
     whip.line(),
-    "cost: 30 ms a sample, the median of 2 stretches between cuts; none past twice that",
+    "cost: 30 ms a sample, the median of 2 stretches between cuts; none past twice that and 33 ms",
+  );
+});
+
+// two heavy sets out of three: each is judged against the others, and the light one stays the typical cost
+test("render cost names every heavy stretch when they outnumber the light ones", () => {
+  const cost = renderCost([2, 4], 6);
+  for (let f = 0; f < 180; f++) cost.add(f / 30, f < 60 ? 30 : 110, 1);
+  assert.equal(
+    cost.line(),
+    'cost: 30 ms a sample, the median of 3 stretches between cuts; 2.00-3.97 s draws 110 ms (x3.7), 4.00-5.97 s draws 110 ms (x3.7): CHECK="probe:*,2.00" bun run render stills lists what it draws',
+  );
+});
+
+// a studio frame has 33 ms at 30 fps: a stretch twice as dear as 10 ms ones still plays smoothly, and is no news
+test("render cost names no stretch that still draws within a frame's time", () => {
+  const cost = renderCost([2], 4);
+  for (let f = 0; f < 120; f++) cost.add(f / 30, f < 60 ? 10 : 25, 1);
+  assert.equal(
+    cost.line(),
+    "cost: 10 ms a sample, the median of 2 stretches between cuts; none past twice that and 33 ms",
   );
 });
