@@ -698,6 +698,20 @@ describe("mc-actor player rig primitives", () => {
     expect(faceMats.some((m) => m.color.getHexString() === "f4f4f4")).toBe(false);
   });
 
+  test("eyeWhite recolours the eye whites, and null brings back the film's faceColors.white", async () => {
+    installPixelDocument();
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin(), {
+      faceColors: { white: "#ddeeff" },
+    });
+    const whites = () => getHeadFaceMaterials(p).map((m) => m.color.getHexString());
+    p.eyeWhite("#ff99aa");
+    expect(whites()).toContain("ff99aa");
+    expect(whites()).not.toContain("ddeeff");
+    p.eyeWhite(null);
+    expect(whites()).toContain("ddeeff");
+    expect(whites()).not.toContain("ff99aa");
+  });
+
   test("tintParts multiplies a SKIN_UV part's pixels and the lids follow it, through setSkin until cleared", async () => {
     installPixelDocument();
     const p = await makePlayer(await loadPlayerTemplate(), plainSkin());

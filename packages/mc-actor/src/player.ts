@@ -1215,7 +1215,7 @@ export async function makePlayer(
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
     return [down, yaw, 0];
   };
-  // The game face's eye whites: a colour (bloodshot pink, a glow) or null for the film's faceColors.white, else plain white
+  // The game face's eye whites: a colour (bloodshot pink) or null for the film's faceColors.white, else plain white
   const eyeWhite = (c = null) => {
     const w = ensureGameFace().white;
     w.color.set(c ?? savedFaceColors?.white ?? "#f4f4f4");
