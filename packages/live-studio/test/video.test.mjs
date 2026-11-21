@@ -6,7 +6,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { filmPicture, probeVideo, videoStart } from "../src/video.mjs";
+import {
+  filmPicture,
+  joinedCuts,
+  probeVideo,
+  videoStart,
+  writeRenderEvidence,
+} from "../src/video.mjs";
 
 test("a chunk starts at its number times 30 s, a final chunk too, whichever slash the path has", () => {
   assert.deepEqual(videoStart("renders/chunks/c02.mp4"), {
@@ -81,4 +87,20 @@ test("a film draft's picture is its top at the film's ratio; a final or a video 
   assert.deepEqual(filmPicture(dir, "renders/draft_video.mp4"), { width: 36, height: 64 });
   assert.equal(filmPicture(dir, "renders/final_video.mp4"), null);
   assert.equal(filmPicture(dir, "draft_video.mp4"), null);
+});
+
+// a CHUNKS run joins chunks drawn at different times: each brings the cuts it was drawn with over its own 30 s
+test("a joined draft's cuts are each chunk's own over its seconds, or none when a chunk recorded none", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "joined-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const chunk = (i, cuts) => {
+    const file = join(dir, `c0${i}.mp4`);
+    writeFileSync(file, `chunk ${i}`);
+    if (cuts) writeRenderEvidence(file, { cuts });
+    return file;
+  };
+  const old = chunk(0, [2.6, 30, 41]);
+  const now = chunk(1, [3.1, 30, 45.5]);
+  assert.deepEqual(joinedCuts([old, now], 30), [2.6, 30, 45.5]);
+  assert.equal(joinedCuts([old, chunk(2, null)], 30), null);
 });

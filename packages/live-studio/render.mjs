@@ -39,7 +39,7 @@ import { audioInfo } from "./src/sound.mjs";
 import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
-import { writeRenderEvidence } from "./src/video.mjs";
+import { joinedCuts, writeRenderEvidence } from "./src/video.mjs";
 import { parseViews } from "./src/views.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 import { writeVoiceMap } from "./src/voice-map.mjs";
@@ -1224,7 +1224,7 @@ if (!failed && chunks) {
     // older mouths: the record of the last whole draw stays, so src/stale.mjs still sees a narration moved since
     if (j.status === 0) {
       writeRenderEvidence(join(RENDERS, JOINED), {
-        cuts: old.length ? null : encodedCuts,
+        cuts: old.length ? joinedCuts(all, CHUNK) : encodedCuts,
         seenSound: old.length ? null : seenJson,
         pictureChoices,
         ...(old.length ? { oldChunks: old } : {}),

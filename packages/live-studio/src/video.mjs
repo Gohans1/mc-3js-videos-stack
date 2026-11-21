@@ -45,6 +45,30 @@ export function writeRenderEvidence(file, data) {
 
 const validCuts = (cuts) => Array.isArray(cuts) && cuts.every((n) => Number.isFinite(n) && n >= 0);
 
+// The cuts a render was drawn with. A picture older than the film (stale) keeps only those recorded with its own file:
+// renders/cuts.json is the current edit's
+export const drawnCuts = (root, video, stale) => {
+  const found = renderCuts(root, video);
+  return stale && found.status === "legacy"
+    ? {
+        status: "unavailable",
+        reason: "renders/cuts.json is the current edit's, not this older picture's",
+      }
+    : found;
+};
+
+// A CHUNKS run joins chunks drawn at different times (files in film order, length seconds each): each brings the cuts
+// it was drawn with over its own seconds; null when one recorded none
+export const joinedCuts = (files, length) => {
+  const cuts = [];
+  for (const [i, file] of files.entries()) {
+    const own = readRenderEvidence(file)?.cuts;
+    if (!validCuts(own)) return null;
+    cuts.push(...own.filter((c) => c >= i * length && c < (i + 1) * length));
+  }
+  return cuts;
+};
+
 export function renderCuts(root, video) {
   const file = resolve(root, video);
   const data = readRenderEvidence(file);

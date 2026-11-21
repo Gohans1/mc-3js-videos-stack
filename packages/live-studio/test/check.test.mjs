@@ -215,6 +215,33 @@ test("a misspelt package.json live-studio key is named as a warning: its file wo
   assert.doesNotMatch(r.stdout, /"myOwn"/);
 });
 
+// a film made before a command joined the template has no script for it: bun run says only "Script not found"
+test("a command the template film has and this film's scripts lack is named with the line to add", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  const { scripts } = JSON.parse(
+    readFileSync(join(STUDIO, "../../templates/film/package.json"), "utf8"),
+  );
+  const { sweep, ...older } = scripts;
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      scripts: { ...older, studio: "bun node_modules/live-studio/src/live.mjs 4400" },
+      "live-studio": {},
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.ok(
+    r.stdout.includes(
+      `⚠ package.json has no script for bun run sweep, which the template film has: add "sweep": ${JSON.stringify(sweep)} to its "scripts"`,
+    ),
+    r.stdout,
+  );
+  assert.doesNotMatch(r.stdout, /bun run studio,/);
+});
+
 test("a file with faults from two checks is one problem, all its faults under it", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

@@ -27,6 +27,9 @@ export const latestStudy = (project) => {
       cuts: cuts.map((c) => c?.at).filter(Number.isFinite),
       seconds: Number(data.duration) || null,
       hits: (data.sound?.hits ?? []).filter((h) => Number.isFinite(h?.at)),
+      whips: (data.motion?.whips ?? []).filter(
+        (w) => Number.isFinite(w?.from) && Number.isFinite(w?.to),
+      ),
     };
   } catch {
     return null;
@@ -34,6 +37,13 @@ export const latestStudy = (project) => {
 };
 
 const s = (t) => `${+t.toFixed(2)} s`;
+
+// the study's whip around a second (within a frame and a half), if any: a cut there may be a whip transition's, or a
+// fast move the cut detector took for one
+export const whipAt = (study, t) => {
+  const near = 1.5 / study.fps;
+  return study.whips?.find((w) => t >= w.from - near && t <= w.to + near) ?? null;
+};
 
 const VIDEO = /\.(mp4|mov|mkv|webm|m4v)$/i;
 // the videos in references/ (bun run reference add puts them there; a -source. file is the download one came from)
@@ -75,6 +85,12 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
   const close = (a) => (b) => Math.abs(a - b) <= near;
   const extra = cameraCuts.filter((t) => !study.cuts.some(close(t)));
   const missing = study.cuts.filter((t) => t <= until + near && !cameraCuts.some(close(t)));
+  const seen = (t) => {
+    const w = whipAt(study, t);
+    return w
+      ? `${s(t)} (inside its whip ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}: a whip transition or only a fast move, look)`
+      : s(t);
+  };
   if (!extra.length && !missing.length) return "";
   const where = relative(project, study.file).replaceAll("\\", "/");
   return [
@@ -82,7 +98,7 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
       extra.length &&
         `cuts at ${extra.map(s).join(", ")}, where the reference does not cut (a jump in the middle of its move)`,
       missing.length &&
-        `${extra.length ? "and " : ""}the reference cuts at ${missing.map(s).join(", ")} and the camera does not`,
+        `${extra.length ? "and " : ""}the reference cuts at ${missing.map(seen).join(", ")} and the camera does not`,
     ]
       .filter(Boolean)
       .join("; ")}; reference cuts from ${where}.`,

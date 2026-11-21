@@ -4236,6 +4236,36 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
   {
+    id: "sweep",
+    label: "sweep",
+    category: "render",
+    summary:
+      "One ranked list of what to fix in a whole draft: pops, focus, light and cuts against the reference.",
+    runner: "bun-script",
+    target: "sweep",
+    cwdModes: ["film"],
+    args: [
+      {
+        key: "video",
+        label: "Whole Draft (Default draft_video.mp4)",
+        type: "string",
+        choiceSource: "renders",
+        placeholder: "renders/draft_video.mp4",
+      },
+    ],
+    flags: [
+      { key: "--json", flag: "--json", label: "JSON Report", type: "boolean", tier: "common" },
+    ],
+    meta: {
+      effect: "write",
+      cost: "free",
+      speed: "short",
+      cancellable: true,
+      helpMode: "flag",
+      outputsHint: "Writes renders/sweep.json and a framecheck run",
+    },
+  },
+  {
     id: "pace",
     label: "pace",
     category: "render",

@@ -453,7 +453,7 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       ordered.some((t) => wantSet.has(t.id) && Boolean(guideFor(t)))
     ) {
       throw new Error(
-        "Speech-to-Speech (Voice Changer) requires ELEVENLABS_API_KEY (api.genvoice.pro/v1 returns 405 on /speech-to-speech)",
+        "Speech-to-Speech (Voice Changer) here requires ELEVENLABS_API_KEY (api.genvoice.pro/v1 returns 405 on /speech-to-speech); with a GenVoice key: bun run voice:playground sources add <recording>, then voice:playground generate voice-changer (schema generate voice-changer shows its input)",
       );
     }
     mkdirSync(takesDir, { recursive: true });

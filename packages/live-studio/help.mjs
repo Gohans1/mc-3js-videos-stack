@@ -72,6 +72,8 @@ const GROUPS = [
       qc: "inspect an encoded video, camera motion, an image region (box), or pixel changes (compare); --help for checks",
       framecheck:
         "encoded picture faults: black, flashes, jumps, shimmer, freezes; --json gives retained evidence",
+      sweep:
+        "a whole draft against the reference, heaviest first: our pops and stutters, blur, light, cuts; new and gone since the last sweep",
       reference:
         "inspect <video|URL> for timestamped pictures/captions and targeted follow-ups; study/compare for measured timing and pictures; optional, no quality gate",
       pace: "current whole-film render: shot lengths and picture holds with planned narration",

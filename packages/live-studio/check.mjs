@@ -1258,6 +1258,22 @@ for (const [name, copy] of copies)
     `⚠ ${conf.soundTimeline} "${name}" is ${copy} byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
   );
 
+// a film made before a command joined the template has no script for it, and bun run says only "Script not found"
+let own = null;
+try {
+  own = JSON.parse(readFileSync(pkgFile, "utf8")).scripts;
+} catch {}
+let templateScripts = {};
+try {
+  templateScripts = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")).scripts ?? {};
+} catch {}
+if (own && typeof own === "object")
+  for (const [name, line] of Object.entries(templateScripts))
+    if (!(name in own))
+      warnings.push(
+        `⚠ package.json has no script for bun run ${name}, which the template film has: add ${JSON.stringify(name)}: ${JSON.stringify(line)} to its "scripts"`,
+      );
+
 const unstudied = unstudiedWarning(PROJECT);
 if (unstudied) warnings.push(unstudied);
 const toolsWarning = ownToolsWarning(PROJECT);
