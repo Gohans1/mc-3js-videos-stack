@@ -68,9 +68,9 @@ const number = (n: number) => n.toLocaleString(undefined, { maximumFractionDigit
 
 export function CameraGraph({ index }: { index: number }) {
   const revision = useStudio((s) => s.camRev);
-  useStudio((s) => s.shotsRev);
-  useStudio((s) => s.timingRev);
-  useStudio((s) => s.keysRev);
+  const shotsRev = useStudio((s) => s.shotsRev);
+  const timingRev = useStudio((s) => s.timingRev);
+  const keysRev = useStudio((s) => s.keysRev);
   useStudio((s) => s.camPicks);
   const [channel, setChannel] = useState<CameraChannel>("position");
   const [axis, setAxis] = useState("0");
@@ -127,18 +127,36 @@ export function CameraGraph({ index }: { index: number }) {
   const painting = brush && mode === "value" && !railPosition;
   const from = indices.indexOf(picked[0]);
   const to = indices.indexOf(picked.at(-1)!);
-  const fitIndices =
-    from < 0
-      ? []
-      : from === to
-        ? indices.slice(Math.max(0, from - 1), to + 2)
-        : indices.slice(from, to + 1);
+  const [fitFrom, fitTo] =
+    from < 0 ? [0, 0] : from === to ? [Math.max(0, from - 1), to + 2] : [from, to + 1];
+  const fitIndices = indices.slice(fitFrom, fitTo);
   const canFit = fitIndices.length > 1 && keys[fitIndices[0]].t < keys[fitIndices.at(-1)!].t;
   const focused = fitSelection && canFit;
   const shown = focused ? fitIndices : indices;
   const start = keys[shown[0]]?.t ?? 0;
   const stop = keys[shown.at(-1) ?? -1]?.t ?? start;
-  const data = plotCameraGraph(shown, mode, channel, Number(axis));
+  // the graph re-renders every frame while the film plays (the playhead's key changes), and a plot samples the camera
+  // thousands of times: plot again only when the keys, shots or clocks it reads change
+  const data = useMemo(() => {
+    void revision;
+    void shotsRev;
+    void timingRev;
+    void keysRev;
+    const plotted = focused ? indices.slice(fitFrom, fitTo) : indices;
+    return plotCameraGraph(plotted, mode, channel, Number(axis));
+  }, [
+    indices,
+    focused,
+    fitFrom,
+    fitTo,
+    mode,
+    channel,
+    axis,
+    revision,
+    shotsRev,
+    timingRev,
+    keysRev,
+  ]);
   const activeBuffer =
     buffer?.channel === channel && buffer.axis === axis && buffer.mode === mode ? buffer : null;
   const ghost = activeBuffer?.data.filter(({ t }) => t >= start && t <= stop) ?? [];
