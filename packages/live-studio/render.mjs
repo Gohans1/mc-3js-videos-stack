@@ -74,8 +74,8 @@ Nothing is written outside the film. Options are environment variables:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   SAMPLES=16                 temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
                              poster 8): more is smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by
-                             itself, up to 64. SAMPLES=8 on stills shows a moving moment as the final blurs it, at the draft's size;
-                             leave stills at 1 to check a pose, a contact or where things are
+                             itself, up to 64. SAMPLES=8 on stills (render all's too) gives a moving moment the final's
+                             motion blur at the draft's size; leave stills at 1 to check a pose, a contact or where things are
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
@@ -215,26 +215,20 @@ const misplaced =
                         ? "INSPECT and VIEWS cannot be used together: use one or the other"
                         : (video || what === "captions") && compare
                           ? "COMPARE is for render stills or poster"
-                          : what === "stills" &&
-                              process.env.SAMPLES &&
-                              process.env.AT === undefined &&
-                              process.env.VIEWS === undefined &&
-                              (process.env.CHECK || process.env.ENTRY)
-                            ? "SAMPLES blurs stills, and a CHECK or ENTRY run without AT draws none: add AT=<s> for a still beside it"
-                            : what === "captions"
-                              ? [
-                                  "AT",
-                                  "LIST",
-                                  "CHECK",
-                                  "INSPECT",
-                                  "VIEWS",
-                                  "ENTRY",
-                                  "CROP",
-                                  "SAMPLES",
-                                ]
-                                  .filter((k) => process.env[k] !== undefined)
-                                  .map((k) => `${k} does nothing for render captions`)[0]
-                              : null;
+                          : what === "captions"
+                            ? [
+                                "AT",
+                                "LIST",
+                                "CHECK",
+                                "INSPECT",
+                                "VIEWS",
+                                "ENTRY",
+                                "CROP",
+                                "SAMPLES",
+                              ]
+                                .filter((k) => process.env[k] !== undefined)
+                                .map((k) => `${k} does nothing for render captions`)[0]
+                            : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -434,6 +428,14 @@ const at =
         ? []
         : [1]
       : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
+if (what === "stills" && env.SAMPLES && (env.ENTRY || !at.length)) {
+  console.error(
+    env.ENTRY
+      ? "SAMPLES blurs the film's stills, and an ENTRY page draws its own pictures (--help for which option goes with which)"
+      : "SAMPLES blurs stills, and a CHECK run without AT draws none: add AT=<s> for a still beside it (--help for which option goes with which)",
+  );
+  process.exit(2);
+}
 const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
 const span = env.SPAN
   ? env.SPAN.split(",").map((x, i) => secondArg(`SPAN item ${i + 1}`, x))
@@ -1107,9 +1109,15 @@ const nextHint =
     : stillsWritten.filter((f) => f.includes("/still_")).length > 1
       ? "; many stills at once: bun run sheet (6 to a picture)"
       : "";
+const sampleNote =
+  what === "poster"
+    ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)`
+    : samples > 1 && cfg.stills.length
+      ? ` (stills: ${samples} sub-frames)`
+      : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : samples > 1 && cfg.stills.length ? ` (stills: ${samples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
+    `wrote ${stillsWritten.join(" ")}${sampleNote}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");

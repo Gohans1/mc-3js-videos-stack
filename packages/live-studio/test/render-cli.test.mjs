@@ -179,13 +179,15 @@ test("captions and final refuse the options they would ignore", (t) => {
   assert.equal(final.status, 2, final.stdout + final.stderr);
   assert.match(final.stderr, /CHECK goes with render stills/);
 
-  // a CHECK run without AT draws no still, so SAMPLES would blur nothing
+  // SAMPLES blurs the film's stills: a CHECK run without AT draws none, an ENTRY page draws its own
   const blurNone = render("stills", { CHECK: "motion:cam,1,2", SAMPLES: "8" });
   assert.equal(blurNone.status, 2, blurNone.stdout + blurNone.stderr);
-  assert.match(
-    blurNone.stderr,
-    /SAMPLES blurs stills, and a CHECK or ENTRY run without AT draws none/,
-  );
+  assert.match(blurNone.stderr, /SAMPLES blurs stills, and a CHECK run without AT draws none/);
+  mkdirSync(join(dir, "lab"));
+  writeFileSync(join(dir, "lab/page.ts"), "");
+  const blurLab = render("stills", { ENTRY: "lab/page.ts", AT: "1", SAMPLES: "8" });
+  assert.equal(blurLab.status, 2, blurLab.stdout + blurLab.stderr);
+  assert.match(blurLab.stderr, /an ENTRY page draws its own pictures/);
 });
 
 test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
@@ -547,7 +549,7 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
   assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
   assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(stills: 8 sub-frames\)/);
   assert.ok(Math.abs(red() - 153) <= 4, `the shutter's average: expected red 153, got ${red()}`);
-}, 400000);
+}, 60000);
 
 test("native async frames preserve source time and layer clocks through Speed and Freeze", (t) => {
   const film = chromeFilm(t, 2, { timingTimeline: "src/timing.json" });
