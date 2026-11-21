@@ -82,16 +82,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
   const builtin = {
-    order: orderCheck(
-      render,
-      DURATION,
-      SHOTS.map((s) => s.t),
-    ),
-    motion: motionCheck(
-      render,
-      cfg,
-      SHOTS.map((s) => s.t),
-    ),
+    order: orderCheck(render, DURATION, [0, ...cuts]),
+    motion: motionCheck(render, cfg, cuts),
     seen: seenCheck(render, cfg),
     touch: touchCheck(render),
     text: textCheck(render, cfg),

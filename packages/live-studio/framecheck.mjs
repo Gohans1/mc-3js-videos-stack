@@ -449,8 +449,14 @@ if (!timeline) {
   const redraw = where.span
     ? `SPAN=${where.span.join(",")} bun run render clip`
     : `CHUNKS=${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")} bun run render ${where.final ? "final" : "clip"}${remix}: chunk N is N*30 s on`;
+  // checks/frames.mjs skips a flash or jump at a cut the render recorded, not a black or frozen run
+  const cutsSaid = !cutInfo?.times
+    ? "a planned cut or freeze is fine"
+    : activeCuts.length
+      ? `a flash or jump at the render's ${activeCuts.length === 1 ? "cut" : `${activeCuts.length} cuts`} here is left out already; a planned freeze or pop can stay`
+      : "the render records no cut here; a planned freeze or pop can stay";
   log(
-    `next: look at the strips listed above; ${context} (${cutInfo?.times ? `${activeCuts.length ? `the render's ${activeCuts.length === 1 ? "cut here is" : `${activeCuts.length} cuts here are`} skipped, so a fault is none of them` : "the render records no cut here"}; a planned freeze or pop can stay` : "a planned cut or freeze is fine"}); if unintended, fix the scene and re-render that stretch (${redraw}), then ${again}bun run framecheck${videoArg ? ` ${showVideo}` : ""} again`,
+    `next: look at the strips listed above; ${context} (${cutsSaid}); if unintended, fix the scene and re-render that stretch (${redraw}), then ${again}bun run framecheck${videoArg ? ` ${showVideo}` : ""} again`,
   );
 }
 // a clean file is not a good one: what the meter cannot judge is left to the eye

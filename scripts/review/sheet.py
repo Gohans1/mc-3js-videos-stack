@@ -370,14 +370,14 @@ if args:
 
     if mode == "shots":
         ends = cuts_of(context)
-        before = sum(c <= picture_from for c in ends)
         edges = [picture_from, *[c for c in ends if picture_from < c < picture_to], picture_to]
         # a shot under 0.05 s has no frame of its own to show; a video that short shows its one frame
         shots = [(a, b) for a, b in zip(edges, edges[1:]) if b - a > 0.05] or [(edges[0], edges[-1])]
         secs = [min((a + b) / 2, end) for a, b in shots]
         short = len(edges) - 1 - len(shots)
-        header = (f"{len(shots)} shots: a frame from the middle of each, in order (shot {before} first"
-                  f"{f'; {short} under 0.05 s left out' if short > 0 else ''})")
+        # the render's cuts count camera keys with cut: true too: these shots are no shots.json rows to number
+        header = (f"{len(shots)} shots between the render's cuts: a frame from the middle of each, in order"
+                  f"{f' ({short} under 0.05 s left out)' if short > 0 else ''}")
     elif mode == "cut":
         ends = cuts_of(context)
         if not ends:

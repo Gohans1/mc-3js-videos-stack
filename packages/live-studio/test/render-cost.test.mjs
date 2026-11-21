@@ -37,3 +37,20 @@ test("render cost over one stretch says its ms alone, and nothing when nothing w
   assert.equal(even.line(), "cost: 25 ms a sample");
   assert.equal(renderCost([1], 2).line(), "");
 });
+
+// a SPAN across one cut draws two stretches: the heavy one is judged against the other, not against itself
+test("render cost names the heavy one of two stretches, and weighs a whip's stretch a sample", () => {
+  const two = renderCost([3], 6);
+  for (let f = 0; f < 180; f++) two.add(f / 30, f < 90 ? 30 : 110, 1);
+  assert.equal(
+    two.line(),
+    "cost: 30 ms a sample, the median of 2 stretches between cuts; 3.00-5.97 s draws 110 ms (x3.7): profile what it shows there",
+  );
+  // a whip stretch drawn at 8 samples a frame costs 8 times a frame, and the same a sample
+  const whip = renderCost([3], 6);
+  for (let f = 0; f < 180; f++) whip.add(f / 30, f < 90 ? 30 : 240, f < 90 ? 1 : 8);
+  assert.equal(
+    whip.line(),
+    "cost: 30 ms a sample, the median of 2 stretches between cuts; none past twice that",
+  );
+});

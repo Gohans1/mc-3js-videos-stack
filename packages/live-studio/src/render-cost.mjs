@@ -4,7 +4,8 @@
 // set to profile before the studio stutters on it
 const FRAMES = 10;
 
-const median = (values) => values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)];
+// the lower middle: of two stretches, the lighter is the typical one
+const median = (values) => values.toSorted((a, b) => a - b)[Math.floor((values.length - 1) / 2)];
 
 export const renderCost = (cuts, duration) => {
   const stretches = [0, ...cuts].map(() => ({ each: [], from: Infinity, to: -Infinity }));
@@ -25,11 +26,14 @@ export const renderCost = (cuts, duration) => {
       }
       const typical = median(judged.map((s) => s.ms));
       if (judged.length === 1) return `cost: ${Math.round(typical)} ms a sample`;
-      const heavy = judged.filter((s) => s.ms > 2 * typical);
-      const named = heavy.map(
-        (s) =>
-          `${s.from.toFixed(2)}-${Math.min(s.to, duration).toFixed(2)} s draws ${Math.round(s.ms)} ms (x${(s.ms / typical).toFixed(1)})`,
-      );
+      const named = judged.flatMap((s) => {
+        const others = median(judged.filter((o) => o !== s).map((o) => o.ms));
+        return s.ms > 2 * others
+          ? [
+              `${s.from.toFixed(2)}-${Math.min(s.to, duration).toFixed(2)} s draws ${Math.round(s.ms)} ms (x${(s.ms / others).toFixed(1)})`,
+            ]
+          : [];
+      });
       return `cost: ${Math.round(typical)} ms a sample, the median of ${judged.length} stretches between cuts; ${
         named.length ? `${named.join(", ")}: profile what it shows there` : "none past twice that"
       }`;
