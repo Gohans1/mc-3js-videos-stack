@@ -166,6 +166,148 @@ test("qc compare reports exact changed-pixel percentage, deltas, and writes labe
   }
 });
 
+// a reference whose frame n is grey n*8, so the frame read back says which one it was; ffmpeg's -ss with fps= picked a
+// neighbour (food-eat-more's refstrip.sh was a frame off)
+const greyReference = (dir, draw = "") => {
+  const frames = spawnSync(
+    "python",
+    [
+      "-c",
+      `from PIL import Image, ImageDraw; import sys\nfor n in range(30):\n  img = Image.new('RGB', (90, 160), (n * 8,) * 3)\n${draw.replace(/^/gm, "  ")}\n  img.save(f"{sys.argv[1]}/ref_{n:03d}.png")`,
+      dir,
+    ],
+    { encoding: "utf8", timeout: 15_000 },
+  );
+  expect(frames.stderr).toBe("");
+  const video = join(dir, "ref.mkv");
+  const r = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-y",
+      "-framerate",
+      "30",
+      "-i",
+      join(dir, "ref_%03d.png"),
+      "-c:v",
+      "ffv1",
+      video,
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  expect(r.status).toBe(0);
+  return video;
+};
+const checker =
+  "d = ImageDraw.Draw(img)\nfor x in range(0, 90, 6):\n  for y in range(0, 160, 6):\n    if (x + y) // 6 % 2 == 0: d.rectangle([x, y, x + 2, y + 2], fill=(255, 255, 255))";
+
+test("qc vs reads the reference frame at the exact index of the second and sets its tones beside ours", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const video = greyReference(dir);
+    const ours = join(dir, "still_0.5s.jpg");
+    // a draft still: 160 lines of picture over a 20-line strip that is not the film's
+    makePng(
+      ours,
+      "img = Image.new('RGB', (90, 180), (100, 100, 100))\nImageDraw.Draw(img).rectangle([0, 160, 89, 179], fill=(255, 0, 0))",
+    );
+    const out = join(dir, "vs.png");
+    const res = runQc([
+      "vs",
+      video,
+      ours,
+      "--at",
+      "0.5",
+      "--picture-height",
+      "160",
+      "--out",
+      out,
+      "--json",
+    ]);
+    expect(res.stderr).toBe("");
+    expect(res.status).toBe(0);
+    const report = JSON.parse(res.stdout);
+    expect(report.reference.frame).toBe(15);
+    expect(report.reference.metrics.lumaP50).toBe(120);
+    expect(report.ours.metrics.lumaP50).toBeCloseTo(100, 0);
+    expect(report.ours.metrics.satP95).toBe(0);
+    expect(report.size).toEqual({ width: 90, height: 160 });
+    expect(existsSync(out)).toBe(true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("qc vs measures sharpness on both at the same size, over the whole frame and a region", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const video = greyReference(dir, checker);
+    const ours = join(dir, "poster_0.2s.png");
+    makePng(
+      ours,
+      `img = Image.new('RGB', (180, 320), (0, 0, 0))\n${checker.replaceAll("90", "180").replaceAll("160", "320")}\nfrom PIL import ImageFilter\nimg = img.filter(ImageFilter.GaussianBlur(4))`,
+    );
+    const res = runQc([
+      "vs",
+      video,
+      ours,
+      "--at",
+      "0.2",
+      "--region",
+      "0.25,0.25,0.5,0.5",
+      "--json",
+    ]);
+    expect(res.status).toBe(0);
+    const { reference, ours: o, sharpnessRatio, region } = JSON.parse(res.stdout);
+    expect(o.metrics.sharpness).toBeLessThan(reference.metrics.sharpness * 0.5);
+    expect(sharpnessRatio).toBeLessThan(0.5);
+    expect(region.sharpnessRatio).toBeLessThan(0.5);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
+// a set lit or painted off the reference's: the same part of both, in numbers rather than by eye
+test("qc vs --region gives that part's mean colour and brightness beside the reference's", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const video = greyReference(dir);
+    const ours = join(dir, "still_0.5s.jpg");
+    makePng(
+      ours,
+      "img = Image.new('RGB', (90, 160), (120, 120, 120))\nImageDraw.Draw(img).rectangle([0, 0, 44, 79], fill=(240, 120, 60))",
+    );
+    const res = runQc(["vs", video, ours, "--at", "0.5", "--region", "0,0,0.5,0.5", "--json"]);
+    expect(res.status).toBe(0);
+    const { region } = JSON.parse(res.stdout);
+    expect(region.rgb.ours[0]).toBeGreaterThan(230);
+    expect(region.rgb.ours[2]).toBeLessThan(70);
+    for (const channel of region.rgb.reference) expect(Math.abs(channel - 120)).toBeLessThan(6);
+    expect(region.lumaRatio).toBeGreaterThan(1.1);
+    const said = runQc(["vs", video, ours, "--at", "0.5", "--region", "0,0,0.5,0.5"]);
+    expect(said.stdout).toMatch(
+      /in 0,0,0\.5,0\.5: rgb ours 2\d\d[.\d]*,1\d\d[.\d]*,\d+[.\d]* reference 1\d\d/,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test("qc vs refuses a second past the reference's end", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const video = greyReference(dir);
+    const ours = join(dir, "still_5s.jpg");
+    makePng(ours, "img = Image.new('RGB', (90, 160), (0, 0, 0))");
+    const res = runQc(["vs", video, ours, "--at", "5"]);
+    expect(res.status).toBe(2);
+    expect(res.stderr).toMatch(/past the reference's last frame/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test("qc motion detects turn/FOV spikes with exact second and key row index without requiring MP4", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-motion-"));
   try {

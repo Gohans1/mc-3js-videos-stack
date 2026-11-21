@@ -59,6 +59,47 @@ export const referenceMediaSubcommands: CliSubcommand[] = [
     meta: { effect: "write", cost: "free", speed: "long" },
   })),
   {
+    id: "camera",
+    label: "camera",
+    summary: tools.camera.summary,
+    args: [
+      {
+        key: "action",
+        label: "Action",
+        type: "enum",
+        options: ["motion", "solve"],
+        required: true,
+      },
+      { key: "source", label: "Source Video", type: "string", required: true },
+    ],
+    flags: [
+      ...evidence,
+      {
+        key: "--from",
+        flag: "--from",
+        label: "From File Second",
+        type: "number",
+        visibleWhen: { field: "action", in: ["motion"] },
+      },
+      {
+        key: "--to",
+        flag: "--to",
+        label: "To File Second",
+        type: "number",
+        visibleWhen: { field: "action", in: ["motion"] },
+      },
+      {
+        key: "--shot",
+        flag: "--shot",
+        label: "Shot File (points of our set)",
+        type: "string",
+        requiredWhen: { field: "action", in: ["solve"] },
+        visibleWhen: { field: "action", in: ["solve"] },
+      },
+    ],
+    meta: { effect: "write", cost: "free", speed: "long" },
+  },
+  {
     id: "foley",
     label: "foley",
     summary: tools.foley.summary,

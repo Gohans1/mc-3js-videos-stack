@@ -1,5 +1,13 @@
 import { clampFov, fovOf, hfovOf, vfovOf } from "film-kit/lens";
-import { type Box3, OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
+import {
+  type Box3,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Plane,
+  Raycaster,
+  Vector2,
+  Vector3,
+} from "three";
 
 export type Vec3 = [number, number, number];
 export type Offset = [number, number];
@@ -102,6 +110,57 @@ export function orientCamera(camera: RigCamera, look: Vector3, roll: number, rig
   const tanV = Math.tan((camera.fov * Math.PI) / 360);
   camera.rotateY(Math.atan(x * tanV * camera.aspect));
   camera.rotateX(Math.atan(-y * tanV));
+}
+
+type StillPose = { p: readonly number[]; l: readonly number[]; fov: number; roll: number };
+
+// The rig option that turns the camera as the shot plays (one pose cannot say where it looks), or null
+export const rigTurnsCamera = (rig: CameraRig | undefined) =>
+  rig?.lead ? "lead" : rig?.bank ? "bank" : rig?.look === "tangent" ? "look: tangent" : null;
+
+// The camera the film draws from this pose and rig (applyCameraRig, orientCamera, projectCamera), for one still frame
+function poseCamera(
+  pose: StillPose,
+  rig: CameraRig | undefined,
+  [w, h]: readonly [number, number],
+) {
+  const moving = rigTurnsCamera(rig);
+  if (moving)
+    throw new Error(
+      `the shot's rig ${moving} turns the camera as the shot plays, past what one pose holds`,
+    );
+  const cam = {
+    p: new Vector3().fromArray(pose.p as number[]),
+    l: new Vector3().fromArray(pose.l as number[]),
+    roll: pose.roll,
+  };
+  applyCameraRig(cam, 0, [0, 1], rig, () => cam);
+  const camera: RigCamera =
+    rig?.projection === "orthographic"
+      ? orthographicCamera(pose.fov, w / h)
+      : new PerspectiveCamera(pose.fov, w / h);
+  camera.position.copy(cam.p);
+  orientCamera(camera, cam.l, cam.roll, rig);
+  projectCamera(camera, w, h, rig);
+  camera.updateMatrixWorld();
+  return camera;
+}
+
+// Where a pixel of the picture (x right, y down, in a w x h frame) meets the plane axis = at: a reference's landmark
+// placed in our world. null when the ray never reaches the plane
+export function pixelOnPlane(
+  pose: StillPose,
+  rig: CameraRig | undefined,
+  [x, y]: readonly [number, number],
+  [w, h]: readonly [number, number],
+  plane: { axis: "x" | "y" | "z"; at: number },
+): Vec3 | null {
+  const camera = poseCamera(pose, rig, [w, h]);
+  const ray = new Raycaster();
+  ray.setFromCamera(new Vector2((x / w) * 2 - 1, 1 - (y / h) * 2), camera);
+  const normal = new Vector3(+(plane.axis === "x"), +(plane.axis === "y"), +(plane.axis === "z"));
+  const hit = ray.ray.intersectPlane(new Plane(normal, -plane.at), new Vector3());
+  return hit ? (hit.toArray() as Vec3) : null;
 }
 
 export function apertureOffset(
@@ -248,4 +307,18 @@ export function fitBoxFrame(
     .applyQuaternion(view.quaternion);
   const p = center.sub(ray);
   return { p, l: p.clone().addScaledVector(direction, distance) };
+}
+
+// The picture's right and up as world directions: a camera turned to face back along +z has its right on the world's -x,
+// where "move it right" by eye goes wrong
+export function screenAxes(
+  pose: StillPose,
+  rig: CameraRig | undefined,
+  frame: readonly [number, number],
+): { right: Vec3; up: Vec3 } {
+  const { quaternion } = poseCamera(pose, rig, frame);
+  return {
+    right: new Vector3(1, 0, 0).applyQuaternion(quaternion).toArray() as Vec3,
+    up: new Vector3(0, 1, 0).applyQuaternion(quaternion).toArray() as Vec3,
+  };
 }

@@ -734,3 +734,29 @@ test("render --compare preserves renders/.prev/, emits diff sheet, and surfaces 
   assert.equal(corrupt.status, 1, corrupt.stdout + corrupt.stderr);
   assert.match(corrupt.stderr, /compare renders\/still_1s\.jpg failed/);
 });
+
+test("REF refuses what would not put our picture beside the reference's frame, before building anything", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  copyDemo(dir);
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  mkdirSync(join(dir, "references"));
+  writeFileSync(join(dir, "references/ref.mp4"), "");
+  const render = (env, what = "stills") =>
+    spawnSync("bun", [RENDER, what], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, LIVE_PROJECT: dir, ...env },
+    });
+  const refused = (env, why, what) => {
+    const run = render(env, what);
+    assert.equal(run.status, 2, run.stdout + run.stderr);
+    assert.match(run.stderr, why);
+  };
+  refused({ REF: "references/missing.mp4" }, /REF references\/missing\.mp4 is no file in the film/);
+  refused({ REF: "references/ref.mp4" }, /REF goes with stills or poster/, "clip");
+  refused({ REF: "references/ref.mp4", CROP: "0,0,1,1" }, /REF and CROP draw another picture/);
+  refused({ REF: "references/ref.mp4", LIST: "1" }, /REF and LIST=1 draw another picture/);
+  refused({ REF_REGION: "0,0,0.5,0.5" }, /REF_REGION goes with REF=<reference video>/);
+});

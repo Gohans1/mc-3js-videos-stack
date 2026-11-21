@@ -81,6 +81,7 @@
     "sheet": "bun packages/live-studio/wrong-place.mjs sheet",
     "qc": "bun scripts/review/qc.ts",
     "framecheck": "bun packages/live-studio/wrong-place.mjs framecheck",
+    "sweep": "bun packages/live-studio/wrong-place.mjs sweep",
     "pace": "bun packages/live-studio/wrong-place.mjs pace",
     "deliver": "bun packages/live-studio/wrong-place.mjs deliver"
   },

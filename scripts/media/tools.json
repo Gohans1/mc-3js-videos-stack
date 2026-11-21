@@ -487,6 +487,15 @@
       }
     ]
   },
+  "camera": {
+    "name": "OpenCV camera motion and solve",
+    "summary": "motion: the camera's move, zoom and turn each frame and its whip pans; solve: one shot's camera from surveyed points (matchmove), with reprojection error. CPU.",
+    "python": "3.12",
+    "packages": ["opencv-python-headless==5.0.0.93", "numpy==2.5.5", "scipy==1.18.1"],
+    "worker": "scripts/media/camera.py",
+    "source": "https://github.com/opencv/opencv-python/tree/93",
+    "codeLicense": "Apache-2.0 (OpenCV); BSD-3-Clause (NumPy, SciPy)"
+  },
   "metadata": {
     "name": "BWF MetaEdit",
     "version": "26.08.1",

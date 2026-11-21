@@ -21,6 +21,7 @@
     "render": "bun node_modules/live-studio/render.mjs",
     "qc": "bun node_modules/live-studio/qc.mjs",
     "framecheck": "bun node_modules/live-studio/framecheck.mjs",
+    "sweep": "bun node_modules/live-studio/sweep.mjs",
     "voice:gen": "bun ../../scripts/voice/gen.ts",
     "voice:playground": "bun ../../scripts/voice/playground.mjs",
     "voice:align": "bun ../../scripts/voice/align.ts",

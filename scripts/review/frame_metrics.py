@@ -180,6 +180,101 @@ def cmd_compare(
   }
 
 
+def _luma(arr: np.ndarray) -> np.ndarray:
+  return arr[..., 0] * 0.2126 + arr[..., 1] * 0.7152 + arr[..., 2] * 0.0722
+
+
+def _sharpness(luma: np.ndarray) -> float:
+  """Variance of the 4-neighbour Laplacian (Pech-Pacheco 2000): it falls as an image blurs. Only comparable between
+  pictures of the same content at the same size."""
+  if luma.shape[0] < 3 or luma.shape[1] < 3:
+    return 0.0
+  lap = (
+    luma[:-2, 1:-1] + luma[2:, 1:-1] + luma[1:-1, :-2] + luma[1:-1, 2:] - 4 * luma[1:-1, 1:-1]
+  )
+  return float(lap.var())
+
+
+def _tones(arr: np.ndarray) -> dict[str, float]:
+  luma = _luma(arr)
+  hi = arr.max(axis=2)
+  sat = np.where(hi > 0, (hi - arr.min(axis=2)) / np.maximum(hi, 1e-9), 0.0)
+  p = lambda a, q: round(float(np.percentile(a, q)), 2)  # noqa: E731
+  return {
+    "lumaP5": p(luma, 5),
+    "lumaP50": p(luma, 50),
+    "lumaP95": p(luma, 95),
+    "satP50": p(sat, 50),
+    "satP95": p(sat, 95),
+    "sharpness": round(_sharpness(luma), 2),
+  }
+
+
+def _ratio(ours: float, ref: float) -> float | None:
+  return round(ours / ref, 3) if ref > 1e-9 else None
+
+
+def cmd_vs(
+  ref_path: str,
+  ours_path: str,
+  out_path: str | None,
+  picture_height: int | None,
+  region_raw: str | None,
+) -> dict:
+  """The reference frame beside ours at the size of ours (the picture alone, without a draft's strip): tones, and
+  sharpness to tell a blur from a lower resolution."""
+  with Image.open(ref_path) as im_r, Image.open(ours_path) as im_o:
+    ours = im_o.convert("RGB")
+    if picture_height:
+      if picture_height > ours.height:
+        raise ValueError(f"--picture-height {picture_height} is taller than {ours_path} ({ours.height})")
+      ours = ours.crop((0, 0, ours.width, picture_height))
+    ref = im_r.convert("RGB").resize(ours.size, Image.Resampling.LANCZOS)
+  w, h = ours.size
+  arr_r = np.asarray(ref, dtype=np.float64)
+  arr_o = np.asarray(ours, dtype=np.float64)
+  tr, to = _tones(arr_r), _tones(arr_o)
+  out: dict = {
+    "size": {"width": w, "height": h},
+    "reference": {"metrics": tr},
+    "ours": {"metrics": to},
+    "sharpnessRatio": _ratio(to["sharpness"], tr["sharpness"]),
+    "meanAbsDelta": round(float(np.abs(arr_o - arr_r).mean()), 2),
+  }
+  box = None
+  if region_raw:
+    x, y, rw, rh = _parse_rect(region_raw)
+    if not (0 <= x < 1 and 0 <= y < 1 and 0 < rw <= 1 - x + 1e-9 and 0 < rh <= 1 - y + 1e-9):
+      raise ValueError(f"--region {region_raw}: x,y,w,h in 0..1 inside the frame")
+    box = (round(x * w), round(y * h), max(round(x * w) + 3, round((x + rw) * w)), max(round(y * h) + 3, round((y + rh) * h)))
+    part_r, part_o = arr_r[box[1]:box[3], box[0]:box[2]], arr_o[box[1]:box[3], box[0]:box[2]]
+    sr, so = _sharpness(_luma(part_r)), _sharpness(_luma(part_o))
+    rgb = lambda a: [round(float(v), 1) for v in a.reshape(-1, 3).mean(axis=0)]  # noqa: E731
+    lr, lo = float(_luma(part_r).mean()), float(_luma(part_o).mean())
+    out["region"] = {
+      "rect": region_raw, "reference": round(sr, 2), "ours": round(so, 2), "sharpnessRatio": _ratio(so, sr),
+      # a set lit or painted off the reference's shows here: the mean colour and brightness of the same part
+      "rgb": {"reference": rgb(part_r), "ours": rgb(part_o)},
+      "luma": {"reference": round(lr, 1), "ours": round(lo, 1)}, "lumaRatio": _ratio(lo, lr),
+    }
+  if out_path:
+    header_h, gap = 36, 12
+    diff = Image.fromarray(np.clip(np.abs(arr_o - arr_r) * 3, 0, 255).astype(np.uint8))
+    sheet = Image.new("RGB", (w * 3 + gap * 2, h + header_h), (24, 24, 28))
+    font = _load_font(15)
+    draw = ImageDraw.Draw(sheet)
+    for i, (im, label) in enumerate([(ref, "REFERENCE"), (ours, "OURS"), (diff, "DIFF x3")]):
+      sheet.paste(im, (i * (w + gap), header_h))
+      draw.text((i * (w + gap) + 8, 9), label, fill=(210, 214, 224), font=font)
+      if box:
+        draw.rectangle([i * (w + gap) + box[0], header_h + box[1], i * (w + gap) + box[2] - 1, header_h + box[3] - 1], outline=(255, 224, 130))
+    dest = Path(out_path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    sheet.save(dest, **({"quality": 92} if dest.suffix.lower() in {".jpg", ".jpeg"} else {}))
+    out["out"] = str(dest)
+  return out
+
+
 def main() -> int:
   parser = argparse.ArgumentParser(
     prog="frame_metrics.py",
@@ -198,10 +293,19 @@ def main() -> int:
   p_cmp.add_argument("--out", help="Output path for labelled side-by-side comparison")
   p_cmp.add_argument("--threshold", type=float, default=4.0, help="Changed-pixel threshold (0..255)")
 
+  p_vs = sub.add_parser("vs", help="A reference frame beside ours: tones, sharpness, diff sheet")
+  p_vs.add_argument("reference", help="The reference frame (PNG)")
+  p_vs.add_argument("ours", help="Our still or poster")
+  p_vs.add_argument("--out", help="Output path for the reference | ours | diff sheet")
+  p_vs.add_argument("--picture-height", type=int, help="Lines of picture in ours, above a draft's strip")
+  p_vs.add_argument("--region", help="x,y,w,h in 0..1: sharpness, mean colour and brightness there too")
+
   args = parser.parse_args()
   try:
     if args.cmd == "box":
       out = cmd_box(args.image, args.rect, args.norm)
+    elif args.cmd == "vs":
+      out = cmd_vs(args.reference, args.ours, args.out, args.picture_height, args.region)
     else:
       out = cmd_compare(args.before, args.after, args.out, args.threshold)
   except (FileNotFoundError, ValueError, OSError) as exc:

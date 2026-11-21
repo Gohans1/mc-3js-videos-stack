@@ -8,7 +8,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { seenSound } from "./narration.ts";
-import { filmVideo, readRenderEvidence, renderCuts, renderIdentity } from "./video.mjs";
+import { drawnCuts, filmVideo, readRenderEvidence, renderIdentity } from "./video.mjs";
 
 const mixer = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
 
@@ -257,7 +257,7 @@ Prints the changed input and rerender advice when stale; prints nothing otherwis
   if (args.includes("--json")) {
     const render = filmVideo(root, video);
     console.log(
-      JSON.stringify({ render, stale, cuts: render && !stale ? renderCuts(root, video) : null }),
+      JSON.stringify({ render, stale, cuts: render ? drawnCuts(root, video, stale) : null }),
     );
   } else if (stale) console.log(stale.message);
 }

@@ -14,31 +14,11 @@ import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js
 
 import { clamp01, smooth } from "./ease";
 import { updaterTo } from "./matrices";
+import { BOX, facesOf } from "./skin-paint";
 
 export const PX = 1.875 / 32; // one skin pixel at the size the game draws a player
-const uvBox = (ox, oy, w, h, d) => ({
-  top: [ox + d, oy, w, d],
-  bottom: [ox + d + w, oy, w, d],
-  right: [ox, oy + d, d, h],
-  front: [ox + d, oy + d, w, h],
-  left: [ox + d + w, oy + d, d, h],
-  back: [ox + d + w + d, oy + d, w, h],
-});
 // Standard 64x64 Steve skin UV rects ([x, y, w, h]) for all 6 inner Layer-1 and 6 outer Layer-2 body boxes
-export const SKIN_UV = {
-  head: uvBox(0, 0, 8, 8, 8),
-  hat: uvBox(32, 0, 8, 8, 8),
-  body: uvBox(16, 16, 8, 12, 4),
-  jacket: uvBox(16, 32, 8, 12, 4),
-  armR: uvBox(40, 16, 4, 12, 4),
-  sleeveR: uvBox(40, 32, 4, 12, 4),
-  armL: uvBox(32, 48, 4, 12, 4),
-  sleeveL: uvBox(48, 48, 4, 12, 4),
-  legR: uvBox(0, 16, 4, 12, 4),
-  pantR: uvBox(0, 32, 4, 12, 4),
-  legL: uvBox(16, 48, 4, 12, 4),
-  pantL: uvBox(0, 48, 4, 12, 4),
-};
+export const SKIN_UV = Object.fromEntries(Object.entries(BOX).map(([k, box]) => [k, facesOf(box)]));
 const D = Math.PI / 180;
 const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
 // GLTFLoader strips ":" from node names (PropertyBinding.sanitizeNodeName), so "Arm:Left:Upper" is "ArmLeftUpper"
@@ -453,7 +433,7 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
     });
   // Keep near-white emissive restrained to skin glow (<= 0.08) so eyes/teeth never trip BloomEffect
   const whiteGlow = Math.min(0.08, Math.max(0, Number.isFinite(glow) ? glow : 0.08));
-  const white = layer(flat("#f4f4f4", whiteGlow), 0),
+  const white = layer(flat(faceColors?.white ?? "#f4f4f4", whiteGlow), 0),
     iris = layer(flat(initCol.irisCol, 0.12), 1),
     dark = layer(flat("#120d1c", 0), 2),
     lid = layer(flat(initCol.lidCol, 0.1), 3);
@@ -584,7 +564,16 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       rect(corners[0], -cw, cy, cSize, cSize);
       rect(corners[1], cw, cy, cSize, cSize);
     },
-    { meshes, recolor, white },
+    {
+      meshes,
+      recolor,
+      white,
+      // a hidden head hides the face; per-mesh visible is the face's own, set on every call
+      show: (on) => {
+        for (const m of [white, iris, dark, lid, browMat, mouthMat, teethMat, tongueMat])
+          m.visible = on;
+      },
+    },
   );
 };
 
@@ -607,6 +596,39 @@ export const FACES = [
   // game face's eyes would cover
   { id: "skin", title: "the skin's own face, nothing over it" },
 ];
+// Each body part's inner box and its second layer, for showParts
+const PART_LAYERS = {
+  head: ["head", "hat"],
+  body: ["body", "jacket"],
+  armR: ["armR", "sleeveR"],
+  armL: ["armL", "sleeveL"],
+  legR: ["legR", "pantR"],
+  legL: ["legL", "pantL"],
+};
+const skinRects = (ctx, box) => {
+  const s = Math.max(1, Math.round(ctx.canvas.width / 64));
+  return Object.values(box).map(([x, y, w, h]) => [x * s, y * s, w * s, h * s]);
+};
+const tintSkin = (ctx, tint) => {
+  for (const [box, hex] of tint)
+    for (const [x, y, w, h] of skinRects(ctx, box)) {
+      const img = ctx.getImageData(x, y, w, h),
+        d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        d[i] = Math.round((d[i] * ((hex >> 16) & 255)) / 255);
+        d[i + 1] = Math.round((d[i + 1] * ((hex >> 8) & 255)) / 255);
+        d[i + 2] = Math.round((d[i + 2] * (hex & 255)) / 255);
+      }
+      ctx.putImageData(img, x, y);
+    }
+};
+const hideSkinParts = (ctx, shown) => {
+  for (const [part, layers] of Object.entries(PART_LAYERS))
+    if (!shown.has(part))
+      for (const k of layers)
+        for (const [x, y, w, h] of skinRects(ctx, SKIN_UV[k])) ctx.clearRect(x, y, w, h);
+};
+
 // Paint face f's eye-row pixels onto ctx using the cheek tone sampled from immutable baseCtx
 const paintFacePixels = (ctx, baseCtx, f) => {
   if (!f.colour) return;
@@ -646,6 +668,7 @@ export type FaceColorValue =
   string | number | { readonly isColor: true; r: number; g: number; b: number };
 
 export interface FaceColorOverrides {
+  white?: FaceColorValue | null;
   lid?: FaceColorValue | null;
   iris?: FaceColorValue | null;
   brow?: FaceColorValue | null;
@@ -663,6 +686,7 @@ export async function makePlayer(
 ) {
   const savedFaceColors = faceColors
     ? {
+        white: faceColors.white != null ? new THREE.Color(faceColors.white) : null,
         lid: faceColors.lid != null ? new THREE.Color(faceColors.lid) : null,
         iris: faceColors.iris != null ? new THREE.Color(faceColors.iris) : null,
         brow: faceColors.brow != null ? new THREE.Color(faceColors.brow) : null,
@@ -695,6 +719,9 @@ export async function makePlayer(
   };
   let faceId = initialFace;
   let overlayFn = null;
+  let tint = null,
+    shown = null,
+    gameFace = null;
   let liveMap = skinTex(canvas);
   const redrawSkin = () => {
     const f = FACES.find((x) => x.id === faceId);
@@ -705,6 +732,7 @@ export async function makePlayer(
       ctx.clearRect?.(0, 0, canvas.width, canvas.height);
       ctx.drawImage(baseCanvas, 0, 0);
       if (f?.colour) paintFacePixels(ctx, baseCtx, f);
+      if (tint) tintSkin(ctx, tint);
       if (overlayFn) {
         ctx.save?.();
         try {
@@ -715,10 +743,13 @@ export async function makePlayer(
           ctx.restore?.();
         }
       }
+      if (shown) hideSkinParts(ctx, shown);
     } finally {
       ctx.restore?.();
     }
     liveMap.needsUpdate = true;
+    // lids and mouth take the skin as drawn, so a tinted or overlaid face blinks in its own colour
+    gameFace?.recolor(ctx);
   };
   redrawSkin();
   // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
@@ -770,8 +801,12 @@ export async function makePlayer(
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
-  let gameFace = null;
-  const ensureGameFace = () => (gameFace ??= makeFace(rig, b.head, baseCtx, glow, savedFaceColors));
+  const ensureGameFace = () => {
+    if (gameFace) return gameFace;
+    gameFace = makeFace(rig, b.head, ctx, glow, savedFaceColors);
+    gameFace.show(!shown || shown.has("head"));
+    return gameFace;
+  };
   if (initialFace === "game") ensureGameFace();
   const setFace = (id) => {
     const f = FACES.find((x) => x.id === id);
@@ -815,10 +850,33 @@ export async function makePlayer(
       prevMap.dispose();
     }
     redrawSkin();
-    gameFace?.recolor(baseCtx);
   };
   const paintSkinOverlay = (drawFn) => {
     overlayFn = typeof drawFn === "function" ? drawFn : null;
+    redrawSkin();
+  };
+  // parts: { [SKIN_UV name]: colour } multiplies those boxes' pixels, alpha kept (a face going red is { head: "#ff8a78" });
+  // null clears. It is drawn under paintSkinOverlay and kept across setSkin
+  const tintParts = (parts) => {
+    for (const k of Object.keys(parts ?? {}))
+      if (!SKIN_UV[k])
+        throw new Error(`tintParts: no part "${k}" (SKIN_UV: ${Object.keys(SKIN_UV).join(", ")})`);
+    const list = Object.entries(parts ?? {}).filter(([, c]) => c != null);
+    tint = list.length ? list.map(([k, c]) => [SKIN_UV[k], new THREE.Color(c).getHex()]) : null;
+    redrawSkin();
+  };
+  // Draws only these parts (each with its second layer), e.g. ["armR"] for a hand in close-up; null draws all again
+  const showParts = (parts) => {
+    for (const k of parts ?? [])
+      if (!PART_LAYERS[k])
+        throw new Error(`showParts: no part "${k}" (${Object.keys(PART_LAYERS).join(", ")})`);
+    shown = parts ? new Set(parts) : null;
+    const cut = shown ? 0.5 : 0;
+    if (inner.alphaTest !== cut) {
+      inner.alphaTest = cut;
+      inner.needsUpdate = true;
+    }
+    gameFace?.show(!shown || shown.has("head"));
     redrawSkin();
   };
   if (initMeta.hold) ensureGameFace()(...initMeta.hold);
@@ -1157,13 +1215,13 @@ export async function makePlayer(
     const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
     return [down, yaw, 0];
   };
-  // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
-  // The game face's eye whites: a colour (bloodshot pink, a glow) or null for the plain white
+  // The game face's eye whites: a colour (bloodshot pink, a glow) or null for the film's faceColors.white, else plain white
   const eyeWhite = (c = null) => {
     const w = ensureGameFace().white;
-    w.color.set(c ?? "#f4f4f4");
+    w.color.set(c ?? savedFaceColors?.white ?? "#f4f4f4");
     w.emissive.copy(w.color);
   };
+  // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
   const red = (on) => {
     for (const m of [inner, outer]) {
       m.color.setRGB(1, on ? 0.45 : 1, on ? 0.45 : 1);
@@ -1214,6 +1272,8 @@ export async function makePlayer(
     setSkin,
     paintSkinOverlay,
     eyeWhite,
+    tintParts,
+    showParts,
     red,
     setFace,
   };

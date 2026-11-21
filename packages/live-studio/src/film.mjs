@@ -71,7 +71,21 @@ export const heardLength = (project, conf) => {
   };
   const edit = read("src/edit.json");
   if (typeof edit?.end !== "number") return null;
-  setTiming(read(conf.timingTimeline) ?? {}, warp(edit.voice?.warp ?? [], edit.end, 0, 1));
+  const fromSource = (s) => warp(edit.voice?.warp ?? [], s, 0, 1);
+  // a shot on the output clock moves its camera through Speed and Freeze (scripts/at.ts builds the same shots)
+  const shots = read(conf.shotsTimeline);
+  setTiming(
+    read(conf.timingTimeline) ?? {},
+    fromSource(edit.end),
+    Array.isArray(shots)
+      ? shots
+          .filter((s) => Number.isFinite(s?.t))
+          .map((s) => ({
+            t: fromSource(s.t),
+            ...(s.cameraClock && { cameraClock: s.cameraClock }),
+          }))
+      : [],
+  );
   return { film: timingClock.duration, layers: Math.max(timingClock.duration, layerDuration()) };
 };
 

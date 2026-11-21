@@ -1,16 +1,17 @@
 // One frame of the film on the picture, with the studio's overlays on the frame on screen only, and the final-quality copy
 // of it on demand
+import { EDIT } from "film/edit";
 import type { Draw } from "film/scene";
 
 import { makeAccumulator } from "../../render/accum";
 import { equalJson } from "../../src/merge-edits.mjs";
 import { shutterBounds, shutterTimes } from "../../src/shutter";
-import { timingClock } from "../../src/timing-state.mjs";
+import { cameraCutSeconds, timingClock } from "../../src/timing-state.mjs";
 import { drawCamPath } from "../camera/campath";
 import { AWAY, PHONE } from "../core/device";
+import type { FreeView } from "../core/engine";
 import { shotEnd, shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
-import type { FreeView } from "../core/engine";
 import { onWake, S } from "../core/state";
 import { get, invalidatePictures, set } from "../core/store";
 import { FPS } from "../core/time";
@@ -54,7 +55,13 @@ const renderShutter = async (
   if (!film || !preview.motionBlur || preview.clean || S.playing || S.tools?.free.on || t !== S.t)
     return renderAt(t);
   const i = shotIndex(t);
-  const [from, to] = shutterBounds(t, SHOTS_OUT[i]?.t ?? 0, shotEnd(i), timingClock.segments);
+  const [from, to] = shutterBounds(
+    t,
+    SHOTS_OUT[i]?.t ?? 0,
+    shotEnd(i),
+    timingClock.segments,
+    cameraCutSeconds(EDIT.cam),
+  );
   const times = shutterTimes(t, FPS, 4, from, to, SHOTS_OUT[i]?.shutter);
   if (times.length < 2) return renderAt(t);
   const renderer = film.tools.renderer;

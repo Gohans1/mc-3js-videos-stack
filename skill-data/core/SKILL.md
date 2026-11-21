@@ -30,7 +30,7 @@ Load one topic on demand with `bun run skills get core --ref <topic>` (repeat `-
 | ----------------------------- | -------------------------------------------------------------- |
 | references/film.md            | New films, file maps, vault and isolated test films            |
 | references/contract.md        | Scene hooks, effects, custom HTML, open schemas and extensions |
-| references/review.md          | Picture/text/pacing checks, frame order and reference videos   |
+| references/review.md          | Picture/text/pacing checks, frame order, reference videos and remakes |
 | references/render.md          | Rendering, cache, output configuration and encode checks       |
 | references/sound.md           | Sound selection, mixing, levels and earshot                    |
 | references/voice.md           | Takes, generation, alignment, lip sync and assembly            |
@@ -76,9 +76,9 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Local media tools               | bun run media --help / media list / media doctor — local audio stems/beats/locate/VAD/denoise, OCR/vision/tracking, OTIO, QC and FFmpeg; see --ref sound and --ref review                                                                                                 |
 | Discover media and NLE tools    | Run bun run media ffmpeg list, then schema cut for the native parser. Pass native arguments after --. Use bun run media qc --contract to find optional checks.                                                                                                            |
 | Choose a review check           | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion.                                                                                                                                                              |
-| Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps.                                                                                                                         |
+| Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps. bun run sweep ranks a whole draft against the reference: pops, stutters, blur, light, cuts |
 | Check arbitrary seeking         | CHECK=order bun run render stills; optional sampled comparison of two capture orders                                                                                                                                                                                      |
-| Study a reference video         | bun run reference inspect <video-or-URL> for frames, captions and search; study/compare for timing; pair with scenes, media and earshot; see --ref review                                                                                                                 |
+| Study a reference video         | bun run reference add <video> puts it in references/ (H.264 copy when needed); inspect <video-or-URL> for frames, captions and search; study for cuts, whips and hits; compare <ref> <draft> for how alike the render is; solve <shot.json> matchmoves a shot's camera; pair with scenes, media and earshot; see --ref review                     |
 | Select, place and edit sound    | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound                                                                                                                                                                                 |
 | Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                                                                                                                            |
 | Measure audio levels            | bun run listen; level measurements cannot identify a sound or decide whether it fits                                                                                                                                                                                      |
@@ -133,5 +133,9 @@ Exit 0 means the command completed; 1 usually indicates a job/data failure, and 
 | Vault audio changed but listen uses cache | bun run listen --fresh                                                                 |
 | Wrong directory                           | Move to the root or films/<name> as the error says                                     |
 | earshot unavailable                       | earshot doctor; read INSTALL.md                                                        |
+| Editing a file                            | The Edit tool, not sed -i or a python replace: a pattern that matches nothing changes nothing and says nothing |
+| A long Python job                         | python -u and write results as it goes, with a deadline; a timeout loses whatever was not written |
+| A one-off Python script                   | uv run --no-project --with numpy python -I script.py states its packages; another tool's venv (earshot's) is its own |
+| Shortlisting pack assets                  | bun run asset pick <ids> --no-build as each is chosen, unpick the rejects, then bun run link <film> at the repo root builds once: pack/picks.json outlives a compacted context, a list in chat does not |
 
 Gap reporting does not gate creativity or automatically justify another command. Logs belong to the current checkout; commit and synchronize them separately when sharing is needed.

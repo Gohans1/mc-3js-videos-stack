@@ -50,7 +50,7 @@ test("the report names the long shot, the hold with what the narration says over
     hold: 8,
   }).join("\n");
   expect(r).toMatch(/shots: 3, mean 13\.33 s/);
-  expect(r).toMatch(/longest: shot 1 at 5\.00-25\.00 \(20\.00 s\)/);
+  expect(r).toMatch(/longest: 5\.00-25\.00 \(20\.00 s\)/);
   expect(r).toMatch(/HOLD 5\.00-25\.00 \(20\.0 s\)[^\n]*"the door opens\."/);
   expect(r).toMatch(/under narration: cut to what the words say/);
   expect(r).toMatch(/first 30 s: 4 new pictures, the first cut at 5\.00/);
@@ -158,7 +158,7 @@ test("deliver's re-encoded stretch is no whole film either", () => {
 test("cuts written by hand out of order are read in order; a negative second is no cut", () => {
   const sorted = paceOn("renders/draft_video.mp4", clip, "[1.5, 0.5]");
   expect(sorted.status).toBe(0);
-  expect(sorted.stdout).toMatch(/longest: shot 1 at 0\.50-1\.50 \(1\.00 s\)/);
+  expect(sorted.stdout).toMatch(/longest: 0\.50-1\.50 \(1\.00 s\)/);
   // one cut written twice is one cut, not a shot of no length
   const twice = paceOn("renders/draft_video.mp4", clip, "[1, 1]");
   expect(twice.status).toBe(0);

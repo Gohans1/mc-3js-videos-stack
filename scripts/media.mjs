@@ -5,11 +5,11 @@ import { fileURLToPath } from "node:url";
 
 import { cliArgs, numberArg } from "../packages/live-studio/src/cli.mjs";
 import { ffmpegCli } from "./media/ffmpeg.mjs";
+import { MEDIA_HOME as HOME, mediaPython as python } from "./media/home.mjs";
 import { runMediaJob } from "./media/job.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const TOOLS = JSON.parse(readFileSync(join(ROOT, "scripts/media/tools.json"), "utf8"));
-const HOME = resolve(process.env.MC_MEDIA_HOME || join(ROOT, "vault/tools/media"));
 const PYTHON_STDIO = { PYTHONIOENCODING: "utf-8" };
 const BUNDLED = {
   id: "ffmpeg",
@@ -40,7 +40,7 @@ const TOOL_GROUPS = [
       "metadata",
     ],
   ],
-  ["Visual", ["ocr", "vision", "tapir", "track"]],
+  ["Visual", ["ocr", "vision", "tapir", "track", "camera"]],
   ["Finish", ["ffmpeg", "qc", "timeline"]],
 ];
 const ALL_TOOL_IDS = [...Object.keys(TOOLS), BUNDLED.id];
@@ -85,8 +85,6 @@ const fail = (message) => {
   console.error(`${message}; bun run media --help`);
   process.exit(2);
 };
-const python = (id) =>
-  join(HOME, id, "env", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
 const runtimeVersions = (binaries) =>
   Object.fromEntries(
     binaries.map((binary) => {

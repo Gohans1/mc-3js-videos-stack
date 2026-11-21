@@ -118,6 +118,7 @@ const SCRIPTS = {
   render: "bun node_modules/live-studio/render.mjs",
   qc: "bun node_modules/live-studio/qc.mjs",
   framecheck: "bun node_modules/live-studio/framecheck.mjs",
+  sweep: "bun node_modules/live-studio/sweep.mjs",
   check: "bun node_modules/live-studio/check.mjs",
   help: "bun node_modules/live-studio/help.mjs",
   // the repo's commands typed in a film: bun would run the system fmt or link, or say only "Script not found"

@@ -1,12 +1,18 @@
 // src/video.mjs: where a render's video starts on the film's clock, read from its name in either slash (videoStart), and what ffprobe reads of it (probeVideo)
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { probeVideo, videoStart } from "../src/video.mjs";
+import {
+  filmPicture,
+  joinedCuts,
+  probeVideo,
+  videoStart,
+  writeRenderEvidence,
+} from "../src/video.mjs";
 
 test("a chunk starts at its number times 30 s, a final chunk too, whichever slash the path has", () => {
   assert.deepEqual(videoStart("renders/chunks/c02.mp4"), {
@@ -52,4 +58,49 @@ test("probeVideo reads a video's size and rate, and says a picture is none", (t)
   assert.deepEqual(probeVideo(join(dir, "v.mp4")), { width: 64, height: 36, fps: 30 });
   assert.equal(probeVideo(join(dir, "p.png")), null);
   assert.equal(probeVideo(join(dir, "none.mp4")), null);
+});
+
+// a draft is the picture with a strip under it (render/page.ts): comparing it with a reference takes the picture alone
+test("a film draft's picture is its top at the film's ratio; a final or a video outside renders/ has no strip", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "video-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": { ratio: "9:16" } }));
+  const make = (name, size) =>
+    assert.equal(
+      spawnSync("ffmpeg", [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        `color=c=gray:s=${size}:r=30:d=0.2`,
+        "-pix_fmt",
+        "yuv420p",
+        join(dir, name),
+      ]).status,
+      0,
+    );
+  make("renders/draft_video.mp4", "36x68");
+  make("renders/final_video.mp4", "36x64");
+  make("draft_video.mp4", "36x68");
+  assert.deepEqual(filmPicture(dir, "renders/draft_video.mp4"), { width: 36, height: 64 });
+  assert.equal(filmPicture(dir, "renders/final_video.mp4"), null);
+  assert.equal(filmPicture(dir, "draft_video.mp4"), null);
+});
+
+// a CHUNKS run joins chunks drawn at different times: each brings the cuts it was drawn with over its own 30 s
+test("a joined draft's cuts are each chunk's own over its seconds, or none when a chunk recorded none", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "joined-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const chunk = (i, cuts) => {
+    const file = join(dir, `c0${i}.mp4`);
+    writeFileSync(file, `chunk ${i}`);
+    if (cuts) writeRenderEvidence(file, { cuts });
+    return file;
+  };
+  const old = chunk(0, [2.6, 30, 41]);
+  const now = chunk(1, [3.1, 30, 45.5]);
+  assert.deepEqual(joinedCuts([old, now], 30), [2.6, 30, 45.5]);
+  assert.equal(joinedCuts([old, chunk(2, null)], 30), null);
 });

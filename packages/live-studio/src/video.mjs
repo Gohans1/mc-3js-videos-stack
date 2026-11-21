@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import { ratioOf, sizeOf } from "./frame.ts";
+
 // Where a rendered video sits on the film's heard clock, read from its name (render.mjs names them so):
 //   renders/chunks/cNN.mp4, renders/final_chunks/cNN.mp4  NN*30 s on (render.mjs CHUNK)
 //   renders/span_<from>-<to>.mp4                           a SPAN run's, <from> s on
@@ -42,6 +44,30 @@ export function writeRenderEvidence(file, data) {
 }
 
 const validCuts = (cuts) => Array.isArray(cuts) && cuts.every((n) => Number.isFinite(n) && n >= 0);
+
+// The cuts a render was drawn with. A picture older than the film (stale) keeps only those recorded with its own file:
+// renders/cuts.json is the current edit's
+export const drawnCuts = (root, video, stale) => {
+  const found = renderCuts(root, video);
+  return stale && found.status === "legacy"
+    ? {
+        status: "unavailable",
+        reason: "renders/cuts.json is the current edit's, not this older picture's",
+      }
+    : found;
+};
+
+// A CHUNKS run joins chunks drawn at different times (files in film order, length seconds each): each brings the cuts
+// it was drawn with over its own seconds; null when one recorded none
+export const joinedCuts = (files, length) => {
+  const cuts = [];
+  for (const [i, file] of files.entries()) {
+    const own = readRenderEvidence(file)?.cuts;
+    if (!validCuts(own)) return null;
+    cuts.push(...own.filter((c) => c >= i * length && c < (i + 1) * length));
+  }
+  return cuts;
+};
 
 export function renderCuts(root, video) {
   const file = resolve(root, video);
@@ -106,6 +132,22 @@ export const filmVideo = (root, video) => {
     start: Number.isFinite(data?.start) && data.start >= 0 ? data.start : where.start,
     mixed: /^renders\/(draft|final)\.mp4$/.test(rel),
   };
+};
+
+// The picture of a film render a draft's strip (heard time, shot) sits under: its top { width, height } at the film's
+// ratio (package.json "live-studio".ratio, 16:9 by default), or null when the video is no film render or has no strip
+export const filmPicture = (root, video) => {
+  const file = resolve(root, video);
+  if (!filmVideo(root, file)) return null;
+  const size = probeVideo(file);
+  if (!size) return null;
+  let pkg = null;
+  try {
+    pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+  } catch {}
+  const [w, h] = sizeOf(ratioOf(pkg), 16);
+  const height = Math.trunc((size.width * h) / w / 2) * 2;
+  return height < size.height ? { width: size.width, height } : null;
 };
 
 // A video's stream as ffprobe reads it ({ width, height, fps }), or null for a picture (ffprobe reads one as a one-frame

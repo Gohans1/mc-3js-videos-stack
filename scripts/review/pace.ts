@@ -94,7 +94,7 @@ export const paceReport = ({
   short?: boolean;
 }) => {
   const edges = [0, ...cuts.filter((c) => c > 0 && c < length), length];
-  const shots = edges.slice(1).map((b, i) => ({ i, a: edges[i], b, len: b - edges[i] }));
+  const shots = edges.slice(1).map((b, i) => ({ a: edges[i], b, len: b - edges[i] }));
   const lens = shots.map((s) => s.len).toSorted((p, q) => p - q);
   const mean = length / shots.length,
     median = lens[Math.floor(lens.length / 2)],
@@ -122,7 +122,7 @@ export const paceReport = ({
   const mid = worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0;
   return [
     `shots: ${shots.length}, mean ${s2(mean)} s, median ${s2(median)} s (${short ? "popular Shorts: about 2.5-4.7 s" : "popular films since 2000: about 4 s"})`,
-    `  longest: ${longest.map((s) => `shot ${s.i} at ${s2(s.a)}-${s2(s.b)} (${s2(s.len)} s)`).join(", ")}`,
+    `  longest: ${longest.map((s) => `${s2(s.a)}-${s2(s.b)} (${s2(s.len)} s)`).join(", ")}`,
     `  lengths vary by ${Math.round(spread * 100)}% of the mean (shots all one length read flat: mix short, medium, long)`,
     `  mean by quarter of the film: ${quarter.join(" ")} s (${short ? "a Short opens at full pace and keeps the picture switching steadily to the end" : "films tend to open on longer shots and shorten into the climax"})`,
     `new pictures: ${news.length - 1}, one every ${s2(length / news.length)} s`,

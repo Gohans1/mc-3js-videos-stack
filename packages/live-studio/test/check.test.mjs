@@ -215,6 +215,40 @@ test("a misspelt package.json live-studio key is named as a warning: its file wo
   assert.doesNotMatch(r.stdout, /"myOwn"/);
 });
 
+// a film made before a command joined the template has no script for it: bun run says only "Script not found"
+// a script runs a file next to the film (node_modules/live-studio, ../../scripts in films/<name>): one whose file a
+// project outside the repo lacks is not offered
+test("commands the template film has and this film's scripts lack are named on one line with what to add", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "node_modules/live-studio"), { recursive: true });
+  for (const f of ["sweep.mjs", "framecheck.mjs"])
+    writeFileSync(join(dir, "node_modules/live-studio", f), "");
+  const { scripts } = JSON.parse(
+    readFileSync(join(STUDIO, "../../templates/film/package.json"), "utf8"),
+  );
+  const { sweep, framecheck, pace, ...older } = scripts;
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      scripts: { ...older, studio: "bun node_modules/live-studio/src/live.mjs 4400" },
+      "live-studio": {},
+    }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const said = r.stdout.split("\n").filter((l) => l.includes("the template film has"));
+  assert.deepEqual(said, [
+    `⚠ package.json lacks scripts the template film has (bun run says only "Script not found"): add to its "scripts" ${JSON.stringify({ framecheck, sweep }).slice(1, -1)}`,
+  ]);
+  assert.match(
+    pace,
+    /\.\.\/\.\.\/scripts\//,
+    "pace runs a file this folder has not, so it is left out",
+  );
+});
+
 test("a file with faults from two checks is one problem, all its faults under it", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -356,6 +390,149 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
   assert.doesNotMatch(r.stdout, /"zoomRate"/);
 });
 
+// a film with the demo's scene, a 10 s reference study of these hits (none when hits is null) and these sound effects
+// ("line" is its narration); refs(dir) adds files under references/
+const coverageFilm = (t, hits, sfx, refs) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  mkdirSync(join(dir, "sound/sfx"), { recursive: true });
+  for (const [name, hz] of [
+    ["line", 440],
+    ["door_slam", 880],
+  ]) {
+    const ff = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", `sine=d=0.5:f=${hz}`, `sound/sfx/${name}.wav`],
+      { cwd: dir },
+    );
+    assert.equal(ff.status, 0, String(ff.stderr));
+  }
+  if (hits) {
+    mkdirSync(join(dir, "renders/reference/ref/run-1"), { recursive: true });
+    writeFileSync(
+      join(dir, "renders/reference/ref/run-1/study.json"),
+      JSON.stringify({ fps: 30, duration: 10, picture: { cuts: [] }, sound: { hits } }),
+    );
+  }
+  if (refs) {
+    mkdirSync(join(dir, "references"));
+    refs(dir);
+  }
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({ beds: [], narration: "line", sfx }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/cam.json"),
+    JSON.stringify([
+      { t: 0, p: [0, 1, -3], l: [0, 1, 0] },
+      { t: 5, p: [1, 1, -3], l: [0, 1, 0] },
+    ]),
+  );
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        soundTimeline: "src/timeline/audio.json",
+        sfx: "sound/sfx",
+        camTimeline: "src/timeline/cam.json",
+      },
+    }),
+  );
+  const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  return JSON.parse(r.stdout);
+};
+
+// coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
+test("check --json gives the reference coverage, matching sound hits with effects only, and warns of a guide sound", (t) => {
+  const { coverage, warnings } = coverageFilm(
+    t,
+    [{ at: 0 }, { at: 2 }, { at: 6 }],
+    [
+      { name: "line", at: 0, gain: 0, guide: true },
+      { name: "door_slam", at: 2, gain: 0 },
+    ],
+  );
+  assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
+  assert.ok(
+    warnings.some((w) => /guide sound "line": drafts play it; bun run mix refuses a final/.test(w)),
+  );
+  assert.ok(!warnings.some((w) => /"guide": no key the studio reads/.test(w)));
+  assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
+});
+
+// a remake scratches with the reference's own narration: check names it until its rows are guides
+test("check warns of an unstudied reference and of a sound that is a reference's file, until its rows are guides", (t) => {
+  const film = (guide) =>
+    coverageFilm(
+      t,
+      null,
+      [
+        { name: "line", at: 0, gain: 0, guide },
+        { name: "line", at: 4, gain: 0, guide },
+        { name: "door_slam", at: 2, gain: 0 },
+      ],
+      (dir) => {
+        cpSync(join(dir, "sound/sfx/line.wav"), join(dir, "references/vox.wav"));
+        writeFileSync(join(dir, "references/ref.mp4"), "not studied");
+      },
+    ).warnings;
+  const scratch = film(false);
+  assert.deepEqual(
+    scratch.filter((w) => /byte for byte/.test(w)),
+    [
+      `⚠ src/timeline/audio.json "line" is references/vox.wav byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
+    ],
+  );
+  assert.ok(
+    scratch.some((w) =>
+      /^⚠ references\/ref\.mp4 has no study.*bun run reference study references\/ref\.mp4$/.test(w),
+    ),
+  );
+  assert.ok(!film(true).some((w) => /byte for byte/.test(w)));
+});
+
+// a study hears every onset, the voice's syllables too: only its strong accents are the cues a remake must hit
+test("coverage asks for the reference's strong hits only, met by an effect starting up to half a second early", (t) => {
+  const { coverage } = coverageFilm(
+    t,
+    [
+      { at: 2, strength: 0.9 },
+      { at: 4, strength: 0.2 },
+      { at: 6, strength: 0.7 },
+      { at: 8, strength: 0.6 },
+    ],
+    [
+      { name: "door_slam", at: 1.6, gain: 0 },
+      { name: "door_slam", at: 4, gain: 0 },
+      { name: "door_slam", at: 7.2, gain: 0 },
+    ],
+  );
+  // a whoosh starts before the beat its peak lands on (1.6 for 2); 7.2 is too early for 8
+  assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
+});
+
+// the build throws on an unknown tone map; check is where an AI looks after editing edit.json
+test("a tone map name the film-stage does not have is a fault in edit.json, with the near name", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(
+    join(dir, "src/edit.json"),
+    JSON.stringify({ ...edit, look: { ...edit.look, toneMapping: "Neutral" } }),
+  );
+  const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  assert.match(r.stderr, /look\.toneMapping "Neutral": .*did you mean "neutral"\?/);
+});
+
 test("check names a transition or anim one letter off a built-in, and leaves a film's own name alone", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -494,6 +671,53 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
 });
 
 // on-screen words have to be read before they go, and a line too small is mush on a phone: both warnings, never refusals
+// captions cut per spoken phrase, as a Short's are, run faster than a subtitle: one line for them all, not one each,
+// so the warnings under them still get read
+test("check says many captions too brief to read in one line, naming the first three; --json lists each", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  const brief = (count) => {
+    const items = Array.from({ length: count }, (_, n) => ({
+      kind: "text",
+      text: `word ${n + 1}`,
+      from: n + 1,
+      to: n + 1.4,
+    }));
+    items.push({ kind: "text", text: "tiny", size: 24, from: 8, to: 9.5 });
+    writeFileSync(join(dir, "src/timeline/text.json"), JSON.stringify({ items }));
+    const run = (args) =>
+      spawnSync("bun", [CHECK, ...args], { cwd: dir, encoding: "utf8", timeout: 60000 });
+    const text = run([]),
+      json = run(["--json"]);
+    assert.equal(text.status, 0, text.stdout + text.stderr);
+    const pace = (lines) => lines.filter((w) => /Netflix's subtitle pace/.test(w));
+    return {
+      said: pace(text.stdout.split("\n")),
+      listed: pace(JSON.parse(json.stdout).warnings),
+      text,
+    };
+  };
+  const many = brief(5);
+  assert.equal(many.said.length, 1, many.said.join("\n"));
+  assert.match(
+    many.said[0],
+    /^⚠ src\/timeline\/text\.json 5 items show for less than a reader needs .*: items\[0\] "word 1" at 1\.00 heard, 0\.40 s of 0\.83; items\[1\] "word 2" at 2\.00 heard, 0\.40 s of 0\.83; items\[2\] "word 3" at 3\.00 heard, 0\.40 s of 0\.83; and 2 more/,
+  );
+  assert.match(many.text.stdout, /items\[5\] "tiny" .*size 24/);
+  // a reader of --json fixes each one: every item keeps its own line there
+  assert.equal(many.listed.length, 5);
+  // three are said one by one
+  assert.equal(brief(3).said.length, 3);
+});
+
 test("check warns of text shown too briefly to read and text too small for a phone, each with the seconds it plays", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

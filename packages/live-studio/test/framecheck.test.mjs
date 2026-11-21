@@ -81,15 +81,75 @@ const flip = (file) => {
   ]);
 };
 
+// a remake copies its reference's moves: a jump the reference makes at the same heard second is not the first to look at
+test("a jump the reference makes too is said so; one it does not is OURS ONLY", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  mkdirSync(join(dir, "references"));
+  flip(join(dir, "references/ref.mp4"));
+  const same = framecheck(dir);
+  assert.equal(same.status, 0, same.stdout + same.stderr);
+  assert.match(same.stdout, /JUMP 1\.00: .*; ref jumps too/);
+  media(join(dir, "calm.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const calm = framecheck(dir, "--vs", "calm.mp4", "--json");
+  assert.equal(calm.status, 0, calm.stdout + calm.stderr);
+  const report = JSON.parse(calm.stdout);
+  assert.equal(report.reference, "calm.mp4");
+  const jump = report.findings.find((f) => f.kind === "JUMP");
+  assert.equal(jump.reference.ours, true);
+  assert.match(
+    jump.reference.said,
+    /^OURS ONLY: ours changes \d+\.\d%, the reference 0\.0% a frame$/,
+  );
+  assert.ok(jump.reference.oursChange > 0.3);
+  // a reference busy every frame (a smeared whip measures under our sharp one) moves as fast: no pop of ours, and one
+  // change between two stills is a single jump (a cut the render did not record), not a move in steps
+  media(join(dir, "busy.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2,noise=alls=100:allf=t",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const busy = framecheck(dir, "--vs", "busy.mp4");
+  assert.equal(busy.status, 0, busy.stdout + busy.stderr);
+  assert.match(
+    busy.stdout,
+    /JUMP 1\.00: .*; the reference moves fast here too \(\d+\.\d% a frame, ours \d+\.\d%\)/,
+  );
+});
+
+test("a --vs video that is not there stops framecheck before it measures", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  const out = framecheck(dir, "--vs", "nope.mp4");
+  assert.equal(out.status, 2);
+  assert.match(out.stderr, /no nope\.mp4: --vs takes the reference video/);
+  assert.doesNotMatch(out.stdout, /frames,/);
+});
+
 test("a SPAN run's video is measured on the film's clock, with only the cuts inside it", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/span_9-11.mp4"));
-  writeFileSync(join(dir, "renders/cuts.json"), "[3, 50]");
+  const cuts = join(dir, "renders/cuts.json");
+  writeFileSync(cuts, "[3, 50]");
+  // written before the span, the list is the render's own
+  const before = new Date(Date.now() - 60_000);
+  utimesSync(cuts, before, before);
   const out = framecheck(dir, "renders/span_9-11.mp4");
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /film seconds from 9 s on \(the span's start\)/);
   assert.match(out.stdout, /0 cuts known/);
   assert.match(out.stdout, /JUMP 10\.00/);
+  assert.match(out.stdout, /\(the render records no cut here; a planned freeze or pop can stay\)/);
 });
 
 test("a fault's picture is the frame before it, the frame, and the frame after", (t) => {
@@ -167,6 +227,57 @@ test("a stale picture is measured without jump exemptions from the current edit"
   assert.match(out.stdout, /STALE/);
   assert.match(out.stdout, /JUMP 1\.00/);
   assert.doesNotMatch(out.stdout, /bun run at /);
+});
+
+// a move the reference makes every frame that ours makes in steps, a dead frame between them, is a stutter of ours
+test("jumps with a still frame between them while the reference keeps moving are OURS STEPS", (t) => {
+  const dir = film(t, "16:9");
+  media(join(dir, "renders/draft_video.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2[a];color=c=white:s=16x16:r=30:d=2[b];[a][b]overlay=x='mod(8*floor(n/3),48)':y=10",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  mkdirSync(join(dir, "references"));
+  media(join(dir, "references/ref.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2[a];color=c=white:s=16x16:r=30:d=2[b];[a][b]overlay=x='abs(mod(t*300,96)-48)':y=10",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const out = framecheck(dir, "--json");
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  const jumps = JSON.parse(out.stdout).findings.filter((f) => f.kind === "JUMP");
+  assert.ok(jumps.length > 3, JSON.stringify(jumps));
+  for (const jump of jumps)
+    assert.match(
+      jump.reference.said,
+      /^OURS STEPS: ours stops dead \(\d+\.\d% a frame\) beside it/,
+    );
+});
+
+// CHUNKS=1 bun run render clip joins chunk 0 as it was drawn: the draft is stale for the timeline, while the cuts it was
+// drawn with, the reference and the strip under the picture are still its own
+test("a draft joining an older chunk keeps its recorded cuts and its reference", (t) => {
+  const dir = film(t, "16:9");
+  const video = join(dir, "renders/draft_video.mp4");
+  flip(video);
+  writeRenderEvidence(video, { cuts: [0.5], oldChunks: [0] });
+  mkdirSync(join(dir, "references"));
+  flip(join(dir, "references/ref.mp4"));
+  const out = framecheck(dir, "--json");
+  assert.equal(out.status, 0, out.stdout + out.stderr);
+  assert.match(out.stderr, /STALE/);
+  const report = JSON.parse(out.stdout);
+  assert.deepEqual(report.cutsUsed, [0.5]);
+  assert.equal(report.reference, "references/ref.mp4");
+  const jump = report.findings.find((f) => f.kind === "JUMP");
+  assert.match(jump.reference.said, /^ref jumps too/);
+  assert.doesNotMatch(out.stderr, /bun run at /);
 });
 
 test("a fault in the upload's picture is drawn again by render final, never by render clip", (t) => {

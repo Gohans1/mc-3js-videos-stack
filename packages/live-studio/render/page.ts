@@ -2,12 +2,14 @@
 // The page render.mjs opens in a headless Chrome: draws frames with the film's own draw(t), the same code the studio shows,
 // and encodes clips in the browser (mediabunny on WebCodecs, GPU H.264). Same t, same picture.
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
+import { EDIT } from "live-studio/edit";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
 import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
-import { apertureSamples, shutterBounds, shutterTimes } from "../src/shutter";
-import { timingClock } from "../src/timing-state.mjs";
+import { renderCost } from "../src/render-cost.mjs";
+import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
+import { renderCutTimes, timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
@@ -64,27 +66,24 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
+  // a shot's start or a camera key with cut: true: framecheck, the shutter, CHECK=motion/order and the cost line stop there
+  const cuts = renderCutTimes(
+    SHOTS.slice(1).map((s) => s.t),
+    EDIT.cam,
+  );
   if (cfg.clip)
     await post(
       "/cuts",
       JSON.stringify({
-        times: SHOTS.slice(1).map((s) => s.t),
+        times: cuts,
         variants: (render.variants ?? []).map((v) => v.id),
       }),
     );
   // CHECK=name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
   // an item { still, canvas } is written as renders/<still>
   const builtin = {
-    order: orderCheck(
-      render,
-      DURATION,
-      SHOTS.map((s) => s.t),
-    ),
-    motion: motionCheck(
-      render,
-      cfg,
-      SHOTS.map((s) => s.t),
-    ),
+    order: orderCheck(render, DURATION, [0, ...cuts]),
+    motion: motionCheck(render, cfg, cuts),
     seen: seenCheck(render, cfg),
     touch: touchCheck(render),
     text: textCheck(render, cfg),
@@ -215,8 +214,13 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
 
   // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
+  const whips = { frames: 0, most: 0 };
+  const cost = cfg.clip ? renderCost(cuts) : null;
+  // the camera samples the last frame drew, a whip's restarted ones too: the cost line divides a frame's time by them
+  let drawn = 0;
   const draw = async (frame, samples, viewName = null) => {
     const t = frame / FPS;
+    drawn = 0;
     ctx.globalAlpha = 1;
     const i = shotAt(t) - 1;
     const shutter = SHOTS[i]?.shutter;
@@ -225,8 +229,9 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       SHOTS[i]?.t ?? 0,
       SHOTS[i + 1]?.t ?? DURATION,
       timingClock.segments,
+      cuts,
     );
-    const times = shutterTimes(t, FPS, samples, from, to, shutter);
+    let times = shutterTimes(t, FPS, samples, from, to, shutter);
     const pupils = apertureSamples(
       !cfg.draft && render.tools?.apertureSampling ? (shutter?.apertureSamples ?? 1) : 1,
       frame,
@@ -234,6 +239,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     if (times.length === 1 && pupils.length === 1) {
       if (render.renderFrame) await render.renderFrame(t);
       else render(t);
+      drawn = 1;
       ctx.drawImage(canvas, 0, 0);
     } else {
       // in the film's own context when it shares its renderer (draw.tools.renderer): no copy through the CPU per sample
@@ -250,12 +256,29 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
       }
       acc.reset();
-      for (const at of times) {
+      const camera = render.tools?.camera;
+      let facing = null;
+      for (let k = 0; k < times.length; k++) {
         for (const aperture of pupils) {
           const options = aperture ? { aperture } : undefined;
-          if (render.renderFrame) await render.renderFrame(at, options);
-          else render(at, options);
+          if (render.renderFrame) await render.renderFrame(times[k], options);
+          else render(times[k], options);
+          drawn++;
           acc.add(canvas);
+        }
+        const e = camera?.matrixWorld?.elements;
+        if (k > 1 || !e || times.length < 2 || times.length > samples) continue;
+        const now = [-e[8], -e[9], -e[10]];
+        if (k === 0) facing = now;
+        else {
+          const more = samplesForTurn(times.length, facing, now, camera.fov, cfg.H);
+          if (more > times.length) {
+            times = shutterTimes(t, FPS, more, from, to, shutter);
+            whips.frames++;
+            whips.most = Math.max(whips.most, times.length);
+            acc.reset();
+            k = -1;
+          }
         }
       }
       ctx.drawImage(acc.resolve(), 0, 0);
@@ -392,6 +415,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     });
     output.addVideoTrack(source, { frameRate: FPS });
     await output.start();
+    // frame to frame, so the GPU's work and the encoder's wait count too, not only what the CPU hands the GPU
+    let mark = performance.now();
     for (let f = first; f <= last; f++) {
       const sample = new VideoSample(await draw(f, cfg.clip.samples), {
         timestamp: (f - first) / FPS,
@@ -399,10 +424,18 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       });
       await source.add(sample);
       sample.close();
+      const now = performance.now();
+      cost.add(f / FPS, now - mark, drawn);
+      mark = now;
       alive(f);
     }
     await output.finalize();
     return output.target.buffer;
+  };
+  const whipped = () => {
+    const said = whips.frames ? ` (${whips.frames} fast-turning frames up to x${whips.most})` : "";
+    whips.frames = whips.most = 0;
+    return said;
   };
   // a SPAN run draws one video of just those frames and leaves every chunk as it is
   if (cfg.clip?.span) {
@@ -417,8 +450,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     }
     await post("/span", await encode(first, last, cfg.clip.bitrate));
     log(
-      `span: ${last - first + 1} frames x${cfg.clip.samples} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+      `span: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
     );
+    const said = cost.line();
+    if (said) log(said);
     await done();
     return;
   }
@@ -439,9 +474,11 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         [first, last] = ranges[index];
       await post(`/chunk/${index}`, await encode(first, last, cfg.clip.bitrate));
       log(
-        `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+        `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
       );
     }
+    const said = cost.line();
+    if (said) log(said);
   }
   await done(cfg.clip ? chunks : undefined);
 })();

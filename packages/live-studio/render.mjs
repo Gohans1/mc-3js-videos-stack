@@ -26,6 +26,7 @@ import { chunksOf, ratioOf, sizeOf, spanOf } from "./src/frame.ts";
 import { killProcessTree } from "./src/kill-process.mjs";
 import { compileLayerTiming } from "./src/layer-timing.mjs";
 import { narrationLines, seenSound } from "./src/narration.ts";
+import { noteNudge } from "./src/note-cli.mjs";
 import { openFilmResource } from "./src/openfilm.mjs";
 import {
   fallbackTimingDuration,
@@ -38,7 +39,7 @@ import { audioInfo } from "./src/sound.mjs";
 import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
-import { writeRenderEvidence } from "./src/video.mjs";
+import { joinedCuts, writeRenderEvidence } from "./src/video.mjs";
 import { parseViews } from "./src/views.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
 import { writeVoiceMap } from "./src/voice-map.mjs";
@@ -59,17 +60,20 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
 A clip or final run keeps every chunk already rendered from the same film code, data and settings, and renders the rest:
 after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
 edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
-when the page goes quiet for 4 minutes mid-video.
+when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: wall ms a camera sample per
+stretch between cuts (its median frame), naming one over twice the median of the others and 33 ms (a heavy set to look into).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options are environment variables:
   AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)
   LIST=1                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
-                             A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot
+                             A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot. The
+                             picture is the frame's top at the film's ratio (720x1280 of a 9:16 draft's 720x1352):
+                             crop=iw:iw*16/9:0:0 (16:9: iw*9/16); framecheck, reference compare and REF= cut it off
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
   SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   SAMPLES=16                 temporal shutter samples a frame for clip, final or poster (1-64; clip 1, final and poster 8): more is
-                             smoother blur, slower
+                             smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by itself, up to 64
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
@@ -77,6 +81,11 @@ Nothing is written outside the film. Options are environment variables:
                              renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
                              view_*.jpg; also accepts VIEWS=@views.json ({ name: [7 nums] } or [{ name, cam }])
   CROP=x,y,w,h               stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
+  REF=references/ref.mp4     stills/poster only: each picture beside the reference's frame at the same second (its exact
+                             frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
+                             sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
+                             says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
+                             brightness ours/reference
   COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
@@ -97,7 +106,10 @@ Nothing is written outside the film. Options are environment variables:
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
   CHECK=probe:<t>, CHECK="probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
                              or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
-                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts)
+                             quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
+                             screen=[x0,y0..x1,y1] in 0..1 of the frame, "past top 0.12": that far beyond the edge, in frames;
+                             with an aperture (fstop > 0) the header says where the lens focuses and each target its blur in px:
+                             the lens's own, as a final with shutter.apertureSamples shows it; the DOF post pass (drafts, and finals without it) tops out short of strong blur
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
   RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
@@ -122,6 +134,8 @@ const ENV_OPTIONS = [
   "SAMPLES",
   "RES",
   "CROP",
+  "REF",
+  "REF_REGION",
   "RENDER_FRESH_CACHE",
 ];
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
@@ -232,6 +246,32 @@ if (
   console.error(
     `ENTRY=${process.env.ENTRY} is no file in the film (${lab.length ? `its pages: ${lab.map((f) => `lab/${f}`).join(", ")}` : "it has no lab/ pages yet"}); without ENTRY it renders the film itself`,
   );
+  process.exit(2);
+}
+// REF: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
+const vsVideo = process.env.REF ? resolve(PROJECT, process.env.REF) : null;
+if (process.env.REF !== undefined) {
+  const other =
+    ["INSPECT", "VIEWS", "CROP", "ENTRY"].find((k) => process.env[k] !== undefined) ??
+    (process.env.LIST === "1" ? "LIST=1" : null);
+  const why = !process.env.REF
+    ? "names no video"
+    : !statSync(vsVideo, { throwIfNoEntry: false })?.isFile()
+      ? `${process.env.REF} is no file in the film`
+      : !["stills", "poster"].includes(what)
+        ? "goes with stills or poster"
+        : other
+          ? `and ${other} draw another picture than the reference's`
+          : null;
+  if (why) {
+    console.error(
+      `REF ${why}: REF=references/ref.mp4 AT=2.5 bun run render stills (or poster, the upload's size, for sharpness)`,
+    );
+    process.exit(2);
+  }
+}
+if (process.env.REF_REGION !== undefined && !vsVideo) {
+  console.error("REF_REGION goes with REF=<reference video>");
   process.exit(2);
 }
 const FPS = 30,
@@ -513,13 +553,19 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 // bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
-if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS))
+if (at.length && what !== "poster" && !views && !env.ENTRY && existsSync(RENDERS)) {
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
       preservedThisRun.add(f);
       rmSync(join(RENDERS, f), { force: true });
     }
+  const moved = [...preservedThisRun];
+  if (moved.length)
+    console.log(
+      `moved the last run's ${moved.length === 1 ? "still" : `${moved.length} stills`} to renders/.prev/ (${moved.slice(0, 8).join(", ")}${moved.length > 8 ? `, ${moved.length - 8} more` : ""}): renders/ keeps only this run's`,
+    );
+}
 const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
@@ -1047,7 +1093,7 @@ const nextHint =
       : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
@@ -1087,6 +1133,42 @@ if (!failed && compare && stillsWritten.length) {
       }
     }
   }
+}
+
+if (!failed && vsVideo && stillsWritten.length) {
+  const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
+  for (const rel of stillsWritten) {
+    const second = /_(\d+(?:\.\d+)?)s\.(?:jpg|png)$/.exec(rel)?.[1];
+    if (!second) continue;
+    const out = `renders/vs_${basename(rel, extname(rel))}.jpg`;
+    const r = spawnSync(
+      process.execPath,
+      [
+        qcCli,
+        "vs",
+        vsVideo,
+        join(PROJECT, rel),
+        "--at",
+        second,
+        "--picture-height",
+        String(H),
+        "--out",
+        join(PROJECT, out),
+        ...(process.env.REF_REGION ? ["--region", process.env.REF_REGION] : []),
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 180_000 },
+    );
+    if (r.status === 0) console.log(r.stdout.trimEnd().replace(join(PROJECT, out), out));
+    else {
+      console.log(`ERROR vs ${rel}: ${(r.stderr || r.error?.message || "qc vs failed").trim()}`);
+      failed = true;
+    }
+  }
+  // the pairs come after the stills: the next step stays the last line
+  if (!failed && !chunks && !span)
+    console.log(
+      `next: open ${stillsWritten.length > 1 ? "the renders/vs_*.jpg pictures" : `renders/vs_${basename(stillsWritten[0], extname(stillsWritten[0]))}.jpg`} to look (reference | ours | diff)${nextHint}`,
+    );
 }
 
 if (span && !failed && existsSync(join(RENDERS, SPAN_FILE))) {
@@ -1142,7 +1224,7 @@ if (!failed && chunks) {
     // older mouths: the record of the last whole draw stays, so src/stale.mjs still sees a narration moved since
     if (j.status === 0) {
       writeRenderEvidence(join(RENDERS, JOINED), {
-        cuts: old.length ? null : encodedCuts,
+        cuts: old.length ? joinedCuts(all, CHUNK) : encodedCuts,
         seenSound: old.length ? null : seenJson,
         pictureChoices,
         ...(old.length ? { oldChunks: old } : {}),
@@ -1163,6 +1245,8 @@ if (!failed && chunks) {
   }
 }
 if (failed) console.log("next: fix what the ERROR above says, then run the same render again");
+const notesWaiting = noteNudge(PROJECT);
+if (notesWaiting) console.log(notesWaiting);
 await ended({
   say: failed
     ? `Render ${what} failed`

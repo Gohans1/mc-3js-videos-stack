@@ -1,5 +1,5 @@
 // What the page plays itself (options to try, beat sounds, the live sound lanes) runs on the mix's clock: the <audio> element
-// plays the mix, and every 50 ms each player schedules what is due in the next quarter second against it
+// plays the mix, and every 50 ms each player schedules what is due in the next LOOKAHEAD seconds against it
 import { S, wake } from "../core/state";
 
 let ctx: AudioContext | null = null,
@@ -67,6 +67,9 @@ export const addPlayer = (p: Player) => {
   players.push(p);
 };
 
+// A main-thread stall longer than this starts a one-shot late, its head cut (a quarter second cut 190 ms off sounds under
+// jank); what is scheduled but not yet heard is stopped by silence() on a seek or an edit, so a long window costs nothing
+const LOOKAHEAD = 1;
 let sounding: AudioScheduledSourceNode[] = [],
   anchor: { base: number; speed: number; from: number } | null = null;
 export const hasSounding = () => sounding.length > 0;
@@ -127,7 +130,7 @@ const tick = () => {
     anchor = { base, speed, from: now };
   }
   const a = anchor,
-    until = now + 0.25 * speed;
+    until = now + LOOKAHEAD * speed;
   const ctxAt = (at: number) => a.base + at / speed;
   const w: Window = {
     now,

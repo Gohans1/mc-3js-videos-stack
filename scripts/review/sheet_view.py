@@ -333,7 +333,66 @@ def extract_displayed_frame(video, dest, seek, *, origin=0, compact=False, canva
     return actual
 
 
-def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock):
+def load_caption_font(ImageFont, size=18):
+    for candidate in (
+        "C:/Windows/Fonts/consola.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Menlo.ttc",
+    ):
+        if Path(candidate).is_file():
+            try:
+                return ImageFont.truetype(candidate, size)
+            except OSError:
+                pass
+    try:
+        return ImageFont.load_default(size=size)
+    except TypeError:
+        return ImageFont.load_default()
+
+
+def pair_with_reference(ours, reference, dest):
+    """reference | ours at the size of ours; the reference fits the picture, top-aligned, so a draft's strip stays under ours."""
+    width, height = image_dimensions(ours)
+    fit = f"scale=w={width}:h={height}:force_original_aspect_ratio=decrease,setsar=1,pad={width}:{height}:(ow-iw)/2:0:black"
+    left = ["-i", str(reference)] if reference else ["-f", "lavfi", "-i", f"color=black:s={width}x{height}"]
+    command(["ffmpeg", "-nostdin", "-v", "error", "-y", *left, "-i", str(ours), "-filter_complex",
+             f"[0:v]{fit},format=yuvj420p[r];[1:v]setsar=1,format=yuvj420p[o];[r][o]hstack=inputs=2",
+             "-frames:v", "1", "-q:v", "2", str(dest)])
+    # the side is named on the picture: a reviewer handed a bare pair has blamed ours for the reference's own logos
+    from PIL import Image, ImageDraw, ImageFont
+    with Image.open(dest) as opened:
+        pair = opened.convert("RGB")
+    draw = ImageDraw.Draw(pair)
+    font = load_caption_font(ImageFont, max(12, height // 40))
+    for x, label in ((0, "REFERENCE" if reference else "REFERENCE (none at this second)"), (width, "OURS")):
+        box = draw.textbbox((x + 8, 8), label, font=font)
+        draw.rectangle((box[0] - 6, box[1] - 4, box[2] + 6, box[3] + 4), fill=(0, 0, 0))
+        draw.text((x + 8, 8), label, fill=(255, 255, 255), font=font)
+    pair.save(dest, quality=92)
+
+
+def rule_grid(frame, step, crop):
+    """The frame cut to crop (x0, y0, x1, y1 in its pixels) with a line every step px, each labelled with its own pixel."""
+    from PIL import Image, ImageDraw, ImageFont
+    x0, y0, x1, y1 = crop
+    with Image.open(frame) as opened:
+        picture = opened.convert("RGB").crop((x0, y0, x1, y1))
+    draw = ImageDraw.Draw(picture, "RGBA")
+    font = load_caption_font(ImageFont, 12)
+    for x in range(-(-x0 // step) * step, x1, step):
+        draw.line([(x - x0, 0), (x - x0, y1 - y0)], fill=(255, 255, 255, 170))
+        draw.text((x - x0 + 2, 1), str(x), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
+    for y in range(-(-y0 // step) * step, y1, step):
+        draw.line([(0, y - y0), (x1 - x0, y - y0)], fill=(255, 255, 255, 170))
+        if y - y0 >= 14:  # the top row holds the x labels
+            draw.text((2, y - y0 + 1), str(y), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
+    picture.save(frame, quality=92)
+
+
+def review(video, mode, spec, start, first, stop, origin, stream, render_context, clock, vs=None, grid=None):
     try:
         times = samples(spec, mode, start + first, stop - first, clock)
     except ValueError as e:
@@ -341,6 +400,14 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
         raise SystemExit(2)
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
+    if grid:
+        width, height = display_size(stream)
+        crop = grid["crop"] or [0, 0, width, height]
+        if not (0 <= crop[0] < crop[2] <= width and 0 <= crop[1] < crop[3] <= height):
+            print(f"--crop {','.join(map(str, crop))} must lie inside the {width}x{height} picture, x0 < x1 and y0 < y1",
+                  file=sys.stderr)
+            raise SystemExit(2)
+        grid = {"step": grid["step"], "crop": crop}
     context, lines, cuts = timeline_context(render_context, clock)
     if context["status"] != "ready":
         print(f"context {context['status']}: {context['reason']}", file=sys.stderr)
@@ -355,13 +422,16 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
                    "duration": stop - first,
                    "width": stream["width"], "height": stream["height"]},
         "context": context,
+        "reference": {"path": str(Path(vs).resolve()), "clock": "file"} if vs else None,
         "entries": [],
     }
     at_end = timeline_length(Path.cwd()) if context.get("timeline") == "fresh" else 0
     for i, t in enumerate(times):
         entry = {"requestedTime": t}
         entry["commands"] = {"frames": {
-            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t)],
+            "argv": ["bun", "run", "sheet", str(Path(video).resolve()), "frames", seconds(t),
+                     *(["--vs", str(Path(vs).resolve())] if vs else []),
+                     *(["--grid", str(grid["step"]), "--crop", ",".join(map(str, grid["crop"]))] if grid else [])],
             "env": {"START": seconds(start)},
         }}
         if t < at_end:
@@ -370,25 +440,50 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
             entry.update({"sheet": str(out / f"overview_{i // 16 + 1:02d}.jpg"), "cell": i % 16 + 1})
         else:
             entry["frame"] = str(out / f"frame_{i:03d}.jpg")
+            if grid:
+                entry["grid"] = grid
+            if vs:
+                entry["vs"] = str(out / f"vs_{i:03d}.jpg")
         data["entries"].append(entry)
     index.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
     print(f"index: {index}", flush=True)
     print(f"{clock} seconds from {start:g}", flush=True)
+    if vs:
+        print(f"pairs: reference | ours, {Path(vs).name} at the same heard second (its file second, its exact frame)", flush=True)
     ended = job(Path.cwd(), "sheet", f"Extracting {len(times)} {mode} samples from {Path(video).name}")
     try:
         displayed = presentation_times(video, origin)
         for entry in data["entries"]:
             entry["seekTime"] = displayed_time(displayed, entry["requestedTime"] - start)
         aspects = sample_aspects(video, origin, data["entries"][-1]["seekTime"])
+        if vs:
+            ref_first, ref_stop, ref_origin, _ = video_bounds(vs)
+            ref_times = presentation_times(vs, ref_origin)
+            ref_seeks = {e["requestedTime"]: displayed_time(ref_times, e["requestedTime"]) for e in data["entries"]
+                         if ref_first <= e["requestedTime"] < ref_stop}
+            ref_aspects = sample_aspects(vs, ref_origin, max(ref_seeks.values())) if ref_seeks else {}
         canvas = None
         for i, entry in enumerate(data["entries"]):
-            dest = str(out / f"tile_{i:03d}.jpg") if mode == "overview" else entry["frame"]
+            dest = str(out / f"{'ours' if vs else 'tile'}_{i:03d}.jpg") if mode == "overview" else entry["frame"]
             aspect = aspects.get(round(entry["seekTime"], 9))
             entry["sampleAspectRatio"] = str(aspect) if aspect is not None else None
             entry["sourceTime"] = extract_displayed_frame(video, dest, entry["seekTime"], origin=origin,
                                                           compact=mode == "overview", canvas=canvas, aspect=aspect)
             if mode == "overview" and canvas is None:
                 canvas = image_dimensions(dest)
+            if grid:
+                rule_grid(dest, grid["step"], grid["crop"])
+            if vs:
+                seek = ref_seeks.get(entry["requestedTime"])
+                ref_dest = out / f"reference_{i:03d}.jpg"
+                entry["reference"] = None if seek is None else {"frame": str(ref_dest), "sourceTime": extract_displayed_frame(
+                    vs, ref_dest, seek, origin=ref_origin, aspect=ref_aspects.get(round(seek, 9)))}
+                pair_with_reference(dest, ref_dest if seek is not None else None,
+                                    out / f"tile_{i:03d}.jpg" if mode == "overview" else entry["vs"])
+                if mode == "overview":
+                    Path(dest).unlink()
+                    ref_dest.unlink(missing_ok=True)
+                    entry["reference"] = entry["reference"] and {"sourceTime": entry["reference"]["sourceTime"]}
             entry["time"] = start + entry["sourceTime"]
             requested = entry["requestedTime"]
             if context["shots"] != "unavailable":
@@ -397,7 +492,7 @@ def review(video, mode, spec, start, first, stop, origin, stream, render_context
             if spoken:
                 entry["narration"] = {k: spoken[0][k] for k in ("text", "s", "e")}
             if mode == "frames":
-                print(f"{entry['time']:g}s\t{entry['frame']}", flush=True)
+                print(f"{entry['time']:g}s\t{entry.get('vs', entry['frame'])}", flush=True)
         if mode == "overview":
             command(["ffmpeg", "-nostdin", "-v", "error", "-y", "-framerate", "1",
                      "-i", "tile_%03d.jpg", "-vf", "tile=4x4", "-q:v", "2",

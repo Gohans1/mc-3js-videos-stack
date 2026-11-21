@@ -497,7 +497,7 @@ export const sts = async (
   const provider = opts.provider ?? (elKey ? "elevenlabs" : "genvoice");
   if (provider !== "elevenlabs") {
     throw new Error(
-      "Speech-to-Speech (Voice Changer) requires ELEVENLABS_API_KEY (api.genvoice.pro/v1 returns 405 on /speech-to-speech)",
+      "Speech-to-Speech (Voice Changer) here requires ELEVENLABS_API_KEY (api.genvoice.pro/v1 returns 405 on /speech-to-speech); with a GenVoice key: bun run voice:playground sources add <recording>, then voice:playground generate voice-changer (schema generate voice-changer shows its input)",
     );
   }
   const { apiKey, apiBase } = resolveVoiceProvider({ ...opts, provider: "elevenlabs" }, env);

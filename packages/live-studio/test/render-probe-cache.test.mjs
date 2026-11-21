@@ -581,6 +581,11 @@ test("projectBoundsToScreen handles perspective, near-plane straddling, offscree
   );
   assert.equal(floor.x0, 0);
   assert.equal(floor.x1, 1);
+  assert.equal(
+    floor.past,
+    undefined,
+    "a box the near plane cuts reaches past every edge unbounded",
+  );
 
   const rightBox = new THREE.Box3(new THREE.Vector3(20, 0.5, -1), new THREE.Vector3(21, 1.5, 0));
   const right = projectBoundsToScreen(rightBox, new THREE.Vector3(20.5, 1, -0.5), camera);
@@ -615,6 +620,24 @@ test("projectBoundsToScreen handles perspective, near-plane straddling, offscree
     [orthoScreen.x0, orthoScreen.y0, orthoScreen.x1, orthoScreen.y1],
     [0.25, 0.25, 0.75, 0.75],
   );
+  assert.equal(orthoScreen.past, undefined);
+});
+
+// hiding a head past the top edge took 3 wrong-way tries when the rect stopped at 0: how far past each edge is said
+test("projectBoundsToScreen says how far past each edge, in frames, a cut-off box reaches", () => {
+  const ortho = new THREE.OrthographicCamera(-4, 4, 2, -2, 0.1, 20);
+  ortho.position.set(0, 0, 5);
+  ortho.lookAt(0, 0, 0);
+  ortho.updateMatrixWorld(true);
+  ortho.updateProjectionMatrix();
+  const head = projectBoundsToScreen(
+    new THREE.Box3(new THREE.Vector3(3, 1, -0.5), new THREE.Vector3(5, 2.5, 0.5)),
+    new THREE.Vector3(4, 1.75, 0),
+    ortho,
+  );
+  assert.equal(head.inView, true);
+  assert.equal(head.y0, 0);
+  assert.deepEqual(head.past, { top: 0.125, right: 0.125 });
 });
 
 test("probeCheck restores tools.free on success and error, and maps sceneT under non-identity timing", async () => {
@@ -676,6 +699,42 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
   } finally {
     setTiming({}, 0);
   }
+});
+
+// a soft target is a focus question: where the lens focused and how blurred each target is, in a 1920-wide frame's px
+test("probeCheck says where the lens focuses and how blurred each target is", async () => {
+  const scene = new THREE.Scene();
+  const camera = makePerspectiveCamera();
+  const near = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial());
+  near.position.set(0, 1, 3);
+  const far = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshBasicMaterial());
+  far.position.set(0, 1, 0);
+  scene.add(near, far);
+  const optics = { mm: 50, fstop: 2, focusM: 2, focusTarget: "near" };
+  const objects = [
+    [near, "near"],
+    [far, "far"],
+  ];
+  const probe = (tools) =>
+    probeCheck(
+      Object.assign(() => {}, { tools }),
+      {},
+      async () => {},
+    )("*", 1);
+  const lines = await probe({ scene, camera, optics, objects });
+  assert.match(lines[0], / focus 2\.00 m on near, f\/2, 50 mm /);
+  // the focus distance is the near box's: it is sharp; 3 m past focus, the far box blurs by blurPx's circle of confusion
+  assert.match(
+    lines.find((l) => l.startsWith("  near")),
+    / blur 0\.0 px/,
+  );
+  assert.match(
+    lines.find((l) => l.startsWith("  far")),
+    / blur 20\.5 px/,
+  );
+  // with no aperture the lens is all sharp, and nothing is said of focus
+  const pinhole = await probe({ scene, camera, optics: { ...optics, fstop: 0 }, objects });
+  assert.doesNotMatch(pinhole.join("\n"), /focus|blur/);
 });
 
 // ---------------- render CLI validation tests ----------------

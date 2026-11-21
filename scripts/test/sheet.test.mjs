@@ -91,7 +91,12 @@ test("sheet shots on a chunk lays out the shots of that chunk, in film seconds",
   const sheet = film(t, [10, 61, 62], "renders/chunks/c02.mp4");
   const r = sheet("renders/chunks/c02.mp4", "shots");
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /3 shots: a frame from the middle of each, in order \(shot 1 first\)/);
+  assert.match(
+    r.stdout,
+    /3 shots between the render's cuts: a frame from the middle of each, in order/,
+  );
+  // a render's cuts count camera keys with cut: true too, so these are no shots.json rows to number
+  assert.doesNotMatch(r.stdout, /shot \d+ first/);
   assert.match(r.stdout, /60\.5s, 61\.5s, 62\.5s/);
 });
 
@@ -192,7 +197,7 @@ test("sheet shots counts the shots it lays out", (t) => {
   const sheet = film(t, [1, 1.03]);
   const r = sheet("renders/draft_video.mp4", "shots");
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.match(r.stdout, /2 shots: a frame from the middle of each/);
+  assert.match(r.stdout, /2 shots between the render's cuts: a frame from the middle of each/);
 });
 
 test("a start between two thousandths still holds the frames cut lays out next to it", (t) => {

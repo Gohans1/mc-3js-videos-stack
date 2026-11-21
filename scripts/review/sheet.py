@@ -10,10 +10,18 @@
   bun run sheet renders/draft_video.mp4 shots    the whole film at a glance: one frame from the middle of every shot
   bun run sheet renders/draft_video.mp4 overview bounded compact overview, or overview 10-20/16 for a closer look
   bun run sheet renders/draft_video.mp4 frames 10,20-21/8  persistent native frames; no render, download or model
+  bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4
+                                                 each frame beside the reference's at the same heard second (its file
+                                                 second, its exact frame), reference | ours, to vs_*.jpg; overview takes it too
+  bun run sheet references/ref.mp4 frames 7.2 --grid 50 [--crop 100,500,1000,1600]
+                                                 each frame ruled every 50 px and labelled in the video's own pixels
+                                                 (--crop x0,y0,x1,y1 keeps that region at full size): read where a
+                                                 landmark sits for bun run reference solve's uv
   bun run sheet renders/draft_video.mp4 cut 4    a transition up close: 6 frames from 0.25 s before cut 4 to 0.35 s after,
-                                                 naming the shots either side (cut 4: shot 4 into 5, numbered from 0 as everywhere)
-                                                 and the transition between them (shotsTimeline row 5 .transition)
-                                                 (shots and cuts from renders/cuts.json, the render clip that made the video)
+                                                 (cuts from renders/cuts.json, the render clip that made the video: the shots'
+                                                 starts and camera keys with cut: true); when the cuts are the shots' starts alone it
+                                                 names the shots either side (cut 4: shot 4 into 5, from 0) and the transition
+                                                 between them (shotsTimeline row 5 .transition); shots shows each stretch between cuts
 Use film seconds for film renders, file seconds for other videos, or START for a manual offset. TIMES accepts 65, 1:05
 or 01:05.250. The shots and cut modes require a current film render at its original offset. Worth a look: a note's (bun run notes), a line's (bun run voice:cues),
 a fault's (bun run framecheck), either side of a cut (renders/cuts.json).
@@ -45,7 +53,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from seconds import heard_second, meant  # noqa: E402
 from stale import render_context  # noqa: E402
 from sheet_view import (  # noqa: E402
-    compact_filter, displayed_time, extract_displayed_frame, image_dimensions, presentation_times,
+    compact_filter, displayed_time, extract_displayed_frame, image_dimensions, load_caption_font, presentation_times,
     review, sample_aspects, seconds, timeline_length, video_bounds,
 )
 from studio_tell import tell  # noqa: E402
@@ -64,26 +72,6 @@ if args[:1] == ["help"] or "-h" in args or "--help" in args:
 def usage(why, code=2):
     print(why, file=sys.stderr)
     raise SystemExit(code)
-
-
-def load_caption_font(ImageFont, size=18):
-    for candidate in (
-        "C:/Windows/Fonts/consola.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Menlo.ttc",
-    ):
-        if Path(candidate).is_file():
-            try:
-                return ImageFont.truetype(candidate, size)
-            except OSError:
-                pass
-    try:
-        return ImageFont.load_default(size=size)
-    except TypeError:
-        return ImageFont.load_default()
 
 
 def caption_labels(paths):
@@ -251,9 +239,31 @@ def cuts_of(context):
 USE = "bun run sheet, bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
 pos = []
 out_arg = None
+vs_arg = None
+grid_arg = None
+crop_arg = None
 i = 0
 while i < len(args):
     a = args[i]
+    if a == "--vs" or a.startswith("--vs="):
+        if vs_arg is not None:
+            usage("--vs may only be passed once")
+        vs_arg = a.split("=", 1)[1] if "=" in a else args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith("-") else ""
+        if not vs_arg:
+            usage("--vs needs the reference video: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
+        i += 1 if "=" in a else 2
+        continue
+    if a in ("--grid", "--crop"):
+        if i + 1 >= len(args):
+            usage(f"{a} needs a value: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")
+        if (grid_arg if a == "--grid" else crop_arg) is not None:
+            usage(f"{a} may only be passed once")
+        if a == "--grid":
+            grid_arg = args[i + 1]
+        else:
+            crop_arg = args[i + 1]
+        i += 2
+        continue
     if a == "--out":
         if out_arg is not None:
             usage("--out may only be passed once")
@@ -291,6 +301,29 @@ elif mode == "frames":
     valid_count = len(args) == 3
 else:
     valid_count = len(args) in (0, 2, 3) and (len(args) == 3) == (mode == "cut")
+if vs_arg is not None and mode not in ("overview", "frames"):
+    usage("--vs goes with frames or overview: bun run sheet renders/draft_video.mp4 frames 37-38/12 --vs references/ref.mp4")
+if vs_arg is not None and not Path(vs_arg).is_file():
+    usage(f"no {vs_arg}: --vs takes the reference video in the film, as references/ref.mp4")
+if vs_arg is not None or grid_arg is not None:
+    try:
+        import PIL  # noqa: F401
+    except ImportError as e:
+        usage(f"Pillow (PIL) is required to label {'--vs pairs' if vs_arg is not None else 'a --grid'}: {e}", 1)
+grid = None
+if crop_arg is not None and grid_arg is None:
+    usage("--crop goes with --grid: bun run sheet references/ref.mp4 frames 7.2 --grid 50 --crop 100,500,1000,1600")
+if grid_arg is not None:
+    if mode != "frames" or vs_arg is not None:
+        usage("--grid goes with frames, one video at a time (no --vs): bun run sheet references/ref.mp4 frames 7.2 --grid 50")
+    if not re.fullmatch(r"[1-9]\d*", grid_arg):
+        usage(f"--grid takes a pixel step, as --grid 50; got {grid_arg}")
+    crop = None
+    if crop_arg is not None:
+        if not re.fullmatch(r"\d+,\d+,\d+,\d+", crop_arg):
+            usage(f"--crop takes x0,y0,x1,y1 in the video's pixels, as 100,500,1000,1600; got {crop_arg}")
+        crop = [int(n) for n in crop_arg.split(",")]
+    grid = {"step": int(grid_arg), "crop": crop}
 if not valid_count:
     why = ("cut takes a number: bun run sheet <video> cut 4" if mode == "cut" else
            "the video needs its seconds too" if len(args) == 1 else f"one video at a time, got {len(args)} words")
@@ -332,19 +365,19 @@ if args:
     end = math.nextafter(picture_to, -math.inf)
 
     if mode in ("overview", "frames"):
-        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock)
+        review(video, mode, args[2] if len(args) == 3 else None, start, first, stop, origin, stream, context, clock, vs=vs_arg, grid=grid)
         raise SystemExit
 
     if mode == "shots":
         ends = cuts_of(context)
-        before = sum(c <= picture_from for c in ends)
         edges = [picture_from, *[c for c in ends if picture_from < c < picture_to], picture_to]
         # a shot under 0.05 s has no frame of its own to show; a video that short shows its one frame
         shots = [(a, b) for a, b in zip(edges, edges[1:]) if b - a > 0.05] or [(edges[0], edges[-1])]
         secs = [min((a + b) / 2, end) for a, b in shots]
         short = len(edges) - 1 - len(shots)
-        header = (f"{len(shots)} shots: a frame from the middle of each, in order (shot {before} first"
-                  f"{f'; {short} under 0.05 s left out' if short > 0 else ''})")
+        # the render's cuts count camera keys with cut: true too: these shots are no shots.json rows to number
+        header = (f"{len(shots)} shots between the render's cuts: a frame from the middle of each, in order"
+                  f"{f' ({short} under 0.05 s left out)' if short > 0 else ''}")
     elif mode == "cut":
         ends = cuts_of(context)
         if not ends:

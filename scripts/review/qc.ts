@@ -57,11 +57,17 @@ Usage:
   bun run qc [video] [options]
   bun run qc box <image> <x,y,w,h> [--norm] [--json]
   bun run qc compare <before> <after> [--out <path>] [--threshold <n>] [--json]
+  bun run qc vs <reference-video> <image> --at <s> [--region x,y,w,h] [--picture-height px] [--out <path>] [--json]
   bun run qc motion [--cam <file>] [--from <s>] [--to <s>] [--json]
 
 Subcommands:
   box <image> <x,y,w,h>      Mean RGB, sRGB/linear luma, WCAG contrast & stops; --norm uses 0..1 coords
   compare <before> <after>   Pixel diff stats + side-by-side PNG (--out <path>, --threshold 0..255, default 4)
+  vs <reference> <image>     The reference's frame at --at seconds (its exact frame index, not ffmpeg -ss rounding)
+                             beside ours at ours' size: luma p5/p50/p95, saturation p50/p95, sharpness (Laplacian
+                             variance; ours/reference under 1 is softer) for the frame and --region (0..1; with its
+                             mean rgb and brightness ours/reference, for a set lit or painted off the reference's),
+                             and a reference | ours | diff sheet (--out). --picture-height drops a draft still's strip
   motion                     Audit camera/key speeds & pops from cam.json (--cam <file>, --from/--to <s>)
 
 Video QC options:
@@ -375,6 +381,176 @@ function runCompare(argv: string[]): number {
     `compare ${basename(beforePath)} -> ${basename(afterPath)}: ${m.changedPct.toFixed(2)}% pixels changed (${m.changedPixels}/${m.totalPixels}, threshold>${m.threshold}), mean delta ${m.meanAbsDelta.toFixed(2)}, max ${m.maxDelta.toFixed(0)} -> wrote ${m.out}`,
   );
   return 0;
+}
+
+// The reference's frame at a second: its index (round(s x fps)) picked by select=eq(n,N), as frames are counted
+function referenceFrame(
+  video: string,
+  at: number,
+  out: string,
+): { frame: number; fps: number } | string {
+  const probe = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-count_packets",
+      "-show_entries",
+      "stream=r_frame_rate,nb_read_packets",
+      "-of",
+      "json",
+      video,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+  );
+  let stream: { r_frame_rate?: string; nb_read_packets?: string } | undefined;
+  try {
+    stream = JSON.parse(probe.stdout || "{}").streams?.[0];
+  } catch {}
+  const [num, den] = (stream?.r_frame_rate ?? "").split("/").map(Number);
+  const fps = num / (den || 1);
+  if (probe.status !== 0 || !Number.isFinite(fps) || fps <= 0)
+    return `cannot read the frame rate of ${video}${probe.stderr ? `: ${probe.stderr.trim()}` : ""}`;
+  const frame = Math.round(at * fps);
+  const frames = Number(stream?.nb_read_packets);
+  if (Number.isFinite(frames) && frame >= frames)
+    return `${at} s is frame ${frame}, past the reference's last frame (${frames - 1}, ${((frames - 1) / fps).toFixed(3)} s)`;
+  const r = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-y",
+      "-i",
+      video,
+      "-vf",
+      `select=eq(n\\,${frame})`,
+      "-frames:v",
+      "1",
+      "-fps_mode",
+      "passthrough",
+      out,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 120_000 },
+  );
+  if (r.status !== 0 || !existsSync(out))
+    return `ffmpeg could not read frame ${frame} of ${video}${r.stderr ? `: ${r.stderr.trim()}` : ""}`;
+  return { frame, fps };
+}
+
+function runVs(argv: string[]): number {
+  let outPath: string | null = null;
+  let at: number | null = null;
+  let region: string | null = null;
+  let pictureHeight: number | null = null;
+  let asJson = false;
+  const pos: string[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--out") outPath = takeFlagValue(argv, i++, "--out");
+    else if (a === "--region") region = takeFlagValue(argv, i++, "--region");
+    else if (a === "--at") {
+      const raw = takeFlagValue(argv, i++, "--at");
+      at = Number(raw);
+      if (!Number.isFinite(at) || at < 0) failUsage(`--at takes seconds from 0, got ${raw}`);
+    } else if (a === "--picture-height") {
+      const raw = takeFlagValue(argv, i++, "--picture-height");
+      pictureHeight = Number(raw);
+      if (!Number.isInteger(pictureHeight) || pictureHeight < 1)
+        failUsage(`--picture-height takes whole lines, got ${raw}`);
+    } else if (a === "--json") asJson = true;
+    else if (a === "-h" || a === "--help") {
+      console.log(HELP);
+      return 0;
+    } else if (a.startsWith("-")) failUsage(`Unknown flag for vs: ${a}`);
+    else pos.push(a);
+  }
+  if (pos.length !== 2 || at === null)
+    failUsage(
+      "Usage: qc vs <reference-video> <image> --at <s> [--region x,y,w,h] [--picture-height px] [--out <path>] [--json]",
+    );
+  const [video, image] = pos.map((p) => resolve(p));
+  if (!existsSync(video)) failUsage(`Reference not found: ${pos[0]}`);
+  if (!existsSync(image)) failUsage(`Image not found: ${pos[1]}`);
+  const py = selectPython(["numpy", "pil"]);
+  if (!py) {
+    console.error("error: Python with numpy + Pillow is required for qc vs");
+    return 2;
+  }
+  const tmp = mkdtempSync(join(tmpdir(), "qc-vs-"));
+  try {
+    const refPng = join(tmp, "reference.png");
+    const got = referenceFrame(video, at, refPng);
+    if (typeof got === "string") {
+      console.error(`error: ${got}`);
+      return 2;
+    }
+    const r = spawnSync(
+      py.cmd[0],
+      [
+        ...py.cmd.slice(1),
+        FRAME_METRICS,
+        "vs",
+        refPng,
+        image,
+        ...(outPath ? ["--out", resolve(outPath)] : []),
+        ...(pictureHeight ? ["--picture-height", String(pictureHeight)] : []),
+        ...(region ? ["--region", region] : []),
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+    );
+    if (r.status !== 0) {
+      if (r.stderr) process.stderr.write(r.stderr);
+      return 2;
+    }
+    const m = JSON.parse(r.stdout);
+    const report = {
+      ...m,
+      reference: { file: pos[0], at, frame: got.frame, fps: got.fps, ...m.reference },
+      ours: { file: pos[1], ...m.ours },
+    };
+    console.log(asJson ? JSON.stringify(report) : formatVs(report));
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+type Tones = Record<"lumaP5" | "lumaP50" | "lumaP95" | "satP50" | "satP95" | "sharpness", number>;
+function formatVs(r: {
+  reference: { file: string; at: number; frame: number; metrics: Tones };
+  ours: { file: string; metrics: Tones };
+  size: { width: number; height: number };
+  sharpnessRatio: number | null;
+  meanAbsDelta: number;
+  region?: {
+    rect: string;
+    sharpnessRatio: number | null;
+    rgb: { reference: number[]; ours: number[] };
+    lumaRatio: number | null;
+  };
+  out?: string;
+}): string {
+  const tones = (m: Tones) =>
+    `luma ${m.lumaP5}/${m.lumaP50}/${m.lumaP95} sat ${m.satP50}/${m.satP95} sharp ${m.sharpness}`;
+  const soft = (ratio: number | null) =>
+    ratio === null
+      ? "n/a"
+      : `${ratio}${ratio < 0.6 ? " SOFTER than the reference" : ratio > 1.6 ? " sharper than the reference" : ""}`;
+  return [
+    `vs ${basename(r.ours.file)} at ${r.reference.at} s (reference frame ${r.reference.frame}), at ${r.size.width}x${r.size.height}:`,
+    `  reference ${tones(r.reference.metrics)}`,
+    `  ours      ${tones(r.ours.metrics)} (luma p5/p50/p95, sat p50/p95)`,
+    `  sharpness ours/reference ${soft(r.sharpnessRatio)}${r.region ? `; in ${r.region.rect} ${soft(r.region.sharpnessRatio)}` : ""}; mean delta ${r.meanAbsDelta}`,
+    ...(r.region
+      ? [
+          `  in ${r.region.rect}: rgb ours ${r.region.rgb.ours.join(",")} reference ${r.region.rgb.reference.join(",")}, brightness ours/reference ${r.region.lumaRatio ?? "n/a"}`,
+        ]
+      : []),
+    ...(r.out ? [`  wrote ${r.out}`] : []),
+  ].join("\n");
 }
 
 function analyzeFilmMotion(opts: {
@@ -1099,6 +1275,7 @@ export function runQc(args: string[]): number {
   }
   if (args[0] === "box") return runBox(args.slice(1));
   if (args[0] === "compare") return runCompare(args.slice(1));
+  if (args[0] === "vs") return runVs(args.slice(1));
   if (args[0] === "motion") return runMotionCmd(args.slice(1));
   return runUnifiedQc(args);
 }

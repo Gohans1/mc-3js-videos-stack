@@ -12,6 +12,19 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun",
+            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/note-watch.ts"],
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }

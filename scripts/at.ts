@@ -11,6 +11,9 @@ import {
   type CameraOpticsTracks,
   type CameraRig,
   cameraTrackOptions,
+  pixelOnPlane,
+  rigTurnsCamera,
+  screenAxes,
 } from "../packages/film-stage/src/camera";
 import { hasGradeEffect } from "../packages/film-stage/src/grade";
 import { TRANSITIONS } from "../packages/film-stage/src/transitions";
@@ -20,6 +23,7 @@ import { checkFiles } from "../packages/live-studio/src/contract.ts";
 import { contractFiles } from "../packages/live-studio/src/film.mjs";
 import { ratioOf, sizeOf } from "../packages/live-studio/src/frame.ts";
 import { overlayTime } from "../packages/live-studio/src/layer-timing.mjs";
+import { noteNudge } from "../packages/live-studio/src/note-cli.mjs";
 import { noteState, wholeNote } from "../packages/live-studio/src/note-state.mjs";
 import { deletedSaid, findNote, noteNumbers } from "../packages/live-studio/src/notes.mjs";
 import { openSound, pickSoundClip, probeAudio } from "../packages/live-studio/src/sound.mjs";
@@ -138,6 +142,23 @@ const filmOf = (dir: string) => {
   shots.forEach((s, i) => (s.index = i));
   setTiming(timingSpec, sourceEnd, shots);
   return { read, conf, edit, timingSpec, fromSource, cam, sourceEnd, shots };
+};
+
+// the picture's right and up in world terms; a rig that turns the camera as the shot plays has no one answer
+const pictureAxes = (
+  pose: { p: number[]; l: number[]; fov: number; roll: number },
+  rig: CameraRig | undefined,
+  frame: [number, number],
+) => {
+  if (rigTurnsCamera(rig)) return null;
+  const { right, up } = screenAxes(pose, rig, frame);
+  const round = (v: number[]) => v.map((x) => +x.toFixed(3) || 0);
+  return { right: round(right), up: round(up) };
+};
+// +x for a direction within 25 degrees of the world's x, else the vector itself
+const axisName = (v: number[]) => {
+  const i = v.findIndex((x) => Math.abs(x) > 0.9);
+  return i < 0 ? `[${v.join(", ")}]` : `${v[i]! > 0 ? "+" : "-"}${"xyz"[i]}`;
 };
 
 const readNotes = (dir: string): Row[] => {
@@ -381,6 +402,13 @@ export const whatsAt = (dir: string, t: number) => {
           },
         )
       : null;
+  // the authored pose before handheld shake, as cam.json keys write it (roll in radians)
+  const pose = camEval && {
+    p: camEval.base.p.toArray().map((v: number) => +v.toFixed(4)),
+    l: camEval.base.l.toArray().map((v: number) => +v.toFixed(4)),
+    fov: +camEval.base.fov.toFixed(3),
+    roll: +camEval.base.roll.toFixed(5),
+  };
 
   const audio = read(conf.soundTimeline ?? "src/timeline/audio.json", null);
   const sounds: Row[] = [];
@@ -662,25 +690,29 @@ export const whatsAt = (dir: string, t: number) => {
     cuts,
     held,
     velocity,
-    cam: camEval
-      ? {
-          evaluation: "authored" as const,
-          clock: worldAtCamera ? "output" : "scene",
-          time: cameraTime,
-          before: previousCam?.row ?? null,
-          after: heldBeforeCut ? null : (nextCam?.row ?? null),
-          t0: previousCam?.key.t ?? null,
-          t1: heldBeforeCut ? undefined : nextCam?.key.t,
-          ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
-          mm: camEval.lensKnown ? +camEval.mm.toFixed(1) : null,
-          fov: camEval.lensKnown ? +camEval.fov.toFixed(1) : null,
-          ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
-          ...(formatFocusSpec(camEval.focus) !== null
-            ? { focus: formatFocusSpec(camEval.focus) }
-            : {}),
-          ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
-        }
-      : null,
+    cam:
+      camEval && pose
+        ? {
+            evaluation: "authored" as const,
+            clock: worldAtCamera ? "output" : "scene",
+            time: cameraTime,
+            before: previousCam?.row ?? null,
+            after: heldBeforeCut ? null : (nextCam?.row ?? null),
+            t0: previousCam?.key.t ?? null,
+            t1: heldBeforeCut ? undefined : nextCam?.key.t,
+            ...(heldBeforeCut ? { heldBeforeCut: true } : {}),
+            mm: camEval.lensKnown ? +camEval.mm.toFixed(1) : null,
+            fov: camEval.lensKnown ? +camEval.fov.toFixed(1) : null,
+            ...(camEval.fstop > 0 ? { fstop: +camEval.fstop.toFixed(1) } : {}),
+            ...(formatFocusSpec(camEval.focus) !== null
+              ? { focus: formatFocusSpec(camEval.focus) }
+              : {}),
+            ...(camEval.handheld ? { handheld: camEval.handheld } : {}),
+            pose,
+            frame: [fw, fh] as [number, number],
+            screen: pictureAxes(pose, shot?.camera, [fw, fh]),
+          }
+        : null,
     sounds,
     texts,
     looks,
@@ -709,12 +741,41 @@ the key rows moving, the notes not done near it. Run inside the film.
   bun run at '#52'       a note's moment (its #number, quoted: a bare # starts a shell comment; or its id, as mw9jknxt),
                          where it is heard now: a note keeps the second it was written at, and Speed or Freeze edits since
                          move that moment. A plain 52 is a second, not a note
+  bun run at 7.2 --pixel 540,1500 --plane y=0.92
+                         where that pixel of the frame (x right, y down, in the film's 1920 frame: a 1080x1920
+                         reference's own pixels) meets the plane y = 0.92 (or x=, z=) through the camera then:
+                         a reference's landmark or prop placed in our world
 Rows are named as their files keep them (scene or narration seconds); the seconds after them are heard.`;
 
 const isMain =
   process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
 if (isMain) {
-  const arg = cliArgs(HELP, ["--json"], 1).find((a) => a !== "--json");
+  const argv = cliArgs(HELP, ["--json", "--pixel x,y", "--plane axis=value"], 1);
+  const valueOf = (flag: string) => {
+    const i = argv.indexOf(flag);
+    return i < 0 ? undefined : argv[i + 1];
+  };
+  const arg = argv.find(
+    (a, i) => !a.startsWith("--") && !["--pixel", "--plane"].includes(argv[i - 1]!),
+  );
+  const pixelArg = valueOf("--pixel"),
+    planeArg = valueOf("--plane");
+  if (["--pixel", "--plane"].some((flag) => argv.indexOf(flag) !== argv.lastIndexOf(flag))) {
+    console.error("--pixel and --plane go once each: one pixel, one plane a run");
+    process.exit(2);
+  }
+  const pixelAt = pixelArg?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+  const planeAt = planeArg?.match(/^([xyz])=(-?\d+(?:\.\d+)?)$/);
+  if (
+    (pixelArg === undefined) !== (planeArg === undefined) ||
+    (pixelArg && !pixelAt) ||
+    (planeArg && !planeAt)
+  ) {
+    console.error(
+      "--pixel x,y and --plane y=0.92 go together: bun run at 7.2 --pixel 540,1500 --plane y=0.92 (pixels of the film's frame, a plane x=, y= or z=)",
+    );
+    process.exit(2);
+  }
   if (!arg) {
     console.error(
       "which second? bun run at 35.6 (a note's, a line's or a fault's: bun run notes, voice:cues). A note by its number: bun run at '#52', quoted, since a bare # starts a shell comment and reaches no command",
@@ -853,8 +914,47 @@ if (isMain) {
           at: times[near]!,
           stale: staleVideo(film, hasDraft ? draft : cutsFile)?.file ?? null,
         };
+  // a render's cuts are its shots' starts and the camera keys with cut: true: the shot a cut opens is the one after it, when
+  // that differs from the one before
+  const opened = cut ? whatsAt(film, cut.at + 0.004).shot : null;
+  const opensShot =
+    opened && opened.index !== whatsAt(film, Math.max(0, cut!.at - 0.004)).shot?.index
+      ? opened.index
+      : null;
+  if (pixelAt && !got.cam) {
+    console.error(
+      `no camera at ${t}: the picture is black or the film has no camera keys, so no pixel reaches the world`,
+    );
+    process.exit(1);
+  }
+  let pixel = null;
+  if (pixelAt && planeAt && got.cam) {
+    const at: [number, number] = [+pixelAt[1]!, +pixelAt[2]!];
+    try {
+      const point = pixelOnPlane(got.cam.pose, got.shot?.camera, at, got.cam.frame, {
+        axis: planeAt[1] as "x" | "y" | "z",
+        at: +planeAt[2]!,
+      });
+      pixel = {
+        at,
+        plane: `${planeAt[1]}=${+planeAt[2]!}`,
+        point: point?.map((v) => +v.toFixed(4)) ?? null,
+        ...(got.shot?.anim ? { anim: got.shot.anim } : {}),
+      };
+    } catch (e) {
+      console.error(
+        `--pixel at ${t}: ${(e as Error).message}; place it by eye with CHECK=probe instead`,
+      );
+      process.exit(1);
+    }
+  }
   // asked by a note, that note is the moment itself, not one near it
-  const data = { ...all, cut, notes: all.notes.filter((n) => n.id !== note?.id) };
+  const data = {
+    ...all,
+    cut: cut && { ...cut, opensShot },
+    ...(pixel && { pixel }),
+    notes: all.notes.filter((n) => n.id !== note?.id),
+  };
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(note ? { note, ...data } : data, null, 2));
     process.exit(0);
@@ -943,6 +1043,10 @@ if (isMain) {
       ...(got.cam.handheld ? [`handheld ${got.cam.handheld}`] : []),
     ];
     out.push(`  camera optics: ${optics.join(" · ")}`);
+    if (got.cam.screen)
+      out.push(
+        `  picture right is world ${axisName(got.cam.screen.right)}, up is world ${axisName(got.cam.screen.up)}`,
+      );
     out.push("  optics estimate uses saved camera data");
   }
   if (got.velocity)
@@ -1033,14 +1137,22 @@ if (isMain) {
     );
   if (cut)
     out.push(
-      `cut ${cut.index} at ${fmt(cut.at)} heard, into shot ${cut.index + 1}${
+      `cut ${cut.index} at ${fmt(cut.at)} heard${opensShot !== null ? `, into shot ${opensShot}` : ""}${
         cut.stale
           ? ` (${hasDraft ? "the draft picture" : "renders/cuts.json"} is older than ${cut.stale}: numbered as the last render cut it; bun run render clip writes it again)`
           : ""
       }${!cut.stale ? `: bun run sheet renders/draft_video.mp4 cut ${cut.index} shows it frame by frame` : ""}`,
     );
+  if (pixel)
+    out.push(
+      pixel.point
+        ? `pixel ${pixel.at.join(",")} of the ${got.cam!.frame.join("x")} frame meets ${pixel.plane} at [${pixel.point.join(", ")}] (the authored camera, before handheld shake${pixel.anim ? ` and the shot's anim ${JSON.stringify(pixel.anim)}, which moves it on top` : ""})`
+        : `pixel ${pixel.at.join(",")} never meets ${pixel.plane}: its ray runs parallel to it or away from it`,
+    );
   out.push(
     `next: look at it with the film's own list over it (AT=${t} LIST=1 bun run render stills), change the rows named, then bun run check`,
   );
+  const notesWaiting = noteNudge(film);
+  if (notesWaiting) out.push(notesWaiting);
   console.log(out.join("\n"));
 }

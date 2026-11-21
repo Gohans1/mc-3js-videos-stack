@@ -1385,6 +1385,12 @@ if _IS_MAIN:
         raise SystemExit(2)
     if context and context["stale"]:
         print(f"STALE: {context['stale']['message']}", file=sys.stderr)
+    # a guide sound (the reference's voice to time against, a temp track) is scratch audio: drafts carry it, a final never
+    guides = [e["name"] for kind in ("beds", "sfx") for e in A[kind] if e.get("guide") and chosen(e)]
+    if guides and whole and render["final"]:
+        print(f'{SOUND_REL}: guide sound {", ".join(json.dumps(n) for n in dict.fromkeys(guides))} is not for release: '
+              "replace it with the film's own sound (or remove it) before mixing the final; drafts still play it", file=sys.stderr)
+        raise SystemExit(1)
     ended = job(ROOT, "mix", f"Mixing the sound{onto}")
     try:
         if _VIDEO_ARG:

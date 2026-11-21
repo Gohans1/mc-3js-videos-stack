@@ -631,3 +631,89 @@ test("frames select the same first video stream as the probe", (t) => {
   assert.deepEqual(dimensions(chosen.entries[0].frame), [160, 90]);
   assert.ok(rgb(chosen.entries[0].frame)[0] > 220);
 });
+
+test("--vs pairs the reference's frame at the same heard second beside ours, black where the reference has ended", (t) => {
+  const f = fixture(t);
+  mkdirSync(join(f.dir, "references"));
+  media(join(f.dir, "references/ref.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=lime:s=160x90:r=25:d=1",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const r = f.run("frames", "0.5,1.5", "--vs", "references/ref.mp4");
+  const { data } = indexOf(r);
+  const [inside, after] = data.entries;
+  assert.equal(inside.reference.sourceTime, 0.48);
+  assert.equal(after.reference, null);
+  assert.deepEqual(dimensions(inside.vs), [640, 180]);
+  const [refHalf, ourHalf] = ["crop=320:180:0:0,scale=1:1", "crop=320:180:320:0,scale=1:1"];
+  assert.ok(rgb(inside.vs, refHalf)[1] > 220 && rgb(inside.vs, refHalf)[0] < 40);
+  assert.ok(rgb(inside.vs, ourHalf)[0] > 220);
+  assert.ok(rgb(after.vs, refHalf).every((c) => c < 30));
+  assert.ok(rgb(after.vs, ourHalf)[2] > 220);
+  assert.match(r.stdout, /reference \| ours/);
+  // each side is named on the picture itself, in a dark box at its top left
+  assert.ok(rgb(inside.vs, "crop=24:8:12:10,scale=1:1")[1] < 160);
+  assert.ok(rgb(inside.vs, "crop=24:8:332:10,scale=1:1")[0] < 160);
+
+  const overview = indexOf(f.run("overview", "0-2/4", "--vs", "references/ref.mp4")).data;
+  assert.deepEqual(dimensions(overview.entries[0].sheet), [2560, 720]);
+  assert.ok(rgb(overview.entries[0].sheet, "crop=320:180:0:0,scale=1:1")[1] > 220);
+  assert.ok(rgb(overview.entries[0].sheet, "crop=320:180:320:0,scale=1:1")[0] > 220);
+
+  for (const [args, why] of [
+    [["0.5", "--vs", "references/ref.mp4"], /--vs goes with frames or overview/],
+    [["frames", "0.5", "--vs", "references/none.mp4"], /no references\/none\.mp4/],
+    [["frames", "0.5", "--vs"], /--vs needs the reference video/],
+  ]) {
+    const bad = f.run(...args);
+    assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+    assert.match(bad.stderr, why);
+  }
+});
+
+test("--grid rules each native frame in the video's own pixels, and --crop keeps just that region at full size", (t) => {
+  const f = fixture(t);
+  const { data } = indexOf(f.run("frames", "0.5", "--grid", "50"));
+  const [whole] = data.entries;
+  assert.deepEqual(dimensions(whole.frame), [320, 180]);
+  assert.deepEqual(whole.grid, { step: 50, crop: [0, 0, 320, 180] });
+  // a ruled line lightens the red picture where it runs
+  const onLine = rgb(whole.frame, "crop=4:40:98:100,scale=1:1:flags=area");
+  const between = rgb(whole.frame, "crop=4:40:122:100,scale=1:1:flags=area");
+  assert.ok(onLine[1] > between[1] + 40, `${onLine} vs ${between}`);
+
+  const cropped = indexOf(f.run("frames", "1.5", "--grid", "50", "--crop", "100,40,300,180")).data
+    .entries[0];
+  assert.deepEqual(dimensions(cropped.frame), [200, 140]);
+  assert.deepEqual(cropped.grid, { step: 50, crop: [100, 40, 300, 180] });
+  assert.deepEqual(cropped.commands.frames.argv.slice(-4), [
+    "--grid",
+    "50",
+    "--crop",
+    "100,40,300,180",
+  ]);
+  // the line at the video's 150 px falls 50 px into the crop
+  assert.ok(
+    rgb(cropped.frame, "crop=4:40:48:80,scale=1:1:flags=area")[1] >
+      rgb(cropped.frame, "crop=4:40:72:80,scale=1:1:flags=area")[1] + 40,
+  );
+
+  for (const [args, why] of [
+    [["frames", "0.5", "--grid", "0"], /--grid takes a pixel step/],
+    [["frames", "0.5", "--crop", "0,0,10,10"], /--crop goes with --grid/],
+    [
+      ["frames", "0.5", "--grid", "50", "--crop", "0,0,400,10"],
+      /--crop .* inside the 320x180 picture/,
+    ],
+    [["overview", "--grid", "50"], /--grid goes with frames/],
+    [["frames", "0.5", "--grid", "50", "--grid", "25"], /--grid may only be passed once/],
+  ]) {
+    const bad = f.run(...args);
+    assert.equal(bad.status, 2, bad.stdout + bad.stderr);
+    assert.match(bad.stderr, why);
+  }
+});

@@ -633,11 +633,18 @@ export async function runVoicePlaygroundCli(argv, options = {}) {
         await sleep(Math.min(500, deadline - Date.now()));
       }
       saveCheckpoint();
-      const failed = receipt.jobs.find((job) => job.status === "failed");
-      if (failed)
-        throw new Error(
-          failed.error || "Generation failed; inspect the checkpoint before retrying",
+      const failed = receipt.jobs.filter((job) => job.status === "failed");
+      if (failed.length) {
+        const error = new Error(
+          failed[0].error || "Generation failed; inspect the checkpoint before retrying",
         );
+        error.failedJobs = failed.map((job) => ({
+          id: job.id,
+          error: job.error ?? null,
+          credits: Number.isFinite(job.creditsDeducted) ? job.creditsDeducted : null,
+        }));
+        throw error;
+      }
       return receipt;
     };
     const waitForClone = async () => {
@@ -1447,10 +1454,13 @@ export async function runVoicePlaygroundCli(argv, options = {}) {
       JSON.stringify({
         error: message,
         ...(checkpoint ? { checkpoint } : {}),
+        ...(error.failedJobs ? { failed: error.failedJobs } : {}),
         next:
           code === 2
             ? "Use command --help or schema <command> to check its input."
-            : "Check the selected project/server and saved progress before retrying.",
+            : error.failedJobs
+              ? "failed[].error says where each job failed: a provider code (provider_under_maintenance, an empty quota) fails every retry until the provider is back or the account topped up, and needs nothing from the Studio or project; any other error names what to check. failed[].credits is what each job cost, null when no figure came back (read the balance on the provider's site)."
+              : "Check the selected project/server and saved progress before retrying.",
       }),
     );
     return code;

@@ -932,7 +932,12 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
   writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([4]));
   const run = (...a) =>
     spawnSync("bun", [AT, ...a], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" });
-  assert.deepEqual(JSON.parse(run("4.1", "--json").stdout).cut, { index: 0, at: 4, stale: null });
+  assert.deepEqual(JSON.parse(run("4.1", "--json").stdout).cut, {
+    index: 0,
+    at: 4,
+    stale: null,
+    opensShot: 1,
+  });
   const old = new Date(Date.now() - 3_600_000);
   utimesSync(join(dir, "renders/cuts.json"), old, old);
   const r = run("4.1");
@@ -941,6 +946,19 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
     r.stdout,
     /^cut 0 at 4\.00 heard, into shot 1 \(renders\/cuts\.json is older than src\/[^ ]+: numbered as the last render cut it; bun run render clip writes it again\)/m,
   );
+});
+
+// a camera key with cut: true cuts inside a shot: the render counts it, so cut n is no longer shot n+1's start
+test("a draft's cut names the shot it opens, and none for a camera key's cut inside a shot", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([2, 4]));
+  const cutLine = (s) =>
+    spawnSync("bun", [AT, s], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" })
+      .stdout.split("\n")
+      .find((l) => l.startsWith("cut "));
+  assert.match(cutLine("2.05"), /^cut 0 at 2\.00 heard: bun run sheet/);
+  assert.match(cutLine("4.1"), /^cut 1 at 4\.00 heard, into shot 1: bun run sheet/);
 });
 
 test("a second said with an s (4.1s) is a second, as every other film command takes it", (t) => {
@@ -2187,4 +2205,35 @@ test("at formats point focus specs and Auto rack endpoints cleanly", (t) => {
   assert.equal(whatsAt(dir, 1).cam?.focus, "Auto -> Wall (1,2.5,3) (50%)");
   assert.equal(whatsAt(dir, 2).cam?.focus, "Wall (1,2.5,3)");
   assert.equal(whatsAt(dir, 4).cam?.focus, "point (4,5,6)");
+});
+
+test("--pixel --plane finds where a frame's pixel meets a world plane through the camera at that second", (t) => {
+  const dir = film(t);
+  const at = (...args) =>
+    spawnSync("bun", [AT, "4.1", ...args], {
+      env: { ...process.env, LIVE_PROJECT: dir },
+      encoding: "utf8",
+    });
+  // keys without p or l sit at the origin and look down -z; the frame's middle runs straight along that axis
+  const r = at("--pixel", "960,540", "--plane", "z=-5", "--json");
+  assert.equal(r.status, 0, r.stderr);
+  const got = JSON.parse(r.stdout);
+  assert.deepEqual(got.pixel, { at: [960, 540], plane: "z=-5", point: [0, 0, -5] });
+  assert.deepEqual(got.cam.pose.p, [0, 0, 0]);
+  // which way the picture's right and up run in the world, for "move it right" by eye
+  assert.deepEqual(got.cam.screen, { right: [1, 0, 0], up: [0, 1, 0] });
+  assert.match(at().stdout, /picture right is world \+x, up is world \+y/);
+  assert.match(at("--pixel", "960,540", "--plane", "y=1").stdout, /never meets y=1/);
+  for (const args of [
+    ["--pixel", "960,540"],
+    ["--plane", "z=-5"],
+    ["--pixel", "a,b", "--plane", "z=-5"],
+  ]) {
+    const bad = at(...args);
+    assert.equal(bad.status, 2, bad.stdout);
+    assert.match(bad.stderr, /--pixel x,y and --plane y=0\.92 go together/);
+  }
+  const twice = at("--pixel", "960,540", "--plane", "z=-5", "--plane", "z=-6");
+  assert.equal(twice.status, 2, twice.stdout);
+  assert.match(twice.stderr, /go once each/);
 });

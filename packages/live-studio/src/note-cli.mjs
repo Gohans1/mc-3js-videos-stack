@@ -218,6 +218,28 @@ export const recordNoteReads = (project, shownIds, allActiveNotes) => {
   writeNoteReads(project, data);
 };
 
+const openNotes = (project) =>
+  existsSync(join(project, "notes/notes.jsonl"))
+    ? createNotes(project)
+        .read()
+        .filter((n) => wholeNote(n) && noteState(n) === "open")
+    : [];
+
+// open notes no bun run notes has listed or shown yet
+export const unreadNotes = (project, open = openNotes(project)) => {
+  const reads = readNoteReads(project);
+  const known = new Set(reads.lastList?.knownIds ?? []);
+  return open.filter((n) => !known.has(n.id) && !reads.byId?.[n.id]);
+};
+
+// The studio cannot tell a running AI that the creator wrote a note, so the commands it runs between fixes end on it
+export const noteNudge = (project) => {
+  const open = openNotes(project);
+  if (!open.length) return "";
+  const fresh = unreadNotes(project, open).length;
+  return `next: bun run notes first: the creator has ${open.length} open note${open.length > 1 ? "s" : ""}${fresh ? `, ${fresh} new since your last bun run notes` : ""}`;
+};
+
 export const collectNewNotesAfterRead = (project, targetId, { consume = false } = {}) => {
   const file = join(project, READS_FILE);
   if (!existsSync(file)) return [];

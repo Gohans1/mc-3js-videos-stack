@@ -3453,7 +3453,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "reference",
     category: "render",
     summary:
-      "Inspect reference pictures/captions, study timing or compare videos; no required style or quality score.",
+      "Add a reference to the film, inspect pictures/captions, study timing, compare videos or matchmove a shot's camera; no required style or quality score.",
     runner: "bun-script",
     target: "reference",
     cwdModes: ["film", "root"],
@@ -3462,10 +3462,15 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "operation",
         label: "Operation",
         type: "enum",
-        options: ["inspect", "study", "compare"],
+        options: ["add", "inspect", "study", "compare", "solve"],
         required: true,
       },
-      { key: "reference", label: "Reference Video / URL", type: "string", required: true },
+      {
+        key: "reference",
+        label: "Reference Video / URL (solve: Shot File)",
+        type: "string",
+        required: true,
+      },
       {
         key: "remake",
         label: "Remake Video",
@@ -3475,7 +3480,36 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       },
     ],
     flags: [
-      { key: "--out", flag: "--out", label: "Report Folder", type: "string" },
+      {
+        key: "--out",
+        flag: "--out",
+        label: "Report Folder",
+        type: "string",
+        visibleWhen: { field: "operation", in: ["inspect", "study", "compare"] },
+      },
+      {
+        key: "--name",
+        flag: "--name",
+        label: "Name in references/",
+        type: "string",
+        placeholder: "ref",
+        visibleWhen: { field: "operation", in: ["add"] },
+      },
+      {
+        key: "--video",
+        flag: "--video",
+        label: "Reference Video",
+        type: "string",
+        placeholder: "references/ref.mp4",
+        visibleWhen: { field: "operation", in: ["solve"] },
+      },
+      {
+        key: "--write",
+        flag: "--write",
+        label: "Write Keys to cam.json",
+        type: "boolean",
+        visibleWhen: { field: "operation", in: ["solve"] },
+      },
       {
         key: "--transcript",
         flag: "--transcript",
@@ -3600,7 +3634,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
     },
   },
   // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────
@@ -4052,6 +4086,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             placeholder: "12",
           },
           {
+            key: "--crop",
+            flag: "--crop",
+            label: "Band x,y,w,h (fractions)",
+            type: "string",
+            placeholder: "0,0.7,1,0.2",
+          },
+          { key: "--captions", flag: "--captions", label: "Timed Captions", type: "boolean" },
+          {
             key: "--score",
             flag: "--score",
             label: "Minimum Model Score",
@@ -4201,6 +4243,14 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     ],
     flags: [
       { key: "--json", flag: "--json", label: "JSON Report", type: "boolean", tier: "common" },
+      {
+        key: "--vs",
+        flag: "--vs",
+        label: "Reference Video (default references/)",
+        type: "string",
+        tier: "advanced",
+        placeholder: "references/ref.mp4",
+      },
     ],
     env: [
       {
@@ -4218,6 +4268,36 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint: "Writes renders/framecheck_*/index.json and fault strips",
+    },
+  },
+  {
+    id: "sweep",
+    label: "sweep",
+    category: "render",
+    summary:
+      "One ranked list of what to fix in a whole draft: pops, focus, light and cuts against the reference.",
+    runner: "bun-script",
+    target: "sweep",
+    cwdModes: ["film"],
+    args: [
+      {
+        key: "video",
+        label: "Whole Draft (Default draft_video.mp4)",
+        type: "string",
+        choiceSource: "renders",
+        placeholder: "renders/draft_video.mp4",
+      },
+    ],
+    flags: [
+      { key: "--json", flag: "--json", label: "JSON Report", type: "boolean", tier: "common" },
+    ],
+    meta: {
+      effect: "write",
+      cost: "free",
+      speed: "short",
+      cancellable: true,
+      helpMode: "flag",
+      outputsHint: "Writes renders/sweep.json and a framecheck run",
     },
   },
   {

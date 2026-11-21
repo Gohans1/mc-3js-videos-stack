@@ -1,13 +1,14 @@
 // The film contract checked without a studio; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ANIMS } from "film-stage/animate";
 import { SHAKES } from "film-stage/camera";
 import { LOOK_IDS } from "film-stage/looks";
 import { TEXT_ITEM_KEYS } from "film-stage/titles";
+import { TONE_MAPS } from "film-stage/tone";
 import { TRANSITIONS } from "film-stage/transitions";
 
 import { LOCAL, vaultPath } from "../../scripts/vault.mjs";
@@ -50,18 +51,22 @@ import {
 } from "./src/contract.ts";
 import { contractFiles, heardLength } from "./src/film.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
+import { noteNudge } from "./src/note-cli.mjs";
+import { ownToolsWarning } from "./src/own-tools.mjs";
 import { placedRelOf } from "./src/placed-lane.mjs";
-import { isRead, readFaults, sizeFaults } from "./src/readable.mjs";
+import { isRead, PACE, readFaults, readPace, sizeFaults } from "./src/readable.mjs";
+import { formatCoverage, refCoverage } from "./src/ref-coverage.mjs";
+import { refCutsWarning, referenceCopy, unstudiedWarning } from "./src/ref-cuts.mjs";
 import { findVaults, openSound, pickSoundClip, probeAudio } from "./src/sound.mjs";
 import { tell } from "./src/tell.mjs";
 import { mapTimeline } from "./src/timing-data.mjs";
-import { clockForTimeline } from "./src/timing-state.mjs";
+import { cameraCutSeconds, clockForTimeline } from "./src/timing-state.mjs";
 import { assertInsideDir } from "./src/voice-map.mjs";
 
 const HELP = `Checks the film's data the way the studio does, without opening it: run it after editing any file in src/timeline,
 src/edit.json, pack/picks.json or package.json "live-studio". Run inside the film.
   bun run check           the problems, each under the file it is in, or "ok"
-  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text]}
+  bun run check --json    {"ok": bool, "problems": [{"where": file, "issue": text}], "warnings": [text], "coverage"?: {...}}
 Checks every timeline file against its schema (src/contract.ts, the studio's own), placed objects (placed.json: gohans/minecraft/mob IDs,
 mob clips) and pack/picks.json entries against the local vault when present, that every other .json in src/ parses,
 every "look" and "handheld" preset name and misspelt keys, every sound name in the sound timeline (beds, sfx and their "try"
@@ -400,6 +405,8 @@ if (soundBroken) {
 const warnings = [];
 // advice under the warnings, for a reader: text output only, never a --json warning
 const hints = [];
+// what the film has against the reference, in heard seconds, for the coverage line (src/ref-coverage.mjs)
+const covered = { sfx: [], text: [], cameraCuts: [], cameraUntil: 0 };
 // the studio opens the film's sounds through its sfx folder: without one no name can be looked up
 if (conf.soundTimeline && !conf.sfx)
   warnings.push(
@@ -572,6 +579,13 @@ rowTypos(
   GRADE_KEYS.map((k) => `grade.${k}`),
 );
 const checkLook = (where, slot, look) => checkPreset(where, slot, look, LOOK_IDS, "look");
+checkPreset(
+  "src/edit.json",
+  "look.toneMapping",
+  readJson("src/edit.json")?.look?.toneMapping,
+  TONE_MAPS,
+  "tone map",
+);
 if (Array.isArray(adjRead?.items))
   adjRead.items.forEach((it, i) =>
     checkLook(conf.adjustmentTimeline, `items[${i}].grade.look`, it?.grade?.look),
@@ -729,6 +743,11 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
       return clock ? Math.min(ends.layers, clock.duration) : ends.layers;
     };
     const heard = mapTimeline("sound", selected, soundClock, false, null, soundDurations);
+    heard.sfx.forEach((c, i) => {
+      const clip = selected.sfx[i];
+      if (!clip._off && !clip._narration && !muted.has(lanes.sfx[i].track) && !(c.length <= 0))
+        covered.sfx.push(c.at);
+    });
     const late = [
       ...heard.beds.flatMap((c, i) => {
         const end = clipEnd(selected.beds[i], "beds");
@@ -778,7 +797,8 @@ if (Array.isArray(textRead?.items)) {
   const textEnd = textClock ? Math.min(ends.layers, textClock.duration) : ends?.layers;
   const heard = textClock ? mapTimeline("text", textRead, textClock, false, null, {}) : null;
   const said = [],
-    late = [];
+    late = [],
+    brief = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
     // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
@@ -791,15 +811,36 @@ if (Array.isArray(textRead?.items)) {
       return;
     }
     if (!isRead(it, textRead.tracks)) return;
+    if (h) covered.text.push([h.from, Math.min(h.to, textEnd)]);
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
+    const name = short.length > 28 ? `${short.slice(0, 27)}…` : short;
     const cut = h && h.to > textEnd;
-    for (const fault of h
-      ? readFaults(it, h, conf.ratio, textEnd, textClock)
-      : sizeFaults(it, conf.ratio))
-      said.push(
-        `⚠ ${conf.textTimeline} items[${i}] "${short.length > 28 ? `${short.slice(0, 27)}…` : short}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? textEnd : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`,
-      );
+    const pace = h && readPace(it, h, textEnd, textClock);
+    (h ? readFaults(it, h, conf.ratio, textEnd, textClock) : sizeFaults(it, conf.ratio)).forEach(
+      (fault, n) => {
+        const line = `⚠ ${conf.textTimeline} items[${i}] "${name}"${h ? ` at ${h.from.toFixed(2)}-${(cut ? textEnd : h.to).toFixed(2)} heard${cut ? ", cut by the film's end" : ""}` : ""} ("from": ${+(+it.from).toFixed(2)}): ${fault}`;
+        said.push(line);
+        if (n === 0 && pace?.tooBrief)
+          brief.push({ line, at: `items[${i}] "${name}" at ${h.from.toFixed(2)} heard`, pace });
+      },
+    );
   });
+  // a Short's captions, cut per phrase, run faster than subtitles: past three, one line says them all to a reader;
+  // --json keeps each, for the one fixing them
+  const folded = new Set(brief.length > 3 && !json ? brief.map((b) => b.line) : []);
+  const lines = [
+    ...(folded.size
+      ? [
+          `⚠ ${conf.textTimeline} ${brief.length} items show for less than a reader needs (${PACE}): ${brief
+            .slice(0, 3)
+            .map((b) => `${b.at}, ${b.pace.readable.toFixed(2)} s of ${b.pace.needs.toFixed(2)}`)
+            .join(
+              "; ",
+            )}; and ${brief.length - 3} more (bun run check --json lists each). Captions timed to a reference's own can stay; others hold longer or cut words`,
+        ]
+      : []),
+    ...said.filter((line) => !folded.has(line)),
+  ];
   if (late.length)
     found.push({
       where: conf.textTimeline,
@@ -808,8 +849,8 @@ if (Array.isArray(textRead?.items)) {
         "  move each earlier (bun run at <second> shows what is on screen there) or remove it",
       ].join("\n"),
     });
-  if (said.length) {
-    warnings.push(...said);
+  if (lines.length) {
+    warnings.push(...lines);
     hints.push(
       `  decor not meant to be read takes "read": false; where each sits and how it reads over the picture: CHECK=text bun run render stills`,
     );
@@ -1173,13 +1214,93 @@ for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
   }
 }
 
+// the camera's cuts in heard seconds, against the reference's (bun run reference study): a remake's cut the reference
+// lacks is the jump mid-move that CHECK=motion:cam would show
+const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =>
+  Number.isFinite(k?.t),
+);
+if (camKeys?.length && filmEnds()) {
+  const camClock = clockForTimeline("cam");
+  const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
+  covered.cameraCuts = cameraCutSeconds(camKeys);
+  covered.cameraUntil = heard(Math.max(...camKeys.map((k) => k.t)));
+  const [first, ...rest] = refCutsWarning(
+    PROJECT,
+    conf.camTimeline,
+    covered.cameraCuts,
+    covered.cameraUntil,
+  ).split("\n");
+  if (first) warnings.push(first);
+  hints.push(...rest);
+}
+
+const coverage = camKeys?.length && filmEnds() ? refCoverage(PROJECT, covered) : null;
+
+const guides = ["beds", "sfx"].flatMap((list) =>
+  (Array.isArray(lanesRead?.[list]) ? lanesRead[list] : []).flatMap((e) =>
+    e?.guide === true && typeof e.name === "string" ? [e.name] : [],
+  ),
+);
+if (guides.length)
+  warnings.push(
+    `⚠ ${conf.soundTimeline} guide sound ${[...new Set(guides)].map((n) => `"${n}"`).join(", ")}: drafts play it; bun run mix refuses a final until the film's own sound replaces it`,
+  );
+const copies = new Map();
+for (const list of ["beds", "sfx"])
+  for (const e of Array.isArray(lanesRead?.[list]) ? lanesRead[list] : []) {
+    if (e?.guide === true || typeof e?.name !== "string" || copies.has(e.name)) continue;
+    const file = sound?.fileOf(e.name);
+    const copy = file ? referenceCopy(PROJECT, file) : null;
+    if (copy) copies.set(e.name, copy);
+  }
+for (const [name, copy] of copies)
+  warnings.push(
+    `⚠ ${conf.soundTimeline} "${name}" is ${copy} byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
+  );
+
+// a film made before a command joined the template has no script for it, and bun run says only "Script not found".
+// Only a script whose file this folder reaches is offered (../../scripts is there in films/<name>, not elsewhere)
+let filmScripts = null;
+try {
+  filmScripts = JSON.parse(readFileSync(pkgFile, "utf8")).scripts;
+} catch {}
+let templateScripts = {};
+try {
+  templateScripts = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")).scripts ?? {};
+} catch {}
+const reached = (line) => {
+  const file = String(line)
+    .split(/\s+/)
+    .find((w) => /\.(?:mjs|js|ts|py)$/.test(w));
+  return Boolean(file && existsSync(resolve(PROJECT, file)));
+};
+const lacking =
+  filmScripts && typeof filmScripts === "object"
+    ? Object.entries(templateScripts).filter(
+        ([name, line]) => !(name in filmScripts) && reached(line),
+      )
+    : [];
+if (lacking.length)
+  warnings.push(
+    `⚠ package.json lacks scripts the template film has (bun run says only "Script not found"): add to its "scripts" ${JSON.stringify(Object.fromEntries(lacking)).slice(1, -1)}`,
+  );
+
+const unstudied = unstudiedWarning(PROJECT);
+if (unstudied) warnings.push(unstudied);
+const toolsWarning = ownToolsWarning(PROJECT);
+if (toolsWarning) warnings.push(toolsWarning);
+
 // one problem per file, as --help says: a file faulted by two checks (its schema, its sound names) has both under it
 const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
   where,
   issue: ps.map((p) => p.issue).join("\n"),
 }));
 const shownWarnings = [...warnings, ...hints];
-if (json) console.log(JSON.stringify({ ok: !problems.length, problems, warnings }));
+if (coverage && !json) console.log(formatCoverage(coverage));
+if (json)
+  console.log(
+    JSON.stringify({ ok: !problems.length, problems, warnings, ...(coverage && { coverage }) }),
+  );
 else if (!problems.length)
   console.log(
     `${shownWarnings.length ? `${shownWarnings.join("\n")}\n` : ""}ok: the film's data is what the studio expects\nnext: look at it: AT=<seconds> bun run render stills, or bun run studio`,
@@ -1190,6 +1311,8 @@ else {
     `${problems.map((p) => `${p.where}\n${p.issue}`).join("\n\n")}${shownWarnings.length ? `\n\n${shownWarnings.join("\n")}` : ""}\n\nevery other file is as the studio expects (${files.size} with problems above)\nnext: fix each ✖ as it says, then bun run check`,
   );
 }
+const notesWaiting = json ? "" : noteNudge(PROJECT);
+if (notesWaiting) console.log(notesWaiting);
 await tell(PROJECT, {
   say: problems.length
     ? `Checked the film's files: ${problems.length} problem${problems.length > 1 ? "s" : ""} to fix`
