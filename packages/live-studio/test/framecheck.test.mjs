@@ -90,6 +90,8 @@ test("a SPAN run's video is measured on the film's clock, with only the cuts ins
   assert.match(out.stdout, /film seconds from 9 s on \(the span's start\)/);
   assert.match(out.stdout, /0 cuts known/);
   assert.match(out.stdout, /JUMP 10\.00/);
+  // cuts.json is newer than the span: its cuts are not this video's, and the hint says none was left out
+  assert.match(out.stdout, /(a planned cut or freeze is fine)/);
 });
 
 test("a fault's picture is the frame before it, the frame, and the frame after", (t) => {

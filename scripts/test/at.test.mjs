@@ -932,7 +932,12 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
   writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([4]));
   const run = (...a) =>
     spawnSync("bun", [AT, ...a], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" });
-  assert.deepEqual(JSON.parse(run("4.1", "--json").stdout).cut, { index: 0, at: 4, stale: null });
+  assert.deepEqual(JSON.parse(run("4.1", "--json").stdout).cut, {
+    index: 0,
+    at: 4,
+    stale: null,
+    opensShot: 1,
+  });
   const old = new Date(Date.now() - 3_600_000);
   utimesSync(join(dir, "renders/cuts.json"), old, old);
   const r = run("4.1");

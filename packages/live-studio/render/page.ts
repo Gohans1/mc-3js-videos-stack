@@ -452,7 +452,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     log(
       `span: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
     );
-    if (cost.line()) log(cost.line());
+    const said = cost.line();
+    if (said) log(said);
     await done();
     return;
   }
@@ -476,7 +477,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
       );
     }
-    if (cost.line()) log(cost.line());
+    const said = cost.line();
+    if (said) log(said);
   }
   await done(cfg.clip ? chunks : undefined);
 })();

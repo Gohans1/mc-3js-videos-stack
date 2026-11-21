@@ -374,6 +374,8 @@ test("camera keys with cut: true cut the picture at their heard second, after a 
   const keys = [{ t: 0, cut: true }, { t: 1 }, { t: 3, cut: true }, { t: 5 }, { t: 6, cut: true }];
   setTiming({}, 8, []);
   assert.deepEqual(cameraCutSeconds(keys), [3, 6]);
+  // before its first key the camera already holds that key's pose: a cut there changes nothing on screen
+  assert.deepEqual(cameraCutSeconds([{ t: 0.5, cut: true }, { t: 2 }, { t: 3, cut: true }]), [3]);
   // the first two source seconds play in one
   setTiming({ speeds: [{ from: 0, to: 2, rate: 2 }] }, 8, []);
   assert.deepEqual(cameraCutSeconds(keys), [2, 5]);

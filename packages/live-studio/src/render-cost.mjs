@@ -37,7 +37,12 @@ export const renderCost = (cuts) => {
         (s) =>
           `${s.from.toFixed(2)}-${s.to.toFixed(2)} s draws ${Math.round(s.ms)} ms (x${s.x.toFixed(1)})`,
       );
-      return `cost: ${Math.round(typical)} ms a sample, the median of ${judged.length} stretches between cuts; ${
+      const unnamed = judged.length - heavy.length;
+      return `cost: ${Math.round(typical)} ms a sample, the median of ${
+        heavy.length
+          ? `the ${unnamed === 1 ? "stretch" : `${unnamed} stretches`} not named of ${judged.length} between cuts`
+          : `${judged.length} stretches between cuts`
+      }; ${
         named.length
           ? `${named.join(", ")}: AT=${heavy[0].from.toFixed(2)} LIST=1 bun run render stills shows what is in view there`
           : `none past twice that and ${FRAME_MS} ms`

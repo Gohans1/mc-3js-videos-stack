@@ -951,7 +951,7 @@ if (isMain) {
   // asked by a note, that note is the moment itself, not one near it
   const data = {
     ...all,
-    cut,
+    cut: cut && { ...cut, opensShot },
     ...(pixel && { pixel }),
     notes: all.notes.filter((n) => n.id !== note?.id),
   };

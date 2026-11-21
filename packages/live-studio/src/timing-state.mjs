@@ -1,4 +1,4 @@
-import { compileCameraClock } from "./camera-clock.mjs";
+import { compileCameraClock, SHOT_CUT_NEAR } from "./camera-clock.mjs";
 import { compileLayerTiming, overlayTime } from "./layer-timing.mjs";
 import { LINKAGE_KINDS } from "./linkage.mjs";
 import { mapTimeline } from "./timing-data.mjs";
@@ -80,19 +80,21 @@ export const clockForTimeline = (name) =>
       ? audioClock
       : (layerClocks[name === "openfilm" ? "overlays" : name] ?? timingClock);
 // the heard seconds where camera keys with cut: true cut the picture, placed as the studio's camera row places them (a
-// Freeze starting on a cut holds the new camera); a key played twice cuts twice, the film's start is no cut
+// Freeze starting on a cut holds the new camera); a key played twice cuts twice. The first key heard is no cut: the camera
+// holds its pose from the film's start
 export const cameraCutSeconds = (keys) => {
   const list = Array.isArray(keys) ? keys : Array.isArray(keys?.keys) ? keys.keys : [];
   const rows = list.filter((k) => Number.isFinite(k?.t));
   const heard = mapTimeline("cam", rows, clockForTimeline("cam")) ?? [];
-  return heard.flatMap((k) => (k.cut && k.t > 1e-9 ? [k.t] : [])).toSorted((a, b) => a - b);
+  const first = heard.length ? Math.min(...heard.map((k) => k.t)) : 0;
+  return heard.flatMap((k) => (k.cut && k.t > first + 1e-9 ? [k.t] : [])).toSorted((a, b) => a - b);
 };
 // every cut a render records (heard seconds): its shots' starts and its camera keys' cuts, in order. A key cut within half
 // a frame of a shot's start is that shot's own cut, as the studio's camera row reads it (cameraShotAtBoundary)
 export const renderCutTimes = (shotStarts, camKeys) => {
   const shots = [...shotStarts].toSorted((a, b) => a - b);
   const keys = cameraCutSeconds(camKeys).filter(
-    (t) => !shots.some((s) => Math.abs(s - t) < 0.5 / 30),
+    (t) => !shots.some((s) => Math.abs(s - t) < SHOT_CUT_NEAR),
   );
   return [...shots, ...keys]
     .toSorted((a, b) => a - b)
