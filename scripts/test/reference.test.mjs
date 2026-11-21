@@ -92,6 +92,51 @@ test("reference studies a real cut and compares with reference first without cla
   }
 }, 30000);
 
+// a draft is its picture over a strip naming the heard time and shot: compare measures the picture, and says the draft
+test("reference compare measures a film draft without the strip under its picture", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-draft-"));
+  try {
+    mkdirSync(join(dir, "renders"));
+    mkdirSync(join(dir, "references"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": { ratio: "16:9" } }));
+    const make = (file, filter) =>
+      expect(
+        spawnSync(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            filter,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            file,
+          ],
+          {
+            encoding: "utf8",
+            timeout: 10000,
+          },
+        ).status,
+      ).toBe(0);
+    make(join(dir, "references/ref.mp4"), "testsrc2=s=128x72:r=30:d=2");
+    make(join(dir, "renders/draft_video.mp4"), "testsrc2=s=128x80:r=30:d=2");
+    const compare = run(dir, ["compare", "references/ref.mp4", "renders/draft_video.mp4"]);
+    expect(compare.stderr).toMatch(
+      /comparing renders\/draft_video\.mp4's picture \(128x72\), without the draft's strip under it/,
+    );
+    const report = JSON.parse(readFileSync(reportFile(compare), "utf8"));
+    expect(report.remake).toBe(join(dir, "renders/draft_video.mp4"));
+    expect(report.remakePicture).toEqual({ width: 128, height: 72 });
+    expect(readdirSync(join(reportFile(compare), ".."))).not.toContain("remake-picture");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
 // bun run scenes found 0 cuts in a reference with about 30 whip pans: study now follows the camera's motion
 test.skipIf(!existsSync(mediaPython("camera")))(
   "reference study measures the camera's motion each frame and marks a whip pan",

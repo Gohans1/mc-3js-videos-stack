@@ -36,6 +36,10 @@ needFilm(process.env.LIVE_PROJECT);
 const PROJECT = resolve(process.env.LIVE_PROJECT ?? process.cwd());
 const RENDERS = join(PROJECT, "renders");
 const video = resolve(PROJECT, videoArg ?? "renders/draft_video.mp4");
+if (vsAt >= 0 && !existsSync(resolve(PROJECT, args[vsAt + 1]))) {
+  console.error(`no ${args[vsAt + 1]}: --vs takes the reference video, as references/ref.mp4`);
+  process.exit(2);
+}
 // a broken film file is a fault in the film: named, exit 1
 const readJson = (file) => {
   try {
@@ -243,12 +247,9 @@ const refFile =
   vsAt >= 0 ? resolve(PROJECT, args[vsAt + 1]) : timeline ? referenceVideo(PROJECT) : null;
 const refShown = vsAt >= 0 ? args[vsAt + 1] : refFile;
 const sudden = faults.filter((x) => x.kind === "JUMP" || x.kind === "FLASH");
+let weighed = false;
 if (refFile && sudden.length) {
   const path = resolve(PROJECT, refFile);
-  if (!existsSync(path)) {
-    console.error(`no ${refShown}: --vs takes the reference video, as references/ref.mp4`);
-    process.exit(2);
-  }
   const from = Math.max(0, START + times[0] - 0.5);
   let refD = [];
   try {
@@ -273,18 +274,26 @@ if (refFile && sudden.length) {
     const i = times.indexOf(x.t);
     const own = x.kind === "FLASH" ? Math.max(D[i] ?? 0, D[i + 1] ?? 0) : (D[i] ?? 0);
     const spike = peak > JUMP_MIN && peak > 3 * median;
-    const asMuch = peak >= 0.75 * own;
-    const pct = `${(peak * 100).toFixed(1)}%`;
+    // the reference's fast moves are smeared and ours are sharp: the same move measures about half ours there, and a
+    // reference changing a tenth of the picture a frame is moving fast itself
+    const fast = peak >= 5 * JUMP_MIN;
+    const asMuch = peak >= 0.5 * own;
+    const pct = (v) => `${(v * 100).toFixed(1)}%`;
+    const both = `${pct(peak)} a frame, ours ${pct(own)}`;
     x.ref = {
       change: peak,
-      times: peak / median,
-      ours: !spike && !asMuch,
+      oursChange: own,
+      overMedian: peak / median,
+      ours: !spike && !fast && !asMuch,
       said: spike
-        ? `ref jumps too (${pct}, x${(peak / median).toFixed(1)} its median)`
-        : asMuch
-          ? `the reference moves as much here (${pct} a frame)`
-          : `OURS ONLY: the reference changes ${pct} a frame here`,
+        ? `ref jumps too (${pct(peak)}, x${(peak / median).toFixed(1)} its median)`
+        : fast
+          ? `the reference moves fast here too (${both})`
+          : asMuch
+            ? `the reference moves about as much here (${both})`
+            : `OURS ONLY: ours changes ${pct(own)}, the reference ${pct(peak)} a frame`,
     };
+    weighed = true;
   }
   for (const [i, x] of faults.entries()) if (x.ref) lines[i + 1] += `; ${x.ref.said}`;
 }
@@ -493,7 +502,7 @@ const report = {
   timeline: timeline ? "current" : stale ? "stale" : render ? "manual-offset" : "external",
   stale,
   cuts: cutInfo,
-  reference: refFile && sudden.length ? refShown.replaceAll("\\", "/") : null,
+  reference: weighed ? refShown.replaceAll("\\", "/") : null,
   cutsUsed: activeCuts.map((c) => c + START),
   findings: faults.map((x) => ({
     kind: x.kind,
@@ -540,7 +549,10 @@ const upload =
       ? "; then bun run deliver (YouTube's spec)"
       : "";
 const showVideo = /\s/.test(shown) ? JSON.stringify(shown) : shown;
-const focus = faults.find((fault) => fault.kind !== "FROZEN") ?? faults[0];
+const focus =
+  faults.find((fault) => fault.ref?.ours) ??
+  faults.find((fault) => fault.kind !== "FROZEN") ??
+  faults[0];
 if (!timeline) {
   log(
     `next: ${again}bun run sheet ${showVideo} ${focus ? `frames ${exact(focus.t)}` : "overview"} (inspect the encoded picture)`,

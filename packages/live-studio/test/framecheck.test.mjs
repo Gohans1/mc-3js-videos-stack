@@ -104,7 +104,35 @@ test("a jump the reference makes too is said so; one it does not is OURS ONLY", 
   assert.equal(report.reference, "calm.mp4");
   const jump = report.findings.find((f) => f.kind === "JUMP");
   assert.equal(jump.reference.ours, true);
-  assert.match(jump.reference.said, /^OURS ONLY: the reference changes 0\.0% a frame here$/);
+  assert.match(
+    jump.reference.said,
+    /^OURS ONLY: ours changes \d+\.\d%, the reference 0\.0% a frame$/,
+  );
+  assert.ok(jump.reference.oursChange > 0.3);
+  // a reference busy every frame (a smeared whip measures under our sharp one) moves as fast: no pop of ours
+  media(join(dir, "busy.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=gray:s=64x36:r=30:d=2,noise=alls=100:allf=t",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  const busy = framecheck(dir, "--vs", "busy.mp4");
+  assert.equal(busy.status, 0, busy.stdout + busy.stderr);
+  assert.match(
+    busy.stdout,
+    /JUMP 1\.00: .*; the reference moves fast here too \(\d+\.\d% a frame, ours \d+\.\d%\)/,
+  );
+});
+
+test("a --vs video that is not there stops framecheck before it measures", (t) => {
+  const dir = film(t, "16:9");
+  flip(join(dir, "renders/draft_video.mp4"));
+  const out = framecheck(dir, "--vs", "nope.mp4");
+  assert.equal(out.status, 2);
+  assert.match(out.stderr, /no nope\.mp4: --vs takes the reference video/);
+  assert.doesNotMatch(out.stdout, /frames,/);
 });
 
 test("a SPAN run's video is measured on the film's clock, with only the cuts inside it", (t) => {

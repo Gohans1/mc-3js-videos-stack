@@ -2,6 +2,8 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, statSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
+import { ratioOf, sizeOf } from "./frame.ts";
+
 // Where a rendered video sits on the film's heard clock, read from its name (render.mjs names them so):
 //   renders/chunks/cNN.mp4, renders/final_chunks/cNN.mp4  NN*30 s on (render.mjs CHUNK)
 //   renders/span_<from>-<to>.mp4                           a SPAN run's, <from> s on
@@ -115,12 +117,12 @@ export const filmPicture = (root, video) => {
   if (!filmVideo(root, file)) return null;
   const size = probeVideo(file);
   if (!size) return null;
-  let ratio = "16:9";
+  let pkg = null;
   try {
-    ratio =
-      JSON.parse(readFileSync(join(root, "package.json"), "utf8"))?.["live-studio"]?.ratio ?? ratio;
+    pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
   } catch {}
-  const height = Math.trunc((size.width * (ratio === "9:16" ? 16 / 9 : 9 / 16)) / 2) * 2;
+  const [w, h] = sizeOf(ratioOf(pkg), 16);
+  const height = Math.trunc((size.width * h) / w / 2) * 2;
   return height < size.height ? { width: size.width, height } : null;
 };
 

@@ -36,14 +36,20 @@ export const latestStudy = (project) => {
 const s = (t) => `${+t.toFixed(2)} s`;
 
 const VIDEO = /\.(mp4|mov|mkv|webm|m4v)$/i;
-// the film's reference video (bun run reference add puts it in references/; a -source. file is the download it came from)
+// the film's reference video (bun run reference add puts it in references/; a -source. file is the download it came from):
+// the one the newest study measured, else ref.*, else the first
 export const referenceVideo = (project) => {
   const dir = join(project, "references");
-  const name = existsSync(dir)
+  const names = existsSync(dir)
     ? readdirSync(dir)
         .filter((f) => VIDEO.test(f) && !f.includes("-source."))
-        .toSorted()[0]
-    : null;
+        .toSorted()
+    : [];
+  const studied = latestStudy(project)?.file.split(/[\\/]/).at(-3);
+  const name =
+    names.find((f) => f.replace(/\.[^.]+$/, "") === studied) ??
+    names.find((f) => f.startsWith("ref.")) ??
+    names[0];
   return name ? `references/${name}` : null;
 };
 

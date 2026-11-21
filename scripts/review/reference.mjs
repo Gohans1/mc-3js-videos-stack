@@ -411,9 +411,13 @@ const ended = await startJob(process.cwd(), `reference ${command}`, {
 });
 // a film draft is its picture over a strip naming the heard time and shot: the measure compares the picture alone
 const measured = files.map((f) => resolve(f));
+const began = Date.now();
 const picture = command === "compare" ? filmPicture(process.cwd(), measured[1]) : null;
+// under its own name, so compare.md names the draft; removed once measured
+const pictureDir = join(out, "remake-picture");
 if (picture) {
-  const cropped = join(out, `${basename(files[1], extname(files[1]))}-picture.mp4`);
+  mkdirSync(pictureDir);
+  const cropped = join(pictureDir, basename(files[1]));
   const c = spawnSync(
     "ffmpeg",
     [
@@ -445,6 +449,10 @@ if (picture) {
     console.error(
       `reference: comparing ${files[1]}'s picture (${picture.width}x${picture.height}), without the draft's strip under it`,
     );
+  } else if (Date.now() - began >= minutes * 60_000) {
+    console.error(`reference: stopped after ${minutes} minute(s) cutting the draft's strip off`);
+    await ended({ say: `Reference ${command} stopped`, level: "warn" });
+    process.exit(1);
   } else
     console.error(
       `reference: could not cut the draft's strip off (${(c.stderr || c.error?.message || `exit ${c.status}`).trim()}); comparing the whole frame`,
@@ -461,8 +469,21 @@ const { status, stopped } = await runWorker(
     ...(values.fit ? ["--fit"] : []),
     ...(values.film ? ["--film", resolve(values.film)] : []),
   ],
-  minutes,
+  Math.max(0.01, minutes - (Date.now() - began) / 60_000),
 );
+if (picture) {
+  rmSync(pictureDir, { recursive: true, force: true });
+  const compareJson = join(out, "compare.json");
+  if (existsSync(compareJson)) {
+    const compared = JSON.parse(readFileSync(compareJson, "utf8"));
+    const named = {
+      ...compared,
+      remake: resolve(files[1]),
+      remakePicture: measured[1] === resolve(files[1]) ? null : picture,
+    };
+    writeFileSync(compareJson, `${JSON.stringify(named, null, 1)}\n`);
+  }
+}
 if (stopped)
   console.error(
     "reference: stopped before completion; completed reports remain, decoding must restart",

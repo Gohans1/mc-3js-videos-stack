@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 
-import { latestStudy, refCutsWarning, referenceCopy, unstudiedWarning } from "../src/ref-cuts.mjs";
+import {
+  latestStudy,
+  refCutsWarning,
+  referenceCopy,
+  referenceVideo,
+  unstudiedWarning,
+} from "../src/ref-cuts.mjs";
 
 const study = (dir, name, run, cuts, when) => {
   const folder = join(dir, "renders/reference", name, run);
@@ -66,6 +72,18 @@ test("a reference with no study is named, since the cut check and the coverage a
   );
   study(dir, "ref", "run-1", [cut(1)], new Date());
   assert.equal(unstudiedWarning(dir), "");
+});
+
+// a film keeps the download beside its H.264 copy (orig.mp4, a 4K AV1): the one measured is the reference
+test("the film's reference video is the one its newest study measured, else ref.*, never a download", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
+  assert.equal(referenceVideo(dir), null);
+  mkdirSync(join(dir, "references"));
+  for (const f of ["orig.mp4", "ref.mp4", "clip-source.mp4", "vox.wav"])
+    writeFileSync(join(dir, "references", f), "");
+  assert.equal(referenceVideo(dir), "references/ref.mp4");
+  study(dir, "orig", "run-1", [cut(1)], new Date());
+  assert.equal(referenceVideo(dir), "references/orig.mp4");
 });
 
 test("a sound file that is a reference's own audio, byte for byte, is named by the reference file", () => {
