@@ -44,9 +44,11 @@ export function shutterBounds(
   start: number,
   end: number,
   spans: readonly PictureSpan[],
+  cuts: readonly number[] = [],
 ) {
-  let from = start,
-    to = end;
+  // the camera keys' cuts inside the shot (heard seconds) bound it as its start and end do
+  let from = Math.max(start, ...cuts.filter((c) => c <= t)),
+    to = Math.min(end, ...cuts.filter((c) => c > t));
   for (let i = 1; i < spans.length; i++) {
     const before = spans[i - 1],
       after = spans[i];

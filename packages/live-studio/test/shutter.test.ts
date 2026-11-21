@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { apertureSamples, samplesForTurn, shutterTimes } from "../src/shutter";
+import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
 
 test("centred shutter clips at a cut and distributes the surviving samples evenly", () => {
   const before = shutterTimes(0.995, 30, 4, 0, 1, { angle: 360, timing: "center" });
@@ -39,4 +39,12 @@ test("a whip takes shutter samples until one sample's turn moves the picture 12 
   expect(samplesForTurn(8, facing(0), facing(30), 50, 1920)).toBe(64);
   expect(samplesForTurn(16, facing(0), facing(0.5), 50, 1920)).toBe(26);
   expect(samplesForTurn(8, facing(0), [Number.NaN, 0, 0], 50, 1920)).toBe(8);
+});
+
+// a camera key with cut: true inside a shot cuts the picture too: an open shutter at 10 s must not reach the next camera
+test("the shutter stops at a camera key's cut inside a shot, as at a shot's start", () => {
+  expect(shutterBounds(10, 0, 20, [], [5, 10.01, 15])).toEqual([5, 10.01]);
+  expect(shutterBounds(10.01, 0, 20, [], [5, 10.01, 15])).toEqual([10.01, 15]);
+  const [from, to] = shutterBounds(10, 0, 20, [], [10.01]);
+  expect(Math.max(...shutterTimes(10, 30, 8, from, to))).toBeLessThan(10.01);
 });

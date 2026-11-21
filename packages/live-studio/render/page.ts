@@ -228,6 +228,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       SHOTS[i]?.t ?? 0,
       SHOTS[i + 1]?.t ?? DURATION,
       timingClock.segments,
+      cuts,
     );
     let times = shutterTimes(t, FPS, samples, from, to, shutter);
     const pupils = apertureSamples(
