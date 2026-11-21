@@ -72,8 +72,10 @@ Nothing is written outside the film. Options are environment variables:
   CHUNKS=3,4                 re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
   SPAN=40,44                 clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
-  SAMPLES=16                 temporal shutter samples a frame for clip, final or poster (1-64; clip 1, final and poster 8): more is
-                             smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by itself, up to 64
+  SAMPLES=16                 temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
+                             poster 8): more is smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by
+                             itself, up to 64. SAMPLES=8 on stills (render all's too) gives a moving moment the final's
+                             motion blur at the draft's size; leave stills at 1 to check a pose, a contact or where things are
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
   INSPECT=px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
@@ -85,7 +87,8 @@ Nothing is written outside the film. Options are environment variables:
                              frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
                              sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
                              says it too); REF_REGION=x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
-                             brightness ours/reference
+                             brightness ours/reference. The reference is filmed with motion blur: on a moving moment give the
+                             stills SAMPLES=8 too, or ours reads sharper than it is
   COMPARE=1  or  --compare   stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
   CHECK=slide:0,108;trace:50,51,0.1  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
   CHECK=motion:handR,81,83   built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
@@ -196,29 +199,36 @@ const misplaced =
         ? "SPAN and CHUNKS each pick what to draw: one at a time"
         : (what === "clip" || what === "final") && process.env.AT
           ? "AT is for render stills"
-          : !video && !full && process.env.SAMPLES
-            ? "SAMPLES is for render clip, final or poster"
-            : !full && process.env.RES
-              ? "RES is for render final or poster"
-              : full && process.env.LIST === "1"
-                ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
-                : ["poster", "final", "clip"].includes(what) && process.env.CHECK
-                  ? "CHECK goes with render stills"
-                  : what === "poster" && !process.env.AT
-                    ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
-                    : video && process.env.CROP !== undefined
-                      ? "CROP is for render stills or poster"
-                      : video && process.env.VIEWS !== undefined
-                        ? "VIEWS is for render stills or poster"
-                        : process.env.INSPECT && process.env.VIEWS !== undefined
-                          ? "INSPECT and VIEWS cannot be used together: use one or the other"
-                          : (video || what === "captions") && compare
-                            ? "COMPARE is for render stills or poster"
-                            : what === "captions"
-                              ? ["AT", "LIST", "CHECK", "INSPECT", "VIEWS", "ENTRY", "CROP"]
-                                  .filter((k) => process.env[k] !== undefined)
-                                  .map((k) => `${k} does nothing for render captions`)[0]
-                              : null;
+          : !full && process.env.RES
+            ? "RES is for render final or poster"
+            : full && process.env.LIST === "1"
+              ? `LIST=1 draws over drafts only; a ${what} is the picture alone`
+              : ["poster", "final", "clip"].includes(what) && process.env.CHECK
+                ? "CHECK goes with render stills"
+                : what === "poster" && !process.env.AT
+                  ? "poster takes AT=<s>, the heard second to draw: AT=12 bun run render poster"
+                  : video && process.env.CROP !== undefined
+                    ? "CROP is for render stills or poster"
+                    : video && process.env.VIEWS !== undefined
+                      ? "VIEWS is for render stills or poster"
+                      : process.env.INSPECT && process.env.VIEWS !== undefined
+                        ? "INSPECT and VIEWS cannot be used together: use one or the other"
+                        : (video || what === "captions") && compare
+                          ? "COMPARE is for render stills or poster"
+                          : what === "captions"
+                            ? [
+                                "AT",
+                                "LIST",
+                                "CHECK",
+                                "INSPECT",
+                                "VIEWS",
+                                "ENTRY",
+                                "CROP",
+                                "SAMPLES",
+                              ]
+                                .filter((k) => process.env[k] !== undefined)
+                                .map((k) => `${k} does nothing for render captions`)[0]
+                            : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -418,6 +428,14 @@ const at =
         ? []
         : [1]
       : env.AT.split(",").map((x, i) => secondArg(`AT item ${i + 1}`, x));
+if (what === "stills" && env.SAMPLES && (env.ENTRY || !at.length)) {
+  console.error(
+    env.ENTRY
+      ? "SAMPLES blurs the film's stills, and an ENTRY page draws its own pictures (--help for which option goes with which)"
+      : "SAMPLES blurs stills, and a CHECK run without AT draws none: add AT=<s> for a still beside it (--help for which option goes with which)",
+  );
+  process.exit(2);
+}
 const only = env.CHUNKS ? numbers("CHUNKS", { min: 0, int: true }) : null;
 const span = env.SPAN
   ? env.SPAN.split(",").map((x, i) => secondArg(`SPAN item ${i + 1}`, x))
@@ -636,7 +654,7 @@ const cfg = {
         name: what === "poster" ? `poster_${s}s.png` : `still_${s}s.jpg`,
         frame: Math.round(s * FPS),
       })),
-  stillSamples: what === "poster" ? samples : 1,
+  stillSamples: samples,
   clip: video
     ? {
         chunk: CHUNK,
@@ -1091,9 +1109,15 @@ const nextHint =
     : stillsWritten.filter((f) => f.includes("/still_")).length > 1
       ? "; many stills at once: bun run sheet (6 to a picture)"
       : "";
+const sampleNote =
+  what === "poster"
+    ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)`
+    : samples > 1 && cfg.stills.length
+      ? ` (stills: ${samples} sub-frames)`
+      : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
+    `wrote ${stillsWritten.join(" ")}${sampleNote}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");

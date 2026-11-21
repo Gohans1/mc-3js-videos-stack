@@ -3729,9 +3729,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "SAMPLES",
         label: "SAMPLES (1-64 sub-frames)",
         type: "number",
-        visibleWhen: { field: "target", in: ["clip", "final", "poster", "all"] },
+        visibleWhen: { field: "target", in: ["stills", "clip", "final", "poster", "all"] },
         tier: "advanced",
         placeholder: "8",
+        hint: "Motion blur: stills and clip default to 1, final and poster to 8.",
       },
       {
         key: "RES",

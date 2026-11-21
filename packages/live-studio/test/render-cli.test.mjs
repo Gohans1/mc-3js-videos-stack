@@ -149,7 +149,7 @@ test("SPAN is refused before any build when it is misplaced, backwards, or start
   assert.doesNotMatch(tail.stdout + tail.stderr, /build/i);
 });
 
-test("captions and final refuse the options they would ignore", (t) => {
+test("captions, final and stills refuse the options they would ignore", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   copyDemo(dir);
@@ -173,11 +173,24 @@ test("captions and final refuse the options they would ignore", (t) => {
   const captions = render("captions", { AT: "4" });
   assert.equal(captions.status, 2, captions.stdout + captions.stderr);
   assert.match(captions.stderr, /AT does nothing for render captions/);
+  const captionsBlur = render("captions", { SAMPLES: "8" });
+  assert.equal(captionsBlur.status, 2, captionsBlur.stdout + captionsBlur.stderr);
+  assert.match(captionsBlur.stderr, /SAMPLES does nothing for render captions/);
 
   // a final takes half an hour and is the upload: a check goes on the stills before it
   const final = render("final", { CHECK: "motion:cam,1,2" });
   assert.equal(final.status, 2, final.stdout + final.stderr);
   assert.match(final.stderr, /CHECK goes with render stills/);
+
+  // SAMPLES blurs the film's stills: a CHECK run without AT draws none, an ENTRY page draws its own
+  const blurNone = render("stills", { CHECK: "motion:cam,1,2", SAMPLES: "8" });
+  assert.equal(blurNone.status, 2, blurNone.stdout + blurNone.stderr);
+  assert.match(blurNone.stderr, /SAMPLES blurs stills, and a CHECK run without AT draws none/);
+  mkdirSync(join(dir, "lab"));
+  writeFileSync(join(dir, "lab/page.ts"), "");
+  const blurLab = render("stills", { ENTRY: "lab/page.ts", AT: "1", SAMPLES: "8" });
+  assert.equal(blurLab.status, 2, blurLab.stdout + blurLab.stderr);
+  assert.match(blurLab.stderr, /an ENTRY page draws its own pictures/);
 });
 
 test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
@@ -502,6 +515,49 @@ export function buildScene(canvas, W, H) {
   assert.ok(bad.failures.length > 0);
   for (const image of bad.evidence) assert.ok(existsSync(join(film.dir, image)));
   assert.match(fail.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
+}, 60000);
+
+test("SAMPLES gives a still the shutter's motion blur; without it a still is the one instant", (t) => {
+  const film = chromeFilm(t, 2);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  // red climbs 3000 a second from 128 at 1 s: the half-frame shutter after 1 s averages to about 153
+  writeFileSync(
+    join(film.dir, "src/scene.ts"),
+    `export const DURATION=2, SHOTS_OUT=[];
+export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=canvas.getContext('2d');return (t)=>{g.fillStyle='rgb('+Math.min(255,Math.max(0,Math.round(128+(t-1)*3000)))+',0,0)';g.fillRect(0,0,W,H);};}`,
+  );
+  const red = () => {
+    const pixel = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        join(film.dir, "renders/still_1s.jpg"),
+        "-vf",
+        "format=rgb24,crop=1:1:0:0",
+        "-f",
+        "rawvideo",
+        "-",
+      ],
+      { timeout: 10000 },
+    );
+    assert.equal(pixel.status, 0, pixel.stderr.toString());
+    return pixel.stdout[0];
+  };
+  const sharp = film.render("stills", { AT: "1" });
+  assert.equal(sharp.status, 0, sharp.stdout + sharp.stderr);
+  assert.doesNotMatch(sharp.stdout, /sub-frames/);
+  const instant = red();
+  assert.ok(Math.abs(instant - 128) <= 3, `one instant: expected red 128, got ${instant}`);
+  const blurred = film.render("stills", { AT: "1", SAMPLES: "8" });
+  assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
+  assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(stills: 8 sub-frames\)/);
+  const averaged = red();
+  assert.ok(
+    Math.abs(averaged - 153) <= 4,
+    `the shutter's average: expected red 153, got ${averaged}`,
+  );
 }, 60000);
 
 test("native async frames preserve source time and layer clocks through Speed and Freeze", (t) => {
