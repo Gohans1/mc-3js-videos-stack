@@ -12,6 +12,7 @@ Chỉ Playground chat (/prompts) và History (/library). Người dùng cấm đ
 | --- | --- |
 | scripts/page-map.ts | Nơi duy nhất biết trang trông thế nào: URL, mọi phần tử theo tên (MAP), chữ đọc từ trang (TEXT), tool, mức thinking, media, đuôi video. |
 | scripts/lib.ts | Hạ tầng dùng chung: Chrome, tab, agent-browser, bộ tìm phần tử trong trang, hành động AI Studio, bộ chạy bước. |
+| scripts/win32.ts | Gọi user32.dll qua bun:ffi để cửa sổ ẩn không vướng người dùng (guardWindows). |
 | scripts/ask.ts | Gửi 1 prompt (0..n file) rồi lưu câu trả lời; follow-up; collect. |
 | scripts/studio.ts | Mọi lệnh còn lại, nhóm theo tab, chat, cài đặt, History, sức khoẻ, cấp thấp; có doctor. |
 | scripts/lib.test.ts | Test cho logic thuần không cần trình duyệt (toSeconds). |
@@ -43,6 +44,9 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Session mới mở about:blank | Lệnh đầu của 1 session mới mở about:blank trong cửa sổ dùng gần nhất, che trang của cửa sổ đó. prepareTab đóng mọi trang trắng nằm trong cửa sổ ngoài màn hình. |
 | Vị trí riêng | Cửa sổ ở left -10000, top = slot × 1200; slot bỏ qua chỗ đã có cửa sổ. Hai cửa sổ chồng khít thì Chrome báo trang bên dưới là hidden. |
 | Mở ở nền | Target.createTarget với newWindow và background: không cướp focus. |
+| Khiên cửa sổ | guardWindows gắn WS_EX_TOOLWINDOW (không taskbar, không Alt+Tab, Win+M bỏ qua) và WS_EX_NOACTIVATE cho cửa sổ ở left -10000, gỡ cho cửa sổ trên màn hình (--show). Chạy trong prepareTab và trước mỗi bước của runSteps. |
+| Mở lại cửa sổ thu nhỏ | guardWindows dùng ShowWindow SW_SHOWNOACTIVATE trước khi CDP thấy trạng thái minimized; đường windowState normal của CDP chỉ còn cho maximized hay fullscreen. |
+| Chuyển tab ít nhất | prepareTab đọc tab list --json, chỉ gọi tab id khi session đang ghim tab khác (nhãn mới, cửa sổ tạo lại). |
 | Chrome khởi động | Start-Process (để Chrome sống sau khi lệnh shell của agent kết thúc) với --no-startup-window (không có cửa sổ đầu tiên cướp focus) và --disable-backgrounding-occluded-windows. |
 
 ## Bài học đã trả giá
@@ -80,6 +84,8 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Chrome mở cửa sổ đầu tiên là cướp focus bàn phím (kể cả với -WindowStyle Minimized). | --no-startup-window + tạo cửa sổ qua CDP ở chế độ nền. |
 | Regex trong chuỗi JS chèn vào trang phải escape 2 lần (\\d, \\b); sửa bằng sed, heredoc hay python dễ làm rơi 1 dấu \ và \b thành ký tự backspace. | Sửa các chuỗi đó bằng Edit tool rồi grep lại. |
 | agent-browser close trên session --cdp đóng cả trình duyệt. | Không bao giờ gọi close; đóng tab bằng CDP Target.closeTarget. |
+| Cửa sổ ẩn từng giữ foreground: người dùng gõ là chữ vào trang AI Studio vô hình, Ctrl+W đóng tab. Nguồn 1: CDP windowState normal trên cửa sổ thu nhỏ (Win+D) kích hoạt cửa sổ. | Khiên cửa sổ và mở lại bằng SW_SHOWNOACTIVATE (mục Tab và cửa sổ). WS_EX_NOACTIVATE một mình không chặn được. |
+| Nguồn 2: agent-browser tab id và lệnh đầu của session chưa ghim tab (mở about:blank) kích hoạt cửa sổ; Windows cho phép khi người dùng ngồi im quá ForegroundLockTimeout (mặc định 200 giây). | Chỉ chuyển tab khi cần. Lệnh thường (eval, click, fill, tab list) và daemon khởi động lại không kích hoạt. |
 | Gemini từng bịa chi tiết audio của clip tổng hợp (nói tiếng bíp 1000 Hz mỗi giây, thật là 440 Hz liên tục). | Câu trả lời quan trọng phải kiểm chứng. |
 
 ## Đã thử
@@ -95,7 +101,9 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Mở menu lượt: cuộn nút vào màn hình rồi rê vào tâm nút | Hỏng với lượt ngắn vì nút nằm ngoài lượt, rời lượt là nút ẩn. |
 | Mở menu lượt: rê vào giữa phần lượt thấy được | Hỏng ngay sau 1 lần copy vì toast Copied che điểm đó. Cách đang dùng ở bảng bẫy. |
 | Fill text dài qua tham số dòng lệnh | Hỏng từ khoảng 32 nghìn ký tự (ENAMETOOLONG). Chuyển sang batch qua stdin. |
-| 1 lần thấy foreground là Chrome sau chuỗi test dài | Không tái hiện được qua status, doctor, smoke, read, reload, mở và đóng tab, chrome --show, đóng mọi cửa sổ. Thấy lại thì đo từng lệnh bằng GetForegroundWindow. |
+| 1 lần thấy foreground là Chrome sau chuỗi test dài | Đã tìm ra 2 nguồn (bảng bẫy); trước đó không tái hiện được vì lúc test người dùng đang gõ nên khoá foreground còn hiệu lực. |
+| Chỉ gắn WS_EX_NOACTIVATE | Không đủ: Chrome tự kích hoạt cửa sổ khi CDP mở lại hay chuyển tab. |
+| Chỉ gắn WS_EX_TOOLWINDOW | Hết taskbar, Alt+Tab và Win+M; Win+D có lúc vẫn thu nhỏ được (2 lần đo, 1 lần thu nhỏ). |
 
 ## Ma trận test thật (2026-11-21)
 
@@ -117,6 +125,9 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | 2 tab song song (chat mới + follow-up) | Pass. |
 | Công tắc search qua chat mới (bật rồi open new, tắt rồi open new) | Search giữ trạng thái cũ cả 2 chiều; Code execution, thinking, media thì không. ASK --tool search=off: Pass, log run báo off. |
 | models, model (đổi 4 lần), set thinking/media (cả mức model không có), tool on/off, rename, system, history --search, read, tabs, tab close, chrome --show | Pass. |
+| Focus (cửa sổ người dùng giữ foreground, lệnh chạy từ cây process của nó như T3 Code): thu nhỏ rồi status, Win+D, chrome --show rồi status, nhãn mới, tab close | Foreground không đổi; taskbar không còn nút Chrome ẩn; --show có lại nút, lệnh sau gắn lại khiên. Đo bằng GetForegroundWindow. |
+| Thu nhỏ cửa sổ giữa lúc ASK chờ trả lời | Pass: bước copy mở lại cửa sổ không lấy focus, lưu đủ câu trả lời. |
+| doctor và smoke sau khi gắn khiên (innerWidth còn 1904) | 47 khớp, 4 vắng hợp lệ, 0 fallback; smoke trả lời đúng 2. |
 
 ## Giới hạn biết trước
 
