@@ -60,7 +60,8 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
 A clip or final run keeps every chunk already rendered from the same film code, data and settings, and renders the rest:
 after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
 edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
-when the page goes quiet for 4 minutes mid-video.
+when the page goes quiet for 4 minutes mid-video. A clip run ends with its cost: ms a camera sample between cuts,
+naming any stretch over twice the median (a heavy set to profile before the studio stutters on it).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options are environment variables:
   AT=40,41.5                 stills at these heard seconds, or as notes print them: AT=0:40,0:41.5 (default 1)

@@ -7,6 +7,7 @@ import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource }
 
 import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
+import { renderCost } from "../src/render-cost.mjs";
 import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
 import { cameraCutSeconds, timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
@@ -222,8 +223,11 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
   const whips = { frames: 0, most: 0 };
+  const cost = cfg.clip ? renderCost(cuts, DURATION) : null;
   const draw = async (frame, samples, viewName = null) => {
     const t = frame / FPS;
+    const began = performance.now();
+    let drawn = 1;
     ctx.globalAlpha = 1;
     const i = shotAt(t) - 1;
     const shutter = SHOTS[i]?.shutter;
@@ -282,7 +286,9 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         }
       }
       ctx.drawImage(acc.resolve(), 0, 0);
+      drawn = times.length * pupils.length;
     }
+    cost?.add(t, performance.now() - began, drawn);
     if (!cfg.draft) return out;
     const ms = Math.round(t * 1000);
     const label = `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`;
@@ -447,6 +453,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     log(
       `span: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
     );
+    if (cost.line()) log(cost.line());
     await done();
     return;
   }
@@ -470,6 +477,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
       );
     }
+    if (cost.line()) log(cost.line());
   }
   await done(cfg.clip ? chunks : undefined);
 })();
