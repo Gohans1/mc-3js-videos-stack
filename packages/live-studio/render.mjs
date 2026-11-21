@@ -60,7 +60,7 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
 A clip or final run keeps every chunk already rendered from the same film code, data and settings, and renders the rest:
 after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
 edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
-when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: ms a camera sample per
+when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: wall ms a camera sample per
 stretch between cuts (its median frame), naming one over twice the median of the others and 33 ms (a heavy set to look into).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options are environment variables:
@@ -106,7 +106,7 @@ Nothing is written outside the film. Options are environment variables:
                              quote | and * in shell); honors INSPECT, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
                              screen=[x0,y0..x1,y1] in 0..1 of the frame, "past top 0.12": that far beyond the edge, in frames;
                              with an aperture (fstop > 0) the header says where the lens focuses and each target its blur in px:
-                             the lens's own, as a final with shutter.apertureSamples shows it; the draft DOF pass caps it near 14 px
+                             the lens's own, as a final with shutter.apertureSamples shows it; the DOF post pass (drafts, and finals without it) tops out short of strong blur
   ENTRY=lab/prop.ts          run a page of the film's own instead (it imports "live-studio/lab"); LAB_VIEW=desk reaches it as cfg.lab.view
   RENDER_FRESH_CACHE=1       use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:

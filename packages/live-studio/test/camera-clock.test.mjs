@@ -392,4 +392,9 @@ test("a render's cuts join the shots' starts and the camera keys' cuts", (t) => 
   const keys = [{ t: 0 }, { t: 4, cut: true }, { t: 6, cut: true }];
   assert.deepEqual(renderCutTimes([4, 2], keys), [2, 4, 6]);
   assert.deepEqual(renderCutTimes([4], { keys }), [4, 6]);
+  // a key cut within half a frame of a shot's start is that shot's own cut, as the studio's camera row reads it
+  assert.deepEqual(
+    renderCutTimes([2.62], [{ t: 0 }, { t: 2.615, cut: true }, { t: 6, cut: true }]),
+    [2.62, 6],
+  );
 });

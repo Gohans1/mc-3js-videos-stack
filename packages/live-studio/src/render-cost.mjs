@@ -8,7 +8,7 @@ const FRAMES = 10,
 // the lower middle: of two stretches, the lighter is the typical one
 const median = (values) => values.toSorted((a, b) => a - b)[Math.floor((values.length - 1) / 2)];
 
-export const renderCost = (cuts, duration) => {
+export const renderCost = (cuts) => {
   const stretches = [0, ...cuts].map(() => ({ each: [], from: Infinity, to: -Infinity }));
   return {
     add(t, ms, samples) {
@@ -35,11 +35,11 @@ export const renderCost = (cuts, duration) => {
       );
       const named = heavy.map(
         (s) =>
-          `${s.from.toFixed(2)}-${Math.min(s.to, duration).toFixed(2)} s draws ${Math.round(s.ms)} ms (x${s.x.toFixed(1)})`,
+          `${s.from.toFixed(2)}-${s.to.toFixed(2)} s draws ${Math.round(s.ms)} ms (x${s.x.toFixed(1)})`,
       );
       return `cost: ${Math.round(typical)} ms a sample, the median of ${judged.length} stretches between cuts; ${
         named.length
-          ? `${named.join(", ")}: CHECK="probe:*,${heavy[0].from.toFixed(2)}" bun run render stills lists what it draws`
+          ? `${named.join(", ")}: AT=${heavy[0].from.toFixed(2)} LIST=1 bun run render stills shows what is in view there`
           : `none past twice that and ${FRAME_MS} ms`
       }`;
     },

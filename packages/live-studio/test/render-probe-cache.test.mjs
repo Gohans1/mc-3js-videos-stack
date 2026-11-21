@@ -723,7 +723,7 @@ test("probeCheck says where the lens focuses and how blurred each target is", as
     )("*", 1);
   const lines = await probe({ scene, camera, optics, objects });
   assert.match(lines[0], / focus 2\.00 m on near, f\/2, 50 mm /);
-  // the focus distance is the near box's: it is sharp; 5 m off, the far box blurs by blurPx's circle of confusion
+  // the focus distance is the near box's: it is sharp; 3 m past focus, the far box blurs by blurPx's circle of confusion
   assert.match(
     lines.find((l) => l.startsWith("  near")),
     / blur 0\.0 px/,

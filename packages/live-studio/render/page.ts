@@ -215,11 +215,12 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
   const whips = { frames: 0, most: 0 };
-  const cost = cfg.clip ? renderCost(cuts, DURATION) : null;
+  const cost = cfg.clip ? renderCost(cuts) : null;
+  // the camera samples the last frame drew, a whip's restarted ones too: the cost line divides a frame's time by them
+  let drawn = 0;
   const draw = async (frame, samples, viewName = null) => {
     const t = frame / FPS;
-    const began = performance.now();
-    let drawn = 1;
+    drawn = 0;
     ctx.globalAlpha = 1;
     const i = shotAt(t) - 1;
     const shutter = SHOTS[i]?.shutter;
@@ -238,6 +239,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     if (times.length === 1 && pupils.length === 1) {
       if (render.renderFrame) await render.renderFrame(t);
       else render(t);
+      drawn = 1;
       ctx.drawImage(canvas, 0, 0);
     } else {
       // in the film's own context when it shares its renderer (draw.tools.renderer): no copy through the CPU per sample
@@ -261,6 +263,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
           const options = aperture ? { aperture } : undefined;
           if (render.renderFrame) await render.renderFrame(times[k], options);
           else render(times[k], options);
+          drawn++;
           acc.add(canvas);
         }
         const e = camera?.matrixWorld?.elements;
@@ -279,9 +282,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         }
       }
       ctx.drawImage(acc.resolve(), 0, 0);
-      drawn = times.length * pupils.length;
     }
-    cost?.add(t, performance.now() - began, drawn);
     if (!cfg.draft) return out;
     const ms = Math.round(t * 1000);
     const label = `${String(Math.floor(ms / 60000)).padStart(2, "0")}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}.${String(ms % 1000).padStart(3, "0")}`;
@@ -414,6 +415,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     });
     output.addVideoTrack(source, { frameRate: FPS });
     await output.start();
+    // frame to frame, so the GPU's work and the encoder's wait count too, not only what the CPU hands the GPU
+    let mark = performance.now();
     for (let f = first; f <= last; f++) {
       const sample = new VideoSample(await draw(f, cfg.clip.samples), {
         timestamp: (f - first) / FPS,
@@ -421,6 +424,9 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       });
       await source.add(sample);
       sample.close();
+      const now = performance.now();
+      cost.add(f / FPS, now - mark, drawn);
+      mark = now;
       alive(f);
     }
     await output.finalize();

@@ -87,11 +87,17 @@ export const cameraCutSeconds = (keys) => {
   const heard = mapTimeline("cam", rows, clockForTimeline("cam")) ?? [];
   return heard.flatMap((k) => (k.cut && k.t > 1e-9 ? [k.t] : [])).toSorted((a, b) => a - b);
 };
-// every cut a render records (heard seconds): its shots' starts and its camera keys' cuts, each once, in order
-export const renderCutTimes = (shotStarts, camKeys) =>
-  [...shotStarts, ...cameraCutSeconds(camKeys)]
+// every cut a render records (heard seconds): its shots' starts and its camera keys' cuts, in order. A key cut within half
+// a frame of a shot's start is that shot's own cut, as the studio's camera row reads it (cameraShotAtBoundary)
+export const renderCutTimes = (shotStarts, camKeys) => {
+  const shots = [...shotStarts].toSorted((a, b) => a - b);
+  const keys = cameraCutSeconds(camKeys).filter(
+    (t) => !shots.some((s) => Math.abs(s - t) < 0.5 / 30),
+  );
+  return [...shots, ...keys]
     .toSorted((a, b) => a - b)
     .filter((t, i, all) => !i || t - all[i - 1] > 1e-6);
+};
 export const layerDuration = () =>
   Math.max(0, ...Object.values(layerClocks).map((clock) => clock.duration));
 
