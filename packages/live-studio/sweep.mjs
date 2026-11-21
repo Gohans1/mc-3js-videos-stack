@@ -5,8 +5,8 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
-import { latestStudy, referenceVideo } from "./src/ref-cuts.mjs";
-import { cutItems, mean, median, sharpness, since, stretches, when } from "./src/sweep.mjs";
+import { cutItems, latestStudy, referenceVideo } from "./src/ref-cuts.mjs";
+import { mean, median, sharpness, since, stretches, when } from "./src/sweep.mjs";
 import { drawnCuts, filmPicture, probeVideo } from "./src/video.mjs";
 
 const HELP = `Sweep a whole draft for what to fix, heaviest first, weighed against the film's reference. Run inside the film.
@@ -202,7 +202,7 @@ if (n) {
       kind: r.ratio > 1 ? "brighter" : "darker",
       weight: 3,
       size: (r.to - r.from) * Math.abs(Math.log(r.ratio)),
-      say: `the whole picture is ${pct(r.ratio)} ${r.ratio > 1 ? "brighter" : "darker"} than the reference: REF=${reference} AT=${+((r.from + r.to) / 2).toFixed(2)} REF_REGION=x,y,w,h bun run render stills names the part`,
+      say: `the whole picture is ${pct(r.ratio)} ${r.ratio > 1 ? "brighter" : "darker"} than the reference; measure one part of it with: REF=${reference} AT=${+((r.from + r.to) / 2).toFixed(2)} REF_REGION=x,y,w,h bun run render stills`,
     });
 } else if (!reference)
   notes.push(

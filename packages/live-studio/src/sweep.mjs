@@ -1,59 +1,6 @@
 // What bun run sweep ranks: each item { from, to, kind, weight, say }; a heavier weight is looked at first
 
-import { whipAt } from "./ref-cuts.mjs";
-
 const s = (t) => t.toFixed(2);
-const whipSaid = (w) => `${w.camera} ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}`;
-
-// The draft's cuts (heard seconds, from its render evidence) against the reference study's cuts, up to the draft's end.
-// A reference whip turns either side into a look: a whip transition cuts mid-swing, and a cut detector takes a fast
-// move for a cut
-export const cutItems = (study, cuts, until) => {
-  const near = Math.max(0.05, 1.5 / study.fps);
-  const close = (a) => (b) => Math.abs(a - b) <= near;
-  const items = [];
-  for (const t of cuts.filter((c) => !study.cuts.some(close(c)))) {
-    const w = whipAt(study, t);
-    items.push(
-      w
-        ? {
-            from: t,
-            to: t,
-            kind: "cut in a whip",
-            weight: 2,
-            say: `ours cuts inside the reference's whip (${whipSaid(w)}), which has no cut here: right for a whip transition, a jump if the swing should carry on`,
-          }
-        : {
-            from: t,
-            to: t,
-            kind: "extra cut",
-            weight: 4,
-            say: "ours cuts where the reference does not: a jump in the middle of its move",
-          },
-    );
-  }
-  for (const t of study.cuts.filter((c) => c <= until + near && !cuts.some(close(c)))) {
-    const w = whipAt(study, t);
-    items.push(
-      w
-        ? {
-            from: t,
-            to: t,
-            kind: "cut in a whip",
-            weight: 2,
-            say: `the reference cuts inside its whip (${whipSaid(w)}) and ours does not: a whip transition, or only a fast move the study took for a cut`,
-          }
-        : {
-            from: t,
-            to: t,
-            kind: "missing cut",
-            weight: 3,
-            say: "the reference cuts here and ours does not",
-          },
-    );
-  }
-  return items;
-};
 
 // Runs of samples (one each step seconds) whose ratio of ours to the reference lies outside [low, high], held at
 // least long seconds

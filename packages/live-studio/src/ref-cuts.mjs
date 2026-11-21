@@ -36,7 +36,7 @@ export const latestStudy = (project) => {
   }
 };
 
-const s = (t) => `${+t.toFixed(2)} s`;
+const sec = (t) => `${+t.toFixed(2)} s`;
 
 // the study's whip around a second (within a frame and a half), if any: a cut there may be a whip transition's, or a
 // fast move the cut detector took for one
@@ -76,29 +76,75 @@ export const unstudiedWarning = (project) => {
     : "";
 };
 
+const whipSaid = (w) => `${w.camera} ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}`;
+
+// The draft's cuts (heard seconds, from its render evidence) against the reference study's cuts, up to the draft's end.
+// A reference whip turns either side into a look: a whip transition cuts mid-swing, and a cut detector takes a fast
+// move for a cut
+export const cutItems = (study, cuts, until) => {
+  const near = Math.max(0.05, 1.5 / study.fps);
+  const close = (a) => (b) => Math.abs(a - b) <= near;
+  const items = [];
+  for (const t of cuts.filter((c) => !study.cuts.some(close(c)))) {
+    const w = whipAt(study, t);
+    items.push(
+      w
+        ? {
+            from: t,
+            to: t,
+            kind: "cut in a whip",
+            weight: 2,
+            say: `ours cuts inside the reference's whip (${whipSaid(w)}), which has no cut here: right for a whip transition, a jump if the swing should carry on`,
+          }
+        : {
+            from: t,
+            to: t,
+            kind: "extra cut",
+            weight: 4,
+            say: "ours cuts where the reference does not: a jump in the middle of its move",
+          },
+    );
+  }
+  for (const t of study.cuts.filter((c) => c <= until + near && !cuts.some(close(c)))) {
+    const w = whipAt(study, t);
+    items.push(
+      w
+        ? {
+            from: t,
+            to: t,
+            kind: "cut in a whip",
+            weight: 2,
+            say: `the reference cuts inside its whip (${whipSaid(w)}) and ours does not: a whip transition, or only a fast move the study took for a cut`,
+          }
+        : {
+            from: t,
+            to: t,
+            kind: "missing cut",
+            weight: 3,
+            say: "the reference cuts here and ours does not",
+          },
+    );
+  }
+  return items;
+};
+
 // A remake cuts where its reference cuts. The camera's cut seconds are heard seconds; until is the last heard second the
 // camera is keyed to, so the part of the reference not built yet is not reported. camFile: the film's camTimeline
 export const refCutsWarning = (project, camFile, cameraCuts, until) => {
   const study = latestStudy(project);
   if (!study) return "";
-  const near = Math.max(0.05, 1.5 / study.fps);
-  const close = (a) => (b) => Math.abs(a - b) <= near;
-  const extra = cameraCuts.filter((t) => !study.cuts.some(close(t)));
-  const missing = study.cuts.filter((t) => t <= until + near && !cameraCuts.some(close(t)));
-  const seen = (t) => {
-    const w = whipAt(study, t);
-    return w
-      ? `${s(t)} (inside its whip ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}: a whip transition or only a fast move, look)`
-      : s(t);
-  };
-  if (!extra.length && !missing.length) return "";
+  const items = cutItems(study, cameraCuts, until);
+  if (!items.length) return "";
+  const of = (kind) => items.filter((x) => x.kind === kind);
+  const [extra, missing, looks] = ["extra cut", "missing cut", "cut in a whip"].map(of);
   const where = relative(project, study.file).replaceAll("\\", "/");
   return [
     `⚠ ${camFile} ${[
       extra.length &&
-        `cuts at ${extra.map(s).join(", ")}, where the reference does not cut (a jump in the middle of its move)`,
+        `cuts at ${extra.map((x) => sec(x.from)).join(", ")}, where the reference does not cut (a jump in the middle of its move)`,
       missing.length &&
-        `${extra.length ? "and " : ""}the reference cuts at ${missing.map(seen).join(", ")} and the camera does not`,
+        `the reference cuts at ${missing.map((x) => sec(x.from)).join(", ")} and the camera does not`,
+      ...looks.map((x) => `${sec(x.from)}: ${x.say}`),
     ]
       .filter(Boolean)
       .join("; ")}; reference cuts from ${where}.`,

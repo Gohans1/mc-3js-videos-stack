@@ -1,7 +1,7 @@
 // The film contract checked without a studio; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ANIMS } from "film-stage/animate";
@@ -1258,21 +1258,32 @@ for (const [name, copy] of copies)
     `⚠ ${conf.soundTimeline} "${name}" is ${copy} byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
   );
 
-// a film made before a command joined the template has no script for it, and bun run says only "Script not found"
-let own = null;
+// a film made before a command joined the template has no script for it, and bun run says only "Script not found".
+// Only a script whose file this folder reaches is offered (../../scripts is there in films/<name>, not elsewhere)
+let filmScripts = null;
 try {
-  own = JSON.parse(readFileSync(pkgFile, "utf8")).scripts;
+  filmScripts = JSON.parse(readFileSync(pkgFile, "utf8")).scripts;
 } catch {}
 let templateScripts = {};
 try {
   templateScripts = JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8")).scripts ?? {};
 } catch {}
-if (own && typeof own === "object")
-  for (const [name, line] of Object.entries(templateScripts))
-    if (!(name in own))
-      warnings.push(
-        `⚠ package.json has no script for bun run ${name}, which the template film has: add ${JSON.stringify(name)}: ${JSON.stringify(line)} to its "scripts"`,
-      );
+const reached = (line) => {
+  const file = String(line)
+    .split(/\s+/)
+    .find((w) => /\.(?:mjs|js|ts|py)$/.test(w));
+  return Boolean(file && existsSync(resolve(PROJECT, file)));
+};
+const lacking =
+  filmScripts && typeof filmScripts === "object"
+    ? Object.entries(templateScripts).filter(
+        ([name, line]) => !(name in filmScripts) && reached(line),
+      )
+    : [];
+if (lacking.length)
+  warnings.push(
+    `⚠ package.json lacks scripts the template film has (bun run says only "Script not found"): add to its "scripts" ${JSON.stringify(Object.fromEntries(lacking)).slice(1, -1)}`,
+  );
 
 const unstudied = unstudiedWarning(PROJECT);
 if (unstudied) warnings.push(unstudied);

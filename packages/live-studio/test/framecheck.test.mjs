@@ -109,15 +109,8 @@ test("a jump the reference makes too is said so; one it does not is OURS ONLY", 
     /^OURS ONLY: ours changes \d+\.\d%, the reference 0\.0% a frame$/,
   );
   assert.ok(jump.reference.oursChange > 0.3);
-  // a reference busy every frame (a smeared whip measures under our sharp one) moves as fast as ours: no pop of ours
-  media(join(dir, "renders/draft_video.mp4"), [
-    "-f",
-    "lavfi",
-    "-i",
-    "color=c=gray:s=64x36:r=30:d=2[a];color=c=white:s=64x36:r=30:d=2[b];[a][b]overlay=enable='gte(t,1)',noise=alls=20:allf=t",
-    "-pix_fmt",
-    "yuv420p",
-  ]);
+  // a reference busy every frame (a smeared whip measures under our sharp one) moves as fast: no pop of ours, and one
+  // change between two stills is a single jump (a cut the render did not record), not a move in steps
   media(join(dir, "busy.mp4"), [
     "-f",
     "lavfi",

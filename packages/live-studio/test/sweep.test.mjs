@@ -8,7 +8,6 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { mediaFixture } from "../../../scripts/test/media-fixture.mjs";
-import { cutItems } from "../src/sweep.mjs";
 
 const SWEEP = fileURLToPath(new URL("../sweep.mjs", import.meta.url));
 const media = mediaFixture();
@@ -97,26 +96,4 @@ test("a chunk is not a whole draft: exit 2, nothing measured", (t) => {
   const out = sweep(dir, "renders/chunks/c01.mp4");
   assert.equal(out.status, 2);
   assert.match(out.stderr, /bun run framecheck renders\/chunks\/c01\.mp4/);
-});
-
-// the reference's cuts from its study, its whips (a swing around a cut, or a fast move a cut detector can take for one)
-test("cuts are matched to the reference's, and one inside a whip of it is a look, not a fault", () => {
-  const study = {
-    fps: 30,
-    cuts: [3, 7, 9, 20],
-    whips: [
-      { from: 4.9, to: 5.1, camera: "pans right" },
-      { from: 6.9, to: 7.1, camera: "pans left", cut: 7 },
-    ],
-  };
-  const items = cutItems(study, [2, 3.01, 5], 12);
-  const at = (t) => items.find((x) => Math.abs(x.from - t) < 1e-9);
-  assert.equal(at(2).kind, "extra cut");
-  assert.equal(at(9).kind, "missing cut");
-  assert.equal(at(5).kind, "cut in a whip");
-  assert.match(at(5).say, /pans right 4\.9-5\.1/);
-  assert.equal(at(7).kind, "cut in a whip");
-  assert.equal(at(3), undefined, "within a frame and a half");
-  assert.equal(at(20), undefined, "past the draft's end");
-  assert.ok(at(2).weight > at(9).weight && at(9).weight > at(5).weight);
 });

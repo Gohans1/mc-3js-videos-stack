@@ -216,14 +216,19 @@ test("a misspelt package.json live-studio key is named as a warning: its file wo
 });
 
 // a film made before a command joined the template has no script for it: bun run says only "Script not found"
-test("a command the template film has and this film's scripts lack is named with the line to add", (t) => {
+// a script runs a file next to the film (node_modules/live-studio, ../../scripts in films/<name>): one whose file a
+// project outside the repo lacks is not offered
+test("commands the template film has and this film's scripts lack are named on one line with what to add", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "node_modules/live-studio"), { recursive: true });
+  for (const f of ["sweep.mjs", "framecheck.mjs"])
+    writeFileSync(join(dir, "node_modules/live-studio", f), "");
   const { scripts } = JSON.parse(
     readFileSync(join(STUDIO, "../../templates/film/package.json"), "utf8"),
   );
-  const { sweep, ...older } = scripts;
+  const { sweep, framecheck, pace, ...older } = scripts;
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({
@@ -233,13 +238,15 @@ test("a command the template film has and this film's scripts lack is named with
   );
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  assert.ok(
-    r.stdout.includes(
-      `⚠ package.json has no script for bun run sweep, which the template film has: add "sweep": ${JSON.stringify(sweep)} to its "scripts"`,
-    ),
-    r.stdout,
+  const said = r.stdout.split("\n").filter((l) => l.includes("the template film has"));
+  assert.deepEqual(said, [
+    `⚠ package.json lacks scripts the template film has (bun run says only "Script not found"): add to its "scripts" ${JSON.stringify({ framecheck, sweep }).slice(1, -1)}`,
+  ]);
+  assert.match(
+    pace,
+    /\.\.\/\.\.\/scripts\//,
+    "pace runs a file this folder has not, so it is left out",
   );
-  assert.doesNotMatch(r.stdout, /bun run studio,/);
 });
 
 test("a file with faults from two checks is one problem, all its faults under it", (t) => {

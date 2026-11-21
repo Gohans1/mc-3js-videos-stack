@@ -97,7 +97,7 @@ const START = manual ? requestedStart : where.start;
 const timeline = Boolean(render && !stale && !manual);
 // a render's own record holds for its frames however the film changed since (a CHUNKS run joins older chunks): its
 // cuts, its picture's shape and its reference; the timeline rows and the studio marks are the current film's
-const own = Boolean(render && !manual);
+const ownRecord = Boolean(render && !manual);
 const clock = manual ? "manual" : render ? "film" : "file";
 if (START)
   log(
@@ -105,11 +105,11 @@ if (START)
   );
 else log(`Reading ${clock} seconds from 0`);
 if (stale) log(`STALE: ${stale.message}`);
-if (!own) log("Film cuts and timeline links omitted for this file or offset.");
+if (!ownRecord) log("Film cuts and timeline links omitted for this file or offset.");
 else if (stale)
   log("Timeline links omitted until it is drawn again; the cuts it was drawn with still count.");
 
-const useLayout = own;
+const useLayout = ownRecord;
 const ratio = useLayout
   ? ratioOf(readJson(join(PROJECT, "package.json")))
   : probed.height > probed.width
@@ -166,7 +166,7 @@ function refChanges(file, from, seconds) {
     });
   });
 }
-const cutInfo = own ? drawnCuts(PROJECT, video, stale) : null;
+const cutInfo = ownRecord ? drawnCuts(PROJECT, video, stale) : null;
 if (cutInfo?.reason) log(cutInfo.reason);
 const cuts = (cutInfo?.times ?? []).map((c) => c - START);
 const ended = await startJob(PROJECT, "framecheck", { say: `Checking the frames of ${shown}` });
@@ -250,7 +250,8 @@ try {
 const activeCuts = cuts.filter((c) => c >= times[0] - 1.5 / fps && c <= times.at(-1) + 2.5 / fps);
 const { lines, faults, D } = m.report(fps, activeCuts, times, lastDuration);
 // the reference at the same heard seconds: a jump or flash it has too is a move the remake copies, one it has not is ours
-const refFile = vsAt >= 0 ? resolve(PROJECT, args[vsAt + 1]) : own ? referenceVideo(PROJECT) : null;
+const refFile =
+  vsAt >= 0 ? resolve(PROJECT, args[vsAt + 1]) : ownRecord ? referenceVideo(PROJECT) : null;
 const refShown = vsAt >= 0 ? args[vsAt + 1] : refFile;
 const sudden = faults.filter((x) => x.kind === "JUMP" || x.kind === "FLASH");
 let weighed = false;
@@ -280,13 +281,17 @@ if (refFile && sudden.length) {
     const i = times.indexOf(x.t);
     const own = x.kind === "FLASH" ? Math.max(D[i] ?? 0, D[i + 1] ?? 0) : (D[i] ?? 0);
     const spike = peak > JUMP_MIN && peak > 3 * median;
-    // a frame beside it where ours stops dead and the reference still moves: our move comes in steps (a stutter)
+    // a frame beside it where ours stops dead and the reference still moves, and another jump of ours within 3 frames:
+    // our move comes in steps (a stutter). One jump between two stills is a cut the render did not record
     const after = x.kind === "FLASH" ? 2 : 1;
-    const dead = [-3, -2, -1, after, after + 1, after + 2]
-      .filter((d) => i + d >= 1 && k + d >= 1)
-      .map((d) => ({ ours: D[i + d], theirs: refD[k + d] }))
-      .filter((f) => f.ours < JUMP_MIN / 2 && f.theirs >= 2.5 * JUMP_MIN)
-      .toSorted((a, b) => b.theirs - a.theirs)[0];
+    const steps = sudden.some((y) => y !== x && Math.abs(times.indexOf(y.t) - i) <= 3);
+    const dead = steps
+      ? [-3, -2, -1, after, after + 1, after + 2]
+          .filter((d) => i + d >= 1 && k + d >= 1)
+          .map((d) => ({ ours: D[i + d], theirs: refD[k + d] }))
+          .filter((f) => f.ours < JUMP_MIN / 2 && f.theirs >= 2.5 * JUMP_MIN)
+          .toSorted((a, b) => b.theirs - a.theirs)[0]
+      : undefined;
     // the reference's fast moves are smeared and ours are sharp: the same move measures about half ours there, and a
     // reference changing a tenth of the picture a frame is moving fast itself
     const fast = peak >= 5 * JUMP_MIN;
