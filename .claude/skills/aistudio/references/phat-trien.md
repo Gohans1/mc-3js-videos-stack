@@ -12,7 +12,7 @@ Chỉ Playground chat (/prompts) và History (/library). Người dùng cấm đ
 | --- | --- |
 | scripts/page-map.ts | Nơi duy nhất biết trang trông thế nào: URL, mọi phần tử theo tên (MAP), chữ đọc từ trang (TEXT), tool, mức thinking, media, đuôi video. |
 | scripts/lib.ts | Hạ tầng dùng chung: Chrome, tab, agent-browser, bộ tìm phần tử trong trang, hành động AI Studio, bộ chạy bước. |
-| scripts/win32.ts | Gọi user32.dll qua bun:ffi để cửa sổ ẩn không vướng người dùng (guardWindows). |
+| scripts/win32.ts | Gọi user32.dll qua bun:ffi để cửa sổ ẩn không vướng người dùng (guardWindows, withForegroundLocked). |
 | scripts/ask.ts | Gửi 1 prompt (0..n file) rồi lưu câu trả lời; follow-up; collect. |
 | scripts/studio.ts | Mọi lệnh còn lại, nhóm theo tab, chat, cài đặt, History, sức khoẻ, cấp thấp; có doctor. |
 | scripts/lib.test.ts | Test cho logic thuần không cần trình duyệt (toSeconds). |
@@ -28,7 +28,7 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Selector chỉ ở page-map.ts | Code khác gọi tên entry qua all/one/has; tên là dữ liệu thì dùng dynamic. Ngoại lệ đã biết: chữ Run/Stop (RUN_STATE), Google Account: (accountName), data-turn-role Model, chip tìm bằng parentElement + innerText, closest('button') quanh modelName, img alt và tên thẻ ms-*-chunk trong read. |
 | Locator bền trước | data-test-id, rồi role + tên ARIA, cuối cùng mới CSS thẻ Angular. Thứ tự này lấy từ khuyến nghị locator của Playwright. |
 | Hành động bằng sự kiện thật | lib đánh dấu phần tử bằng data-aistudio-target rồi gọi agent-browser click/fill, không gọi element.click() trong trang. |
-| Không trạng thái ngầm | Trạng thái lâu dài ngoài trang chỉ có aistudio-tabs.json (nhãn tab → cửa sổ, slot) và profile Chrome giữ đăng nhập, cả 2 ở %USERPROFILE%\.agent-browser\profiles. Còn lại là tạm: daemon agent-browser theo nhãn, biến window.__aistudio* và thuộc tính data-aistudio-target trong trang, file trong %TEMP%. |
+| Không trạng thái ngầm | Trạng thái lâu dài ngoài trang chỉ có aistudio-tabs.json (nhãn tab → cửa sổ, slot) và profile Chrome giữ đăng nhập, cả 2 ở %USERPROFILE%\.agent-browser\profiles. Còn lại là tạm: daemon agent-browser theo nhãn, biến window.__aistudio* và thuộc tính data-aistudio-target trong trang, file trong %TEMP%, kiểu cửa sổ (khiên) trên cửa sổ Chrome. |
 | Việc dùng chung đặt ở lib | ask.ts và studio.ts không chép logic của nhau. |
 | Lỗi viết cho người đọc | StepError mang lý do và cách xử lý; lỗi khác là bug và in stack. |
 | Text dài đi qua stdin | fill dùng batch --bail với JSON trên stdin, vì dòng lệnh Windows giới hạn khoảng 32 nghìn ký tự. |
@@ -39,13 +39,14 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Điều | Chi tiết |
 | --- | --- |
 | 1 tab = 1 cửa sổ | Trong 1 cửa sổ chỉ tab đang chọn là visible; tab nền bị hidden và dropdown không mở. Vì vậy mỗi nhãn có cửa sổ riêng, tab close đóng cả cửa sổ. |
-| 1 tab = 1 session agent-browser | Session tên aistudio-nhãn, luôn gọi với --pin-tab và chọn đúng cửa sổ bằng tab targetId mỗi lần chạy. Không pin thì session tự nhảy sang tab mới mở. |
+| 1 tab = 1 session agent-browser | Session tên aistudio-nhãn, luôn gọi với --pin-tab. Session nhớ tab đã ghim qua các lần daemon khởi động lại; không pin thì session tự nhảy sang tab mới mở. |
 | Daemon tự tắt | --idle-timeout 10m. Daemon gắn qua --cdp mặc định sống mãi; tắt rồi thì tab vẫn còn và lệnh sau gắn lại. |
 | Session mới mở about:blank | Lệnh đầu của 1 session mới mở about:blank trong cửa sổ dùng gần nhất, che trang của cửa sổ đó. prepareTab đóng mọi trang trắng nằm trong cửa sổ ngoài màn hình. |
 | Vị trí riêng | Cửa sổ ở left -10000, top = slot × 1200; slot bỏ qua chỗ đã có cửa sổ. Hai cửa sổ chồng khít thì Chrome báo trang bên dưới là hidden. |
 | Mở ở nền | Target.createTarget với newWindow và background: không cướp focus. |
-| Khiên cửa sổ | guardWindows gắn WS_EX_TOOLWINDOW (không taskbar, không Alt+Tab, Win+M bỏ qua) và WS_EX_NOACTIVATE cho cửa sổ ở left -10000, gỡ cho cửa sổ trên màn hình (--show). Chạy trong prepareTab và trước mỗi bước của runSteps. |
-| Mở lại cửa sổ thu nhỏ | guardWindows dùng ShowWindow SW_SHOWNOACTIVATE trước khi CDP thấy trạng thái minimized; đường windowState normal của CDP chỉ còn cho maximized hay fullscreen. |
+| Khiên cửa sổ | guardWindows (win32.ts) gắn WS_EX_TOOLWINDOW (không taskbar, không Alt+Tab, Win+M bỏ qua) và WS_EX_NOACTIVATE cho khung Chrome có vị trí normal ở left -10000, gỡ cho khung trên màn hình (--show). Chỉ xét khung không có owner; bong bóng và popup của Chrome đi theo khung. Chạy trong prepareTab và trước mỗi bước của runSteps. |
+| Mở lại cửa sổ thu nhỏ | guardWindows mở lại khung ẩn bằng ShowWindow SW_SHOWNOACTIVATE trước khi CDP thấy trạng thái minimized. Khung --show người dùng tự thu nhỏ thì để yên; đường windowState normal của CDP chỉ còn cho nó (khi chính tab đó chạy lệnh) và cửa sổ maximized. |
+| Khoá foreground | prepareTab chạy trong withForegroundLocked (LockSetForegroundWindow, API Windows làm đúng việc này) nên Chrome không kích hoạt được cửa sổ khi chuyển tab hay session mới mở about:blank. Người dùng click hoặc bấm Alt thì khoá tự mở. |
 | Chuyển tab ít nhất | prepareTab đọc tab list --json, chỉ gọi tab id khi session đang ghim tab khác (nhãn mới, cửa sổ tạo lại). |
 | Chrome khởi động | Start-Process (để Chrome sống sau khi lệnh shell của agent kết thúc) với --no-startup-window (không có cửa sổ đầu tiên cướp focus) và --disable-backgrounding-occluded-windows. |
 
@@ -54,7 +55,7 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Bẫy | Đã xử lý thế nào |
 | --- | --- |
 | Google chặn đăng nhập trong Chrome do automation mở; cookie Chrome trên Windows không export được (App-Bound Encryption, DBSC). | Chrome thường, không cờ automation, profile riêng, cổng 9333; người dùng đăng nhập tay 1 lần. Cổng 9222 là của Tab Out. |
-| Cửa sổ thu nhỏ làm trang hidden, dropdown không mở. | Luôn đưa cửa sổ về normal qua CDP; đặt ngoài màn hình thay vì thu nhỏ. |
+| Cửa sổ thu nhỏ làm trang hidden, dropdown không mở. | Đặt ngoài màn hình thay vì thu nhỏ; mở lại qua guardWindows (mục Tab và cửa sổ). |
 | Cửa sổ hẹp (đã thấy 929px) thì AI Studio giấu bảng Run settings. | Ép 1920x1080. |
 | Chat mới: click chuột vào dropdown bị ô prompt cướp focus. | Mở dropdown bằng focus rồi Enter, đợi có option rồi mới chọn. |
 | Mức thinking khác nhau theo model (flash-lite: Minimal tới High, không có Extra High); tool Maps chỉ có ở 1 số model. | selectOption báo danh sách model đó có; TOOLS_SOME_MODELS cho doctor báo vắng thay vì gãy. |
@@ -85,7 +86,8 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Regex trong chuỗi JS chèn vào trang phải escape 2 lần (\\d, \\b); sửa bằng sed, heredoc hay python dễ làm rơi 1 dấu \ và \b thành ký tự backspace. | Sửa các chuỗi đó bằng Edit tool rồi grep lại. |
 | agent-browser close trên session --cdp đóng cả trình duyệt. | Không bao giờ gọi close; đóng tab bằng CDP Target.closeTarget. |
 | Cửa sổ ẩn từng giữ foreground: người dùng gõ là chữ vào trang AI Studio vô hình, Ctrl+W đóng tab. Nguồn 1: CDP windowState normal trên cửa sổ thu nhỏ (Win+D) kích hoạt cửa sổ. | Khiên cửa sổ và mở lại bằng SW_SHOWNOACTIVATE (mục Tab và cửa sổ). WS_EX_NOACTIVATE một mình không chặn được. |
-| Nguồn 2: agent-browser tab id và lệnh đầu của session chưa ghim tab (mở about:blank) kích hoạt cửa sổ; Windows cho phép khi người dùng ngồi im quá ForegroundLockTimeout (mặc định 200 giây). | Chỉ chuyển tab khi cần. Lệnh thường (eval, click, fill, tab list) và daemon khởi động lại không kích hoạt. |
+| Nguồn 2: agent-browser tab id và lệnh đầu của session chưa ghim tab (mở about:blank) kích hoạt cửa sổ, chập chờn. Windows cho phép khi người dùng đã ngồi im lâu hoặc khi lệnh chạy từ chính app đang foreground (agent trong T3 Code). | Chỉ chuyển tab khi cần, và khoá foreground suốt prepareTab. Lệnh thường (eval, click, fill, tab list) và daemon khởi động lại không kích hoạt. |
+| SetWindowPlacement kéo cửa sổ nằm hẳn ngoài màn hình vào 0,0 (đúng như docs Microsoft), dù showCmd nào. | Không dùng; mở lại bằng ShowWindow. Vì vậy cửa sổ ẩn bị Win+D thu nhỏ hiện thành thanh nhỏ cạnh nút Start tới bước kế tiếp. |
 | Gemini từng bịa chi tiết audio của clip tổng hợp (nói tiếng bíp 1000 Hz mỗi giây, thật là 440 Hz liên tục). | Câu trả lời quan trọng phải kiểm chứng. |
 
 ## Đã thử
@@ -101,9 +103,13 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Mở menu lượt: cuộn nút vào màn hình rồi rê vào tâm nút | Hỏng với lượt ngắn vì nút nằm ngoài lượt, rời lượt là nút ẩn. |
 | Mở menu lượt: rê vào giữa phần lượt thấy được | Hỏng ngay sau 1 lần copy vì toast Copied che điểm đó. Cách đang dùng ở bảng bẫy. |
 | Fill text dài qua tham số dòng lệnh | Hỏng từ khoảng 32 nghìn ký tự (ENAMETOOLONG). Chuyển sang batch qua stdin. |
-| 1 lần thấy foreground là Chrome sau chuỗi test dài | Đã tìm ra 2 nguồn (bảng bẫy); trước đó không tái hiện được vì lúc test người dùng đang gõ nên khoá foreground còn hiệu lực. |
+| 1 lần thấy foreground là Chrome sau chuỗi test dài | Đã tìm ra 2 nguồn (bảng bẫy); chập chờn vì Windows chỉ cho giành foreground trong 1 số điều kiện. |
 | Chỉ gắn WS_EX_NOACTIVATE | Không đủ: Chrome tự kích hoạt cửa sổ khi CDP mở lại hay chuyển tab. |
 | Chỉ gắn WS_EX_TOOLWINDOW | Hết taskbar, Alt+Tab và Win+M; Win+D có lúc vẫn thu nhỏ được (2 lần đo, 1 lần thu nhỏ). |
+| WPF_SETMINPOSITION để chỗ thu nhỏ nằm ngoài màn hình | Hỏng: SetWindowPlacement kéo cửa sổ slot 1 trở đi vào 0,0, hiện ra trước mặt người dùng. |
+| Trả bàn phím sau mỗi bước bằng SetForegroundWindow | Hỏng: Chrome đã giữ foreground thì Windows từ chối process khác (trả 0). |
+| AttachThreadInput để ép trả bàn phím | Không làm: Raymond Chen và PowerToys đều gọi là hack. |
+| LockSetForegroundWindow quanh prepareTab | Chạy: cho Chrome quyền giành foreground rồi chuyển tab, có khoá 2/2 lần giữ nguyên, không khoá Chrome giành ngay. |
 
 ## Ma trận test thật (2026-11-21)
 
@@ -128,12 +134,15 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Focus (cửa sổ người dùng giữ foreground, lệnh chạy từ cây process của nó như T3 Code): thu nhỏ rồi status, Win+D, chrome --show rồi status, nhãn mới, tab close | Foreground không đổi; taskbar không còn nút Chrome ẩn; --show có lại nút, lệnh sau gắn lại khiên. Đo bằng GetForegroundWindow. |
 | Thu nhỏ cửa sổ giữa lúc ASK chờ trả lời | Pass: bước copy mở lại cửa sổ không lấy focus, lưu đủ câu trả lời. |
 | doctor và smoke sau khi gắn khiên (innerWidth còn 1904) | 47 khớp, 4 vắng hợp lệ, 0 fallback; smoke trả lời đúng 2. |
+| Khoá foreground: cho Chrome quyền giành foreground rồi tab id, có và không khoá | Có khoá 2/2 foreground giữ nguyên; không khoá Chrome giành. Chạy lại focus e2e, doctor (51 kiểm tra, 0 fallback), smoke: Pass. |
 
 ## Giới hạn biết trước
 
 | Giới hạn | Ghi chú |
 | --- | --- |
 | Không có khoá theo tab | 2 lệnh cùng lúc trên 1 tab sẽ giẫm lên nhau. Thêm khoá là phức tạp thêm, phải hỏi người dùng trước. |
+| Khoá foreground chỉ phủ prepareTab | Các bước sau chỉ dùng lệnh không kích hoạt cửa sổ. Trong 1-2 giây khoá, app khác cũng không tự nhảy lên được (người dùng click vẫn được). |
+| Win+D thu nhỏ cửa sổ ẩn | Có lúc hiện thanh nhỏ cạnh nút Start tới bước kế tiếp; bấm vào thì thấy trang AI Studio. |
 | ASK chỉ copy lượt Model cuối | Nếu 1 câu trả lời tách thành nhiều lượt Model thì dùng STUDIO read để lấy đủ. |
 | Chat đang chạy chỉ lấy được ở tab đang chạy nó | Tab khác tải bản đã lưu, không thấy phần đang sinh; có thể báo has no answer hoặc lấy nhầm câu trả lời trước. |
 | history chỉ đọc các dòng đã tải ở trang đầu | Chưa cuộn hay phân trang; cần chat cũ hơn thì dùng --search. |

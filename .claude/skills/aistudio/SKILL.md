@@ -110,12 +110,12 @@ Exit 0 là xong và đã xác nhận, 1 là 1 bước hỏng, 2 là sai input (c
 
 ## Chế độ ẩn
 
-Chrome chạy ở cổng 9333 với profile riêng, mỗi tab là 1 cửa sổ nằm ngoài màn hình, mở ở chế độ nền. Không chiếm chuột, bàn phím, màn hình, focus hay clipboard Windows. Cửa sổ ẩn không có nút trên taskbar, không có trong Alt+Tab, Windows không tự trao bàn phím cho nó, nên người dùng không bấm nhầm hay gõ nhầm vào được.
+Chrome chạy ở cổng 9333 với profile riêng, mỗi tab là 1 cửa sổ nằm ngoài màn hình, mở ở chế độ nền. Không chiếm chuột, bàn phím, màn hình, focus hay clipboard Windows. Cửa sổ ẩn không có nút trên taskbar, không có trong Alt+Tab, Windows không tự trao bàn phím cho nó; lúc ghim tab (1-2 giây) skill khoá foreground nên Chrome không giành được bàn phím.
 
 | Đánh đổi | Vì sao |
 | --- | --- |
 | Không dùng headless | Chrome headless tự khai HeadlessChrome trong user agent; Google dễ chặn hoặc đăng xuất. Giả user agent là lách luật nên không làm. |
-| Không thu nhỏ cửa sổ | Cửa sổ thu nhỏ làm trang thành hidden, dropdown không mở. Win+D có lúc vẫn thu nhỏ được nó; bước kế tiếp tự mở lại mà không lấy focus. |
+| Không thu nhỏ cửa sổ | Cửa sổ thu nhỏ làm trang thành hidden, dropdown không mở. Win+D có lúc vẫn thu nhỏ được nó, khi đó nó là thanh nhỏ cạnh nút Start tới bước kế tiếp (bước đó tự mở lại, không lấy focus). |
 | Muốn nhìn tận mắt | STUDIO chrome --show đưa cửa sổ ra màn hình thành cửa sổ thường (có taskbar, click gõ được); lệnh kế tiếp có mở trang trên cùng tab (status, ASK...) đưa nó về chỗ ẩn. |
 
 ## Lỗi thường gặp

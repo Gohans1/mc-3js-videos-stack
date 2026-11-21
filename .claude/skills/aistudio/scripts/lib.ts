@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { type Candidate, dynamic, type Key, MAP, TEXT, URLS } from "./page-map";
-import { guardWindows } from "./win32";
+import { guardWindows, withForegroundLocked } from "./win32";
 
 const AB = process.env.AGENT_BROWSER_EXE ?? "C:/Users/ADMIN/.bun/bin/agent-browser.exe";
 export const AB_CONFIG =
@@ -378,9 +378,12 @@ const guard = () =>
 /**
  * Binds this command to its tab's own window, opening one if needed (in the background, so it takes no focus; windows
  * the tool did not open are left alone). Then un-minimizes it, sizes it to 1920x1080 (narrower and AI Studio hides the
- * run settings panel) and moves it off-screen, or on-screen with show (to log in by hand).
+ * run settings panel) and moves it off-screen, or on-screen with show (to log in by hand). No app can take the
+ * foreground meanwhile, so the tab switch cannot hand Chrome the user's keyboard.
  */
-export async function prepareTab(show = false): Promise<string> {
+export const prepareTab = (show = false) => withForegroundLocked(() => placeTab(show));
+
+async function placeTab(show: boolean): Promise<string> {
   const tabs = readTabs();
   let info = tabs[tab];
   const opened = !info || !(await pageTargets()).some((p) => p.id === info!.id);
@@ -426,16 +429,15 @@ export async function prepareTab(show = false): Promise<string> {
   if (bound !== id) ab("tab", id);
   const strays = await cdp(async (send) => {
     // The first command of a new agent-browser session opens an about:blank page in the last used window, where it
-    // becomes the active tab and hides that window's chat. This tool's off-screen windows never want a blank page.
+    // becomes the active tab and hides that window's chat. Every window of this Chrome is the tool's; none wants one.
     let blank = 0;
     for (const p of await pageTargets()) {
       if (p.url !== "about:blank") continue;
-      const { bounds } = await send("Browser.getWindowForTarget", { targetId: p.id });
-      if (bounds.left !== offscreen(0).left) continue;
       await send("Target.closeTarget", { targetId: p.id });
       blank++;
     }
     const { windowId, bounds } = await send("Browser.getWindowForTarget", { targetId: id });
+    // Left for maximized windows and a minimized --show window; Chrome would activate it but the foreground is locked.
     if (bounds.windowState !== "normal") {
       await send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
     }
@@ -446,6 +448,11 @@ export async function prepareTab(show = false): Promise<string> {
     return blank;
   });
   guard(); // the window may have just moved on or off screen
+  const placed = await cdp(
+    async (send) => (await send("Browser.getWindowForTarget", { targetId: id })).bounds,
+  );
+  if (placed.left !== at.left || placed.top !== at.top)
+    throw new StepError(`the window is at ${placed.left},${placed.top}, not ${at.left},${at.top}`);
   const [w, h, vis, lang] = js<[number, number, string, string]>(
     `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
   );
