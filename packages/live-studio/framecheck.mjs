@@ -22,8 +22,9 @@ A Short (package.json "live-studio".ratio "9:16") is measured at its own shape, 
   bun run framecheck [video] --vs <ref.mp4>  weigh each JUMP and FLASH against the reference at the same heard second
                                              (a current render does it by itself with the film's references/ video):
                                              "ref jumps too" is a move the remake copies, "OURS ONLY" a pop to look at
-                                             first, "OURS STEPS" a move of ours stopping dead a frame while the
-                                             reference keeps moving (a stutter); those get the strips first
+                                             first, "OURS STEPS" jumps of ours within three frames with a dead frame
+                                             between while the reference keeps moving (a stutter); those get the
+                                             strips first
 Saves each run's report and up to 12 fault strips in renders/framecheck_*/. A render skips abrupt changes at the cuts it
 was drawn with, also a CHUNKS draft joining older chunks (stale: only its timeline links wait for a full render clip). External files use file seconds and the full frame.
 START gives a manual time offset. Use sheet <video> frames for native image detail at a precise requested time.

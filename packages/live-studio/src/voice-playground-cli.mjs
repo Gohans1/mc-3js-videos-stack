@@ -641,7 +641,7 @@ export async function runVoicePlaygroundCli(argv, options = {}) {
         error.failedJobs = failed.map((job) => ({
           id: job.id,
           error: job.error ?? null,
-          credits: Number.isFinite(job.creditsDeducted) ? job.creditsDeducted : "not reported",
+          credits: Number.isFinite(job.creditsDeducted) ? job.creditsDeducted : null,
         }));
         throw error;
       }
@@ -1459,7 +1459,7 @@ export async function runVoicePlaygroundCli(argv, options = {}) {
           code === 2
             ? "Use command --help or schema <command> to check its input."
             : error.failedJobs
-              ? "The provider failed these jobs, not the Studio or the project: read failed[].error, since a provider state (maintenance, quota) fails every retry until it clears. failed[].credits is what each cost; not reported = the provider gave no figure, so read the account balance on its site."
+              ? "failed[].error says where each job failed: a provider code (provider_under_maintenance, a quota) fails every retry until the provider clears it and needs nothing from the Studio or project; any other error names what to check. failed[].credits is what each job cost, null when no figure came back (read the balance on the provider's site)."
               : "Check the selected project/server and saved progress before retrying.",
       }),
     );

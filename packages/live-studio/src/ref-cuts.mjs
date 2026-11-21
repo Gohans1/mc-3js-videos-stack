@@ -94,6 +94,8 @@ export const cutItems = (study, cuts, until) => {
             to: t,
             kind: "cut in a whip",
             weight: 2,
+            side: "ours",
+            whip: whipSaid(w),
             say: `ours cuts inside the reference's whip (${whipSaid(w)}), which has no cut here: right for a whip transition, a jump if the swing should carry on`,
           }
         : {
@@ -114,6 +116,8 @@ export const cutItems = (study, cuts, until) => {
             to: t,
             kind: "cut in a whip",
             weight: 2,
+            side: "reference",
+            whip: whipSaid(w),
             say: `the reference cuts inside its whip (${whipSaid(w)}) and ours does not: a whip transition, or only a fast move the study took for a cut`,
           }
         : {
@@ -137,6 +141,12 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
   if (!items.length) return "";
   const of = (kind) => items.filter((x) => x.kind === kind);
   const [extra, missing, looks] = ["extra cut", "missing cut", "cut in a whip"].map(of);
+  const [oursInWhip, refInWhip] = ["ours", "reference"].map((side) =>
+    looks
+      .filter((x) => x.side === side)
+      .map((x) => `${sec(x.from)} (${x.whip})`)
+      .join(", "),
+  );
   const where = relative(project, study.file).replaceAll("\\", "/");
   return [
     `⚠ ${camFile} ${[
@@ -144,7 +154,10 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
         `cuts at ${extra.map((x) => sec(x.from)).join(", ")}, where the reference does not cut (a jump in the middle of its move)`,
       missing.length &&
         `the reference cuts at ${missing.map((x) => sec(x.from)).join(", ")} and the camera does not`,
-      ...looks.map((x) => `${sec(x.from)}: ${x.say}`),
+      oursInWhip &&
+        `cuts inside the reference's whips at ${oursInWhip}, where it has no cut: right for a whip transition, a jump if the swing should carry on`,
+      refInWhip &&
+        `the reference cuts inside its own whips at ${refInWhip} and the camera does not: a whip transition, or only a fast move the study took for a cut`,
     ]
       .filter(Boolean)
       .join("; ")}; reference cuts from ${where}.`,

@@ -61,8 +61,14 @@ test("a camera cut inside a reference whip, and a reference cut inside its own w
   };
   writeFileSync(file, JSON.stringify(data));
   const warning = refCutsWarning(dir, "src/timeline/cam.json", [2.62], 10);
-  assert.match(warning, /2\.62 s: ours cuts inside the reference's whip \(pulls out 2\.54-3\.07\)/);
-  assert.match(warning, /5\.84 s: the reference cuts inside its whip \(pans right 5\.71-5\.87\)/);
+  assert.match(
+    warning,
+    /cuts inside the reference's whips at 2\.62 s \(pulls out 2\.54-3\.07\), where/,
+  );
+  assert.match(
+    warning,
+    /the reference cuts inside its own whips at 5\.84 s \(pans right 5\.71-5\.87\) and/,
+  );
   assert.doesNotMatch(warning, /where the reference does not cut/);
 });
 
