@@ -14,4 +14,6 @@ ignorePatterns = [
   "**/renders/**",
   "**/chunks/**",
   "patches/**",
+  # Skill docs are loaded into an agent's context; aligned table padding nearly doubles their tokens.
+  ".claude/skills/**/*.md",
 ]
