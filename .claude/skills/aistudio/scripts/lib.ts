@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { type Candidate, dynamic, type Key, MAP, TEXT, URLS } from "./page-map";
+import { guardWindows, withForegroundLocked } from "./win32";
 
 const AB = process.env.AGENT_BROWSER_EXE ?? "C:/Users/ADMIN/.bun/bin/agent-browser.exe";
 export const AB_CONFIG =
@@ -84,7 +85,11 @@ export async function pageTargets(): Promise<{ id: string; url: string; title: s
 // ---------- agent-browser ----------
 
 export function ab(...cmd: string[]): string {
-  const p = Bun.spawnSync([...abArgs(), ...cmd], { stdout: "pipe", stderr: "pipe" });
+  const p = Bun.spawnSync([...abArgs(), ...cmd], {
+    stdout: "pipe",
+    stderr: "pipe",
+    windowsHide: true,
+  });
   const out = p.stdout.toString().trim();
   if (p.exitCode !== 0)
     throw new StepError(`agent-browser ${cmd[0]}: ${p.stderr.toString().trim() || out}`);
@@ -97,6 +102,7 @@ function abStdin(cmd: string[]): string {
     stdin: Buffer.from(JSON.stringify([cmd])),
     stdout: "pipe",
     stderr: "pipe",
+    windowsHide: true,
   });
   const out = p.stdout.toString().trim();
   if (p.exitCode !== 0)
@@ -124,8 +130,15 @@ export async function pollUntil(
       lastTick = now;
       onTick(now - start);
     }
-    await Bun.sleep(1_000);
+    await pollPause();
   }
+}
+
+/** One poll interval. Waits can last an hour, and a window Win+D minimizes meanwhile is hidden to the page (AI Studio
+ * stalls its answer) and sits as a clickable bar near Start, so the windows are guarded every second. */
+async function pollPause() {
+  guard();
+  await Bun.sleep(1_000);
 }
 
 /** pollUntil that answers whether the condition came true in time. */
@@ -313,7 +326,7 @@ export async function startChrome(): Promise<string> {
       "-Command",
       `Start-Process -FilePath ${psQuote(CHROME)} -ArgumentList ${psQuote(args.map((a) => `"${a}"`).join(" "))}`,
     ],
-    { stdout: "pipe", stderr: "pipe" },
+    { stdout: "pipe", stderr: "pipe", windowsHide: true },
   );
   if (p.exitCode !== 0)
     throw new StepError(`could not start Chrome (${CHROME}): ${p.stderr.toString().trim()}`);
@@ -362,13 +375,23 @@ export async function cdp<T>(fn: (send: Send) => Promise<T>): Promise<T> {
   }
 }
 
+/** Chrome's browser process, set by prepareTab; from then on runSteps guards its windows before every step. */
+let chromePid: number | undefined;
+
+/** Win+D can minimize even a shielded window (minimized = visibilityState "hidden", dropdowns stop opening). */
+const guard = () =>
+  chromePid === undefined ? undefined : guardWindows(chromePid, offscreen(0).left);
+
 /**
  * Binds this command to its tab's own window, opening one if needed (in the background, so it takes no focus; windows
- * the tool did not open are left alone). Then un-minimizes it (minimized = visibilityState "hidden", dropdowns stop
- * opening), sizes it to 1920x1080 (narrower and AI Studio hides the run settings panel) and moves it off-screen, or
- * on-screen with show (to log in by hand).
+ * the tool did not open are left alone). Then un-minimizes it, sizes it to 1920x1080 (narrower and AI Studio hides the
+ * run settings panel) and moves it off-screen, or on-screen with show (to log in by hand). No app can take the
+ * foreground meanwhile, so the tab switch cannot hand Chrome the user's keyboard.
  */
-export async function prepareTab(show = false): Promise<string> {
+export const prepareTab = (show = false) =>
+  withForegroundLocked((locked) => placeTab(show, locked));
+
+async function placeTab(show: boolean, locked: boolean): Promise<string> {
   const tabs = readTabs();
   let info = tabs[tab];
   const opened = !info || !(await pageTargets()).some((p) => p.id === info!.id);
@@ -400,19 +423,29 @@ export async function prepareTab(show = false): Promise<string> {
   }
   const { id, slot } = info!;
   const at = show ? { left: 0, top: 0 } : offscreen(slot);
-  ab("tab", id);
+  chromePid ??= await cdp(
+    async (send) =>
+      (await send("SystemInfo.getProcessInfo")).processInfo.find((p: any) => p.type === "browser")
+        .id,
+  );
+  const { restored } = guard()!;
+  // Switching tabs activates the window, and so does a new session's first command (it opens a blank tab). A session
+  // keeps its tab across daemon restarts, so switch only when it is bound elsewhere: a new label or a re-created window.
+  const bound = JSON.parse(ab("tab", "list", "--json")).data.tabs.find(
+    (t: any) => t.active,
+  )?.targetId;
+  if (bound !== id) ab("tab", id);
   const strays = await cdp(async (send) => {
     // The first command of a new agent-browser session opens an about:blank page in the last used window, where it
-    // becomes the active tab and hides that window's chat. This tool's off-screen windows never want a blank page.
+    // becomes the active tab and hides that window's chat. Every window of this Chrome is the tool's; none wants one.
     let blank = 0;
     for (const p of await pageTargets()) {
       if (p.url !== "about:blank") continue;
-      const { bounds } = await send("Browser.getWindowForTarget", { targetId: p.id });
-      if (bounds.left !== offscreen(0).left) continue;
       await send("Target.closeTarget", { targetId: p.id });
       blank++;
     }
     const { windowId, bounds } = await send("Browser.getWindowForTarget", { targetId: id });
+    // Left for maximized windows and a minimized --show window; Chrome would activate it but the foreground is locked.
     if (bounds.windowState !== "normal") {
       await send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
     }
@@ -422,12 +455,25 @@ export async function prepareTab(show = false): Promise<string> {
     });
     return blank;
   });
-  const [w, h, vis, lang] = js<[number, number, string, string]>(
-    `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
+  guard(); // the window may have just moved on or off screen
+  const placed = await cdp(
+    async (send) => (await send("Browser.getWindowForTarget", { targetId: id })).bounds,
   );
+  if (placed.left !== at.left || placed.top !== at.top)
+    throw new StepError(`the window is at ${placed.left},${placed.top}, not ${at.left},${at.top}`);
+  const page = () =>
+    js<[number, number, string, string]>(
+      `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
+    );
+  let [w, h, vis, lang] = page();
+  // Another tab in front of ours in its window (a link opened in a new tab) leaves the session bound but the page hidden.
+  if (vis !== "visible" && bound === id) {
+    ab("tab", id);
+    [w, h, vis, lang] = page();
+  }
   if (vis !== "visible") throw new StepError(`page is "${vis}" after restoring the window`);
   const english = !lang || lang.startsWith("en");
-  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${strays ? `, closed ${strays} blank tab(s)` : ""}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
+  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : "; WARNING foreground lock held by another command, Chrome could take the keyboard"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
 }
 
 /** Every page in the same Chrome window as targetId, that one included. */
@@ -723,7 +769,7 @@ export async function waitForAnswer(opts: {
       lastTick = now;
       console.error(`  … still generating (${secs(now - start)})`);
     }
-    await Bun.sleep(1_000);
+    await pollPause();
   }
   const generated = secs(Date.now() - start);
   // AI Studio saves a new chat (and gives it a /prompts/<id> link) up to about a minute after the first answer.
@@ -853,6 +899,7 @@ export async function runSteps(steps: Step[], opts: { onDone?: () => void } = {}
       stepNo++;
       current = `[${stepNo}/${steps.length}] ${name}`;
       console.error(`→ ${current}`);
+      guard();
       const start = Date.now();
       const confirmed = await run();
       console.error(`✓ ${current}: ${confirmed} (${secs(Date.now() - start)})`);
