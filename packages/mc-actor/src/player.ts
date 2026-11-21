@@ -584,7 +584,7 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       rect(corners[0], -cw, cy, cSize, cSize);
       rect(corners[1], cw, cy, cSize, cSize);
     },
-    { meshes, recolor },
+    { meshes, recolor, white },
   );
 };
 
@@ -1158,6 +1158,12 @@ export async function makePlayer(
     return [down, yaw, 0];
   };
   // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
+  // The game face's eye whites: a colour (bloodshot pink, a glow) or null for the plain white
+  const eyeWhite = (c = null) => {
+    const w = ensureGameFace().white;
+    w.color.set(c ?? "#f4f4f4");
+    w.emissive.copy(w.color);
+  };
   const red = (on) => {
     for (const m of [inner, outer]) {
       m.color.setRGB(1, on ? 0.45 : 1, on ? 0.45 : 1);
@@ -1207,6 +1213,7 @@ export async function makePlayer(
     skin: ctx,
     setSkin,
     paintSkinOverlay,
+    eyeWhite,
     red,
     setFace,
   };
