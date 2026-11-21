@@ -13,6 +13,12 @@ const user32 = dlopen("user32.dll", {
   ShowWindow: { args: ["u64", "i32"], returns: "i32" },
   LockSetForegroundWindow: { args: ["u32"], returns: "i32" },
 }).symbols;
+const kernel32 = dlopen("kernel32.dll", {
+  CreateMutexW: { args: ["ptr", "i32", "ptr"], returns: "u64" },
+  WaitForSingleObject: { args: ["u64", "u32"], returns: "u32" },
+  ReleaseMutex: { args: ["u64"], returns: "i32" },
+  CloseHandle: { args: ["u64"], returns: "i32" },
+}).symbols;
 
 const GW_OWNER = 4;
 const GWL_EXSTYLE = -20;
@@ -28,6 +34,10 @@ const SW_SHOWNOACTIVATE = 4;
 const SW_SHOWMINNOACTIVE = 7;
 const LSFW_LOCK = 1;
 const LSFW_UNLOCK = 2;
+const WAIT_TIMEOUT = 0x102;
+const TURN_MUTEX = Uint16Array.from("Local\\aistudio-prepare-tab\0", (c) => c.charCodeAt(0));
+// A prepareTab takes about 1 s, a few more when it opens a new window; past this the command goes on without its turn.
+const TURN_WAIT_MS = 15_000;
 const CHROME_WINDOW = Uint16Array.from("Chrome_WidgetWin_1\0", (c) => c.charCodeAt(0));
 
 const ownerPid = (h: bigint) => {
@@ -90,13 +100,20 @@ export function guardWindows(pid: number, hiddenLeft: number) {
  * Runs fn with every app barred from taking the foreground (LockSetForegroundWindow, made for this): Chrome activates a
  * window when agent-browser switches to its tab or a new session opens its blank tab, and Windows allows it when the
  * user has been idle a while or works in the agent's parent app. A user click or Alt lifts the lock early by design.
- * Only one process holds the lock: while another command holds it, locked is false and that command's unlock ends it.
+ * Only one process can hold the lock, so commands take turns on a named mutex (another tab preparing in parallel would
+ * otherwise run unlocked). Windows also refuses the lock (locked is false, same error 5) to a process that may not
+ * change the foreground itself, e.g. while the user has not touched the agent's app; Chrome usually may not either.
  */
 export async function withForegroundLocked<T>(fn: (locked: boolean) => Promise<T>): Promise<T> {
+  const turn = kernel32.CreateMutexW(null, 0, TURN_MUTEX);
+  // WAIT_ABANDONED (a command died holding it) still hands over the turn.
+  const owned = turn !== 0n && kernel32.WaitForSingleObject(turn, TURN_WAIT_MS) !== WAIT_TIMEOUT;
   const locked = user32.LockSetForegroundWindow(LSFW_LOCK) !== 0;
   try {
     return await fn(locked);
   } finally {
     if (locked) user32.LockSetForegroundWindow(LSFW_UNLOCK);
+    if (owned) kernel32.ReleaseMutex(turn);
+    if (turn) kernel32.CloseHandle(turn);
   }
 }

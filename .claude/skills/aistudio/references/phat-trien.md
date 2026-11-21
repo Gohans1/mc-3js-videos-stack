@@ -12,6 +12,7 @@ Chỉ Playground chat (/prompts) và History (/library). Người dùng cấm đ
 | --- | --- |
 | scripts/page-map.ts | Nơi duy nhất biết trang trông thế nào: URL, mọi phần tử theo tên (MAP), chữ đọc từ trang (TEXT), tool, mức thinking, media, đuôi video. |
 | scripts/lib.ts | Hạ tầng dùng chung: Chrome, tab, agent-browser, bộ tìm phần tử trong trang, hành động AI Studio, bộ chạy bước. |
+| system/ | System prompt soạn sẵn cho ASK --system-file (review-1-video, compare-2-video); người dùng tự viết, rỗng thì ASK từ chối. Lưu ở file vì preset System instructions của AI Studio chỉ nằm trong local storage của profile. |
 | scripts/win32.ts | Gọi user32.dll qua bun:ffi để cửa sổ ẩn không vướng người dùng (guardWindows, withForegroundLocked). |
 | scripts/ask.ts | Gửi 1 prompt (0..n file) rồi lưu câu trả lời; follow-up; collect. |
 | scripts/studio.ts | Mọi lệnh còn lại, nhóm theo tab, chat, cài đặt, History, sức khoẻ, cấp thấp; có doctor. |
@@ -110,6 +111,7 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Trả bàn phím sau mỗi bước bằng SetForegroundWindow | Hỏng: Chrome đã giữ foreground thì Windows từ chối process khác (trả 0). |
 | AttachThreadInput để ép trả bàn phím | Không làm: Raymond Chen và PowerToys đều gọi là hack. |
 | LockSetForegroundWindow quanh prepareTab | Chạy: cho Chrome quyền giành foreground rồi chuyển tab, có khoá 2/2 lần giữ nguyên, không khoá Chrome giành ngay. |
+| Thử lock lại tới 5 giây khi bị từ chối | Bỏ: Windows từ chối vì không có quyền cũng báo lỗi 5, nên mọi lệnh chờ oan 5 giây. Thay bằng named mutex. |
 
 ## Ma trận test thật (2026-11-21)
 
@@ -137,6 +139,8 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | Khoá foreground: cho Chrome quyền giành foreground rồi tab id, có và không khoá | Có khoá 2/2 foreground giữ nguyên; không khoá Chrome giành. Chạy lại focus e2e, doctor (51 kiểm tra, 0 fallback), smoke: Pass. |
 | 2 process cùng LockSetForegroundWindow | Process sau lock và unlock đều trả 0, lỗi 5; khoá của process trước vẫn giữ tới khi nó unlock. |
 | Link target=_blank mở tab mới che trang của nhãn doctor rồi status | Trước sửa: page is hidden. Sau sửa: Pass, chuyển lại đúng tab. |
+| status 3 tab cùng lúc (doctor, smoke, main) | Pass, prepareTab xếp hàng: 0.2, 2.5, 2.8 giây. |
+| ASK --system-file (tiếng Việt, CRLF) | Pass: model làm theo system, đọc lại khớp; file rỗng, thiếu file, trùng --system đều exit 2. |
 
 ## Giới hạn biết trước
 
@@ -144,7 +148,8 @@ Luồng 1 lệnh: parse input (sai thì exit 2) → start Chrome → prepare tab
 | --- | --- |
 | Không có khoá theo tab | 2 lệnh cùng lúc trên 1 tab sẽ giẫm lên nhau. Thêm khoá là phức tạp thêm, phải hỏi người dùng trước. |
 | Khoá foreground chỉ phủ prepareTab | Các bước sau chỉ dùng lệnh không kích hoạt cửa sổ. Trong 1-2 giây khoá, app khác cũng không tự nhảy lên được (người dùng click vẫn được). |
-| Windows chỉ cho 1 process giữ khoá | 2 lệnh prepareTab chồng nhau thì lệnh sau không khoá được (lỗi 5) và in WARNING; lệnh trước mở khoá xong là lệnh sau hở. |
+| Windows chỉ cho 1 process giữ khoá | Các lệnh xếp hàng qua named mutex Local\aistudio-prepare-tab (đợi tối đa 15 giây), nên tab song song không giành khoá của nhau. |
+| Windows có thể từ chối khoá | Process không được đổi foreground (vd người dùng bấm taskbar, lệnh là cháu chắt của app foreground) thì lock trả 0, cùng lỗi 5 như khi bị giữ; log ghi foreground not locked. Lúc đó Chrome thường cũng không được giành, nhưng chưa kiểm khi người dùng thật đang gõ trong T3. |
 | Win+D thu nhỏ cửa sổ ẩn | Có lúc hiện thanh nhỏ cạnh nút Start tới bước kế tiếp; bấm vào thì thấy trang AI Studio. |
 | ASK chỉ copy lượt Model cuối | Nếu 1 câu trả lời tách thành nhiều lượt Model thì dùng STUDIO read để lấy đủ. |
 | Chat đang chạy chỉ lấy được ở tab đang chạy nó | Tab khác tải bản đã lưu, không thấy phần đang sinh; có thể báo has no answer hoặc lấy nhầm câu trả lời trước. |

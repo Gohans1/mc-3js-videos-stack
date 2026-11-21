@@ -47,6 +47,7 @@ Viết tắt bên dưới: ASK = bun .claude/skills/aistudio/scripts/ask.ts, STU
 | --thinking | Extra High (chat mới trên gemini-4-neon) | Model khác giữ mức mặc định của trang, muốn chắc thì truyền --thinking. Mỗi model có danh sách riêng (flash-lite chỉ tới High); hỏi tiếp thì giữ của chat. |
 | --media | High (chat mới) | Default, Low, Medium, High. |
 | --system "text" | giữ nguyên | Thay system instructions ngay trước khi gửi; "" là xoá. |
+| --system-file file | giữ nguyên | Như --system nhưng đọc từ file (system dài). File rỗng bị từ chối. |
 | --tool tên=on hoặc off | trạng thái đang nhớ | Lặp được, vd --tool search=off. Công tắc Google Search được AI Studio nhớ sang mọi chat mới, nên cần chắc thì luôn truyền; bước run in trạng thái search đã dùng. |
 | --fps n | 24 | Chỉ file video, 0 < n ≤ 24. |
 | --start 1m10s --end 2m30s | cả video | Chỉ file video, cắt đoạn. AI Studio tự viết lại thời gian (0m2s thành 2s), script so theo số giây. |
@@ -58,7 +59,8 @@ Viết tắt bên dưới: ASK = bun .claude/skills/aistudio/scripts/ask.ts, STU
 
 | Việc | Cách |
 | --- | --- |
-| So sánh 2 video | ASK a.mp4 b.mp4 "so sánh..." --out cmp.md. FPS và đoạn cắt áp cho mọi video trong lệnh, được đọc lại từng video rồi kiểm lại cả 2 trước khi Run. |
+| Review 1 video | ASK a.mp4 "..." --system-file .claude/skills/aistudio/system/review-1-video.md --out review.md |
+| So sánh 2 video | ASK a.mp4 b.mp4 "so sánh..." --system-file .claude/skills/aistudio/system/compare-2-video.md --out cmp.md. FPS và đoạn cắt áp cho mọi video trong lệnh, được đọc lại từng video rồi kiểm lại cả 2 trước khi Run. |
 | Hỏi đáp thuần text | ASK "câu hỏi" --thinking Low cho nhanh. |
 | Đọc PDF, ảnh, audio, text | Đưa file vào trước prompt như video; chỉ video mới có bước cài đặt riêng. |
 | Câu trả lời lâu (video dài, Extra High) | Chạy lệnh ở chế độ nền với timeout lớn hơn --run-timeout-min. Hết giờ thì log in sẵn lệnh lấy lại. |
