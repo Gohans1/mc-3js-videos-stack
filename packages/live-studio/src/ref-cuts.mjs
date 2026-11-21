@@ -36,27 +36,31 @@ export const latestStudy = (project) => {
 const s = (t) => `${+t.toFixed(2)} s`;
 
 const VIDEO = /\.(mp4|mov|mkv|webm|m4v)$/i;
-// the film's reference video (bun run reference add puts it in references/; a -source. file is the download it came from):
-// the one the newest study measured, else ref.*, else the first
-export const referenceVideo = (project) => {
+// the videos in references/ (bun run reference add puts them there; a -source. file is the download one came from)
+const referenceVideos = (project) => {
   const dir = join(project, "references");
-  const names = existsSync(dir)
+  return existsSync(dir)
     ? readdirSync(dir)
         .filter((f) => VIDEO.test(f) && !f.includes("-source."))
         .toSorted()
     : [];
+};
+
+// the video the film remakes: the one its newest study measured, else ref.*; a lone technique clip is no such video
+export const referenceVideo = (project) => {
+  const names = referenceVideos(project);
   const studied = latestStudy(project)?.file.split(/[\\/]/).at(-3);
   const name =
     names.find((f) => f.replace(/\.[^.]+$/, "") === studied) ??
-    names.find((f) => f.startsWith("ref.")) ??
-    names[0];
+    names.find((f) => f.startsWith("ref."));
   return name ? `references/${name}` : null;
 };
 
 // The cut check and the coverage read the newest study: a film holding a reference video but no study gets neither
 export const unstudiedWarning = (project) => {
   if (latestStudy(project)) return "";
-  const video = referenceVideo(project);
+  const name = referenceVideos(project)[0];
+  const video = name && (referenceVideo(project) ?? `references/${name}`);
   return video
     ? `⚠ ${video} has no study, so check can neither match its cuts nor count coverage: bun run reference study ${video}`
     : "";

@@ -79,7 +79,10 @@ test("the film's reference video is the one its newest study measured, else ref.
   const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
   assert.equal(referenceVideo(dir), null);
   mkdirSync(join(dir, "references"));
-  for (const f of ["orig.mp4", "ref.mp4", "clip-source.mp4", "vox.wav"])
+  // a lone technique clip is not what the film remakes: nothing weighs the film against it
+  writeFileSync(join(dir, "references/orig.mp4"), "");
+  assert.equal(referenceVideo(dir), null);
+  for (const f of ["ref.mp4", "clip-source.mp4", "vox.wav"])
     writeFileSync(join(dir, "references", f), "");
   assert.equal(referenceVideo(dir), "references/ref.mp4");
   study(dir, "orig", "run-1", [cut(1)], new Date());

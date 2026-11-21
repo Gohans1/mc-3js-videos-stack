@@ -40,7 +40,7 @@ export const renderCost = (cuts) => {
       const unnamed = judged.length - heavy.length;
       return `cost: ${Math.round(typical)} ms a sample, the median of ${
         heavy.length
-          ? `the ${unnamed === 1 ? "stretch" : `${unnamed} stretches`} not named of ${judged.length} between cuts`
+          ? `${unnamed} of ${judged.length} stretches between cuts, the ones not named here`
           : `${judged.length} stretches between cuts`
       }; ${
         named.length

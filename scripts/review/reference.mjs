@@ -451,6 +451,7 @@ if (picture) {
     );
   } else if (Date.now() - began >= minutes * 60_000) {
     console.error(`reference: stopped after ${minutes} minute(s) cutting the draft's strip off`);
+    rmSync(pictureDir, { recursive: true, force: true });
     await ended({ say: `Reference ${command} stopped`, level: "warn" });
     process.exit(1);
   } else

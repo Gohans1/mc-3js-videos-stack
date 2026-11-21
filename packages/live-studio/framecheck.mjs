@@ -487,7 +487,13 @@ for (const [i, x] of stripFaults.entries()) {
     log(`ERROR could not write ${artifact}`);
   }
 }
-if (faults.length > 12) log(`${faults.length - 12} more not drawn`);
+if (faults.length > 12)
+  log(
+    `${faults.length - 12} more not drawn (${faults
+      .filter((x) => !strips.has(x))
+      .map((x) => film(x.t))
+      .join(", ")})`,
+  );
 const index = join(out, "index.json");
 const report = {
   source: {
