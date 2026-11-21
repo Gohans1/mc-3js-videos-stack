@@ -914,8 +914,13 @@ if (isMain) {
           at: times[near]!,
           stale: staleVideo(film, hasDraft ? draft : cutsFile)?.file ?? null,
         };
-  // a render's cuts are its shots' starts and the camera keys with cut: true; cut n opens shot n+1 only with no key cuts
-  const cutOpensShot = times.length === got.shotCount - 1;
+  // a render's cuts are its shots' starts and the camera keys with cut: true: the shot a cut opens is the one after it, when
+  // that differs from the one before
+  const opened = cut ? whatsAt(film, cut.at + 0.004).shot : null;
+  const opensShot =
+    opened && opened.index !== whatsAt(film, Math.max(0, cut!.at - 0.004)).shot?.index
+      ? opened.index
+      : null;
   if (pixelAt && !got.cam) {
     console.error(
       `no camera at ${t}: the picture is black or the film has no camera keys, so no pixel reaches the world`,
@@ -1132,7 +1137,7 @@ if (isMain) {
     );
   if (cut)
     out.push(
-      `cut ${cut.index} at ${fmt(cut.at)} heard${cutOpensShot ? `, into shot ${cut.index + 1}` : ""}${
+      `cut ${cut.index} at ${fmt(cut.at)} heard${opensShot !== null ? `, into shot ${opensShot}` : ""}${
         cut.stale
           ? ` (${hasDraft ? "the draft picture" : "renders/cuts.json"} is older than ${cut.stale}: numbered as the last render cut it; bun run render clip writes it again)`
           : ""

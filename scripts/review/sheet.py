@@ -18,9 +18,10 @@
                                                  (--crop x0,y0,x1,y1 keeps that region at full size): read where a
                                                  landmark sits for bun run reference solve's uv
   bun run sheet renders/draft_video.mp4 cut 4    a transition up close: 6 frames from 0.25 s before cut 4 to 0.35 s after,
-                                                 naming the shots either side (cut 4: shot 4 into 5, numbered from 0 as everywhere)
-                                                 and the transition between them (shotsTimeline row 5 .transition)
-                                                 (shots and cuts from renders/cuts.json, the render clip that made the video)
+                                                 (cuts from renders/cuts.json, the render clip that made the video: the shots'
+                                                 starts and camera keys with cut: true); when the cuts are the shots' starts alone it
+                                                 names the shots either side (cut 4: shot 4 into 5, from 0) and the transition
+                                                 between them (shotsTimeline row 5 .transition); shots shows each stretch between cuts
 Use film seconds for film renders, file seconds for other videos, or START for a manual offset. TIMES accepts 65, 1:05
 or 01:05.250. The shots and cut modes require a current film render at its original offset. Worth a look: a note's (bun run notes), a line's (bun run voice:cues),
 a fault's (bun run framecheck), either side of a cut (renders/cuts.json).

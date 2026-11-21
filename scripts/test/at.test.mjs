@@ -943,6 +943,19 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
   );
 });
 
+// a camera key with cut: true cuts inside a shot: the render counts it, so cut n is no longer shot n+1's start
+test("a draft's cut names the shot it opens, and none for a camera key's cut inside a shot", (t) => {
+  const dir = film(t);
+  mkdirSync(join(dir, "renders"));
+  writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([2, 4]));
+  const cutLine = (s) =>
+    spawnSync("bun", [AT, s], { env: { ...process.env, LIVE_PROJECT: dir }, encoding: "utf8" })
+      .stdout.split("\n")
+      .find((l) => l.startsWith("cut "));
+  assert.match(cutLine("2.05"), /^cut 0 at 2\.00 heard: bun run sheet/);
+  assert.match(cutLine("4.1"), /^cut 1 at 4\.00 heard, into shot 1: bun run sheet/);
+});
+
 test("a second said with an s (4.1s) is a second, as every other film command takes it", (t) => {
   const r = spawnSync("bun", [AT, "4.1s"], {
     env: { ...process.env, LIVE_PROJECT: film(t) },

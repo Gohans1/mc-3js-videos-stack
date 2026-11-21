@@ -13,16 +13,27 @@ test("render cost names the stretch between cuts that draws over twice the media
   }
   assert.equal(
     cost.line(),
-    "cost: 30 ms a sample, the median of 4 stretches between cuts; 4.00-6.00 s draws 110 ms (x3.7): profile what it shows there",
+    "cost: 30 ms a sample, the median of 4 stretches between cuts; 4.00-5.97 s draws 110 ms (x3.7): profile what it shows there",
   );
 });
 
-test("render cost says so when no stretch is heavy, and nothing when nothing was drawn", () => {
+// the first frame a set is drawn compiles its shaders, and a cold run starts slow: neither is what the set costs
+test("render cost is not swayed by a slow first frame, and names no stretch too short to judge", () => {
+  const cost = renderCost([2, 4, 4.2], 6);
+  for (let f = 0; f < 180; f++) {
+    const t = f / 30;
+    const first = f === 0 || f === 60;
+    cost.add(t, first ? 1000 : t >= 4 && t < 4.2 ? 200 : 30, 1);
+  }
+  assert.equal(
+    cost.line(),
+    "cost: 30 ms a sample, the median of 3 stretches between cuts; none past twice that",
+  );
+});
+
+test("render cost over one stretch says its ms alone, and nothing when nothing was drawn", () => {
   const even = renderCost([], 4);
   for (let f = 0; f < 120; f++) even.add(f / 30, 25, 1);
-  assert.equal(
-    even.line(),
-    "cost: 25 ms a sample, the median of 1 stretch between cuts; none past twice that",
-  );
+  assert.equal(even.line(), "cost: 25 ms a sample");
   assert.equal(renderCost([1], 2).line(), "");
 });
