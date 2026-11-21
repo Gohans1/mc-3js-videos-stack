@@ -178,6 +178,14 @@ test("captions and final refuse the options they would ignore", (t) => {
   const final = render("final", { CHECK: "motion:cam,1,2" });
   assert.equal(final.status, 2, final.stdout + final.stderr);
   assert.match(final.stderr, /CHECK goes with render stills/);
+
+  // a CHECK run without AT draws no still, so SAMPLES would blur nothing
+  const blurNone = render("stills", { CHECK: "motion:cam,1,2", SAMPLES: "8" });
+  assert.equal(blurNone.status, 2, blurNone.stdout + blurNone.stderr);
+  assert.match(
+    blurNone.stderr,
+    /SAMPLES blurs stills, and a CHECK or ENTRY run without AT draws none/,
+  );
 });
 
 test("render poster refuses a missing AT, LIST=1 and an unknown RES", (t) => {
@@ -537,7 +545,7 @@ export function buildScene(canvas,W,H){canvas.width=W;canvas.height=H;const g=ca
   assert.ok(Math.abs(red() - 128) <= 3, `one instant: expected red 128, got ${red()}`);
   const blurred = film.render("stills", { AT: "1", SAMPLES: "8" });
   assert.equal(blurred.status, 0, blurred.stdout + blurred.stderr);
-  assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(8 sub-frames\)/);
+  assert.match(blurred.stdout, /wrote renders\/still_1s\.jpg \(stills: 8 sub-frames\)/);
   assert.ok(Math.abs(red() - 153) <= 4, `the shutter's average: expected red 153, got ${red()}`);
 }, 400000);
 

@@ -74,7 +74,7 @@ Nothing is written outside the film. Options are environment variables:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   SAMPLES=16                 temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
                              poster 8): more is smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by
-                             itself, up to 64. SAMPLES=8 on stills shows a moving moment as the video blurs it, at the draft's size;
+                             itself, up to 64. SAMPLES=8 on stills shows a moving moment as the final blurs it, at the draft's size;
                              leave stills at 1 to check a pose, a contact or where things are
   RES=2160                   final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
@@ -215,20 +215,26 @@ const misplaced =
                         ? "INSPECT and VIEWS cannot be used together: use one or the other"
                         : (video || what === "captions") && compare
                           ? "COMPARE is for render stills or poster"
-                          : what === "captions"
-                            ? [
-                                "AT",
-                                "LIST",
-                                "CHECK",
-                                "INSPECT",
-                                "VIEWS",
-                                "ENTRY",
-                                "CROP",
-                                "SAMPLES",
-                              ]
-                                .filter((k) => process.env[k] !== undefined)
-                                .map((k) => `${k} does nothing for render captions`)[0]
-                            : null;
+                          : what === "stills" &&
+                              process.env.SAMPLES &&
+                              process.env.AT === undefined &&
+                              process.env.VIEWS === undefined &&
+                              (process.env.CHECK || process.env.ENTRY)
+                            ? "SAMPLES blurs stills, and a CHECK or ENTRY run without AT draws none: add AT=<s> for a still beside it"
+                            : what === "captions"
+                              ? [
+                                  "AT",
+                                  "LIST",
+                                  "CHECK",
+                                  "INSPECT",
+                                  "VIEWS",
+                                  "ENTRY",
+                                  "CROP",
+                                  "SAMPLES",
+                                ]
+                                  .filter((k) => process.env[k] !== undefined)
+                                  .map((k) => `${k} does nothing for render captions`)[0]
+                              : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
@@ -646,7 +652,7 @@ const cfg = {
         name: what === "poster" ? `poster_${s}s.png` : `still_${s}s.jpg`,
         frame: Math.round(s * FPS),
       })),
-  stillSamples: what === "poster" || env.SAMPLES ? samples : 1,
+  stillSamples: samples,
   clip: video
     ? {
         chunk: CHUNK,
@@ -1103,7 +1109,7 @@ const nextHint =
       : "";
 if (stillsWritten.length)
   console.log(
-    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : cfg.stillSamples > 1 ? ` (${cfg.stillSamples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
+    `wrote ${stillsWritten.join(" ")}${what === "poster" ? ` (${posterView.outWidth}x${posterView.outHeight}, ${samples} sub-frames)` : samples > 1 && cfg.stills.length ? ` (stills: ${samples} sub-frames)` : ""}${failed || chunks || span || vsVideo ? "" : `\nnext: open ${stillsWritten.length > 1 ? "them" : "it"} to look${nextHint}`}`,
   );
 if (!failed && compare && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
