@@ -229,7 +229,9 @@ export function frameSubject(
   return { p, l, fov, mm };
 }
 
-/** Map full-frame mm + aperture f-stop to postprocessing DepthOfFieldEffect parameters. */
+/** Map full-frame mm + aperture f-stop to postprocessing DepthOfFieldEffect parameters. bokehScale is the blur's radius
+ * in full-resolution pixels (the bokeh passes step coc * scale texels) and also how fast the low-resolution blurred buffer
+ * takes over from the sharp picture (the effect uses one scale for both). */
 export function dofParams({
   mm,
   fstop,
@@ -250,11 +252,16 @@ export function dofParams({
   const cocInfMm = (mm * mm) / (fstop * Math.max(10, s - mm));
   const pxInf = (cocInfMm / SENSOR) * 1920;
   const targetPx = Math.min(14, pxInf * 0.72);
-  const rawRange =
-    pxInf > targetPx + 1e-4 ? (focusDistance * targetPx) / (pxInf - targetPx) : focusDistance;
-  const focusRange = Math.min(25, Math.max(0.15, rawRange));
-  // SENSOR=36 fits horizontally, so pixel bokeh radius scales with horizontal render width (not height).
+  // the depth in front of focus where the blur reaches targetPx (it grows faster in front than behind, and the effect's
+  // ramp is the same both ways)
+  const sharpRange = Math.min(25, Math.max(0.15, (focusDistance * targetPx) / (pxInf + targetPx)));
+  // SENSOR=36 fits horizontally, so pixel bokeh radius scales with horizontal render width (not height). Past 48 px the
+  // 64-tap kernel's gaps show
   const width = widthPx ?? (heightPx !== undefined ? heightPx * (16 / 9) : 1920);
-  const bokehScale = Math.max(0, Math.min(8, pxInf / 6) * (width / 1920));
-  return { focusDistance, focusRange, bokehScale };
+  const bokehScale = Math.max(0, Math.min(48, pxInf / 2) * (width / 1920));
+  // DepthOfFieldEffect swaps in its low-resolution blur buffer wholly where smoothstep(0, focusRange, offset) *
+  // bokehScale reaches 1, so focusRange is stretched until that happens at sharpRange, not bokehScale times nearer
+  const y = Math.min(1, 1 / Math.max(bokehScale, 1e-6));
+  const x = 0.5 - Math.sin(Math.asin(1 - 2 * y) / 3);
+  return { focusDistance, focusRange: sharpRange / x, bokehScale };
 }

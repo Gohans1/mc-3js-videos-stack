@@ -82,7 +82,11 @@ Object.assign(window, {
     fadeLevel?: number;
     particles?: number;
     t?: number;
+    clip?: [number, number];
   }) {
+    // a film's camera rig sets near and far every frame, after the effect was built (camera-rig.ts projectCamera)
+    if (opts.clip) [camera.near, camera.far] = opts.clip;
+    camera.updateProjectionMatrix();
     dof.update({
       fstop: opts.fstop ?? 0,
       focusDistance: opts.focusDistance ?? 4,
@@ -105,6 +109,8 @@ Object.assign(window, {
     let s = "";
     for (let i = 0; i < rgb.length; i += 0x8000)
       s += String.fromCharCode(...rgb.subarray(i, i + 0x8000));
+    [camera.near, camera.far] = [0.1, 100];
+    camera.updateProjectionMatrix();
     return { enabled: dof.pass.enabled, w: W, h: H, rgb: btoa(s) };
   },
 });

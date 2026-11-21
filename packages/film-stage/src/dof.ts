@@ -1,5 +1,5 @@
 import { blurPx, dofParams } from "film-kit/lens";
-import { DepthOfFieldEffect, type EffectComposer, EffectPass } from "postprocessing";
+import { DepthOfFieldEffect, type EffectComposer, EffectPass, KernelSize } from "postprocessing";
 import type { Camera } from "three";
 
 export { blurPx };
@@ -25,6 +25,9 @@ export function makeDof(
     resolutionScale: draft ? 0.35 : 0.5,
   });
   effect.target = null;
+  // the near CoC is blurred so a soft foreground's edge spreads over what is behind it, then scaled by the blur's radius
+  // (bokehScale, up to 48 px): a wider kernel let a table's edge swallow the subject standing on it
+  effect.blurPass.kernelSize = KernelSize.VERY_SMALL;
   const pass = new EffectPass(camera, effect);
   composer.addPass(pass);
   pass.enabled = false;
@@ -36,6 +39,9 @@ export function makeDof(
       return false;
     }
     const p = dofParams({ mm, fstop, focus: focusDistance, widthPx, heightPx });
+    // the CoC shader shares the camera's matrices but copied its near and far once, at construction; a rig that sets them
+    // per frame (projectCamera) would otherwise have every depth read back at the wrong distance and blur the focus plane
+    effect.cocMaterial.adoptCameraSettings(camera);
     effect.cocMaterial.focusDistance = p.focusDistance;
     effect.cocMaterial.focusRange = p.focusRange;
     effect.bokehScale = p.bokehScale;

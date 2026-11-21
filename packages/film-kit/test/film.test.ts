@@ -116,7 +116,7 @@ test("lens: shotSize and frameSubject place targets cleanly on screen fill, thir
   expect(projected.y).toBeCloseTo(-0.2, 4);
 });
 
-test("lens: dofParams maps thin-lens mm and fstop to shallower 85mm bokeh and resolution-independent scale", () => {
+test("lens: dofParams maps thin-lens mm and fstop to shallower 85mm bokeh and a resolution-independent sharp depth", () => {
   expect(dofParams({ mm: 50, fstop: 0, focus: 3 })).toEqual({
     focusDistance: 3,
     focusRange: 0,
@@ -126,7 +126,7 @@ test("lens: dofParams maps thin-lens mm and fstop to shallower 85mm bokeh and re
   const wide = dofParams({ mm: 24, fstop: 1.8, focus: 2.5 });
   const stopped = dofParams({ mm: 85, fstop: 11, focus: 2.5 });
   expect(tele.focusDistance).toBe(2.5);
-  expect(tele.focusRange).toBeLessThan(wide.focusRange);
+  expect(sharpDepth(tele)).toBeLessThan(sharpDepth(wide));
   expect(tele.bokehScale).toBeGreaterThan(wide.bokehScale);
   expect(tele.bokehScale).toBeGreaterThan(stopped.bokehScale);
   const hd = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1280 });
@@ -136,9 +136,44 @@ test("lens: dofParams maps thin-lens mm and fstop to shallower 85mm bokeh and re
   // 9:16 Shorts shrinks horizontal sensor width from 1920 to 1080: bokeh must scale with width (9/16), not height (16/9).
   const landscape = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1920, heightPx: 1080 });
   const shorts = dofParams({ mm: 50, fstop: 2, focus: 2.5, widthPx: 1080, heightPx: 1920 });
-  expect(shorts.focusRange).toBeCloseTo(landscape.focusRange, 6);
+  expect(sharpDepth(shorts)).toBeCloseTo(sharpDepth(landscape), 6);
   expect(shorts.bokehScale / landscape.bokehScale).toBeCloseTo(1080 / 1920, 6);
+});
 
+// postprocessing's DepthOfFieldEffect shows its low-resolution blur buffer wholly where
+// smoothstep(0, focusRange, |depth - focus|) * bokehScale reaches 1
+const shown = (p: ReturnType<typeof dofParams>, offset: number) => {
+  const x = Math.min(1, offset / p.focusRange);
+  return Math.min(1, x * x * (3 - 2 * x) * p.bokehScale);
+};
+const sharpDepth = (p: ReturnType<typeof dofParams>) => {
+  let lo = 0,
+    hi = p.focusRange;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (shown(p, mid) < 1) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+};
+
+test("lens: dofParams keeps a close-up subject a hand deep sharp under a wide aperture", () => {
+  // a 100 mm close-up of a jar 0.8 m off at f/2.2 on a 1080-wide Short: the jar's back, 10 cm behind the focused label,
+  // stays mostly the full-resolution picture
+  const jar = dofParams({ mm: 100, fstop: 2.2, focus: 0.8, widthPx: 1080, heightPx: 1920 });
+  expect(shown(jar, 0.03)).toBeLessThan(0.1);
+  expect(shown(jar, 0.1)).toBeLessThan(0.5);
+  // while the chef 1.2 m behind it is the blurred buffer
+  expect(shown(jar, 1.2)).toBe(1);
+});
+
+test("lens: dofParams blurs the far background as wide as a fast lens does", () => {
+  // 100 mm at f/2.2 focused 0.8 m away on a 1080-wide Short: a real lens's blur of infinity is ~250 px across at 1080
+  const jar = dofParams({ mm: 100, fstop: 2.2, focus: 0.8, widthPx: 1080, heightPx: 1920 });
+  expect(jar.bokehScale).toBeGreaterThan(20);
+});
+
+test("lens: shotSize rejects an unknown size and a zero height", () => {
   expect(() => shotSize("MLS" as unknown as Parameters<typeof shotSize>[0])).toThrow(/shotSize/);
   expect(() => shotSize("MCU", { height: 0 })).toThrow(/shotSize/);
 });

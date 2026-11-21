@@ -16,6 +16,7 @@ const renderShot = async (opts: {
   fadeLevel?: number;
   particles?: number;
   t?: number;
+  clip?: [number, number];
 }) => {
   const r = await page.run<{ enabled: boolean; w: number; h: number; rgb: string }>(
     `renderShot(${JSON.stringify(opts)})`,
@@ -69,6 +70,13 @@ test("Active DOF blurs out-of-focus planes and swaps sharpness across rack-focus
   const fn = edgeContrast(farFocus, 90, 100, 230, 260);
   const ff = edgeContrast(farFocus, 410, 100, 550, 260);
   expect(ff).toBeGreaterThan(fn * 1.4);
+});
+
+test("DOF keeps the focused plane sharp when the camera's near and far change after the effect was built", async () => {
+  const shot = await renderShot({ fstop: 1.4, focusDistance: 4.0, mm: 85, clip: [0.4, 500] });
+  const near = edgeContrast(shot, 90, 100, 230, 260);
+  const far = edgeContrast(shot, 410, 100, 550, 260);
+  expect(near).toBeGreaterThan(far * 1.4);
 });
 
 test("makeFade(1) renders pure black (0,0,0) even with active DOF, Bloom, grain, and HalfFloatType", async () => {
