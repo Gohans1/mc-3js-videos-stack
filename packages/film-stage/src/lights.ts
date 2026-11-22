@@ -427,3 +427,109 @@ export function createGodraysPass(
     },
   };
 }
+
+export type EnvironmentPreset = "studio" | "outdoor" | "night";
+
+interface EnvironmentSpec {
+  bg: number;
+  ground: number;
+  panels: readonly { size: [number, number]; at: Vec3; look: Vec3; color: number; gain: number }[];
+}
+
+export const ENVIRONMENT_PRESETS: Record<EnvironmentPreset, EnvironmentSpec> = {
+  studio: {
+    bg: 0x9aa9b4,
+    ground: 0x2e343a,
+    panels: [
+      { size: [8, 8], at: [0, 6, 0], look: [0, 0, 0], color: 0xffffff, gain: 3.2 },
+      { size: [3, 6], at: [-6, 2, 2], look: [0, 1, 0], color: 0xf4f8ff, gain: 1.6 },
+      { size: [3, 6], at: [6, 2, -2], look: [0, 1, 0], color: 0xfff5e8, gain: 1.3 },
+    ],
+  },
+  outdoor: {
+    bg: 0x89b7e8,
+    ground: 0x454a3c,
+    panels: [
+      { size: [6, 6], at: [5, 8, 4], look: [0, 0, 0], color: 0xfff5dc, gain: 4.5 },
+      { size: [10, 6], at: [-6, 4, -4], look: [0, 1, 0], color: 0xc2dfff, gain: 1.4 },
+      { size: [8, 4], at: [0, 2, -7], look: [0, 1, 0], color: 0xe6f2ff, gain: 1.1 },
+    ],
+  },
+  night: {
+    bg: 0x162033,
+    ground: 0x0d1018,
+    panels: [
+      { size: [6, 6], at: [-4, 7, 3], look: [0, 0, 0], color: 0x7ca6e0, gain: 1.6 },
+      { size: [3, 5], at: [6, 2, 2], look: [0, 1, 0], color: 0xffb36b, gain: 1.2 },
+      { size: [4, 4], at: [0, 3, -6], look: [0, 1, 0], color: 0x3b5a8a, gain: 0.9 },
+    ],
+  },
+};
+
+export interface EnvironmentOptions {
+  preset?: EnvironmentPreset;
+  sigma?: number;
+}
+
+export interface EnvironmentHandle {
+  texture: THREE.Texture;
+  dispose: () => void;
+}
+
+export function buildEnvironmentScene(preset: EnvironmentPreset = "studio"): THREE.Scene {
+  const spec = ENVIRONMENT_PRESETS[preset];
+  if (!spec) {
+    throw new Error(
+      `Unknown environment preset ${JSON.stringify(preset)}; expected ${Object.keys(ENVIRONMENT_PRESETS).join(" | ")}`,
+    );
+  }
+  const env = new THREE.Scene();
+  env.background = new THREE.Color(spec.bg);
+  for (const panel of spec.panels) {
+    const color = new THREE.Color(panel.color).multiplyScalar(panel.gain);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(panel.size[0], panel.size[1]),
+      new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide }),
+    );
+    mesh.position.set(...panel.at);
+    mesh.lookAt(...panel.look);
+    env.add(mesh);
+  }
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(40, 40),
+    new THREE.MeshBasicMaterial({ color: spec.ground }),
+  );
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -3;
+  env.add(floor);
+  return env;
+}
+
+export function createEnvironment(
+  renderer: THREE.WebGLRenderer,
+  opts: EnvironmentOptions = {},
+): EnvironmentHandle {
+  const envScene = buildEnvironmentScene(opts.preset ?? "studio");
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  let target: THREE.WebGLRenderTarget | null = null;
+  try {
+    target = pmrem.fromScene(envScene, opts.sigma ?? 0.04);
+  } finally {
+    pmrem.dispose();
+    envScene.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+        else obj.material.dispose();
+      }
+    });
+  }
+  return {
+    texture: target.texture,
+    dispose() {
+      if (!target) return;
+      target.dispose();
+      target = null;
+    },
+  };
+}

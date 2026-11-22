@@ -1110,6 +1110,7 @@ const Shutter = z.object({
   angle: z.number().min(0).max(360).optional(),
   timing: z.enum(["open", "center", "close"]).optional(),
   phase: z.number().min(-1).max(1).optional(),
+  samples: z.number().int().min(1).max(64).optional(),
   apertureSamples: z.number().int().min(1).max(32).optional(),
 });
 const OpticsKey = z.looseObject({
