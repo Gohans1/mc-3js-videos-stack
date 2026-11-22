@@ -62,6 +62,7 @@ async function runWorker(executable, args, minutes) {
 const HELP = `Optional reference analysis; never required to author a film.
   bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
   bun run reference timecode <video> [--out <file>] [--label <text>]  Burn a black timecode bar below a copy for AI review; timecode --help
+  bun run reference sidebyside <reference> <remake> [--out <file>]  Tile reference and remake into one synced video with shared timecode bar; sidebyside --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
@@ -109,6 +110,20 @@ Default output: renders/reference/<video-name>_timecode.mp4 (outside references/
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
 next: pass the output alongside renders/draft.mp4 to your video reviewer; keep references/ clean`;
+
+const SIDEBYSIDE_HELP = `Tile a reference video and a remake into one synced video with REF/OURS headers and a shared black timecode bar for AI comparison.
+  bun run reference sidebyside <reference> <remake> [--out <file>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
+Writes an H.264 .mp4 copy without touching either source; strips a film draft's bottom studio bar before tiling and pads any shorter clip with black to show duration mismatch.
+Default output: renders/reference/<ref-name>_vs_<remake-name>.mp4.
+  --out <file>       Output .mp4 path (must differ from both inputs).
+  --audio <mode>     Audio track to keep: ours (default), ref, or none.
+  --layout <mode>    auto (default: hstack for portrait/square, vstack for landscape), hstack, or vstack.
+  --short-edge <px>  Cap each panel's shorter side in pixels without upscaling (default 720).
+  --full             Keep native panel resolution (disables --short-edge downscaling).
+  --crf <N>          H.264 quality factor 0-51 (default 22).
+  --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
+Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
+next: pass the output to your video reviewer with compare-2-video.md; keep sources clean`;
 
 const MONO_FONTS = [
   "C:/Windows/Fonts/consolab.ttf",
@@ -527,6 +542,289 @@ if (process.argv[2] === "timecode") {
   );
   console.log(
     `next: pass ${displayOut} to your video reviewer (e.g. aistudio); keep references/ clean`,
+  );
+  process.exit(0);
+}
+
+if (process.argv[2] === "sidebyside") {
+  const argv = cliArgs(
+    SIDEBYSIDE_HELP,
+    [
+      "--out file",
+      "--audio mode",
+      "--layout mode",
+      "--short-edge px",
+      "--full",
+      "--crf N",
+      "--minutes N",
+    ],
+    2,
+    process.argv.slice(3),
+  );
+  const { positionals, values } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      out: { type: "string" },
+      audio: { type: "string" },
+      layout: { type: "string" },
+      "short-edge": { type: "string" },
+      full: { type: "boolean" },
+      crf: { type: "string" },
+      minutes: { type: "string" },
+    },
+  });
+  if (positionals.length !== 2) usage("Choose sidebyside <reference> <remake>");
+  if (values.full && values["short-edge"] !== undefined)
+    usage("Use either --full or --short-edge, not both");
+  const audioMode = values.audio ?? "ours";
+  if (!["ours", "ref", "none"].includes(audioMode)) usage("--audio takes ours, ref, or none");
+  const layoutMode = values.layout ?? "auto";
+  if (!["auto", "hstack", "vstack"].includes(layoutMode))
+    usage("--layout takes auto, hstack, or vstack");
+  const shortEdge = values.full
+    ? null
+    : numberArg("--short-edge", values["short-edge"] ?? "720", { min: 144, max: 4320, int: true });
+  const crf = numberArg("--crf", values.crf ?? "22", { min: 0, max: 51, int: true });
+  const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  const refSource = resolve(positionals[0]);
+  const remSource = resolve(positionals[1]);
+  for (const [raw, file] of [
+    [positionals[0], refSource],
+    [positionals[1], remSource],
+  ]) {
+    if (!statSync(file, { throwIfNoEntry: false })?.isFile()) usage(`No local file: ${raw}`);
+  }
+  if (values.out !== undefined && !values.out.trim()) usage("--out needs an .mp4 file path");
+  const refStem = basename(refSource, extname(refSource));
+  const remStem = basename(remSource, extname(remSource));
+  const outPath = resolve(values.out ?? join("renders/reference", `${refStem}_vs_${remStem}.mp4`));
+  const samePath = (a, b) =>
+    process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+  const matchesInput = (input) =>
+    samePath(outPath, input) ||
+    (existsSync(outPath) && samePath(realpathSync(outPath), realpathSync(input)));
+  if (matchesInput(refSource) || matchesInput(remSource))
+    usage("--out must differ from both inputs: keep sources untouched");
+  if (statSync(outPath, { throwIfNoEntry: false })?.isDirectory())
+    usage("--out must be a file path, not a directory");
+  if (extname(outPath).toLowerCase() !== ".mp4") usage("--out must end in .mp4");
+
+  const probeMedia = (file) => {
+    const p = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,duration:stream_disposition=attached_pic:stream_side_data=rotation:format=duration",
+        "-of",
+        "json",
+        file,
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+    );
+    const info = p.status === 0 ? JSON.parse(p.stdout) : {};
+    const video = info.streams?.find(
+      (s) => s.codec_type === "video" && s.disposition?.attached_pic !== 1,
+    );
+    const audio = info.streams?.find((s) => s.codec_type === "audio");
+    if (!video?.width || !video?.height) {
+      return {
+        error: `no video stream in ${file} (${(p.stderr || p.error?.message || "").trim()})`,
+      };
+    }
+    const rotation = Number(
+      video.side_data_list?.find((item) => item?.rotation !== undefined)?.rotation ?? 0,
+    );
+    const rotated = Math.abs(rotation) % 180 === 90;
+    const dispW = rotated ? video.height : video.width;
+    const dispH = rotated ? video.width : video.height;
+    const parseRate = (raw) => {
+      const [num, den] = String(raw ?? "0/1")
+        .split("/")
+        .map(Number);
+      return den > 0 && num > 0 ? num / den : 0;
+    };
+    const fps = parseRate(video.avg_frame_rate) || parseRate(video.r_frame_rate) || 30;
+    const duration = Number(video.duration) || Number(info.format?.duration) || 0;
+    return { video, audio, dispW, dispH, fps, duration };
+  };
+
+  const refInfo = probeMedia(refSource);
+  const remInfo = probeMedia(remSource);
+  if (refInfo.error || remInfo.error) {
+    console.error(`reference sidebyside: ${refInfo.error ?? remInfo.error}`);
+    process.exit(1);
+  }
+
+  const findRemakePicture = (file) => {
+    const direct = filmPicture(process.cwd(), file);
+    if (direct) return direct;
+    let cur = dirname(file);
+    for (let i = 0; i < 4; i++) {
+      const hit = filmPicture(cur, file);
+      if (hit) return hit;
+      const parent = dirname(cur);
+      if (parent === cur) break;
+      cur = parent;
+    }
+    return null;
+  };
+  const remPicture = findRemakePicture(remSource);
+  const minSide = Math.min(refInfo.dispW, refInfo.dispH);
+  const scale = shortEdge && minSide > shortEdge ? shortEdge / minSide : 1;
+  const panelW = 2 * Math.ceil((refInfo.dispW * scale) / 2);
+  const panelH = 2 * Math.ceil((refInfo.dispH * scale) / 2);
+  const layout = layoutMode === "auto" ? (panelH >= panelW ? "hstack" : "vstack") : layoutMode;
+  const seam = 4;
+  const headH = Math.max(24, 2 * Math.round(panelH * 0.024));
+  const barH = Math.max(28, 2 * Math.round(panelH * 0.028));
+  const outW = layout === "hstack" ? panelW * 2 + seam : panelW;
+  const outH =
+    layout === "hstack" ? headH + panelH + barH : headH + panelH + seam + headH + panelH + barH;
+  const targetFps = Math.max(1, Math.min(60, Math.round(remInfo.fps || refInfo.fps || 30)));
+  const targetDur = Math.max(refInfo.duration, remInfo.duration, 1 / targetFps);
+  const totalFrames = Math.max(1, Math.round(targetDur * targetFps));
+  const padDur = targetDur + 0.5;
+
+  const pickedAudio =
+    audioMode === "ours"
+      ? remInfo.audio
+        ? { inputIndex: 1, stream: remInfo.audio, tag: "ours" }
+        : { inputIndex: null, stream: null, tag: "none" }
+      : audioMode === "ref"
+        ? refInfo.audio
+          ? { inputIndex: 0, stream: refInfo.audio, tag: "ref" }
+          : { inputIndex: null, stream: null, tag: "none" }
+        : { inputIndex: null, stream: null, tag: "none" };
+
+  const font = fontOption();
+  const margin = Math.max(8, Math.round(outW * 0.02));
+  const headFont = Math.max(12, Math.round(headH * 0.62));
+  const barFont = Math.max(
+    10,
+    Math.min(Math.round(barH * 0.62), Math.floor((outW - 2 * margin) / 28)),
+  );
+  const rightFont = Math.max(10, Math.round(barFont * 0.8));
+  const rightText = `${layout === "hstack" ? "REF | OURS" : "REF / OURS"}  audio:${pickedAudio.tag}`;
+
+  const prepPanel = (inputSpec, cropPrefix) => {
+    const parts = [
+      ...(cropPrefix ? [cropPrefix] : []),
+      `scale=${panelW}:${panelH}:force_original_aspect_ratio=decrease:flags=lanczos`,
+      `pad=${panelW}:${panelH}:(ow-iw)/2:(oh-ih)/2:black`,
+      "setsar=1",
+      "setpts=PTS-STARTPTS",
+      `fps=${targetFps}`,
+      `tpad=stop_mode=add:stop_duration=${padDur.toFixed(3)}:color=black`,
+      `trim=end_frame=${totalFrames}`,
+      "setpts=PTS-STARTPTS",
+    ];
+    return `${inputSpec}${parts.join(",")}`;
+  };
+
+  const outDir = dirname(outPath);
+  mkdirSync(outDir, { recursive: true });
+  const tmpOut = join(outDir, `.${basename(outPath)}.tmp.${process.pid}.mp4`);
+  const tmpLabelDir = mkdtempSync(join(tmpdir(), "ref-sbs-"));
+  const rightFile = join(tmpLabelDir, "right.txt");
+  writeFileSync(rightFile, rightText, "utf8");
+
+  const remCrop = remPicture ? `crop=${remPicture.width}:${remPicture.height}:0:0` : null;
+  const barY = `h-${barH}+(${barH}-text_h)/2`;
+  let filterComplex;
+  if (layout === "hstack") {
+    filterComplex = [
+      `${prepPanel("[0:V:0]", null)},pad=${panelW + seam}:${panelH}:0:0:#141414[left]`,
+      `${prepPanel("[1:V:0]", remCrop)}[right]`,
+      `[left][right]hstack=inputs=2,pad=${outW}:${outH}:0:${headH}:black,` +
+        `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
+        `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=${panelW + seam}+(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
+        `drawtext=${font}:text='%{pts\\:hms}  f%{n}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY},` +
+        `drawtext=${font}:expansion=none:textfile='${escapeFilterPath(rightFile)}':fontcolor=#b8b6ad:fontsize=${rightFont}:x=w-tw-${margin}:y=${barY}[outv]`,
+    ].join(";");
+  } else {
+    const botHeaderY = headH + panelH + seam;
+    filterComplex = [
+      `${prepPanel("[0:V:0]", null)},pad=${panelW}:${headH + panelH + seam}:0:${headH}:black,drawbox=x=0:y=${headH + panelH}:w=${panelW}:h=${seam}:color=#141414:t=fill[top]`,
+      `${prepPanel("[1:V:0]", remCrop)},pad=${panelW}:${headH + panelH + barH}:0:${headH}:black[bot]`,
+      `[top][bot]vstack=inputs=2,` +
+        `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
+        `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=${botHeaderY}+(${headH}-text_h)/2,` +
+        `drawtext=${font}:text='%{pts\\:hms}  f%{n}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY},` +
+        `drawtext=${font}:expansion=none:textfile='${escapeFilterPath(rightFile)}':fontcolor=#b8b6ad:fontsize=${rightFont}:x=w-tw-${margin}:y=${barY}[outv]`,
+    ].join(";");
+  }
+
+  const ended = await startJob(process.cwd(), "reference sidebyside", {
+    say: `Tiling ${basename(refSource)} vs ${basename(remSource)}`,
+  });
+  let status = 1;
+  let stopped = false;
+  try {
+    ({ status, stopped } = await runWorker(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        refSource,
+        "-i",
+        remSource,
+        "-filter_complex",
+        filterComplex,
+        "-map",
+        "[outv]",
+        ...(pickedAudio.inputIndex !== null
+          ? [
+              "-map",
+              `${pickedAudio.inputIndex}:a:0`,
+              ...(pickedAudio.stream.codec_name === "aac"
+                ? ["-c:a", "copy"]
+                : ["-c:a", "aac", "-b:a", "256k"]),
+            ]
+          : ["-an"]),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        String(crf),
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        tmpOut,
+      ],
+      minutes,
+    ));
+    const ok = !stopped && status === 0 && existsSync(tmpOut);
+    await ended({
+      say: `Side-by-side video ${ok ? "ready" : "failed"}`,
+      level: ok ? "ok" : "warn",
+    });
+    if (!ok) {
+      rmSync(tmpOut, { force: true });
+      console.error(
+        `reference sidebyside: ${stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`}; ${outPath} unchanged`,
+      );
+      process.exit(1);
+    }
+    renameSync(tmpOut, outPath);
+  } finally {
+    rmSync(tmpOut, { force: true });
+    rmSync(tmpLabelDir, { recursive: true, force: true });
+  }
+  const shownOut = relative(process.cwd(), outPath).replaceAll("\\", "/") || outPath;
+  const displayOut = shownOut.startsWith("..") ? outPath : shownOut;
+  console.log(
+    `wrote ${displayOut} (${outW}x${outH}, ${layout} REF|OURS, ${targetFps}fps, ref ${refInfo.duration.toFixed(2)}s vs ours ${remInfo.duration.toFixed(2)}s, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
+  );
+  console.log(
+    `next: pass ${displayOut} to your video reviewer with compare-2-video.md; keep sources clean`,
   );
   process.exit(0);
 }

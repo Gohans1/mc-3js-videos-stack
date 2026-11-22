@@ -2255,4 +2255,38 @@ describe("cli-catalog resolver rules", () => {
       "5",
     ]);
   });
+
+  test("resolves reference sidebyside operation with --out, --audio, --layout, and --short-edge", () => {
+    const sbs = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: {
+          operation: "sidebyside",
+          reference: "references/ref.mp4",
+          remake: "renders/draft.mp4",
+        },
+        flags: {
+          "--out": "renders/ref_vs_draft.mp4",
+          "--audio": "ours",
+          "--layout": "hstack",
+          "--short-edge": 720,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(sbs.validationErrors).toEqual([]);
+    expect(sbs.argvTokens).toEqual([
+      "sidebyside",
+      "references/ref.mp4",
+      "renders/draft.mp4",
+      "--out",
+      "renders/ref_vs_draft.mp4",
+      "--short-edge",
+      "720",
+      "--audio",
+      "ours",
+      "--layout",
+      "hstack",
+    ]);
+  });
 });

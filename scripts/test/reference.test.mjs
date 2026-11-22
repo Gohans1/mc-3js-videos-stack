@@ -479,7 +479,7 @@ test("reference timecode writes an H.264 copy with a bottom black timecode bar a
         "rgb24",
         "-",
       ],
-      { timeout: 10000 },
+      { timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
     );
     expect(raw.status).toBe(0);
     const buf = raw.stdout;
@@ -602,3 +602,291 @@ test("reference timecode downscales portrait 1080x1920 to 720 short-edge by defa
     rmSync(dir, { recursive: true, force: true });
   }
 }, 30000);
+
+test("reference sidebyside help and invalid arguments exit 2 without writing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-usage-"));
+  try {
+    const ref = join(dir, "ref.mp4");
+    const ours = join(dir, "ours.mp4");
+    writeFileSync(ref, "ref-placeholder");
+    writeFileSync(ours, "ours-placeholder");
+    const help = run(dir, ["sidebyside", "--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout).toMatch(/sidebyside/i);
+    expect(help.stdout).toMatch(/--audio/);
+    expect(help.stdout).toMatch(/--layout/);
+    for (const args of [
+      ["sidebyside"],
+      ["sidebyside", ref],
+      ["sidebyside", ref, join(dir, "missing.mp4")],
+      ["sidebyside", join(dir, "missing.mp4"), ours],
+      ["sidebyside", ref, ours, "--typo"],
+      ["sidebyside", ref, ours, "--audio", "both"],
+      ["sidebyside", ref, ours, "--layout", "grid"],
+      ["sidebyside", ref, ours, "--minutes", "0"],
+      ["sidebyside", ref, ours, "--short-edge", "10"],
+      ["sidebyside", ref, ours, "--full", "--short-edge", "720"],
+      ["sidebyside", ref, ours, "--crf", "99"],
+      ["sidebyside", ref, ours, "--out", ref],
+      ["sidebyside", ref, ours, "--out", ours],
+      ["sidebyside", ref, ours, "--out", dir],
+      ["sidebyside", ref, ours, "--out", join(dir, "bad.mkv")],
+    ]) {
+      expect(run(dir, args).status, args.join(" ")).toBe(2);
+    }
+    expect(existsSync(join(dir, "renders"))).toBe(false);
+    expect(readFileSync(ref, "utf8")).toBe("ref-placeholder");
+    expect(readFileSync(ours, "utf8")).toBe("ours-placeholder");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 20000);
+
+test("reference sidebyside tiles portrait ref and draft horizontally, strips draft bar, and keeps remake audio", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-portrait-"));
+  try {
+    mkdirSync(join(dir, "references"));
+    mkdirSync(join(dir, "renders"));
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": { ratio: "9:16" } }));
+    const ref = join(dir, "references/ref.mp4");
+    const draft = join(dir, "renders/draft.mp4");
+    const mk = (file, filter, tone) =>
+      expect(
+        spawnSync(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            filter,
+            "-f",
+            "lavfi",
+            "-i",
+            `sine=f=${tone}:d=1`,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            file,
+          ],
+          { encoding: "utf8", timeout: 15000 },
+        ).status,
+      ).toBe(0);
+    mk(ref, "color=c=#cc2020:s=360x640:r=30000/1001:d=1", 440);
+    mk(
+      draft,
+      "color=c=#2040cc:s=360x676:r=30:d=1,drawbox=x=0:y=640:w=360:h=36:color=black:t=fill",
+      880,
+    );
+    const refBytes = readFileSync(ref);
+    const draftBytes = readFileSync(draft);
+    const audioHash = (file) =>
+      spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-i", file, "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        { encoding: "utf8" },
+      ).stdout.trim();
+
+    const result = run(dir, ["sidebyside", "references/ref.mp4", "renders/draft.mp4"]);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout.trim().split(/\r?\n/).at(-1)).toMatch(/^next: /);
+    expect(readFileSync(ref)).toEqual(refBytes);
+    expect(readFileSync(draft)).toEqual(draftBytes);
+
+    const out = join(dir, "renders/reference/ref_vs_draft.mp4");
+    expect(existsSync(out)).toBe(true);
+    expect(audioHash(out)).toBe(audioHash(draft));
+
+    const probe = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-count_frames",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name,width,height,nb_read_frames",
+        "-of",
+        "csv=p=0",
+        out,
+      ],
+      { encoding: "utf8" },
+    );
+    const [codec, wStr, hStr, framesStr] = probe.stdout.trim().split(",");
+    const width = Number(wStr);
+    const height = Number(hStr);
+    expect(codec).toBe("h264");
+    expect(width).toBe(724);
+    expect(height).toBeGreaterThan(680);
+    expect(height % 2).toBe(0);
+    expect(Number(framesStr)).toBe(30);
+
+    const raw = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        out,
+        "-vf",
+        "select=eq(n\\,15)",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+      ],
+      { timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
+    );
+    expect(raw.status).toBe(0);
+    const buf = raw.stdout;
+    const pixel = (x, y) => {
+      const i = (y * width + x) * 3;
+      return [buf[i], buf[i + 1], buf[i + 2]];
+    };
+    const [lr, lg, lb] = pixel(180, Math.floor(height / 2));
+    expect(lr).toBeGreaterThan(160);
+    expect(lb).toBeLessThan(80);
+    const [rr, rg, rb] = pixel(544, Math.floor(height / 2));
+    expect(rb).toBeGreaterThan(160);
+    expect(rr).toBeLessThan(80);
+    const [sr, sg, sb] = pixel(362, Math.floor(height / 2));
+    expect(Math.max(sr, sg, sb)).toBeLessThan(40);
+    expect(lg + rg).toBeLessThan(200);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("reference sidebyside stacks landscape vertically, pads shorter clip with black, supports audio modes, and preserves prior output on error", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-land-"));
+  try {
+    const ref = join(dir, "ref.mp4");
+    const ours = join(dir, "ours.mp4");
+    const mk = (file, filter, dur, tone) =>
+      expect(
+        spawnSync(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            `${filter}:d=${dur}`,
+            "-f",
+            "lavfi",
+            "-i",
+            `sine=f=${tone}:d=${dur}`,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            file,
+          ],
+          { encoding: "utf8", timeout: 15000 },
+        ).status,
+      ).toBe(0);
+    mk(ref, "color=c=#2050d0:s=640x360:r=30", "1.2", 440);
+    mk(ours, "color=c=#20c040:s=640x360:r=30", "0.5", 880);
+
+    const outV = join(dir, "land_v.mp4");
+    const rV = run(dir, ["sidebyside", ref, ours, "--out", outV, "--audio", "ref"]);
+    expect(rV.status, rV.stdout + rV.stderr).toBe(0);
+
+    const probe = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-count_frames",
+        "-show_entries",
+        "stream=codec_type,width,height,nb_read_frames",
+        "-of",
+        "json",
+        outV,
+      ],
+      { encoding: "utf8" },
+    );
+    const streams = JSON.parse(probe.stdout).streams;
+    const vs = streams.find((s) => s.codec_type === "video");
+    const as = streams.find((s) => s.codec_type === "audio");
+    expect(vs.width).toBe(640);
+    expect(vs.height).toBeGreaterThan(760);
+    expect(Number(vs.nb_read_frames)).toBe(36);
+    expect(as).toBeTruthy();
+
+    const rawLate = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        outV,
+        "-vf",
+        "select=eq(n\\,30)",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+      ],
+      { timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
+    );
+    expect(rawLate.status).toBe(0);
+    const buf = rawLate.stdout;
+    const px = (x, y) => {
+      const i = (y * vs.width + x) * 3;
+      return [buf[i], buf[i + 1], buf[i + 2]];
+    };
+    const [tr, , tb] = px(320, 200);
+    expect(tb).toBeGreaterThan(150);
+    expect(tr).toBeLessThan(80);
+    const [br, bg, bb] = px(320, vs.height - 200);
+    expect(Math.max(br, bg, bb)).toBeLessThan(20);
+
+    const outSilent = join(dir, "land_h_silent.mp4");
+    const rH = run(dir, [
+      "sidebyside",
+      ref,
+      ours,
+      "--out",
+      outSilent,
+      "--audio",
+      "none",
+      "--layout",
+      "hstack",
+    ]);
+    expect(rH.status, rH.stdout + rH.stderr).toBe(0);
+    const streamsH = JSON.parse(
+      spawnSync(
+        "ffprobe",
+        ["-v", "error", "-show_entries", "stream=codec_type,width", "-of", "json", outSilent],
+        { encoding: "utf8" },
+      ).stdout,
+    ).streams;
+    expect(streamsH.find((s) => s.codec_type === "video").width).toBe(1284);
+    expect(streamsH.find((s) => s.codec_type === "audio")).toBeUndefined();
+
+    const kept = readFileSync(outSilent);
+    const corrupt = join(dir, "corrupt.mp4");
+    writeFileSync(corrupt, "broken");
+    const fail = run(dir, ["sidebyside", corrupt, ours, "--out", outSilent]);
+    expect(fail.status).toBe(1);
+    expect(readFileSync(outSilent)).toEqual(kept);
+    expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 40000);
