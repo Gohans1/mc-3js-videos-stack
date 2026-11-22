@@ -3743,7 +3743,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "reference",
     category: "render",
     summary:
-      "Add a reference to the film, inspect pictures/captions, study timing, compare videos or matchmove a shot's camera; no required style or quality score.",
+      "Add a reference to the film, burn a bottom timecode bar on a copy, inspect pictures/captions, study timing, compare videos or matchmove a shot's camera; no required style or quality score.",
     runner: "bun-script",
     target: "reference",
     cwdModes: ["film", "root"],
@@ -3752,7 +3752,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "operation",
         label: "Operation",
         type: "enum",
-        options: ["add", "inspect", "study", "compare", "solve"],
+        options: ["add", "timecode", "inspect", "study", "compare", "solve"],
         required: true,
       },
       {
@@ -3773,9 +3773,17 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         key: "--out",
         flag: "--out",
-        label: "Report Folder",
+        label: "Output File / Report Folder",
         type: "string",
-        visibleWhen: { field: "operation", in: ["inspect", "study", "compare"] },
+        visibleWhen: { field: "operation", in: ["timecode", "inspect", "study", "compare"] },
+      },
+      {
+        key: "--label",
+        flag: "--label",
+        label: "Timecode Strip Label",
+        type: "string",
+        placeholder: "REFERENCE",
+        visibleWhen: { field: "operation", in: ["timecode"] },
       },
       {
         key: "--name",
@@ -3924,7 +3932,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). timecode writes an H.264 copy with a bottom black timecode strip to renders/reference/<name>_timecode.mp4 (or --out) without modifying the source. solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
     },
   },
   // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────

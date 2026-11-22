@@ -2233,4 +2233,26 @@ describe("cli-catalog resolver rules", () => {
       "0.1",
     ]);
   });
+
+  test("resolves reference timecode operation with --out, --label, and --minutes", () => {
+    const tc = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "timecode", reference: "references/ref.mp4" },
+        flags: { "--out": "renders/ref_tc.mp4", "--label": "REF", "--minutes": 5 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(tc.validationErrors).toEqual([]);
+    expect(tc.argvTokens).toEqual([
+      "timecode",
+      "references/ref.mp4",
+      "--out",
+      "renders/ref_tc.mp4",
+      "--label",
+      "REF",
+      "--minutes",
+      "5",
+    ]);
+  });
 });

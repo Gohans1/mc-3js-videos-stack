@@ -166,6 +166,7 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 | Breakdown need | Local CLI |
 | --- | --- |
 | Bring a downloaded video into the film | `bun run reference add <video> [--name ref]`: plain name in references/, untouched source kept, H.264 copy for AV1/4K/.mkv |
+| Burn timecode bar below a review copy | `bun run reference timecode references/ref.mp4 [--out <file>] [--label <text>]`: black bottom bar (HH:MM:SS.mmm, frame, label) written to renders/reference/ without touching references/ |
 | Frames, 4x4 overviews, captions & URL fetch | `bun run reference inspect <video\|URL>` (`--scenes --frames N --at ... --find ...`) |
 | Cuts, fades & scene gallery | `bun run scenes <video>` (PySceneDetect) or `bun run reference study <video>` |
 | Separate voice, BGM & SFX stems | `bun run media separate <video>` (see `--ref sound`) |

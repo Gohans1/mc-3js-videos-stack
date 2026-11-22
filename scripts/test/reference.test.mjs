@@ -361,3 +361,185 @@ test("failed analysis never recommends a previous report and each completed run 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("reference timecode help and invalid arguments exit 2 without writing", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-tc-usage-"));
+  try {
+    const src = join(dir, "clip.mp4");
+    writeFileSync(src, "placeholder");
+    const help = run(dir, ["timecode", "--help"]);
+    expect(help.status).toBe(0);
+    expect(help.stdout).toMatch(/timecode/i);
+    expect(help.stdout).toMatch(/--label/);
+    for (const args of [
+      ["timecode"],
+      ["timecode", join(dir, "missing.mp4")],
+      ["timecode", src, "--typo"],
+      ["timecode", src, "--minutes", "0"],
+      ["timecode", src, "--out", src],
+      ["timecode", src, "--out", dir],
+      ["timecode", src, "--out", join(dir, "bad.mkv")],
+    ]) {
+      expect(run(dir, args).status, args.join(" ")).toBe(2);
+    }
+    expect(existsSync(join(dir, "renders"))).toBe(false);
+    expect(readFileSync(src, "utf8")).toBe("placeholder");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reference timecode writes an H.264 copy with a bottom black timecode bar and leaves the source untouched", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-tc-real-"));
+  try {
+    mkdirSync(join(dir, "references"));
+    const src = join(dir, "references/ref.mp4");
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=s=360x640:r=30000/1001:d=1",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=f=440:d=1",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        src,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const sourceBytes = readFileSync(src);
+    const audioHash = (file) =>
+      spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-i", file, "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        {
+          encoding: "utf8",
+        },
+      ).stdout.trim();
+
+    const result = run(dir, ["timecode", "references/ref.mp4"]);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout.trim().split(/\r?\n/).at(-1)).toMatch(/^next: /);
+    expect(readFileSync(src)).toEqual(sourceBytes);
+    expect(readdirSync(join(dir, "references"))).toEqual(["ref.mp4"]);
+
+    const out = join(dir, "renders/reference/ref_timecode.mp4");
+    expect(existsSync(out)).toBe(true);
+    expect(readdirSync(join(dir, "renders/reference"))).toEqual(["ref_timecode.mp4"]);
+
+    const probe = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-count_frames",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=codec_name,width,height,nb_read_frames",
+        "-of",
+        "csv=p=0",
+        out,
+      ],
+      { encoding: "utf8" },
+    );
+    expect(probe.stdout.trim()).toBe("h264,360,676,30");
+    expect(audioHash(out)).toBe(audioHash(src));
+
+    const raw = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        out,
+        "-vf",
+        "select=eq(n\\,15)",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+      ],
+      { timeout: 10000 },
+    );
+    expect(raw.status).toBe(0);
+    const buf = raw.stdout;
+    expect(buf.length).toBe(360 * 676 * 3);
+    let black = 0;
+    let bright = 0;
+    const barPixels = 360 * 36;
+    for (let y = 640; y < 676; y++) {
+      for (let x = 0; x < 360; x++) {
+        const idx = (y * 360 + x) * 3;
+        const r = buf[idx];
+        const g = buf[idx + 1];
+        const b = buf[idx + 2];
+        if (r < 16 && g < 16 && b < 16) black++;
+        if (r > 150 && g > 150 && b > 150) bright++;
+      }
+    }
+    expect(black / barPixels).toBeGreaterThan(0.65);
+    expect(bright / barPixels).toBeGreaterThan(0.01);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("reference timecode supports special-character and empty --label and keeps prior output on failure", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-tc-label-"));
+  try {
+    const src = join(dir, "in.mp4");
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "testsrc2=s=360x640:r=30:d=0.5",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        src,
+      ],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+
+    const labeled = join(dir, "custom.mp4");
+    const r1 = run(dir, ["timecode", src, "--out", labeled, "--label", "REF 100%: it's ok"]);
+    expect(r1.status, r1.stdout + r1.stderr).toBe(0);
+    expect(existsSync(labeled)).toBe(true);
+
+    const bare = join(dir, "bare.mp4");
+    const r2 = run(dir, ["timecode", src, "--out", bare, "--label", ""]);
+    expect(r2.status, r2.stdout + r2.stderr).toBe(0);
+    expect(existsSync(bare)).toBe(true);
+
+    const kept = readFileSync(labeled);
+    const bad = join(dir, "corrupt.mp4");
+    writeFileSync(bad, "not a video");
+    const failed = run(dir, ["timecode", bad, "--out", labeled]);
+    expect(failed.status).toBe(1);
+    expect(readFileSync(labeled)).toEqual(kept);
+    expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);

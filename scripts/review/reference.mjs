@@ -6,11 +6,14 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, extname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
@@ -58,6 +61,7 @@ async function runWorker(executable, args, minutes) {
 
 const HELP = `Optional reference analysis; never required to author a film.
   bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
+  bun run reference timecode <video> [--out <file>] [--label <text>]  Burn a black timecode bar below a copy for AI review; timecode --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
@@ -92,6 +96,33 @@ and references/<name>.mp4 becomes an H.264 copy (CRF 18, long side 1920 at most,
 AAC audio copied as it is, other audio AAC 256k).
 Never replaces a file: an existing name stops it (exit 2) before anything is copied.
 next: bun run reference study references/<name>.mp4`;
+
+const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. aistudio).
+  bun run reference timecode <video> [--out <file>] [--label <text>] [--minutes 10]
+Writes an H.264 .mp4 copy with a black bottom strip (HH:MM:SS.mmm, frame number, and label), keeping the source untouched.
+Default output: renders/reference/<video-name>_timecode.mp4 (outside references/ so tools keep reading the clean source).
+  --out <file>     Output .mp4 path (must differ from <video>).
+  --label <text>   Right-side label on the strip (default REFERENCE; pass "" to omit).
+  --minutes <N>    Stop FFmpeg after N minutes (default 10, maximum 60).
+Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
+next: pass the output alongside renders/draft.mp4 to your video reviewer; keep references/ clean`;
+
+const MONO_FONTS = [
+  "C:/Windows/Fonts/consolab.ttf",
+  "C:/Windows/Fonts/consola.ttf",
+  "C:/Windows/Fonts/arialbd.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf",
+  "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
+  "/System/Library/Fonts/Menlo.ttc",
+];
+
+const escapeFilterPath = (file) =>
+  file.replaceAll("\\", "/").replaceAll(":", "\\:").replaceAll("'", "\\'");
+
+const fontOption = () => {
+  const file = MONO_FONTS.find((candidate) => existsSync(candidate));
+  return file ? `fontfile='${escapeFilterPath(file)}'` : "font='monospace'";
+};
 
 const SOLVE_HELP = `Solve one reference shot's camera from points of our set (a matchmove), run in films/<name>.
   bun run reference solve shots/pour.json [--video references/ref.mp4] [--write] [--minutes 10]
@@ -299,6 +330,189 @@ if (process.argv[2] === "add") {
     );
   }
   console.log(`next: bun run reference study references/${name}.mp4`);
+  process.exit(0);
+}
+
+if (process.argv[2] === "timecode") {
+  const argv = cliArgs(
+    TIMECODE_HELP,
+    ["--out file", "--label text", "--minutes N"],
+    1,
+    process.argv.slice(3),
+  );
+  const { positionals, values } = parseArgs({
+    args: argv,
+    allowPositionals: true,
+    options: {
+      out: { type: "string" },
+      label: { type: "string" },
+      minutes: { type: "string" },
+    },
+  });
+  if (positionals.length !== 1) usage("Choose timecode <video>");
+  const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  const source = resolve(positionals[0]);
+  if (!statSync(source, { throwIfNoEntry: false })?.isFile())
+    usage(`No local file: ${positionals[0]}`);
+  if (values.out !== undefined && !values.out.trim()) usage("--out needs an .mp4 file path");
+  const outPath = resolve(
+    values.out ?? join("renders/reference", `${basename(source, extname(source))}_timecode.mp4`),
+  );
+  const samePath = (a, b) =>
+    process.platform === "win32" ? a.toLowerCase() === b.toLowerCase() : a === b;
+  const isSameAsSource =
+    samePath(outPath, source) ||
+    (existsSync(outPath) && samePath(realpathSync(outPath), realpathSync(source)));
+  if (isSameAsSource) usage("--out must differ from <video>: keep the clean source untouched");
+  if (statSync(outPath, { throwIfNoEntry: false })?.isDirectory())
+    usage("--out must be a file path, not a directory");
+  if (extname(outPath).toLowerCase() !== ".mp4") usage("--out must end in .mp4");
+
+  const probe = spawnSync(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "stream=codec_type,codec_name,width,height,start_time:stream_disposition=attached_pic:stream_side_data=rotation:format=start_time,duration",
+      "-of",
+      "json",
+      source,
+    ],
+    { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+  );
+  const info = probe.status === 0 ? JSON.parse(probe.stdout) : {};
+  const video = info.streams?.find(
+    (s) => s.codec_type === "video" && s.disposition?.attached_pic !== 1,
+  );
+  const audio = info.streams?.find((s) => s.codec_type === "audio");
+  if (!video?.width || !video?.height) {
+    console.error(
+      `reference timecode: no video stream in ${source} (${(probe.stderr || probe.error?.message || "").trim()})`,
+    );
+    process.exit(1);
+  }
+  const rotation = Number(
+    video.side_data_list?.find((item) => item?.rotation !== undefined)?.rotation ?? 0,
+  );
+  const rotated = Math.abs(rotation) % 180 === 90;
+  const dispW = rotated ? video.height : video.width;
+  const dispH = rotated ? video.width : video.height;
+  const outW = 2 * Math.ceil(dispW / 2);
+  const picH = 2 * Math.ceil(dispH / 2);
+  const barH = Math.max(28, 2 * Math.round(picH * 0.028));
+  const outH = picH + barH;
+  const margin = Math.max(8, Math.round(outW * 0.02));
+  const rawLabel = (values.label ?? "REFERENCE").replace(/\s+/g, " ").trim();
+  const estFrames = Math.max(1, Math.ceil((Number(info.format?.duration) || 60) * 60));
+  const leftChars = 15 + String(estFrames).length;
+  const minF = Math.max(8, Math.round(barH * 0.35));
+  const maxF = Math.round(barH * 0.62);
+  const totalUnits = (leftChars + (rawLabel ? 2 + rawLabel.length * 0.8 : 1)) * 0.62;
+  const fontSize = Math.max(minF, Math.min(maxF, Math.floor((outW - 2 * margin) / totalUnits)));
+  const labelFontSize = Math.max(8, Math.round(fontSize * 0.8));
+  const maxRightChars = Math.max(
+    0,
+    Math.floor(((outW - 2 * margin) / (0.62 * fontSize) - leftChars - 2) / 0.8),
+  );
+  const label =
+    !rawLabel || maxRightChars < 4
+      ? ""
+      : rawLabel.length > maxRightChars
+        ? `${rawLabel.slice(0, maxRightChars - 1)}…`
+        : rawLabel;
+
+  const origin = Number(video.start_time ?? info.format?.start_time ?? 0);
+  const ptsExpr =
+    Number.isFinite(origin) && Math.abs(origin) > 1e-6
+      ? `%{pts\\:hms\\:${(-origin).toFixed(6)}}`
+      : "%{pts\\:hms}";
+  const font = fontOption();
+  const yExpr = `h-${barH}+(${barH}-text_h)/2`;
+  const filters = [
+    `pad=${outW}:${outH}:0:0:black`,
+    `drawtext=${font}:text='${ptsExpr}  f%{n}':fontcolor=white:fontsize=${fontSize}:x=${margin}:y=${yExpr}`,
+  ];
+
+  const outDir = dirname(outPath);
+  mkdirSync(outDir, { recursive: true });
+  const tmpOut = join(outDir, `.${basename(outPath)}.tmp.${process.pid}.mp4`);
+  const tmpLabelDir = label ? mkdtempSync(join(tmpdir(), "ref-tc-")) : null;
+  if (tmpLabelDir) {
+    const labelFile = join(tmpLabelDir, "label.txt");
+    writeFileSync(labelFile, label, "utf8");
+    filters.push(
+      `drawtext=${font}:expansion=none:textfile='${escapeFilterPath(labelFile)}':fontcolor=#b8b6ad:fontsize=${labelFontSize}:x=w-tw-${margin}:y=${yExpr}`,
+    );
+  }
+
+  const ended = await startJob(process.cwd(), "reference timecode", {
+    say: `Burning timecode bar on ${basename(source)}`,
+  });
+  let status = 1;
+  let stopped = false;
+  try {
+    ({ status, stopped } = await runWorker(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-nostdin",
+        "-y",
+        "-i",
+        source,
+        "-map",
+        "0:V:0",
+        "-map",
+        "0:a:0?",
+        "-vf",
+        filters.join(","),
+        "-fps_mode",
+        "passthrough",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "18",
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        ...(audio?.codec_name === "aac"
+          ? ["-c:a", "copy"]
+          : audio
+            ? ["-c:a", "aac", "-b:a", "256k"]
+            : []),
+        tmpOut,
+      ],
+      minutes,
+    ));
+    const ok = !stopped && status === 0 && existsSync(tmpOut);
+    await ended({
+      say: `Timecode bar ${ok ? "ready" : "failed"}`,
+      level: ok ? "ok" : "warn",
+    });
+    if (!ok) {
+      rmSync(tmpOut, { force: true });
+      console.error(
+        `reference timecode: ${stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`}; ${outPath} unchanged`,
+      );
+      process.exit(1);
+    }
+    renameSync(tmpOut, outPath);
+  } finally {
+    rmSync(tmpOut, { force: true });
+    if (tmpLabelDir) rmSync(tmpLabelDir, { recursive: true, force: true });
+  }
+  const shownOut = relative(process.cwd(), outPath).replaceAll("\\", "/") || outPath;
+  const displayOut = shownOut.startsWith("..") ? outPath : shownOut;
+  console.log(
+    `wrote ${displayOut} (${outW}x${outH}, +${barH}px black timecode bar; source untouched)`,
+  );
+  console.log(
+    `next: pass ${displayOut} to your video reviewer (e.g. aistudio); keep references/ clean`,
+  );
   process.exit(0);
 }
 
