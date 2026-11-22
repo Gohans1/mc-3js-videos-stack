@@ -99,6 +99,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   renderer.setSize(W, H, false);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
   const environment = createEnvironment(renderer, { preset: "studio" });
