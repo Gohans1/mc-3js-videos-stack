@@ -465,3 +465,84 @@ test("every transition shader starts cleanly on From at progress=0, lands cleanl
     }
   }
 });
+
+test("cardFlip projects a perspective card over black and swaps From to To across the 90-degree edge", () => {
+  const tr = TRANSITIONS.find((x) => x.id === "cardFlip");
+  expect(tr).toBeDefined();
+  const red = (): [number, number, number, number] => [1, 0, 0, 1];
+  const blue = (): [number, number, number, number] => [0, 0, 1, 1];
+  const outside = evalGlslTransition(
+    tr!.glsl,
+    [0.02, 0.02],
+    { progress: 0.45, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(outside).toEqual([0, 0, 0, 1]);
+  const edgeOn = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.5],
+    { progress: 0.5, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(edgeOn).toEqual([0, 0, 0, 1]);
+  const front = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.5],
+    { progress: 0.25, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(front[0]).toBeGreaterThan(0.5);
+  expect(front[2]).toBe(0);
+  const back = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.5],
+    { progress: 0.75, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(back[2]).toBeGreaterThan(0.5);
+  expect(back[0]).toBe(0);
+});
+
+test("pushUp slides incoming shot vertically, flips direction with uFlip, and smears the seam with uFeather", () => {
+  const tr = TRANSITIONS.find((x) => x.id === "pushUp");
+  expect(tr).toBeDefined();
+  const red = (): [number, number, number, number] => [1, 0, 0, 1];
+  const blue = (): [number, number, number, number] => [0, 0, 1, 1];
+  const bottomUp = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.1],
+    { progress: 0.5, uFeather: 0, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  const topUp = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.9],
+    { progress: 0.5, uFeather: 0, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(bottomUp).toEqual([0, 0, 1, 1]);
+  expect(topUp).toEqual([1, 0, 0, 1]);
+  const topDown = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.9],
+    { progress: 0.5, uFeather: 0, uFlip: 1, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(topDown).toEqual([0, 0, 1, 1]);
+  const smearedSeam = evalGlslTransition(
+    tr!.glsl,
+    [0.5, 0.5],
+    { progress: 0.5, uFeather: 1, uFlip: 0, uRatio: 9 / 16 },
+    red,
+    blue,
+  );
+  expect(smearedSeam[0]).toBeGreaterThan(0.2);
+  expect(smearedSeam[2]).toBeGreaterThan(0.2);
+});
