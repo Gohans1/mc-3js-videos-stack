@@ -186,24 +186,24 @@ async function runAtomicFfmpeg({
   const ended = await startJob(process.cwd(), jobName, { say: sayStart });
   let status = 1;
   let stopped = false;
+  let ok = false;
   try {
     ({ status, stopped } = await runWorker("ffmpeg", [...ffmpegArgs, tmpOut], minutes));
-    const ok = !stopped && status === 0 && existsSync(tmpOut);
+    ok = !stopped && status === 0 && existsSync(tmpOut);
     await ended({
       say: `${sayDone} ${ok ? "ready" : "failed"}`,
       level: ok ? "ok" : "warn",
     });
-    if (!ok) {
-      rmSync(tmpOut, { force: true });
-      console.error(
-        `${commandLabel}: ${stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`}; ${outPath} unchanged`,
-      );
-      process.exit(1);
-    }
-    renameSync(tmpOut, outPath);
+    if (ok) renameSync(tmpOut, outPath);
   } finally {
     rmSync(tmpOut, { force: true });
     for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
+  }
+  if (!ok) {
+    console.error(
+      `${commandLabel}: ${stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`}; ${outPath} unchanged`,
+    );
+    process.exit(1);
   }
 }
 
@@ -419,7 +419,12 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   const outH =
     layout === "hstack" ? headH + panelH + barH : headH + panelH + seam + headH + panelH + barH;
   const targetFps = Math.max(1, Math.min(60, Math.round(remInfo.fps || refInfo.fps || 30)));
-  const targetDur = Math.max(refInfo.duration, remInfo.duration, 1 / targetFps);
+  const maxDur = Math.max(refInfo.duration, remInfo.duration);
+  if (!(maxDur > 0)) {
+    console.error("reference sidebyside: inputs report zero duration; nothing was written");
+    process.exit(1);
+  }
+  const targetDur = Math.max(maxDur, 1 / targetFps);
   const totalFrames = Math.max(1, Math.round(targetDur * targetFps));
   const padDur = targetDur + 0.5;
 

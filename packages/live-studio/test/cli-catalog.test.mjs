@@ -2304,6 +2304,7 @@ describe("cli-catalog resolver rules", () => {
       },
       BASE_CONTEXT,
     );
+    expect(conflict.exclusiveConflicts.length).toBeGreaterThan(0);
     expect(conflict.validationErrors.length).toBeGreaterThan(0);
   });
 });

@@ -18,8 +18,13 @@ import { mediaPython } from "../media/home.mjs";
 import { FPS, tableShot, testVideo } from "./pinhole.mjs";
 
 const cli = fileURLToPath(new URL("../review/reference.mjs", import.meta.url));
-const run = (cwd, args) =>
-  spawnSync(process.execPath, [cli, ...args], { cwd, encoding: "utf8", timeout: 30000 });
+const run = (cwd, args, env) =>
+  spawnSync(process.execPath, [cli, ...args], {
+    cwd,
+    encoding: "utf8",
+    timeout: 30000,
+    ...(env ? { env } : {}),
+  });
 const reportFile = (result) => result.stdout.match(/next: read (.+?) and /)?.[1];
 
 test("reference help and usage failures do no analysis or writes", () => {
@@ -843,35 +848,46 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
     expect(audioHash(outV)).toBe(audioHash(ref));
     expect(audioHash(outV)).not.toBe(audioHash(ours));
 
-    const rawLate = spawnSync(
-      "ffmpeg",
-      [
-        "-v",
-        "error",
-        "-i",
-        outV,
-        "-vf",
-        "select=eq(n\\,30)",
-        "-frames:v",
-        "1",
-        "-f",
-        "rawvideo",
-        "-pix_fmt",
-        "rgb24",
-        "-",
-      ],
-      { timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
-    );
-    expect(rawLate.status).toBe(0);
-    const buf = rawLate.stdout;
-    const px = (x, y) => {
-      const i = (y * vs.width + x) * 3;
-      return [buf[i], buf[i + 1], buf[i + 2]];
+    const decodeFrame = (frameIndex) => {
+      const r = spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-i",
+          outV,
+          "-vf",
+          `select=eq(n\\,${frameIndex})`,
+          "-frames:v",
+          "1",
+          "-f",
+          "rawvideo",
+          "-pix_fmt",
+          "rgb24",
+          "-",
+        ],
+        { timeout: 10000, maxBuffer: 10 * 1024 * 1024 },
+      );
+      expect(r.status).toBe(0);
+      return (x, y) => {
+        const i = (y * vs.width + x) * 3;
+        return [r.stdout[i], r.stdout[i + 1], r.stdout[i + 2]];
+      };
     };
-    const [tr, , tb] = px(320, 200);
+    const pxEarly = decodeFrame(5);
+    const [etr, , etb] = pxEarly(320, 200);
+    expect(etb).toBeGreaterThan(150);
+    expect(etr).toBeLessThan(80);
+    const [ebr, ebg, ebb] = pxEarly(320, vs.height - 200);
+    expect(ebg).toBeGreaterThan(150);
+    expect(ebr).toBeLessThan(80);
+    expect(ebb).toBeLessThan(90);
+
+    const pxLate = decodeFrame(30);
+    const [tr, , tb] = pxLate(320, 200);
     expect(tb).toBeGreaterThan(150);
     expect(tr).toBeLessThan(80);
-    const [br, bg, bb] = px(320, vs.height - 200);
+    const [br, bg, bb] = pxLate(320, vs.height - 200);
     expect(Math.max(br, bg, bb)).toBeLessThan(20);
 
     const outSilent = join(dir, "land_h_silent.mp4");
@@ -993,6 +1009,69 @@ test("reference sidebyside downscales to --short-edge, preserves native size wit
     const nativeStreams = probeStreams(native);
     expect(nativeStreams.find((s) => s.codec_type === "video").width).toBe(724);
     expect(nativeStreams.find((s) => s.codec_type === "audio")).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("reference timecode and sidebyside clean up temp label directories and preserve prior output on ffmpeg timeout", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-ffmpeg-fail-"));
+  const isolatedTmp = join(dir, "tmp");
+  mkdirSync(isolatedTmp);
+  try {
+    const seed = join(dir, "seed.mp4");
+    const longClip = join(dir, "long.mp4");
+    expect(
+      spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "testsrc2=s=1080x1920:r=30:d=1",
+          "-c:v",
+          "libx264",
+          "-preset",
+          "ultrafast",
+          "-pix_fmt",
+          "yuv420p",
+          seed,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+    expect(
+      spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-stream_loop", "59", "-i", seed, "-c", "copy", longClip],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+
+    const env = { ...process.env, TEMP: isolatedTmp, TMP: isolatedTmp, TMPDIR: isolatedTmp };
+    const tcOut = join(dir, "kept_tc.mp4");
+    writeFileSync(tcOut, "prior-tc-bytes");
+    const tcFail = run(dir, ["timecode", longClip, "--out", tcOut, "--minutes", "0.01"], env);
+    expect(tcFail.status).toBe(1);
+    expect(tcFail.stderr).toMatch(/stopped after 0\.01 minute/);
+    expect(readFileSync(tcOut, "utf8")).toBe("prior-tc-bytes");
+    expect(readdirSync(isolatedTmp)).toEqual([]);
+    expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+
+    const sbsOut = join(dir, "kept_sbs.mp4");
+    writeFileSync(sbsOut, "prior-sbs-bytes");
+    const sbsFail = run(
+      dir,
+      ["sidebyside", longClip, longClip, "--out", sbsOut, "--minutes", "0.01"],
+      env,
+    );
+    expect(sbsFail.status).toBe(1);
+    expect(sbsFail.stderr).toMatch(/stopped after 0\.01 minute/);
+    expect(readFileSync(sbsOut, "utf8")).toBe("prior-sbs-bytes");
+    expect(readdirSync(isolatedTmp)).toEqual([]);
+    expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
