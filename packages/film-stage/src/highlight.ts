@@ -39,7 +39,7 @@ export function pulseEnvelope(
 ): number {
   if (!Number.isFinite(t) || !Number.isFinite(start) || !Number.isFinite(end)) return 0;
   const dur = end - start;
-  if (dur <= 0 || t <= start || t >= end) return 0;
+  if (dur <= 0 || t < start || t >= end) return 0;
   let rIn = Number.isFinite(rampIn) && rampIn > 0 ? rampIn : 0;
   let rOut = Number.isFinite(rampOut) && rampOut > 0 ? rampOut : 0;
   if (rIn + rOut > dur) {
@@ -59,7 +59,7 @@ export function createHighlight(
   const defaultColor = new THREE.Color(defaults?.color ?? 0xffe44d);
   const defaultIntensity =
     typeof defaults?.intensity === "number" && Number.isFinite(defaults.intensity)
-      ? defaults.intensity
+      ? Math.max(0, defaults.intensity)
       : 0.85;
   const clones = new Map<THREE.Material, THREE.Material>();
   const entries: Entry[] = [];
@@ -100,7 +100,9 @@ export function createHighlight(
     }
     const targetColor = color !== undefined ? scratch.set(color) : defaultColor;
     const targetIntensity =
-      typeof intensity === "number" && Number.isFinite(intensity) ? intensity : defaultIntensity;
+      typeof intensity === "number" && Number.isFinite(intensity)
+        ? Math.max(0, intensity)
+        : defaultIntensity;
     for (const e of entries) {
       e.mat.emissive.copy(e.baseEmissive).lerp(targetColor, w);
       e.mat.emissiveIntensity = e.baseIntensity + (targetIntensity - e.baseIntensity) * w;

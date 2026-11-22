@@ -12,6 +12,7 @@ test("pulseEnvelope returns smooth trapezoid weights and guards invalid or short
   expect(pulseEnvelope(1.05, 1, 2, 0.1, 0.1)).toBeCloseTo(0.5, 6);
   expect(pulseEnvelope(1.95, 1, 2, 0.1, 0.1)).toBeCloseTo(0.5, 6);
   expect(pulseEnvelope(1.05, 1, 1.1, 0.2, 0.2)).toBeCloseTo(1, 6);
+  expect(pulseEnvelope(1.0, 1, 2, 0, 0)).toBe(1);
   expect(pulseEnvelope(Number.NaN, 1, 2)).toBe(0);
   expect(pulseEnvelope(1.5, 2, 1)).toBe(0);
 });
