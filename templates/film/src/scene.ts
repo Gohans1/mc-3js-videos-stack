@@ -666,7 +666,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "IN FRAME / STACK",
         lines: [
           {
-            text: `three.js r186 · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
+            text: `three.js r${THREE.REVISION} · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
           },
         ],
       },

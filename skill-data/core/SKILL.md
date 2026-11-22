@@ -46,6 +46,7 @@ Separate repo skills and docs (open directly; `skills get` does not serve them):
 
 | Need                                                     | Read                                                                          |
 | -------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Full film package exports, acting modules, shaders, physics & skills | CAPABILITIES.md (in each new film root / templates/film/CAPABILITIES.md) |
 | Commands grouped by job; a film also prints its file map | bun run help                                                                  |
 | Where a command runs                                     | bun run help <command>                                                        |
 | All catalog IDs, including direct maintenance tools      | bun run help --json; bun run help direct for a text list                      |

@@ -312,6 +312,10 @@ if (film) {
     timingTimeline: "speed ramps, freezes, velocity",
   };
   const files = [
+    [
+      "CAPABILITIES.md",
+      "full atlas of package exports (film-stage, film-kit, mc-actor, mc-assets, live-studio), shaders, physics and skills (shared: ../../templates/film/CAPABILITIES.md)",
+    ],
     ["src/scene.ts", "the film's code: buildScene, draw(t)"],
     ["src/edit.json", "narration takes and script, voice warp, beats, the film's own settings"],
     ...Object.entries(what).flatMap(([k, about]) => (conf[k] ? [[conf[k], about]] : [])),
