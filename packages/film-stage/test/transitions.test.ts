@@ -466,82 +466,93 @@ test("every transition shader starts cleanly on From at progress=0, lands cleanl
   }
 });
 
-test("cardFlip projects a perspective card over black and swaps From to To across the 90-degree edge", () => {
+test("cardFlip projects a perspective card over black and swaps From to To un-mirrored across the 90-degree edge", () => {
   const tr = TRANSITIONS.find((x) => x.id === "cardFlip");
   expect(tr).toBeDefined();
-  const red = (): [number, number, number, number] => [1, 0, 0, 1];
-  const blue = (): [number, number, number, number] => [0, 0, 1, 1];
+  const fromGrad = ([x, y]: [number, number]): [number, number, number, number] => [x, y, 0, 1];
+  const toGrad = ([x, y]: [number, number]): [number, number, number, number] => [x, 0, 1, 1];
   const outside = evalGlslTransition(
     tr!.glsl,
     [0.02, 0.02],
     { progress: 0.45, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
   expect(outside).toEqual([0, 0, 0, 1]);
   const edgeOn = evalGlslTransition(
     tr!.glsl,
     [0.5, 0.5],
     { progress: 0.5, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
   expect(edgeOn).toEqual([0, 0, 0, 1]);
-  const front = evalGlslTransition(
+  const frontRight = evalGlslTransition(
     tr!.glsl,
-    [0.5, 0.5],
+    [0.7, 0.5],
     { progress: 0.25, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
-  expect(front[0]).toBeGreaterThan(0.5);
-  expect(front[2]).toBe(0);
-  const back = evalGlslTransition(
+  expect(frontRight[0]).toBeGreaterThan(0.5);
+  expect(frontRight[2]).toBe(0);
+  const backLeft = evalGlslTransition(
     tr!.glsl,
-    [0.5, 0.5],
+    [0.3, 0.5],
     { progress: 0.75, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
-  expect(back[2]).toBeGreaterThan(0.5);
-  expect(back[0]).toBe(0);
+  const backRight = evalGlslTransition(
+    tr!.glsl,
+    [0.7, 0.5],
+    { progress: 0.75, uFeather: 0.5, uFlip: 0, uRatio: 9 / 16 },
+    fromGrad,
+    toGrad,
+  );
+  expect(backLeft[2]).toBeGreaterThan(0.5);
+  expect(backRight[2]).toBeGreaterThan(0.5);
+  expect(backRight[0]).toBeGreaterThan(backLeft[0]);
 });
 
-test("pushUp slides incoming shot vertically, flips direction with uFlip, and smears the seam with uFeather", () => {
+test("pushUp slides incoming and outgoing UVs vertically, flips direction with uFlip, and smears the seam with uFeather", () => {
   const tr = TRANSITIONS.find((x) => x.id === "pushUp");
   expect(tr).toBeDefined();
-  const red = (): [number, number, number, number] => [1, 0, 0, 1];
-  const blue = (): [number, number, number, number] => [0, 0, 1, 1];
+  const fromGrad = ([, y]: [number, number]): [number, number, number, number] => [1, y, 0, 1];
+  const toGrad = ([, y]: [number, number]): [number, number, number, number] => [0, y, 1, 1];
   const bottomUp = evalGlslTransition(
     tr!.glsl,
     [0.5, 0.1],
     { progress: 0.5, uFeather: 0, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
   const topUp = evalGlslTransition(
     tr!.glsl,
     [0.5, 0.9],
     { progress: 0.5, uFeather: 0, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
-  expect(bottomUp).toEqual([0, 0, 1, 1]);
-  expect(topUp).toEqual([1, 0, 0, 1]);
+  expect(bottomUp[2]).toBe(1);
+  expect(bottomUp[1]).toBeCloseTo(0.6, 5);
+  expect(topUp[0]).toBe(1);
+  expect(topUp[1]).toBeCloseTo(0.4, 5);
   const topDown = evalGlslTransition(
     tr!.glsl,
     [0.5, 0.9],
     { progress: 0.5, uFeather: 0, uFlip: 1, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
-  expect(topDown).toEqual([0, 0, 1, 1]);
+  expect(topDown[2]).toBe(1);
+  expect(topDown[1]).toBeCloseTo(0.4, 5);
   const smearedSeam = evalGlslTransition(
     tr!.glsl,
     [0.5, 0.5],
     { progress: 0.5, uFeather: 1, uFlip: 0, uRatio: 9 / 16 },
-    red,
-    blue,
+    fromGrad,
+    toGrad,
   );
   expect(smearedSeam[0]).toBeGreaterThan(0.2);
   expect(smearedSeam[2]).toBeGreaterThan(0.2);
