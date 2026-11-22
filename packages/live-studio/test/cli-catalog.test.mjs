@@ -571,6 +571,10 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "scripts/review/reference_transcript.py",
         "raw-preserving transcript import for reference inspect",
       ],
+      [
+        "scripts/review/reference_video.mjs",
+        "timecode and sidebyside video subcommand handlers imported by scripts/review/reference.mjs",
+      ],
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
       ["scripts/evals/find/dual.ts", "dual search evaluation dispatched by eval:find --mode dual"],
@@ -2288,5 +2292,18 @@ describe("cli-catalog resolver rules", () => {
       "--layout",
       "hstack",
     ]);
+    const conflict = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: {
+          operation: "sidebyside",
+          reference: "references/ref.mp4",
+          remake: "renders/draft.mp4",
+        },
+        flags: { "--short-edge": 720, "--full": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(conflict.validationErrors.length).toBeGreaterThan(0);
   });
 });

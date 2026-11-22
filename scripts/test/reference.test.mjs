@@ -693,6 +693,8 @@ test("reference sidebyside tiles portrait ref and draft horizontally, strips dra
 
     const result = run(dir, ["sidebyside", "references/ref.mp4", "renders/draft.mp4"]);
     expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(result.stdout).toMatch(/stripped draft bar/);
+    expect(result.stdout).toMatch(/hstack REF \| OURS/);
     expect(result.stdout.trim().split(/\r?\n/).at(-1)).toMatch(/^next: /);
     expect(readFileSync(ref)).toEqual(refBytes);
     expect(readFileSync(draft)).toEqual(draftBytes);
@@ -700,6 +702,7 @@ test("reference sidebyside tiles portrait ref and draft horizontally, strips dra
     const out = join(dir, "renders/reference/ref_vs_draft.mp4");
     expect(existsSync(out)).toBe(true);
     expect(audioHash(out)).toBe(audioHash(draft));
+    expect(audioHash(out)).not.toBe(audioHash(ref));
 
     const probe = spawnSync(
       "ffprobe",
@@ -757,6 +760,12 @@ test("reference sidebyside tiles portrait ref and draft horizontally, strips dra
     const [rr, rg, rb] = pixel(544, Math.floor(height / 2));
     expect(rb).toBeGreaterThan(160);
     expect(rr).toBeLessThan(80);
+    const [rer, , reb] = pixel(368, Math.floor(height / 2));
+    expect(reb).toBeGreaterThan(160);
+    expect(rer).toBeLessThan(80);
+    const [rbr, , rbb] = pixel(544, height - 45);
+    expect(rbb).toBeGreaterThan(160);
+    expect(rbr).toBeLessThan(80);
     const [sr, sg, sb] = pixel(362, Math.floor(height / 2));
     expect(Math.max(sr, sg, sb)).toBeLessThan(40);
     expect(lg + rg).toBeLessThan(200);
@@ -798,10 +807,17 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
       ).toBe(0);
     mk(ref, "color=c=#2050d0:s=640x360:r=30", "1.2", 440);
     mk(ours, "color=c=#20c040:s=640x360:r=30", "0.5", 880);
+    const audioHash = (file) =>
+      spawnSync(
+        "ffmpeg",
+        ["-v", "error", "-i", file, "-map", "0:a", "-c", "copy", "-f", "md5", "-"],
+        { encoding: "utf8" },
+      ).stdout.trim();
 
     const outV = join(dir, "land_v.mp4");
     const rV = run(dir, ["sidebyside", ref, ours, "--out", outV, "--audio", "ref"]);
     expect(rV.status, rV.stdout + rV.stderr).toBe(0);
+    expect(rV.stdout).toMatch(/vstack REF \/ OURS/);
 
     const probe = spawnSync(
       "ffprobe",
@@ -824,6 +840,8 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
     expect(vs.height).toBeGreaterThan(760);
     expect(Number(vs.nb_read_frames)).toBe(36);
     expect(as).toBeTruthy();
+    expect(audioHash(outV)).toBe(audioHash(ref));
+    expect(audioHash(outV)).not.toBe(audioHash(ours));
 
     const rawLate = spawnSync(
       "ffmpeg",
@@ -869,6 +887,7 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
       "hstack",
     ]);
     expect(rH.status, rH.stdout + rH.stderr).toBe(0);
+    expect(rH.stdout).toMatch(/hstack REF \| OURS/);
     const streamsH = JSON.parse(
       spawnSync(
         "ffprobe",
@@ -890,3 +909,91 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
     rmSync(dir, { recursive: true, force: true });
   }
 }, 40000);
+
+test("reference sidebyside downscales to --short-edge, preserves native size with --full, and omits audio when remake is silent", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-scale-"));
+  try {
+    const ref = join(dir, "ref.mp4");
+    const oursSilent = join(dir, "ours_silent.mp4");
+    expect(
+      spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=#cc2020:s=360x640:r=30:d=0.4",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=f=440:d=0.4",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-c:a",
+          "aac",
+          ref,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+    expect(
+      spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=#2040cc:s=360x640:r=30:d=0.4",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-an",
+          oursSilent,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+
+    const probeStreams = (file) =>
+      JSON.parse(
+        spawnSync(
+          "ffprobe",
+          ["-v", "error", "-show_entries", "stream=codec_type,width,height", "-of", "json", file],
+          { encoding: "utf8" },
+        ).stdout,
+      ).streams;
+
+    const scaled = join(dir, "scaled.mp4");
+    const rScaled = run(dir, [
+      "sidebyside",
+      ref,
+      oursSilent,
+      "--out",
+      scaled,
+      "--short-edge",
+      "180",
+    ]);
+    expect(rScaled.status, rScaled.stdout + rScaled.stderr).toBe(0);
+    expect(rScaled.stdout).toMatch(/audio:none/);
+    const scaledStreams = probeStreams(scaled);
+    expect(scaledStreams.find((s) => s.codec_type === "video").width).toBe(364);
+    expect(scaledStreams.find((s) => s.codec_type === "audio")).toBeUndefined();
+
+    const native = join(dir, "native.mp4");
+    const rNative = run(dir, ["sidebyside", ref, oursSilent, "--out", native, "--full"]);
+    expect(rNative.status, rNative.stdout + rNative.stderr).toBe(0);
+    expect(rNative.stdout).toMatch(/audio:none/);
+    const nativeStreams = probeStreams(native);
+    expect(nativeStreams.find((s) => s.codec_type === "video").width).toBe(724);
+    expect(nativeStreams.find((s) => s.codec_type === "audio")).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);

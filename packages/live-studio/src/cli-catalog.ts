@@ -3794,6 +3794,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Max Short Edge (px)",
         type: "number",
         placeholder: "720",
+        exclusiveGroup: "reference-size",
         visibleWhen: { field: "operation", in: ["timecode", "sidebyside"] },
       },
       {
@@ -3801,6 +3802,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--full",
         label: "Keep Native Resolution",
         type: "boolean",
+        exclusiveGroup: "reference-size",
         visibleWhen: { field: "operation", in: ["timecode", "sidebyside"] },
       },
       {
