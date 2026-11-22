@@ -470,7 +470,7 @@ test("cardFlip projects a perspective card over black and swaps From to To un-mi
   const tr = TRANSITIONS.find((x) => x.id === "cardFlip");
   expect(tr).toBeDefined();
   const fromGrad = ([x, y]: [number, number]): [number, number, number, number] => [x, y, 0, 1];
-  const toGrad = ([x, y]: [number, number]): [number, number, number, number] => [x, 0, 1, 1];
+  const toGrad = ([x]: [number, number]): [number, number, number, number] => [x, 0, 1, 1];
   const outside = evalGlslTransition(
     tr!.glsl,
     [0.02, 0.02],
