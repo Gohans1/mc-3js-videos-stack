@@ -98,12 +98,15 @@ Never replaces a file: an existing name stops it (exit 2) before anything is cop
 next: bun run reference study references/<name>.mp4`;
 
 const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. aistudio).
-  bun run reference timecode <video> [--out <file>] [--label <text>] [--minutes 10]
+  bun run reference timecode <video> [--out <file>] [--label <text>] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
 Writes an H.264 .mp4 copy with a black bottom strip (HH:MM:SS.mmm, frame number, and label), keeping the source untouched.
 Default output: renders/reference/<video-name>_timecode.mp4 (outside references/ so tools keep reading the clean source).
-  --out <file>     Output .mp4 path (must differ from <video>).
-  --label <text>   Right-side label on the strip (default REFERENCE; pass "" to omit).
-  --minutes <N>    Stop FFmpeg after N minutes (default 10, maximum 60).
+  --out <file>       Output .mp4 path (must differ from <video>).
+  --label <text>     Right-side label on the strip (default REFERENCE; pass "" to omit).
+  --short-edge <px>  Cap the shorter picture side in pixels without upscaling (default 720; e.g. 720x1280 portrait / 1280x720 landscape).
+  --full             Keep native source picture resolution (disables --short-edge downscaling).
+  --crf <N>          H.264 quality factor 0-51 (default 22 for fast AI uploads; lower is larger).
+  --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
 next: pass the output alongside renders/draft.mp4 to your video reviewer; keep references/ clean`;
 
@@ -336,7 +339,7 @@ if (process.argv[2] === "add") {
 if (process.argv[2] === "timecode") {
   const argv = cliArgs(
     TIMECODE_HELP,
-    ["--out file", "--label text", "--minutes N"],
+    ["--out file", "--label text", "--short-edge px", "--full", "--crf N", "--minutes N"],
     1,
     process.argv.slice(3),
   );
@@ -346,10 +349,19 @@ if (process.argv[2] === "timecode") {
     options: {
       out: { type: "string" },
       label: { type: "string" },
+      "short-edge": { type: "string" },
+      full: { type: "boolean" },
+      crf: { type: "string" },
       minutes: { type: "string" },
     },
   });
   if (positionals.length !== 1) usage("Choose timecode <video>");
+  if (values.full && values["short-edge"] !== undefined)
+    usage("Use either --full or --short-edge, not both");
+  const shortEdge = values.full
+    ? null
+    : numberArg("--short-edge", values["short-edge"] ?? "720", { min: 144, max: 4320, int: true });
+  const crf = numberArg("--crf", values.crf ?? "22", { min: 0, max: 51, int: true });
   const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
   const source = resolve(positionals[0]);
   if (!statSync(source, { throwIfNoEntry: false })?.isFile())
@@ -398,8 +410,10 @@ if (process.argv[2] === "timecode") {
   const rotated = Math.abs(rotation) % 180 === 90;
   const dispW = rotated ? video.height : video.width;
   const dispH = rotated ? video.width : video.height;
-  const outW = 2 * Math.ceil(dispW / 2);
-  const picH = 2 * Math.ceil(dispH / 2);
+  const minSide = Math.min(dispW, dispH);
+  const scale = shortEdge && minSide > shortEdge ? shortEdge / minSide : 1;
+  const outW = 2 * Math.ceil((dispW * scale) / 2);
+  const picH = 2 * Math.ceil((dispH * scale) / 2);
   const barH = Math.max(28, 2 * Math.round(picH * 0.028));
   const outH = picH + barH;
   const margin = Math.max(8, Math.round(outW * 0.02));
@@ -430,6 +444,7 @@ if (process.argv[2] === "timecode") {
   const font = fontOption();
   const yExpr = `h-${barH}+(${barH}-text_h)/2`;
   const filters = [
+    ...(scale < 1 ? [`scale=${outW}:${picH}:flags=lanczos`] : []),
     `pad=${outW}:${outH}:0:0:black`,
     `drawtext=${font}:text='${ptsExpr}  f%{n}':fontcolor=white:fontsize=${fontSize}:x=${margin}:y=${yExpr}`,
   ];
@@ -474,7 +489,7 @@ if (process.argv[2] === "timecode") {
         "-preset",
         "veryfast",
         "-crf",
-        "18",
+        String(crf),
         "-pix_fmt",
         "yuv420p",
         "-movflags",

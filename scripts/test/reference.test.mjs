@@ -376,6 +376,11 @@ test("reference timecode help and invalid arguments exit 2 without writing", () 
       ["timecode", join(dir, "missing.mp4")],
       ["timecode", src, "--typo"],
       ["timecode", src, "--minutes", "0"],
+      ["timecode", src, "--short-edge", "10"],
+      ["timecode", src, "--short-edge", "720.5"],
+      ["timecode", src, "--full", "--short-edge", "720"],
+      ["timecode", src, "--crf", "99"],
+      ["timecode", src, "--crf", "22.5"],
       ["timecode", src, "--out", src],
       ["timecode", src, "--out", dir],
       ["timecode", src, "--out", join(dir, "bad.mkv")],
@@ -387,7 +392,7 @@ test("reference timecode help and invalid arguments exit 2 without writing", () 
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-});
+}, 20000);
 
 test("reference timecode writes an H.264 copy with a bottom black timecode bar and leaves the source untouched", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-tc-real-"));
@@ -539,6 +544,60 @@ test("reference timecode supports special-character and empty --label and keeps 
     expect(failed.status).toBe(1);
     expect(readFileSync(labeled)).toEqual(kept);
     expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("reference timecode downscales portrait 1080x1920 to 720 short-edge by default and preserves native size with --full", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-tc-scale-"));
+  try {
+    const src = join(dir, "portrait.mp4");
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=#203040:s=1080x1920:r=30:d=0.2",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        src,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+
+    const probeDim = (file) =>
+      spawnSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=width,height",
+          "-of",
+          "csv=p=0",
+          file,
+        ],
+        { encoding: "utf8" },
+      ).stdout.trim();
+
+    const scaled = join(dir, "scaled.mp4");
+    const rScaled = run(dir, ["timecode", src, "--out", scaled]);
+    expect(rScaled.status, rScaled.stdout + rScaled.stderr).toBe(0);
+    expect(probeDim(scaled)).toBe("720,1352");
+
+    const native = join(dir, "native.mp4");
+    const rNative = run(dir, ["timecode", src, "--out", native, "--full", "--crf", "18"]);
+    expect(rNative.status, rNative.stdout + rNative.stderr).toBe(0);
+    expect(probeDim(native)).toBe("1080,2028");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
