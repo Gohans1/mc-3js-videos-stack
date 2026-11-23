@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "duration_sec": 35.536,
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "forced_perspective_castle",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1.335,
+  "opening_spoken_line": "If they built the castle over 200 feet,",
+  "hook_visual_trigger": "Tower crane lowers golden spire onto pink castle while camera pulls wide",
+  "story_structure": "problem_solution_irony",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "rehook_timestamps_sec": [
+    6.306,
+    13.847,
+    20.521,
+    26.526
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.003,
+      "pct_runtime": 8
+    },
+    {
+      "role": "escalation",
+      "start_sec": 3.003,
+      "end_sec": 8.976,
+      "pct_runtime": 17
+    },
+    {
+      "role": "setup",
+      "start_sec": 8.976,
+      "end_sec": 13.847,
+      "pct_runtime": 14
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 13.847,
+      "end_sec": 20.521,
+      "pct_runtime": 19
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 20.521,
+      "end_sec": 29.496,
+      "pct_runtime": 25
+    },
+    {
+      "role": "resolution",
+      "start_sec": 29.496,
+      "end_sec": 35.536,
+      "pct_runtime": 17
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 0,
+    "transition": 6,
+    "continuous": 15
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 6,
+    "M": 8,
+    "MCU": 5,
+    "CU": 1,
+    "ECU": 1,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 17,
+    "low": 3,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "mixed",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true
+  },
+  "reusable_script_template": "If [ICONIC LANDMARK] crossed [REGULATORY THRESHOLD], it would need [UGLY SAFETY FEATURE] that ruins [EXPERIENCE] -> SO [ARCHITECT] used [PERCEPTUAL TRICK] -> WHICH MAKES IT LOOK [IMPRESSIVE TRAIT] WHILE STAYING UNDER [LIMIT].",
+  "secret_sauce_cues": [
+    "Screen-locked 3D measurement bar carried vertically up the tower shaft (6 Feet -> 4 Feet window shrinkage, f573-f600)",
+    "Translucent ghost-silhouette height overlay followed by skull X-ray thought projection inside firing synapses (f754-f883)"
+  ],
+  "weaknesses_or_drag": [
+    "Background park extras freeze into slightly stiff idle poses during wide night pull-back (f365-f413)",
+    "Lower-balcony worker holds static kneel for ~0.7s while waiting for the 6 Feet counter animation (f546-f572)"
+  ]
+}

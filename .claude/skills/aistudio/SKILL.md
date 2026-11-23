@@ -1,150 +1,83 @@
 ---
 name: aistudio
-description: Điều khiển Playground chat và History của Google AI Studio (aistudio.google.com) bằng Chrome thật đã đăng nhập, chạy ẩn ngoài màn hình. Dùng để hỏi đáp Gemini (mặc định gemini-4-neon, miễn phí theo gói Pro/Ultra, không tốn API), gửi kèm file (video, ảnh, PDF, audio, text), so sánh nhiều video ở FPS 24, hỏi tiếp trong chat cũ, đợi câu trả lời lâu rồi lấy lại, chạy nhiều chat song song ở nhiều tab, đổi model, thinking level, media resolution, tools, system instructions, đổi tên chat, tìm và đọc lại chat cũ trong History. Use this skill whenever the user mentions AI Studio, Gemini in the browser, gemini-4-neon, asking Gemini about a video/file/PDF/image, comparing videos with Gemini, reading or searching old AI Studio chats, or changing AI Studio chat settings, even if they do not say "skill". Triggers: "hỏi gemini", "gửi video lên ai studio", "so sánh 2 video", "đọc lại chat ai studio", "đổi model ai studio", "aistudio".
+description: Controls Google AI Studio Playground chat and History (aistudio.google.com) through a logged-in off-screen Chrome window. Use when asking Gemini questions (default gemini-4-neon, free under Pro/Ultra without API spend), attaching files (video, images, PDFs, audio, text), analyzing or comparing videos at 24 FPS, continuing or collecting saved chats, running parallel tabs, switching models/thinking/media/tools/system instructions, or searching History. Triggers include "ask gemini", "send video to ai studio", "compare 2 videos", "read ai studio chat", "switch ai studio model", "aistudio", or Vietnamese equivalents ("hỏi gemini", "gửi video lên ai studio", "so sánh 2 video").
 ---
 
 # aistudio
 
-Bộ đồ nghề cho Playground chat và History của AI Studio: ask.ts gửi prompt và lấy câu trả lời, studio.ts làm mọi việc còn lại. Chạy từ root repo bằng bun.
+CLI toolkit for Google AI Studio Playground chat (`/prompts`) and History (`/library`): `ask.ts` sends prompts and collects answers; `studio.ts` manages tabs, settings, history, and UI health checks. Run all commands from the repo root with `bun`.
 
-Khu này dành cho AI dùng skill. Sửa hay mở rộng skill thì đọc references/phat-trien.md.
+Shorthand:
+- `ASK = bun .claude/skills/aistudio/scripts/ask.ts`
+- `STUDIO = bun .claude/skills/aistudio/scripts/studio.ts`
 
-## Phạm vi
+For full option/subcommand syntax, run `ASK --help` and `STUDIO --help`. For browser infrastructure maintenance read [references/browser/development.md](references/browser/development.md); when AI Studio UI changes break locators read [references/browser/ui-changes.md](references/browser/ui-changes.md); for prompt architecture & A/B evaluation read [references/prompts/prompt-eval-guide.md](references/prompts/prompt-eval-guide.md). To reverse-engineer an entire YouTube channel into a standalone skill, use `.claude/skills/channel-dna/`.
 
-| Được | Không đụng |
+## Review Gate & Video Preparation Rules
+
+- **Never invoke AI Studio video reviews unsolicited** — ask/confirm with the user unless explicitly delegated. Use Gemini's native 24fps multimodal video + audio vision specifically where static local frame sampling or deaf inspection falls short (motion curves, boundary continuity, whip-blur/DOF, BGM/VO rhythm).
+- **1-video reference breakdown:** Inside `films/<name>/`, burn a 720p CRF 22 timecode strip via `bun run reference timecode references/ref.mp4` (writes `films/<name>/renders/reference/ref_timecode.mp4`), then run `ASK` from the repo root.
+- **2-video comparison (`REF` vs `OURS`):** Inside `films/<name>/`, render moving 3D drafts with `--samples 8` when motion blur matters, then tile both into one synced 720p video via `bun run reference sidebyside references/ref.mp4 renders/draft.mp4` (writes `films/<name>/renders/reference/ref_vs_draft.mp4`; 50% fewer tokens, auto-strips draft bar, keeps `audio:ours`, avoids hitting the 65k Thoughts output cap on long dual uploads), then run `ASK` from the repo root.
+- **Model & thinking selection:** `ASK` defaults to `gemini-4-neon` and only auto-applies `--thinking "Extra High"` on `gemini-4-neon`; any other `--model` keeps the page default unless `--thinking` is passed. For high-precision video comparison (`compare-2-video.md`) and `channel-dna` extraction, pass `--model gemini-4-hydrogen --thinking "Extra High"` explicitly. Always pass `--tool search=off` on video audits because AI Studio persists the Google Search toggle across future new chats.
+
+## Scope
+
+| Allowed | Off-Limits |
 | --- | --- |
-| Playground chat (/prompts) và History (/library). | Build apps, API keys, Dashboard, usage, billing và mọi khu khác của AI Studio, kể cả qua lệnh ab. |
+| Playground chat (`/prompts`) and History (`/library`) only. | Build apps, API keys, Dashboard, usage, billing, and every other AI Studio area — including via `STUDIO ab`. |
 
-## Bắt đầu
+## Quick Start & Core Recipes
 
-| Việc | Lệnh |
+| Job | Command |
 | --- | --- |
-| Xem toàn bộ lệnh | bun .claude/skills/aistudio/scripts/studio.ts --help và ask.ts --help |
-| Hỏi 1 câu | bun .claude/skills/aistudio/scripts/ask.ts "câu hỏi" --out answer.md |
-| Hỏi kèm file | bun .claude/skills/aistudio/scripts/ask.ts a.mp4 b.pdf c.png "câu hỏi" --out answer.md |
-| Trang đang ở đâu, cài đặt gì | bun .claude/skills/aistudio/scripts/studio.ts status |
-| Bản đồ mọi nút trên trang | bun .claude/skills/aistudio/scripts/studio.ts map |
-| Kiểm tra skill còn khớp UI | bun .claude/skills/aistudio/scripts/studio.ts --tab doctor doctor |
+| Full CLI options & subcommands | `ASK --help` and `STUDIO --help` |
+| Analyze 1 reference video | In `films/<name>/`: `bun run reference timecode references/ref.mp4`; then from repo root: `ASK films/<name>/renders/reference/ref_timecode.mp4 "Analyze this video..." --tool search=off --system-file .claude/skills/aistudio/system/analyze-ref-video.md --out ref-breakdown.md` |
+| Compare `REF` vs `OURS` (default) | In `films/<name>/`: `bun run reference sidebyside references/ref.mp4 renders/draft.mp4`; then from repo root: `ASK films/<name>/renders/reference/ref_vs_draft.mp4 "Compare REF and OURS..." --model gemini-4-hydrogen --thinking "Extra High" --tool search=off --system-file .claude/skills/aistudio/system/compare-2-video.md --out cmp.md` (use 2 separate files with `--start`/`--end` only on `<20s` clips when directly comparing both audio streams, or lower `--thinking High`) |
+| Ask text or multimodal (PDF/image/audio/text) | `ASK [file ...] "prompt" --out answer.md` (prompt goes last; use `--prompt-file <file>` for long prompts, or `-- "-..."` if prompt starts with `-`) |
+| Continue or collect a chat | `ASK --chat <url-or-id> [file ...] "follow-up"` / `ASK --chat <url-or-id> --out ans.md` / `ASK --collect --out ans.md` (unsaved open chat) |
+| Parallel tasks across windows | Use distinct `--tab <label>` per job (e.g. `--tab vid`, `--tab qa`); never run two commands on the same tab at once. Close temp tabs afterward with `STUDIO tab close <label>`. |
+| Search & read saved History | `STUDIO history --search <query>`, then `STUDIO read <url-or-id> [--thoughts] --out chat.md` |
+| Inspect state, settings, or UI health | `STUDIO status`, `STUDIO models`, `STUDIO map`, `STUDIO --tab doctor doctor [--quick]`, `STUDIO --tab smoke smoke` |
 
-Viết tắt bên dưới: ASK = bun .claude/skills/aistudio/scripts/ask.ts, STUDIO = bun .claude/skills/aistudio/scripts/studio.ts.
+Add `--json` to data-printing `STUDIO` commands (`status`, `tabs`, `models`, `history`, `read`, `system`, `doctor`) for structured JSON. When no dedicated command exists inside `/prompts` or `/library`, inspect via `STUDIO map` and `STUDIO ab snapshot -i`, then act via `STUDIO ab click/fill`.
 
-## Gửi prompt (ASK)
+## Reading Logs & Exit Codes
 
-| Chế độ | Lệnh |
+| Prefix | Meaning |
 | --- | --- |
-| Chat mới, 0 tới n file | ASK [file ...] "prompt". Prompt luôn đứng cuối. |
-| Hỏi tiếp chat cũ, có thể kèm file mới | ASK --chat link-hoặc-id [file ...] "prompt" |
-| Lấy câu trả lời cuối của chat (đang chạy hay xong r) | ASK --chat link-hoặc-id. Chat đang chạy chỉ lấy được ở đúng tab đang chạy nó: dùng lệnh lấy lại in trong log (đã kèm --tab). |
-| Lấy câu trả lời của chat đang mở trong tab (chat chưa có link) | ASK --collect |
+| `→ [n/N] step` | Step started. |
+| `✓ [n/N] step: ...` | Step verified by reading back live page state. |
+| `… still ...` | Waiting (heartbeat every 30s). |
+| `✗ [n/N] step failed: ...` | Failure with reason and screenshot at `%TEMP%\aistudio-failed-<tab>-stepN.png`. |
 
-| Tuỳ chọn | Mặc định | Ghi chú |
-| --- | --- | --- |
-| --prompt-file file | không | Prompt dài đọc từ file; khi đó mọi tham số còn lại là file đính kèm. Đã thử 40 nghìn ký tự. |
-| -- "prompt" | không | Prompt bắt đầu bằng dấu - thì đặt sau --. |
-| --out file.md | in ra stdout | Log luôn ra stderr. |
-| --tab nhãn | main | Mỗi tab là 1 cửa sổ riêng, chạy song song được. |
-| --model id | gemini-4-neon | Chỉ chat mới. Danh sách: STUDIO models. |
-| --thinking | Extra High (chat mới trên gemini-4-neon) | Model khác giữ mức mặc định của trang, muốn chắc thì truyền --thinking. Mỗi model có danh sách riêng (flash-lite chỉ tới High); hỏi tiếp thì giữ của chat. |
-| --media | High (chat mới) | Default, Low, Medium, High. |
-| --system "text" | giữ nguyên | Thay system instructions ngay trước khi gửi; "" là xoá. |
-| --system-file file | giữ nguyên | Như --system nhưng đọc từ file (system dài). File rỗng bị từ chối. |
-| --tool tên=on hoặc off | trạng thái đang nhớ | Lặp được, vd --tool search=off. Công tắc Google Search được AI Studio nhớ sang mọi chat mới, nên cần chắc thì luôn truyền; bước run in trạng thái search đã dùng. |
-| --fps n | 24 | Chỉ file video, 0 < n ≤ 24. |
-| --start 1m10s --end 2m30s | cả video | Chỉ file video, cắt đoạn. AI Studio tự viết lại thời gian (0m2s thành 2s), script so theo số giây. |
-| --agentic | tắt | Agentic video understanding. AI Studio ẩn FPS và đoạn cắt khi bật, nên không đi cùng --fps/--start/--end. |
-| --run-timeout-min | 60 | Hết giờ script dừng, model vẫn chạy tiếp trong Chrome. |
-| --upload-timeout-min | 15 | File lớn thì tăng. |
+Exit `0`: verified success. Exit `1`: step/runtime failure. Exit `2`: invalid CLI input (browser untouched).
 
-## Công thức hay dùng
+## Off-Screen Chrome & Focus Safety
 
-| Việc | Cách |
+Chrome runs on port `9333` with an isolated profile; each `--tab` gets its own off-screen background window so it never steals mouse, keyboard, screen, focus, or Windows clipboard. Never use `--headless` (exposes `HeadlessChrome` UA and risks Google sign-out) and never minimize windows manually (minimized pages become hidden and break dropdowns). Run `STUDIO chrome --show` when a human needs to sign in manually; the next command on that tab returns it off-screen.
+
+## Common Errors & Recovery
+
+| Error | Fix |
 | --- | --- |
-| Review 1 video | ASK a.mp4 "..." --system-file .claude/skills/aistudio/system/review-1-video.md --out review.md |
-| So sánh 2 video | ASK a.mp4 b.mp4 "so sánh..." --system-file .claude/skills/aistudio/system/compare-2-video.md --out cmp.md. FPS và đoạn cắt áp cho mọi video trong lệnh, được đọc lại từng video rồi kiểm lại cả 2 trước khi Run. |
-| Hỏi đáp thuần text | ASK "câu hỏi" --thinking Low cho nhanh. |
-| Đọc PDF, ảnh, audio, text | Đưa file vào trước prompt như video; chỉ video mới có bước cài đặt riêng. |
-| Câu trả lời lâu (video dài, Extra High) | Chạy lệnh ở chế độ nền với timeout lớn hơn --run-timeout-min. Hết giờ thì log in sẵn lệnh lấy lại. |
-| Hỏi tiếp | Cuối log in link chat và lệnh follow-up; chat mới chưa có link thì in lệnh --collect. Giữ link lại. |
-| Nhiều việc cùng lúc | Mỗi việc 1 --tab riêng (vd --tab vid, --tab qa). Không chạy 2 lệnh cùng 1 tab. |
-| Tìm chat cũ rồi đọc | STUDIO history --search từ-khoá, rồi STUDIO read link --out chat.md. |
-| Có hay không tra web | ASK --tool search=on hoặc search=off "câu hỏi". STUDIO tool search còn đổi luôn mặc định cho chat mới về sau ở mọi tab; tool khác, model, thinking, media chỉ đổi chat đang mở. |
-| Đổi cài đặt chat đang mở | STUDIO model id, STUDIO set thinking High, STUDIO set media Low, STUDIO tool search off, STUDIO system "text". |
+| `signed out` | Ask the user to run `STUDIO chrome --show`, sign in manually, then retry. |
+| `AI Studio cannot open that chat` | Wrong ID, deleted chat, or signed into a different Google account. |
+| `still generating` | That tab/chat is busy; collect it with `ASK --collect` (same `--tab`) or use a different `--tab`. |
+| `stopped after Thoughts with no answer text` | Hit the 65k output-length cap during Extra High thinking; shorten or tile video via `bun run reference sidebyside`, or lower `--thinking High`. |
+| `the last prompt in this chat has no answer` | Check `STUDIO tabs` (may be running in another tab); otherwise the previous run stopped — re-send via `--chat`. |
+| `has no ... on this model; it offers: ...` | Pick a thinking/media level from the printed model list. |
+| `no ... switch on the page` / `is disabled right now` | Tool unavailable on this model (e.g., `maps`); switch models or omit the tool. |
+| `already holds N attachment(s)` | Previous run left attachments in that tab; use another `--tab` or `STUDIO open new`. |
+| `tab_locked` | Another `agent-browser` session holds that window; pick another `--tab`. |
+| `only a saved chat can be renamed` | Wait ~1 min after the first reply until AI Studio assigns a chat URL. |
+| `AI Studio says: ...` | Live AI Studio banner alert (quota, server error, rejected video range); read verbatim. |
+| Missing locator / button not found | UI may have changed — run `STUDIO --tab doctor doctor` and follow [references/browser/ui-changes.md](references/browser/ui-changes.md). |
 
-## Hộp đồ nghề (STUDIO)
+## Usage Laws
 
-| Nhóm | Lệnh | Làm gì |
-| --- | --- | --- |
-| Tab | tabs | Liệt kê cửa sổ: nhãn, url, tiêu đề. |
-| Tab | tab close nhãn | Đóng cửa sổ của tab (từ chối khi đang sinh câu trả lời). Tab tự mở khi lần đầu dùng --tab. |
-| Chat | status | url, tài khoản, chat, tiêu đề, số lượt, đang chạy không, cài đặt. |
-| Chat | open new [--model id] / open link-hoặc-id | Mở chat mới hoặc chat đã lưu. Chat đang mở sẵn thì không tải lại. |
-| Chat | rename "tên" [--description "mô tả"] | Đổi tên chat đã lưu (chat mới chưa có link thì chưa đổi được). |
-| Chat | read [link] [--thoughts] [--out file.md] | Cả chat thành markdown, có tên file đính kèm; --thoughts kèm suy nghĩ của model. |
-| Cài đặt | models [--search chữ] | Mọi model trong picker: id, tên, mô tả. |
-| Cài đặt | model id | Đổi model. |
-| Cài đặt | set thinking mức / set media mức | Đổi dropdown, đọc lại để xác nhận. |
-| Cài đặt | tool search, url, code, structured, functions, maps (hoặc tên đầy đủ) + on hoặc off | Bật tắt tool. maps chỉ có ở 1 số model. |
-| Cài đặt | system ["text"] | Xem hoặc thay system instructions. Chỉ được lưu vào chat khi Run, nên muốn chắc thì dùng ASK --system. |
-| History | history [--search chữ] [--limit n] | Chat đã lưu, mới nhất trước, mặc định 20 dòng. |
-| Sức khoẻ | doctor [--quick] | Kiểm mọi locator trên UI thật, không tốn quota; --quick bỏ bước upload. Chạy ở tab riêng (--tab doctor) vì nó đi qua chat mới, History và chat gần nhất; cần ít nhất 1 chat đã lưu. |
-| Sức khoẻ | smoke | Chạy ASK thật trên video test 2 giây; chạy ở tab riêng (--tab smoke). |
-| Cấp thấp | map | Bản đồ page-map.ts, không mở trình duyệt. |
-| Cấp thấp | screenshot [file.png] | Chụp tab. |
-| Cấp thấp | ab lệnh-agent-browser | Lối thoát: agent-browser đã gắn đúng tab (vd STUDIO ab snapshot -i, STUDIO --tab qa ab get url). |
-| Cấp thấp | chrome [--show] | Mở Chrome ẩn; --show đưa cửa sổ ra màn hình để đăng nhập tay. |
-
-Thêm --json vào lệnh in dữ liệu (status, tabs, models, history, read, system, doctor) để lấy JSON. Xong việc thì đóng tab phụ bằng STUDIO tab close nhãn.
-
-## Việc chưa có lệnh
-
-Dùng STUDIO map để biết tên nút, STUDIO ab snapshot -i để thấy trang, rồi STUDIO ab click/fill theo ref, chỉ trong phạm vi ở trên. Việc lặp lại thì thêm lệnh theo references/phat-trien.md.
-
-## Đọc log
-
-| Dấu | Nghĩa |
-| --- | --- |
-| → [n/N] bước | Bước bắt đầu. |
-| ✓ [n/N] bước: ... | Bước xong, kèm bằng chứng đọc lại từ trang. |
-| … still ... | Đang đợi, 30 giây báo 1 lần. |
-| ✗ [n/N] bước failed: ... | Bước hỏng, kèm lý do và ảnh chụp %TEMP%\aistudio-failed-nhãn-stepN.png. |
-
-Exit 0 là xong và đã xác nhận, 1 là 1 bước hỏng, 2 là sai input (chưa đụng trình duyệt).
-
-## Chế độ ẩn
-
-Chrome chạy ở cổng 9333 với profile riêng, mỗi tab là 1 cửa sổ nằm ngoài màn hình, mở ở chế độ nền. Không chiếm chuột, bàn phím, màn hình, focus hay clipboard Windows. Cửa sổ ẩn không có nút trên taskbar, không có trong Alt+Tab, Windows không tự trao bàn phím cho nó; lúc ghim tab (1-2 giây) skill khoá foreground nên Chrome không giành được bàn phím.
-
-| Đánh đổi | Vì sao |
-| --- | --- |
-| Không dùng headless | Chrome headless tự khai HeadlessChrome trong user agent; Google dễ chặn hoặc đăng xuất. Giả user agent là lách luật nên không làm. |
-| Không thu nhỏ cửa sổ | Cửa sổ thu nhỏ làm trang thành hidden, dropdown không mở. Win+D có lúc vẫn thu nhỏ được nó, khi đó nó là thanh nhỏ cạnh nút Start tới bước kế tiếp (bước đó tự mở lại, không lấy focus). |
-| Muốn nhìn tận mắt | STUDIO chrome --show đưa cửa sổ ra màn hình thành cửa sổ thường (có taskbar, click gõ được); lệnh kế tiếp có mở trang trên cùng tab (status, ASK...) đưa nó về chỗ ẩn. |
-
-## Lỗi thường gặp
-
-| Lỗi | Xử lý |
-| --- | --- |
-| signed out | Nhờ người dùng chạy STUDIO chrome --show và tự đăng nhập trong cửa sổ đó, rồi chạy lại. |
-| AI Studio cannot open that chat | Sai id, chat đã xoá hoặc thuộc tài khoản Google khác. |
-| still generating | Tab hay chat đang trả lời việc khác. Lấy nó bằng ASK --collect (cùng --tab) hoặc dùng tab khác. |
-| the last prompt in this chat has no answer | Chat có thể đang chạy ở tab khác: xem STUDIO tabs trước. Không thì lần chạy trước đã bị dừng, gửi lại bằng --chat. |
-| has no ... on this model; it offers: ... | Mức thinking hay media đó không có ở model này. Chọn 1 mức trong danh sách in ra. |
-| no ... switch on the page / is disabled right now | Tool đó không có hoặc bị khoá ở model này (vd maps). Đổi model hoặc bỏ tool. |
-| already holds N attachment(s) | Lần chạy trước trong tab bỏ dở file đính kèm. Dùng --tab khác hoặc STUDIO open new. |
-| tab_locked | Một session agent-browser khác đang giữ cửa sổ đó. Dùng nhãn tab khác. |
-| only a saved chat can be renamed | Chat mới có link khoảng 1 phút sau câu trả lời đầu tiên. |
-| AI Studio says: ... | Thông báo của chính AI Studio (quota, lỗi server, giá trị video sai). Đọc nguyên văn. |
-| Bước nào đó không tìm thấy nút | UI có thể đã đổi: chạy STUDIO doctor rồi theo references/khi-ui-thay-doi.md. |
-
-## Luật dùng
-
-| Luật | Vì sao |
-| --- | --- |
-| Chỉ Playground và History | Người dùng chỉ cho phép phạm vi này. |
-| Mỗi tab 1 lệnh tại 1 thời điểm | Các lệnh trong cùng tab dùng chung 1 trang, không có khoá. |
-| Không tải lại hay rời chat đang sinh câu trả lời | Mất câu trả lời đang sinh. |
-| Không dùng agent-browser close hay tab new trên Chrome này | close đóng cả Chrome chung; tab new mở tab trong cửa sổ có sẵn làm tab kia bị ẩn. |
-| Giữ tài khoản Google ở tiếng Anh | Locator dựa vào tên tiếng Anh của nút. |
-| Kiểm chứng câu trả lời quan trọng | Gemini từng bịa chi tiết audio của clip test. |
-| ASK chỉ copy lượt Model cuối | Câu trả lời tách nhiều lượt thì STUDIO read để lấy đủ. |
-| history chỉ đọc trang đầu của History | Không thấy chat cũ thì dùng --search, đừng kết luận là không có. |
+- Stay strictly inside `/prompts` and `/library`; never pass empty files to `--system-file` (rejected with exit `2`).
+- Run at most one command per `--tab` at a time; never reload or navigate away from a generating chat.
+- Never run `agent-browser close` or `tab new` on this Chrome instance (`close` kills shared Chrome; `tab new` hides existing tabs in that window).
+- Keep the Google account UI in English (ARIA locators expect English labels).
+- Verify critical answers independently (Gemini audio is 1Kbps mono and has hallucinated fine audio details).
+- `ASK` copies only the final Model turn (use `STUDIO read` for multi-turn answers); `history` reads only page 1 (use `--search` for older chats).

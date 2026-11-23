@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { toSeconds } from "./lib";
+import { formatCopyFailureError, formatStoppedRunError, toSeconds } from "./lib";
 
 // AI Studio rewrites clip times when it saves them (0m2s comes back as 2s), so times compare as seconds.
 test("toSeconds reads every spelling the video dialog accepts or writes back", () => {
@@ -17,4 +17,17 @@ test("toSeconds rejects text that is not a time", () => {
   expect(toSeconds("")).toBeNaN();
   expect(toSeconds("abc")).toBeNaN();
   expect(toSeconds("1m30")).toBeNaN();
+});
+
+test("formatStoppedRunError surfaces AI Studio alerts or thought-only output-cap exhaustion", () => {
+  expect(formatStoppedRunError("Quota exceeded", true)).toContain("AI Studio says: Quota exceeded");
+  expect(formatStoppedRunError("", true)).toContain("stopped after Thoughts with no answer text");
+  expect(formatStoppedRunError("", false)).toContain("AI Studio shows no message");
+});
+
+test("formatCopyFailureError appends AI Studio alerts when present", () => {
+  expect(formatCopyFailureError(-1, "Quota exceeded: daily limit")).toBe(
+    '"Copy as markdown" of turn -1 copied nothing; AI Studio says: Quota exceeded: daily limit',
+  );
+  expect(formatCopyFailureError(-1, "")).toBe('"Copy as markdown" of turn -1 copied nothing');
 });

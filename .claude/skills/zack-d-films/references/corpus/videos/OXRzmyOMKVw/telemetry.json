@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "duration_sec": 58.158,
+  "topic_category": "other",
+  "topic_sublabel": "hide_and_seek_psychology_hack",
+  "hook_archetype": "imperative_how_to_step",
+  "opening_shot_sec": 2.669,
+  "opening_spoken_line": "Before playing hide and seek, identify who is the best hider.",
+  "hook_visual_trigger": "Dollhouse cutaway fly-in with 3D HIDE & SEEK text slamming onto floor before whipping to crown rival",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 76,
+  "rehook_timestamps_sec": [
+    8,
+    20.4,
+    27.4,
+    38.6,
+    44.3
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.004,
+      "pct_runtime": 7
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.037,
+      "end_sec": 12.946,
+      "pct_runtime": 15
+    },
+    {
+      "role": "escalation",
+      "start_sec": 13.013,
+      "end_sec": 28.662,
+      "pct_runtime": 27
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 28.729,
+      "end_sec": 38.572,
+      "pct_runtime": 17
+    },
+    {
+      "role": "twist",
+      "start_sec": 38.639,
+      "end_sec": 54.321,
+      "pct_runtime": 27
+    },
+    {
+      "role": "resolution",
+      "start_sec": 54.354,
+      "end_sec": 58.158,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 11,
+    "continuous": 16
+  },
+  "transition_types": [
+    "push_up_dissolve",
+    "cross_dissolve",
+    "card_flip",
+    "push_up"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 2,
+    "M": 11,
+    "MCU": 9,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 4
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 2,
+    "eye": 23,
+    "low": 3,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "clean_studio_soft",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "Before [COMPETITIVE GAME], identify the best player -> secretly sabotage [EVERYDAY PROP] to plant a delayed trap -> manipulate [OPPONENT'S MENTAL MAP] -> when only you two remain, trigger the trap to cause an emotional meltdown and steal the win.",
+  "secret_sauce_cues": [
+    "Ghost-trail speed-skipping (f571-f586, f1009-f1027) compresses hallway traversal inside static/panning shots without jarring cuts",
+    "Bookended floating gold crown transfer (f105 -> f1702) plus organic blobby thought bubbles and X-ray architectural cutaways visualize invisible mind games",
+    "Zero hard cuts across 58s: every scene change is masked via 3D card flips, push-ups, cross-dissolves, or whip-blur swaps"
+  ],
+  "weaknesses_or_drag": [
+    "Blanket cutaway hold (f649-f666) and clipboard hover after crossing Anna (f1244-f1278) linger slightly while waiting for VO phrasing"
+  ]
+}

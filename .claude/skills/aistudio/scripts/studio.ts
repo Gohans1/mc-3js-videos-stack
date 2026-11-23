@@ -723,7 +723,7 @@ function doctor(quick: boolean) {
         "",
         "✓ first candidate  ⚠ only a fallback matched (fix soon)  ✗ broken  · absent but allowed",
         bad.length || weak.length
-          ? `fix: page-map.ts entries above, guide: references/khi-ui-thay-doi.md, inspect: ${STUDIO}${tabFlag()} ab snapshot -i`
+          ? `fix: page-map.ts entries above, guide: references/browser/ui-changes.md, inspect: ${STUDIO}${tabFlag()} ab snapshot -i`
           : "",
       ]
         .filter(Boolean)

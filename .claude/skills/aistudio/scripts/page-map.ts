@@ -1,5 +1,5 @@
 // The only file that knows what AI Studio's pages look like. When the UI changes, fix it here (see
-// references/khi-ui-thay-doi.md), then run `bun studio.ts doctor`.
+// references/browser/ui-changes.md), then run `bun studio.ts doctor`.
 //
 // Each entry lists candidates from most to least stable; the first one that matches wins, and `doctor`
 // reports when only a fallback matched (fix it before that breaks too). Stability order, following

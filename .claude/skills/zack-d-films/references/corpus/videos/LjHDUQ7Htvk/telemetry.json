@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "duration_sec": 49,
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "short_time_rewind_thought_experiment",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1,
+  "opening_spoken_line": "Imagine you find this weird, ancient-looking device.",
+  "hook_visual_trigger": "Dusty construction worker in blue hard hat stares intently at a strange oval object before camera cranes over shoulder to reveal glowing brass dial",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "but_therefore",
+  "ending_type": "question_cta",
+  "twist_at_pct": 56,
+  "rehook_timestamps_sec": [
+    10,
+    17.5,
+    27.6,
+    34.1,
+    41.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 9.96,
+      "pct_runtime": 20
+    },
+    {
+      "role": "setup",
+      "start_sec": 10,
+      "end_sec": 12.24,
+      "pct_runtime": 5
+    },
+    {
+      "role": "escalation",
+      "start_sec": 12.28,
+      "end_sec": 27.56,
+      "pct_runtime": 31
+    },
+    {
+      "role": "twist",
+      "start_sec": 27.6,
+      "end_sec": 41.56,
+      "pct_runtime": 29
+    },
+    {
+      "role": "cta",
+      "start_sec": 41.6,
+      "end_sec": 49,
+      "pct_runtime": 15
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 16,
+    "hidden_cut": 0,
+    "transition": 4,
+    "continuous": 5
+  },
+  "transition_types": [
+    "flash_bloom",
+    "flash_whip",
+    "flash_white"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 6,
+    "MCU": 6,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 10
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 9,
+    "eye": 12,
+    "low": 2,
+    "ground": 2
+  },
+  "camera_energy": "mixed",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "mixed",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "Imagine you find [POWERFUL OBJECT], SO at first you use it for [RELATABLE/FUNNY FIXES], BUT once you realize [PSYCHOLOGICAL CONSEQUENCE], you escalate to [CRIME/DANGER] -> click below to see what happens next.",
+  "secret_sauce_cues": [
+    "Hybrid live-action presenter + high-detail 3D CGI dramatization using a punch-in crop and 0.6s silent stare right before the climax",
+    "Consistent cyan flash-whip optical transitions anchored to the hero prop for every time-rewind jump",
+    "Graphic-anchored cut keeping a spinning 3D white curved arrow locked across shots directly onto the blurred end-screen YouTube video card"
+  ],
+  "weaknesses_or_drag": [
+    "Minor 3D continuity/settle flaws (victim shirt gains a white lower stripe mid-shot at f454; 4f blurry focus-settle at f488)",
+    "~3s of silent/ambient hold on the static YouTube card at the very end (00:46.0–00:49.0) after narration finishes"
+  ]
+}

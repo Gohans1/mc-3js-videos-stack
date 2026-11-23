@@ -1,0 +1,1804 @@
+{
+  "channel": "zack-d-films",
+  "generatedAt": "2026-11-22T21:42:16.471Z",
+  "catalogTelemetry": {
+    "snapshotDate": "2026-11-22",
+    "totalCollected": 1000,
+    "matureCount": 855,
+    "enrichedCount": 352,
+    "matureEnrichedCount": 316,
+    "transcriptCount": 85,
+    "matureTranscriptCount": 51,
+    "globalMatureMedianViews": 10000000,
+    "overallMature": {
+      "n": 855,
+      "medianViews": 10000000,
+      "medianOutlier": 0.99,
+      "durationSampleN": 316,
+      "medianDurationSec": 34,
+      "likeRateSampleN": 316,
+      "medianLikeRate": 3.31,
+      "wordCountSampleN": 51,
+      "wpmSampleN": 51,
+      "medianWordCount": 99,
+      "medianWpm": 166
+    },
+    "byTier": {
+      "winner": {
+        "n": 171,
+        "medianViews": 26557211,
+        "medianOutlier": 2.63,
+        "durationSampleN": 120,
+        "medianDurationSec": 37,
+        "likeRateSampleN": 120,
+        "medianLikeRate": 2.66,
+        "wordCountSampleN": 23,
+        "wpmSampleN": 23,
+        "medianWordCount": 103,
+        "medianWpm": 159.7
+      },
+      "median": {
+        "n": 513,
+        "medianViews": 10000000,
+        "medianOutlier": 0.99,
+        "durationSampleN": 91,
+        "medianDurationSec": 34,
+        "likeRateSampleN": 91,
+        "medianLikeRate": 3.42,
+        "wordCountSampleN": 16,
+        "wpmSampleN": 16,
+        "medianWordCount": 95,
+        "medianWpm": 171
+      },
+      "flop": {
+        "n": 171,
+        "medianViews": 4230977,
+        "medianOutlier": 0.43,
+        "durationSampleN": 105,
+        "medianDurationSec": 31,
+        "likeRateSampleN": 105,
+        "medianLikeRate": 3.75,
+        "wordCountSampleN": 12,
+        "wpmSampleN": 12,
+        "medianWordCount": 99,
+        "medianWpm": 173.7
+      }
+    }
+  },
+  "deepDna": {
+    "minedCount": 17,
+    "tierCounts": {
+      "winner": 7,
+      "median": 6,
+      "flop": 4,
+      "provisional": 0
+    },
+    "pacingAndTiming": {
+      "overall": {
+        "n": 17,
+        "medianOutlierRolling": 1.33,
+        "medianDurationSec": 37.2,
+        "medianOpeningShotSec": 1.7,
+        "medianRehookCount": 4,
+        "twistPresencePct": 88.2,
+        "wpmSampleN": 8,
+        "medianWpm": 167.4
+      },
+      "winner": {
+        "n": 7,
+        "medianOutlierRolling": 5.19,
+        "medianDurationSec": 36.9,
+        "medianOpeningShotSec": 2.04,
+        "medianRehookCount": 4,
+        "twistPresencePct": 71.4,
+        "wpmSampleN": 2,
+        "medianWpm": 160.1
+      },
+      "median": {
+        "n": 6,
+        "medianOutlierRolling": 0.97,
+        "medianDurationSec": 43.2,
+        "medianOpeningShotSec": 1.3,
+        "medianRehookCount": 5,
+        "twistPresencePct": 100,
+        "wpmSampleN": 4,
+        "medianWpm": 162.9
+      },
+      "flop": {
+        "n": 4,
+        "medianOutlierRolling": 0.32,
+        "medianDurationSec": 37,
+        "medianOpeningShotSec": 1.37,
+        "medianRehookCount": 4,
+        "twistPresencePct": 100,
+        "wpmSampleN": 2,
+        "medianWpm": 182.7
+      },
+      "medianTwistAtPct": 76,
+      "winnerMedianTwistAtPct": 76,
+      "flopMedianTwistAtPct": 71.5,
+      "medianEditCutsPerMin": 7.5,
+      "winnerMedianEditCutsPerMin": 4.9,
+      "flopMedianEditCutsPerMin": 8.1,
+      "medianTotalBeatsPerMin": 23.5
+    },
+    "distributions": {
+      "topicCategory": [
+        {
+          "key": "hypothetical_what_if",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 3.12,
+          "winnerCount": 2,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.14
+        },
+        {
+          "key": "other",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 4.69,
+          "winnerCount": 2,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "explainer_how_it_works",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 2.85,
+          "winnerCount": 1,
+          "medianCount": 1,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "history_weird_true_story",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 1.12,
+          "winnerCount": 0,
+          "medianCount": 2,
+          "flopCount": 0,
+          "winnerSharePct": 0,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "crime_disaster_accident",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 0.82,
+          "winnerCount": 0,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        },
+        {
+          "key": "everyday_object_secret",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 7.83,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "animals_nature_survival",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 4.46,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "pop_culture_media_tech",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 0.89,
+          "winnerCount": 0,
+          "medianCount": 1,
+          "flopCount": 0,
+          "winnerSharePct": 0,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "anatomy_health_body",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 0.33,
+          "winnerCount": 0,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        },
+        {
+          "key": "food_diy_and_hacks",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 0.24,
+          "winnerCount": 0,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        }
+      ],
+      "hookArchetype": [
+        {
+          "key": "hypothetical_premise",
+          "count": 5,
+          "pct": 29.4,
+          "medianOutlier": 4.92,
+          "winnerCount": 3,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 42.9,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.71
+        },
+        {
+          "key": "character_story_setup",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 1.36,
+          "winnerCount": 1,
+          "medianCount": 3,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "visual_pattern_interrupt",
+          "count": 3,
+          "pct": 17.6,
+          "medianOutlier": 0.79,
+          "winnerCount": 1,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "cold_open_crisis",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 2.38,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "imperative_how_to_step",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 1.84,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "shock_fact_stat",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 0.85,
+          "winnerCount": 0,
+          "medianCount": 1,
+          "flopCount": 0,
+          "winnerSharePct": 0,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        }
+      ],
+      "storyStructure": [
+        {
+          "key": "mechanism_step_by_step",
+          "count": 5,
+          "pct": 29.4,
+          "medianOutlier": 3.44,
+          "winnerCount": 3,
+          "medianCount": 0,
+          "flopCount": 2,
+          "winnerSharePct": 42.9,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.86
+        },
+        {
+          "key": "what_if_chain_reaction",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 3.12,
+          "winnerCount": 2,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.14
+        },
+        {
+          "key": "problem_solution_irony",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 2.88,
+          "winnerCount": 2,
+          "medianCount": 2,
+          "flopCount": 0,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "chronological_escalation_twist",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 1.11,
+          "winnerCount": 0,
+          "medianCount": 3,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        }
+      ],
+      "narrativeConnector": [
+        {
+          "key": "but_therefore",
+          "count": 12,
+          "pct": 70.6,
+          "medianOutlier": 0.97,
+          "winnerCount": 4,
+          "medianCount": 5,
+          "flopCount": 3,
+          "winnerSharePct": 57.1,
+          "flopSharePct": 75,
+          "winnerToFlopLift": 0.76
+        },
+        {
+          "key": "causal_chain",
+          "count": 3,
+          "pct": 17.6,
+          "medianOutlier": 4.46,
+          "winnerCount": 3,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 42.9,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "chronological_and_then",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 0.79,
+          "winnerCount": 0,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        }
+      ],
+      "endingType": [
+        {
+          "key": "ironic_twist_punchline",
+          "count": 8,
+          "pct": 47.1,
+          "medianOutlier": 1.19,
+          "winnerCount": 3,
+          "medianCount": 4,
+          "flopCount": 1,
+          "winnerSharePct": 42.9,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.71
+        },
+        {
+          "key": "satisfying_resolution",
+          "count": 7,
+          "pct": 41.2,
+          "medianOutlier": 1.39,
+          "winnerCount": 3,
+          "medianCount": 2,
+          "flopCount": 2,
+          "winnerSharePct": 42.9,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.86
+        },
+        {
+          "key": "question_cta",
+          "count": 2,
+          "pct": 11.8,
+          "medianOutlier": 4.05,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        }
+      ],
+      "cameraEnergy": [
+        {
+          "key": "smooth_damped_continuous",
+          "count": 8,
+          "pct": 47.1,
+          "medianOutlier": 2.17,
+          "winnerCount": 4,
+          "medianCount": 3,
+          "flopCount": 1,
+          "winnerSharePct": 57.1,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 2.29
+        },
+        {
+          "key": "mixed",
+          "count": 5,
+          "pct": 29.4,
+          "medianOutlier": 1.05,
+          "winnerCount": 2,
+          "medianCount": 1,
+          "flopCount": 2,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "snappy_whip_kinetic",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 1.36,
+          "winnerCount": 1,
+          "medianCount": 2,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        }
+      ],
+      "dominantLensFeel": [
+        {
+          "key": "wide",
+          "count": 10,
+          "pct": 58.8,
+          "medianOutlier": 1.19,
+          "winnerCount": 4,
+          "medianCount": 4,
+          "flopCount": 2,
+          "winnerSharePct": 57.1,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 1.14
+        },
+        {
+          "key": "normal",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 2.9,
+          "winnerCount": 2,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.14
+        },
+        {
+          "key": "mixed",
+          "count": 3,
+          "pct": 17.6,
+          "medianOutlier": 1.39,
+          "winnerCount": 1,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0.57
+        }
+      ],
+      "lightingStyle": [
+        {
+          "key": "mixed",
+          "count": 7,
+          "pct": 41.2,
+          "medianOutlier": 1.05,
+          "winnerCount": 1,
+          "medianCount": 4,
+          "flopCount": 2,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.29
+        },
+        {
+          "key": "clean_studio_soft",
+          "count": 6,
+          "pct": 35.3,
+          "medianOutlier": 4.69,
+          "winnerCount": 4,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 57.1,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 2.29
+        },
+        {
+          "key": "natural_daylight",
+          "count": 4,
+          "pct": 23.5,
+          "medianOutlier": 2.63,
+          "winnerCount": 2,
+          "medianCount": 1,
+          "flopCount": 1,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 1.14
+        }
+      ],
+      "easingEnergy": [
+        {
+          "key": "smooth_damped",
+          "count": 16,
+          "pct": 94.1,
+          "medianOutlier": 1.36,
+          "winnerCount": 7,
+          "medianCount": 6,
+          "flopCount": 3,
+          "winnerSharePct": 100,
+          "flopSharePct": 75,
+          "winnerToFlopLift": 1.33
+        },
+        {
+          "key": "snappy_overshoot",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 0.33,
+          "winnerCount": 0,
+          "medianCount": 0,
+          "flopCount": 1,
+          "winnerSharePct": 0,
+          "flopSharePct": 25,
+          "winnerToFlopLift": 0
+        }
+      ],
+      "audioBedStyle": [
+        {
+          "key": "shifting_bgm_plus_vo",
+          "count": 8,
+          "pct": 47.1,
+          "medianOutlier": 0.97,
+          "winnerCount": 2,
+          "medianCount": 4,
+          "flopCount": 2,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "continuous_bgm_plus_vo",
+          "count": 6,
+          "pct": 35.3,
+          "medianOutlier": 1.06,
+          "winnerCount": 2,
+          "medianCount": 2,
+          "flopCount": 2,
+          "winnerSharePct": 28.6,
+          "flopSharePct": 50,
+          "winnerToFlopLift": 0.57
+        },
+        {
+          "key": "music_sfx_no_vo",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 7.83,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "vo_only_dry",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 7.76,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        },
+        {
+          "key": "minimal_ambient_plus_vo",
+          "count": 1,
+          "pct": 5.9,
+          "medianOutlier": 4.46,
+          "winnerCount": 1,
+          "medianCount": 0,
+          "flopCount": 0,
+          "winnerSharePct": 14.3,
+          "flopSharePct": 0,
+          "winnerToFlopLift": null
+        }
+      ]
+    },
+    "crossTabs": {
+      "hookByTopic": {
+        "hypothetical_what_if": {
+          "n": 4,
+          "medianOutlier": 3.12,
+          "breakdown": [
+            {
+              "key": "hypothetical_premise",
+              "count": 4,
+              "pct": 100,
+              "medianOutlier": 3.12
+            }
+          ]
+        },
+        "crime_disaster_accident": {
+          "n": 2,
+          "medianOutlier": 0.82,
+          "breakdown": [
+            {
+              "key": "character_story_setup",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 1.33
+            },
+            {
+              "key": "cold_open_crisis",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.3
+            }
+          ]
+        },
+        "explainer_how_it_works": {
+          "n": 2,
+          "medianOutlier": 2.85,
+          "breakdown": [
+            {
+              "key": "hypothetical_premise",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 4.92
+            },
+            {
+              "key": "visual_pattern_interrupt",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.79
+            }
+          ]
+        },
+        "history_weird_true_story": {
+          "n": 2,
+          "medianOutlier": 1.12,
+          "breakdown": [
+            {
+              "key": "character_story_setup",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 1.39
+            },
+            {
+              "key": "shock_fact_stat",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.85
+            }
+          ]
+        },
+        "other": {
+          "n": 2,
+          "medianOutlier": 4.69,
+          "breakdown": [
+            {
+              "key": "character_story_setup",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 5.94
+            },
+            {
+              "key": "imperative_how_to_step",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 3.44
+            }
+          ]
+        },
+        "anatomy_health_body": {
+          "n": 1,
+          "medianOutlier": 0.33,
+          "breakdown": [
+            {
+              "key": "visual_pattern_interrupt",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.33
+            }
+          ]
+        },
+        "animals_nature_survival": {
+          "n": 1,
+          "medianOutlier": 4.46,
+          "breakdown": [
+            {
+              "key": "cold_open_crisis",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 4.46
+            }
+          ]
+        },
+        "everyday_object_secret": {
+          "n": 1,
+          "medianOutlier": 7.83,
+          "breakdown": [
+            {
+              "key": "visual_pattern_interrupt",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 7.83
+            }
+          ]
+        },
+        "food_diy_and_hacks": {
+          "n": 1,
+          "medianOutlier": 0.24,
+          "breakdown": [
+            {
+              "key": "imperative_how_to_step",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.24
+            }
+          ]
+        },
+        "pop_culture_media_tech": {
+          "n": 1,
+          "medianOutlier": 0.89,
+          "breakdown": [
+            {
+              "key": "character_story_setup",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.89
+            }
+          ]
+        }
+      },
+      "storyByTopic": {
+        "hypothetical_what_if": {
+          "n": 4,
+          "medianOutlier": 3.12,
+          "breakdown": [
+            {
+              "key": "what_if_chain_reaction",
+              "count": 4,
+              "pct": 100,
+              "medianOutlier": 3.12
+            }
+          ]
+        },
+        "crime_disaster_accident": {
+          "n": 2,
+          "medianOutlier": 0.82,
+          "breakdown": [
+            {
+              "key": "chronological_escalation_twist",
+              "count": 2,
+              "pct": 100,
+              "medianOutlier": 0.82
+            }
+          ]
+        },
+        "explainer_how_it_works": {
+          "n": 2,
+          "medianOutlier": 2.85,
+          "breakdown": [
+            {
+              "key": "problem_solution_irony",
+              "count": 2,
+              "pct": 100,
+              "medianOutlier": 2.85
+            }
+          ]
+        },
+        "history_weird_true_story": {
+          "n": 2,
+          "medianOutlier": 1.12,
+          "breakdown": [
+            {
+              "key": "chronological_escalation_twist",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 1.39
+            },
+            {
+              "key": "problem_solution_irony",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.85
+            }
+          ]
+        },
+        "other": {
+          "n": 2,
+          "medianOutlier": 4.69,
+          "breakdown": [
+            {
+              "key": "problem_solution_irony",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 5.94
+            },
+            {
+              "key": "mechanism_step_by_step",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 3.44
+            }
+          ]
+        },
+        "anatomy_health_body": {
+          "n": 1,
+          "medianOutlier": 0.33,
+          "breakdown": [
+            {
+              "key": "mechanism_step_by_step",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.33
+            }
+          ]
+        },
+        "animals_nature_survival": {
+          "n": 1,
+          "medianOutlier": 4.46,
+          "breakdown": [
+            {
+              "key": "mechanism_step_by_step",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 4.46
+            }
+          ]
+        },
+        "everyday_object_secret": {
+          "n": 1,
+          "medianOutlier": 7.83,
+          "breakdown": [
+            {
+              "key": "mechanism_step_by_step",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 7.83
+            }
+          ]
+        },
+        "food_diy_and_hacks": {
+          "n": 1,
+          "medianOutlier": 0.24,
+          "breakdown": [
+            {
+              "key": "mechanism_step_by_step",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.24
+            }
+          ]
+        },
+        "pop_culture_media_tech": {
+          "n": 1,
+          "medianOutlier": 0.89,
+          "breakdown": [
+            {
+              "key": "chronological_escalation_twist",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.89
+            }
+          ]
+        }
+      },
+      "endingByTopic": {
+        "hypothetical_what_if": {
+          "n": 4,
+          "medianOutlier": 3.12,
+          "breakdown": [
+            {
+              "key": "question_cta",
+              "count": 2,
+              "pct": 50,
+              "medianOutlier": 4.05
+            },
+            {
+              "key": "ironic_twist_punchline",
+              "count": 2,
+              "pct": 50,
+              "medianOutlier": 3.12
+            }
+          ]
+        },
+        "crime_disaster_accident": {
+          "n": 2,
+          "medianOutlier": 0.82,
+          "breakdown": [
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 1.33
+            },
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.3
+            }
+          ]
+        },
+        "explainer_how_it_works": {
+          "n": 2,
+          "medianOutlier": 2.85,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 4.92
+            },
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.79
+            }
+          ]
+        },
+        "history_weird_true_story": {
+          "n": 2,
+          "medianOutlier": 1.12,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 1.39
+            },
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 0.85
+            }
+          ]
+        },
+        "other": {
+          "n": 2,
+          "medianOutlier": 4.69,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 5.94
+            },
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 50,
+              "medianOutlier": 3.44
+            }
+          ]
+        },
+        "anatomy_health_body": {
+          "n": 1,
+          "medianOutlier": 0.33,
+          "breakdown": [
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.33
+            }
+          ]
+        },
+        "animals_nature_survival": {
+          "n": 1,
+          "medianOutlier": 4.46,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 4.46
+            }
+          ]
+        },
+        "everyday_object_secret": {
+          "n": 1,
+          "medianOutlier": 7.83,
+          "breakdown": [
+            {
+              "key": "ironic_twist_punchline",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 7.83
+            }
+          ]
+        },
+        "food_diy_and_hacks": {
+          "n": 1,
+          "medianOutlier": 0.24,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.24
+            }
+          ]
+        },
+        "pop_culture_media_tech": {
+          "n": 1,
+          "medianOutlier": 0.89,
+          "breakdown": [
+            {
+              "key": "satisfying_resolution",
+              "count": 1,
+              "pct": 100,
+              "medianOutlier": 0.89
+            }
+          ]
+        }
+      }
+    },
+    "beatBudgets": [
+      {
+        "role": "hook",
+        "presentInVideos": 17,
+        "presencePct": 100,
+        "medianPctWhenPresent": 12
+      },
+      {
+        "role": "setup",
+        "presentInVideos": 16,
+        "presencePct": 94.1,
+        "medianPctWhenPresent": 15
+      },
+      {
+        "role": "escalation",
+        "presentInVideos": 17,
+        "presencePct": 100,
+        "medianPctWhenPresent": 27
+      },
+      {
+        "role": "explanation_value",
+        "presentInVideos": 8,
+        "presencePct": 47.1,
+        "medianPctWhenPresent": 21
+      },
+      {
+        "role": "visual_proof",
+        "presentInVideos": 12,
+        "presencePct": 70.6,
+        "medianPctWhenPresent": 13.5
+      },
+      {
+        "role": "twist",
+        "presentInVideos": 15,
+        "presencePct": 88.2,
+        "medianPctWhenPresent": 12
+      },
+      {
+        "role": "resolution",
+        "presentInVideos": 11,
+        "presencePct": 64.7,
+        "medianPctWhenPresent": 14
+      },
+      {
+        "role": "cta",
+        "presentInVideos": 2,
+        "presencePct": 11.8,
+        "medianPctWhenPresent": 8.5
+      }
+    ],
+    "boundaries": {
+      "totalNonOpening": 294,
+      "counts": {
+        "hard_cut": 25,
+        "hidden_cut": 19,
+        "transition": 60,
+        "continuous": 190
+      },
+      "pcts": {
+        "hard_cut": 8.5,
+        "hidden_cut": 6.5,
+        "transition": 20.4,
+        "continuous": 64.6
+      },
+      "transitionTypes": [
+        {
+          "type": "cross_dissolve",
+          "videos": 10,
+          "videoPct": 58.8,
+          "winnerPct": 71.4,
+          "flopPct": 0
+        },
+        {
+          "type": "card_flip",
+          "videos": 6,
+          "videoPct": 35.3,
+          "winnerPct": 28.6,
+          "flopPct": 25
+        },
+        {
+          "type": "wipe_up",
+          "videos": 2,
+          "videoPct": 11.8,
+          "winnerPct": 14.3,
+          "flopPct": 0
+        },
+        {
+          "type": "flash_bloom",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 25
+        },
+        {
+          "type": "flash_whip",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 25
+        },
+        {
+          "type": "flash_white",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 25
+        },
+        {
+          "type": "morph_dissolve",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 0
+        },
+        {
+          "type": "object_wipe",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 0
+        },
+        {
+          "type": "push_up",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 14.3,
+          "flopPct": 0
+        },
+        {
+          "type": "push_up_dissolve",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 14.3,
+          "flopPct": 0
+        },
+        {
+          "type": "radial_zoom_dissolve",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 0
+        },
+        {
+          "type": "vertical_push",
+          "videos": 1,
+          "videoPct": 5.9,
+          "winnerPct": 0,
+          "flopPct": 0
+        }
+      ]
+    },
+    "framing": {
+      "totalShots": 311,
+      "shotScalePcts": {
+        "EW": 2.6,
+        "W": 15.8,
+        "M": 37.3,
+        "MCU": 19,
+        "CU": 14.1,
+        "ECU": 1.6,
+        "INSERT": 9.6
+      },
+      "cameraAnglePcts": {
+        "aerial": 1.6,
+        "overhead": 3.5,
+        "high": 25.1,
+        "eye": 55.3,
+        "low": 8.4,
+        "ground": 6.1
+      }
+    },
+    "craftSignals": [
+      {
+        "signal": "uses_motion_blur",
+        "count": 17,
+        "pct": 100,
+        "winnerPct": 100,
+        "flopPct": 100,
+        "winnerMinusFlopPp": 0
+      },
+      {
+        "signal": "has_emissive_highlight_pulse",
+        "count": 16,
+        "pct": 94.1,
+        "winnerPct": 100,
+        "flopPct": 75,
+        "winnerMinusFlopPp": 25
+      },
+      {
+        "signal": "uses_shallow_dof",
+        "count": 16,
+        "pct": 94.1,
+        "winnerPct": 100,
+        "flopPct": 100,
+        "winnerMinusFlopPp": 0
+      },
+      {
+        "signal": "has_diegetic_text_or_labels",
+        "count": 14,
+        "pct": 82.4,
+        "winnerPct": 85.7,
+        "flopPct": 50,
+        "winnerMinusFlopPp": 35.7
+      },
+      {
+        "signal": "has_motion_graphics_or_arrows",
+        "count": 12,
+        "pct": 70.6,
+        "winnerPct": 85.7,
+        "flopPct": 50,
+        "winnerMinusFlopPp": 35.7
+      },
+      {
+        "signal": "has_cutaway_or_xray",
+        "count": 10,
+        "pct": 58.8,
+        "winnerPct": 71.4,
+        "flopPct": 50,
+        "winnerMinusFlopPp": 21.4
+      },
+      {
+        "signal": "has_time_remap_or_hit_stop",
+        "count": 10,
+        "pct": 58.8,
+        "winnerPct": 57.1,
+        "flopPct": 25,
+        "winnerMinusFlopPp": 32.1
+      },
+      {
+        "signal": "has_jl_cut",
+        "count": 6,
+        "pct": 35.3,
+        "winnerPct": 0,
+        "flopPct": 50,
+        "winnerMinusFlopPp": -50
+      },
+      {
+        "signal": "uses_backdrop_vignette",
+        "count": 6,
+        "pct": 35.3,
+        "winnerPct": 42.9,
+        "flopPct": 50,
+        "winnerMinusFlopPp": -7.1
+      },
+      {
+        "signal": "has_pre_impact_silence",
+        "count": 0,
+        "pct": 0,
+        "winnerPct": 0,
+        "flopPct": 0,
+        "winnerMinusFlopPp": 0
+      },
+      {
+        "signal": "has_seamless_loop",
+        "count": 0,
+        "pct": 0,
+        "winnerPct": 0,
+        "flopPct": 0,
+        "winnerMinusFlopPp": 0
+      }
+    ],
+    "exemplars": [
+      {
+        "id": "0BZ1C83I2R4",
+        "title": "How Electrical Outlets Work 🤔",
+        "tier": "winner",
+        "views": 78287032,
+        "outlierRolling": 7.83,
+        "durationSec": 24.2,
+        "wpm": null,
+        "topic": "everyday_object_secret",
+        "topicSublabel": "wall_outlet_hamster_power_parody",
+        "hook": "visual_pattern_interrupt",
+        "openingShotSec": 2,
+        "openingLine": "Get up on that wheel and get to spinnin'!",
+        "story": "mechanism_step_by_step",
+        "connector": "causal_chain",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 90,
+        "scriptTemplate": "[MUNDANE EVERYDAY ACTION] triggers an unbroken cutaway into [ABSURD MINIATURE WORKFORCE] -> SO [CHAIN-REACTION MECHANICAL/X-RAY ESCALATION] -> TWIST [ALL THAT EFFORT YIELDS ONLY TINY RESULT + BRAND PUNCHLINE]",
+        "secretSauce": [
+          "Zero-cut architectural drywall slice penetration (0.5s) and exit (18.9s) preserving full 3D spatial continuity across exterior and interior worlds",
+          "Temporary holographic blue X-ray machinery overlay (12.6-15.9s) paired with a shallow-DOF ground-level plasma bolt chase along the power cord (19.3-21.5s)",
+          "Mood lighting shift from bright exterior (0-0.5s) to dark cool-blue low-key room with wall spotlight cone (18.9-24.2s) so glowing electricity and branded UI pop"
+        ],
+        "weaknesses": [
+          "Brief 3.5s wheel spin-up (00:09.0-00:12.5) slows visual novelty slightly before the X-ray cutaway activates, followed by a 2.2s static outro logo hold"
+        ]
+      },
+      {
+        "id": "SGgYDfeHYXA",
+        "title": "Flying A Plane With No Pilot 😱",
+        "tier": "winner",
+        "views": 72157139,
+        "outlierRolling": 7.76,
+        "durationSec": 73.24,
+        "wpm": null,
+        "topic": "hypothetical_what_if",
+        "topicSublabel": "unconscious_pilots_plane_survival",
+        "hook": "hypothetical_premise",
+        "openingShotSec": 2.035,
+        "openingLine": "Imagine you wake up and everyone on your flight is unconscious.",
+        "story": "what_if_chain_reaction",
+        "connector": "but_therefore",
+        "ending": "question_cta",
+        "twistAtPct": 68,
+        "scriptTemplate": "[IMAGINE SCENARIO] looks safe at first, SO [FALSE REASSURANCE] -> BUT [CRISIS DISCOVERY] -> you try [OBVIOUS FIX], BUT [ACCIDENTAL ESCALATION] -> after [TIME-LAPSE STRUGGLE] you reach [FALSE VICTORY], BUT [FINAL REVERSAL] -> ending on [SURVIVAL DILEMMA + 'WHAT DO YOU DO?']",
+        "secretSauce": [
+          "Near-unbroken 1st-person POV ride (only 1 cross-dissolve in 73.2s) stitched by directional-blur whip pans and windshield zoom-outs",
+          "Color-coded emissive body/prop outline pulses (red = threat/incapacitation, yellow-green = interactables) paired with X-ray silhouettes and diegetic cockpit HUD callouts",
+          "Relentless 'But/Therefore' false-victory reversals peaking with a 180-degree whip-around to the protagonist's blinking face for comment engagement"
+        ],
+        "weaknesses": [
+          "Cockpit display continuity errors: altitude readout jumps abruptly from 11303 FT to 619 FT (f1599->f1600) and dual screens briefly conflict (2555 FT vs 9000 FT at f1742)",
+          "Repeated passenger 3D character asset visible in adjacent cabin rows (f71-f74)",
+          "Brief mid-clip pacing slowdown during the 00:57-01:04 landing control options hover"
+        ]
+      },
+      {
+        "id": "7i6ok0llYUc",
+        "title": "The Simple Experiment About Happiness ☺️",
+        "tier": "winner",
+        "views": 58491641,
+        "outlierRolling": 5.94,
+        "durationSec": 36.87,
+        "wpm": null,
+        "topic": "other",
+        "topicSublabel": "social_experiment_moral_parable",
+        "hook": "character_story_setup",
+        "openingShotSec": 4.504,
+        "openingLine": "She handed them balloons and told them to write their name on it before throwing it into the hallway.",
+        "story": "problem_solution_irony",
+        "connector": "but_therefore",
+        "ending": "satisfying_resolution",
+        "twistAtPct": 49,
+        "scriptTemplate": "[PROTAGONIST] tries to achieve [PERSONAL GOAL] alone, BUT [CHAOS/FAILURE] proves self-focus fails -> SO [MENTOR/TWIST] changes the rule to helping [OTHERS] first -> THEREFORE [PROTAGONIST] effortlessly gets [OWN GOAL] in half the time.",
+        "secretSauce": [
+          "Meta-branding Easter eggs woven organically into 3D props and wardrobe (Zack D. Films shirt/clock, Zack D. balloon)",
+          "Emissive prop glow sweeps and text flashes synced directly to spoken keywords (balloons, name, own balloon)",
+          "Floating 3D spatial timers paired with motion-blurred timelapses to contrast 5-minute failure vs 2-minute cooperation"
+        ],
+        "weaknesses": [
+          "Minor CG hand-to-balloon spacing/clipping during exchanges (f760-f802, f1030-f1060) and stiff crowd idle poses (f847-f930)",
+          "Slight pop-in transition snapping from rapid timelapse motion into static lined-up crowd pose (f844-f847)"
+        ]
+      },
+      {
+        "id": "320fjAdEboQ",
+        "title": "Turning Your Yard Into A War Trench 😨",
+        "tier": "winner",
+        "views": 50385628,
+        "outlierRolling": 5.19,
+        "durationSec": 37.5,
+        "wpm": null,
+        "topic": "hypothetical_what_if",
+        "topicSublabel": "erosion_and_desire_path_escalation",
+        "hook": "hypothetical_premise",
+        "openingShotSec": 3.203,
+        "openingLine": "If you walk across the exact same line in your yard every day, your feet slowly crush the grass and compact the soil, causing the strip to turn bare and hard over time.",
+        "story": "what_if_chain_reaction",
+        "connector": "but_therefore",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 92,
+        "scriptTemplate": "If you repeat [ORDINARY ACTION], it causes [SUBSURFACE/HIDDEN DAMAGE]; when [ENVIRONMENTAL TRIGGER] hits, [BLOCKED MECHANISM] forces [ESCALATING EROSION] over [TIME SPAN] until it creates an absurd [GENRE-FLIP STRUCTURE] perfect for [SHOCKING SCENARIO].",
+        "secretSauce": [
+          "Zero-hard-cut whip-smear and fluid-occlusion stitching (water engulfment and crash-zooms) bridge multi-decade time jumps seamlessly",
+          "Character aging (boy in shorts to adult in jeans) plus 'ZACK D. FILMS' chest branding visually proves decades passing without narration drag",
+          "Escalating visual depth proof: subterranean pebble cutaway -> chest-deep trench walk -> animated 1-6 FT ruler -> pop-in war props"
+        ],
+        "weaknesses": [
+          "Fast 3D camera whips trigger heavy reference macroblocking smears during rapid scale dives (f150-f156, f708-f716)"
+        ]
+      },
+      {
+        "id": "UgP7_6_i1J4",
+        "title": "Why Disney's Castle Looks So Tall 🤔",
+        "tier": "winner",
+        "views": 45349656,
+        "outlierRolling": 4.92,
+        "durationSec": 35.536,
+        "wpm": null,
+        "topic": "explainer_how_it_works",
+        "topicSublabel": "forced_perspective_castle",
+        "hook": "hypothetical_premise",
+        "openingShotSec": 1.335,
+        "openingLine": "If they built the castle over 200 feet,",
+        "story": "problem_solution_irony",
+        "connector": "but_therefore",
+        "ending": "satisfying_resolution",
+        "twistAtPct": null,
+        "scriptTemplate": "If [ICONIC LANDMARK] crossed [REGULATORY THRESHOLD], it would need [UGLY SAFETY FEATURE] that ruins [EXPERIENCE] -> SO [ARCHITECT] used [PERCEPTUAL TRICK] -> WHICH MAKES IT LOOK [IMPRESSIVE TRAIT] WHILE STAYING UNDER [LIMIT].",
+        "secretSauce": [
+          "Screen-locked 3D measurement bar carried vertically up the tower shaft (6 Feet -> 4 Feet window shrinkage, f573-f600)",
+          "Translucent ghost-silhouette height overlay followed by skull X-ray thought projection inside firing synapses (f754-f883)"
+        ],
+        "weaknesses": [
+          "Background park extras freeze into slightly stiff idle poses during wide night pull-back (f365-f413)",
+          "Lower-balcony worker holds static kneel for ~0.7s while waiting for the 6 Feet counter animation (f546-f572)"
+        ]
+      },
+      {
+        "id": "CRGWDiIgMZ4",
+        "title": "How Cookiecutter Sharks Bite Whales 😨",
+        "tier": "winner",
+        "views": 62487878,
+        "outlierRolling": 4.46,
+        "durationSec": 27.63,
+        "wpm": 162.9,
+        "topic": "animals_nature_survival",
+        "topicSublabel": "cookiecutter_shark_feeding",
+        "hook": "cold_open_crisis",
+        "openingShotSec": 1.502,
+        "openingLine": "As it bites the whale, small upper teeth sink into the flesh, while huge lower teeth drive in like a curved blade.",
+        "story": "mechanism_step_by_step",
+        "connector": "causal_chain",
+        "ending": "satisfying_resolution",
+        "twistAtPct": null,
+        "scriptTemplate": "Mid-action cold open on [CREATURE/MECHANISM ACTION] -> step-by-step macro breakdown ([PART 1] -> [PART 2] -> [TWIST/RESULT]) -> visual proof of [SURVIVAL/OUTCOME] -> causal 'WHY' ([SIZE/CONSTRAINT LIMITATION], SO [CLEVER EVOLUTIONARY ADAPTATION])",
+        "secretSauce": [
+          "Continuous [NO CUT] macro-to-wide 3D camera choreography spanning 9 seamless reframes before a single graphic cross-dissolve",
+          "Brief 0.4-0.6s golden emissive outline pulses synced to spoken anatomical nouns (teeth, flesh plug) to guide focus without text clutter",
+          "Graphic cross-dissolve anchoring the round wound crater onto the full-body size reveal, plus foreground-masked alpha stage clearing"
+        ],
+        "weaknesses": [
+          "Brief white specular/alpha shimmer glitch pulsing near the shark's tail fin during solo swimming (f560-f591)",
+          "Noticeable background alpha fade-out of the squid and extra sharks behind the foreground pass (f764-f768) feels slightly game-engine-like"
+        ]
+      },
+      {
+        "id": "OXRzmyOMKVw",
+        "title": "How To Trick The Seeker In Hide And Seek 😏",
+        "tier": "winner",
+        "views": 45234785,
+        "outlierRolling": 3.44,
+        "durationSec": 58.158,
+        "wpm": 157.2,
+        "topic": "other",
+        "topicSublabel": "hide_and_seek_psychology_hack",
+        "hook": "imperative_how_to_step",
+        "openingShotSec": 2.669,
+        "openingLine": "Before playing hide and seek, identify who is the best hider.",
+        "story": "mechanism_step_by_step",
+        "connector": "causal_chain",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 76,
+        "scriptTemplate": "Before [COMPETITIVE GAME], identify the best player -> secretly sabotage [EVERYDAY PROP] to plant a delayed trap -> manipulate [OPPONENT'S MENTAL MAP] -> when only you two remain, trigger the trap to cause an emotional meltdown and steal the win.",
+        "secretSauce": [
+          "Ghost-trail speed-skipping (f571-f586, f1009-f1027) compresses hallway traversal inside static/panning shots without jarring cuts",
+          "Bookended floating gold crown transfer (f105 -> f1702) plus organic blobby thought bubbles and X-ray architectural cutaways visualize invisible mind games",
+          "Zero hard cuts across 58s: every scene change is masked via 3D card flips, push-ups, cross-dissolves, or whip-blur swaps"
+        ],
+        "weaknesses": [
+          "Blanket cutaway hold (f649-f666) and clipboard hover after crossing Anna (f1244-f1278) linger slightly while waiting for VO phrasing"
+        ]
+      },
+      {
+        "id": "Uzo10EjKC6w",
+        "title": "The Dog Who Guarded The Grave 😢",
+        "tier": "median",
+        "views": 12635441,
+        "outlierRolling": 1.39,
+        "durationSec": 53.854,
+        "wpm": null,
+        "topic": "history_weird_true_story",
+        "topicSublabel": "loyal_dog_historical_story",
+        "hook": "character_story_setup",
+        "openingShotSec": 0.801,
+        "openingLine": "He got a puppy so he wouldn't be alone.",
+        "story": "chronological_escalation_twist",
+        "connector": "but_therefore",
+        "ending": "satisfying_resolution",
+        "twistAtPct": 68,
+        "scriptTemplate": "[PROTAGONIST] adopts/starts [HUMBLE COMPANION/ROUTINE] so [EMOTIONAL NEED], BUT [SUDDEN LOSS/CRISIS] -> SO [UNWAVERING DEVOTION DESPITE HARDSHIP] -> TWIST [NEW EXTERNAL THREAT/LAW] -> RESOLUTION [UNEXPECTED RESCUE & ETERNAL LEGACY]",
+        "secretSauce": [
+          "Zero-hard-cut spatial storytelling: chains scenes via whip-tilts/whip-pans inside one unified 3D environment and motion-blur pose/prop Hidden Cuts",
+          "Accelerated environmental sun/cloud/rain time-lapses over static characters paired with diegetic 3D time props (floating spiral calendars, newspaper print, glowing cage placard)"
+        ],
+        "weaknesses": [
+          "Historical prop continuity mismatch: gravestone reads John Traill (1835-1897, Dunfermline) while newspaper reads May 17, 1896 (Sergeant John C. Whitman, Oak Hill) and the Mayor hands modern-style US $100 bills with a creator portrait",
+          "Visible walk-cycle treadmill cropping before pull-back in S05a and hard-edged triangular lantern beam geometry"
+        ]
+      },
+      {
+        "id": "epP7TB8n3ZU",
+        "title": "He Used Kitchen Supplies To Escape Prison 😬",
+        "tier": "median",
+        "views": 14190760,
+        "outlierRolling": 1.33,
+        "durationSec": 27.9,
+        "wpm": 177.9,
+        "topic": "crime_disaster_accident",
+        "topicSublabel": "diy_prison_escape",
+        "hook": "character_story_setup",
+        "openingShotSec": 0.701,
+        "openingLine": "He stole Sharpies from the prison kitchen and colored in his uniform, leaving the word police written on the back.",
+        "story": "chronological_escalation_twist",
+        "connector": "chronological_and_then",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 88,
+        "scriptTemplate": "[PROTAGONIST] steals/takes [MUNDANE EVERYDAY ITEMS] to DIY [AUDACIOUS FAKE DISGUISE/TOOL] -> uses it to bluff [AUTHORITY GATEKEEPER] and succeeds -> UNTIL [UNACCOUNTED-FOR FLAW/TRACKER] exposes them [TIME] later.",
+        "secretSauce": [
+          "Zero hard cuts: connects tactile prop crafting to wide action via 3D card flips, radial zoom-dissolves, and 160-180 degree smeared whip-orbits",
+          "In-shot seamless environment morph (prison yard asphalt turning into grass while pine trees drop from sky) plus brief neon-yellow emissive outline pulses on key props/barriers",
+          "Diegetic 3D floor-projected channel watermark ('ZACK D FILMS') integrated naturally into scene lighting"
+        ],
+        "weaknesses": []
+      },
+      {
+        "id": "tFbYLBxBB00",
+        "title": "What Happens If You Eat Too Many Bananas 😱",
+        "tier": "median",
+        "views": 10436918,
+        "outlierRolling": 1.05,
+        "durationSec": 47.8,
+        "wpm": null,
+        "topic": "hypothetical_what_if",
+        "topicSublabel": "banana_radiation_threshold",
+        "hook": "hypothetical_premise",
+        "openingShotSec": 1.702,
+        "openingLine": "If you were forced to eat a banana, then another, and another",
+        "story": "what_if_chain_reaction",
+        "connector": "but_therefore",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 83,
+        "scriptTemplate": "If you [EXTREME ACTION], [FIRST CONSEQUENCE] -> BUT if you avoided that, [MYTH] -> THAT'S BECAUSE [HIDDEN MECHANISM], BUT [SCALE COMPARISON] -> EVEN [HISTORICAL BENCHMARK] -> SO you would need [ABSURD THRESHOLD] -> BUT twist: [IRONIC REAL CAUSE OF FAILURE]",
+        "secretSauce": [
+          "Zero-hard-cut spatial continuity using continuous 3D camera flights, VHS time-reverse rewinds, and occlusion/whip-pan hidden cuts across sets",
+          "Gamified multiplier callout badges (1x -> 1,000,000x -> 35,000,000x) paired with emissive cyan/green rim pulses to make abstract science math intuitive",
+          "Diegetic channel branding printed onto props plus a post-punchline slapstick background slip gag in a locked ground-level tableau"
+        ],
+        "weaknesses": []
+      },
+      {
+        "id": "rPWvvcttpmk",
+        "title": "He Raced His Dead Dad In A Video Game 😢",
+        "tier": "median",
+        "views": 13643700,
+        "outlierRolling": 0.89,
+        "durationSec": 55.1,
+        "wpm": 153.8,
+        "topic": "pop_culture_media_tech",
+        "topicSublabel": "gaming_ghost_car_tribute",
+        "hook": "character_story_setup",
+        "openingShotSec": 2.436,
+        "openingLine": "He played the racing game with his dad over and over again, but he could never beat him.",
+        "story": "chronological_escalation_twist",
+        "connector": "but_therefore",
+        "ending": "satisfying_resolution",
+        "twistAtPct": 88,
+        "scriptTemplate": "[SHARED RITUAL] seemed endless, BUT [TRAGEDY] forced it away -> UNTIL [TIME-LAPSE REDISCOVERY] revealed [PRESERVED MEMORY] -> SO [PROTAGONIST] nearly overcame it, TWIST [INTENTIONAL SACRIFICE] keeps [EMOTIONAL BOND] alive.",
+        "secretSauce": [
+          "In-camera off-frame prop aging: pans down onto lower shelf for procedural cobweb/dust time-lapse while swapping CRT to flatscreen TV off-frame before booming up",
+          "Foreground pass-by occlusion hidden cuts (TV cabinet and couch backrest) paired with pose/UI graphic-matched cross-dissolves between reality and game world",
+          "Diegetic channel branding easter-eggs (ZACK D FILMS on dad's t-shirt and race finish gantry) and emotional ghost/hologram shader overlays"
+        ],
+        "weaknesses": []
+      },
+      {
+        "id": "fUmofQCc_4s",
+        "title": "Why Companies Shortened Lightbulb Lifespans 🤨",
+        "tier": "median",
+        "views": 11852609,
+        "outlierRolling": 0.85,
+        "durationSec": 38.6,
+        "wpm": 152.3,
+        "topic": "history_weird_true_story",
+        "topicSublabel": "phoebus_lightbulb_cartel",
+        "hook": "shock_fact_stat",
+        "openingShotSec": 0.9,
+        "openingLine": "They built a light bulb that lasted 2,000 hours,",
+        "story": "problem_solution_irony",
+        "connector": "but_therefore",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 43,
+        "scriptTemplate": "[BREAKTHROUGH INVENTION] solved [NEED] for [IMPRESSIVE STAT], BUT [PERVERSE ECONOMIC INCENTIVE] -> SO [POWERFUL GROUP] secretly rigged [PRODUCT] to [SABOTAGE] -> AND when [REBEL] tried [BETTER ALTERNATIVE], [GROUP] crushed them to protect [IRONIC PROFIT MOTIVE].",
+        "secretSauce": [
+          "Unbroken 3D spline camera journeys bridge multiple story beats via orbits, window pull-outs, and 1-frame snap-appearances (f427) paired with crisp action/graphic match cuts (f26->f28, f836->f837).",
+          "Translucent cyan X-ray cutaway (f741-f793) layers internal mechanical failure directly over the character's shocked facial reaction in a single deep-focus frame."
+        ],
+        "weaknesses": [
+          "Stiff character locomotion and mannequin-like pointing/walking cycles during store confrontation (f837-f987)."
+        ]
+      },
+      {
+        "id": "HF1K91wSTTc",
+        "title": "Training Sea Lions To Protect Navy Waters 🤔",
+        "tier": "median",
+        "views": 9094360,
+        "outlierRolling": 0.79,
+        "durationSec": 30.36,
+        "wpm": 172,
+        "topic": "explainer_how_it_works",
+        "topicSublabel": "navy_marine_mammal_program",
+        "hook": "visual_pattern_interrupt",
+        "openingShotSec": 3.37,
+        "openingLine": "The sea lion will snap a clamp onto the diver's leg before swimming away.",
+        "story": "problem_solution_irony",
+        "connector": "but_therefore",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 82,
+        "scriptTemplate": "Show [UNEXPECTED MECHANISM IN ACTION] -> explain [HOW IT SOLVES PROBLEM], BUT [FIRST ATTEMPT FAILED DUE TO LIMIT] -> SO [BETTER SOLUTION WAS USED], BUT [COMEDIC FLAW RUINS ADVANTAGE].",
+        "secretSauce": [
+          "Continuous 3D water-surface camera breaches and foreground pass-by subject handoffs avoiding hard cuts",
+          "Emissive red highlight pulses on props/limbs plus diegetic 3D infographic props (72F thermometer, Zs) and hidden background sight gags"
+        ],
+        "weaknesses": []
+      },
+      {
+        "id": "LjHDUQ7Htvk",
+        "title": "What If You Could Undo Anything?",
+        "tier": "flop",
+        "views": 2785351,
+        "outlierRolling": 0.35,
+        "durationSec": 49,
+        "wpm": null,
+        "topic": "hypothetical_what_if",
+        "topicSublabel": "short_time_rewind_thought_experiment",
+        "hook": "hypothetical_premise",
+        "openingShotSec": 1,
+        "openingLine": "Imagine you find this weird, ancient-looking device.",
+        "story": "what_if_chain_reaction",
+        "connector": "but_therefore",
+        "ending": "question_cta",
+        "twistAtPct": 56,
+        "scriptTemplate": "Imagine you find [POWERFUL OBJECT], SO at first you use it for [RELATABLE/FUNNY FIXES], BUT once you realize [PSYCHOLOGICAL CONSEQUENCE], you escalate to [CRIME/DANGER] -> click below to see what happens next.",
+        "secretSauce": [
+          "Hybrid live-action presenter + high-detail 3D CGI dramatization using a punch-in crop and 0.6s silent stare right before the climax",
+          "Consistent cyan flash-whip optical transitions anchored to the hero prop for every time-rewind jump",
+          "Graphic-anchored cut keeping a spinning 3D white curved arrow locked across shots directly onto the blurred end-screen YouTube video card"
+        ],
+        "weaknesses": [
+          "Minor 3D continuity/settle flaws (victim shirt gains a white lower stripe mid-shot at f454; 4f blurry focus-settle at f488)",
+          "~3s of silent/ambient hold on the static YouTube card at the very end (00:46.0–00:49.0) after narration finishes"
+        ]
+      },
+      {
+        "id": "QXEr924US38",
+        "title": "Why Gambling Becomes Addictive 🤔",
+        "tier": "flop",
+        "views": 2291481,
+        "outlierRolling": 0.33,
+        "durationSec": 37.2,
+        "wpm": null,
+        "topic": "anatomy_health_body",
+        "topicSublabel": "gambling_brain_dopamine_loop",
+        "hook": "visual_pattern_interrupt",
+        "openingShotSec": 1.268,
+        "openingLine": "When someone gambles and wins, their brain releases a chemical that feels really good.",
+        "story": "mechanism_step_by_step",
+        "connector": "but_therefore",
+        "ending": "ironic_twist_punchline",
+        "twistAtPct": 91,
+        "scriptTemplate": "When someone [COMMON REWARDING ACTION], their [BODY SYSTEM] releases [CHEMICAL], same as [EVERYDAY BASELINE], BUT [UNCERTAIN/VARIABLE VERSION] spikes it more because [COGNITIVE LOOP] -> even [NEAR MISS/FAILURE] triggers the rush -> leaving you [IRONIC VISUAL TRAP].",
+        "secretSauce": [
+          "Unbroken 3D orbital camera moves diving directly from game action into glowing circular skull cutaways (even nesting a spinning roulette thought-portal inside the brain at 00:14.7)",
+          "Diegetic 3D world-space UI callouts (floating X, checkmark, pocket flashes, 3D '7' arrow, and assembling 'TRY AGAIN' marquee) embedded directly onto props",
+          "Surreal no-cut dolly morph across the craps rail (00:33.9) that materializes a chair, snaps rope around the character, and flips panic into an addicted smile via a silver platter reveal"
+        ],
+        "weaknesses": [
+          "Visible mirrored motion-tile edge artifacts along frame borders during both whip-smear Hidden Cuts (f166-f172 and f266-f270)",
+          "Brief visual-logic ambiguity between the red X near ball in pocket 28 (f546) and the green checkmark over ball in pocket 28 (f570)"
+        ]
+      },
+      {
+        "id": "5puZlZQNArc",
+        "title": "The Jump Rope That Saved A Teen's Life 😮",
+        "tier": "flop",
+        "views": 4210636,
+        "outlierRolling": 0.3,
+        "durationSec": 36.9,
+        "wpm": 178.4,
+        "topic": "crime_disaster_accident",
+        "topicSublabel": "thin_ice_rescue_incident",
+        "hook": "cold_open_crisis",
+        "openingShotSec": 3.033,
+        "openingLine": "The ice started to break as the dog chased the geese.",
+        "story": "chronological_escalation_twist",
+        "connector": "but_therefore",
+        "ending": "satisfying_resolution",
+        "twistAtPct": 68,
+        "scriptTemplate": "[VICTIM] triggers [ESCALATING HAZARD], SO [SECOND PERSON] rushes in and gets trapped too -> ACROSS THE SCENE [UNLIKELY HERO] grabs [EVERYDAY PROP] -> FIRST ATTEMPT fails due to [PHYSICAL SETBACK], SO [HERO] adapts [SURVIVAL TECHNIQUE] to pull everyone out alive",
+        "secretSauce": [
+          "Unbroken 3D dolly/whip bridges across suburban geography paired with a character torso lens-wipe Hidden Cut",
+          "Brief emissive neon-yellow highlight pulse on the everyday rescue tool before action, plus ZACK D FILMS pickup decal Easter egg"
+        ],
+        "weaknesses": [
+          "Slow-motion water splash hang at 00:27.0-00:29.0 lingers slightly on static mid-air droplets before the card flip"
+        ]
+      },
+      {
+        "id": "lEXSVWGubLo",
+        "title": "How To Make A Big Mac Sushi Push Pop 🤤",
+        "tier": "flop",
+        "views": 4406535,
+        "outlierRolling": 0.24,
+        "durationSec": 25.5,
+        "wpm": 186.9,
+        "topic": "food_diy_and_hacks",
+        "topicSublabel": "fast_food_push_pop_recipe",
+        "hook": "imperative_how_to_step",
+        "openingShotSec": 1.468,
+        "openingLine": "Lay the cheese down on a bamboo mat.",
+        "story": "mechanism_step_by_step",
+        "connector": "chronological_and_then",
+        "ending": "satisfying_resolution",
+        "twistAtPct": 75,
+        "scriptTemplate": "Take [ICONIC FAST FOOD ITEM] and assemble it using [UNEXPECTED PREP TOOL/FORMAT], layer [RECOGNIZABLE INGREDIENTS], THEN seal it inside [NOVELTY CONTAINER/MECHANISM] so you can eat it as [ABSURD RESULT].",
+        "secretSauce": [
+          "Zero-cut continuous damped camera choreography linking cutting board, prep mat, ground-level roll, and host reaction",
+          "Diegetic packaging & apparel branding ('PUSH POP Big Mac', 'ZACK D FILMS') paired with an on-the-fly 3D side cutaway of internal plunger mechanics",
+          "Uncanny-cheerful facial micro-acting (wide eyes, bite crunch in VO pause, slow lip-lick, held grin)"
+        ],
+        "weaknesses": [
+          "Blocky low-poly onion cube geometry contrasts noticeably with detailed meat/fry textures",
+          "Slight teeth-to-cheese clipping during bite (`f674-f679`) and brief dark meat cube slip outside rolled end (`f545`)"
+        ]
+      }
+    ]
+  }
+}

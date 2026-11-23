@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "duration_sec": 30.36,
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "navy_marine_mammal_program",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 3.37,
+  "opening_spoken_line": "The sea lion will snap a clamp onto the diver's leg before swimming away.",
+  "hook_visual_trigger": "Harnessed sea lion swims up underwater and snaps a flashing metal clamp onto a scuba diver's ankle",
+  "story_structure": "problem_solution_irony",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 82,
+  "rehook_timestamps_sec": [
+    6.2,
+    11,
+    14.9,
+    21,
+    25
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 5.21,
+      "pct_runtime": 17
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 5.21,
+      "end_sec": 11.01,
+      "pct_runtime": 19
+    },
+    {
+      "role": "setup",
+      "start_sec": 11.01,
+      "end_sec": 14.88,
+      "pct_runtime": 13
+    },
+    {
+      "role": "escalation",
+      "start_sec": 14.88,
+      "end_sec": 21.02,
+      "pct_runtime": 20
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 21.02,
+      "end_sec": 24.99,
+      "pct_runtime": 13
+    },
+    {
+      "role": "twist",
+      "start_sec": 24.99,
+      "end_sec": 30.36,
+      "pct_runtime": 18
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 3,
+    "continuous": 8
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 4,
+    "M": 5,
+    "MCU": 1,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 0,
+    "eye": 8,
+    "low": 4,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "natural_daylight",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "Show [UNEXPECTED MECHANISM IN ACTION] -> explain [HOW IT SOLVES PROBLEM], BUT [FIRST ATTEMPT FAILED DUE TO LIMIT] -> SO [BETTER SOLUTION WAS USED], BUT [COMEDIC FLAW RUINS ADVANTAGE].",
+  "secret_sauce_cues": [
+    "Continuous 3D water-surface camera breaches and foreground pass-by subject handoffs avoiding hard cuts",
+    "Emissive red highlight pulses on props/limbs plus diegetic 3D infographic props (72F thermometer, Zs) and hidden background sight gags"
+  ],
+  "weaknesses_or_drag": []
+}

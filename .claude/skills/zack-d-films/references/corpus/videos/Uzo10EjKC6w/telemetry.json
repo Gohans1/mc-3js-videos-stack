@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "duration_sec": 53.854,
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "loyal_dog_historical_story",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 0.801,
+  "opening_spoken_line": "He got a puppy so he wouldn't be alone.",
+  "hook_visual_trigger": "Man opens pet carrier door revealing shaggy puppy, then camera pulls back into empty room",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 68,
+  "rehook_timestamps_sec": [
+    8.1,
+    10.9,
+    22.1,
+    36.7,
+    44
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.036,
+      "pct_runtime": 6
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.036,
+      "end_sec": 10.878,
+      "pct_runtime": 15
+    },
+    {
+      "role": "escalation",
+      "start_sec": 10.878,
+      "end_sec": 31.932,
+      "pct_runtime": 39
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 31.932,
+      "end_sec": 36.67,
+      "pct_runtime": 9
+    },
+    {
+      "role": "twist",
+      "start_sec": 36.67,
+      "end_sec": 44.044,
+      "pct_runtime": 13
+    },
+    {
+      "role": "resolution",
+      "start_sec": 44.044,
+      "end_sec": 53.854,
+      "pct_runtime": 18
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 5,
+    "transition": 11,
+    "continuous": 10
+  },
+  "transition_types": [
+    "cross_dissolve",
+    "card_flip",
+    "vertical_push"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 7,
+    "M": 15,
+    "MCU": 3,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 4,
+    "eye": 12,
+    "low": 4,
+    "ground": 6
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "mixed",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "[PROTAGONIST] adopts/starts [HUMBLE COMPANION/ROUTINE] so [EMOTIONAL NEED], BUT [SUDDEN LOSS/CRISIS] -> SO [UNWAVERING DEVOTION DESPITE HARDSHIP] -> TWIST [NEW EXTERNAL THREAT/LAW] -> RESOLUTION [UNEXPECTED RESCUE & ETERNAL LEGACY]",
+  "secret_sauce_cues": [
+    "Zero-hard-cut spatial storytelling: chains scenes via whip-tilts/whip-pans inside one unified 3D environment and motion-blur pose/prop Hidden Cuts",
+    "Accelerated environmental sun/cloud/rain time-lapses over static characters paired with diegetic 3D time props (floating spiral calendars, newspaper print, glowing cage placard)"
+  ],
+  "weaknesses_or_drag": [
+    "Historical prop continuity mismatch: gravestone reads John Traill (1835-1897, Dunfermline) while newspaper reads May 17, 1896 (Sergeant John C. Whitman, Oak Hill) and the Mayor hands modern-style US $100 bills with a creator portrait",
+    "Visible walk-cycle treadmill cropping before pull-back in S05a and hard-edged triangular lantern beam geometry"
+  ]
+}
