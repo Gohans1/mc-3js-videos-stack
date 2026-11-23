@@ -5,7 +5,7 @@ description: Produces a frame-accurate, engine-agnostic deep breakdown blueprint
 
 # analyze-ref-video
 
-Backend-agnostic reference video breakdown workflow: prepares a clean 720p timecoded review copy, runs the calibrated 4-section system prompt [system/analyze-ref-video.md](system/analyze-ref-video.md) through any 24 FPS multimodal runner (defaulting today to `.claude/skills/aistudio/scripts/ask.ts`), and pairs the output with local 30fps ground-truth verification before production.
+Backend-agnostic, style-agnostic reference video breakdown workflow: prepares a clean 720p timecoded review copy, runs the calibrated 4-section system prompt [system/analyze-ref-video.md](system/analyze-ref-video.md) through any 24 FPS multimodal runner (defaulting today to `.claude/skills/aistudio/scripts/ask.ts`), and pairs the output with local 30fps ground-truth verification before production. Target visual-style adaptation (e.g., 3D stylized, 2D anime, voxel, claymation, vector, live-action) always belongs at the filmmaking-agent layer — never hardcode a specific style into this skill.
 
 ## Review Gate & Workflow
 

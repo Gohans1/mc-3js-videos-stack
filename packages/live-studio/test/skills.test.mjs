@@ -188,3 +188,30 @@ test("skills get prints a guide, one reference by its name, and names the refere
   assert.equal(own.status, 2);
   assert.match(own.stderr, /open \.\.\/\.\.\/\.claude\/skills\/cinetic\/SKILL\.md/);
 });
+
+test("analyze-ref-video and compare-video stay open, style-agnostic, and share verbatim craft taxonomy", () => {
+  const analyzeSys = readFileSync(
+    join(ROOT, ".claude/skills/analyze-ref-video/system/analyze-ref-video.md"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  const compareSys = readFileSync(
+    join(ROOT, ".claude/skills/compare-video/system/compare-2-video.md"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  const compareSkill = readFileSync(
+    join(ROOT, ".claude/skills/compare-video/SKILL.md"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  const styleLeak = /\bminecraft\b|\bvoxel\b|\bblocky\b|block head|zack\s*d\b/i;
+  for (const [label, body] of [
+    ["analyze-ref-video.md", analyzeSys],
+    ["compare-2-video.md", compareSys],
+    ["compare-video/SKILL.md", compareSkill],
+  ]) {
+    assert.equal(styleLeak.test(body), false, `${label} must stay style-agnostic`);
+  }
+  const tax = (s) =>
+    s.match(/## Reusable Film & Motion Craft Taxonomy[\s\S]*?(?=\n---\n)/)?.[0] ?? "";
+  assert.ok(tax(analyzeSys).length > 200, "missing craft taxonomy");
+  assert.equal(tax(analyzeSys), tax(compareSys), "craft taxonomy drifted between skills");
+});
