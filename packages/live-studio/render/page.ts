@@ -8,6 +8,7 @@ import { chunksOf } from "../src/frame";
 import { renderCost } from "../src/render-cost.mjs";
 import {
   apertureSamples,
+  MAX_SHUTTER_SAMPLES,
   samplesForMotion,
   shutterBounds,
   shutterSamples,
@@ -250,6 +251,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       acc.reset();
       const camera = render.tools?.camera;
       let prevPose = null;
+      let whipped = false;
       for (let k = 0; k < times.length; k++) {
         for (const aperture of pupils) {
           const options = aperture ? { aperture, layerTime: t } : { layerTime: t };
@@ -259,7 +261,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
           acc.add(canvas);
         }
         const e = camera?.matrixWorld?.elements;
-        if (k > 1 || !e || times.length < 2 || times.length > shotSamples) continue;
+        if (!e || times.length < 2 || times.length >= MAX_SHUTTER_SAMPLES) continue;
         const look = render.tools?.look;
         const focusDist =
           render.tools?.optics?.focusM ??
@@ -269,17 +271,22 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
           pos: [e[12], e[13], e[14]],
           focusDist,
         };
-        if (k === 0) prevPose = now;
-        else {
+        if (prevPose) {
           const more = samplesForMotion(times.length, prevPose, now, camera.fov, cfg.H);
           if (more > times.length) {
             times = shutterTimes(t, FPS, more, from, to, shutter);
-            whips.frames++;
+            if (!whipped) {
+              whips.frames++;
+              whipped = true;
+            }
             whips.most = Math.max(whips.most, times.length);
             acc.reset();
+            prevPose = null;
             k = -1;
+            continue;
           }
         }
+        prevPose = now;
       }
       ctx.drawImage(acc.resolve(), 0, 0);
     }
