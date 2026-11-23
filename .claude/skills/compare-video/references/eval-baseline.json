@@ -1,0 +1,413 @@
+{
+  "generatedAt": "2026-11-22",
+  "comparePromptEval": {
+    "evaluatedAt": "2026-11-22",
+    "shippedPrompt": {
+      "file": ".claude/skills/compare-video/system/compare-2-video.md",
+      "version": "v2",
+      "lines": 94,
+      "taxonomyVerbatimParityWithAnalyzeRef": true,
+      "settings": {
+        "model": "gemini-4-hydrogen",
+        "thinking": "Extra High",
+        "media": "High",
+        "fps": 24,
+        "search": "off",
+        "recommendedVideoPrep": "bun run reference sidebyside <ref> <draft> (auto hstack portrait / vstack landscape, 720p short-edge, CRF 22, auto draft-strip crop, audio:ours)"
+      }
+    },
+    "photographicGtPanelsVerified": {
+      "foodEatMoreTotalClaimPanelsInspected": 36,
+      "v1FoodSbsClaimPanelsVerified": "24/24",
+      "v2FoodSbsClaimPanelsVerified": "34/34",
+      "panelScopeNote": "2 of the 36 panels (f690 beehive, f1108 cookie z-fighting) verified v1-only claims; f1562 shows pre-vanish brain consistent with f1561->f1563; overview sheets food_gt_1/2.jpg and verify_food_sbs_10s/end.jpg also inspected",
+      "syntheticControlPanels": "12/12"
+    },
+    "independentReviewRounds": {
+      "round1": {
+        "reviewers": 2,
+        "verdicts": [
+          "FAIL",
+          "FAIL"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "requiredOverlap": 3,
+        "requiredBlockers": [
+          "eval-baseline/doc metric bugs (v2_food_2file truncated=true & 0/13 Sec3, v2_synth_4defects crop_overextended_after_255=true, v2_synth_drift_vstack judder f110-f149 +20f static onset lag & +11f vs +12f, v2 34/34 vs 36/36 panel attribution)",
+          "mutation-blind assertions in reference.test.mjs (sidebyside draft-bar edge pixels + audioHash equality on --audio ref)",
+          "scripts/review/reference.mjs exceeded 1000 lines with duplicated timecode/sidebyside blocks (extracted to reference_video.mjs)"
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 13.5,
+            "r2": 14.5
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.2,
+            "r2": 29.2
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 29,
+            "r2": 28.5
+          },
+          "v2_synth_4defects": {
+            "r1": 26.5,
+            "r2": 25.5
+          }
+        }
+      },
+      "round2": {
+        "reviewers": 2,
+        "verdicts": [
+          "FAIL",
+          "FAIL"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "requiredOverlap": 2,
+        "requiredBlockers": [
+          "eval_cmp_metrics.mjs cross-line and unanchored regex false positives inflated arm_b (6/13->9/13) and arm_c2 (9/13->10/13), plus prompt-compare-design.md misattributed VO desync to v2_food_sbs (fixed with per-row negative-lookbehind regexes and accurate extra catches)",
+          "runAtomicFfmpeg called process.exit(1) inside try, bypassing finally cleanup of ref-tc-*/ref-sbs-* temp dirs on FFmpeg failure/timeout (fixed by moving process.exit(1) after try/finally + adding FFmpeg timeout cleanup regression test)"
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9.5
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 12.5,
+            "r2": 13.5
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.2,
+            "r2": 29.3
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 28.5,
+            "r2": 28.9
+          },
+          "v2_synth_4defects": {
+            "r1": 26,
+            "r2": 26.5
+          }
+        }
+      },
+      "round3": {
+        "reviewers": 2,
+        "verdicts": [
+          "PASS",
+          "PASS"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "required": [
+          0,
+          0
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9.5
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 12.5,
+            "r2": 13
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.3,
+            "r2": 29.3
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 28.9,
+            "r2": 28.8
+          },
+          "v2_synth_4defects": {
+            "r1": 26,
+            "r2": 26.3
+          }
+        }
+      }
+    },
+    "arms": {
+      "arm_a_old_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 326,
+        "chars": 4157,
+        "sections": 2,
+        "truncated": false,
+        "verdict": null,
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "5/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1KRxi8XugiRiJBKzZnaVct0k1VTEii6I2"
+      },
+      "arm_b_naive_copy_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 370.1,
+        "chars": 7888,
+        "sections": 3,
+        "truncated": false,
+        "verdict": null,
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 3,
+        "foodRecall": "6/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1lCygTEg42N2U7hm1fAQ70YQmaH33SkbX"
+      },
+      "arm_c2_v1_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 671.5,
+        "chars": 9331,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 12,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "9/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1U3EySDdQEgJI6f5aje0KnTBDen3tSHgv"
+      },
+      "arm_c1_v1_sbs": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 689.1,
+        "chars": 20410,
+        "sections": 3,
+        "truncated": true,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 12,
+          "Major": 13,
+          "Minor": 0
+        },
+        "sec1CountMismatch": true,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 1,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "13/13",
+        "chatUrl": "https://aistudio.google.com/prompts/16nvtTU_eWYvutuia0bkS4ZErl6equOFV"
+      },
+      "arm_d_synth_gt": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 83671,
+        "sec": 287.1,
+        "chars": 10267,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 4,
+          "Major": 3,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "synthChecks": {
+          "dark_105_179": true,
+          "dropout_210_211": true,
+          "zoom_180_254": true,
+          "drift_255_10f": true,
+          "tail_345_359": true,
+          "crop_overextended_after_255": true
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1tqlhYWgnGY7j-E66ePub_jJA-Btd2y4n"
+      },
+      "v2_food_sbs": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 432,
+        "chars": 21812,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 15,
+          "Major": 11,
+          "Minor": 5
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "12/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1-gaC-4BAu7NFeC7O14WOFJWN49W5SqKc"
+      },
+      "v2_food_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 475.5,
+        "chars": 2647,
+        "sections": 2,
+        "truncated": true,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": true,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "0/13",
+        "chatUrl": "https://aistudio.google.com/prompts/113TO5QonTsuFT9xTbXYwo7fKmCYPyDHf",
+        "attempt1Failure": "thought-only exhaustion at 65,536 Output length cap (0 answer chars)"
+      },
+      "v2_synth_4defects": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 83671,
+        "sec": 307.2,
+        "chars": 7012,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 4,
+          "Major": 2,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "synthChecks": {
+          "dark_105_179": true,
+          "dropout_210_211": true,
+          "zoom_180_254": true,
+          "drift_255_10f": true,
+          "tail_345_359": true,
+          "crop_overextended_after_255": true
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1V7K5wbgZJnDCHkDDtnacQVNnEsLlaYai"
+      },
+      "v2_synth_ident": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 69731,
+        "sec": 153.8,
+        "chars": 2917,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "PASS",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "identPass": true,
+        "chatUrl": "https://aistudio.google.com/prompts/1DKslYdANnpRnmFGeFh3WE8uekH2X2XPF"
+      },
+      "v2_synth_drift_vstack": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 97611,
+        "sec": 319.6,
+        "chars": 7519,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 5,
+          "Major": 1,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "vstackChecks": {
+          "judder_detected_f110_149": true,
+          "judder_onset_frame": 110,
+          "judder_onset_lag_frames": 20,
+          "freeze_150_179": true,
+          "drift_reported_frames": 11,
+          "drift_ground_truth_frames": 12,
+          "drift_within_2f": true,
+          "fake_crop_during_drift": false
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1p95WfqCq-paCveeTxe3vpxbVSsG0XFZb"
+      }
+    }
+  }
+}

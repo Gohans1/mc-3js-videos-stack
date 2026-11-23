@@ -1,6 +1,6 @@
 # Developing the `aistudio` Skill
 
-Maintainer guide for extending, debugging, or refactoring `.claude/skills/aistudio/`. For normal usage read [SKILL.md](../../SKILL.md); when AI Studio UI changes break locators read [ui-changes.md](ui-changes.md). Run commands from the repo root (`STUDIO = bun .claude/skills/aistudio/scripts/studio.ts`).
+Maintainer guide for extending, debugging, or refactoring `.claude/skills/aistudio/`. For normal usage read [SKILL.md](../SKILL.md); when AI Studio UI changes break locators read [ui-changes.md](ui-changes.md). Run commands from the repo root (`STUDIO = bun .claude/skills/aistudio/scripts/studio.ts`).
 
 ## Scope
 
@@ -12,17 +12,12 @@ Strictly Playground chat (`/prompts`) and History (`/library`). Never touch Buil
 | --- | --- |
 | `scripts/page-map.ts` | Single source of truth for AI Studio UI structure: `URLS`, named element `MAP`, readable `TEXT`, tools, thinking/media levels, and video extensions. |
 | `scripts/lib.ts` | Shared infrastructure: Chrome lifecycle, tab/window manager, `agent-browser` bridge, live DOM finder, AI Studio actions, and verified step runner. |
-| `system/` | Ready-made system prompts for `ASK --system-file` (`analyze-ref-video.md`, `compare-2-video.md`; empty files are rejected by `ask.ts`). Stored on disk because AI Studio presets live only in browser localStorage. |
 | `scripts/win32.ts` | Calls `user32.dll` via `bun:ffi` so off-screen Chrome windows stay invisible and never steal focus (`guardWindows`, `withForegroundLocked`). |
 | `scripts/ask.ts` | Sends one prompt (`0..n` attachments) and collects the reply; supports `--chat` follow-up and `--collect`. |
 | `scripts/studio.ts` | Tab, chat, settings, History, health (`doctor`, `smoke`), and low-level (`map`, `screenshot`, `ab`, `chrome`) commands. |
-| `scripts/lib.test.ts` | Pure unit tests that require no browser (`toSeconds`, `formatStoppedRunError`, `formatCopyFailureError`). |
+| `scripts/lib.test.ts` | Pure unit tests that require no browser (`toSeconds`, `formatStoppedRunError`, `formatCopyFailureError`, `detectPossibleTruncation`). |
 | `assets/doctor-2s.mp4` | 2-second test video with audio used by `doctor` and `smoke`. |
-| `references/browser/ui-changes.md` | UI locator recovery procedure, `MAP` conventions, and `doctor` diagnostics. |
-| `references/prompts/prompt-design.md` | `analyze-ref-video.md` v1->v4 design rationale, shared Taxonomy contract, `N=60` baseline, and v3 vs v4 A/B scores. |
-| `references/prompts/prompt-compare-design.md` | `compare-2-video.md` v2 design rationale, 7 VLM comparison traps, 10-arm `food-eat-more` + synthetic evaluation, and `reference sidebyside` decision. |
-| `references/prompts/prompt-eval-guide.md` | 5-step upgrade workflow, 6-axis 30-point rubrics, and stratified regression suites for upgrading `analyze-ref-video.md` (v4->v5+) and `compare-2-video.md` (v2->v3+). |
-| `references/prompts/eval-baseline.json` | Machine-readable JSON storing the 60 Zack D. Films IDs, `N=60` verified craft frequencies, v3 vs v4 critic scores, and `comparePromptEval` results for `compare-2-video` v2. |
+| `references/ui-changes.md` | UI locator recovery procedure, `MAP` conventions, and `doctor` diagnostics. |
 
 Command flow: parse & validate inputs (exit `2` on usage errors) -> ensure Chrome -> prepare tab -> run verified steps -> print output. Every step must read back live page evidence rather than assuming a click succeeded.
 
@@ -78,7 +73,7 @@ Command flow: parse & validate inputs (exit `2` on usage errors) -> ensure Chrom
 | Video-only turns lack `Copy as markdown` in their menu. | `read` records attachment filenames for those turns. |
 | `Copy as markdown` invokes `execCommand` and clobbers the Windows clipboard. | Capture copied text in a capture-phase `copy` listener and call `preventDefault()`. |
 | New chats receive a saved URL ~1 minute after the first reply. | Poll up to 2 minutes post-reply; fall back to printing `ASK --collect`. |
-| AI Studio persists the Google Search switch across all future new chats in the profile. | Always pass `ASK --tool search=on|off`; `run` logs the active search state. |
+| AI Studio persists the Google Search switch across all future new chats in the profile. | Always pass `ASK --tool search=on\|off`; `run` logs the active search state. |
 | Reloading a generating chat discards the in-progress reply. | `openChat` skips reload if already open; navigation refuses while generating. |
 | Invalid or cross-account chat IDs redirect to `/prompt-access-restricted`. | `waitForPromptBox` detects both access-restricted and Google login redirects clearly. |
 | Model picker auto-closes with animation; clicking `Close` immediately misses. | Wait 3s for auto-close before clicking the adjacent `Close` button if still open. |
@@ -91,8 +86,9 @@ Command flow: parse & validate inputs (exit `2` on usage errors) -> ensure Chrom
 | `agent-browser close` on `--cdp` closes the entire shared browser. | Never call `close`; close individual tabs via CDP `Target.closeTarget`. |
 | Off-screen windows previously stole focus via CDP `windowState: normal` or `agent-browser tab <id>` / `about:blank`. | Fixed via Win32 shield (`SW_SHOWNOACTIVATE`), minimal tab switches, and `LockSetForegroundWindow` around `prepareTab`. Never use `SetWindowPlacement` (Microsoft docs confirm it drags off-screen windows to `0,0`). |
 | Gemini hallucinated synthetic audio tones (claimed 1000 Hz beeps on a continuous 440 Hz tone). | Always verify critical claims independently. |
-| Sending two 55s videos separately (753k tokens) at Extra High exhausted the 65,536 Output length cap inside Thoughts. | Tile into one file via `bun run reference sidebyside` (376k tokens); `waitForAnswer` checks `LAST_IS_THOUGHT_ONLY` to report cap exhaustion explicitly. |
+| Sending two 55s videos separately (753k tokens) at Extra High exhausted the 65,536 Output length cap inside Thoughts. | Reduce input size/tokens (e.g., shorten or pre-tile dual streams externally into one clip) or lower `--thinking`; `waitForAnswer` checks `LAST_IS_THOUGHT_ONLY` to report cap exhaustion explicitly. |
 | Daily quota banners left an error turn matching `LAST_IS_ANSWER`, causing generic `copied nothing` errors. | `copyTurnMarkdown` retries once on empty copy when no alert exists and always appends `AI Studio says: <pageAlerts()>` on failure. |
+| Dense long responses can hit output-length cutoff mid-table or mid-code-fence without an AI Studio error banner. | `detectPossibleTruncation` (`lib.ts`) checks copied markdown for unclosed fences, truncated trailing table rows, unclosed bold spans, or trailing mid-clause punctuation and prints `⚠ warning: answer may be truncated (...)` in `ask.ts` alongside the `--chat` follow-up command. |
 
 ## Experiments & Verified Test Matrix (2026-11-21 Baseline)
 
@@ -114,4 +110,4 @@ Command flow: parse & validate inputs (exit `2` on usage errors) -> ensure Chrom
 1. Verify the feature stays strictly inside `/prompts` and `/library`; inspect in a separate tab (`STUDIO --tab dev ab snapshot -i`).
 2. Add `MAP` entries to `scripts/page-map.ts` (see [ui-changes.md](ui-changes.md)), adding any new `Where` state to `doctor`.
 3. Put shared actions in `scripts/lib.ts`; wire strict `parseArgs` options (exit `2` on unknown flags), `USAGE`, verified `add(...)` steps with `StepError`, and `emit(data, () => text)` in `studio.ts` (or both `--collect` rejection guards + `USAGE` in `ask.ts`).
-4. Add unit tests in `scripts/lib.test.ts` for pure logic, run the verification suite above, verify live on AI Studio, update [SKILL.md](../../SKILL.md) if top-level usage changed, and close test tabs.
+4. Add unit tests in `scripts/lib.test.ts` for pure logic, run the verification suite above, verify live on AI Studio, update [SKILL.md](../SKILL.md) if top-level usage changed, and close test tabs.

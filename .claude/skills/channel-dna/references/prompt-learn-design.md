@@ -7,7 +7,7 @@ Canonical engineering log for system/learn-channel-video.md covering architectur
 | Decision | Rationale |
 | --- | --- |
 | Single-pass 4-section architecture | Research on LLM pipeline decomposition (arXiv:2609.32825) shows chaining independent LLM calls drops accuracy via lossy summaries; one coherent pass captures Hook, Narrative Intent, Macro Shot Spine, and JSON Telemetry jointly while staying under 16k chars |
-| 3-way byte-identical Craft Taxonomy | Reusable Film & Motion Craft Taxonomy is copied verbatim from aistudio/system/analyze-ref-video.md and compare-2-video.md and locked by an automated unit test in scripts/channel-dna.test.ts |
+| 3-way byte-identical Craft Taxonomy | Reusable Film & Motion Craft Taxonomy is copied verbatim from analyze-ref-video/system/analyze-ref-video.md and compare-video/system/compare-2-video.md and locked by an automated unit test in scripts/channel-dna.test.ts |
 | Closed enums plus open secret_sauce_cues | Deterministic scripts/aggregate.ts requires exact enum spellings for zero-drift cross-video percentages and cross-tabs, while secret_sauce_cues and weaknesses_or_drag preserve novel channel-specific tricks |
 | Deterministic Python/TS telemetry offload | View counts, age-normalized rolling-median outlier scores, durations, and spoken WPM come from yt-dlp and youtube-transcript-api in scripts/collect.ts (0 AI tokens) so Gemini focuses 100% on observable visual, narrative, editorial, and audible craft |
 | Clean AAC 128k 44.1kHz stereo re-encode in burnTimecode720 | Copying raw DASH m4a audio streams risked edit-list/PTS quirks; re-encoding audio cleanly alongside explicit active-listening rules eliminated silent fallback across parallel tabs |

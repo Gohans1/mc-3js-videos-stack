@@ -734,7 +734,7 @@ const LAST_IS_THOUGHT_ONLY = `(() => { const t = ${TURNS}.at(-1);
 export function formatStoppedRunError(alerts: string, thoughtOnly: boolean): string {
   if (alerts) return `the run stopped without an answer; AI Studio says: ${alerts}`;
   if (thoughtOnly)
-    return "the run stopped after Thoughts with no answer text (likely hit Output length cap on Extra High thinking; shorten/tile video with reference sidebyside or lower --thinking)";
+    return "the run stopped after Thoughts with no answer text (likely hit Output length cap on Extra High thinking; reduce input size/tokens or lower --thinking)";
   return "the run stopped without an answer; AI Studio shows no message (see the screenshot)";
 }
 

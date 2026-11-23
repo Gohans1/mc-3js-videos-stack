@@ -38,7 +38,7 @@ All 17 dossiers were mined via `gemini-4-hydrogen` (`Thinking: Extra High`, `Med
 
 - **Visual 30fps Ground-Truth Verification:**
   - Wave 1 (`6/6` ZDF = `48` GT panels) + OOD (`2/2` = `16` GT panels) visually inspected directly frame-by-frame (`64/64` panels confirmed against dossier timestamps, boundaries, and craft claims; see `.claude/skills/channel-dna/references/prompt-learn-design.md`).
-  - Supplementary `N=60` ZDF visual craft benchmark: `696` GT panels verified at `98.9%–99.4%` blind critic accuracy (`.claude/skills/aistudio/references/prompts/eval-baseline.json`).
+  - Supplementary `N=60` ZDF visual craft benchmark: `696` GT panels verified at `98.9%–99.4%` blind critic accuracy (`.claude/skills/analyze-ref-video/references/eval-baseline.json`).
   - Wave 2 (`11/11` completed dossiers): `11/11` passed `parseAndValidateDossier` on Attempt 1 with `0` errors and `0` warnings (including strict Section-3-to-JSON boundary, scale, angle, and `opening_shot_sec` cross-checks).
 - **Audio Calibration Disclosure (`16/17` Aurally Verified):**
   - `SGgYDfeHYXA` (Winner) was mined on a frame-sampled input with burnt-in captions and no attached audio stream (`videos/SGgYDfeHYXA/dossier.md` lines 6 & 52). Its `audio_bed_style: "vo_only_dry"`, `has_pre_impact_silence: false`, and `has_jl_cut: false` fields are unverified calibration fallbacks; all audio claims in `references/audio-voice-and-pacing.md` explicitly cite the `16/17` (`6/7` Winners) aurally verified subsample.

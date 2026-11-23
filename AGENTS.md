@@ -16,8 +16,10 @@
 | Đường dẫn                               | Nội dung                                                                                                        |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                                                                      |
-| .claude/skills/aistudio                 | Điều khiển Google AI Studio qua Chrome ẩn để phân tích video ref và so sánh REF vs OURS.                       |
-| .claude/skills/channel-dna              | Nhà máy reverse-engineer bất kỳ kênh YouTube Shorts nào thành skill sản xuất riêng.                             |
+| .claude/skills/aistudio                 | CLI điều khiển Google AI Studio Playground (/prompts) và History (/library) qua Chrome ẩn (tầng transport).    |
+| .claude/skills/analyze-ref-video        | Phân tích & bóc tách video mẫu (ref) theo khung hình thành blueprint để copy/dựng lại (backend-agnostic).      |
+| .claude/skills/compare-video            | So sánh REF vs OURS theo khung hình, lọc lỗi ưu tiên & lặp QA đến khi pass (backend-agnostic).                 |
+| .claude/skills/channel-dna              | Nhà máy reverse-engineer bất kỳ kênh YouTube Shorts nào thành skill sản xuất riêng (backend-agnostic).          |
 | .claude/skills/zack-d-films             | Playbook sản xuất Shorts 3D Minecraft theo DNA thực nghiệm của Zack D. Films.                                   |
 | skill-data/core                         | Guide CLI và quy trình; chạy bun run help và bun run skills get core trước khi tự viết lệnh thủ công.           |
 | packages/live-studio                    | Studio, timeline, ghi chú, render; cách dùng: bun run skills get core --ref contract.                           |

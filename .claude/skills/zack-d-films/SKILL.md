@@ -10,7 +10,7 @@ Turn any 1-line concept (true story, hypothetical what-if, game comparison, arch
 
 ## Data Provenance & Non-Negotiable Denominator Discipline
 
-Every metric in this skill is computed deterministically from verified disk artifacts under `references/corpus/` and `.claude/skills/aistudio/references/prompts/eval-baseline.json`. Never blend denominators when reporting or auditing metrics:
+Every metric in this skill is computed deterministically from verified disk artifacts under `references/corpus/` and `.claude/skills/analyze-ref-video/references/eval-baseline.json`. Never blend denominators when reporting or auditing metrics:
 
 | Dataset | Exact Scope | Sample Size | Primary Use |
 | --- | --- | --- | --- |

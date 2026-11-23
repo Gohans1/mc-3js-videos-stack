@@ -21,7 +21,7 @@ import {
   readRenderEvidence,
 } from "../../packages/live-studio/src/video.mjs";
 
-const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. aistudio).
+const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. analyze-ref-video).
   bun run reference timecode <video> [--out <file>] [--label <text>] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
 Writes an H.264 .mp4 copy with a black bottom strip (HH:MM:SS.mmm, frame number, and label), keeping the source untouched.
 Default output: renders/reference/<video-name>_timecode.mp4 (outside references/ so tools keep reading the clean source).
@@ -32,7 +32,7 @@ Default output: renders/reference/<video-name>_timecode.mp4 (outside references/
   --crf <N>          H.264 quality factor 0-51 (default 22 for fast AI uploads; lower is larger).
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
-next: pass the output alongside renders/draft.mp4 to your video reviewer; keep references/ clean`;
+next: pass the output to analyze-ref-video (or your video reviewer); keep references/ clean`;
 
 const SIDEBYSIDE_HELP = `Tile a reference video and a remake into one synced video with REF/OURS headers and a shared black timecode bar for AI comparison.
   bun run reference sidebyside <reference> <remake> [--out <file>] [--start <sec>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
@@ -48,7 +48,7 @@ Default output: renders/reference/<ref-name>_vs_<remake-name>.mp4.
   --crf <N>          H.264 quality factor 0-51 (default 22).
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
-next: pass the output to your video reviewer with compare-2-video.md; keep sources clean`;
+next: pass the output to compare-video (compare-2-video.md); keep sources clean`;
 
 const MONO_FONTS = [
   "C:/Windows/Fonts/consolab.ttf",
@@ -366,7 +366,7 @@ export async function runTimecode(rawArgs, { usage, runWorker }) {
     `wrote ${displayOut} (${outW}x${outH}, +${barH}px black timecode bar; source untouched)`,
   );
   console.log(
-    `next: pass ${displayOut} to your video reviewer (e.g. aistudio); keep references/ clean`,
+    `next: pass ${displayOut} to analyze-ref-video (or your video reviewer); keep references/ clean`,
   );
   process.exit(0);
 }
@@ -611,8 +611,6 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   console.log(
     `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refWindowDur.toFixed(2)}s vs ours ${remInfo.duration.toFixed(2)}s${startSec > 0 ? `, start ${startSec.toFixed(2)}s` : ""}, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
   );
-  console.log(
-    `next: pass ${displayOut} to your video reviewer with compare-2-video.md; keep sources clean`,
-  );
+  console.log(`next: pass ${displayOut} to compare-video (compare-2-video.md); keep sources clean`);
   process.exit(0);
 }

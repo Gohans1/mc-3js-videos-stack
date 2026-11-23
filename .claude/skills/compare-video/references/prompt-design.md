@@ -1,10 +1,10 @@
 # Two-Video Comparison Prompt Design (`compare-2-video` v2)
 
-Canonical engineering log of design rationale, 7 documented VLM comparison traps, the 10-arm evaluation matrix on `gemini-4-hydrogen`, and trade-offs for `system/compare-2-video.md` (official v2, 94 lines). For the upgrade loop see [prompt-eval-guide.md](prompt-eval-guide.md); raw scores live under `comparePromptEval` in [eval-baseline.json](eval-baseline.json).
+Canonical engineering log of design rationale, 7 documented VLM comparison traps, the 10-arm evaluation matrix on `gemini-4-hydrogen`, and trade-offs for `system/compare-2-video.md` (official v2, 94 lines). For the upgrade loop see [eval-guide.md](eval-guide.md); raw scores live under `comparePromptEval` in [eval-baseline.json](eval-baseline.json).
 
 ## Inherited Taxonomy & 7 VLM Video-Comparison Traps
 
-The 8-category `## Reusable Film & Motion Craft Taxonomy` block is copied verbatim from `system/analyze-ref-video.md` for identical vocabulary. The role, rules, and 4-section layout target 7 failure modes documented across 2025–2026 benchmarks and live AI Studio testing:
+The 8-category `## Reusable Film & Motion Craft Taxonomy` block is copied verbatim from `.claude/skills/analyze-ref-video/system/analyze-ref-video.md` for identical vocabulary. The role, rules, and 4-section layout target 7 failure modes documented across 2025–2026 benchmarks and live AI Studio testing:
 
 | VLM Comparison Trap | Evidence & Root Cause | Mitigation in `compare-2-video` v2 & CLI |
 | --- | --- | --- |

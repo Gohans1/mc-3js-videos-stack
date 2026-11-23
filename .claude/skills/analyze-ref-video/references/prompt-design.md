@@ -1,10 +1,10 @@
 # Reference Video Breakdown Prompt Design (`analyze-ref-video` v1 to v4)
 
-Canonical record of architectural rationale, trade-offs, the `N=60` baseline matrix, and controlled A/B evaluation results for `system/analyze-ref-video.md` (official v4, 100 lines). For the step-by-step upgrade workflow see [prompt-eval-guide.md](prompt-eval-guide.md); raw numbers live in [eval-baseline.json](eval-baseline.json).
+Canonical record of architectural rationale, trade-offs, the `N=60` baseline matrix, and controlled A/B evaluation results for `system/analyze-ref-video.md` (official v4, 100 lines). For the step-by-step upgrade workflow see [eval-guide.md](eval-guide.md); raw numbers live in [eval-baseline.json](eval-baseline.json).
 
 ## Shared Reusable Craft Taxonomy
 
-The `## Reusable Film & Motion Craft Taxonomy` section in `system/analyze-ref-video.md` is strictly mode-agnostic (zero mentions of `reference`, `Claude`, `Three.js`, `draw(t)`, or CLI flags) and spans 3D CG, 2D flat-vector, and live-action video. Copy this 8-category block **byte-identically** into `compare-2-video.md`, `channel-dna/system/learn-channel-video.md`, and any future single-video review prompt (enforced by automated unit test in `.claude/skills/channel-dna/scripts/channel-dna.test.ts`).
+The `## Reusable Film & Motion Craft Taxonomy` section in `system/analyze-ref-video.md` is strictly mode-agnostic (zero mentions of `reference`, `Claude`, `Three.js`, `draw(t)`, or CLI flags) and spans 3D CG, 2D flat-vector, and live-action video. Copy this 8-category block **byte-identically** into `.claude/skills/compare-video/system/compare-2-video.md`, `.claude/skills/channel-dna/system/learn-channel-video.md`, and any future single-video review prompt (enforced by automated unit test in `.claude/skills/channel-dna/scripts/channel-dna.test.ts`).
 
 ## Division of Labor: Gemini 24fps vs Local CLI
 

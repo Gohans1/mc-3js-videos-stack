@@ -80,7 +80,7 @@ Options:
   --thinking <level>         e.g. ${THINKING.join(" | ")}; each model has its own list (new chat on ${DEFAULT_MODEL}: ${DEFAULT_THINKING}; otherwise the chat's own)
   --media <resolution>       ${MEDIA.join(" | ")} (new chat default ${DEFAULT_MEDIA}; follow-up keeps the chat's)
   --system "<text>"          replace the chat's system instructions before sending ("" clears; saved with the chat on Run)
-  --system-file <file>       the same, read from a file (e.g. one of the skill's system/*.md)
+  --system-file <file>       the same, read from a file (e.g. a workflow skill's system/*.md or any non-empty UTF-8 prompt file)
   --tool <name>=<on|off>     switch a tool before sending, repeatable: ${Object.keys(TOOLS).join(" | ")} or its full name
                              (AI Studio carries the Google Search switch over to every new chat, so set it when it matters)
 Video files only (${VIDEO_EXT.join(" ")}):

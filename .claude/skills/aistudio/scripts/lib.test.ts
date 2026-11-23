@@ -26,7 +26,10 @@ test("toSeconds rejects text that is not a time", () => {
 
 test("formatStoppedRunError surfaces AI Studio alerts or thought-only output-cap exhaustion", () => {
   expect(formatStoppedRunError("Quota exceeded", true)).toContain("AI Studio says: Quota exceeded");
-  expect(formatStoppedRunError("", true)).toContain("stopped after Thoughts with no answer text");
+  const thoughtMsg = formatStoppedRunError("", true);
+  expect(thoughtMsg).toContain("stopped after Thoughts with no answer text");
+  expect(thoughtMsg).toContain("reduce input size/tokens");
+  expect(thoughtMsg).not.toContain("sidebyside");
   expect(formatStoppedRunError("", false)).toContain("AI Studio shows no message");
 });
 

@@ -193,11 +193,81 @@ test("Reusable Film & Motion Craft Taxonomy is byte-identical across analyze-ref
     expect(end).toBeGreaterThan(start);
     return text.slice(start, end);
   };
-  const refTax = grab(".claude/skills/aistudio/system/analyze-ref-video.md");
-  const cmpTax = grab(".claude/skills/aistudio/system/compare-2-video.md");
+  const refTax = grab(".claude/skills/analyze-ref-video/system/analyze-ref-video.md");
+  const cmpTax = grab(".claude/skills/compare-video/system/compare-2-video.md");
   const lrnTax = grab(".claude/skills/channel-dna/system/learn-channel-video.md");
   expect(lrnTax).toBe(refTax);
   expect(lrnTax).toBe(cmpTax);
+});
+
+test("aistudio stays a pure transport skill while analyze-ref-video and compare-video own their prompts and evals", () => {
+  expect(existsSync(join(REPO_ROOT, ".claude/skills/aistudio/system"))).toBe(false);
+  expect(existsSync(join(REPO_ROOT, ".claude/skills/aistudio/references/prompts"))).toBe(false);
+  expect(existsSync(join(REPO_ROOT, ".claude/skills/aistudio/references/browser"))).toBe(false);
+  for (const rel of [
+    ".claude/skills/aistudio/SKILL.md",
+    ".claude/skills/aistudio/references/development.md",
+    ".claude/skills/aistudio/references/ui-changes.md",
+    ".claude/skills/analyze-ref-video/SKILL.md",
+    ".claude/skills/analyze-ref-video/system/analyze-ref-video.md",
+    ".claude/skills/analyze-ref-video/references/prompt-design.md",
+    ".claude/skills/analyze-ref-video/references/eval-guide.md",
+    ".claude/skills/analyze-ref-video/references/eval-baseline.json",
+    ".claude/skills/compare-video/SKILL.md",
+    ".claude/skills/compare-video/system/compare-2-video.md",
+    ".claude/skills/compare-video/references/prompt-design.md",
+    ".claude/skills/compare-video/references/eval-guide.md",
+    ".claude/skills/compare-video/references/eval-baseline.json",
+  ]) {
+    expect(existsSync(join(REPO_ROOT, rel)), `missing ${rel}`).toBe(true);
+  }
+});
+
+test("split eval-baseline.json files preserve full analyze-ref and compare-video benchmark records", () => {
+  const refBase = JSON.parse(
+    readFileSync(
+      join(REPO_ROOT, ".claude/skills/analyze-ref-video/references/eval-baseline.json"),
+      "utf8",
+    ),
+  );
+  expect(refBase.shippedPrompt.file).toBe(
+    ".claude/skills/analyze-ref-video/system/analyze-ref-video.md",
+  );
+  expect(refBase.comparePromptEval).toBeUndefined();
+  expect(refBase.corpusZackDFilms60.length).toBe(60);
+  expect(refBase.corpusOOD2.length).toBe(2);
+  const cmpBase = JSON.parse(
+    readFileSync(
+      join(REPO_ROOT, ".claude/skills/compare-video/references/eval-baseline.json"),
+      "utf8",
+    ),
+  );
+  expect(cmpBase.comparePromptEval.shippedPrompt.file).toBe(
+    ".claude/skills/compare-video/system/compare-2-video.md",
+  );
+  expect(Object.keys(cmpBase.comparePromptEval.arms).length).toBe(10);
+});
+
+test("decoupled workflow SKILL.md files contain no stray ASCII control bytes", () => {
+  for (const skillMd of [
+    ".claude/skills/aistudio/SKILL.md",
+    ".claude/skills/analyze-ref-video/SKILL.md",
+    ".claude/skills/compare-video/SKILL.md",
+    ".claude/skills/channel-dna/SKILL.md",
+  ]) {
+    const text = readFileSync(join(REPO_ROOT, skillMd), "utf8");
+    const hasControl = [...text].some((ch) => {
+      const code = ch.charCodeAt(0);
+      return (
+        (code >= 0 && code <= 8) ||
+        code === 11 ||
+        code === 12 ||
+        (code >= 14 && code <= 31) ||
+        code === 127
+      );
+    });
+    expect(hasControl, `control char in ${skillMd}`).toBe(false);
+  }
 });
 
 test("parseAndValidateDossier accepts valid v2 4-section dossier with zero warnings", () => {
