@@ -65,9 +65,17 @@ export const MAP = {
     ],
   },
   runButton: {
-    what: "Run button; its name is Run when idle and Stop while the model generates",
+    what: "Run button; its name starts with Run (plus shortcut badge) when idle and Stop while the model generates",
     where: "chat",
-    candidates: [{ role: "button", name: re("^(Run|Stop)$") }, { css: "ms-run-button button" }],
+    candidates: [
+      {
+        role: "button",
+        name: re(
+          "^(Run(\\s+(Ctrl|⌘|Cmd|Meta|Alt|Shift|Enter|Return|keyboard_return).*)?|Stop(\\s+(Esc|Ctrl|⌘|Cmd|Meta|keyboard_return).*)?)$",
+        ),
+      },
+      { css: "ms-run-button button" },
+    ],
   },
   account: {
     what: "signed-in Google account button (name 'Google Account: <name> (<email>)')",
