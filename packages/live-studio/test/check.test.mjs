@@ -2104,3 +2104,78 @@ test("check warns on near-miss built-in shape kind typos in text.json while allo
   assert.match(warns, /items\[1\]\.kind "circl".*did you mean "circle"/);
   assert.equal(warns.includes("customCallout"), false);
 });
+
+test("overlapping same-track captions at the same position warn; touching handoffs, stacked lines, and separate tracks do not", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 12 }));
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      tracks: { 0: { name: "captions" }, 1: { name: "banner" } },
+      items: [
+        { kind: "text", text: "First line", from: 0, to: 2.05, x: 0.5, y: 0.8, size: 72, track: 0 },
+        {
+          kind: "text",
+          text: "Second line",
+          from: 2.0,
+          to: 4.0,
+          x: 0.5,
+          y: 0.8,
+          size: 72,
+          track: 0,
+        },
+        {
+          kind: "text",
+          text: "Clean handoff",
+          from: 4.0,
+          to: 6.0,
+          x: 0.5,
+          y: 0.8,
+          size: 72,
+          track: 0,
+        },
+        {
+          kind: "text",
+          text: "Stacked top",
+          from: 4.0,
+          to: 6.0,
+          x: 0.5,
+          y: 0.2,
+          size: 72,
+          track: 0,
+        },
+        {
+          kind: "text",
+          text: "Other track",
+          from: 0.5,
+          to: 2.5,
+          x: 0.5,
+          y: 0.8,
+          size: 72,
+          track: 1,
+        },
+      ],
+    }),
+  );
+  const checked = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  const report = JSON.parse(checked.stdout);
+  const warns = (report.warnings ?? []).filter((w) => w.includes("overlap"));
+  assert.equal(warns.length, 1, JSON.stringify(report.warnings));
+  assert.match(
+    warns[0],
+    /items\[0\] "First line" and items\[1\] "Second line" overlap by 0\.050 s/,
+  );
+});

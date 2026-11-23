@@ -757,7 +757,8 @@ if (Array.isArray(textRead?.items)) {
   const heard = textClock ? mapTimeline("text", textRead, textClock, false, null, {}) : null;
   const said = [],
     late = [],
-    brief = [];
+    brief = [],
+    placed = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
     if (heard && (!h || h.to <= h.from)) return;
@@ -771,6 +772,10 @@ if (Array.isArray(textRead?.items)) {
     if (h) covered.text.push([h.from, Math.min(h.to, textEnd)]);
     const short = it.text.replace(/\s*\n\s*/g, " ").trim();
     const name = short.length > 28 ? `${short.slice(0, 27)}…` : short;
+    const from = h ? h.from : +it.from;
+    const to = h ? Math.min(h.to, textEnd) : +it.to;
+    if (Number.isFinite(from) && Number.isFinite(to) && to > from && !it.at)
+      placed.push({ i, name, from, to, track: it.track ?? 0, x: it.x ?? 0.5, y: it.y ?? 0.5 });
     const cut = h && h.to > textEnd;
     const pace = h && readPace(it, h, textEnd, textClock);
     (h ? readFaults(it, h, conf.ratio, textEnd, textClock) : sizeFaults(it, conf.ratio)).forEach(
@@ -782,6 +787,21 @@ if (Array.isArray(textRead?.items)) {
       },
     );
   });
+  for (let a = 0; a < placed.length; a++) {
+    for (let b = a + 1; b < placed.length; b++) {
+      const p = placed[a],
+        q = placed[b];
+      if (p.track !== q.track) continue;
+      if (Math.abs(p.x - q.x) >= 0.08 || Math.abs(p.y - q.y) >= 0.08) continue;
+      const start = Math.max(p.from, q.from),
+        end = Math.min(p.to, q.to),
+        overlap = end - start;
+      if (overlap > 1e-4)
+        said.push(
+          `⚠ ${conf.textTimeline} items[${p.i}] "${p.name}" and items[${q.i}] "${q.name}" overlap by ${overlap.toFixed(3)} s at ${start.toFixed(2)}-${end.toFixed(2)}${heard ? " heard" : ""} (same position): double-rendered captions; trim items[${p.i}].to <= items[${q.i}].from`,
+        );
+    }
+  }
   const folded = new Set(brief.length > 3 && !json ? brief.map((b) => b.line) : []);
   const lines = [
     ...(folded.size
