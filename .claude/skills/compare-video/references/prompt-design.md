@@ -60,3 +60,14 @@ Six independent reviewers across 3 rounds (Round 1 fixed 3 Required, Round 2 fix
 | Prompt v1 -> v2 | Added concision budget (1 sentence/row Sec 3, deduplicated globals, max `5` Minors), drift-confounding guard `REF(t-delta)`, Minecraft block-head exemption, Severity decoupled from `Conf`, `>=6f` black-tail threshold, and clean `PASS` template | `4/4` composite runs had `0` truncations, `0` count mismatches, `0` enum/order errors, `0` engine leaks, `0` style noise, `100%` `PASS` on identical clip |
 | CLI `reference sidebyside` | Added `bun run reference sidebyside`, extracted video helpers to `scripts/review/reference_video.mjs`, moved `process.exit(1)` outside `try/finally` in `runAtomicFfmpeg` to avoid temp leaks on FFmpeg timeout, added `exclusiveGroup` for `--short-edge`/`--full` in `cli-catalog.ts` | `53/53` tests pass (`1,556` assertions) covering draft-bar crop pixels, `vstack` frame pixels, audio hash, and timeout cleanup; `bun run verify` 0 warnings/errors |
 | CLI `aistudio/scripts/lib.ts` | Updated `waitForAnswer` (including `--collect`) to surface 65k Thoughts exhaustion & AI Studio alerts; updated `openTurnMenu` & `copyTurnMarkdown` (1 retry + safe listener cleanup in `finally`) | `4/4` `lib.test.ts` pass, `tsc --strict` exit `0`, `oxlint` 0 errors, `doctor --quick` `41/41` checks |
+
+## Field-Observed v3 Upgrade Candidates (Awaiting 4-Clip A/B Eval)
+
+Logged from multi-round live `food-eat-more` production audits (`v2 -> v3 -> final_sbs`, reducing verified defects from `15` Blockers to `0` Blockers). Do **not** edit `system/compare-2-video.md` directly without running the mandatory 4-clip A/B evaluation in [eval-guide.md](eval-guide.md):
+
+| Observed Pattern in v2 Live Audits | Candidate v3 Prompt Tightening |
+| --- | --- |
+| Mega-rows merged 4–5 unrelated per-shot rig bugs (`S01, S05, S07, S11, S12`) into one `Major` row (`f8–f1276`), obscuring triage and mixing real defects with false positives | Clarify Rule 5 consolidation: merge **only** single-cause global issues (e.g., global missing motion blur); keep distinct per-shot clipping/floating/acting bugs as separate rows |
+| Intentional creator overrides (e.g., 2-beat rim glow pulse) were re-flagged as `Major` on every round | Explicitly honor `Intentional overrides (do NOT flag): ...` when supplied in the user prompt while keeping strict pixel-first auditing everywhere else |
+| Contents seen through translucent glass jars were occasionally misread as `clipping through jar walls` | Add a 1-line translucent-glass/container optical note under Rule 1 alongside intentional blocky geometry |
+| Very dense first drafts (`>= 25` total defects) risked hitting the 65k output-length cap mid-Section 3 | Cap `Major` rows to top `10` whenever `Blocker >= 5` so all 4 sections always complete cleanly on early drafts |
