@@ -194,6 +194,10 @@ test("analyze-ref-video and compare-video stay open, style-agnostic, and share v
     join(ROOT, ".claude/skills/analyze-ref-video/system/analyze-ref-video.md"),
     "utf8",
   ).replace(/\r\n/g, "\n");
+  const analyzeSkill = readFileSync(
+    join(ROOT, ".claude/skills/analyze-ref-video/SKILL.md"),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
   const compareSys = readFileSync(
     join(ROOT, ".claude/skills/compare-video/system/compare-2-video.md"),
     "utf8",
@@ -202,14 +206,26 @@ test("analyze-ref-video and compare-video stay open, style-agnostic, and share v
     join(ROOT, ".claude/skills/compare-video/SKILL.md"),
     "utf8",
   ).replace(/\r\n/g, "\n");
-  const styleLeak = /\bminecraft\b|\bvoxel\b|\bblocky\b|block head|zack\s*d\b/i;
+  const promptLeak =
+    /\bminecraft\b|\bvoxel\b|\bblocky\b|block head|zack\s*d\b|\bthree\.js\b|3D or hybrid pipelines|3D\/Render QC|video\/3D AI/i;
   for (const [label, body] of [
     ["analyze-ref-video.md", analyzeSys],
     ["compare-2-video.md", compareSys],
-    ["compare-video/SKILL.md", compareSkill],
   ]) {
-    assert.equal(styleLeak.test(body), false, `${label} must stay style-agnostic`);
+    assert.equal(promptLeak.test(body), false, `${label} must stay open and medium-agnostic`);
   }
+  const compareSkillLeak = /\bminecraft\b|\bvoxel\b|\bblocky\b|block head|zack\s*d\b|3D render defects/i;
+  assert.equal(
+    compareSkillLeak.test(compareSkill),
+    false,
+    "compare-video/SKILL.md must stay open and style-agnostic",
+  );
+  const analyzeSkillLeak = /\bminecraft\b|\bblocky\b|block head/i;
+  assert.equal(
+    analyzeSkillLeak.test(analyzeSkill),
+    false,
+    "analyze-ref-video/SKILL.md must not hardcode a target style",
+  );
   const tax = (s) =>
     s.match(/## Reusable Film & Motion Craft Taxonomy[\s\S]*?(?=\n---\n)/)?.[0] ?? "";
   assert.ok(tax(analyzeSys).length > 200, "missing craft taxonomy");

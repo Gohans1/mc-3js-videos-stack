@@ -619,5 +619,61 @@
       "title": "Making of Apple Pay Action Film (Edgar Wright)",
       "genre": "live-action-commercial"
     }
-  ]
+  ],
+  "openMultiMediumEvalV4": {
+    "evaluatedAt": "2026-11-24",
+    "shippedPrompt": {
+      "file": ".claude/skills/analyze-ref-video/system/analyze-ref-video.md",
+      "version": "v4-open",
+      "lines": 100,
+      "scorer": ".claude/skills/analyze-ref-video/scripts/score-breakdown.ts",
+      "styleAgnosticGuardTest": "packages/live-studio/test/skills.test.mjs",
+      "model": "gemini-4-hydrogen",
+      "activeAudioListeningFix": true
+    },
+    "meanScoreOutOf100": 98.25,
+    "gtFramesVerified": "48/48",
+    "clips": {
+      "ood1_kurzgesagt": {
+        "genre": "2d-flat-vector",
+        "pillar1Max25": 25,
+        "pillar2Max25": 25,
+        "pillar3Max50": 49,
+        "totalOutOf100": 99,
+        "scenesMatched": "11/11",
+        "gtPanelsVerified": "12/12",
+        "leaks": 0
+      },
+      "ood2_apple_cinema": {
+        "genre": "live-action-commercial",
+        "pillar1Max25": 25,
+        "pillar2Max25": 25,
+        "pillar3Max50": 49,
+        "totalOutOf100": 99,
+        "scenesMatched": "32/32",
+        "gtPanelsVerified": "12/12",
+        "leaks": 0
+      },
+      "zdf28_grape_plasma_v4b": {
+        "genre": "3d-macro-vfx",
+        "pillar1Max25": 25,
+        "pillar2Max25": 25,
+        "pillar3Max50": 49,
+        "totalOutOf100": 99,
+        "gtPanelsVerified": "12/12",
+        "activeAudioListeningVerified": true,
+        "leaks": 0
+      },
+      "food_3dcg": {
+        "genre": "3d-explainer",
+        "pillar1Max25": 24,
+        "pillar2Max25": 25,
+        "pillar3Max50": 47,
+        "totalOutOf100": 96,
+        "gtPanelsVerified": "12/12",
+        "note": "Ran before activeAudioListeningFix (-2 on Soundscape; audio fix verified live on zdf28_grape_plasma_v4b)",
+        "leaks": 0
+      }
+    }
+  }
 }

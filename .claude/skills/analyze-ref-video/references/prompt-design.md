@@ -73,3 +73,15 @@ Three critics audited `861` shot rows (`801` non-opening boundaries) across 60 Z
 | Diegetic screens (phones, LCDs, TVs) | `18/60` (`30.0%`) | Documented `CanvasTexture` + `openfilm.json` recipe in `film.md` (kept `mc-assets/screen` scoped to `gohans:computer*`) |
 | `Hidden Cut` & `Hard Cut` | `Hidden Cut` `27/60` (`8.2%`); `Hard Cut` `16/60` (`2.9%`) | Already supported |
 | PiP, VHS, split-screen, dip-to-white hold | PiP `8/60` (`13.3%`), VHS `5–9/60`, split `2/60` (`3.3%`), dip `2/60` | Rejected custom engine wrappers to stay lean |
+
+## Open Multi-Medium Quantitative Eval (`v4-open`, 2026-11-24)
+
+Broadened Role line 4 from `3D or hybrid pipelines` to `any target medium (3D, 2D, animation, motion graphics, live-action, or hybrid)`, added an automated style/engine guard in `packages/live-studio/test/skills.test.mjs`, built the deterministic 100-point scorer `scripts/score-breakdown.ts` (Pillar 1 contract/hygiene `25` + Pillar 2 `scenes.py` cut alignment `25` + Pillar 3 12-frame 30fps GT audit `50`), and evaluated 4 diverse mediums live on `gemini-4-hydrogen` (`48/48` native 30fps GT panels verified visually). Initial testing caught a silent-clip assumption bug on captioned videos (`zdf28_grape_plasma` & `food_3dcg`); adding an explicit active-audio-listening guard in Rule 2 fixed it cleanly (verified live on `zdf28_grape_plasma_v4b` catching male VO pauses and ambient hum tail):
+
+| Clip | Medium | Pillar 1 (`/25`) | Pillar 2 (`/25`) | Pillar 3 (`/50`) | Total (`/100`) |
+| --- | --- | --- | --- | --- | --- |
+| `ood1_kurzgesagt` (`78.3s`) | 2D flat-vector | `25` | `25` (`11/11` cuts) | `49` (`12/12` GT) | **`99.0`** |
+| `ood2_apple_cinema` (`52.4s`) | Live-action commercial | `25` | `25` (`32/32` cuts) | `49` (`12/12` GT) | **`99.0`** |
+| `zdf28_grape_plasma_v4b` (`28.4s`) | 3D macro VFX | `25` | `25` | `49` (`12/12` GT, audio fixed) | **`99.0`** |
+| `food_3dcg` (`54.8s`) | 3D explainer | `24` | `25` | `47` (`12/12` GT, pre-audio fix) | **`96.0`** |
+| **Mean (4 mediums)** | **2D + Live-Action + 3D** | **`24.75`** | **`25.0`** | **`48.5`** | **`98.25%` (PASS `>=95%`)** |

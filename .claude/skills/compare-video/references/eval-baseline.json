@@ -467,5 +467,59 @@
         "chatUrl": "https://aistudio.google.com/prompts/19QpbJzP2CMgcoqsjMnYUDtRBpDN3qAW0"
       }
     }
+  },
+  "comparePromptEvalV3Open": {
+    "evaluatedAt": "2026-11-24",
+    "shippedPrompt": {
+      "file": ".claude/skills/compare-video/system/compare-2-video.md",
+      "version": "v3-open",
+      "lines": 94,
+      "styleAgnosticGuardTest": "packages/live-studio/test/skills.test.mjs",
+      "recommendedModel": "gemini-4-hydrogen"
+    },
+    "arms": {
+      "open_hydro_ident": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 69731,
+        "sec": 111.2,
+        "chars": 2195,
+        "verdict": "PASS",
+        "sevCounts": { "Blocker": 0, "Major": 0, "Minor": 0 },
+        "allHighConf": true,
+        "chatUrl": "https://aistudio.google.com/prompts/1mOLZYs936SlsQPpqqBq2C8uyaso1MJiG"
+      },
+      "open_hydro_synth": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 83671,
+        "sec": 225,
+        "chars": 4705,
+        "verdict": "FAIL",
+        "sevCounts": { "Blocker": 3, "Major": 2, "Minor": 0 },
+        "falsePositivesF0_104": 0,
+        "plantedFaultsCaught": "5/5",
+        "chatUrl": "https://aistudio.google.com/prompts/1qeA01bTnLoMACoc4z4jTd00KDJyCj5l9"
+      },
+      "open_hydro_food_final2": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 405.1,
+        "chars": 8719,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": { "Blocker": 0, "Major": 5, "Minor": 5 },
+        "verifiedRealMajorsFixed": 5,
+        "chatUrl": "https://aistudio.google.com/prompts/10sSg_U1EhdGsOsWTH1ggNPbA_PJaZJVK"
+      },
+      "open_hydro_food_final3": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 374,
+        "chars": 5210,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": { "Blocker": 0, "Major": 6, "Minor": 0 },
+        "step5VerifiedCounts": { "Blocker": 0, "Major": 0 },
+        "step5Verdict": "VERIFIED PASS",
+        "chatUrl": "https://aistudio.google.com/prompts/1b388F3GibU7Dojr8uvXdBN_gw4Iafet_"
+      }
+    }
   }
 }

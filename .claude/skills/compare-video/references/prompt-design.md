@@ -73,3 +73,13 @@ Multi-round live `food-eat-more` audits (`v2 -> v7`) exposed 5 failure modes in 
 | `food-eat-more` `v8_sbs` (`54.8s`, head-to-head on `neon`) | `NEEDS POLISH` `0/12/0`: 4 style/FP rows (`f814` bite-swap, `f309/f1448` halos, `f1069` cookie, `f1148` pipette) + 1 10-shot mega-row (`f228–f1641`) | `NEEDS POLISH` `0/14/0`: **`0` style/bite-swap/halo/pipette FP, `0` mega-rows**, caught every shared real defect (`f405–f406` & `f1493` caption overlaps, `f620` plant, `f1286→f1288`, `f1300` rain, `f1345` leaked frame, `f1520` early sparks) **+ 5 real temporal/framing bugs v2 missed** (`f78` near-cut blur drop, `f490` mid-whip table pop, `f959–f963` jar snap, `f1049–f1051` early whip, `f1195–f1215` flat bliss lens) | **Higher precision + higher temporal recall, zero mega-rows** |
 
 Intentional creator overrides (e.g., 2-beat rim glow pulse) remain strictly **out** of `compare-2-video.md` and AI Studio prompts; the filmmaking AI orchestrator filters `Dismissed (Intentional Override)` locally at `SKILL.md` Step 5 against `bun run notes`.
+
+## Open Style-Agnostic Refactor & `gemini-4-hydrogen` Verification (2026-11-23/24)
+
+All hardcoded Minecraft/voxel/blocky/3D-only terms were purged from `compare-2-video.md` and `SKILL.md` (enforced permanently by `packages/live-studio/test/skills.test.mjs`) so AI Studio output stays 100% pure across any visual medium (3D, 2D vector, anime, claymation, voxel, live-action), with all target-style filtering handled locally in `SKILL.md` Step 5. Live verification also uncovered a **model-level central-tendency quirk** in `gemini-4-neon` (collapsing 3-tier enums to `NEEDS POLISH`/`Major`/`Med` even on `0/0/0` identical clips and blackouts), whereas `gemini-4-hydrogen` obeyed all severity and verdict contracts strictly:
+
+| Verification Arm (`compare-2-video.md` open v3) | Model | Verdict & Raw B/M/m | Step-5 Verified Result |
+| --- | --- | --- | --- |
+| `synth_ident_sbs` (`10.0s`) | `gemini-4-hydrogen` | `PASS` `0/0/0` (`6/6 High`, `111s`) | `0` hallucinations (`30.0/30`), confirms `PASS` contract |
+| `synth_sbs` (`12.0s`, 5 zones) | `gemini-4-hydrogen` | `FAIL` `3/2/0` (`225s`) | `5/5` exact-frame planted faults (`0` FP in `f0–f104`), strict `Blocker` floor on blackouts, rewind cut & black tail |
+| `food-eat-more` `final` -> `final2` -> `final3` (`54.8s` 1080p) | `gemini-4-hydrogen` | `final` `0/11/0` (11 real bugs fixed) -> `final2` `0/5/5` (5 real bugs + 3 Minors fixed) -> `final3` `0/6/0` | Native 30fps verification (`f12`, `f78`, `f378`, `f702`, `f948`, `f1374`) confirmed **`0 Verified Blocker` / `0 Verified Major` -> `VERIFIED PASS`** (0 style-hardcoding noise) |

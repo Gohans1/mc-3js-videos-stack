@@ -1,11 +1,11 @@
 ---
 name: compare-video
-description: Compares a reference video (REF) against a remake render (OURS) at 24 FPS to surface frame-accurate camera, boundary, motion, acting, VFX, lighting, caption, and 3D render defects in a prioritized Blocker/Major/Minor ledger, driving an iterative verify-and-fix QA loop until pass. Backend-agnostic multimodal workflow (defaults today to the aistudio CLI). Use when asked to compare two videos, audit a remake against its reference, or iterate compare-and-fix until pass. Triggers include "compare video", "compare 2 videos", "compare ref vs ours", "audit remake", or Vietnamese equivalents ("so sánh 2 video", "so sánh video ref", "compare video đến khi pass").
+description: Compares a reference video (REF) against a remake render (OURS) at 24 FPS to surface frame-accurate camera, boundary, motion, acting, VFX, lighting, caption, and render/technical defects in a prioritized Blocker/Major/Minor ledger, driving an iterative verify-and-fix QA loop until pass. Backend-agnostic, style-agnostic multimodal workflow (defaults today to the aistudio CLI). Use when asked to compare two videos, audit a remake against its reference, or iterate compare-and-fix until pass. Triggers include "compare video", "compare 2 videos", "compare ref vs ours", "audit remake", or Vietnamese equivalents ("so sánh 2 video", "so sánh video ref", "compare video đến khi pass").
 ---
 
 # compare-video
 
-Backend-agnostic `REF` vs `OURS` comparison and remake QA skill: tiles both videos into one synced 720p side-by-side composite, runs the calibrated 4-section comparison prompt [system/compare-2-video.md](system/compare-2-video.md) through any 24 FPS multimodal runner (defaulting today to `.claude/skills/aistudio/scripts/ask.ts`), and enforces native 30fps local ground-truth verification before every fix round.
+Backend-agnostic, style-agnostic `REF` vs `OURS` comparison and remake QA skill: tiles both videos into one synced 720p side-by-side composite, runs the calibrated 4-section comparison prompt [system/compare-2-video.md](system/compare-2-video.md) through any 24 FPS multimodal runner (defaulting today to `.claude/skills/aistudio/scripts/ask.ts`), and enforces native 30fps local ground-truth verification before every fix round. Target visual-style filtering always belongs at the filmmaking-agent layer (Step 5) — never hardcode a specific visual style into this skill or its system prompt.
 
 ## Review Gate & Iterative QA Loop
 
@@ -40,7 +40,7 @@ Run from the repo root (`ASK = bun .claude/skills/aistudio/scripts/ask.ts`):
 ASK --tab cmp-qa --model gemini-4-hydrogen --thinking "Extra High" --media High --fps 24 --tool search=off --system-file .claude/skills/compare-video/system/compare-2-video.md films/<name>/renders/reference/vN_sbs.mp4 "Compare REF (left) vs OURS (right) across the full video." --out films/<name>/renders/reference/vN_compare.md
 ```
 
-Keep the user prompt strictly blind and neutral (panel layout + scope only) — never add Creator Notes or "ignore X" instructions to AI Studio; filter intentional divergences locally in Step 5 instead. Always pass `--model gemini-4-hydrogen --thinking "Extra High" --tool search=off` for high-precision defect recall, and close temporary tabs afterward via `bun .claude/skills/aistudio/scripts/studio.ts tab close cmp-qa`.
+Keep the user prompt strictly blind and neutral (panel layout + scope only) — never add Creator Notes, style rules, or "ignore X" instructions to AI Studio; filter intentional medium adaptations and overrides locally in Step 5 instead. **Always prefer `--model gemini-4-hydrogen --thinking "Extra High" --tool search=off`** for `compare-video` (empirical A/B testing proved `gemini-4-neon` suffers central-tendency enum collapse to `NEEDS POLISH`/`Major`/`Med` even on `0/0/0` identical clips and blackout faults, whereas `gemini-4-hydrogen` hits exact `PASS 0/0/0` + `Conf=High` and strict `Blocker` recall), and close temporary tabs afterward via `bun .claude/skills/aistudio/scripts/studio.ts tab close cmp-qa`.
 
 ## Backend-Agnostic Runner Contract
 

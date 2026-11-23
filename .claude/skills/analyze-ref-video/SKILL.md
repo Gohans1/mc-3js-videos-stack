@@ -26,7 +26,7 @@ Run from the repo root (`ASK = bun .claude/skills/aistudio/scripts/ask.ts`):
 ASK --tab ref-analyze --model gemini-4-neon --thinking "Extra High" --media High --fps 24 --tool search=off --system-file .claude/skills/analyze-ref-video/system/analyze-ref-video.md films/<name>/renders/reference/ref_timecode.mp4 "Analyze this reference video in full detail." --out films/<name>/renders/reference/ref_breakdown.md
 ```
 
-Close temporary tabs afterward via `bun .claude/skills/aistudio/scripts/studio.ts tab close ref-analyze`. For maximum visual-craft rigor on dense 3D/VFX clips, you may pass `--model gemini-4-hydrogen --thinking "Extra High"`.
+Close temporary tabs afterward via `bun .claude/skills/aistudio/scripts/studio.ts tab close ref-analyze`. For maximum visual-craft rigor on dense visual/VFX clips, you may pass `--model gemini-4-hydrogen --thinking "Extra High"`.
 
 ## Backend-Agnostic Runner Contract
 
@@ -51,7 +51,8 @@ This skill owns the **workflow, system prompt, design rationale, and eval baseli
 
 | Path | Purpose |
 | --- | --- |
-| [system/analyze-ref-video.md](system/analyze-ref-video.md) | Official v4 system prompt (100 lines, 4 sections, 5-state boundaries, 3-way byte-identical Craft Taxonomy) |
+| [system/analyze-ref-video.md](system/analyze-ref-video.md) | Official open, style-agnostic v4 system prompt (100 lines, 4 sections, 5-state boundaries, active audio listening guard, 3-way byte-identical Craft Taxonomy) |
+| [scripts/score-breakdown.ts](scripts/score-breakdown.ts) | Deterministic quantitative scorer (Pillar 1 contract/hygiene `25 pts` + Pillar 2 `scenes.py` boundary alignment `25 pts` + 12-frame 30fps GT sampling plan; unit-tested in `score-breakdown.test.ts`) |
 | [references/prompt-design.md](references/prompt-design.md) | v1->v4 engineering log, shared Taxonomy contract, `N=60` baseline, and controlled v3 vs v4 A/B scores |
-| [references/eval-guide.md](references/eval-guide.md) | Mandatory pre-edit rules, 5-step A/B upgrade loop, 6-axis 30-point rubric, and 8-clip stratified regression suite |
-| [references/eval-baseline.json](references/eval-baseline.json) | Machine-readable JSON storing the 60 Zack D. Films IDs, `N=60` verified craft frequencies, and v3 vs v4 blind critic scores |
+| [references/eval-guide.md](references/eval-guide.md) | Mandatory pre-edit rules, 3-pillar 100-point quantitative eval rubric (`>=95%` ship gate), 5-step A/B upgrade loop, and multi-medium regression suite |
+| [references/eval-baseline.json](references/eval-baseline.json) | Machine-readable JSON storing historical v3/v4 baselines and open multi-medium quantitative scores |

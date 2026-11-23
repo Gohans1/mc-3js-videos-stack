@@ -14,6 +14,19 @@ Every change must pass head-to-head live A/B testing on the same multimodal back
 | Zero engine/channel leaks | Ban fixed channel names, Three.js syntax, `draw(t)`, CLI flags, or auto-shutter assumptions | Keeps prompts universal across 3D, 2D vector, live-action, and commercials |
 | Keep Taxonomy mode-agnostic | `## Reusable Film & Motion Craft Taxonomy` must remain byte-identical across `.claude/skills/analyze-ref-video/system/analyze-ref-video.md`, `.claude/skills/compare-video/system/compare-2-video.md`, and `.claude/skills/channel-dna/system/learn-channel-video.md` (enforced by unit test) | Guarantees one shared vocabulary across breakdown, comparison, and channel learning |
 | Ban optical finishing fabrication | Always require pixel evidence before logging grain, flare, halation, CA, or vignette | Stops the model from inventing film-stock grit on clean CG renders |
+| Enforce active audio listening | Explicitly require listening to the attached audio stream even when burnt-in captions appear | Prevents models from falsely assuming captioned videos are silent/frame-only |
+
+## Quantitative 100-Point Open Eval System (`>= 95%` Ship Gate)
+
+Because breakdowns do not emit `Blocker`/`Major` counts, score every open multi-medium candidate on one objective 100-point scale combining deterministic code linting (`scripts/score-breakdown.ts`) and 30fps pixel verification across diverse mediums (2D flat-vector, live-action cinema, 3D VFX, 3D explainer):
+
+| Pillar | Points | Method & Hard Gate |
+| --- | --- | --- |
+| Pillar 1: Deterministic Contract & Hygiene | `25` | `bun .claude/skills/analyze-ref-video/scripts/score-breakdown.ts <md> --duration <sec> --json` — 4 complete sections (`4`), zero engine/style leaks or unattributed `mm` guesses (`5`), valid 5-state boundaries + exact Sec 1/2 count parity (`6`), valid 8-category Taxonomy + ascending Sec 3 order + zero audio catch-alls (`6`), qualitative lens/curve/shadow/finishing/Secret-Sauce signal density (`4`) |
+| Pillar 2: Automated Cut-Map Alignment | `25` | Pass `--scenes <scenes.py result.json>` to `score-breakdown.ts` — measures exact boundary recall (`±5f` tolerance) against deterministic PySceneDetect cuts |
+| Pillar 3: 12-Frame 30fps Visual & Audio GT Audit | `50` | Inspect 12 native frames per clip (`8` claim-targeted + `4` blind recall slots at `5%`/`35%`/`68%`/`94%` printed by `gtSamplingPlan`): factual claim precision (`15`), blind recall & Secret-Sauce capture (`15`), medium-agnostic vocabulary & zero fabricated grit/SFX (`10`), actionable buildability + genuine audio listening (`10`) |
+
+**Ship Gate:** Mean score `>= 95.0 / 100` (`95–99%`) across all tested visual mediums with `0` engine/style leaks and `>= 97%` verified 30fps claim precision.
 
 ## 5-Step Upgrade Loop
 
