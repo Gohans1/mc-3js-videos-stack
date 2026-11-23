@@ -120,7 +120,8 @@ export const timedDraw = (draw) => {
   const asyncFrame = draw.renderFrame?.bind(draw);
   const at = (t, render, options) => {
     const { world: frame, camera, worldAtCamera } = cameraTimesAt(t);
-    const layers = layerClock.sourceAt(t);
+    const layerAt = options?.layerTime ?? t;
+    const layers = layerClock.sourceAt(layerAt);
     const adjustment = clockForTimeline("adjustment");
     return render(frame, {
       ...options,
@@ -128,10 +129,10 @@ export const timedDraw = (draw) => {
       worldAtCamera,
       layers,
       adjustments: adjustment.sourceAt(t),
-      textTime: (item) => overlayTime(layerClock, t, item),
+      textTime: (item) => overlayTime(layerClock, layerAt, item),
       adjustmentTime: (item) => overlayTime(adjustment, t, item),
       pictureVisible: frameVisible(timingClock, t),
-      layersVisible: frameVisible(layerClock, t),
+      layersVisible: frameVisible(layerClock, layerAt),
       adjustmentsVisible: frameVisible(adjustment, t),
       transitionVisible: (at) => transitionAvailable(timingClock, at),
       velocity: velocityAt(timing.velocity, frame),

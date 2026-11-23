@@ -194,3 +194,18 @@ test("the built film exposes output times while camera and procedural motion sam
   assert.deepEqual(draw(6), { camera: 12, actor: Math.sin(6), light: 0 });
   assert.equal(draw.tools.tag, "scene");
 });
+
+test("layerTime keeps 2D text/layer clocks locked to the whole frame time during shutter sub-frame samples", () => {
+  setTiming({}, 10);
+  const draw = timedDraw((frame, { layers, textTime, layersVisible }) => ({
+    frame,
+    layers,
+    textAt: textTime({ from: 5.672, to: 7.207 }),
+    layersVisible,
+  }));
+  const sub = draw(5.68, { layerTime: 5.667 });
+  assert.equal(sub.frame, 5.68);
+  assert.equal(sub.layers, 5.667);
+  assert.equal(sub.textAt, 5.667);
+  assert.equal(sub.layersVisible, true);
+});

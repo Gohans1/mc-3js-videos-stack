@@ -24,6 +24,7 @@ import {
   copyTurnMarkdown,
   currentChatUrl,
   currentTab,
+  detectPossibleTruncation,
   fill,
   GENERATING,
   has,
@@ -453,12 +454,15 @@ add("wait for answer", () =>
   }),
 );
 
+let truncationReason: string | null = null;
+
 add("copy answer", async () => {
   if (js<string>(CHAT_ID)) chatUrl = currentChatUrl();
   answer = await copyTurnMarkdown(-1);
   if (!answer.trim())
     throw new StepError(`the answer is empty; AI Studio alerts: ${pageAlerts() || "none"}`);
-  return `${answer.length} chars of markdown`;
+  truncationReason = detectPossibleTruncation(answer);
+  return `${answer.length} chars of markdown${truncationReason ? ` (⚠ may be truncated: ${truncationReason})` : ""}`;
 });
 
 add("save answer", async () => {
@@ -474,6 +478,10 @@ add("save answer", async () => {
 
 await runSteps(steps, {
   onDone: () => {
+    if (truncationReason)
+      console.error(
+        `  ⚠ warning: answer may be truncated (${truncationReason}); send a follow-up to continue from where it stopped`,
+      );
     console.error(
       `  chat: ${chatUrl || `(not saved yet; run ${ASK}${tabFlag()} --collect later to get its link)`}`,
     );

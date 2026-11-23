@@ -1,6 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { formatCopyFailureError, formatStoppedRunError, toSeconds } from "./lib";
+import {
+  detectPossibleTruncation,
+  formatCopyFailureError,
+  formatStoppedRunError,
+  toSeconds,
+} from "./lib";
 
 // AI Studio rewrites clip times when it saves them (0m2s comes back as 2s), so times compare as seconds.
 test("toSeconds reads every spelling the video dialog accepts or writes back", () => {
@@ -30,4 +35,21 @@ test("formatCopyFailureError appends AI Studio alerts when present", () => {
     '"Copy as markdown" of turn -1 copied nothing; AI Studio says: Quota exceeded: daily limit',
   );
   expect(formatCopyFailureError(-1, "")).toBe('"Copy as markdown" of turn -1 copied nothing');
+});
+
+test("detectPossibleTruncation flags mid-table, unclosed fence, unclosed bold, and trailing mid-clause cuts without false positives", () => {
+  expect(detectPossibleTruncation("| Blocker | 00:30.167–00:32.367 (f905–f971) |")).toBeNull();
+  expect(detectPossibleTruncation("| Blocker | 00:30.167–00:32.367 (f905–f971)")).toBe(
+    "incomplete trailing markdown table row",
+  );
+  expect(detectPossibleTruncation("```ts\nconst x = 1;")).toBe("unclosed fenced code block");
+  expect(detectPossibleTruncation("```ts\nconst x = 1;\n```")).toBeNull();
+  expect(detectPossibleTruncation("Summary: **incomplete bold")).toBe(
+    "unclosed bold span on final line",
+  );
+  expect(detectPossibleTruncation("Summary: **done** and `**code**`")).toBeNull();
+  expect(detectPossibleTruncation("First, check the framing,")).toBe(
+    "ends mid-clause with trailing punctuation",
+  );
+  expect(detectPossibleTruncation("## Verdict\nAll checks pass.")).toBeNull();
 });

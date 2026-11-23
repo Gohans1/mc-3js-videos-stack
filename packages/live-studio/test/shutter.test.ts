@@ -4,6 +4,7 @@ import { ShotsTimeline } from "../src/contract";
 import {
   apertureSamples,
   MAX_SHUTTER_SAMPLES,
+  samplesForMotion,
   samplesForTurn,
   shutterBounds,
   shutterSamples,
@@ -69,4 +70,44 @@ test("per-shot shutter.samples boosts multi-sample renders up to MAX_SHUTTER_SAM
   expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 0 } }]).success).toBe(false);
   expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 65 } }]).success).toBe(false);
   expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 12.5 } }]).success).toBe(false);
+});
+
+test("samplesForMotion boosts shutter samples for fast linear trucks and dollies, not only camera rotation", () => {
+  const fwd = [0, 0, -1];
+  expect(
+    samplesForMotion(
+      8,
+      { facing: fwd, pos: [0, 0, 0], focusDist: 1.4 },
+      { facing: fwd, pos: [0.017, 0, 0], focusDist: 1.4 },
+      38,
+      960,
+    ),
+  ).toBeGreaterThan(24);
+  expect(
+    samplesForMotion(
+      8,
+      { facing: fwd, pos: [0, 0, 0], focusDist: 1.4 },
+      { facing: fwd, pos: [0.001, 0, 0], focusDist: 1.4 },
+      38,
+      960,
+    ),
+  ).toBe(8);
+  expect(
+    samplesForMotion(
+      8,
+      { facing: fwd, pos: [0, 0, 0], focusDist: 1.0 },
+      { facing: fwd, pos: [0, 0, -0.05], focusDist: 1.0 },
+      45,
+      960,
+    ),
+  ).toBeGreaterThan(16);
+  expect(
+    samplesForMotion(
+      8,
+      { facing: [0, 0, -1], pos: [0, 0, 0], focusDist: 1.5 },
+      { facing: [Number.NaN, 0, 0], pos: [0, 0, 0], focusDist: 1.5 },
+      45,
+      960,
+    ),
+  ).toBe(8);
 });

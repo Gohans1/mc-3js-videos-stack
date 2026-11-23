@@ -346,7 +346,7 @@ export const buildScene = (canvas: HTMLCanvasElement, W: number, H: number) => {
   const part = film.render("clip", ["--chunks", "0"]);
   assert.equal(part.status, 0, part.stdout + part.stderr);
   assert.match(part.stdout, /chunk 1 was drawn before the film's last change/);
-  assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "unavailable");
+  assert.equal(renderCuts(film.dir, "renders/draft_video.mp4").status, "bound");
   assert.match(
     staleVideo(film.dir, join(film.dir, "renders/draft_video.mp4"))?.message ?? "fresh",
     /narration clips moved/,

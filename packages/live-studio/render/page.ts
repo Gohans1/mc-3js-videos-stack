@@ -8,7 +8,7 @@ import { chunksOf } from "../src/frame";
 import { renderCost } from "../src/render-cost.mjs";
 import {
   apertureSamples,
-  samplesForTurn,
+  samplesForMotion,
   shutterBounds,
   shutterSamples,
   shutterTimes,
@@ -249,10 +249,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       }
       acc.reset();
       const camera = render.tools?.camera;
-      let facing = null;
+      let prevPose = null;
       for (let k = 0; k < times.length; k++) {
         for (const aperture of pupils) {
-          const options = aperture ? { aperture } : undefined;
+          const options = aperture ? { aperture, layerTime: t } : { layerTime: t };
           if (render.renderFrame) await render.renderFrame(times[k], options);
           else render(times[k], options);
           drawn++;
@@ -260,10 +260,18 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         }
         const e = camera?.matrixWorld?.elements;
         if (k > 1 || !e || times.length < 2 || times.length > shotSamples) continue;
-        const now = [-e[8], -e[9], -e[10]];
-        if (k === 0) facing = now;
+        const look = render.tools?.look;
+        const focusDist =
+          render.tools?.optics?.focusM ??
+          (look ? Math.hypot(e[12] - look.x, e[13] - look.y, e[14] - look.z) : undefined);
+        const now = {
+          facing: [-e[8], -e[9], -e[10]],
+          pos: [e[12], e[13], e[14]],
+          focusDist,
+        };
+        if (k === 0) prevPose = now;
         else {
-          const more = samplesForTurn(times.length, facing, now, camera.fov, cfg.H);
+          const more = samplesForMotion(times.length, prevPose, now, camera.fov, cfg.H);
           if (more > times.length) {
             times = shutterTimes(t, FPS, more, from, to, shutter);
             whips.frames++;

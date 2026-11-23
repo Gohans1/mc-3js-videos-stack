@@ -80,7 +80,14 @@ export const apertureSamples = (count: number, time = 0): (ApertureSample | unde
 };
 
 const GAP_PX = 12;
+const MOTION_GAP_RATIO = 0.004;
+const MIN_MOTION_GAP_PX = 3;
 export const MAX_SHUTTER_SAMPLES = 64;
+export interface CameraPose {
+  facing: readonly number[];
+  pos?: readonly number[];
+  focusDist?: number;
+}
 export const shutterSamples = (base: number, shutter?: Shutter) => {
   if (base <= 1) return base;
   const raw = shutter?.samples;
@@ -101,4 +108,45 @@ export const samplesForTurn = (
   const px = (turn / ((fovDeg * Math.PI) / 180)) * height;
   if (!(px > GAP_PX)) return samples;
   return Math.min(MAX_SHUTTER_SAMPLES, Math.ceil((samples * px) / GAP_PX));
+};
+export const samplesForMotion = (
+  samples: number,
+  before: CameraPose,
+  after: CameraPose,
+  fovDeg: number,
+  height: number,
+) => {
+  const fovRad = (fovDeg * Math.PI) / 180;
+  if (!(fovRad > 0) || !(height > 0)) return samples;
+  const gapPx = Math.max(MIN_MOTION_GAP_PX, height * MOTION_GAP_RATIO);
+  const f0Len = Math.hypot(before.facing[0], before.facing[1], before.facing[2]);
+  const f1Len = Math.hypot(after.facing[0], after.facing[1], after.facing[2]);
+  if (!(f0Len > 0) || !(f1Len > 0)) return samples;
+  const dot =
+    before.facing[0] * after.facing[0] +
+    before.facing[1] * after.facing[1] +
+    before.facing[2] * after.facing[2];
+  const turn = Math.acos(Math.min(1, Math.max(-1, dot / (f0Len * f1Len))));
+  const pxTurn = (turn / fovRad) * height;
+  let pxLat = 0;
+  let pxAxial = 0;
+  if (before.pos && after.pos) {
+    const dx = after.pos[0] - before.pos[0];
+    const dy = after.pos[1] - before.pos[1];
+    const dz = after.pos[2] - before.pos[2];
+    const fx = before.facing[0] / f0Len;
+    const fy = before.facing[1] / f0Len;
+    const fz = before.facing[2] / f0Len;
+    const proj = dx * fx + dy * fy + dz * fz;
+    const axial = Math.abs(proj);
+    const lateral = Math.hypot(dx - proj * fx, dy - proj * fy, dz - proj * fz);
+    const rawDist = before.focusDist ?? after.focusDist ?? 1.5;
+    const dist = Number.isFinite(rawDist) && rawDist > 0 ? Math.max(0.25, rawDist) : 1.5;
+    const worldH = 2 * dist * Math.tan(fovRad / 2);
+    if (worldH > 0) pxLat = (lateral / worldH) * height;
+    pxAxial = (axial / dist) * 0.25 * height;
+  }
+  const px = Math.hypot(pxTurn, pxLat) + pxAxial;
+  if (!(px > gapPx)) return samples;
+  return Math.min(MAX_SHUTTER_SAMPLES, Math.ceil((samples * px) / gapPx));
 };

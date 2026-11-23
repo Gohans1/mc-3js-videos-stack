@@ -742,6 +742,29 @@ export function formatCopyFailureError(index: number, alerts: string): string {
   return `"Copy as markdown" of turn ${index} copied nothing${alerts ? `; AI Studio says: ${alerts}` : ""}`;
 }
 
+export function detectPossibleTruncation(markdown: string): string | null {
+  const trimmed = markdown.trimEnd();
+  if (!trimmed) return null;
+  const lines = trimmed.split(/\r?\n/);
+  let openFence: { ch: string; len: number } | null = null;
+  for (const line of lines) {
+    const m = /^\s*(`{3,}|~{3,})(.*)$/.exec(line);
+    if (!m) continue;
+    const fence = m[1]!;
+    const rest = m[2] ?? "";
+    if (!openFence) openFence = { ch: fence[0]!, len: fence.length };
+    else if (fence[0] === openFence.ch && fence.length >= openFence.len && rest.trim() === "")
+      openFence = null;
+  }
+  if (openFence) return "unclosed fenced code block";
+  const last = lines.at(-1)!.trim();
+  if (last.startsWith("|") && !last.endsWith("|")) return "incomplete trailing markdown table row";
+  const noCode = last.replace(/`[^`]*`/g, "").replace(/\\\*/g, "");
+  if (((noCode.match(/\*\*/g)?.length ?? 0) & 1) === 1) return "unclosed bold span on final line";
+  if (/[,;([\\—–]$/.test(last)) return "ends mid-clause with trailing punctuation";
+  return null;
+}
+
 /** Waits until the model is idle and the last turn is its answer. turnsBefore = turn count before the run, if one was sent here. */
 export async function waitForAnswer(opts: {
   turnsBefore?: number;
