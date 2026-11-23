@@ -26,14 +26,8 @@
     "independentReviewRounds": {
       "round1": {
         "reviewers": 2,
-        "verdicts": [
-          "FAIL",
-          "FAIL"
-        ],
-        "critical": [
-          0,
-          0
-        ],
+        "verdicts": ["FAIL", "FAIL"],
+        "critical": [0, 0],
         "requiredOverlap": 3,
         "requiredBlockers": [
           "eval-baseline/doc metric bugs (v2_food_2file truncated=true & 0/13 Sec3, v2_synth_4defects crop_overextended_after_255=true, v2_synth_drift_vstack judder f110-f149 +20f static onset lag & +11f vs +12f, v2 34/34 vs 36/36 panel attribution)",
@@ -73,14 +67,8 @@
       },
       "round2": {
         "reviewers": 2,
-        "verdicts": [
-          "FAIL",
-          "FAIL"
-        ],
-        "critical": [
-          0,
-          0
-        ],
+        "verdicts": ["FAIL", "FAIL"],
+        "critical": [0, 0],
         "requiredOverlap": 2,
         "requiredBlockers": [
           "eval_cmp_metrics.mjs cross-line and unanchored regex false positives inflated arm_b (6/13->9/13) and arm_c2 (9/13->10/13), plus prompt-compare-design.md misattributed VO desync to v2_food_sbs (fixed with per-row negative-lookbehind regexes and accurate extra catches)",
@@ -119,18 +107,9 @@
       },
       "round3": {
         "reviewers": 2,
-        "verdicts": [
-          "PASS",
-          "PASS"
-        ],
-        "critical": [
-          0,
-          0
-        ],
-        "required": [
-          0,
-          0
-        ],
+        "verdicts": ["PASS", "PASS"],
+        "critical": [0, 0],
+        "required": [0, 0],
         "scoresOutOf30": {
           "arm_a_old_2file": {
             "r1": 9.5,
@@ -407,6 +386,85 @@
           "fake_crop_during_drift": false
         },
         "chatUrl": "https://aistudio.google.com/prompts/1p95WfqCq-paCveeTxe3vpxbVSsG0XFZb"
+      }
+    }
+  },
+  "comparePromptEvalV3": {
+    "evaluatedAt": "2026-11-23",
+    "shippedPrompt": {
+      "file": ".claude/skills/compare-video/system/compare-2-video.md",
+      "version": "v3",
+      "lines": 94,
+      "taxonomyVerbatimParityWithAnalyzeRef": true,
+      "settings": {
+        "model": "gemini-4-neon",
+        "thinking": "Extra High",
+        "media": "High",
+        "fps": 24,
+        "search": "off"
+      }
+    },
+    "arms": {
+      "v3_synth_ident": {
+        "tokens": 69734,
+        "sec": 433.9,
+        "chars": 3593,
+        "truncated": false,
+        "verdict": "PASS",
+        "sevCounts": { "Blocker": 0, "Major": 0, "Minor": 0 },
+        "falsePositives": 0,
+        "chatUrl": "https://aistudio.google.com/prompts/1ggLFCts8lrO-ieQ1zQAJ82GOXlf0dYqe"
+      },
+      "v3_synth_sbs": {
+        "tokens": 83674,
+        "sec": 440.7,
+        "chars": 7354,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": { "Blocker": 5, "Major": 0, "Minor": 0 },
+        "falsePositivesF0_104": 0,
+        "plantedFaultsCaught": "5/5",
+        "cropOverextendedAfter255": false,
+        "chatUrl": "https://aistudio.google.com/prompts/1Gf33iTk1sMifZnySp-PAofesiRC3l3vV"
+      },
+      "v3_synth_drift_vstack": {
+        "tokens": 97614,
+        "sec": 330.8,
+        "chars": 3666,
+        "truncated": false,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": { "Blocker": 0, "Major": 3, "Minor": 0 },
+        "falsePositivesF0_109": 0,
+        "judderDetectedF110_149": true,
+        "freeze150_179": true,
+        "driftReportedFrames": 12,
+        "driftGroundTruthFrames": 12,
+        "fakeCropDuringDrift": false,
+        "note": "gemini-4-neon scored all vstack rows at Conf=Med and softened freeze/Hard Cut to Major; recall and drift math are exact (+12f, 0 FP)",
+        "chatUrl": "https://aistudio.google.com/prompts/1DBMCFd0uittJRul0cvk6kVQE3ZbzyCBe"
+      },
+      "v2_food_v8_sbs_neon": {
+        "tokens": 376414,
+        "sec": 496.1,
+        "chars": 8788,
+        "truncated": false,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": { "Blocker": 0, "Major": 12, "Minor": 0 },
+        "styleAndHallucinationFPs": 4,
+        "megaRows": 1,
+        "chatUrl": "https://aistudio.google.com/prompts/14WBTWfJiY-AAi4FPsn8YqgFoaldJt11E"
+      },
+      "v3_food_v8_sbs_neon": {
+        "tokens": 376414,
+        "sec": 631.6,
+        "chars": 8620,
+        "truncated": false,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": { "Blocker": 0, "Major": 14, "Minor": 0 },
+        "styleAndHallucinationFPs": 0,
+        "megaRows": 0,
+        "extraVerifiedRealCatchesOverV2": 5,
+        "chatUrl": "https://aistudio.google.com/prompts/19QpbJzP2CMgcoqsjMnYUDtRBpDN3qAW0"
       }
     }
   }

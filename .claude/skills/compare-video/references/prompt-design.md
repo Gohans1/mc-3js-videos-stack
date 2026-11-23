@@ -1,6 +1,6 @@
-# Two-Video Comparison Prompt Design (`compare-2-video` v2)
+# Two-Video Comparison Prompt Design (`compare-2-video` v3)
 
-Canonical engineering log of design rationale, 7 documented VLM comparison traps, the 10-arm evaluation matrix on `gemini-4-hydrogen`, and trade-offs for `system/compare-2-video.md` (official v2, 94 lines). For the upgrade loop see [eval-guide.md](eval-guide.md); raw scores live under `comparePromptEval` in [eval-baseline.json](eval-baseline.json).
+Canonical engineering log of design rationale, 7 documented VLM comparison traps, the 10-arm v2 matrix on `gemini-4-hydrogen`, and the 4-clip v3 A/B upgrade on `gemini-4-neon` for `system/compare-2-video.md` (official v3, 94 lines). For the upgrade loop see [eval-guide.md](eval-guide.md); raw scores live under `comparePromptEval` and `comparePromptEvalV3` in [eval-baseline.json](eval-baseline.json).
 
 ## Inherited Taxonomy & 7 VLM Video-Comparison Traps
 
@@ -61,13 +61,15 @@ Six independent reviewers across 3 rounds (Round 1 fixed 3 Required, Round 2 fix
 | CLI `reference sidebyside` | Added `bun run reference sidebyside`, extracted video helpers to `scripts/review/reference_video.mjs`, moved `process.exit(1)` outside `try/finally` in `runAtomicFfmpeg` to avoid temp leaks on FFmpeg timeout, added `exclusiveGroup` for `--short-edge`/`--full` in `cli-catalog.ts` | `53/53` tests pass (`1,556` assertions) covering draft-bar crop pixels, `vstack` frame pixels, audio hash, and timeout cleanup; `bun run verify` 0 warnings/errors |
 | CLI `aistudio/scripts/lib.ts` | Updated `waitForAnswer` (including `--collect`) to surface 65k Thoughts exhaustion & AI Studio alerts; updated `openTurnMenu` & `copyTurnMarkdown` (1 retry + safe listener cleanup in `finally`) | `4/4` `lib.test.ts` pass, `tsc --strict` exit `0`, `oxlint` 0 errors, `doctor --quick` `41/41` checks |
 
-## Field-Observed v3 Upgrade Candidates (Awaiting 4-Clip A/B Eval)
+## Shipped v3 Upgrade & 4-Clip A/B Evaluation (`gemini-4-neon`, 2026-11-23)
 
-Logged from multi-round live `food-eat-more` production audits (`v2 -> v3 -> final_sbs`, reducing verified defects from `15` Blockers to `0` Blockers). Do **not** edit `system/compare-2-video.md` directly without running the mandatory 4-clip A/B evaluation in [eval-guide.md](eval-guide.md):
+Multi-round live `food-eat-more` audits (`v2 -> v7`) exposed 5 failure modes in v2: blocky hand-grip / bite-state swap false positives, translucent glass interior misreads, mega-rows merging 4–10 unrelated shots, secondary-staging inflation to `Blocker`, and hidden defect-quota pressure on clean stylized remakes. All 5 were fixed in v3 (`94` lines, byte-identical Taxonomy) and evaluated across all 4 control clips on `gemini-4-neon` (`Thinking: Extra High`, `Media: High`, `24fps`, `Search: off`):
 
-| Observed Pattern in v2 Live Audits | Candidate v3 Prompt Tightening |
-| --- | --- |
-| Mega-rows merged 4–5 unrelated per-shot rig bugs (`S01, S05, S07, S11, S12`) into one `Major` row (`f8–f1276`), obscuring triage and mixing real defects with false positives | Clarify Rule 5 consolidation: merge **only** single-cause global issues (e.g., global missing motion blur); keep distinct per-shot clipping/floating/acting bugs as separate rows |
-| Intentional creator overrides (e.g., 2-beat rim glow pulse) were re-flagged as `Major` on every round | **Do NOT inject overrides into the VLM prompt or `compare-2-video.md`** (priming the comparator risks attention bias and softening nearby real defects). Keep the VLM 100% blind and filter `Dismissed (Intentional Override)` locally in the filmmaking AI orchestrator (`SKILL.md` Step 5) against `bun run notes` |
-| Contents seen through translucent glass jars were occasionally misread as `clipping through jar walls` | Add a 1-line translucent-glass/container optical note under Rule 1 alongside intentional blocky geometry |
-| Very dense first drafts (`>= 25` total defects) risked hitting the 65k output-length cap mid-Section 3 | Cap `Major` rows to top `10` whenever `Blocker >= 5` so all 4 sections always complete cleanly on early drafts |
+| Control Clip | v2 Baseline / Head-to-Head | v3 Result (`gemini-4-neon`) | Verified Delta |
+| --- | --- | --- | --- |
+| `synth_ident_sbs` (`10.0s`) | `PASS` `0/0/0` (`hydrogen`) | `PASS` `0/0/0`, `8/8` shots `Match`, `0` hallucinations | Parity (`30.0/30`) |
+| `synth_sbs` (`12.0s`, 5 zones) | `FAIL` `4/2/0`, crop bled into `f255–f344` (`26.3/30`) | `FAIL` `5/0/0`, `0` FP in `f0–f104`, `5/5` exact frame bounds (`f105–f179`, `f180–f254`, `f210–f211`, `f255–f344 +10f`, `f345–f359`), `0` crop bleed | **Eliminated v2 crop bleed (`30.0/30`)** |
+| `synth_drift_vstack` (`14.0s`, `vstack`) | `FAIL` `5/1/0`, `+11f` reported (`hydrogen`) | `0` FP in `f0–f109`, exact `5f` 6fps judder `f110–f149`, exact `30f` freeze `f150–f179`, `Hard Cut f180`, exact `+12f` lag, VO desync, `0` drift-confounded crops (note: `gemini-4-neon` scored `vstack` at `Conf=Med` -> `0/3/0`) | Exact `+12f` lag & `0` FP; noted `neon` `vstack` severity softness |
+| `food-eat-more` `v8_sbs` (`54.8s`, head-to-head on `neon`) | `NEEDS POLISH` `0/12/0`: 4 style/FP rows (`f814` bite-swap, `f309/f1448` halos, `f1069` cookie, `f1148` pipette) + 1 10-shot mega-row (`f228–f1641`) | `NEEDS POLISH` `0/14/0`: **`0` style/bite-swap/halo/pipette FP, `0` mega-rows**, caught every shared real defect (`f405–f406` & `f1493` caption overlaps, `f620` plant, `f1286→f1288`, `f1300` rain, `f1345` leaked frame, `f1520` early sparks) **+ 5 real temporal/framing bugs v2 missed** (`f78` near-cut blur drop, `f490` mid-whip table pop, `f959–f963` jar snap, `f1049–f1051` early whip, `f1195–f1215` flat bliss lens) | **Higher precision + higher temporal recall, zero mega-rows** |
+
+Intentional creator overrides (e.g., 2-beat rim glow pulse) remain strictly **out** of `compare-2-video.md` and AI Studio prompts; the filmmaking AI orchestrator filters `Dismissed (Intentional Override)` locally at `SKILL.md` Step 5 against `bun run notes`.
