@@ -2,9 +2,9 @@
   bun run sheet                                  every renders/still_*.jpg (make them: bun run render stills --at 1,4),
                                                  to renders/sheet_<n>.jpg; a draft still carries its time and shot under it
   bun run sheet vs                               every renders/vs_still_*.jpg (from render stills --ref), to renders/sheet_vs_<n>.jpg
-  bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg]
-                                                 explicit images or globs (.jpg, .jpeg, .png, .webp) into one captioned grid
-                                                 (default renders/sheet_custom.jpg; --out must stay inside the film folder)
+  bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg] [--per-sheet 6]
+                                                 explicit images or globs (.jpg, .jpeg, .png, .webp) into captioned grid(s)
+                                                 (default renders/sheet_custom.jpg; --per-sheet paginates into <stem>_0.<ext>, ...; --out stays inside the film folder)
   bun run sheet renders/draft_video.mp4 10,20,30  only those seconds of a video, to renders/sheet_<video>_<n>.jpg
   bun run sheet renders/chunks/c02.mp4 62,70     film seconds, as framecheck prints them: a chunk or a span starts at its
                                                  film second by itself (c02: 60 s, span_40-44: 40 s), --start 60 for any other
@@ -107,7 +107,7 @@ def caption_labels(paths):
     return labels
 
 
-def build_image_sheet(paths, out_arg):
+def build_image_sheet(paths, out_arg, per_sheet=None):
     cwd_root = Path.cwd().resolve()
     raw_out = out_arg if out_arg is not None else "renders/sheet_custom.jpg"
     if not raw_out.strip():
@@ -157,90 +157,111 @@ def build_image_sheet(paths, out_arg):
     except ImportError as e:
         usage(f"Pillow (PIL) is required for image contact sheets: {e}", 1)
 
-    n = len(img_paths)
-    if n <= 3:
-        cols = n
-    elif n == 4:
-        cols = 2
-    elif n <= 9:
-        cols = 3
-    elif n <= 16:
-        cols = 4
-    else:
-        cols = min(6, math.ceil(math.sqrt(n)))
-    rows = math.ceil(n / cols)
+    total = len(img_paths)
+    all_labels = caption_labels(img_paths)
+    page_size = per_sheet if per_sheet is not None else total
+    pages = [
+        (img_paths[k : k + page_size], all_labels[k : k + page_size])
+        for k in range(0, total, page_size)
+    ]
 
     tile_w = 640
     caption_h = 34
     gap = 4
-    labels = caption_labels(img_paths)
     font = load_caption_font(ImageFont, 18)
 
-    canvas = None
-    draw = None
-    tile_h = 0
-    cell_h = 0
-    for idx, (p, raw_label) in enumerate(zip(img_paths, labels)):
-        try:
-            with Image.open(p) as opened:
-                im = ImageOps.exif_transpose(opened)
-                if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
-                    rgba = im.convert("RGBA")
-                    bg = Image.new("RGBA", rgba.size, (20, 20, 24, 255))
-                    im = Image.alpha_composite(bg, rgba).convert("RGB")
-                else:
-                    im = im.convert("RGB")
-                iw, ih = im.size
-                if canvas is None:
-                    tile_h = max(120, min(960, round(tile_w * ih / max(1, iw) / 2) * 2))
-                    cell_h = tile_h + caption_h
-                    sheet_w = cols * tile_w + (cols + 1) * gap
-                    sheet_h = rows * cell_h + (rows + 1) * gap
-                    canvas = Image.new("RGB", (sheet_w, sheet_h), (10, 10, 12))
-                    draw = ImageDraw.Draw(canvas)
-                scale = min(tile_w / max(1, iw), tile_h / max(1, ih))
-                nw = max(1, round(iw * scale))
-                nh = max(1, round(ih * scale))
-                resized = im.resize((nw, nh), Image.Resampling.LANCZOS)
-        except (OSError, ValueError) as e:
-            usage(f"could not read image {p}: {e}")
-
-        col, row = idx % cols, idx // cols
-        x0 = gap + col * (tile_w + gap)
-        y0 = gap + row * (cell_h + gap)
-        draw.rectangle([x0, y0, x0 + tile_w - 1, y0 + tile_h - 1], fill=(18, 18, 22))
-        px = x0 + (tile_w - nw) // 2
-        py = y0 + (tile_h - nh) // 2
-        canvas.paste(resized, (px, py))
-
-        cap_y0 = y0 + tile_h
-        draw.rectangle([x0, cap_y0, x0 + tile_w - 1, cap_y0 + caption_h - 1], fill=(18, 18, 22))
-        label = raw_label
-        max_text_w = tile_w - 16
-        if draw.textlength(label, font=font) > max_text_w:
-            while len(label) > 1 and draw.textlength(label + "...", font=font) > max_text_w:
-                label = label[:-1]
-            label = label + "..."
-        bbox = draw.textbbox((0, 0), label, font=font)
-        text_h = bbox[3] - bbox[1]
-        ty = cap_y0 + (caption_h - text_h) // 2 - bbox[1]
-        draw.text((x0 + 8, ty), label, fill=(240, 240, 240), font=font)
-
-    rel_display = rel_out.as_posix()
-    try:
-        resolved_out.parent.mkdir(parents=True, exist_ok=True)
-        if out_ext in (".jpg", ".jpeg"):
-            canvas.save(resolved_out, format="JPEG", quality=92, optimize=True)
-        elif out_ext == ".png":
-            canvas.save(resolved_out, format="PNG")
+    written = []
+    for page_idx, (page_paths, page_labels) in enumerate(pages):
+        n = len(page_paths)
+        if n <= 3:
+            cols = n
+        elif n == 4:
+            cols = 2
+        elif n <= 9:
+            cols = 3
+        elif n <= 16:
+            cols = 4
         else:
-            canvas.save(resolved_out, format="WEBP", quality=92)
-    except OSError as e:
-        usage(f"could not write {rel_display}: {e}", 1)
-    tell(Path.cwd(), f"Laid out {n} image{'s' if n != 1 else ''} to {rel_display}")
-    print(f"{rel_display}  {', '.join(labels)}")
-    print(f"{n} {'picture' if n == 1 else 'pictures'} -> {rel_display}")
-    print("next: open it to look")
+            cols = min(6, math.ceil(math.sqrt(n)))
+        rows = math.ceil(n / cols)
+
+        canvas = None
+        draw = None
+        tile_h = 0
+        cell_h = 0
+        for idx, (p, raw_label) in enumerate(zip(page_paths, page_labels)):
+            try:
+                with Image.open(p) as opened:
+                    im = ImageOps.exif_transpose(opened)
+                    if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in im.info):
+                        rgba = im.convert("RGBA")
+                        bg = Image.new("RGBA", rgba.size, (20, 20, 24, 255))
+                        im = Image.alpha_composite(bg, rgba).convert("RGB")
+                    else:
+                        im = im.convert("RGB")
+                    iw, ih = im.size
+                    if canvas is None:
+                        tile_h = max(120, min(960, round(tile_w * ih / max(1, iw) / 2) * 2))
+                        cell_h = tile_h + caption_h
+                        sheet_w = cols * tile_w + (cols + 1) * gap
+                        sheet_h = rows * cell_h + (rows + 1) * gap
+                        canvas = Image.new("RGB", (sheet_w, sheet_h), (10, 10, 12))
+                        draw = ImageDraw.Draw(canvas)
+                    scale = min(tile_w / max(1, iw), tile_h / max(1, ih))
+                    nw = max(1, round(iw * scale))
+                    nh = max(1, round(ih * scale))
+                    resized = im.resize((nw, nh), Image.Resampling.LANCZOS)
+            except (OSError, ValueError) as e:
+                usage(f"could not read image {p}: {e}")
+
+            col, row = idx % cols, idx // cols
+            x0 = gap + col * (tile_w + gap)
+            y0 = gap + row * (cell_h + gap)
+            draw.rectangle([x0, y0, x0 + tile_w - 1, y0 + tile_h - 1], fill=(18, 18, 22))
+            px = x0 + (tile_w - nw) // 2
+            py = y0 + (tile_h - nh) // 2
+            canvas.paste(resized, (px, py))
+
+            cap_y0 = y0 + tile_h
+            draw.rectangle([x0, cap_y0, x0 + tile_w - 1, cap_y0 + caption_h - 1], fill=(18, 18, 22))
+            label = raw_label
+            max_text_w = tile_w - 16
+            if draw.textlength(label, font=font) > max_text_w:
+                while len(label) > 1 and draw.textlength(label + "...", font=font) > max_text_w:
+                    label = label[:-1]
+                label = label + "..."
+            bbox = draw.textbbox((0, 0), label, font=font)
+            text_h = bbox[3] - bbox[1]
+            ty = cap_y0 + (caption_h - text_h) // 2 - bbox[1]
+            draw.text((x0 + 8, ty), label, fill=(240, 240, 240), font=font)
+
+        target = (
+            resolved_out
+            if len(pages) == 1
+            else resolved_out.with_name(f"{resolved_out.stem}_{page_idx}{resolved_out.suffix}")
+        )
+        rel_display = target.relative_to(cwd_root).as_posix()
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if out_ext in (".jpg", ".jpeg"):
+                canvas.save(target, format="JPEG", quality=92, optimize=True)
+            elif out_ext == ".png":
+                canvas.save(target, format="PNG")
+            else:
+                canvas.save(target, format="WEBP", quality=92)
+        except OSError as e:
+            usage(f"could not write {rel_display}: {e}", 1)
+        written.append(rel_display)
+        print(f"{rel_display}  {', '.join(page_labels)}")
+
+    if len(written) == 1:
+        tell(Path.cwd(), f"Laid out {total} image{'s' if total != 1 else ''} to {written[0]}")
+        print(f"{total} {'picture' if total == 1 else 'pictures'} -> {written[0]}")
+        print("next: open it to look")
+    else:
+        tell(Path.cwd(), f"Laid out {total} images across {len(written)} sheets")
+        print(f"{total} pictures -> {len(written)} sheets")
+        print("next: open them to look")
 
 
 def cuts_of(context):
@@ -250,9 +271,10 @@ def cuts_of(context):
     return sorted(set(cuts["times"]))
 
 
-USE = "bun run sheet [vs], bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
+USE = "bun run sheet [vs], bun run sheet <img1> [<img2> ...] [--out <path>] [--per-sheet <N>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
 pos = []
 out_arg = None
+per_sheet_arg = None
 vs_arg = None
 grid_arg = None
 crop_arg = None
@@ -303,6 +325,22 @@ while i < len(args):
             usage("--out needs a path: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
         i += 1
         continue
+    if a == "--per-sheet":
+        if per_sheet_arg is not None:
+            usage("--per-sheet may only be passed once")
+        if i + 1 >= len(args) or re.match(r"^--?[a-zA-Z]", args[i + 1]):
+            usage("--per-sheet needs a positive integer (1-36): bun run sheet 'renders/frame_*.jpg' --per-sheet 6")
+        per_sheet_arg = args[i + 1]
+        i += 2
+        continue
+    if a.startswith("--per-sheet="):
+        if per_sheet_arg is not None:
+            usage("--per-sheet may only be passed once")
+        per_sheet_arg = a.split("=", 1)[1]
+        if not per_sheet_arg:
+            usage("--per-sheet needs a positive integer (1-36): bun run sheet 'renders/frame_*.jpg' --per-sheet 6")
+        i += 1
+        continue
     if re.match(r"^--?[a-zA-Z]", a):
         usage(f"unknown option {a}: {USE}")
     pos.append(a)
@@ -313,10 +351,17 @@ vs_stills = len(pos) == 1 and pos[0] == "vs"
 if start_arg is not None and (is_image_list or not pos or vs_stills):
     usage("--start goes with a video: bun run sheet renders/clip.mp4 frames 62 --start 60")
 if is_image_list:
-    build_image_sheet(pos, out_arg)
+    per_sheet = None
+    if per_sheet_arg is not None:
+        if not re.fullmatch(r"[1-9]\d*", per_sheet_arg) or int(per_sheet_arg) > 36:
+            usage(f"--per-sheet must be an integer from 1 to 36, got {per_sheet_arg!r}")
+        per_sheet = int(per_sheet_arg)
+    build_image_sheet(pos, out_arg, per_sheet)
     raise SystemExit
 if out_arg is not None:
     usage("--out is only for image lists: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
+if per_sheet_arg is not None:
+    usage("--per-sheet is only for image lists: bun run sheet 'renders/frame_*.jpg' --per-sheet 6")
 args = [] if vs_stills else pos
 mode = args[1] if len(args) >= 2 and args[1] in ("shots", "cut", "overview", "frames") else ""
 if len(args) == 1 and not Path(args[0]).exists() and not re.fullmatch(r"[\d.,:]+", args[0]):

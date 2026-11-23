@@ -1650,7 +1650,7 @@ describe("cli-catalog resolver rules", () => {
     const staleCutDraft = {
       subcommandPath: [],
       args: { target: "cut", cutIndex: 4, images: ["renders/a.png"] },
-      flags: { "--out": "renders/out.jpg", "--start": "60" },
+      flags: { "--out": "renders/out.jpg", "--per-sheet": "6", "--start": "60" },
       targetFilm: "active",
     };
     const sheetStaleCut = buildCliInvocation(
@@ -1662,7 +1662,13 @@ describe("cli-catalog resolver rules", () => {
       BASE_CONTEXT,
     );
     expect(sheetStaleCut.validationErrors).toEqual([]);
-    expect(sheetStaleCut.argvTokens).toEqual(["renders/a.png", "--out", "renders/out.jpg"]);
+    expect(sheetStaleCut.argvTokens).toEqual([
+      "renders/a.png",
+      "--out",
+      "renders/out.jpg",
+      "--per-sheet",
+      "6",
+    ]);
     const staleCutCombined = { ...staleCutDraft.args, ...staleCutDraft.flags };
     expect(
       sheetStaleCut.argsDef
@@ -1673,10 +1679,11 @@ describe("cli-catalog resolver rules", () => {
       sheetStaleCut.flagsDef
         .filter((d) => isFieldVisible(d.visibleWhen, staleCutCombined))
         .map((d) => d.key),
-    ).toEqual(["--out"]);
+    ).toEqual(["--out", "--per-sheet"]);
     expect(listActiveLegoTokens(sheetStaleCut, staleCutDraft).map((t) => t.id)).toEqual([
       "args:images",
       "flags:--out",
+      "flags:--per-sheet",
     ]);
 
     const sheetStaleOverview = buildCliInvocation(

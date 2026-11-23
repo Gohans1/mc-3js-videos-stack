@@ -4240,6 +4240,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "renders/views_sheet.jpg",
       },
       {
+        key: "--per-sheet",
+        flag: "--per-sheet",
+        label: "Max Images Per Sheet (Image-list mode)",
+        type: "number",
+        tier: "common",
+        visibleWhen: { field: "images", nonEmpty: true, and: { field: "video", nonEmpty: false } },
+        placeholder: "6",
+        hint: "Paginate large image lists (1-36 per sheet) into <stem>_0.<ext>, <stem>_1.<ext>, ...",
+      },
+      {
         key: "--start",
         flag: "--start",
         label: "Video Start (film sec)",

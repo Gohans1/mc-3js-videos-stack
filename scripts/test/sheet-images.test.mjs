@@ -318,3 +318,59 @@ test(
     assert.match(noMatch.stderr, /no image files match/);
   },
 );
+
+test(
+  "sheet --per-sheet paginates large image lists into numbered sheets and rejects invalid values",
+  { timeout: 30000 },
+  (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "sheet-per-sheet-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+    makeImages(
+      Array.from({ length: 5 }, (_, idx) => ({
+        file: join(dir, `renders/frame_00${idx}.jpg`),
+        w: 320,
+        h: 180,
+        color: [40 + idx * 40, 120, 200 - idx * 30],
+      })),
+    );
+
+    const paged = spawnSync(
+      "python",
+      [SHEET, "renders/frame_*.jpg", "--per-sheet", "2", "--out", "renders/audit.jpg"],
+      { cwd: dir, encoding: "utf8", timeout: 25000 },
+    );
+    assert.equal(paged.status, 0, paged.stdout + paged.stderr);
+    assert.match(paged.stdout, /renders\/audit_0\.jpg/);
+    assert.match(paged.stdout, /renders\/audit_1\.jpg/);
+    assert.match(paged.stdout, /renders\/audit_2\.jpg/);
+    assert.match(paged.stdout, /5 pictures -> 3 sheets/);
+    assert.ok(existsSync(join(dir, "renders/audit_0.jpg")));
+    assert.ok(existsSync(join(dir, "renders/audit_1.jpg")));
+    assert.ok(existsSync(join(dir, "renders/audit_2.jpg")));
+    assert.ok(!existsSync(join(dir, "renders/audit.jpg")));
+
+    const singlePage = spawnSync(
+      "python",
+      [SHEET, "renders/frame_*.jpg", "--per-sheet=6", "--out", "renders/one.jpg"],
+      { cwd: dir, encoding: "utf8", timeout: 25000 },
+    );
+    assert.equal(singlePage.status, 0, singlePage.stdout + singlePage.stderr);
+    assert.ok(existsSync(join(dir, "renders/one.jpg")));
+
+    for (const argv of [
+      ["renders/frame_000.jpg", "--per-sheet", "0"],
+      ["renders/frame_000.jpg", "--per-sheet", "37"],
+      ["renders/frame_000.jpg", "--per-sheet=abc"],
+      ["renders/frame_000.jpg", "--per-sheet", "2", "--per-sheet", "3"],
+      ["vs", "--per-sheet", "2"],
+    ]) {
+      const bad = spawnSync("python", [SHEET, ...argv], {
+        cwd: dir,
+        encoding: "utf8",
+        timeout: 15000,
+      });
+      assert.equal(bad.status, 2, `expected exit 2 for ${argv.join(" ")}: ${bad.stderr}`);
+    }
+  },
+);

@@ -22,7 +22,7 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 | Single-command QC | Run bun run qc FILE --json to aggregate video, audio, sync, motion, and text checks. Pass --strict to treat warnings as failures. |
 | Title readability | Run bun run qc --checks text to verify planned title size and reading time directly from the timeline without rendering an MP4. |
 | Region luma and pixel diff | Run bun run qc box IMAGE x,y,w,h for mean RGB, Rec.709 luma, and contrast. Run bun run qc compare BEFORE AFTER --out PATH for changed-pixel stats and a side-by-side image. |
-| Explicit image sheet | Run bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg] to lay out .jpg/.jpeg/.png/.webp files into a captioned contact sheet (default renders/sheet_custom.jpg; --out must stay inside the film folder). |
+| Explicit image sheet | Run bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg] [--per-sheet 6] to lay out .jpg/.jpeg/.png/.webp files or globs into captioned contact sheet(s) (default renders/sheet_custom.jpg; --per-sheet 1-36 paginates into <stem>_0.<ext>, <stem>_1.<ext>, ...; --out must stay inside the film folder). |
 | Director's Eye and Color Script | In Studio, Shift+V toggles B&W/silhouette value check, Shift+O toggles the outgoing cut-boundary ghost overlay, and Shift+C toggles the Color Script strip. Ctrl+; toggles guides, Alt+; cycles guide layouts, Alt+M toggles Mute Test, and Shift+H toggles Blind Audio Test. |
 | Delivery and technical checks | Run bun run deliver to validate the project's upload profile. Use media ffmpeg probe/check or media qc for specific streams, properties, or rules. |
 | Time source | External files use seconds from the file start. Standard chunks and spans use film seconds. --start sets an explicit origin, and sheet omits timeline links when the origin conflicts with the render. |
@@ -44,7 +44,7 @@ bun run at 35.6                              # what plays at a heard second (als
 bun run render stills --at 12,30.5             # frames, with the heard time and shot under each
 bun run sheet                                # every still, six to a picture
 bun run sheet vs                             # every renders/vs_still_*.jpg from render stills --ref, six to a picture
-bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg --out renders/grid.jpg  # explicit images or globs into a captioned grid
+bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg --out renders/grid.jpg --per-sheet 6  # explicit images or globs into paginated captioned grid(s)
 bun run sheet renders/draft_video.mp4 shots  # the whole film at a glance: one frame from every shot
 bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s before cut 4 to 0.35 s after, naming shot 4 and 5 and the fx
 bun run render clip                          # the draft video and renders/cuts.json
