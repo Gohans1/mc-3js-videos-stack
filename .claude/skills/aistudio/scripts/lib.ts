@@ -5,7 +5,13 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import { type Candidate, dynamic, type Key, MAP, TEXT, URLS } from "./page-map";
-import { guardWindows, withForegroundLocked } from "./win32";
+import {
+  currentDesktopName,
+  guardWindows,
+  hasVisibleFrames,
+  shouldMigrateChromeDesktop,
+  withForegroundLocked,
+} from "./win32";
 
 const AB = process.env.AGENT_BROWSER_EXE ?? "C:/Users/ADMIN/.bun/bin/agent-browser.exe";
 export const AB_CONFIG =
@@ -301,23 +307,120 @@ export const chromeUp = () =>
     () => false,
   );
 
-/** Where the window lives: off every screen, so it never covers the user's work. The page still counts as visible. */
+type ChromeMeta = { pid: number; desktop: string };
+const CHROME_META_FILE = resolve(PROFILE, "..", "aistudio-chrome.json");
+function readChromeMeta(): ChromeMeta | null {
+  try {
+    const d = JSON.parse(readFileSync(CHROME_META_FILE, "utf8"));
+    return typeof d?.pid === "number" && typeof d?.desktop === "string" ? d : null;
+  } catch {
+    return null;
+  }
+}
+const writeChromeMeta = (meta: ChromeMeta) =>
+  writeFileSync(CHROME_META_FILE, JSON.stringify(meta, null, 2));
+
+const chromeBrowserPid = () =>
+  cdp(
+    async (send) =>
+      (await send("SystemInfo.getProcessInfo")).processInfo.find((p: any) => p.type === "browser")
+        .id as number,
+  );
+
+export async function isTargetGeneratingCdp(targetId: string): Promise<boolean> {
+  const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as any[];
+  const found = list.find((t) => t.id === targetId && t.webSocketDebuggerUrl);
+  if (!found) return false;
+  const ws = new WebSocket(found.webSocketDebuggerUrl);
+  await new Promise((ok, fail) => {
+    ws.onopen = ok;
+    ws.onerror = () => fail(new StepError(`could not inspect tab ${targetId}`));
+  });
+  try {
+    const result = await new Promise<any>((done, fail) => {
+      const timer = setTimeout(() => fail(new StepError("Runtime.evaluate timed out")), 5_000);
+      ws.onmessage = (e) => {
+        const msg = JSON.parse(String(e.data));
+        if (msg.id !== 1) return;
+        clearTimeout(timer);
+        if (msg.error) fail(new StepError(msg.error.message));
+        else done(msg.result);
+      };
+      ws.send(
+        JSON.stringify({
+          id: 1,
+          method: "Runtime.evaluate",
+          params: {
+            expression: `(() => { ${RUNTIME}; return ${GENERATING}; })()`,
+            returnByValue: true,
+          },
+        }),
+      );
+    });
+    return result?.result?.value === true;
+  } finally {
+    ws.close();
+  }
+}
+
+async function anyTabGenerating(): Promise<boolean> {
+  for (const p of await pageTargets()) {
+    if (!p.url.includes("aistudio.google.com")) continue;
+    try {
+      if (await isTargetGeneratingCdp(p.id)) return true;
+    } catch {}
+  }
+  return false;
+}
+
+async function closeChromeGracefully(): Promise<boolean> {
+  try {
+    await cdp((send) => send("Browser.close"));
+  } catch {}
+  for (let i = 0; i < 40; i++) {
+    await Bun.sleep(250);
+    if (!(await chromeUp())) return true;
+  }
+  return false;
+}
+
 export const offscreen = (slot: number) => ({ left: -10000, top: slot * 1200 });
 
-export async function startChrome(): Promise<string> {
-  if (await chromeUp()) return `already running on port ${PORT}`;
+export async function startChrome(opts: { show?: boolean } = {}): Promise<string> {
+  const myDesktop = currentDesktopName();
+  let migrated = false;
+  if (await chromeUp()) {
+    const livePid = await chromeBrowserPid();
+    chromePid = livePid;
+    const meta = readChromeMeta();
+    const needsMove = shouldMigrateChromeDesktop({
+      livePid,
+      recordedPid: meta?.pid,
+      recordedDesktop: meta?.desktop,
+      currentDesktop: myDesktop,
+      show: !!opts.show,
+      hasVisibleOnCurrentDesktop: hasVisibleFrames(livePid),
+    });
+    if (!needsMove) return `already running on port ${PORT}`;
+    if (await anyTabGenerating()) {
+      return `already running on port ${PORT} (kept on ${meta?.desktop || "other desktop"} while a tab generates)`;
+    }
+    const closed = await closeChromeGracefully();
+    if (!closed) return `already running on port ${PORT} (did not exit for desktop isolation)`;
+    chromePid = undefined;
+    writeTabs({});
+    migrated = true;
+  }
   mkdirSync(PROFILE, { recursive: true });
   const args = [
     `--remote-debugging-port=${PORT}`,
     `--user-data-dir=${PROFILE}`,
     "--no-first-run",
-    // A startup window would take keyboard focus from the user; prepareTab opens one in the background instead.
     "--no-startup-window",
-    // The dropdowns only open while the page is visible; keep it visible behind other windows.
     "--disable-backgrounding-occluded-windows",
+    "--window-position=-10000,0",
+    "--window-size=1920,1080",
   ];
-  // Start-Process detaches Chrome from this script: a child of the agent's shell dies when that shell command ends,
-  // and Chrome must outlive it so a long answer keeps generating between commands.
   const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
   const p = Bun.spawnSync(
     [
@@ -332,7 +435,12 @@ export async function startChrome(): Promise<string> {
     throw new StepError(`could not start Chrome (${CHROME}): ${p.stderr.toString().trim()}`);
   for (let i = 0; i < 40; i++) {
     await Bun.sleep(500);
-    if (await chromeUp()) return `started off-screen with profile ${PROFILE}`;
+    if (await chromeUp()) {
+      const pid = await chromeBrowserPid();
+      chromePid = pid;
+      if (myDesktop) writeChromeMeta({ pid, desktop: myDesktop });
+      return `${migrated ? "migrated off visible desktop to" : "started"} ${myDesktop || "off-screen"} with profile ${PROFILE}`;
+    }
   }
   throw new StepError(`Chrome did not open port ${PORT} within 20 s (${CHROME})`);
 }
@@ -375,28 +483,24 @@ export async function cdp<T>(fn: (send: Send) => Promise<T>): Promise<T> {
   }
 }
 
-/** Chrome's browser process, set by prepareTab; from then on runSteps guards its windows before every step. */
 let chromePid: number | undefined;
+let allowOnScreen = false;
 
-/** Win+D can minimize even a shielded window (minimized = visibilityState "hidden", dropdowns stop opening). */
 const guard = () =>
-  chromePid === undefined ? undefined : guardWindows(chromePid, offscreen(0).left);
+  chromePid === undefined
+    ? undefined
+    : guardWindows(chromePid, offscreen(0).left, { allowOnScreen });
 
-/**
- * Binds this command to its tab's own window, opening one if needed (in the background, so it takes no focus; windows
- * the tool did not open are left alone). Then un-minimizes it, sizes it to 1920x1080 (narrower and AI Studio hides the
- * run settings panel) and moves it off-screen, or on-screen with show (to log in by hand). No app can take the
- * foreground meanwhile, so the tab switch cannot hand Chrome the user's keyboard.
- */
 export const prepareTab = (show = false) =>
   withForegroundLocked((locked) => placeTab(show, locked));
 
 async function placeTab(show: boolean, locked: boolean): Promise<string> {
+  allowOnScreen = show;
   const tabs = readTabs();
   let info = tabs[tab];
   const opened = !info || !(await pageTargets()).some((p) => p.id === info!.id);
+  chromePid ??= await chromeBrowserPid();
   if (opened) {
-    // Skip slots other labels own and spots where any window already sits (one left behind would cover the new one).
     const used = new Set(
       Object.entries(tabs)
         .filter(([l]) => l !== tab)
@@ -410,34 +514,36 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
     });
     let slot = 0;
     while (used.has(slot)) slot++;
-    const window = {
-      url: URLS.library,
-      newWindow: true,
-      background: true,
-      ...offscreen(slot),
-      width: 1920,
-      height: 1080,
-    };
-    info = { id: (await cdp((send) => send("Target.createTarget", window))).targetId, slot };
+    const atNew = show ? { left: 0, top: 0 } : offscreen(slot);
+    const createdId = await cdp(async (send) => {
+      const { targetId } = await send("Target.createTarget", {
+        url: URLS.library,
+        newWindow: true,
+        background: !show,
+        focus: show,
+        ...atNew,
+        width: 1920,
+        height: 1080,
+      });
+      const { windowId } = await send("Browser.getWindowForTarget", { targetId });
+      await send("Browser.setWindowBounds", {
+        windowId,
+        bounds: { ...atNew, width: 1920, height: 1080 },
+      });
+      return targetId as string;
+    });
+    info = { id: createdId, slot };
     writeTabs({ ...readTabs(), [tab]: info });
+    guard();
   }
   const { id, slot } = info!;
   const at = show ? { left: 0, top: 0 } : offscreen(slot);
-  chromePid ??= await cdp(
-    async (send) =>
-      (await send("SystemInfo.getProcessInfo")).processInfo.find((p: any) => p.type === "browser")
-        .id,
-  );
-  const { restored } = guard()!;
-  // Switching tabs activates the window, and so does a new session's first command (it opens a blank tab). A session
-  // keeps its tab across daemon restarts, so switch only when it is bound elsewhere: a new label or a re-created window.
+  const { restored, pushedBack } = guard() ?? { restored: 0, pushedBack: 0 };
   const bound = JSON.parse(ab("tab", "list", "--json")).data.tabs.find(
     (t: any) => t.active,
   )?.targetId;
   if (bound !== id) ab("tab", id);
   const strays = await cdp(async (send) => {
-    // The first command of a new agent-browser session opens an about:blank page in the last used window, where it
-    // becomes the active tab and hides that window's chat. Every window of this Chrome is the tool's; none wants one.
     let blank = 0;
     for (const p of await pageTargets()) {
       if (p.url !== "about:blank") continue;
@@ -445,7 +551,6 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
       blank++;
     }
     const { windowId, bounds } = await send("Browser.getWindowForTarget", { targetId: id });
-    // Left for maximized windows and a minimized --show window; Chrome would activate it but the foreground is locked.
     if (bounds.windowState !== "normal") {
       await send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
     }
@@ -455,7 +560,7 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
     });
     return blank;
   });
-  guard(); // the window may have just moved on or off screen
+  guard();
   const placed = await cdp(
     async (send) => (await send("Browser.getWindowForTarget", { targetId: id })).bounds,
   );
@@ -466,14 +571,13 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
       `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
     );
   let [w, h, vis, lang] = page();
-  // Another tab in front of ours in its window (a link opened in a new tab) leaves the session bound but the page hidden.
   if (vis !== "visible" && bound === id) {
     ab("tab", id);
     [w, h, vis, lang] = page();
   }
   if (vis !== "visible") throw new StepError(`page is "${vis}" after restoring the window`);
   const english = !lang || lang.startsWith("en");
-  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : ", foreground not locked (Windows refused)"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
+  return `tab ${tab}${opened ? " (new window)" : ""}, ${w}x${h}, ${show ? "on screen" : "off-screen"}, ${vis}${restored ? `, un-minimized ${restored} window(s) without taking focus` : ""}${pushedBack ? `, shoved ${pushedBack} window(s) back off-screen` : ""}${strays ? `, closed ${strays} blank tab(s)` : ""}${locked ? "" : ", foreground not locked (Windows refused)"}${english ? "" : `; WARNING page language is "${lang}", locators expect English`}`;
 }
 
 /** Every page in the same Chrome window as targetId, that one included. */

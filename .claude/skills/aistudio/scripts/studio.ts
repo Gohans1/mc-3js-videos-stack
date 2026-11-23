@@ -16,7 +16,6 @@ import {
   chatTitle,
   chatUrlFrom,
   chipReady,
-  chromeStep,
   chromeUp,
   click,
   closeDialog,
@@ -29,6 +28,7 @@ import {
   fill,
   GENERATING,
   has,
+  isTargetGeneratingCdp,
   js,
   navigate,
   one,
@@ -208,18 +208,21 @@ async function onChat() {
 
 switch (command) {
   case "chrome":
-    if (opt.show) prelude = [chromeStep, ["show window", () => prepareTab(true)]];
+    if (opt.show)
+      prelude = [
+        ["start Chrome", () => startChrome({ show: true })],
+        ["show window", () => prepareTab(true)],
+      ];
     break;
 
   case "tabs":
-    prelude = []; // listing must not start Chrome or open a tab
+    prelude = [];
     add("list tabs", async () => {
       if (!(await chromeUp())) {
         emit([], () => "");
         return `Chrome is not running on port ${PORT}`;
       }
       const pages = await pageTargets();
-      // Forget labels whose window is gone (Chrome restarted, or closed by hand).
       const tabs = Object.fromEntries(
         Object.entries(readTabs()).filter(([, t]) => pages.some((p) => p.id === t.id)),
       );
@@ -242,9 +245,7 @@ switch (command) {
       const id = readTabs()[label]?.id;
       if (!id || !(await chromeUp()) || !(await pageTargets()).some((p) => p.id === id))
         throw new StepError(`no open tab "${label}" (see \`${STUDIO} tabs\`)`);
-      useTab(label);
-      ab("tab", id);
-      if (js<boolean>(GENERATING)) {
+      if (await isTargetGeneratingCdp(id)) {
         throw new StepError(
           `tab ${label} is still generating; collect it first (${ASK} --tab ${label} --collect)`,
         );

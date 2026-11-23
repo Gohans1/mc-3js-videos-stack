@@ -6,6 +6,7 @@ import {
   formatStoppedRunError,
   toSeconds,
 } from "./lib";
+import { shouldMigrateChromeDesktop } from "./win32";
 
 // AI Studio rewrites clip times when it saves them (0m2s comes back as 2s), so times compare as seconds.
 test("toSeconds reads every spelling the video dialog accepts or writes back", () => {
@@ -55,4 +56,57 @@ test("detectPossibleTruncation flags mid-table, unclosed fence, unclosed bold, a
     "ends mid-clause with trailing punctuation",
   );
   expect(detectPossibleTruncation("## Verdict\nAll checks pass.")).toBeNull();
+});
+
+test("shouldMigrateChromeDesktop banishes Default-desktop Chrome into isolated desktops without disrupting peer hidden sessions", () => {
+  expect(
+    shouldMigrateChromeDesktop({
+      livePid: 100,
+      recordedPid: 100,
+      recordedDesktop: "Default",
+      currentDesktop: "exebox-ABC",
+      show: false,
+      hasVisibleOnCurrentDesktop: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldMigrateChromeDesktop({
+      livePid: 100,
+      recordedPid: undefined,
+      recordedDesktop: undefined,
+      currentDesktop: "exebox-ABC",
+      show: false,
+      hasVisibleOnCurrentDesktop: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldMigrateChromeDesktop({
+      livePid: 100,
+      recordedPid: 100,
+      recordedDesktop: "exebox-PEER",
+      currentDesktop: "exebox-ABC",
+      show: false,
+      hasVisibleOnCurrentDesktop: false,
+    }),
+  ).toBe(false);
+  expect(
+    shouldMigrateChromeDesktop({
+      livePid: 100,
+      recordedPid: 100,
+      recordedDesktop: "exebox-ABC",
+      currentDesktop: "Default",
+      show: true,
+      hasVisibleOnCurrentDesktop: false,
+    }),
+  ).toBe(true);
+  expect(
+    shouldMigrateChromeDesktop({
+      livePid: 100,
+      recordedPid: 100,
+      recordedDesktop: "Default",
+      currentDesktop: "Default",
+      show: false,
+      hasVisibleOnCurrentDesktop: true,
+    }),
+  ).toBe(false);
 });

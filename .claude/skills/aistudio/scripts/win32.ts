@@ -10,24 +10,33 @@ const user32 = dlopen("user32.dll", {
   GetWindowPlacement: { args: ["u64", "ptr"], returns: "i32" },
   GetWindowLongPtrW: { args: ["u64", "i32"], returns: "i64" },
   SetWindowLongPtrW: { args: ["u64", "i32", "i64"], returns: "i64" },
+  SetWindowPos: { args: ["u64", "u64", "i32", "i32", "i32", "i32", "u32"], returns: "i32" },
   ShowWindow: { args: ["u64", "i32"], returns: "i32" },
   LockSetForegroundWindow: { args: ["u32"], returns: "i32" },
+  GetThreadDesktop: { args: ["u32"], returns: "u64" },
+  GetUserObjectInformationW: { args: ["u64", "i32", "ptr", "u32", "ptr"], returns: "i32" },
 }).symbols;
 const kernel32 = dlopen("kernel32.dll", {
   CreateMutexW: { args: ["ptr", "i32", "ptr"], returns: "u64" },
   WaitForSingleObject: { args: ["u64", "u32"], returns: "u32" },
   ReleaseMutex: { args: ["u64"], returns: "i32" },
   CloseHandle: { args: ["u64"], returns: "i32" },
+  GetCurrentThreadId: { args: [], returns: "u32" },
 }).symbols;
 
 const GW_OWNER = 4;
 const GWL_EXSTYLE = -20;
-// No taskbar button and no Alt+Tab entry (Win+M skips it too), so the user cannot reach a window they cannot see.
+const WS_EX_TRANSPARENT = 0x20n;
 const WS_EX_TOOLWINDOW = 0x80n;
-// Windows does not hand it the keyboard on its own, e.g. when the user's window closes or minimizes.
 const WS_EX_NOACTIVATE = 0x8000000n;
 const WS_EX_APPWINDOW = 0x40000n;
-const SHIELD = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE;
+const SHIELD = WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TRANSPARENT;
+const HWND_BOTTOM = 1n;
+const SWP_NOSIZE = 0x1;
+const SWP_NOMOVE = 0x2;
+const SWP_NOACTIVATE = 0x10;
+const SWP_NOOWNERZORDER = 0x200;
+const UOI_NAME = 2;
 const SW_HIDE = 0;
 const SW_SHOWMINIMIZED = 2;
 const SW_SHOWNOACTIVATE = 4;
@@ -36,9 +45,47 @@ const LSFW_LOCK = 1;
 const LSFW_UNLOCK = 2;
 const WAIT_TIMEOUT = 0x102;
 const TURN_MUTEX = Uint16Array.from("Local\\aistudio-prepare-tab\0", (c) => c.charCodeAt(0));
-// A prepareTab takes about 1 s, a few more when it opens a new window; past this the command goes on without its turn.
 const TURN_WAIT_MS = 15_000;
 const CHROME_WINDOW = Uint16Array.from("Chrome_WidgetWin_1\0", (c) => c.charCodeAt(0));
+
+export function currentDesktopName(): string {
+  const desk = user32.GetThreadDesktop(kernel32.GetCurrentThreadId());
+  if (!desk) return "";
+  const buf = new Uint16Array(128);
+  const need = new Uint32Array(1);
+  if (!user32.GetUserObjectInformationW(desk, UOI_NAME, buf, buf.byteLength, need)) return "";
+  const chars = Math.max(0, Math.floor((need[0] ?? 0) / 2) - 1);
+  return String.fromCharCode(...buf.slice(0, chars));
+}
+
+export function shouldMigrateChromeDesktop(opts: {
+  livePid: number;
+  recordedPid?: number;
+  recordedDesktop?: string;
+  currentDesktop: string;
+  show: boolean;
+  hasVisibleOnCurrentDesktop: boolean;
+}): boolean {
+  const {
+    livePid,
+    recordedPid,
+    recordedDesktop,
+    currentDesktop,
+    show,
+    hasVisibleOnCurrentDesktop,
+  } = opts;
+  if (!currentDesktop) return false;
+  const knownDesktop = recordedPid === livePid ? (recordedDesktop ?? "") : "";
+  if (show) {
+    if (knownDesktop && knownDesktop !== currentDesktop) return true;
+    if (!knownDesktop && !hasVisibleOnCurrentDesktop) return true;
+    return false;
+  }
+  if (currentDesktop === "Default") return false;
+  if (knownDesktop === "Default") return true;
+  if (!knownDesktop && !hasVisibleOnCurrentDesktop) return true;
+  return false;
+}
 
 const ownerPid = (h: bigint) => {
   const pid = new Uint32Array(1);
@@ -46,7 +93,6 @@ const ownerPid = (h: bigint) => {
   return pid[0];
 };
 
-/** WINDOWPLACEMENT as int32s: [length, flags, showCmd, minX, minY, maxX, maxY, normal left, top, right, bottom]. */
 function placement(h: bigint) {
   const p = new Int32Array(11);
   p[0] = p.byteLength;
@@ -54,10 +100,8 @@ function placement(h: bigint) {
   return p;
 }
 
-/** The normal (not minimized) position is in workspace coordinates, off by a taskbar on the left; half way is enough. */
 const isHidden = (p: Int32Array, hiddenLeft: number) => p[7]! <= hiddenLeft / 2;
 
-/** Visible browser frames of pid; owned windows (status bubbles, popups) follow their frame and are left alone. */
 function framesOf(pid: number): bigint[] {
   const found: bigint[] = [];
   for (let h = user32.FindWindowExW(0n, 0n, CHROME_WINDOW, null); h;) {
@@ -68,32 +112,57 @@ function framesOf(pid: number): bigint[] {
   return found;
 }
 
-/**
- * For every frame of the Chrome process pid whose normal position is hidden (left at hiddenLeft): shields it and
- * un-minimizes it without activating it (Chrome's own restore, which CDP windowState "normal" triggers, takes the
- * keyboard from the user's window). Frames on screen (--show, to log in by hand) lose the shield and are left as they
- * are, minimized or not.
- */
-export function guardWindows(pid: number, hiddenLeft: number) {
+export const hasVisibleFrames = (pid: number) => framesOf(pid).length > 0;
+
+export function guardWindows(
+  pid: number,
+  hiddenLeft: number,
+  opts: { allowOnScreen?: boolean } = {},
+) {
+  const frames = framesOf(pid);
   let restored = 0;
-  for (const h of framesOf(pid)) {
+  let pushedBack = 0;
+  for (const h of frames) {
     const p = placement(h);
-    const hidden = isHidden(p, hiddenLeft);
+    let hidden = isHidden(p, hiddenLeft);
+    if (!hidden && !opts.allowOnScreen) {
+      user32.SetWindowPos(
+        h,
+        HWND_BOTTOM,
+        hiddenLeft,
+        0,
+        0,
+        0,
+        SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+      );
+      hidden = true;
+      pushedBack++;
+    }
     if (hidden && p[2] === SW_SHOWMINIMIZED) {
-      // Not SetWindowPlacement: it moves a window it would show entirely off-screen onto a monitor (seen at 0,0).
       user32.ShowWindow(h, SW_SHOWNOACTIVATE);
       restored++;
     }
     const ex = BigInt(user32.GetWindowLongPtrW(h, GWL_EXSTYLE));
     const want = hidden ? (ex | SHIELD) & ~WS_EX_APPWINDOW : ex & ~SHIELD;
-    if (want === ex) continue;
-    // The taskbar reads the style only when a window is shown, so: hide, restyle, show (Microsoft's order).
-    const minimized = placement(h)[2] === SW_SHOWMINIMIZED;
-    user32.ShowWindow(h, SW_HIDE);
-    user32.SetWindowLongPtrW(h, GWL_EXSTYLE, want);
-    user32.ShowWindow(h, minimized ? SW_SHOWMINNOACTIVE : SW_SHOWNOACTIVATE);
+    if (want !== ex) {
+      const minimized = placement(h)[2] === SW_SHOWMINIMIZED;
+      user32.ShowWindow(h, SW_HIDE);
+      user32.SetWindowLongPtrW(h, GWL_EXSTYLE, want);
+      user32.ShowWindow(h, minimized ? SW_SHOWMINNOACTIVE : SW_SHOWNOACTIVATE);
+    }
+    if (hidden) {
+      user32.SetWindowPos(
+        h,
+        HWND_BOTTOM,
+        0,
+        0,
+        0,
+        0,
+        SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+      );
+    }
   }
-  return { restored };
+  return { found: frames.length, restored, pushedBack };
 }
 
 /**
