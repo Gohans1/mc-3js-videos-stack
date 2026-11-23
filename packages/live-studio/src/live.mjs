@@ -1,4 +1,3 @@
-// The studio for one film; HELP below
 import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
@@ -110,9 +109,6 @@ export const tailscaleHostsForPort = (raw, port) => {
     .map(([host]) => host);
 };
 
-// No password here, so nothing but this machine and names the film lists may even ask. A website can point its own name at
-// this machine (DNS rebinding), or make the visitor's browser ask it for something. Browsers say where a request comes from
-// (Fetch Metadata): another site may link to the studio, nothing more. Origin covers the browsers that don't say
 export const isKnownHost = (host, hosts = []) => {
   const n = (host ?? "").replace(/:\d+$/, "").toLowerCase();
   if (n === "localhost" || n === "[::1]" || /^\d+\.\d+\.\d+\.\d+$/.test(n)) return true;
@@ -291,8 +287,6 @@ const terminatePid = async (pid) => {
   return !isPidAlive(pid);
 };
 
-// The link the creator opens: the Tailscale https names that serve this port. Hosts confirmed by local `tailscale serve`
-// for this exact port are allowed automatically via film.allowHost(name), without opening any other hostname.
 function tailscaleLink(film, port) {
   return new Promise((done) => {
     execFile(
@@ -517,7 +511,6 @@ async function runDetach(project, work, studioJson, studioLog, portArg, port, la
 }
 
 async function main() {
-  // the film's studio script puts its port first, so "bun run studio help" arrives as "<port> help"
   const argv = process.argv.slice(2);
   const portArg = /^\d+$/.test(argv[0] ?? "") ? argv.shift() : undefined;
   if (/^\d+$/.test(argv[0] ?? "") || argv.some((a) => /^--port(=|$)/.test(a))) {
@@ -556,10 +549,10 @@ async function main() {
     return runDetach(PROJECT, work, studioJson, studioLog, portArg, PORT, LAN);
   }
 
-  const events = new Set(); // open pages, see /api/events
+  const events = new Set();
   const send = (event, data = "") => {
     for (const page of events) page.writeSSE({ event, data: String(data) });
-  }; // a page that left is dropped by /api/events itself
+  };
   const activity = createActivity(send);
   let film;
   try {
@@ -569,8 +562,6 @@ async function main() {
     process.exit(1);
   }
   const studioJsonPath = join(film.WORK, "studio.json");
-  // One studio per film: it owns notes.jsonl, and note.mjs done finds it through renders/live/studio.json, which a second one
-  // would take over
   try {
     const existing = readStudioInfo(studioJsonPath);
     if (
@@ -584,20 +575,14 @@ async function main() {
       );
       process.exit(1);
     }
-  } catch {
-    /* none recorded, or it no longer answers */
-  }
+  } catch {}
 
   let broken = false;
   const page = await buildPage(film, {
-    // A build made only because the studio saved the sound lanes or the camera keys is no new code for the creator to load: the
-    // page has them already
     onChange: (files) => {
       const own = film.ownWrites(),
         others = files.filter((f) => !own.includes(resolve(f)));
       send("code", files.length && !others.length ? "own" : "");
-      // the page's build holds the studio's own code too: named as such, the film's files by their path in it
-      // one build has named the same file twice (seen: "studio Compose.tsx, studio Compose.tsx")
       const names = [
         ...new Set(
           others.map((f) => {
@@ -618,11 +603,8 @@ async function main() {
       broken = false;
     },
     onError: (message, first) => {
-      send("build-error", message); // Vite prints it in this terminal itself
-      // once as it breaks: each save while broken shows its own error on the page already
+      send("build-error", message);
       if (!broken) {
-        // "[builtin:vite-transform] Unexpected token": the plugin's name says nothing to the creator. A transform error has no id;
-        // loc's line is counted in the code after its TypeScript is stripped (seen 344 for 367), so no line is named
         const what = stripVTControlCharacters(first?.message ?? "")
             .split("\n")[0]
             .replace(/^\[[^\]]*\]\s*/, "")
@@ -660,7 +642,6 @@ async function main() {
     }
   };
 
-  // The lessons the AI keeps (bun run note learned, or its own edit): both global and this film's lessons/*.md
   const globalLessons = openLessonFiles();
   const projectLessons = openLessonFiles(join(film.PROJECT, "lessons"));
   const lessons = { all: globalLessons, film: projectLessons };
@@ -728,7 +709,6 @@ async function main() {
   if (resolve(projectLessons.dir) !== resolve(globalLessons.dir))
     watchLessons(globalLessons, "all", "global");
 
-  // This machine only, unless asked: --lan opens it to the network for a phone, and nothing here asks for a password
   const serve = {
     port: PORT,
     idleTimeout: 255,
@@ -741,9 +721,8 @@ async function main() {
         decodeURI(new URL(req.url).pathname);
       } catch {
         return new Response(null, { status: 400 });
-      } // a path no file can have, before Hono trips on it
+      }
       const res = await api.fetch(req);
-      // Another site can't load the film as a script, or show the studio in a frame to steal clicks
       res.headers.set("cross-origin-resource-policy", "same-origin");
       res.headers.set(
         "content-security-policy",
@@ -757,9 +736,7 @@ async function main() {
   // The browser tries localhost's IPv6 address first, and on Windows a refused one costs ~300 ms per new connection
   try {
     Bun.serve({ ...serve, hostname: "::1" });
-  } catch {
-    /* no IPv6 loopback: localhost is 127.0.0.1 alone */
-  }
+  } catch {}
   console.log(`live at http://localhost:${PORT}`);
   const tailscale = await tailscaleLink(film, PORT);
   await writeStudioInfo(studioJsonPath, {
@@ -767,7 +744,7 @@ async function main() {
     project: film.PROJECT,
     pid: process.pid,
     ...(tailscale.length ? { tailscale } : {}),
-  }); // where note.mjs done, --status, and --stop find the studio that owns this film
+  });
   if (LAN)
     for (const nets of Object.values(networkInterfaces()))
       for (const n of nets)

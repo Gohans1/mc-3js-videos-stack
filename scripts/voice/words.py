@@ -309,7 +309,7 @@ def main() -> None:
 
     lab_root = Path(os.environ.get("THREEJS_LAB") or "E:/threejs_lab")
     if lab_root.exists():
-        os.environ.setdefault("HF_HOME", str(lab_root / ".hf"))  # models beside the lab's other caches
+        os.environ.setdefault("HF_HOME", str(lab_root / ".hf"))
     os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS", "1")
     import torch
     import whisperx

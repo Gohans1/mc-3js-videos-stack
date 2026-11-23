@@ -1,4 +1,3 @@
-// The inside rule on the shapes Minecraft models are made of, none of them named: solids close, cards never do
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -48,7 +47,7 @@ test("crossed cards (grass, flowers, cobweb, saplings): never inside, from any s
 
 test("one merged room: behind a card standing in it is not inside, a hand in its wall is", () => {
   const T = 0.2,
-    S = 3; // 3 m room, 20 cm solid walls, all one mesh as block renderers merge it, a cobweb card inside
+    S = 3;
   const room = mergeGeometries([
     box(S, T, S, 0, -T / 2, 0),
     box(S, T, S, 0, S + T / 2, 0),

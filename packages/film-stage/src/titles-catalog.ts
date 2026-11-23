@@ -1,29 +1,22 @@
-// The title catalogue: fonts, kinds, and the In/Out voices the studio lists for text and shapes (titles-look.ts plays them).
-// A film adds its own voices through makeTitles' extra (an id with a step), which take the place of a built-in one of that id.
 export interface Font {
   id: string;
   title: string;
   css: string;
-  // the look and the moods it suits (Cinetic faces.json), and whether it draws Vietnamese accents
   tip?: string;
 }
 export interface TitleVoice {
   id: string;
   title: string;
-  // what a viewer sees it do (bun run find reads it)
   tip: string;
   len: number;
   cat: string;
-  // takes a stagger (0-1 of len spread across words or letters), defaultStagger when the item gives none
   stagger?: boolean;
   defaultStagger?: number;
-  // takes an accent tint, defaultTint when the item gives none
   tint?: boolean;
   defaultTint?: string;
 }
 
 const NO_VI = "; no Vietnamese accents";
-// Every css family here is imported in titles.ts; the rest are Cinetic's faces (all OFL, @fontsource-variable)
 export const FONTS: readonly Font[] = [
   {
     id: "sans",
@@ -116,13 +109,10 @@ export const FONTS: readonly Font[] = [
     tip: "Mono beside Geist: numbers, code, labels",
   },
 ];
-// own: a film's faces (makeTitles' 4th argument, fonts), looked up before the built-ins
 export const fontOf = (id?: string, own: readonly Font[] = []) =>
   (own.find((f) => f.id === id) ?? FONTS.find((f) => f.id === id) ?? FONTS[0]!).css;
 
 type FontUser = { font?: string; in?: { fx?: string }; out?: { fx?: string } };
-// The faces a build waits on: the ones its items draw in (a phone skips ~0.5 MB of the rest); every face when an item's
-// fontCycle hops through them, or when the items are not given. A face picked later loads on first draw (loadingdone redraws)
 export const fontsFor = (
   items?: readonly FontUser[],
   own: readonly Font[] = [],
@@ -152,7 +142,6 @@ export const TITLE_EASES: readonly string[] = [
 ];
 export const KINDS: readonly string[] = ["text", "arrow", "circle", "box", "bracket", "underline"];
 export const isShapeKind = (kind?: string) => Boolean(kind && kind !== "text");
-// What each annotation shape draws (titles.ts drawShape), for an editor who asks for the mark, not its kind name
 export const SHAPES: Readonly<Record<string, { title: string; tip: string }>> = {
   arrow: { title: "Arrow", tip: "A hand-drawn arrow pointing at something on screen" },
   circle: { title: "Circle", tip: "A ring or ellipse drawn around something to call it out" },
@@ -707,7 +696,6 @@ export const SHAPE_OUT: readonly TitleVoice[] = [
   },
 ];
 
-// What the drawer reads on an item; any other field is the film's own (the studio's Film tab lists those)
 export const TEXT_ITEM_KEYS = [
   "id",
   "kind",

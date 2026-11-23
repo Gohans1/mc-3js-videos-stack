@@ -1,4 +1,3 @@
-// Filter dropdown and removable chip bar for the shared English voice library (lazy-loaded on Voices tab).
 import { useState } from "react";
 
 import {

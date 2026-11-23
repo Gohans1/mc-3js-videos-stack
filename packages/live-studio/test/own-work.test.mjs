@@ -1,4 +1,3 @@
-// app/own/own-work.ts: what a film's code adds on top of the studio's libraries, for the view-only Film tab
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -22,11 +21,16 @@ const dissolve = {
 const fade = { id: "fade", title: "Fade", cat: "Basic", tip: "built in", len: 0.5 };
 
 test("render lifecycle hooks do not appear as the film's own effects", () => {
-  assert.deepEqual(otherKeys({
-    renderFrame: async () => {}, prepareFrame: async () => {},
-    needsPreparation: () => false, disposeOpenFilm: () => {},
-    particles: {title:"My particles"},
-  }), ["particles"]);
+  assert.deepEqual(
+    otherKeys({
+      renderFrame: async () => {},
+      prepareFrame: async () => {},
+      needsPreparation: () => false,
+      disposeOpenFilm: () => {},
+      particles: { title: "My particles" },
+    }),
+    ["particles"],
+  );
 });
 const builtins = {
   transitions: [dissolve],
@@ -75,7 +79,7 @@ test("a film's own effects are listed with the heard seconds they are used at; t
       ],
       texts: [
         { kind: "text", from: 2, in: { fx: "stamp" } },
-        { kind: "arrow", from: 3, in: { fx: "stamp" } }, // a shape's In names shape voices, not text ones
+        { kind: "arrow", from: 3, in: { fx: "stamp" } },
       ],
     },
   );
@@ -83,7 +87,6 @@ test("a film's own effects are listed with the heard seconds they are used at; t
     group(groups, "transitions").items.map((x) => [x.id, x.used]),
     [["glitch", [4.5, 12]]],
   );
-  // an In used only in a shot's Out slot is not used: the slots are separate lists
   assert.deepEqual(
     group(groups, "animation").items.map((x) => [x.id, x.part, x.used]),
     [["rise", "In", [0]]],
@@ -229,7 +232,7 @@ test("a list of {id, title} the film hands over under a new name is a kind of it
         ],
         "tools.sparks": [{ id: "embers" }],
         "tools.composer": { passes: [] },
-        scores: [1, 2, 3], // a list, but not of things with an id
+        scores: [1, 2, 3],
       },
     },
     builtins,
@@ -315,7 +318,7 @@ test("a field of its own inside a slot the studio reads (a shot's anim, a text's
 test("the film's own sounds show where they play, and the 3D it builds in code is listed by name", () => {
   const groups = ownWork(
     {
-      sounds: [{ name: "sfx/unused.wav" }, { name: "sfx/door_slam.wav", title: "Door slam" }], // the playing one goes first
+      sounds: [{ name: "sfx/unused.wav" }, { name: "sfx/door_slam.wav", title: "Door slam" }],
       objects: ["room", "CCTV camera (mc-assets pack/cctv_camera.json)"],
     },
     builtins,

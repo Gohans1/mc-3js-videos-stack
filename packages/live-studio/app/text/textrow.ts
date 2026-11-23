@@ -1,11 +1,5 @@
 import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
-import { drawTextSel } from "./onpicture";
 import { together } from "../core/doc";
-// CapCut's text tracks, over the camera row (its main track) on the same seconds as every other row: track 0 at the bottom, each
-// one above drawn over it on the picture. An item is dragged to move (up or down onto another track, above the top one for a new
-// track), by an edge to trim, with Alt held for a copy, and snaps to the playhead, cuts, words and other items' edges (Shift: no
-// snap). A box dragged over empty space picks what it touches here and on the rows below (timeline/rowbox.ts, across.ts); a click
-// on empty space drops the pick and moves the playhead there. Items are added from the Text library (TextLibrary.tsx).
 import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
@@ -18,6 +12,7 @@ import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { isElementShown, onShownResize } from "../timeline/visible";
+import { drawTextSel } from "./onpicture";
 import {
   edit,
   isShape,
@@ -37,13 +32,11 @@ import { shapeGlyph } from "./text-anim";
 export const ROW_H = 28;
 const CLIP_H = 24,
   EDGE = 6;
-// A shape has no CapCut clip to copy: plum, apart from the text clips' orange-brown (index.css --clip-text)
 
 type Box = { i: number; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
 let hover = -1;
 
-// Rows from the top: the highest track first. With none yet, one row holds the hint
 const rows = () => Math.max(1, tracksUsed());
 export const textRowHeight = () => rows() * ROW_H;
 const yOf = (track: number) => (rows() - 1 - track) * ROW_H;
@@ -84,7 +77,6 @@ export const drawTextRow = () => {
     g.beginPath();
     g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 3);
     g.fill();
-    // The In and Out as a darker stretch at each end, as long as they run
     const px = (x1 - x0) / Math.max(1e-3, it.to - it.from),
       span = it.to - it.from;
     const ai = it.in?.fx ? (it.in.len ?? 0.5) : 0,
@@ -127,7 +119,8 @@ export const drawTextRow = () => {
       g.stroke();
     }
     g.globalAlpha = 1;
-    if (typeof it.id === "string") paintActivityMark(g, "text", it.id, cx0, y + CLIP_H - 2, cx1 - cx0);
+    if (typeof it.id === "string")
+      paintActivityMark(g, "text", it.id, cx0, y + CLIP_H - 2, cx1 - cx0);
     boxes.push({ i, x0, x1, y0: y, y1: y + CLIP_H });
   });
 };
@@ -339,7 +332,6 @@ export const attachTextRow = () => {
           Math.min(DURATION - Math.max(...moving.map((j) => f.items[j].to)), room[1], shift),
         );
         drag!.shift = shift;
-        // Up or down by as many rows as the pointer went, the whole pick together, never under track 0
         const tracks = moving.map((j) => f.items[j].track ?? 0),
           dk = Math.max(-Math.min(...tracks), trackAt(y) - trackAt(drag!.y));
         moving.forEach((j, k) => {

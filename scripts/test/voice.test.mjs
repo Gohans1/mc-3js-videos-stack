@@ -204,7 +204,6 @@ test("gen.ts runs takes sequentially per voice with neighbor context, request-id
   assert.deepEqual(calls[2].body.previous_request_ids, ["req_1", "req_2"]);
   assert.equal(existsSync(join(dir, "voice/takes/02.mp3.words.json")), true);
 
-  // Regenerating middle take 02 --try --takes 2 keeps 02.mp3 untouched and passes BOTH previous (req_1) and next (req_3)
   calls.length = 0;
   await runGen({
     cwd: dir,
@@ -279,7 +278,6 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
       },
     }),
   );
-  // Radio-Edit-First: takes omit `t` initially!
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -356,13 +354,11 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
   assert.equal(bricks[1].at, bricks[1].start);
   assert.ok(bricks[1].at >= bricks[0].at + bricks[0].length);
 
-  // Simulate creator dragging Phrase Brick #2 right by +3.5s on Studio timeline for dramatic silence!
   const shift = 3.5;
   const originalSecondAt = bricks[1].at;
   bricks[1].at = +(bricks[1].at + shift).toFixed(3);
   writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify(audio, null, 1) + "\n");
 
-  // Re-running assemble WITHOUT --clips must NOT clobber the creator's dragged brick!
   await runAssemble({ cwd: dir, args: [] });
   const afterReassemble = JSON.parse(readFileSync(join(dir, "src/timeline/audio.json"), "utf8"));
   assert.equal(
@@ -370,16 +366,12 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
     +(originalSecondAt + shift).toFixed(3),
   );
 
-  // cues.ts must report the exact post-drag heard Word GPS + the dramatic silence gap!
   const cues = buildVoiceCues(dir);
   assert.equal(cues.lines.length, 2);
   assert.equal(cues.lines[1].words[0].w, "Empty");
   assert.ok(Math.abs(cues.lines[1].s - (cues.lines[0].e + 0.4 + shift)) < 0.35);
   assert.ok(cues.gaps.some((g) => g.dur >= 3.5));
 
-  // Replacing Take 01 with a longer take (with loud tail noise past lastWord+0.2s) and re-running assemble:
-  // 1) Take 02 re-packs after Take 01 with zero overlap in edit.voice.lines
-  // 2) Trailing noise in Take 01 (1.05s..1.95s) is trimmed before amix so the 0.4s gap stays silent
   writeFileSync(join(dir, "voice/takes/01.mp3"), makeTinyWavBuffer(2.0));
   writeFileSync(
     join(dir, "voice/takes/01.mp3.words.json"),
@@ -399,7 +391,6 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
     `expected Take 02 to re-pack after regrown Take 01, got ${JSON.stringify(editRegrown.voice.lines)}`,
   );
   const vmap = JSON.parse(readFileSync(join(dir, "renders/live/voice_map.json"), "utf8"));
-  // Take 01 naturalEnd = min(2.0, 0.8 + 0.2) = 1.0s; Take 02 starts at 1.4s -> bins 27..32 (1.08s..1.28s) must be silent (0)
   const gapPeaks = vmap.peaks.slice(27, 33);
   assert.ok(
     gapPeaks.length > 0 && gapPeaks.every((p) => p < 0.01),
@@ -407,8 +398,6 @@ test("assemble.ts builds full_voice.wav + per-take draggable Phrase Bricks, pres
   );
 });
 
-// a blind probe once spent credits with a bare voice:gen ID: without --yes it only previews (Vercel CLI guidelines: money
-// needs --yes when nobody is at a prompt), and the preview's next line is the command that spends
 test("voice:gen without --yes previews what it would write and spend, sends nothing, and names the command that sends", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "voice-yes-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -425,7 +414,6 @@ test("voice:gen without --yes previews what it would write and spend, sends noth
       ],
     }),
   );
-  // a request would fail on this closed port: exit 0 proves nothing was sent
   const gen = (...args) =>
     spawnSync("bun", [fileURLToPath(new URL("../voice/gen.ts", import.meta.url)), ...args], {
       encoding: "utf8",
@@ -446,12 +434,10 @@ test("voice:gen without --yes previews what it would write and spend, sends noth
   );
   assert.equal(readFileSync(join(dir, "voice/takes/02.mp3"), "utf8"), "old");
 
-  // --dry-run wins over --yes
   const both = gen("--dry-run", "01", "--yes");
   assert.equal(both.status, 0, both.stdout + both.stderr);
   assert.match(both.stdout, /next: bun run voice:gen 01 --yes sends this take \(12 characters/);
 
-  // with --yes it sends: the closed port fails the request
   assert.equal(gen("01", "--yes").status, 1);
 });
 
@@ -528,7 +514,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   });
   assert.deepEqual(seenLangs, ["en", "vi"]);
 
-  // Active 01.wav must NOT be clobbered by default runGen, and existing 01_1.wav in try/ must advance nextTryOut to 01_2.mp3
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -554,7 +539,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   assert.equal(existsSync(join(dir, "voice/takes/01.mp3")), false);
 
-  // 02's words edited after its audio was made: a bare run offers it again, saying why; 01's words were never sent, so unknown
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -587,7 +571,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   assert.equal(tried.length, 1);
   assert.equal(tried[0].out, join(dir, "voice/try/01_2.mp3"));
 
-  // Unknown take ID must fail BEFORE spending any paid TTS/STS API requests
   seenLangs.length = 0;
   await assert.rejects(
     runGen({
@@ -599,7 +582,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   assert.equal(seenLangs.length, 0, "must validate all take IDs before calling TTS API");
 
-  // --try with no explicit IDs would spend credits on every take: refused before any request
   await assert.rejects(
     runGen({
       cwd: dir,
@@ -610,7 +592,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   );
   assert.equal(seenLangs.length, 0, "a bare --try must not call the TTS API");
 
-  // Regenerating an existing take with unaligned TTS must remove stale <id>.mp3.words.json!
   writeFileSync(
     join(dir, "voice/takes/02.mp3.words.json"),
     JSON.stringify({ dur: 0.2, words: [{ w: "Stale", s: 0, e: 0.15 }] }),
@@ -626,7 +607,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
     "stale .words.json must be purged on unaligned regen",
   );
 
-  // cues.ts must reflect fresh edit.json / .words.json edits even when an older renders/live/voice_map.json sits on disk
   mkdirSync(join(dir, "renders/live"), { recursive: true });
   writeFileSync(
     join(dir, "renders/live/voice_map.json"),
@@ -651,7 +631,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
   const freshCues = buildVoiceCues(dir);
   assert.equal(freshCues.lines[0]?.text, "Fresh line.");
 
-  // a take made after full_voice.wav is not on the film yet: its words read at the old take's place until voice:assemble
   const wav = voiceFileOf(dir);
   mkdirSync(dirname(wav), { recursive: true });
   writeFileSync(wav, "old");
@@ -661,7 +640,6 @@ test("tts classifies English smart punctuation as en, Vietnamese diacritics as v
 });
 
 test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires one take id, and assemble --clips initializes audio.narration", async (t) => {
-  // 1. Character alignment from /with-timestamps includes raw [audio tags]: strip them from words while keeping spoken timing & dur
   const raw = "[low, quiet] Wake [slow] up.";
   const chars = raw.split("");
   const starts = chars.map((_, i) => +(i * 0.05).toFixed(3));
@@ -683,7 +661,6 @@ test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires o
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   mkdirSync(join(dir, "voice/takes"), { recursive: true });
 
-  // 2. Tag-only /with-timestamps payload purges stale .words.json instead of writing empty word list
   const audioBytes = makeTinyWavBuffer(0.2);
   let hits = 0;
   const baseUrl = await listenServer(t, async (_req, res) => {
@@ -717,7 +694,6 @@ test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires o
   assert.equal(tagRes.wordsFile, undefined);
   assert.equal(existsSync(`${tagOut}.words.json`), false);
 
-  // 3. --guide without a single explicit take ID must throw BEFORE calling any API
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -739,7 +715,6 @@ test("alignmentToWords strips ElevenLabs [audio tags], gen.ts --guide requires o
   );
   assert.equal(hits, 0);
 
-  // 4. assemble --clips initializes audio.narration = "narration" when omitted in audio.json
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({
@@ -805,8 +780,6 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
     res.end(JSON.stringify({ audio_base64: audioBytes.toString("base64") }));
   });
 
-  // 1. Expired (>2h), legacy plain-string, and mismatched-voice entries in .request_ids.json must NOT be sent,
-  // while fresh (<2h, same voice & model) neighbor entries ARE sent!
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -840,7 +813,6 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   assert.equal(payloads[0].previous_text, "First line.");
   assert.deepEqual(payloads[0].next_request_ids, ["req_fresh_5m"]);
 
-  // 2. Direct ElevenLabs 422 on stitched request IDs automatically retries once with text-only context
   payloads.length = 0;
   failStitchedOnce = true;
   await tts({
@@ -858,7 +830,6 @@ test("gen.ts expires >2h or mismatched .request_ids.json entries, retries Eleven
   assert.equal(payloads[1].previous_request_ids, undefined);
   assert.equal(payloads[1].previous_text, "Neighbor before.");
 
-  // 3. CLI --guide without file path, unsafe TAKE_ID, duplicate take IDs, and missing guide file all fail before API calls
   payloads.length = 0;
   await assert.rejects(
     runGen({
@@ -953,7 +924,6 @@ test("mix.py prepare_timing applies timing.main scene-reorder Linkage in offline
       drive: 0,
     }),
   );
-  // Reorder [5..10] before [0..5] via timing.main ONLY (no speeds/freezes/cuts/gaps!)
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({
@@ -1002,7 +972,6 @@ test("genvoice, gen, assemble, and mix.py enforce remote URL, --takes integer, a
     }),
   );
 
-  // 1. --takes rejects leading-zero take IDs ("02"), zero, negative, non-integers, and excessive >20 values
   for (const badTakes of ["02", "0", "-1", "Infinity", "21"]) {
     await assert.rejects(
       runGen({
@@ -1014,7 +983,6 @@ test("genvoice, gen, assemble, and mix.py enforce remote URL, --takes integer, a
     );
   }
 
-  // 2. GenVoice remote https:// apiBase must reject loopback http://127.0.0.1 audio_url
   const origFetch = globalThis.fetch;
   t.after(() => {
     globalThis.fetch = origFetch;
@@ -1051,7 +1019,6 @@ test("genvoice, gen, assemble, and mix.py enforce remote URL, --takes integer, a
   );
   globalThis.fetch = origFetch;
 
-  // 3. runAssemble rejects soundSources.narration or soundTimeline escaping the film directory
   writeFileSync(join(dir, "voice/takes/01.wav"), makeTinyWavBuffer(0.5));
   writeFileSync(
     join(dir, "package.json"),
@@ -1064,7 +1031,6 @@ test("genvoice, gen, assemble, and mix.py enforce remote URL, --takes integer, a
   await assert.rejects(runAssemble({ cwd: dir }), /inside film directory/i);
   assert.equal(existsSync(join(outside, "pwned.wav")), false);
 
-  // 4. mix.py rejects filtergraph injection (amovie=...) and out-of-root soundSources
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   writeFileSync(join(dir, "sound/sfx/tap.wav"), makeTinyWavBuffer(0.3));
@@ -1303,8 +1269,6 @@ test("voice:cues reads a line a Freeze cuts in two as its two heard pieces, each
   );
 });
 
-// a take made before voice:gen kept its words has only what whisperX heard: words that no longer read the same are named, never
-// spent on (a misheard word reads differently too)
 test("voice:gen names the takes whose audio says other words than src/edit.json, when it never kept what it sent", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "gen-heard-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -1374,7 +1338,6 @@ test("Round 18: buildVoiceCues respects warped edit.end over raw wavDur and read
   mkdirSync(join(dir, "sound"), { recursive: true });
   mkdirSync(join(dir, "renders/live"), { recursive: true });
 
-  // Part 1: 5s .ogg narration via soundSources without explicit length
   const ffOgg = spawnSync(
     "ffmpeg",
     ["-v", "error", "-f", "lavfi", "-i", "sine=d=5", "sound/voice.ogg"],
@@ -1414,12 +1377,10 @@ test("Round 18: buildVoiceCues respects warped edit.end over raw wavDur and read
   const saveVoiceMap = () =>
     writeFileSync(join(dir, "renders/live/voice_map.json"), JSON.stringify(voiceMap));
   saveVoiceMap();
-  // Make sure full_voice.wav with 10s also tests warped edit.end < wavDur
   const cuesOgg = buildVoiceCues(dir);
   assert.equal(cuesOgg.lines.length, 1);
   assert.equal(cuesOgg.duration, 6);
 
-  // Part 2: 10s WAV file with voice.warp compressing edit.end 10 -> 6 must stay duration 6, not 10
   const ffWav = spawnSync(
     "ffmpeg",
     ["-v", "error", "-f", "lavfi", "-i", "sine=d=10", "sound/voice.wav"],
@@ -1483,7 +1444,6 @@ test("Round 19: cues honors voice:false when lines exist, caps at edit.end, read
   assert.match(cli.stderr, /narration: off/);
   assert.doesNotMatch(cli.stdout, /hidden/);
 
-  // 2) Overlong spoken line past edit.end keeps duration capped at edit.end and clamps speech
   writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [] }));
   writeFileSync(
     join(dir, "renders/live/voice_map.json"),
@@ -1507,7 +1467,6 @@ test("Round 19: cues honors voice:false when lines exist, caps at edit.end, read
   assert.equal(capped.lines[0].e, 5);
   assert.deepEqual(capped.lines[0].words, [{ w: "inside", s: 4, e: 4.5 }]);
 
-  // 3) .mp3 narration via soundSources without explicit length and choices.json try[] swap
   const ffMp3 = spawnSync(
     "ffmpeg",
     ["-v", "error", "-f", "lavfi", "-i", "sine=d=4", "sound/narr.mp3"],

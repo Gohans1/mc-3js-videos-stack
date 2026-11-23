@@ -3,12 +3,6 @@ import { EDIT, fromSource } from "film/edit";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { shotEnd, shotIndex } from "../core/film";
-// The ruler and the stretch around the playhead under it, drawn on canvases: shot names (with no Camera row), each sentence's
-// pace, the words, actions and sounds in lanes, option ranges and notes.
-// Custom canvas on purpose: the waveform is drawn through the voice edit's time warp and the rows come from edit.json, which no
-// waveform or timeline library models. The studio only reads this timeline; changes are made from notes, in edit.json. The sound
-// lanes under it (sound/lanes.ts) are the one part the creator edits by hand, on the same seconds as the stretch drawn here.
-// Voice samples and annotations use the audio file clock; voice.warp only places narrative anchors.
 import { applyEdit, DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { type Line, S } from "../core/state";
@@ -23,8 +17,8 @@ import { boxEnd, boxMove, boxPick, boxStart } from "./rowbox";
 import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
 import { invalidateShown, isElementShown, onShownResize } from "./visible";
 
-const STILL = 6; // how long with nothing moving reads as stuck
-const HOLDS = new Set(["zz", "note1", "code", "typing"]); // these say when something is shown, not that it moves
+const STILL = 6;
+const HOLDS = new Set(["zz", "note1", "code", "typing"]);
 
 type Box =
   | { type: "beat"; id: string; x0: number; x1: number; y0: number; y1: number }
@@ -32,7 +26,6 @@ type Box =
 let boxes: Box[] = [];
 let selected: { type: "beat"; id: string } | { type: "line"; i: number } | null = null;
 let stuck: [number, number][] = [];
-// The beats in film order, drawn every frame: edit.json changes only on refreshTimes, so the sort is kept between them
 let beatRev = -1,
   beatOrder: [string, (typeof EDIT.beats)[string]][] = [];
 const orderedBeats = () => {
@@ -41,24 +34,21 @@ const orderedBeats = () => {
   return (beatOrder = Object.entries(EDIT.beats).sort((p, q) => p[1].at - q[1].at));
 };
 const wordWidths = new Map<string, number>();
-export const shown = () => Math.min(get().span, DURATION); // seconds the detail timeline shows
+export const shown = () => Math.min(get().span, DURATION);
 let frozenCentre: number | null = null;
-// Where Alt+wheel slid the stretch (c), and the playhead then (t): it stays while the playhead stays or moves inside it, and
-// goes once playing or a jump takes the playhead out of it, so the stretch follows the playhead again
 let slid: { c: number; t: number } | null = null;
-// What else the timelines mark, set by the parts that own it
 export const marks = {
   voice: (lines: Line[]) => mapVoice(lines, clockForTimeline("voice")),
   voiceLoaded: () => {},
   notes: () => [] as { t: number; to?: number; done: boolean; check: boolean; asking?: boolean }[],
   optionRanges: () => [] as [number, number][],
-  ai: () => [] as { a: number; b: number; level?: "ok" | "warn" | "fail" }[], // the seconds the AI is at (activity/activity.ts)
-  lanes: () => {}, // sound/lanes.ts draws its canvas whenever these do
-  cam: () => {}, // and camera/camrow.ts its own
-  keys: () => {}, // and keys/keyrows.ts the key rows
+  ai: () => [] as { a: number; b: number; level?: "ok" | "warn" | "fail" }[],
+  lanes: () => {},
+  cam: () => {},
+  keys: () => {},
   layers: () => {},
   openfilm: () => {},
-  text: () => {}, // and text/textrow.ts the text tracks
+  text: () => {},
 };
 
 export const paceOf = (i: number) => {
@@ -66,7 +56,6 @@ export const paceOf = (i: number) => {
   if (!l || l.words.length < 4 || l.e <= l.s) return null;
   return (l.words.length / (l.e - l.s)) * 60 * (EDIT.voice.edits[i]?.speed ?? 1);
 };
-// Stretches where neither the camera nor anything in frame moves
 const findStuck = () => {
   const out: [number, number][] = [];
   SHOTS.forEach((s, i) => {
@@ -133,7 +122,6 @@ const describeSelection = () => {
   }
 };
 
-// Every time the edit or the voice map changes: the heard seconds of everything move
 export const refreshVoiceTimes = () => {
   S.voiceBase = S.voice.lines.map((l) => ({
     ...l,
@@ -209,13 +197,10 @@ export const viewCentre = () => {
   const c = frozenCentre ?? slid?.c ?? S.t;
   return v >= DURATION ? DURATION / 2 : Math.max(v / 2, Math.min(DURATION - v / 2, c));
 };
-// The playhead line runs down every row, and as in CapCut a press on it anywhere drags the playhead. While a row scrubs, the
-// stretch holds still: centred on a moving playhead, the time under the pointer would run away
 export const onPlayhead = (x: number, w: number, touch: boolean) => {
   const { a, v } = view();
   return Math.abs(x - ((S.t - a) / v) * w) <= (touch ? 10 : 4);
 };
-// The stretch shown: its first second (a) and how many seconds (v); and the second at x on a row w wide
 export const view = () => {
   const v = shown();
   return { a: viewCentre() - v / 2, v };
@@ -305,12 +290,12 @@ const paintDetail = (
   const b = a + v;
   const X = (s: number) => ((s - a) / v) * w;
   const { shots: SH, voiceY: VY, actionY: AY } = rows,
-    VH = rows.voice - WORDS_H; // VH: the wave's height, the words go under it
+    VH = rows.voice - WORDS_H;
   g.fillStyle = tone("track");
   g.fillRect(0, 0, w, h);
   g.font = `12px ${UI_FONT}`;
   g.textBaseline = "middle";
-  const named = SH > SHOTS_STRIP; // no Camera row: the shots' names are here
+  const named = SH > SHOTS_STRIP;
   SHOTS.forEach((s, i) => {
     const e = shotEnd(i);
     if (e < a || s.t > b) return;
@@ -334,7 +319,6 @@ const paintDetail = (
   boxes = [];
   g.fillStyle = tone("stuck");
   for (const [x, y] of stuck) if (y > a && x < b) g.fillRect(X(x), SH - 2, X(y) - X(x), 3);
-  // Voice: each sentence's pace behind the wave
   if (rows.voice)
     S.voiceOut.forEach((l, i) => {
       const n = S.voiceOut[i + 1];
@@ -360,7 +344,6 @@ const paintDetail = (
       }
     });
   if (rows.voice) drawWave(g, a, b, w, VY, VH);
-  // Actions and sounds, in lanes so they don't cover each other; as many lanes as the Action row's height holds, 3 to 2
   const count = Math.max(2, Math.floor(rows.action / LANE_H)),
     moves = Math.max(1, Math.round(count * 0.6));
   const lanes: Record<string, number[]> = {
@@ -413,7 +396,6 @@ const paintDetail = (
   g.fillStyle = tone("warn");
   for (const [s0, s1] of marks.optionRanges())
     if (s1 >= a && s0 <= b) g.fillRect(X(s0), h - 5, Math.max(1, X(s1) - X(s0)), 4);
-  // Words, as many as fit
   g.font = `12px ${UI_FONT}`;
   let right = -1;
   for (const l of rows.voice ? S.voiceOut : []) {
@@ -447,10 +429,6 @@ const paintDetail = (
       g.fillText(hintLabel, hintX, VY + VH + 11);
     }
   }
-  // Notes: a marker each, their lines faint so many of them don't drown the playhead; a done note keeps only a dim marker, and
-  // open/check/asking notes draw hairline stems down the rows in their status tone.
-  // Markers under 2 px apart are drawn once and touching lines as one, so thousands of notes stay a few hundred shapes for the
-  // GPU (which, drawing every one, held a 3000-note film to 23 fps). marks.notes() comes in film order
   const open = new Path2D(),
     done = new Path2D(),
     check = new Path2D(),
@@ -468,7 +446,7 @@ const paintDetail = (
     const isAsk = !!n.asking;
     if (n.to && !n.done) {
       g.fillStyle = tone(isAsk ? "ai" : n.check ? "warn" : "primary");
-      g.fillRect(x, SH + 1, Math.max(2, X(n.to) - x), 3); // a drawn note that spans moments
+      g.fillRect(x, SH + 1, Math.max(2, X(n.to) - x), 3);
     }
     const prevX = isAsk ? lastAsk : n.check ? lastCheck : n.done ? lastDone : lastOpen;
     if (x - prevX >= 2) {
@@ -596,8 +574,6 @@ const drawDetail = () => {
   }
   g.drawImage(detailBgCanvas, 0, 0, pw, ph, 0, 0, w, h);
 };
-// Where the AI is in the film (activity/activity.ts): its violet over the seconds it looks at or renders, what a check of its
-// found in the check's colour; faint down the rows and stronger on the ruler. Under the playhead, which stays the creator's
 const drawAi = (
   g: CanvasRenderingContext2D,
   X: (s: number) => number,
@@ -629,9 +605,6 @@ const rulerLabel = (s: number) => {
   return label;
 };
 
-// The seconds over every row, as CapCut 9.7's ruler measured off the dev's screenshot: a dark line along its top, the ticks
-// hanging from just under it (long at each label, short between, dimmer still), the seconds dim beside each long one so the
-// clips under them lead. It stays put while the rows under it scroll, and carries the playhead's head
 const drawRuler = () => {
   const c = S.el.ruler,
     { g, w, h } = sized(c);
@@ -645,7 +618,6 @@ const drawRuler = () => {
   g.fillRect(0, 0, w, h);
   g.fillStyle = tone("backdrop");
   g.fillRect(0, 0, w, 1);
-  // Room for each label whatever the screen; ten short ticks to a label when they stand apart, as CapCut's, else five
   const tick = [1, 2, 5, 10, 30, 60].find((n) => n * scale >= 72) ?? 60,
     apart = tick * scale,
     minor = tick / (apart >= 150 ? 10 : 5);
@@ -673,7 +645,6 @@ const drawRuler = () => {
   drawInOut(g, X, w, h);
   const t = X(S.t);
   drawPlayhead(g, t, h);
-  // CapCut's handle: a hollow white shield from the top edge down, the ruler showing through it
   g.beginPath();
   g.moveTo(t - 4.5, 1.5);
   g.lineTo(t + 4.5, 1.5);
@@ -688,7 +659,6 @@ const drawRuler = () => {
   g.lineJoin = "round";
   g.stroke();
 };
-// CapCut's In to Out stretch (inout.ts): the film outside it dimmed, its ends bracketed in blue
 const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: number, h: number) => {
   const r = get().inOut;
   if (!r) return;
@@ -703,7 +673,6 @@ const drawInOut = (g: CanvasRenderingContext2D, X: (s: number) => number, w: num
   g.fillRect(x1 - 2, 0, 2, h);
 };
 
-// Shared vertical+horizontal track overlay geometry across all rows (bridging row gaps & empty bottom space)
 let playheadDetail: HTMLElement | null = null;
 let playheadScroller: HTMLElement | null = null;
 let playheadLine: HTMLElement | null = null;
@@ -910,7 +879,7 @@ const syncPlayhead = () => {
   if (line.hidden) line.hidden = false;
 };
 export const drawTimelineActivity = () => {
-  if (!S.el?.detail) return; // no timeline in this layout (a phone's, PhoneApp)
+  if (!S.el?.detail) return;
   drawRuler();
   drawDetail();
   syncAi();
@@ -927,7 +896,6 @@ export const drawTimelines = () => {
   marks.lanes();
   syncPlayhead();
 };
-// Shows s seconds (6 at the closest, the whole film at the farthest), as CapCut's zoom slider; zoomSpan scales what is shown
 export const ZOOM_MIN = 6;
 export const zoomTo = (s: number) => {
   const span = Math.max(ZOOM_MIN, Math.min(DURATION, s));
@@ -936,15 +904,12 @@ export const zoomTo = (s: number) => {
   drawTimelines();
 };
 export const zoomSpan = (k: number) => zoomTo(shown() * k);
-export const zoomToFit = () => zoomTo(DURATION); // the whole film
-// Auto snapping (S, or the toolbar): drags stick to the playhead, words, cuts and edges
+export const zoomToFit = () => zoomTo(DURATION);
 export const toggleMagnet = () => {
   const on = !get().magnet;
   setPref("magnet", on);
   say(on ? "Auto snapping on" : "Auto snapping off");
 };
-// The wheel over any timeline row, as CapCut's: plain scrolls the rows up and down (the browser's own scroll), Ctrl+wheel zooms,
-// Alt+wheel slides the stretch along the film without moving the playhead (Shift+wheel too, as in Premiere, and a sideways swipe)
 export const timelineWheel = (e: WheelEvent) => {
   if (e.ctrlKey || e.metaKey) {
     e.preventDefault();
@@ -971,7 +936,6 @@ const boxAt = (e: PointerEvent) => {
   const r = getCachedRect(S.el.detail),
     x = e.clientX - r.left,
     y = e.clientY - r.top;
-  // A fingertip covers more than these thin rows: take what's nearest within reach, and keep a cut's edge easy to catch
   const reach = e.pointerType === "touch" ? 9 : 0;
   let best: Box | null = null,
     d = 1e9;
@@ -988,10 +952,6 @@ const boxAt = (e: PointerEvent) => {
   return best;
 };
 
-// Scrubbing, as in CapCut: a press on the ruler seeks there and drags; on the rows below (detail) only the playhead line itself
-// drags, a click on a word or a beat picks what the panel describes, a click on empty space puts the playhead there and a mouse
-// drag draws the box over the rows (rowbox.ts). A touch drag scrubs from anywhere, a fingertip being too wide for the line. The
-// stretch below holds still while it drags
 export const attachTimeline = () => {
   const { ruler, detail } = S.el,
     scroller = detail.closest<HTMLElement>("[data-tracks-scroll]");
@@ -1001,7 +961,7 @@ export const attachTimeline = () => {
     grab: (e: PointerEvent) => boolean = () => true,
     active: (e: PointerEvent) => boolean = () => true,
   ) => {
-    let press: { x: number; y: number } | null = null; // a touch that has not moved yet
+    let press: { x: number; y: number } | null = null;
     let own = false;
     const start = (e: PointerEvent) => {
       S.dragging = { resume: S.playing };
@@ -1028,7 +988,6 @@ export const attachTimeline = () => {
       S.dirty = true;
       if (r) setPlaying(true);
     };
-    // A move with the button already up ends the drag too: a let-go never heard would otherwise scrub on a mere hover
     const move = (e: PointerEvent) => {
       if (own) {
         if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= 4) {
@@ -1051,7 +1010,7 @@ export const attachTimeline = () => {
     c.addEventListener("pointermove", move);
     for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) c.addEventListener(t, up);
   };
-  let onThing = false; // the press was on a word or a beat, which it picks: its release is no click on empty space
+  let onThing = false;
   detail.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     invalidateRects();
@@ -1169,7 +1128,6 @@ export const attachTimeline = () => {
   };
 };
 
-// The voice lines and their words, which the timeline lays out and the captions read
 export const loadVoice = async () => {
   const r = await getFile("/api/voice_map.json").catch(() => null);
   S.voiceReady = true;

@@ -35,7 +35,6 @@ const cameraEdge = (key, clock, outgoing, shotCut, inverse = false) => {
   if (shotCut && clock.cameraShotStarts?.length) return "before";
   if (!clock.cameraPicture) {
     if (!key.cut) return key.t > 0 ? "before" : "after";
-    // A scene-clock cut is visible on the held frame only if the Freeze actually samples it.
     if (
       !shotCut &&
       !inverse &&
@@ -92,7 +91,9 @@ const projectCameraRows = (rows, clock) => {
           clock.cameraRateAt ||
           (key.cut && clock.cameraShotStarts?.length) ||
           Math.abs(lookup.sourceAt(t, key.cut ? "after" : "before") - key.t) > 1e-8;
-        return track ? { ...key, t, __timing: cameraMeta(key, t, alias, sourceRow) } : { ...key, t };
+        return track
+          ? { ...key, t, __timing: cameraMeta(key, t, alias, sourceRow) }
+          : { ...key, t };
       });
     })
     .sort(orderCameraRows);
@@ -138,7 +139,6 @@ const unprojectCameraRows = (rows, clock, previous, previousClock) => {
       if (!alias.best || (edited && !alias.best.edited)) alias.best = { candidate, edited };
     } else result.push(candidate);
   }
-  // Removing any visible placement removes its shared key; an edit in one placement updates the shared row.
   for (const alias of aliases.values())
     if (alias.seen === alias.count) result.push(alias.best.candidate);
   result.push(
@@ -315,7 +315,6 @@ export const mapTimeline = (
             (check.torn ? item.out.len : check.to - forward(item.to - item.out.len, "after")) -
               input.out.len,
           ) > 1e-7);
-      // A freeze or reordered seam with no unique source span retains this item's track clock instead of collapsing or inverting.
       if (b > a && mismatch) {
         item.from = a;
         item.to = b;

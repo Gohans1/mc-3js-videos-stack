@@ -106,8 +106,6 @@ test("the mix's loudness is judged the way YouTube plays it: turned down when lo
   assert.doesNotMatch(soft, /true peak over/);
 });
 
-// ffmpeg-normalize once fell back to dynamic loudnorm on a mix whose peaks stood far over its loudness, lifting every quiet
-// stretch and still leaving +0.5 dBTP after the AAC encode (AES TD1004 6a: raise linearly to the target or the peak ceiling)
 test("the loudness pass raises a mix linearly to its target, or only as far as its true peaks allow, and says which lever is left", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "level-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -133,7 +131,6 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
   const even = join(dir, "even.wav"),
     spiky = join(dir, "spiky.wav");
   tone(even, "0.05*sin(2*PI*440*t)");
-  // a quiet bed with one hit 26 dB over it: no linear gain reaches -14 LUFS under the ceiling
   tone(spiky, "0.03*sin(2*PI*440*t)+between(t\\,4\\,4.05)*0.6*sin(2*PI*900*t)");
 
   const plain = level(even, -14);
@@ -150,7 +147,6 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
   );
   assert.doesNotMatch(hit.report.join("\n"), /lufs -14 is what it plays at/);
 
-  // the lever said as the value to write, never past the +12 bun run check warns at (a probe read "+10" as "set to 10")
   const advice = (held, drive) => {
     const r = spawnSync(
       "python",
@@ -169,12 +165,10 @@ print(json.dumps({"held": held, "i": i, "tp": tp, "report": loudness_report(sys.
     advice(3.1, 9),
     /set audio\.json drive to 12 \(now 9\), the most before the hits flatten/,
   );
-  // on sealed-room the narration 3 dB up bought 0.2 LU (its own limiter holds it): only drive closes the gap to the peaks
   assert.match(
     advice(2, 12),
     /louder: drive is at \+12, the most before bun run check warns the hits flatten\. Either leave it \(the upload plays 2\.0 dB under audio\.json lufs, nothing else wrong\) or raise drive past 12 and listen whether the hits still land/,
   );
-  // within YouTube's 1 LU the loudness is ready: no lever to pull
   assert.doesNotMatch(advice(0.6, 0), /stopped/);
 });
 
@@ -184,7 +178,6 @@ test("listen flags a sound effect that barely rises over the bed it lands on, an
   const voice = join(dir, "voice.wav"),
     rest = join(dir, "rest.wav");
   tone(voice, "0");
-  // a steady bed; a thud at 2 s about as loud as it, a slam at 5 s far over it
   tone(
     rest,
     "0.05*sin(2*PI*200*t)+0.04*sin(2*PI*90*t)*between(t\\,2\\,2.5)+0.6*sin(2*PI*90*t)*between(t\\,5\\,5.5)",
@@ -209,7 +202,6 @@ test("listen flags a sound effect that barely rises over the bed it lands on, an
 });
 
 test("listen --at shows the levels around one second, half a second at a time, next to the last listen's", () => {
-  // the rest steps down 10 dB at 35 s; the last listen had it level at -10 throughout
   const curve = Array.from({ length: 500 }, (_, i) => {
     const t = +(i * 0.1).toFixed(1);
     return [t, -20, t < 35 ? -10 : -20];
@@ -237,7 +229,6 @@ test("listen --at shows the levels around one second, half a second at a time, n
   assert.deepEqual([after.voice, after.rest, after.margin, after.was], [-20, -20, 0, -10]);
 });
 
-// listen's numbers are levels only: what is heard there, and whether hits land on the cuts, is earshot's to say
 test("listen --at hands over the earshot timeline of the same stretch of the draft with sound", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "listen-at-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -251,7 +242,6 @@ test("listen --at hands over the earshot timeline of the same stretch of the dra
       ],
       { cwd: dir, encoding: "utf8", env },
     );
-  // a machine without earshot is told how to set it up, not handed a command that fails
   const deaf = focus({ ...process.env, PATH: dirname(process.execPath) });
   assert.equal(deaf.status, 0, deaf.stderr);
   assert.doesNotMatch(deaf.stdout, /earshot timeline/);
@@ -288,7 +278,6 @@ test("listen hears a line the bed drowns and a line it leaves clear, and the jum
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const voice = join(dir, "voice.wav"),
     rest = join(dir, "rest.wav");
-  // the narration speaks 1-3 s and 5-7 s; the bed whispers under the first line and matches the second
   tone(voice, "0.1*sin(2*PI*1000*t)*(between(t\\,1\\,3)+between(t\\,5\\,7))");
   tone(rest, "0.001*sin(2*PI*300*t)+0.1*sin(2*PI*300*t)*between(t\\,5\\,7)");
   const r = spawnSync(
@@ -319,7 +308,6 @@ test("a stretch louder than the narration says whether the voice was speaking un
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const voice = join(dir, "voice.wav"),
     rest = join(dir, "rest.wav");
-  // the narration speaks 1-3 s; the rest swells over its level at 2 s, under it, and again at 5-6 s, with nothing said
   tone(voice, "0.05*sin(2*PI*1000*t)*between(t\\,1\\,3)");
   tone(rest, "0.5*sin(2*PI*300*t)*(between(t\\,2\\,2.6)+between(t\\,5\\,6))");
   const r = spawnSync(
@@ -348,7 +336,6 @@ test("a sound that cancels itself when a phone plays the mix in one speaker is n
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   const voice = join(dir, "voice.wav"),
     rest = join(dir, "rest.wav");
-  // the narration sits in the middle 1-3 s; the bed is wide all along (each side its own), and 4-6 s one side is the other upside down
   tone(voice, "0.1*sin(2*PI*1000*t)*between(t\\,1\\,3)|0.1*sin(2*PI*1000*t)*between(t\\,1\\,3)");
   tone(
     rest,
@@ -374,7 +361,6 @@ test("a sound that cancels itself when a phone plays the mix in one speaker is n
   assert.ok(Math.abs(got.voice) < 0.5, `the voice keeps its level: ${got.voice}`);
 });
 
-// a probe's copy lost one row's gain: both crashed in a Python traceback, though bun run check names the fault
 test("a row that lacks what the mix reads stops mix and listen with the command that names it, no traceback", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "unfit-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -412,7 +398,6 @@ test("a row that lacks what the mix reads stops mix and listen with the command 
 
 test("mix given a video that is not there did nothing: exit 2, naming the videos it could take", () => {
   const dir = mkdtempSync(join(tmpdir(), "mix-novideo-"));
-  // only a picture render takes a mix: deliver's youtube_preview.mp4 or a mixed draft.mp4 is not one
   mkdirSync(join(dir, "renders"));
   for (const f of ["draft_video.mp4", "draft.mp4", "youtube_preview.mp4"])
     writeFileSync(join(dir, "renders", f), "x");
@@ -448,8 +433,6 @@ test("mix given a video that already has sound did nothing: exit 2, naming the p
   assert.match(r.stderr, /renders\/before\.mp4 already has sound[^\n]*renders\/draft_video\.mp4/);
 });
 
-// a mix stopped at the -1.5 dBTP ceiling still went out at -0.9 after the AAC encode (probe R7): the encoded file is measured.
-// Square bursts overshoot at 96 kbps: at 900 Hz the mix is held at the ceiling, at 7 kHz it reaches -14 and still overshoots
 test("a mix put on a video is measured after the AAC encode, and lowered by what the codec added when that crosses -1 dBTP", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "encoded-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

@@ -1,4 +1,3 @@
-// Pure selection, reply, and snapshot helpers shared by ReviewRoom and notes.ts.
 import { SAME } from "../core/time";
 
 export function stepReviewPickId(

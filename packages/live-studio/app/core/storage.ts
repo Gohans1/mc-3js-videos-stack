@@ -1,4 +1,3 @@
-// Storage can be missing (a private window) or full: a setting then just lasts for this page
 export const stored = {
   get: (key: string, area: Storage = localStorage) => {
     try {

@@ -1,4 +1,3 @@
-// The film inside the studio's Vite build: the names the page imports it by, and one copy of three.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 

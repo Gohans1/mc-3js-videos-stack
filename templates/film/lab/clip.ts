@@ -1,12 +1,6 @@
 // @ts-nocheck
 import { canvas, config, done, log, still } from "live-studio/lab";
 import { loadSource } from "mc-actor/clips";
-// Lab: a mocap clip played in the film itself (bodyAt, feet.ts foot lock, legTo, the set's light): standing, half a
-// second's blend into the clip, the clip (held 2 s at least), its crossfade into standing where it left him, seen from
-// his front and his left: renders/clip_<n>_<front|left>.jpg (python ../../packages/clip-catalog/sheet_clip.py: contact sheets). Logs where the
-// clip leaves him, for the next key's at and yaw.
-// bun run render stills --lab clip=mixamo/Kneeling_Idle_c9cd9c47 --entry lab/clip.ts  (--lab at=x,z floor spot, --lab fps=4,
-// --lab t0=film second it starts at: the set's light is the film's at that time)
 import * as THREE from "three";
 
 import { EDIT } from "../src/edit";
@@ -16,7 +10,7 @@ import { buildScene } from "../src/scene";
   const cfg = await config();
   const ref = cfg.lab.clip ?? "mixamo/Kneeling_Idle_c9cd9c47";
   const [x, z] = (cfg.lab.at ?? "3,3").split(",").map(Number);
-  const { duration } = (await loadSource(ref)).clip; // its length, for the keys; the film loads and bakes it itself
+  const { duration } = (await loadSource(ref)).clip;
   const t0 = Number(cfg.lab.t0 ?? 0),
     a = t0 + 1.5,
     b = a + Math.max(duration, 2),
@@ -32,7 +26,6 @@ import { buildScene } from "../src/scene";
   EDIT.steve.hands = [];
   EDIT.steve.look = [];
   const draw = await buildScene(canvas(), cfg.W, cfg.H, true);
-  // the next key where the clip leaves him (his frame turned by the key's yaw, 0 here), set before the first draw bakes the feet
   const { end } = draw.tools.clips[ref];
   after.at = [x + end.x, 0, z + end.z];
   after.yaw = end.ry;

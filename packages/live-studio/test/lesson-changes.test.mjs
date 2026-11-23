@@ -1,4 +1,3 @@
-// app/lessons/changes.ts: what changed in a lesson file since the creator last read it, as md-phone shows a review
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

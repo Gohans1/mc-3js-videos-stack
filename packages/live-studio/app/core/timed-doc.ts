@@ -22,7 +22,6 @@ export const refreshTimedDocs = () => {
   for (const refresh of refreshers) refresh();
 };
 
-// History and disk keep source coordinates. Only the editable view is projected, so changing speed cannot bake motion keys.
 export const createTimedDoc = <T extends object>(
   name: string,
   hooks: TimedHooks<T>,

@@ -50,7 +50,6 @@ def remote_source(url, out, *, language=None, transcript_only=False, transcript_
         pending.replace(out / "acquisition.json")
     checkpoint()
     try:
-        # Simulation retains lazy subtitle discovery without downloading tracks or media.
         info = json.loads(downloader([*auth, "--dump-single-json", "--skip-download", "--write-subs",
                                       "--write-auto-subs", "--sub-langs", "all", "--", url]))
         if info.get("entries") is not None or info.get("_type", "video") not in ("video", "url_transparent"):

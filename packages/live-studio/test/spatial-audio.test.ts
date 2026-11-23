@@ -46,7 +46,6 @@ describe("IR synthesizer (ir.ts)", () => {
     expect(hall.left.length).toBeGreaterThan(small.left.length);
     expect(cave.left.length).toBeGreaterThan(hall.left.length);
 
-    // Tail energy decays over time (last 20% quieter than first 20%)
     const rmsSlice = (buf: Float32Array, a: number, b: number) => {
       let s = 0;
       for (let i = a; i < b; i++) s += buf[i] * buf[i];
@@ -56,7 +55,6 @@ describe("IR synthesizer (ir.ts)", () => {
     const lateRms = rmsSlice(hall.left, Math.floor(hall.left.length * 0.8), hall.left.length);
     expect(earlyRms).toBeGreaterThan(lateRms * 2);
 
-    // Outdoor has sparser/quieter late tail relative to cave
     const outdoorLate = rmsSlice(
       outdoor.left,
       Math.floor(outdoor.left.length * 0.6),
@@ -65,7 +63,6 @@ describe("IR synthesizer (ir.ts)", () => {
     const caveEarly = rmsSlice(cave.left, 0, Math.floor(cave.left.length * 0.25));
     expect(caveEarly).toBeGreaterThan(outdoorLate);
 
-    // Stereo L and R channels are distinct (decorrelated reflections/tail)
     let diff = 0;
     for (let i = 0; i < hall.left.length; i++) diff += Math.abs(hall.left[i] - hall.right[i]);
     expect(diff).toBeGreaterThan(1.0);
@@ -78,21 +75,17 @@ describe("IR synthesizer (ir.ts)", () => {
     ];
     const film = { space: "hall", wet: 0.3 };
 
-    // Falls back to film default outside shots
     expect(resolveClipReverb(undefined, 12, spaces, film)).toEqual({
       space: "hall",
       wet: 0.3,
       preDelayMs: 18,
     });
-    // Inherits shot space inside [5, 10)
     expect(resolveClipReverb(undefined, 6.5, spaces, film)).toEqual({
       space: "cave",
       wet: 0.45,
       preDelayMs: 24,
     });
-    // Explicit clip dry overrides shot/film space
     expect(resolveClipReverb({ space: "dry" }, 6.5, spaces, film)).toBeNull();
-    // Explicit clip override wins
     expect(
       resolveClipReverb({ space: "stairwell", wet: 0.5, preDelayMs: 12 }, 6.5, spaces, film),
     ).toEqual({
@@ -144,9 +137,9 @@ describe("3D spatial audio math (spatial.ts)", () => {
       rolloff: 1,
     });
 
-    expect(near.gain).toBeCloseTo(1, 6); // distance === refDistance === 2
-    expect(mid.gain).toBeCloseTo(2 / (2 + (10 - 2)), 6); // 0.2
-    expect(farClamped.gain).toBeCloseTo(2 / (2 + (20 - 2)), 6); // clamped at maxDistance=20 -> 0.1
+    expect(near.gain).toBeCloseTo(1, 6);
+    expect(mid.gain).toBeCloseTo(2 / (2 + (10 - 2)), 6);
+    expect(farClamped.gain).toBeCloseTo(2 / (2 + (20 - 2)), 6);
     expect(mid.cutoffHz).toBeLessThan(near.cutoffHz);
     expect(farClamped.cutoffHz).toBeLessThan(mid.cutoffHz);
 
@@ -175,12 +168,10 @@ describe("3D spatial audio math (spatial.ts)", () => {
   });
 
   test("respects camera roll in radians (matching Three.js rotateZ) and offsetPosition helper", () => {
-    // pi/2 roll rotates right vector onto camUp (+Y), so source above camera pans right
     const rolledCam = { ...cam, roll: Math.PI / 2 };
     const above = computeSpatialParams(rolledCam, [0, 5.6, 5], { at: [0, 5.6, 5] });
     expect(above.pan).toBeCloseTo(1, 5);
 
-    // Parity against THREE.PerspectiveCamera.rotateZ across varied pitches/yaws/rolls
     for (const roll of [0, 0.4, -0.75, Math.PI / 2]) {
       const p: [number, number, number] = [2, 3, 6];
       const l: [number, number, number] = [-1, 1.5, 0];
@@ -303,7 +294,6 @@ describe("J-Cut / L-Cut helpers (jlcut.ts)", () => {
   });
 
   test("computeJCutStart and computeLCutEnd clamp cleanly against neighbours and source room", () => {
-    // Source trimIn allows going back from 4.0 to 3.4 (clamped by sourceRoom, not 3.25)
     const j = computeJCutStart({
       from: 4.0,
       to: 7.0,
@@ -318,7 +308,6 @@ describe("J-Cut / L-Cut helpers (jlcut.ts)", () => {
     expect(j.changed).toBe(true);
     expect(j.target).toBeCloseTo(3.4, 6);
 
-    // At start of audio file (minFrom === from): blocked by source, no change
     const jBlocked = computeJCutStart({
       from: 4.0,
       to: 7.0,
@@ -332,7 +321,6 @@ describe("J-Cut / L-Cut helpers (jlcut.ts)", () => {
     expect(jBlocked.changed).toBe(false);
     expect(jBlocked.blockedBy).toBe("source");
 
-    // L-Cut stops cleanly at next neighbour clip on same track
     const l = computeLCutEnd({
       from: 4.0,
       to: 7.0,
@@ -637,7 +625,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
           });
         }
         async decodeAudioData(buf: ArrayBuffer) {
-          // Marker size 64 simulates a 44100 Hz custom IR WAV file decoded on ctx
           const isCustomIr = buf.byteLength === 64;
           const sr = isCustomIr ? 44100 : this.sampleRate;
           return this.createBuffer(2, isCustomIr ? 4410 : sr * 4, sr);
@@ -797,7 +784,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         await mod.sound.loadSound();
         await new Promise((r) => setTimeout(r, 30));
 
-        // Verify playSlice constructs Web Audio reverb + spatial nodes cleanly & Q is in dB
         await mod.mixer.playSlice(4.2, 0.25);
         expect(created.convolvers.length).toBeGreaterThanOrEqual(1);
         expect(created.convolvers[0].normalize).toBe(false);
@@ -806,10 +792,9 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(created.delays[0].delayTime.value).toBeCloseTo(0.02, 5);
         expect(created.filters.length).toBeGreaterThanOrEqual(1);
         expect(created.filters[0].Q.value).toBeCloseTo(-20 * Math.log10(Math.SQRT2), 5);
-        expect(created.filters[0].frequency.value).toBeLessThan(5000); // occlusion LPF active
-        expect(created.panners.some((p) => p.pan.value > 0.8)).toBe(true); // camera looks -Z, source at +X => right pan
+        expect(created.filters[0].frequency.value).toBeLessThan(5000);
+        expect(created.panners.some((p) => p.pan.value > 0.8)).toBe(true);
 
-        // Verify rapid skim cleanup disconnects old GainNode and shared ConvolverNode
         const prevConvolverCount = created.disconnectedConvolvers;
         const prevGainCount = created.disconnectedGains;
         await mod.mixer.playSlice(4.2, 0.05);
@@ -817,7 +802,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(created.disconnectedConvolvers).toBeGreaterThan(prevConvolverCount);
         expect(created.disconnectedGains).toBeGreaterThan(prevGainCount);
 
-        // Verify offline custom IR decodes/resamples cleanly to OfflineAudioContext 48kHz & forgetSounds clears IR cache
         created.convolvers.length = 0;
         await mod.mixer.renderAudioSpan(7.9, 8.6);
         expect(irFetches).toBe(1);
@@ -829,7 +813,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         await mod.mixer.renderAudioSpan(7.9, 8.6);
         expect(irFetches).toBe(2);
 
-        // Verify scene-spatial.ts reads source-time EDIT.cam/EDIT[placedKey] + frameAt + FreeCam/offline gates
         mod.filmStub.EDIT.cam = [
           { t: 0, p: [0, 1.6, 5], l: [0, 1.6, 0] },
           { t: 4, p: [8, 1.6, 5], l: [0, 1.6, 0], ease: "linear" },
@@ -858,15 +841,12 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
             matrixWorld: { elements: [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 99, 99, 99, 1] },
           },
         };
-        // Freeze spans output [0.5, 1.5) holding source frame=0.5 while FreeCam is ignored
         expect(mod.sceneSpatial.pictureTimeAt(1.0)).toBeCloseTo(0.5, 5);
         expect(mod.sceneSpatial.pictureTimeAt(1.75)).toBeCloseTo(1.5, 5);
         expect(mod.sceneSpatial.sceneCameraPoseAt(1.0).p[0]).toBeCloseTo(1, 4);
-        // Live camera pose is used only when !free.on && !offline
         mod.state.S.tools.free.on = false;
         expect(mod.sceneSpatial.sceneCameraPoseAt(1.0).p[0]).toBe(99);
         expect(mod.sceneSpatial.sceneCameraPoseAt(1.0, { offline: true }).p[0]).toBeCloseTo(1, 4);
-        // Placed object at t=0.5 matches mc-assets/src/placed-math.ts poseAt arriving-key ease ("inOut")
         const placedAtHalf = poseAt(mod.filmStub.EDIT.objects.hero.keys, 0.5);
         mod.state.S.tools.objects = [[mod.state.S.tools.camera, "preview-only"]];
         expect(mod.sceneSpatial.availableSpatialTargets()).toEqual(["hero", "preview-only"]);
@@ -877,7 +857,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         mod.timingState.setTiming({}, 12);
         mod.state.S.tools = null;
 
-        // Verify ReverbSection keeps Wet & Pre-delay controls mounted even at wet = 0%
         const wetZeroHtml = mod.renderReverbSection({
           clip: { list: "sfx", i: 0 },
           c: { ...mod.sound.lanes.sfx[0], reverb: { space: "hall", wet: 0, preDelayMs: 12 } },
@@ -887,7 +866,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         expect(wetZeroHtml).toContain("Wet");
         expect(wetZeroHtml).toContain("Pre-delay");
 
-        // Verify J-Cut respects SHOTS_OUT cut times, looping beds, rate!=1, locked tracks & Undo/Redo
         mod.filmMeta.setFilmSource({
           DURATION: 12,
           SHOTS: [{ t: 0 }, { t: 6 }, { t: 9 }],
@@ -911,7 +889,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         mod.doc.redo();
         expect(mod.sound.lanes.sfx[0].at).toBeCloseTo(3.25, 3);
 
-        // Looping bed extends past SHOTS_OUT cut and wraps start via loopWrap(6, -0.5) => 4.0 cleanly
         const bedRef = { list: "beds" as const, i: 0 };
         mod.sound.applyJCut(bedRef, 1.5);
         expect(mod.sound.lanes.beds[0].from).toBeCloseTo(2.5, 3);
@@ -919,7 +896,6 @@ describe("Live mixer Web Audio routing + J/L-Cut Undo/Redo (mixer.ts & sound.ts)
         mod.sound.applyLCut(bedRef, 0.5);
         expect(mod.sound.lanes.beds[0].to).toBeCloseTo(8.5, 3);
 
-        // Locked track is protected from applyJCut / applyLCut; rate=2 unlocking scales trimDelta
         const lockedRef = { list: "sfx" as const, i: 1 };
         expect(mod.sound.locked(lockedRef)).toBe(true);
         mod.sound.applyJCut(lockedRef, 0.5);

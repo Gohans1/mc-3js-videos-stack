@@ -4,11 +4,6 @@ import { join, relative, resolve } from "node:path";
 
 import { ratioOf, sizeOf } from "./frame.ts";
 
-// Where a rendered video sits on the film's heard clock, read from its name (render.mjs names them so):
-//   renders/chunks/cNN.mp4, renders/final_chunks/cNN.mp4  NN*30 s on (render.mjs CHUNK)
-//   renders/span_<from>-<to>.mp4                           a --span run's, <from> s on
-// anything else starts at 0. final: render final's picture (final_chunks, final_video.mp4, mix's final.mp4), which
-// render final draws again.
 export const videoStart = (video) => {
   const chunk = /(?:^|[\\/])(final_)?chunks[\\/]c(\d+)\.mp4$/.exec(video);
   if (chunk) return { start: Number(chunk[2]) * 30, kind: "chunk", final: Boolean(chunk[1]) };
@@ -45,8 +40,6 @@ export function writeRenderEvidence(file, data) {
 
 const validCuts = (cuts) => Array.isArray(cuts) && cuts.every((n) => Number.isFinite(n) && n >= 0);
 
-// The cuts a render was drawn with. A picture older than the film (stale) keeps only those recorded with its own file:
-// renders/cuts.json is the current edit's
 export const drawnCuts = (root, video, stale) => {
   const found = renderCuts(root, video);
   return stale && found.status === "legacy"
@@ -57,8 +50,6 @@ export const drawnCuts = (root, video, stale) => {
     : found;
 };
 
-// A --chunks run joins chunks drawn at different times (files in film order, length seconds each): each brings the cuts
-// it was drawn with over its own seconds; null when one recorded none
 export const joinedCuts = (files, length) => {
   const cuts = [];
   for (const [i, file] of files.entries()) {
@@ -91,7 +82,6 @@ export function renderCuts(root, video) {
         status: "invalid",
         reason: "renders/cuts.json is no list of seconds; bun run render clip writes it again",
       };
-    // Legacy global cut files were written before their own video.
     if (statSync(old).mtimeMs > statSync(file).mtimeMs)
       return {
         status: "unavailable",
@@ -106,7 +96,6 @@ export function renderCuts(root, video) {
   }
 }
 
-// A filename convention applies within the selected film's own renders.
 export const filmVideo = (root, video) => {
   const file = resolve(root, video);
   const rel = relative(root, file).replaceAll("\\", "/");
@@ -134,8 +123,6 @@ export const filmVideo = (root, video) => {
   };
 };
 
-// The picture of a film render a draft's strip (heard time, shot) sits under: its top { width, height } at the film's
-// ratio (package.json "live-studio".ratio, 16:9 by default), or null when the video is no film render or has no strip
 export const filmPicture = (root, video) => {
   const file = resolve(root, video);
   if (!filmVideo(root, file)) return null;
@@ -150,8 +137,6 @@ export const filmPicture = (root, video) => {
   return height < size.height ? { width: size.width, height } : null;
 };
 
-// A video's stream as ffprobe reads it ({ width, height, fps }), or null for a picture (ffprobe reads one as a one-frame
-// video stream: image2, png_pipe, ...) or a file it cannot read
 export const probeVideo = (file) => {
   const r = spawnSync(
     "ffprobe",

@@ -107,8 +107,6 @@ reference's timing); the keys between from and to and earlier mm-<name>-* keys a
 Exit 0: solved; 1: failed or stopped, cam.json unchanged; 2: usage error.
 next: look at sheet.jpg before --write`;
 
-// the solved keys into package.json "live-studio".camTimeline: reference (heard) seconds become camera seconds through
-// the film's edit, and they take over their span and any earlier solve of the same shot
 const writeSolvedKeys = (film, name, solvedKeys) => {
   const conf = JSON.parse(readFileSync(join(film, "package.json"), "utf8"))["live-studio"] ?? {};
   if (!conf.camTimeline) {
@@ -233,7 +231,6 @@ if (process.argv[2] === "add") {
     );
     process.exit(1);
   }
-  // H.264 up to 1920 in an .mp4 decodes everywhere (ffmpeg, the studio, Chromium) and is kept as it is
   const ready =
     video.codec_name === "h264" &&
     extname(source).toLowerCase() === ".mp4" &&
@@ -409,11 +406,9 @@ console.error(
 const ended = await startJob(process.cwd(), `reference ${command}`, {
   say: `Measuring ${basename(files[0])}`,
 });
-// a film draft is its picture over a strip naming the heard time and shot: the measure compares the picture alone
 const measured = files.map((f) => resolve(f));
 const began = Date.now();
 const picture = command === "compare" ? filmPicture(process.cwd(), measured[1]) : null;
-// under its own name, so compare.md names the draft; removed once measured
 const pictureDir = join(out, "remake-picture");
 if (picture) {
   mkdirSync(pictureDir);
@@ -489,7 +484,6 @@ if (stopped)
   console.error(
     "reference: stopped before completion; completed reports remain, decoding must restart",
   );
-// the measure's cuts are image changes and miss a whip pan, so study adds the camera's own motion from bun run media camera
 const studyJson = join(out, "study.json");
 if (command === "study" && !stopped && status === 0 && existsSync(studyJson)) {
   const camera = mediaPython("camera");

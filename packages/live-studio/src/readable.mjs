@@ -1,8 +1,3 @@
-// Can the words over the picture be read: the subtitle standards are the published rules for words over moving pictures.
-// Netflix's timed text: up to 20 characters a second for adults, at least 5/6 s on screen. BBC's subtitle guidelines: a
-// line 7-8% of the frame height as authored, which a player may shrink to about half; SIZE_MIN (36 px at 1080, 3.3%) is
-// that half, and the floor under which words turn to mush on a phone. An item with "read": false is decor (a sign in the
-// world, a glitch) and is never judged
 import { graphemes, inOutLengths } from "film-stage/titles-text";
 
 import { isTornByReorder, remapOutputTime, timebaseClock } from "./layer-timing.mjs";
@@ -11,7 +6,6 @@ export const READ_CPS = 20;
 export const READ_MIN = 5 / 6;
 export const SIZE_MIN = 36;
 
-// tracks: the text file's own (a hidden track's items are off screen, as a hidden item is)
 export const isRead = (it, tracks) =>
   it?.kind === "text" &&
   it.read !== false &&
@@ -19,15 +13,9 @@ export const isRead = (it, tracks) =>
   !tracks?.[it.track ?? 0]?.hidden &&
   !!it.text?.trim();
 export const charsOf = (text) => graphemes(text.replace(/\s*\n\s*/g, " ").trim()).length;
-// px at 1080 on the frame's short side, as film-stage/titles.ts sizes it
 export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
 
-// heard: the item mapped to heard seconds. A fade or a typing is about half there at its middle, so half the In and half
-// the Out count as read; both are the item's own seconds, scaled when a Speed stretches the item. The size floor holds
-// for a Short too: played full screen, a film's short side (a Short's width) is the phone's short side either way
-// the size floor needs no clock: said even for a film whose length is not in its data
 export const sizeFaults = (scene, ratio = "16:9") => {
-  // titles.ts multiplies them: a word ("big", "2") draws at no size the canvas takes
   const word = ["size", "scale"].find((k) => scene[k] != null && typeof scene[k] !== "number");
   if (word)
     return [
@@ -44,7 +32,6 @@ export const sizeFaults = (scene, ratio = "16:9") => {
       ]
     : [];
 };
-// Actual heard duration of a title's In and Out under its timing clock (Freezes and piecewise Speeds never stretch them uniformly)
 export const heardInOut = (scene, heard, clock = null) => {
   const io = inOutLengths(scene);
   if (clock) {
@@ -84,8 +71,6 @@ const visibleSpans = (from, to, clock) => {
   return out;
 };
 
-// end: the film's end in heard seconds; an item it cuts off is read only until then, its Out as far as it plays.
-// null when no frame of it is on screen
 export const readPace = (scene, heard, end = Infinity, clock = null) => {
   const spans = visibleSpans(heard.from, Math.min(heard.to, end), clock);
   if (clock && !spans.length) return null;
@@ -107,7 +92,6 @@ export const readPace = (scene, heard, end = Infinity, clock = null) => {
 
 export const PACE = `${READ_CPS} characters a second and at least ${READ_MIN.toFixed(2)} s, Netflix's subtitle pace`;
 
-// the pace fault first, then the size faults
 export const readFaults = (scene, heard, ratio = "16:9", end = Infinity, clock = null) => {
   const pace = readPace(scene, heard, end, clock);
   if (!pace) return [];
@@ -121,7 +105,6 @@ export const readFaults = (scene, heard, ratio = "16:9", end = Infinity, clock =
   ];
 };
 
-// Frame time inside visible non-blank spans of [max(h.from, from), min(h.to, to)), or null when cut/blank/past end.
 export const textCheckSample = (h, io, from, to, fps = 30, clock = null) => {
   const spans = visibleSpans(Math.max(h.from, from), Math.min(h.to, to), clock);
   if (!spans.length) return null;
@@ -159,7 +142,6 @@ const planEnd = (plan) =>
       )
     : 0;
 
-// Source duration fallback when edit.json omits end, so setTiming compiles all timing and text spans for --check text.
 export const fallbackTimingDuration = (items = [], timing = {}) => {
   const histories = [timing.layers, ...Object.values(timing.layerKinds ?? {})].filter(Boolean);
   const plans = [

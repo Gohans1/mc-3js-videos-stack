@@ -10,7 +10,6 @@ export const VELOCITY_EFFECTS = [
   "fringeBeat",
   "rainbow",
 ] as const;
-// What each built-in effect does on a beat, as the shader below draws it (the studio's picker, bun run find)
 export const VELOCITY_LOOKS: Record<
   (typeof VELOCITY_EFFECTS)[number],
   { title: string; tip: string }

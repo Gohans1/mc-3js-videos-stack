@@ -33,6 +33,24 @@
         "three-good-godrays": "catalog:",
       },
     },
+    "films/food-eat-more": {
+      "name": "food-eat-more",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
     "packages/clip-catalog": {
       "name": "clip-catalog",
       "version": "0.1.0",
@@ -998,6 +1016,8 @@
     "flatted": ["flatted@3.4.4", "", {}, "sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q=="],
 
     "follow-redirects": ["follow-redirects@1.16.2", "", { "peerDependencies": { "debug": "*" }, "optionalPeers": ["debug"] }, "sha512-/kVP2U8z596Ia0gwFrwyIeo74ta5aVmSeU1FfAUMAmcEP5EP7zydmag3SLiN64NaRKef3lxsq7i/g7ltJQDGow=="],
+
+    "food-eat-more": ["food-eat-more@workspace:films/food-eat-more"],
 
     "foreground-child": ["foreground-child@3.3.1", "", { "dependencies": { "cross-spawn": "^7.0.6", "signal-exit": "^4.0.1" } }, "sha512-gIXjKqtFuWEgzFRJA9WCQeSJLZDjgJUOMCMzxtvFq/37KojM1BFGufqsCy0r4qSQmYLsZYMeyRqzIWOMup03sw=="],
 

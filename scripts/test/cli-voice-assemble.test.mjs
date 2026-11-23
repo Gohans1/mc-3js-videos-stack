@@ -377,7 +377,6 @@ test("validates edit.json, package.json, audio.json, and junctions upfront befor
     }
   }
 
-  // Junctioned src/timeline must also fail before mutating edit.json or full_voice.wav
   const outside = mkdtempSync(join(tmpdir(), "cva-junc-out-"));
   const dj = makeFilm("junction", { takes: [{ id: "01", text: "Hi", t: 0 }] });
   try {
@@ -402,7 +401,6 @@ test("validates edit.json, package.json, audio.json, and junctions upfront befor
 });
 
 test("sorts out-of-order takes chronologically, validates SoundTimeline, and rejects duplicate IDs or overlapping spoken takes", () => {
-  // 1. Out-of-order takes with touching silent tail sort cleanly across lines, voice_map, and Phrase Bricks
   const dOrder = makeFilm("unordered", {
     end: 2,
     takes: [
@@ -431,7 +429,6 @@ test("sorts out-of-order takes chronologically, validates SoundTimeline, and rej
     rmSync(dOrder, { recursive: true, force: true });
   }
 
-  // 2. Duplicate take IDs rejected upfront
   const dDup = makeFilm("dup", {
     takes: [
       { id: "01", text: "A", t: 0 },
@@ -449,7 +446,6 @@ test("sorts out-of-order takes chronologically, validates SoundTimeline, and rej
     rmSync(dDup, { recursive: true, force: true });
   }
 
-  // 3. Spoken overlap rejected upfront (takes 01 and 02 collide)
   const dOverlap = makeFilm("overlap", {
     takes: [
       { id: "01", text: "Long", t: 0.1 },
@@ -472,7 +468,6 @@ test("sorts out-of-order takes chronologically, validates SoundTimeline, and rej
 });
 
 test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --clips, repairs missing track, and clears bricks on empty takes", () => {
-  // 1. Single take edited at at=0, start=0 (rate + gainKeys)
   const dSingle = makeFilm("single-edit", {
     takes: [{ id: "01", text: "Solo", t: 0 }],
     audio: {
@@ -511,7 +506,6 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
     rmSync(dSingle, { recursive: true, force: true });
   }
 
-  // 2. Multi-take split (at==start, 3 bricks for 2 takes), voiceFilter edit, deleted brick, invalid track repair, and empty takes cleanup
   const dMulti = makeFilm("multi-edit", {
     takes: [
       { id: "01", text: "One", t: 0 },
@@ -533,13 +527,11 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
     makeAudio(join(dMulti, "voice/takes/02.wav"), 550, 1.0);
     writeWords(join(dMulti, "voice/takes/02.wav"), [{ w: "Two", s: 0.1, e: 0.8 }], 1.0);
 
-    // Dangling track gets repaired to valid "voice" track cleanly
     assert.equal(runCli([], dMulti).status, 0);
     const repaired = JSON.parse(readFileSync(join(dMulti, "src/timeline/audio.json"), "utf8"));
     assert.equal(SoundTimeline.safeParse(repaired).success, true);
     assert.equal(repaired.sfx[0].track, "voice");
 
-    // Split brick 1 into 2 bricks (now 3 bricks, all with at===start) -> preserved!
     const splitDoc = structuredClone(repaired);
     splitDoc.sfx.splice(
       0,
@@ -554,7 +546,6 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
       3,
     );
 
-    // Reset with --clips, then add voiceFilter without moving at -> preserved!
     assert.equal(runCli(["--clips"], dMulti).status, 0);
     const filteredDoc = JSON.parse(readFileSync(join(dMulti, "src/timeline/audio.json"), "utf8"));
     filteredDoc.sfx[0].voiceFilter = "telephone";
@@ -565,7 +556,6 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
       "telephone",
     );
 
-    // Delete 1 brick cleanly with 2 takes -> 1 short brick kept without --clips
     const oneDel = structuredClone(repaired);
     oneDel.sfx = [repaired.sfx[0]];
     writeFileSync(join(dMulti, "src/timeline/audio.json"), JSON.stringify(oneDel));
@@ -575,7 +565,6 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
       1,
     );
 
-    // Empty takes + --clips clears stale bricks
     const edit = JSON.parse(readFileSync(join(dMulti, "src/edit.json"), "utf8"));
     edit.takes = [];
     writeFileSync(join(dMulti, "src/edit.json"), JSON.stringify(edit));
@@ -590,7 +579,6 @@ test("preserves edited, split, DSP-modified, and deleted Phrase Bricks unless --
 });
 
 test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choices.json off, and reports startJob activity", async () => {
-  // 1. Corrupt .wav.mouth.json or empty cues triggers unshaped warning AND next: bun run voice:lips
   const dMouth = makeFilm("mouth-check", {
     takes: [{ id: "01", text: "Speak", t: 0.2, by: "hero" }],
   });
@@ -606,7 +594,6 @@ test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choi
     assert.match(rBad.stdout, /without mouth shapes \(01\)/i);
     assert.match(lastNonEmptyLine(rBad.stdout), /^next:\s+bun run voice:lips\b/i);
 
-    // Write valid cues and re-run -> mouth.json gets shifted cues, next: advances to voice:cues
     writeFileSync(
       join(dMouth, "voice/takes/01.wav.mouth.json"),
       JSON.stringify({
@@ -632,7 +619,6 @@ test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choi
     rmSync(dMouth, { recursive: true, force: true });
   }
 
-  // 2. Empty takes prints next: directing to add takes + bun run voice:gen
   const dEmpty = makeFilm("empty-next", { takes: [] });
   try {
     const r = runCli([], dEmpty);
@@ -642,7 +628,6 @@ test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choi
     rmSync(dEmpty, { recursive: true, force: true });
   }
 
-  // 3. startJob activity reporting (success + failure) + choices.json off note
   const dAct = makeFilm("activity", {
     takes: [{ id: "01", text: "Hello", t: 0 }],
     audio: { narration: "narration", beds: [], sfx: [] },
@@ -680,7 +665,6 @@ test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choi
     assert.equal(events.at(-1).job?.end, true);
     assert.equal(events.at(-1).level, "ok");
 
-    // Failure also closes startJob with level: "fail"
     events.length = 0;
     writeFileSync(join(dAct, "src/timeline/audio.json"), "{ broken");
     const rFail = await runCliAsync([], dAct);
@@ -692,5 +676,45 @@ test("detects invalid/empty mouth shapes, emits accurate next: lines, notes choi
   } finally {
     srv.close();
     rmSync(dAct, { recursive: true, force: true });
+  }
+});
+
+test("findNarrationOffChoice rejects malformed choices.json and escaping symlinks instead of swallowing errors", async () => {
+  const dBad = makeFilm("bad-choices", {
+    takes: [{ id: "01", text: "Hello", t: 0 }],
+    audio: { narration: "narration", beds: [], sfx: [] },
+  });
+  const outside = mkdtempSync(join(tmpdir(), "voice-outside-choice-"));
+  try {
+    makeAudio(join(dBad, "voice/takes/01.wav"), 440, 0.6);
+    writeWords(join(dBad, "voice/takes/01.wav"), [{ w: "Hello", s: 0.1, e: 0.4 }], 0.6);
+
+    writeFileSync(join(dBad, "choices.json"), "{ invalid json");
+    const editBefore = readFileSync(join(dBad, "src/edit.json"), "utf8");
+    const audioBefore = readFileSync(join(dBad, "src/timeline/audio.json"), "utf8");
+    const rBad = await runCliAsync([], dBad);
+    assert.notEqual(rBad.status, 0, "malformed choices.json must fail loudly");
+    assert.match(rBad.stderr + rBad.stdout, /choices\.json/i);
+    assert.equal(existsSync(join(dBad, "assets/public/agent/full_voice.wav")), false);
+    assert.equal(existsSync(join(dBad, "renders/live/voice_map.json")), false);
+    assert.equal(existsSync(join(dBad, "renders/live/mouth.json")), false);
+    assert.equal(readFileSync(join(dBad, "src/edit.json"), "utf8"), editBefore);
+    assert.equal(readFileSync(join(dBad, "src/timeline/audio.json"), "utf8"), audioBefore);
+
+    rmSync(join(dBad, "choices.json"), { force: true });
+    writeFileSync(join(outside, "choices.json"), JSON.stringify({ narration: { set: "off" } }));
+    try {
+      symlinkSync(join(outside, "choices.json"), join(dBad, "choices.json"));
+    } catch {
+      symlinkSync(outside, join(dBad, "choices.json"), "junction");
+    }
+    const rSym = await runCliAsync([], dBad);
+    assert.notEqual(rSym.status, 0, "symlinked choices.json outside film must fail loudly");
+    assert.match(rSym.stderr + rSym.stdout, /choices\.json|inside film/i);
+    assert.equal(existsSync(join(dBad, "assets/public/agent/full_voice.wav")), false);
+    assert.equal(existsSync(join(dBad, "renders/live/voice_map.json")), false);
+  } finally {
+    rmSync(dBad, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });

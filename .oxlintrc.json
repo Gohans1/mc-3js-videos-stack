@@ -6,6 +6,7 @@
     "reportUnusedDisableDirectives": "error"
   },
   "plugins": ["eslint", "typescript", "unicorn", "oxc"],
+  "jsPlugins": ["./scripts/lint/oxlint-no-comments.mjs"],
   "ignorePatterns": [
     "**/node_modules/**",
     "vault/**",
@@ -16,6 +17,7 @@
     "films/**"
   ],
   "rules": {
+    "mc-comments/no-comments": "error",
     "typescript/no-floating-promises": "off",
     "typescript/unbound-method": "off",
     "typescript/no-implied-eval": "off",

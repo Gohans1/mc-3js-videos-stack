@@ -1,4 +1,3 @@
-// src/note-state.mjs: what each side may do to a note, and where that leaves it
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

@@ -1,6 +1,4 @@
 // @ts-nocheck
-// The page render.mjs opens in a headless Chrome: draws frames with the film's own draw(t), the same code the studio shows,
-// and encodes clips in the browser (mediabunny on WebCodecs, GPU H.264). Same t, same picture.
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
 import { EDIT } from "live-studio/edit";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
@@ -43,8 +41,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const canvas = glCanvas();
   canvas.width = cfg.W;
   canvas.height = cfg.H;
-  // A draft frame is the picture with a strip under it for the heard time and the shot, so nothing is printed over the film
-  // (burn-ins go outside the picture when there is room, as on dailies); final frames are the picture alone
   const BAR = cfg.draft ? 2 * Math.round(cfg.H * 0.028) : 0;
   const out = document.createElement("canvas");
   out.width = cfg.W;
@@ -53,9 +49,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const t0 = performance.now();
   const render = await buildScene(canvas, cfg.W, cfg.H, cfg.draft, log);
   log(`scene built in ${((performance.now() - t0) / 1000).toFixed(1)}s`);
-  for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set); // what was picked in the studio
-  // a transition the film does not have plays as a hard cut with no error: check only knows the built-ins, this page knows
-  // the film's own too (draw.transitions, from makeTransitions)
+  for (const v of render.variants ?? []) if (cfg.choices?.[v.id]?.set) v.set(cfg.choices[v.id].set);
   if (render.transitions) {
     const ids = render.transitions.map((x) => x.id);
     SHOTS.forEach((s, i) => {
@@ -66,7 +60,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         );
     });
   }
-  // a shot's start or a camera key with cut: true: framecheck, the shutter, --check motion/order and the cost line stop there
   const cuts = renderCutTimes(
     SHOTS.slice(1).map((s) => s.t),
     EDIT.cam,
@@ -79,8 +72,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         variants: (render.variants ?? []).map((v) => v.id),
       }),
     );
-  // --check name:args;name:args runs the film's draw.checks[name](...args), or a built-in one, and prints the lines it returns;
-  // an item { still, canvas } is written as renders/<still>
   const builtin = {
     order: orderCheck(render, DURATION, [0, ...cuts]),
     motion: motionCheck(render, cfg, cuts),
@@ -98,7 +89,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       return;
     }
     const t1 = performance.now();
-    // which shots the seconds asked for are, numbered as bun run at numbers them: a scene second given by mistake shows here
     if (
       builtin[name] &&
       !render.checks?.[name] &&
@@ -136,8 +126,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     return;
   }
 
-  // The film's list of what is going on (draw.describe), over the picture of a draft with --list: one backed box per section,
-  // wrapped into a new column when it would run off the bottom. Colours are the studio's
   const S = Math.max(10, Math.round(cfg.H * 0.019)),
     LH = Math.round(S * 1.35),
     PAD = Math.round(S * 0.6),
@@ -212,11 +200,9 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     ctx.restore();
   };
 
-  // Temporal shutter and spatial aperture samples are averaged in linear light.
   let acc = null;
   const whips = { frames: 0, most: 0 };
   const cost = cfg.clip ? renderCost(cuts) : null;
-  // the camera samples the last frame drew, a whip's restarted ones too: the cost line divides a frame's time by them
   let drawn = 0;
   const draw = async (frame, samples, viewName = null) => {
     const t = frame / FPS;
@@ -242,7 +228,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       drawn = 1;
       ctx.drawImage(canvas, 0, 0);
     } else {
-      // in the film's own context when it shares its renderer (draw.tools.renderer): no copy through the CPU per sample
       const three = render.tools?.renderer;
       if (!acc) {
         const gl = three?.getContext?.();
@@ -392,16 +377,13 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     }
   }
 
-  // The film in chunks of cfg.clip.chunk seconds, each its own mp4 starting on a keyframe, so render.mjs joins them by stream copy
   const chunks = chunkCount;
-  // render.mjs restarts a page that goes quiet for minutes; a frame now and then says this one is still at work
   let beat = 0;
   const alive = (f) => {
     if (performance.now() - beat < 5000) return;
     beat = performance.now();
     post("/alive", String(f));
   };
-  // frames first-last as one mp4 starting on a keyframe: a chunk, or a --span run's video
   const encode = async (first, last, bitrate) => {
     const output = new Output({
       format: new Mp4OutputFormat({ fastStart: "in-memory" }),
@@ -415,7 +397,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     });
     output.addVideoTrack(source, { frameRate: FPS });
     await output.start();
-    // frame to frame, so the GPU's work and the encoder's wait count too, not only what the CPU hands the GPU
     let mark = performance.now();
     for (let f = first; f <= last; f++) {
       const sample = new VideoSample(await draw(f, cfg.clip.samples), {
@@ -437,7 +418,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     whips.frames = whips.most = 0;
     return said;
   };
-  // a --span run draws one video of just those frames and leaves every chunk as it is
   if (cfg.clip?.span) {
     const started = performance.now(),
       first = cfg.clip.span[0],
@@ -459,7 +439,6 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   }
   if (cfg.clip) {
     const todo = cfg.clip.only ?? Array.from({ length: chunks }, (_, i) => i);
-    // a chunk already rendered from this same build and settings (render.mjs stamps them) is kept as it is
     const kept = todo.filter((i) => cfg.clip.unchanged?.includes(i));
     if (kept.length)
       log(

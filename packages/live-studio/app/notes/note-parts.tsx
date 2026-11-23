@@ -1,4 +1,3 @@
-// Shared note UI building blocks reused across NoteList (Cards view) and Notion-style NoteViews.
 import { PreviewCard } from "@base-ui/react/preview-card";
 import {
   Bookmark,
@@ -395,10 +394,8 @@ export function NoteTimeChip({
   );
 }
 
-/** Returns true when the current pointer gesture left a non-empty DOM text selection. */
 export const hasSelectedText = () => Boolean(window.getSelection()?.toString());
 
-/** Keyboard-focusable open trigger paired alongside selectable note prose so pointer drag-select stays native. */
 export function NoteOpenButton({
   label,
   title = "Open note",
@@ -874,7 +871,6 @@ export function FixCallout({
   );
 }
 
-// Unified follow-up stack shared by cards, rows, timelines, and drawers so no state or turn gets buried.
 export function NoteFollowups({
   note,
   state,
@@ -996,7 +992,6 @@ export function NoteTags({
   );
 }
 
-// Compact frame thumbnail; hovering opens a floating full-detail frame preview.
 function NotePreviewTile({
   src,
   alt,
@@ -1329,7 +1324,6 @@ export function NoteThumb({
   );
 }
 
-// Inline feedback composer so creators can supplement or send a check/done note back to the AI anywhere, including PhoneApp.
 export function InlineFeedbackBox({
   note,
   ask,
@@ -1758,7 +1752,6 @@ export const openNoteRow = (n: Note, state: NoteState, el: Element) => {
   else goToNote(n);
 };
 
-/** Shared active filter pills strip with single-filter removal and Reset all. */
 export function ActiveFilterChips({
   includeSearch = false,
   shotOptions = [],
@@ -1841,7 +1834,6 @@ export function ActiveFilterChips({
   );
 }
 
-/** Returns a stable signature of active note filters so exit ghosts clear whenever filter scope changes. */
 export function useNoteFilterScopeKey() {
   const status = useStudio((s) => s.noteStatus);
   const scope = useStudio((s) => s.noteScope);
@@ -1851,7 +1843,6 @@ export function useNoteFilterScopeKey() {
   return `${status}|${scope}|${shot ?? ""}|${facets.join(",")}|${q}`;
 }
 
-/** Plays an interruptible exit transition for a departing note while hiding duplicate accessibility/tracking hooks. */
 export function NoteExitSlot({
   id,
   kind,

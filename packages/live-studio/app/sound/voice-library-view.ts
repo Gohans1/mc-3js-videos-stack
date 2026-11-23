@@ -1,4 +1,3 @@
-// Pure view, category, facet, search, and sort helpers for the shared English voice library.
 import type { SharedVoiceEntry } from "../../src/voice-library.mjs";
 import { words } from "../core/search";
 
@@ -481,7 +480,6 @@ export interface VoiceEmptyStateResult {
   detail: string;
 }
 
-/** Picks unambiguous title and action-aligned guidance when no voice cards match or load. */
 export const voiceEmptyState = ({
   loaded,
   loading,
@@ -703,7 +701,6 @@ export interface VoiceScrollAnchor {
   topRatio: number;
 }
 
-/** Captures the top-visible voice item and proportional row offset before a column count change. */
 export const captureVoiceRowAnchor = (
   topRowIndex: number,
   prevCols: number,
@@ -723,7 +720,6 @@ export const captureVoiceRowAnchor = (
   };
 };
 
-/** Resolves row viewport offset after reflow, scaling negative offsets proportionally to keep the row visible. */
 export const resolveVoiceRowOffset = (
   anchor: Pick<VoiceScrollAnchor, "offsetWithinRow" | "topRatio">,
   measuredRowHeightPx: number,

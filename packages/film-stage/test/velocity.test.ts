@@ -32,7 +32,6 @@ test("makeVelocity bypasses offscreen render targets on clean frames and runs di
   const { renderer, getCopies, targets, rendered } = fakeRenderer();
   const vel = makeVelocity(renderer);
 
-  // Neutral optics + null accent: zero framebuffer copies or offscreen passes
   vel(null, {
     blur: 0,
     exposure: 0,
@@ -47,7 +46,6 @@ test("makeVelocity bypasses offscreen render targets on clean frames and runs di
   expect(targets.length).toBe(0);
   expect(rendered.length).toBe(0);
 
-  // Directional smear alone triggers the optics shader pass with uSmear populated
   vel(null, {
     blur: 0,
     exposure: 0,
@@ -83,7 +81,6 @@ test("makeVelocity supports Cinetic beat accents (hitPunch, fringeBeat, shutterS
 
   for (const effect of VELOCITY_EFFECTS) {
     rendered.length = 0;
-    // Also exercise omitted beatIndex runtime safety
     vel({ effect, amount: 0.7, phase: 0.25, beatIndex: undefined as unknown as number }, null);
     expect(rendered.length).toBeGreaterThanOrEqual(1);
     const mat = rendered.at(-1) as THREE.ShaderMaterial;
@@ -99,12 +96,10 @@ test("makeVelocity passes through unknown custom beat effects cleanly (never sil
   const { renderer, getCopies, rendered } = fakeRenderer();
   const plain = makeVelocity(renderer);
 
-  // Unknown custom beat effect without optics: no-op instead of silently running retroZoom (mode 3)
   plain({ effect: "customStrobe", amount: 0.8, phase: 0.3, beatIndex: 1 }, null);
   expect(getCopies()).toBe(0);
   expect(rendered.length).toBe(0);
 
-  // Unknown custom beat effect WITH camera optics: runs only the optics pass, never mode 3 velocity shader
   plain(
     { effect: "customStrobe", amount: 0.8, phase: 0.3, beatIndex: 1 },
     { blur: 0, exposure: 0.5, fringe: 0, bulge: 0, sweep: 0, sweepPos: 0.5 },
@@ -113,7 +108,6 @@ test("makeVelocity passes through unknown custom beat effects cleanly (never sil
   expect((rendered[0] as THREE.ShaderMaterial).uniforms.mode).toBeUndefined();
   plain.disposeVelocity();
 
-  // Registered custom beat effect via extra map drives optics/builtin modulation cleanly
   rendered.length = 0;
   const custom = makeVelocity(renderer, {
     customStrobe: ({ amount, phase }) => ({ exposure: amount * (1 - phase), fringe: 0.4 * amount }),

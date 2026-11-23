@@ -22,8 +22,7 @@ from pathlib import Path
 from jev import Jev
 from batch import read_rows
 
-ROOT = Path(__file__).resolve().parents[2] / "vault/motion"  # the repo's vault link (bun run link)
-# Fight words and retarget-break limits, shared with bun run find (scripts/find.ts reads the same file)
+ROOT = Path(__file__).resolve().parents[2] / "vault/motion"
 SCREEN = json.loads((Path(__file__).parent / "screen.json").read_text(encoding="utf-8"))
 # matched at a word's start in the name (after _ or a camel hump): inside a word, Wheelbarrow read as arrow, Relaxed as axe
 FIGHT = re.compile(r"(?:(?<![a-z])|(?<=(?-i:[a-z]))(?=(?-i:[A-Z])))(?:" + "|".join(SCREEN["fights"]) + ")", re.I)
@@ -74,7 +73,7 @@ def describe(r, full=False):
     return " | ".join([head, facts, *tl])
 
 
-HEAT, KEEP, SEED, FIT_N = 200, 20, 1, 5  # rerank heats; fits checks the first FIT_N shown
+HEAT, KEEP, SEED, FIT_N = 200, 20, 1, 5
 FIT_NO, FIT_YES = 0.3, 0.7
 
 
@@ -115,8 +114,6 @@ def fits(jev, scene, shown, full=False):
     return [ans[f"fit_{k + 1}"]["noul"] for k in range(len(shown))]
 
 
-# Retarget breaks that read on screen (clip-catalog/sweep.sh numbers; milder ones are the box body meeting itself and pass
-# by eye; a hand catching a fall jumps ~15 cm in a frame and reads right): check name start -> (limit, what a viewer sees)
 BROKEN = SCREEN["broken"]
 
 
@@ -137,8 +134,6 @@ def broken(lib):
 
 
 def rows(libs):
-    # measured tags, with the fixes recorded by eye (clip-catalog/catalog_review.py) over them; `seen`: someone has checked
-    # the clip. A sweep break joins the clip's flaw, so the finder shows it and Jev weighs it
     rp = ROOT / "catalog" / "review.json"
     review = json.loads(rp.read_text(encoding="utf-8-sig")) if rp.exists() else {}
     for lib in libs:
@@ -151,7 +146,6 @@ def rows(libs):
                         continue
                     rv = review.get(r["ref"], {})
                     row = {**r, **rv, "seen": r["ref"] in review, "fix": set(rv)}
-                    # seq drops runs under 0.2 s, but --from/--to read the first and last 0.2 s: the shown order holds both
                     if not rv.get("seq"):
                         body = [x for x in [row.get("start"), *row.get("seq", []), row.get("end")] if x]
                         row["seq"] = [x for i, x in enumerate(body) if not i or x != body[i - 1]]
@@ -200,7 +194,6 @@ def main():
         if len(s) > 3:
             s = re.sub(r"(?:ie|[ye])$", "", s)
         return s
-    # match either from a word start ("sit" finds sitting, never disposition) or by shared light stem ("sitting" finds Sit)
     queries = [(re.compile(r"\b" + re.escape(w)), _stem(w)) for w in words]
     tok_stems = lambda t: {_stem(tok) for tok in re.split(r"[^a-z\d]+", t) if tok}
     plain_name = lambda n: re.sub(r"([a-z])([A-Z])", r"\1 \2", n).replace("_", " ").lower()
@@ -227,13 +220,10 @@ def main():
             (a.look, lambda: r["look"] >= a.look), (a.air, lambda: has(r, "air") == (a.air == "yes")),
         ]
         if all(f() for on, f in checks if on):
-            # words in the name or the eye-checked description outrank Mixamo's search keywords
             said = plain_name(name) + " | " + r.get("desc", "").lower()
             said_stems = tok_stems(said)
             score = sum(2 if p.search(said) or s in said_stems else 1 for p, s in queries)
             hits.append((score, r, loop, tags))
-    # a one-frame clip is a still pose, never the move its name says: after every clip that moves; a clip with a
-    # FLAW after the equal ones without, so a list with no words opens on a usable clip, not the bind pose
     hits.sort(key=lambda h: (h[1]["dur"] < 0.1, -h[0], bool(h[1].get("flaw")), h[1]["dur"]))
     pool = len(hits)
     fit = {}
@@ -246,8 +236,6 @@ def main():
             fit = dict(zip(map(id, shown), fits(jev, a.jev, shown, a.timeline)))
             print(f"Jev via {jev.used}" + (f", cost ${jev.spent:.4f}" if jev.spent else "") + "; rank = Choice probability, fits = "
                   "its own yes/no", file=sys.stderr)
-            # TypeSafe's starting thresholds for a Noul: yes above 0.7, no below 0.3
-            # The yes threshold is inclusive, as in jev.ts.
             best = max(fit.values())
             if fit[id(shown[0])] < FIT_YES <= best:
                 best_index = max(range(len(shown)), key=lambda i: fit[id(shown[i])])

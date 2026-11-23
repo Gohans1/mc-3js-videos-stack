@@ -1,19 +1,6 @@
 import { hash } from "./hash";
-// A yawn: a fixed action pattern that, once started, runs to its end (no half yawns). It lasts 5.9 s on average (Provine
-// 1986: within a person the length barely changes from week to week; 3.5 s to well over 6 s across people) in three
-// phases (Barbizet 1958; Aloé 1994): a long slow inhale through the mouth as the jaw opens wide and the eyes start to
-// narrow; the acme, brief, mouth at its widest, the eyes squeezed shut, brows up, the neck stretched back; then the inhale
-// stops abruptly and a quick passive exhale lets everything go, the mouth closing, followed by a short pause in
-// breathing. Yawns come in bouts about 68 s apart (Provine 1986), mostly when sleepy or bored.
-//   const y = yawns([{ t: 4 }, { t: 75, k: 0.8 }], { gasps });   y(t) -> { phase, gape, lids, brow, neck, lungs } or null
-//   a yawn that would overlap a fright's gasp (the same events idle and startle get) is dropped whole, face and breath
-//   face: mouth open by gape, blink = max(blink, lids), brows up by brow;  pose = addPose(pose, yawnPose(y(t)))
-//   idle(poseAt, end, { yawns: y }) breathes the yawn's own breath (and holds back sighs and blinks around it)
-//   yawnTimes(end, drowsy) places yawns by themselves while he is sleepy
-// Over a mocap clip that is itself a yawn (Mixamo's Big_Yawn_While_Standing), mask yawnPose and keep the face only.
 import { GASP } from "./idle";
 
-// how long a fright's breath (idle.ts gasp: in, held, let go, back) takes at strength k
 const gaspLength = (k: number) => {
   const m = ([a, b]: number[]) => a + (b - a) * Math.min(1, Math.max(0, k));
   return GASP.start + GASP.inhale + m(GASP.hold) + m(GASP.relief) + GASP.back;
@@ -22,12 +9,12 @@ const gaspLength = (k: number) => {
 export const YAWN = {
   inhale: 2.8,
   acme: 1.8,
-  exhale: 1.3, // s: 5.9 in all (Provine's mean), each phase in Barbizet's 1.5-4 s range
-  pause: 0.8, // s of no breath after it
-  lungs: 2.6, // a deep breath, in units of a normal one
-  neck: 14, // degrees the head tips back at the acme
-  narrow: 0.45, // how shut the eyes are by the end of the inhale (then squeezed shut at the acme)
-  bout: 68, // s between yawns in a bout
+  exhale: 1.3,
+  pause: 0.8,
+  lungs: 2.6,
+  neck: 14,
+  narrow: 0.45,
+  bout: 68,
 };
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -51,7 +38,6 @@ export type Yawns = ((t: number) => YawnState | null) & {
   events: { t: number; kind: string }[];
 };
 
-// keys: when each yawn starts; k 0..1 how big; tempo stretches its phases (a long yawner, a quick one)
 export function yawns(
   keys: { t: number; k?: number; tempo?: number }[],
   { gasps = [] as { t: number; k?: number }[], o = YAWN } = {},
@@ -100,7 +86,6 @@ export function yawns(
       };
     }
     if (t < y.c) {
-      // the inhale stops at once and everything lets go: fast at first, settling
       const u = (t - y.b) / (y.c - y.b),
         r = 1 - minJerk(u / 0.7);
       return {
@@ -127,7 +112,6 @@ export function yawns(
   };
   return Object.assign(f, {
     spans: list.map((y) => [y.t0, y.d] as [number, number]),
-    // sound cues: the gasp in at the start, the "aah" out at the acme's end
     events: list.flatMap((y) => [
       { t: y.t0, kind: "yawn-in" },
       { t: y.b, kind: "yawn-out" },
@@ -135,13 +119,11 @@ export function yawns(
   });
 }
 
-// the body's part of a yawn: the head back, the chest lifted by the deep breath (idle adds the breath itself)
 export function yawnPose(y: YawnState | null) {
   if (!y) return { root: {} };
   return { root: {}, head: [-y.neck, 0, 0], chest: [-0.25 * y.neck, 0, 0] };
 }
 
-// yawns that come by themselves while he is sleepy (drowsy(t) over 0.3): ~68 s apart, uneven; none while busy(t)
 export function yawnTimes(
   end: number,
   drowsy: (t: number) => number,

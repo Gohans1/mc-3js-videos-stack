@@ -1,12 +1,7 @@
-// What every timeline canvas draws and answers the pointer with (the ruler and the stretch in timeline.ts, sound/lanes.ts,
-// camera/camrow.ts, keys/keyrows.ts, text/textrow.ts), kept once so the rows look and behave alike
 export const UI_FONT = "system-ui,Segoe UI,Roboto,sans-serif";
-// How near a key the pointer must come to take it, in CSS pixels: a finger is less exact than a mouse
 export const REACH = 7;
 export const keyReach = (touch: boolean) => (touch ? REACH * 2 : REACH);
 
-// The canvases' colours are index.css's tokens of the same names, so one place sets the page's and the rows' alike. Read once
-// the page has its styles: before that a token reads empty and is asked for again
 const TONES = [
   "background",
   "foreground",
@@ -89,13 +84,11 @@ export const tone = (k: Tone) => {
   }
   return tones[k];
 };
-// The playhead down a row: CapCut's half-white line, grey on an empty row and tinted over a clip, with no edge of its own
 export const drawPlayhead = (g: CanvasRenderingContext2D, x: number, h: number) => {
   g.fillStyle = tone("playhead");
   g.fillRect(x - 0.75, 0, 1.5, h);
 };
 
-// The canvas sized to its box in CSS pixels and drawn sharp at the screen's pixel ratio
 interface CanvasBox {
   w: number;
   h: number;

@@ -1,7 +1,5 @@
 import { loopSources } from "../app/sound/loop";
 
-// The two-ramp file of sound-loop.test.mjs looped from stream second start for len seconds, joined at clip second u0, as
-// the preview plays it: every 97th sample of each channel
 Object.assign(window, {
   renderLoop: async (start: number, len: number, u0: number) => {
     const SR = 48000,

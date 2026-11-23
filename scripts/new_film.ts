@@ -56,7 +56,6 @@ export function parseNewFilmArgs(argv: string[]): {
     : { name: words[0], portArg: words[1], ratio };
 }
 
-/** Extracts a normalized lowercase hostname from `tailscale status --json` output, or null. */
 export function parseTailscaleDnsName(jsonText: string): string | null {
   try {
     const parsed = JSON.parse(jsonText);
@@ -77,7 +76,6 @@ export type TailscaleRunner = (
   opts: { encoding: "utf8"; windowsHide: boolean; timeout: number },
 ) => { status: number | null; stdout?: string; error?: Error };
 
-/** Reads the local machine's Tailscale DNSName, returning null silently when unavailable. */
 export function detectTailscaleHost(runCmd: TailscaleRunner = spawnSync): string | null {
   try {
     const r = runCmd("tailscale", ["status", "--json"], {
@@ -170,12 +168,11 @@ function main() {
     process.exit(1);
   }
 
-  // the template is a working film too: its own node_modules (links) and renders stay behind
   cpSync(join(ROOT, "templates/film"), film, {
     recursive: true,
     filter: (src) => !["node_modules", "renders"].includes(basename(src)),
   });
-  mkdirSync(join(film, "assets/public"), { recursive: true }); // else init.mjs copies the studio demo's
+  mkdirSync(join(film, "assets/public"), { recursive: true });
   const pkg = join(film, "package.json");
   const pkgText = readFileSync(pkg, "utf8")
     .replace("__NAME__", name)
@@ -187,7 +184,6 @@ function main() {
   } else {
     writeFileSync(pkg, pkgText);
   }
-  // this machine's studio host names (Tailscale), never committed: from a film that has them, or local tailscale status
   const hosts = films.map((f) => join(FILMS, f, ".live_hosts")).find(existsSync);
   if (hosts) copyFileSync(hosts, join(film, ".live_hosts"));
   else {

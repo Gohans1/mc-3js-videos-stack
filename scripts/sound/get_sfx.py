@@ -23,7 +23,7 @@ import urllib.request
 import wave
 from pathlib import Path
 
-ROOT = Path.cwd() / "sound"  # run from the film folder: its sound/sfx
+ROOT = Path.cwd() / "sound"
 OUT = ROOT / "sfx"
 RAW = OUT / "raw"
 SOURCES = OUT / "SOURCES.json"
@@ -44,7 +44,6 @@ class CliError(Exception):
         super().__init__(message)
         self.code = code
 
-# name: (Freesound id, keep s or None for the whole sound, what it is for). Ids were picked with `find` and are pinned here.
 SFX = {
     "room_hum": (671455, 30.0, "the cold lamp's electric hum under the whole cell (Bedroom Room Tone Electric Lamp Hum)"),
     "cctv_hiss": (443339, 5.0, "the CCTV feed's faint recording hiss, cut dead at the cut to the clean lens (TAPE HISS)"),
@@ -52,13 +51,11 @@ SFX = {
     "rustle_hand": (320144, None, "his right hand twitching on the mattress at 00:02.8 (Blanket Movement 6)"),
     "rustle_head": (556711, 1.6, "his collar on the mattress as his head turns at 00:06.6 (Rustling fabric)"),
     "breath": (707832, None, "the short breath in as his eyes open at 00:03.7 (IN-BREATHS; the mix keeps the first breath)"),
-    # Options the studio can switch to (src/timeline/audio.json `try` on a bed or sound effect)
     "hum_lowfreq": (72091, None, "room hum option: a plain low-frequency hum (Low Frequency Humming Noise)"),
     "hum_fluorescent": (784208, None, "room hum option: old fluorescent tubes in a quiet room (1950s Flourescent Bathroom Lights)"),
     "hum_backrooms": (626096, None, "room hum option: a buzzing fluorescent backrooms tone (Backrooms Ambience)"),
     "pop_flick": (448394, None, "cut pop option: a fuse switch flicked off (Fuze Switch Flick)"),
     "pop_flashlight": (758910, None, "cut pop option: a flashlight clicked off (Flashlight Off)"),
-    # 0:27-0:58: up, to the door, back to the desk, the terminal
     "bed_creak": (444389, None, "the bed frame as he pushes himself up (Bed creak)"),
     "steps": (366111, None, "his bare feet on the stone floor (Indoor Footsteps)"),
     "steps_stone": (813622, None, "footsteps option: harder steps on stone (Footsteps - Stone, Rock, Concrete, Cement)"),
@@ -80,7 +77,6 @@ SFX = {
     "slam_table": (787456, None, "slam option: a hand slapped on a table (hand_on_table)"),
     "keys_rattle": (368025, None, "the keyboard rattling as it is knocked askew (keyboard bang)"),
     "sigh": (215380, None, "his breath out as he slumps (male sigh)"),
-    # 0:59-1:50: the cabinet, the silverfish, the pages
     "cabinet_rustle": (211246, None, "something stirring among the papers inside the cabinet (PageRustle)"),
     "cabinet_rustle_crumple": (272015, None, "cabinet rustle option: paper crumpled inside (Crumpling Paper)"),
     "drawer_creak": (752216, None, "the drawer eased open (Sliding Squeaking Drawer Soft Opening)"),
@@ -103,7 +99,6 @@ SFX = {
     "arrival": (541029, None, "a page out of nowhere: a very low thud (Very low frequency impact)"),
     "lamp_flicker": (484157, None, "the dying tube's flicker under section 1.2 (fluorescent light flickering 1)"),
     "heartbeat": (249716, None, "his heartbeat at the empty slot (SLOW HEARTBEAT)"),
-    # background music (BGM), 115 s kept: options in the studio
     "bgm_thriller": (157133, 115.0, "BGM: slow dark thriller ambience (Thriller Ambient)"),
     "bgm_museum": (726368, 115.0, "BGM option: dark ambient (Street Museum (Dark Ambient BGM))"),
     "bgm_drone": (332246, None, "BGM option: a plain drone (Drone - 15.12.2015)"),
@@ -111,10 +106,7 @@ SFX = {
 }
 BEDS = {"room_hum", "cctv_hiss", "hum_lowfreq", "hum_fluorescent", "hum_backrooms", "lamp_flicker", "heartbeat", "dig_papers",
         "bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}
-MUSIC = {"bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}  # kept stereo; every other sound is mono
-# Cut sweeteners, the same set in every film: the studio's Sound at the cut (live-studio app/sound/sweeten.ts) finds them by
-# role and lines each one's hit up with the cut: a riser ends on it, a whoosh is loudest on it, an impact starts on it, a
-# downlifter falls away from it. name: (Freesound id, keep s or None, role, what it is)
+MUSIC = {"bgm_thriller", "bgm_museum", "bgm_drone", "bgm_suspense"}
 SWEETENERS = {
     "sweet_riser": (685256, None, "riser", "a short riser that stops dead on the cut (Riser sound effect short)"),
     "sweet_swell": (110218, None, "riser", "a reversed crash swelling into the cut (reverse crash)"),

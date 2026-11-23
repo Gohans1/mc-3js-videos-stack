@@ -12,10 +12,6 @@ import {
 } from "../../src/camera-clock.mjs";
 import { frameCountOf } from "../../src/frame";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
-// The film's camera keys (package.json "live-studio".camTimeline, keys as film-stage/camera.ts reads them), edited by hand on the
-// camera row like the sound lanes (doc.ts: undo, saving, manual edits are protected). The film draws from EDIT.cam, so every change
-// puts a fresh copy there and the picture follows at once; its caches are keyed on that array, so it is never edited in place.
-// Rolling a shot boundary moves both the camera cut and its shot. Cuts inside a shot are camera keys only.
 import { lightEdit } from "../activity/activity";
 import { together } from "../core/doc";
 import {
@@ -73,7 +69,7 @@ import { mergeShotHits, repartitionAdjacentHits, type ShotHit, splitShotHits } f
 import { type ShotRow, shotsDoc } from "./shots";
 
 export type { HandheldSpec };
-export type Point = [number, number, number] | Record<string, unknown>; // a world point, or the film's anchor ({"eye": [...]})
+export type Point = [number, number, number] | Record<string, unknown>;
 export interface CamKey {
   id?: string;
   __timing?: { source: number; output: number; alias?: string | number; sourceRow?: number };
@@ -271,13 +267,11 @@ export const initialKeyTime = (i: number): number | undefined => {
   return id ? initialKeyTimes.get(id) : undefined;
 };
 
-// What film-stage/camera.ts gives a key without an ease (core/ease.ts works out how each one spends its span)
 export const DEFAULT_EASE = "smooth";
 export const holds = (a: CamKey, b: CamKey) =>
   b.motion === "hold" ||
   JSON.stringify([a.p, a.l, a.fov, a.mm, a.fstop, a.focus, a.handheld, a.roll, a.wave, a.bob]) ===
     JSON.stringify([b.p, b.l, b.fov, b.mm, b.fstop, b.focus, b.handheld, b.roll, b.wave, b.bob]);
-// The keys a key may move between: its shot's cut (or the film's start) and the next cut, never past its neighbours
 const placementRoom = (k: CamKey): [number, number] => {
   const placement = clockForTimeline("cam").cameraSpans?.find(
     (span) => k.t >= span.from && k.t < span.to,
@@ -363,7 +357,6 @@ const selectPlacement = (target: CameraKeyIdentity) => {
   const i = findCameraKeyIndex(target, SAME);
   setKey(i >= 0 ? i : null);
 };
-// Selection includes fixed keys; group retiming and deletion still preserve shot boundaries.
 export const pickCamKeys = (is: number[], shots?: number[]) => {
   const ok = [...new Set(is)].filter((i) => !!keys[i]).sort((a, b) => a - b);
   if (ok.length < 2 && !shots?.length) {
@@ -373,7 +366,6 @@ export const pickCamKeys = (is: number[], shots?: number[]) => {
   set(transitionSelection({ kind: "camKeys", indices: ok, shots }, get().side));
   S.dirty = true;
 };
-// How far the picked keys may move together: until the first of them meets a key left out
 export const groupRoom = (is: number[]): [number, number] => {
   is = is.filter(movable);
   let lo = -Infinity,
@@ -395,8 +387,6 @@ export const shiftCamKeys = (is: number[], d: number, apply: typeof edit = edit)
   apply((ks) => {
     for (const i of is.filter(movable)) ks[i].t = r3(ks[i].t + d);
   });
-// Copies of keys (timeline/clipboard.ts), d seconds later: each lands in whatever shot it falls in, taking the place of a key on
-// that frame; one that would land on a cut, the film's first key or past its end is left out. The copies are picked after
 export const pasteCamKeys = (items: CamKey[], d: number) => {
   const ok = items
     .map((k) => ({ ...structuredClone(k), t: r3(k.t + d) }))
@@ -530,7 +520,6 @@ export const retime = (i: number, t: number, apply: typeof edit = edit) => {
     });
   return next;
 };
-// fov in degrees, roll in radians (film-stage turns the picture by it), wave the sway's size (1 the film's own)
 export type LensField = "fov" | "mm" | "fstop" | "roll" | "wave" | "bob";
 export const cameraAxisAt = (time: number) => activeCameraRig(cameraShotIndex(time))?.fovAxis;
 export const cameraLensAspect = (shot: number) =>
@@ -769,7 +758,6 @@ export const connectSmoothly = (i: number, glide = false) =>
       const fPrev = easeFn(ks[i - 1].ease, DEFAULT_EASE);
       const sPrev = fPrev ? endSlope(fPrev) : 0;
       if (glide || sPrev < 0.05) {
-        // Promote dead-stop start junction into a smooth cruise velocity across both segments.
         const vPass = Math.max(sPrev / dtPrev, 0.75 / Math.max(dtPrev, dtCurr, 0.25));
         const [px1, py1] = easeToBezier(ks[i - 1].ease, DEFAULT_EASE);
         const [px2, py2] = exitHandleForSlope(vPass * dtPrev);
@@ -871,7 +859,6 @@ export const removeKey = (i: number) => {
   setKey(null);
   say(`Keyframe deleted. Ctrl+Z to undo`);
 };
-// A still stretch: the same framing again `secs` later (or just before the next key), so the camera rests between the two
 export const holdAfter = (i: number, secs = 1) => {
   const k = keys[i],
     next = keys[i + 1],
@@ -895,9 +882,7 @@ export const holdAfter = (i: number, secs = 1) => {
   say(`Camera holds ${stamp(k.t)} → ${stamp(t)}. Drag the new keyframe to hold longer`);
 };
 
-// The key on the playhead: on a cut both the shot's last key and the cut sit at that second, and the picture there is the cut's
 export const keyAt = (t: number) => keyAtTime(keys, t, SAME);
-// The key the Camera and Speed tabs show: the one picked on the camera row, else the one on the playhead (-1: none)
 export const shownKey = (t: number) => {
   const k = get().camKey;
   return k !== null && keys[k] ? k : keyAt(t);
@@ -1265,12 +1250,8 @@ export const addKeyHere = () => {
     insertKey(t, drawnView(t));
   }
 };
-// ---------- A cut moved (a roll edit): the shot before ends sooner or later and the one after starts with it; nothing in the film
-// moves, only where the picture changes camera. The shot's start in shots.json moves with its cut key (one undo step for both),
-// and so does the last key of the shot before when it sits on the cut (its framing held up to the cut, a frame or less before)
 export const tailOf = (i: number) => cameraTailIndex(keys, i, SAME * 2);
 
-// On a split cut, target the paired closing keyframe right before the cut so easing into the split remains editable.
 export const easeKeyIndex = (i: number) => {
   const k = keys[i];
   if (!k) return -1;
@@ -1422,10 +1403,7 @@ export const rollCut = (i: number, t: number) => {
 };
 export const previewRoll = (i: number, t: number) => rollWith(i, t, preview, shotsDoc.preview);
 
-// Split captures both sides of the cut and copies the shot's settings. Exact easing subdivisions keep
-// the closing key on Merge, because it still holds the left part of the camera curve.
 const TAIL = 0.001;
-// The film's own draw with the free camera off, for its camera alone: no overlays (picture/render.ts) on a frame nobody sees
 const drawnView = (time = S.t): CameraView => {
   const tools = S.tools!;
   const was = tools.free.on;
@@ -1444,7 +1422,6 @@ const drawnView = (time = S.t): CameraView => {
     S.dirty = true;
   }
 };
-// The new half's name: "Hall (2)", and splitting "Hall (2)" again gives "Hall (3)", never "Hall (2) (2)" or a name taken
 const secondName = (name: string, shots: ShotRow[]) => {
   const base = name.replace(/ \(\d+\)$/, ""),
     taken = new Set(shots.map((x) => x.name));
@@ -1456,7 +1433,6 @@ const shotOutputAt = (source: number) =>
   timingClock.outputAt(timingClock.sourceAt(fromSource(source)), "before");
 const shotSourceAt = (time: number) => {
   const source = toSource(time);
-  // A voice-warp round trip must not delay a shot past its camera cut frame.
   return shotOutputAt(source) <= time ? source : toSource(time - 1e-8);
 };
 

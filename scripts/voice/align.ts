@@ -1,4 +1,3 @@
-// bun run voice:align: whisperX word timings (<take>.words.json) for the takes that lack them or are stale, which voice:assemble needs
 import { spawnSync } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";

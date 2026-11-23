@@ -257,7 +257,6 @@ function CliFieldContent({
   const labelText =
     flagDef && !def.label.includes(flagDef.flag) ? `${def.label} (${flagDef.flag})` : def.label;
 
-  // Boolean switch
   if (def.type === "boolean") {
     const checked = value === true || value === "true" || value === 1 || value === "1";
     return (
@@ -288,7 +287,6 @@ function CliFieldContent({
     );
   }
 
-  // Optional-value flag: Switch to pass bare flag vs optional picker/input/multi
   if (optionalValue) {
     const enabled = value !== undefined && value !== false && value !== "false";
     const strVal = typeof value === "string" ? value : "";
@@ -435,7 +433,6 @@ function CliFieldContent({
     );
   }
 
-  // Multi enum / choice as toggle pills
   if ((def.type === "enum" || def.type === "choice") && multi && options.length > 0) {
     const picked = asTokenArray(value);
     const toggle = (optVal: string) => {
@@ -476,7 +473,6 @@ function CliFieldContent({
     );
   }
 
-  // Single enum / choice with options
   if ((def.type === "enum" || def.type === "choice") && options.length > 0) {
     const strVal = typeof value === "string" || typeof value === "number" ? String(value) : "";
     const selectItems = required
@@ -529,7 +525,6 @@ function CliFieldContent({
     );
   }
 
-  // Multi string or csv (with optional detected choices)
   if (multi || def.type === "csv") {
     const picked = asTokenArray(value);
     const togglePicked = (optVal: string) => {
@@ -576,7 +571,6 @@ function CliFieldContent({
     );
   }
 
-  // Single string, number, or dynamic choice input (showing detected choices when available)
   const strVal = typeof value === "string" || typeof value === "number" ? String(value) : "";
   const active = isFieldValueActive(value);
 

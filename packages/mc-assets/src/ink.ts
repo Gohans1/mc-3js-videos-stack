@@ -1,11 +1,6 @@
 // @ts-nocheck
-// Print on the props' paper (sheet, paper_scrap, folder_*): text in the game's font (gamefont.ts), ink only (transparent
-// elsewhere), on a plane a hair above the model's paper face; folders carry their titles on a cover label with their
-// letters (A..Z, two a folder). What is printed comes from the film (its props.json pages and note).
 import * as THREE from "three";
 
-// Prints onto the props as they stand at the origin unturned (their boxes are the models' own extents); returns one ink
-// material per page, for props.ts to swap onto a sheet as it shows a different page
 export function printProps(font, { sheets, scrap, folders, pages, note }) {
   const INK = font.tinted("#262626"),
     GREY = font.tinted("#5d5d5d"),
@@ -23,7 +18,6 @@ export function printProps(font, { sheets, scrap, folders, pages, note }) {
       polygonOffsetFactor: -2,
     });
   };
-  // a printed page: big title fitted to the width, a rule under it, then the body lines
   const pageInk = ({ title, lines }) => {
     const c = document.createElement("canvas");
     c.width = 152;
@@ -67,7 +61,6 @@ export function printProps(font, { sheets, scrap, folders, pages, note }) {
     h.add(ink);
     h.userData.ink = ink;
   });
-  // what the scrap says (props.note), small lines filling its face
   const nb = new THREE.Box3().setFromObject(scrap),
     ns = nb.getSize(new THREE.Vector3());
   const nc = document.createElement("canvas");

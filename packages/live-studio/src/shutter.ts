@@ -46,7 +46,6 @@ export function shutterBounds(
   spans: readonly PictureSpan[],
   cuts: readonly number[] = [],
 ) {
-  // the camera keys' cuts inside the shot (heard seconds) bound it as its start and end do
   let from = Math.max(start, ...cuts.filter((c) => c <= t)),
     to = Math.min(end, ...cuts.filter((c) => c > t));
   for (let i = 1; i < spans.length; i++) {
@@ -79,9 +78,6 @@ export const apertureSamples = (count: number, time = 0): (ApertureSample | unde
   return result;
 };
 
-// A whip turns the camera so far between two shutter samples that each prints as its own copy of the picture: such a
-// frame takes samples until one sample's turn moves the picture GAP_PX at most (food-eat-more's 20°-a-frame whips ghosted
-// at 8 and smeared clean at 32). `before` and `after` are the camera's facing at its first two samples.
 const GAP_PX = 12;
 export const MAX_SHUTTER_SAMPLES = 64;
 export const samplesForTurn = (

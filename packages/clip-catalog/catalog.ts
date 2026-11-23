@@ -4,24 +4,12 @@ import { config, done, log } from "live-studio/lab";
 import { clipNames, loadClip } from "mc-actor/clips";
 import { bodyBoxes } from "mc-actor/mocap";
 import { loadRig, makePlayer } from "mc-actor/player";
-// Lab: tags for a clip library, measured on Steve himself (each clip retargeted and baked as the film does, mc-actor/clips,
-// at 30 fps): one "ROW {json}" line per clip, which clip-catalog/catalog.sh appends to vault/motion/catalog/<lib>.jsonl and
-// clip-catalog/catalog.py searches. No stills.
-// bun run render stills --entry ../../packages/clip-catalog/catalog.ts --lab lib=mixamo --lab clips=a,b,c
-// Fields: dur s; start/end posture and the posture runs (POSTURE below, each run at least RUN s); travel (end x, z in his
-// frame, m: x his left, z his front), reach (furthest from the start, m), turn (end ry, deg to his left); loop (first
-// against last frame: worst joint deg, hips cm); energy (mean joint turn speed, deg/s); look (head twist on the neck,
-// range, deg); hips (lowest and mean hip height, share of standing); head / up / ground (seconds a hand is at his head /
-// above it / on the floor); air (seconds nothing of him touches the floor: a jump, or a bed or ledge under him); bend (seconds
-// on his feet with the trunk over past 50 deg: picking up, putting down, looking under); tl (timeline, below).
 import * as THREE from "three";
 
 const D = 180 / Math.PI,
   FPS = 30,
   RUN = 0.3;
 
-// runs of equal labels; a run shorter than `min` frames is folded into its longer neighbour, so a flicker between two
-// states never becomes a segment of its own
 const runsOf = (labels, min) => {
   const runs = [];
   labels.forEach((l, i) => {
@@ -69,11 +57,6 @@ const unwrap = (a) =>
   }, []);
 const t1 = (i) => +(i / FPS).toFixed(1);
 
-// The clip as timed segments per channel, measured (what clip-catalog/catalog.py hands Jev next to the eye-checked notes): body
-// posture, travel (direction in his own frame, distance), body turns, gaze (head direction: up / down past 20 deg, far down
-// past 50, left / right of his chest past 35), each hand (where: on the floor / low / hip / chest / face height / at his
-// head / above it; reaching forward past 0.3 m or out to the side past 0.45 m from the chest; how fast it moves against
-// his chest) and tempo (mean joint speed). Labels a segment of its own needs: 0.3 s body, 1 s tempo, 0.5 s the rest.
 const timeline = (posture, track, energy) => {
   const seg = (labels, min, note = () => "") =>
     runsOf(labels, min)
@@ -156,7 +139,6 @@ const timeline = (posture, track, energy) => {
                   ? "at chest height"
                   : "at face height";
       const act = sp[i] > 1.5 ? "fast" : sp[i] > 0.35 ? "moving" : "";
-      // lying, heights above the floor say nothing of his body: on the floor, on himself, or held up off him
       if (posture[i] === "lie")
         return [
           h.floor ? "on the floor" : h.p.y - h.chest.y > 0.25 ? "raised" : "resting on his body",
@@ -213,7 +195,6 @@ const timeline = (posture, track, energy) => {
     rest = { chest: restOf("chest"), head: restOf("head"), root: restOf("root") },
     body = bodyBoxes(steve);
   const turnOf = (k) => b[k].getWorldQuaternion(new THREE.Quaternion()).multiply(rest[k]);
-  // each box's lowest corner (the floor meets his box surfaces, a joint centre sits half a limb above it)
   const M = new THREE.Matrix4(),
     c = new THREE.Vector3();
   const low = (k) => {
@@ -233,9 +214,7 @@ const timeline = (posture, track, energy) => {
       );
     return y;
   };
-  const ON = 0.06; // a box this close to the floor rests on it
-  // a hand at his head: by the head's box and above its chin (his head sits right on his shoulders: a hand rubbing the
-  // other shoulder is as close to the box)
+  const ON = 0.06;
   const atHead = (p) => {
     const q = p
       .clone()
@@ -245,10 +224,6 @@ const timeline = (posture, track, energy) => {
     return body.box.head.distanceToPoint(q) < 0.1 && q.y > body.box.head.min.y + 0.08;
   };
 
-  // what his body is doing in one frame, by its shape over its own lowest point (so lying on a bed is lying, and a jump
-  // keeps its stand / crouch; `air` counts the time off the floor). Steve's metres over that point: hips 0.70 standing,
-  // ~0.47 kneeling upright or on all fours, ~0.15 sitting on the floor; neck ~1.4 standing; a knee joint ~0.12 when down.
-  // Thresholds checked against the clips' names (a clip named kneel must kneel...) and by eye on the disagreements.
   const POSTURE = (f, base) => {
     const lean =
       Math.acos(
@@ -273,19 +248,12 @@ const timeline = (posture, track, energy) => {
         ),
       ) * D;
     const level = thighTilt("L") < 35 && thighTilt("R") < 35;
-    // trunk flat: hips up on hands and knees, else lying: neck no higher than the hips (a deep crouch leans as far but keeps
-    // its neck up), and the hips low or the thighs flat too (on a bed the legs can hang off its edge; bending over to the
-    // floor keeps the thighs upright)
     if (lean > 55 && kneeDown && handsDown && hips > 0.3) return "allFours";
     if (lean > 55 && neck - hips < 0.3 && (hips < 0.45 || level)) return "lie";
-    // the seat on the floor: hips low (a knee on the floor alone keeps them up) and his seat on it (a catcher's squat
-    // keeps it off)
     if (hips < 0.4 * H0 && low("body") - base < 0.1) return "sitFloor";
     if (kneeDown) return "kneel";
-    // a walk's stance leg is near straight; a crouch (or crouched walk) keeps both knees bent
     if (hips > 0.92 * H0 || (hips > 0.85 * H0 && Math.min(fold("L"), fold("R")) < 35))
       return "stand";
-    // thighs level: a seat (feet out in front of the hips), not a squat (knees folded shut, feet under him)
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(turnOf("root")).setY(0).normalize();
     const feetAhead = f.soleL.clone().add(f.soleR).multiplyScalar(0.5).sub(f.root).dot(fwd);
     if (level && Math.max(fold("L"), fold("R")) < 115 && feetAhead > 0.2) return "sitSeat";
@@ -342,14 +310,11 @@ const timeline = (posture, track, energy) => {
         hipSum += f.root.y / H0;
         if (hands.some((h) => h.y > top)) up += 1 / FPS;
         if (Math.min(low("laL"), low("laR")) < ON) ground += 1 / FPS;
-        // the head's twist about the chest's up (swing-twist): stays put when he looks down, unlike a yaw from his gaze
         const q = turnOf("chest").invert().multiply(turnOf("head")),
           look = 2 * Math.atan2(q.y, q.w) * D;
         const tw = THREE.MathUtils.euclideanModulo(look + 180, 360) - 180;
         lookMin = Math.min(lookMin, tw);
         lookMax = Math.max(lookMax, tw);
-        // where his body faces on the floor: the hips' front, or across their left-right axis when the front points up or
-        // down (lying on his back or front), so the facing doesn't spin while he lies or sits up
         const front = new THREE.Vector3(0, 0, 1).applyQuaternion(turnOf("root")).setY(0);
         const across = new THREE.Vector3().crossVectors(
           new THREE.Vector3(1, 0, 0).applyQuaternion(turnOf("root")).setY(0),
@@ -365,7 +330,6 @@ const timeline = (posture, track, energy) => {
           z: p.root.z,
           yaw: Math.atan2(fwd.x, fwd.z) * D,
           pitch,
-          // left / right means nothing for a gaze straight up or down
           gazeYaw:
             Math.abs(pitch) > 60
               ? 0
@@ -394,14 +358,12 @@ const timeline = (posture, track, energy) => {
           energy.push((sum / Math.max(1, n)) * FPS);
         }
       });
-      // runs of one posture; runs shorter than RUN (flickers between two) are dropped
       const runs = [];
       posture.forEach((x, i) => {
         if (runs.length && runs.at(-1)[0] === x) runs.at(-1)[2] = i;
         else runs.push([x, i, i]);
       });
       const kept = runs.filter((r) => (r[2] - r[1] + 1) / FPS >= RUN || runs.length === 1);
-      // a short clip changing all the time keeps no run that long: its longest run then
       const seq = (
         kept.length ? kept : [runs.reduce((x, y) => (y[2] - y[1] > x[2] - x[1] ? y : x))]
       )

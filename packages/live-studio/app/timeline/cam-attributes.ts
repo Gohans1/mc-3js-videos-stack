@@ -9,7 +9,6 @@ export interface OpticsSummaryKey {
   wave?: number;
 }
 
-/** Readable focus target summary for copy/paste attributes. */
 export const focusLabel = (f: unknown): string | null =>
   typeof f === "number"
     ? `${f}m`
@@ -23,7 +22,6 @@ export const focusLabel = (f: unknown): string | null =>
             : "Surface"
           : null;
 
-/** Readable handheld preset summary matching `film-stage/camera`'s normalization rules. */
 export const handheldLabel = (v: unknown): string | null => {
   if (v === undefined) return null;
   if (v === false) return "off";
@@ -56,7 +54,6 @@ export const handheldLabel = (v: unknown): string | null => {
   return "off";
 };
 
-/** Build Paste Attributes lens & optics summary string for a camera keyframe. */
 export function formatOpticsAttributes(
   k: OpticsSummaryKey,
   group?: "lens" | "dof" | "shake",

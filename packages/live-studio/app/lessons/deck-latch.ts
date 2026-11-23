@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 
 import { prefersReduced } from "../components/Motion";
 
-/** Duration to hold a shrinking Lessons pane open while outgoing panels exit and kept columns FLIP cleanly. */
 export const DECK_SHRINK_LATCH_MS = 240;
 
 export interface DeckShrinkLatchState {
@@ -18,7 +17,6 @@ export interface DeckShrinkLatch {
   seq: number;
 }
 
-/** Pure step helper so width latching on folder/file collapse is deterministic and testable. */
 export function nextDeckShrinkLatch({
   prev,
   next,
@@ -34,7 +32,6 @@ export function nextDeckShrinkLatch({
 
   const prevVisibleW = current ? current.paneW : prev.desiredW;
   if (next.trailKey === prev.trailKey) {
-    // Manual splitter drag or viewport resize without a trail change takes effect immediately
     if (!current) return null;
     if (next.desiredW !== prev.desiredW) {
       return next.desiredW < current.paneW ? null : { ...current, innerW: next.desiredW };
@@ -42,7 +39,6 @@ export function nextDeckShrinkLatch({
     return current;
   }
 
-  // Hold the wider pane during fold-in so exiting sheets and FLIP-moving columns stay unclipped
   if (next.desiredW < prevVisibleW) {
     return {
       paneW: prevVisibleW,
@@ -54,7 +50,6 @@ export function nextDeckShrinkLatch({
   return null;
 }
 
-/** Latches a shrinking Lessons pane width until outgoing exit/FLIP transitions complete, avoiding frame-0 slicing and Stage bleed. */
 export function useDeckShrinkLatch({
   desiredW,
   trailKey,

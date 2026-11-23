@@ -1,5 +1,3 @@
-// Virtualized English ElevenLabs v4 voice browser: instant sample previewing,
-// favorites sync, Copy ID, Compose Note handoff, and background sync controls.
 import {
   Check,
   Copy,
@@ -362,7 +360,6 @@ export function VoiceLibraryPane({
   side?: boolean;
   favoriteEntries?: readonly UnifiedPlaygroundEntry[];
 }) {
-  // Subscribe to playing voice ID string rather than 80ms auditionRev ticks so virtualized rows never re-render during playback
   const now = useSyncExternalStore(subscribeAudition, listening, listening);
   const targetNow = useSyncExternalStore(subscribeAudition, auditionTarget, auditionTarget);
   const effectFavs = useStudio((s) => s.favorites.effects);
@@ -417,7 +414,6 @@ export function VoiceLibraryPane({
   useLayoutEffect(() => {
     const el = hostRef.current;
     if (!el || !hasVoices || typeof ResizeObserver === "undefined") return;
-    // Observe VirtualList's stable scroll div and subtract px-* padding; flush before initial paint
     const scrollEl = (el.firstElementChild as HTMLElement | null) ?? el;
     const onUserScroll = () => {
       if (performance.now() > ignoreScrollUntilRef.current) {

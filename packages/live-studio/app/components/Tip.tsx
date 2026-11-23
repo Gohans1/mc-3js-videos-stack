@@ -1,4 +1,3 @@
-// A tooltip on a control: shown on hover and on keyboard focus, which a title attribute never is (and never on a phone)
 import type { ReactElement, ReactNode } from "react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";

@@ -1,18 +1,15 @@
-// Pictures pasted into the note being written (a reference, a screenshot of what it should look like): pasted, dropped or
-// picked in the note box, kept on the device with the draft, sent with the note as JPEGs (src/notes.mjs saves them as refs)
 import { showUndo } from "@/components/ui/toast";
 
 import { stored } from "../core/storage";
 import { get, say, set } from "../core/store";
 import type { RefPic } from "./slice";
 
-// api.mjs NoteIn takes 6; 1600 px keeps a screenshot's small text readable and six of them inside the page's storage
 export const REFS_MAX = 6;
 const REF_SIDE = 1600,
   QUALITY = 0.88,
   KEY = "noteDraftRefs";
 
-export const refHooks = { changed: () => {} }; // notes.ts: the note being written is kept on the device with its pictures
+export const refHooks = { changed: () => {} };
 const keep = (refs: RefPic[]) => {
   set({ refs });
   refHooks.changed();
@@ -24,7 +21,6 @@ const keep = (refs: RefPic[]) => {
     );
 };
 
-// Every picture becomes a JPEG on white (a PNG's see-through parts would turn black)
 export const toJpeg = (source: CanvasImageSource, w: number, h: number) => {
   const k = Math.min(1, REF_SIDE / Math.max(w, h)),
     c = document.createElement("canvas");
@@ -37,7 +33,6 @@ export const toJpeg = (source: CanvasImageSource, w: number, h: number) => {
   return c.toDataURL("image/jpeg", QUALITY);
 };
 
-// Says whether any of them was a picture, so a paste of words still pastes the words
 export const addRefs = async (files: Iterable<File>) => {
   const pictures = [...files].filter((f) => f.type.startsWith("image/"));
   if (!pictures.length) return false;

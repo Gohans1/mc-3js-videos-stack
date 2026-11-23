@@ -1,4 +1,3 @@
-// src/lesson-files.mjs: the studio's Lessons tab reads and writes the repo's lessons/*.md without writing over the AI's edits
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

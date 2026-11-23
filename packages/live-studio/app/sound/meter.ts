@@ -1,8 +1,3 @@
-// The master meter's numbers (AudioMeter.tsx draws them): each channel's peak and the loudness of everything the page plays, read
-// at master, before the volume slider. Loudness is EBU R128 / ITU-R BS.1770-5 from loudness-worklet (checked by its author
-// against the EBU Tech 3341 and ITU BS.2217 test signals), never computed here. Every number is shifted to what the final render
-// holds: mix.py's last pass moves the whole film by one gain to audio.json "lufs" (-14, YouTube's level), and that gain is
-// measured here too, on the film's sound rendered offline after each change (mixer.ts renderFilm)
 import LoudnessNode from "loudness-worklet";
 import worklet from "loudness-worklet/worklet?url";
 
@@ -16,7 +11,6 @@ import { renderFilm } from "./mixer";
 const load = (ctx: BaseAudioContext) => addModule(ctx, worklet);
 export const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 
-// ---------- Live, while the meter is shown
 let nodeCtx: AudioContext | null = null,
   stereo: GainNode | null = null,
   split: ChannelSplitterNode | null = null,
@@ -51,9 +45,8 @@ const ensureNodes = (ctx: AudioContext) => {
   split = ctx.createChannelSplitter(2);
   sink = ctx.createGain();
   stereo.connect(split);
-  sink.gain.value = 0; // the loudness node passes the sound on and only runs while that reaches the output: silently
+  sink.gain.value = 0;
   sink.connect(ctx.destination);
-  // 4096 samples (~85 ms): each frame's read overlaps the last one even at 15 fps, so no peak falls between two
   taps = [0, 1].map((c) => {
     const a = ctx.createAnalyser();
     a.fftSize = 4096;
@@ -98,7 +91,6 @@ export const stopMeter = () => {
     loud = null;
   }
 };
-// A new count, so the integrated reading covers what has played since (AudioMeter calls it when Play is pressed)
 export const resetLoudness = () => {
   if (!on || !ready || !nodeCtx || !stereo || !sink) return;
   if (loud) {
@@ -116,7 +108,6 @@ export interface Reading {
   integrated: number;
   truePeak: number;
 }
-// In dB as the final render will have them (its gain added); -Infinity until there is something to read
 export const readMeter = (gain: number): Reading => {
   if (taps && nodeCtx) {
     const t = nodeCtx.currentTime;
@@ -165,24 +156,22 @@ export const readMeter = (gain: number): Reading => {
   return readingOut;
 };
 
-// ---------- The final render's loudness pass (mix.py, listen.level): one linear gain to the target, or as far as MIX_CEILING allows
 export interface Loudness {
   before: number;
   target: number;
   gain: number;
   truePeak: number;
   held: number;
-} // truePeak: the film's, after the gain; held: how far short of the target the ceiling stopped it
+}
 let timer = 0,
   busy = false,
   again = false;
-// After the lanes or the narration change, once the edits rest: a render of the whole film takes a second or two
 export const measureFinal = () => {
   clearTimeout(timer);
   timer = window.setTimeout(measure, 1500);
 };
 const measure = async () => {
-  if (!get().meter) return; // measured again when it is shown (AudioMeter)
+  if (!get().meter) return;
   if (busy) {
     again = true;
     return;
@@ -200,7 +189,6 @@ const measure = async () => {
       set({ loudness: null });
       return;
     }
-    // The worklet sends its numbers as messages every 0.1 s of film; the last land a moment after the render ends
     const m = new Float32Array(got.node.metricCount);
     for (let i = 0; i < 20; i++) {
       got.node.getFloatLoudnessData(m);

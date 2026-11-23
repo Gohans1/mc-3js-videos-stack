@@ -1,5 +1,3 @@
-// The film's per-take voiceover script and audio takes (src/edit.json -> takes[], voice/takes/*, voice/try/*).
-// Served read-only over /api/voice and /api/voice/audio/:kind/:file, with non-destructive try-take promotion (/api/voice/use-try).
 import { spawn } from "node:child_process";
 import {
   closeSync,
@@ -57,9 +55,7 @@ export const runFfmpeg = (args, timeoutMs = 60_000) =>
     const timer = setTimeout(() => {
       try {
         child.kill();
-      } catch {
-        /* ignore */
-      }
+      } catch {}
       finish(false);
     }, timeoutMs);
     child.on("error", () => finish(false));
@@ -250,9 +246,7 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
             return meta;
           }
         }
-      } catch {
-        // Fall through to header/zero fallback
-      }
+      } catch {}
     }
     try {
       const { mtimeMs, size } = statSync(realAudioPath);
@@ -337,9 +331,7 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
           if (!lstatSync(f).isSymbolicLink() && realRoot && inside(realRoot, realpathSync(f))) {
             return Boolean(JSON.parse(readFileSync(f, "utf8")).narration);
           }
-        } catch {
-          /* ignore */
-        }
+        } catch {}
       }
     }
     const vf = voiceFileOf(ROOT);
@@ -466,6 +458,7 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
 
   const syncEditVoiceLines = (placements, wavEnd) => {
     if (!existsSync(EDIT)) return;
+    let part = null;
     try {
       if (lstatSync(EDIT).isSymbolicLink()) return;
       const realRoot = realpathSync(ROOT);
@@ -488,13 +481,23 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
       }
       if (dirty) {
         const text = JSON.stringify(edit, null, 1) + "\n";
-        const part = `${realEdit}.${nextTmp()}.part`;
+        part = `${realEdit}.${nextTmp()}.part`;
         writeFileSync(part, text, "utf8");
         renameSync(part, realEdit);
+        part = null;
         lastEditWrite = text;
       }
-    } catch {
-      /* ignore edit sync errors */
+    } catch (err) {
+      if (part) {
+        try {
+          rmSync(part, { force: true });
+        } catch {
+          void 0;
+        }
+      }
+      console.warn(
+        `[voice] failed to sync ${EDIT}: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -619,7 +622,6 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
       prevWordsPath && existsSync(prevWordsPath) && !lstatSync(prevWordsPath).isSymbolicLink(),
     );
 
-    // Stage rollback files so an ffmpeg reassemble failure leaves voice/takes/ unchanged
     const stamp = nextTmp();
     const audioBak = prevActive ? join(realTakes, `.${takeId}.${stamp}.audio.bak`) : null;
     const wordsBak = hadPrevWords ? join(realTakes, `.${takeId}.${stamp}.words.bak`) : null;
@@ -629,7 +631,6 @@ export const openVoice = (project, conf = {}, hooks = {}) => {
     try {
       let createdOrigAudio = null;
       let createdOrigWords = null;
-      // Back up original active take once into voice/try/<id>_orig.<prevExt> before overwriting or cross-ext swapping
       const hasOrigBackup =
         existsSync(join(realTries, `${takeId}_orig.mp3`)) ||
         existsSync(join(realTries, `${takeId}_orig.wav`));

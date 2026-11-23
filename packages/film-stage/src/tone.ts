@@ -1,8 +1,5 @@
 import { ToneMappingMode } from "postprocessing";
 
-// src/edit.json look.toneMapping. agx stays the default so older films keep their look; it greys saturated colour and
-// rolls highlights off early (a teal reference read grey). neutral (Khronos PBR Neutral) keeps base colours, the one to
-// match a reference's pixels; aces is the punchier filmic curve.
 const MODES = {
   agx: ToneMappingMode.AGX,
   neutral: ToneMappingMode.NEUTRAL,

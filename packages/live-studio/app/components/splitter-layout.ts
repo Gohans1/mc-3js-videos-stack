@@ -1,5 +1,3 @@
-// Pure pane layout and splitter clamping rules shared by App and Splitter.
-
 export const STAGE_MIN_W = 360;
 export const LIB_MIN = 260;
 export const SIDE_MIN = 260;
@@ -7,7 +5,6 @@ export const REVIEW_MIN = 280;
 export const EDIT_MIN = 144;
 const SIDE_ABS_MAX = 900;
 
-/** Matches CSS upright/sideways phone media queries so desktop panels never flash mobile layouts. */
 export const isDesktopViewport = (vw: number, vh: number) =>
   !(vh <= 520 || vw <= 559 || (vw <= 820 && vh >= 521));
 
@@ -57,7 +54,6 @@ export function fitSplitterValue({
   const lo = Math.round(min);
   const hi = Math.max(lo, Math.round(max));
   if (fold && target < lo / 2) {
-    // Dragging toward open from a visually squeezed box opens to min instead of folding away
     return target > current ? lo : 0;
   }
   return Math.round(Math.min(hi, Math.max(lo, target)));

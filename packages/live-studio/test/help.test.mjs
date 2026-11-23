@@ -1,4 +1,3 @@
-// help.mjs: a film's command list. earshot is no bun run script, so an AI reading only the list would never learn it has ears
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -172,11 +171,9 @@ test("a film's help names earshot beside its sound commands, and where the guide
     expect(sound).toMatch(
       /\n {2}earshot {2,}ears, its own CLI \(earshot <command> -h\)[^\n]*bun run skills get core --ref sound/,
     );
-    // asked about by the name the list gives it, it is pointed to, never "no command"
     const one = spawnSync("bun", [HELP, "earshot"], { cwd: dir, encoding: "utf8" });
     expect(one.status).toBe(0);
     expect(one.stdout).toMatch(/earshot -h/);
-    // file map includes both notes/ and per-film lessons/ with global path
     expect(r.stdout).toMatch(
       /\n {2}lessons\/\s+this film's lessons \(every film's: \.\.\/\.\.\/lessons\//,
     );

@@ -187,14 +187,12 @@ test("resolvePreviewSpec expands pack/picks.json by default, filters by --kind, 
     expect(fromArgs.out).toBe("custom.png");
     expect(fromArgs.size).toBe(0.6);
 
-    // Empty/comma-only args and empty --kind must fail instead of falling back
     expect(() => resolvePreviewSpec({ projectDir: dir, rawIds: [", ,"] })).toThrow(
       /empty asset IDs/,
     );
     expect(() => resolvePreviewSpec({ projectDir: dir, rawIds: [""] })).toThrow(/empty asset IDs/);
     expect(() => resolvePreviewSpec({ projectDir: dir, kind: "" })).toThrow(/block or item/);
 
-    // Corrupt / malformed pack/picks.json throws PreviewDataError
     for (const badContent of [
       "{not-json",
       JSON.stringify({ not: "an-array" }),
@@ -246,7 +244,6 @@ test("asset preview CLI validates flags, leading flags with multi-IDs, corrupt p
     expect(badKind.status).toBe(2);
     expect(badKind.stderr).toContain("block or item");
 
-    // Empty positional ID must exit 2 instead of silently falling back to pack/picks.json
     writeFileSync(
       join(dir, "pack/picks.json"),
       JSON.stringify([{ jar: "vanilla.jar", namespace: "minecraft", blocks: ["oak_stairs"] }]),
@@ -277,7 +274,6 @@ test("asset preview CLI validates flags, leading flags with multi-IDs, corrupt p
     expect(emptyPicks.status).toBe(2);
     expect(emptyPicks.stderr).toContain("pack/picks.json");
 
-    // Corrupt picks.json exits 1 (data error, not usage error)
     writeFileSync(join(dir, "pack/picks.json"), "{broken-json");
     const corruptPicks = runBun(ASSET_SCRIPT, ["preview", "--film", dir]);
     expect(corruptPicks.status).toBe(1);
@@ -288,7 +284,6 @@ test("asset preview CLI validates flags, leading flags with multi-IDs, corrupt p
     expect(blankNsPicks.stderr).toContain("namespace");
     writeFileSync(join(dir, "pack/picks.json"), "[]");
 
-    // Leading flag before preview with multiple IDs must pass cliArgs (reaches missing client_assets.zip -> exit 1)
     const leadingFlag = runBun(ASSET_SCRIPT, [
       "--film",
       dir,
@@ -315,7 +310,6 @@ test("stagePreviewPackOverlay handles gohans built-ins, missing vault/packs, and
     mkdirSync(emptyVault, { recursive: true });
     process.env.MC_VAULT_ROOT = emptyVault;
 
-    // 1) gohans built-in rejects mismatched --source and accepts --source gohans
     const gohansItem = [normalizePreviewEntry("block:gohans:chair")];
     expect(() => stagePreviewPackOverlay(project, gohansItem, { source: "pack-a" })).toThrow(
       /mc-assets\/pack/,
@@ -326,7 +320,6 @@ test("stagePreviewPackOverlay handles gohans built-ins, missing vault/packs, and
       stagingErrors: [],
     });
 
-    // 2) Missing vault/packs returns empty without --source, and throws exit 2 with --source
     const modItem = [normalizePreviewEntry("block:sharedmod:desk_lamp")];
     expect(stagePreviewPackOverlay(project, modItem)).toEqual({
       zipPath: null,
@@ -337,7 +330,6 @@ test("stagePreviewPackOverlay handles gohans built-ins, missing vault/packs, and
       /Vault packs folder not found/,
     );
 
-    // 3) pack/picks.json pinnedJar disambiguates a multi-pack ID without --source or picked.zip
     const vault = join(dir, "vault");
     mkdirSync(join(vault, "packs"), { recursive: true });
     mkdirSync(join(vault, "jar"), { recursive: true });
@@ -430,7 +422,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     copyFileSync(BMR_WASM, join(film, "assets/public/block_model_renderer_bg.wasm"));
     if (existsSync(RIG_GLB)) copyFileSync(RIG_GLB, join(film, "assets/public/rig/player.glb"));
 
-    // Synthetic picked.zip with 1 valid custom block, 1 vanilla override, + broken entries
     const pickedZip = zipSync({
       "assets/badmod/blockstates/good_crate.json": enc.encode(
         JSON.stringify({ variants: { "": { model: "minecraft:block/oak_planks" } } }),
@@ -449,7 +440,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     });
     writeFileSync(join(film, "assets/public/picked.zip"), pickedZip);
 
-    // Seed a sentinel still_1s.jpg to prove an --entry run never wipes existing film stills
     mkdirSync(join(film, "renders"), { recursive: true });
     writeFileSync(join(film, "renders/still_1s.jpg"), sentinel);
 
@@ -489,7 +479,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     expect(j1.items[2].missing).toBe(false);
     expect(j1.items[2].bounds.size).toEqual([1, 1, 1]);
 
-    // Uppercase .PNG MUST write actual PNG magic bytes (not JPEG)
     const pngBytes = readFileSync(join(film, "renders/upper_sheet.PNG"));
     expect(pngBytes.length).toBeGreaterThan(5000);
     expect([...pngBytes.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
@@ -512,7 +501,7 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
     expect(j2.ok).toBe(true);
     expect(j2.source).toBe("picks");
     expect(j2.scaleRef).toBe("none");
-    expect(j2.width).toBe(664); // 1 column: PAD*2 (24) + TILE_W (640)
+    expect(j2.width).toBe(664);
     expect(j2.items[0].bounds.size[0]).toBeCloseTo(0.8, 2);
     const jpgBytes = readFileSync(join(film, "renders/solo_item.jpg"));
     expect(jpgBytes.length).toBeGreaterThan(2000);
@@ -692,7 +681,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       const pickedZipBefore = readFileSync(join(film, "assets/public/picked.zip"));
       const vaultEnv = { ...process.env, MC_VAULT_ROOT: vault };
 
-      // 1) Unpicked modpack block + item preview cleanly without mutating film picks or picked.zip
       const rUnpicked = runBun(
         ASSET_SCRIPT,
         [
@@ -721,7 +709,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(readFileSync(join(film, "pack/picks.json"))).toEqual(picksBefore);
       expect(readFileSync(join(film, "assets/public/picked.zip"))).toEqual(pickedZipBefore);
 
-      // 2) Ambiguous ID across 2 vault packs fails with exit 2 naming both packs
       const rAmbig = runBun(
         ASSET_SCRIPT,
         ["preview", "block:sharedmod:desk_lamp", "--film", film],
@@ -732,7 +719,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(rAmbig.stderr).toContain("pack-a.jar");
       expect(rAmbig.stderr).toContain("pack-b.jar");
 
-      // 3) --source selects pack-b's lantern (0.375 x 0.6875 x 0.375) AND overrides picked.zip's 1x1x1 good_crate
       const rSource = runBun(
         ASSET_SCRIPT,
         [
@@ -764,7 +750,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       }
       expect(readFileSync(join(film, "assets/public/picked.zip"))).toEqual(pickedZipBefore);
 
-      // 4) Broken vault candidate is isolated so valid siblings still render and stagingErrors reports it
       const rBrokenMix = runBun(
         ASSET_SCRIPT,
         [
@@ -792,7 +777,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(jBrokenMix.stagingErrors[0].id).toBe("block:shopmod:broken_lamp");
       expect(jBrokenMix.stagingErrors[0].pack).toBe("pack-a.jar");
 
-      // 5) Broken --source candidate must NEVER silently fall back to picked.zip or vanilla client_assets.zip
       const rBrokenSourcePicked = runBun(
         ASSET_SCRIPT,
         [
@@ -839,7 +823,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(jBrokenSourceVanilla.stagingErrors).toHaveLength(1);
       expect(jBrokenSourceVanilla.stagingErrors[0].id).toBe("block:minecraft:oak_planks");
 
-      // 6) --source minecraft skips picked.zip overrides and renders true vanilla geometry
       const rSourceVanilla = runBun(
         ASSET_SCRIPT,
         [
@@ -860,7 +843,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(jSourceVanilla.items[0].missing).toBe(false);
       expect(jSourceVanilla.items[0].bounds.size).toEqual([1, 1, 1]);
 
-      // 7) Unknown --source fails fast with exit 2
       const rMissingSrc = runBun(
         ASSET_SCRIPT,
         ["preview", "block:sharedmod:desk_lamp", "--source", "no-such-pack", "--film", film],
@@ -869,7 +851,6 @@ describe.skipIf(!HAS_LIVE_PREVIEW_ASSETS)("asset preview live headless Chrome re
       expect(rMissingSrc.status).toBe(2);
       expect(rMissingSrc.stderr).toContain("no-such-pack");
 
-      // 8) Every ephemeral overlay zip created by child processes in this test was cleaned up
       const spawnedPids = new Set(
         [
           rUnpicked,

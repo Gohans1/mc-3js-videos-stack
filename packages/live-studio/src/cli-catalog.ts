@@ -1,7 +1,6 @@
 import { nativeMediaSubcommands } from "./media-cli.ts";
 import { referenceMediaSubcommands } from "./media-reference-cli.ts";
 import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
-// Shared CLI catalog schema, 100% repo command inventory, and pure argv/safety resolver (no Node built-ins; safe in browser & server).
 import { PLAYGROUND_CLI_COMMAND } from "./voice-playground-cli-catalog";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
@@ -287,7 +286,6 @@ export const CLI_CATEGORIES: readonly CliCategory[] = [
   },
 ];
 
-// Reusable Earshot flag factories matching `earshot <cmd> -h` without duplicating fields.
 const earshotThreadsFlag: CliFlagDef = {
   key: "--threads",
   flag: "--threads",
@@ -406,7 +404,6 @@ const assetSelectionFlags: readonly CliFlagDef[] = [
 
 export const CLI_COMMANDS: readonly CliCommand[] = [
   PLAYGROUND_CLI_COMMAND,
-  // ── DAILY FILM AI LOOP ───────────────────────────────────────────────────────────────────────────
   {
     id: "help",
     label: "help",
@@ -955,7 +952,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         exclusiveGroup: "star-op",
         tier: "advanced",
       },
-      // Mocap-only filters: shown whenever --kind is unset or starts with mocap
       {
         key: "--from",
         flag: "--from",
@@ -1660,7 +1656,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
 
-  // ── VOICE & LIP SYNC ─────────────────────────────────────────────────────────────────────────────
   {
     id: "voice:gen",
     label: "voice:gen",
@@ -2027,7 +2022,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     ],
   },
 
-  // ── SOUND, MIX & EARSHOT ─────────────────────────────────────────────────────────────────────────
   {
     id: "sfx:get",
     label: "sfx:get",
@@ -3927,7 +3921,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         "add copies the video into references/ (an H.264 copy beside the untouched source when needed). solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
     },
   },
-  // ── RENDER & QA REVIEW ───────────────────────────────────────────────────────────────────────────
   {
     id: "render",
     label: "render",
@@ -4708,7 +4701,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
 
-  // ── SETUP & VAULTS ───────────────────────────────────────────────────────────────────────────────
   {
     id: "setup",
     label: "setup",
@@ -5516,7 +5508,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
 
-  // ── REPO DEV & EVALS ─────────────────────────────────────────────────────────────────────────────
   {
     id: "studio",
     label: "studio",
@@ -5670,10 +5661,148 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     },
   },
   {
+    id: "comments",
+    label: "comments",
+    category: "dev",
+    summary: "List, measure, safely strip, and ratchet code comments across the repository.",
+    runner: "bun-script",
+    target: "comments",
+    cwdModes: ["root"],
+    subcommandRequired: true,
+    meta: {
+      effect: "read",
+      cost: "free",
+      speed: "short",
+      cancellable: true,
+      helpMode: "flag",
+    },
+    subcommands: [
+      {
+        id: "list",
+        label: "list",
+        summary: "Emit JSONL of prose comment blocks (excluding allowed tool directives).",
+        args: [
+          {
+            key: "paths",
+            label: "Paths (optional)",
+            type: "string",
+            multi: true,
+            placeholder: "packages/film-kit",
+            hint: "Relative paths to inspect; defaults to tracked workspace scopes.",
+          },
+        ],
+        flags: [
+          {
+            key: "--out",
+            flag: "--out",
+            label: "Output JSONL file",
+            type: "string",
+            placeholder: "verdicts-input.jsonl",
+            hint: "Write UTF-8 JSONL directly to a file instead of stdout.",
+            tier: "common",
+          },
+        ],
+      },
+      {
+        id: "stats",
+        label: "stats",
+        summary: "Show per-package prose comment counts and sheddable LOC estimate.",
+        args: [
+          {
+            key: "paths",
+            label: "Paths (optional)",
+            type: "string",
+            multi: true,
+            placeholder: "packages/live-studio",
+            hint: "Relative paths to measure; defaults to tracked workspace scopes.",
+          },
+        ],
+        flags: [
+          {
+            key: "--json",
+            flag: "--json",
+            label: "JSON output",
+            type: "boolean",
+            tier: "common",
+          },
+        ],
+      },
+      {
+        id: "strip",
+        label: "strip",
+        summary:
+          "Safely strip selected comment blocks from a JSONL verdict file after AST/token verification.",
+        args: [
+          {
+            key: "jsonl",
+            label: "Selection JSONL",
+            type: "string",
+            required: true,
+            placeholder: "doomed.jsonl",
+            hint: "JSONL file with {file, line, text} records to remove.",
+          },
+        ],
+        flags: [
+          {
+            key: "--dry-run",
+            flag: "--dry-run",
+            label: "Dry run",
+            type: "boolean",
+            tier: "common",
+          },
+        ],
+        meta: { effect: "write" },
+      },
+      {
+        id: "ratchet",
+        label: "ratchet",
+        summary: "Tighten or verify scripts/lint/comment-ratchet.json without raising ceilings.",
+        args: [
+          {
+            key: "paths",
+            label: "Paths (optional)",
+            type: "string",
+            multi: true,
+            placeholder: "packages/film-kit",
+            hint: "Relative paths to check or tighten; defaults to tracked workspace scopes.",
+          },
+        ],
+        flags: [
+          {
+            key: "--check",
+            flag: "--check",
+            label: "Check only",
+            type: "boolean",
+            exclusiveGroup: "ratchet-mode",
+            tier: "common",
+          },
+          {
+            key: "--init",
+            flag: "--init",
+            label: "Initialize baseline",
+            type: "boolean",
+            exclusiveGroup: "ratchet-mode",
+            requiresConfirmIfSet: true,
+            tier: "advanced",
+          },
+        ],
+        meta: {
+          effect: "write",
+          confirm: {
+            mode: "when-flagged",
+            message:
+              "Overwrite scripts/lint/comment-ratchet.json with a fresh baseline from current comments?",
+          },
+        },
+      },
+    ],
+  },
+  {
     id: "lint",
     label: "lint",
     category: "dev",
-    summary: "Run oxlint on packages/ and scripts/.",
+    summary:
+      "Run oxlint and comment ratchet check across packages/, scripts/, templates/ and .claude/hooks/.",
     runner: "bun-script",
     target: "lint",
     cwdModes: ["root"],
@@ -6102,7 +6231,6 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     meta: { effect: "read", cost: "free", speed: "instant", cancellable: true, helpMode: "flag" },
   },
 
-  // ── DIRECT ASSET & CATALOG TOOLS ─────────────────────────────────────────────────────────────────
   {
     id: "mc:pick",
     label: "mc:pick",
@@ -6701,7 +6829,6 @@ export function isFieldRequired(
   );
 }
 
-// Split string input like `a "b c"` into discrete argv tokens without shell eval while preserving JSON literals.
 export function tokenizeWords(input: string): string[] {
   const out: string[] = [];
   let cur = "";
@@ -6912,6 +7039,15 @@ function computeEffectiveMeta(
     if (isActiveValue(args.need) && isActiveValue(flags["--did"])) {
       next.effect = "write";
     }
+  } else if (commandId === "comments") {
+    if (
+      (subcommandPath[0] === "strip" && isBooleanActive(flags["--dry-run"])) ||
+      (subcommandPath[0] === "ratchet" && isBooleanActive(flags["--check"]))
+    ) {
+      next.effect = "read";
+    } else if (subcommandPath[0] === "list" && isActiveValue(flags["--out"])) {
+      next.effect = "write";
+    }
   }
   return next;
 }
@@ -6964,7 +7100,6 @@ export function buildCliInvocation(
   const args = request.args ?? {};
   const flags = request.flags ?? {};
 
-  // Match Studio init-like behavior when resolving relative targetFilm for runner display
   const filmOnly = command.cwdModes.length === 1 && command.cwdModes[0] === "film";
   const rawFilm =
     request.targetFilm === "active" || request.targetFilm === "root"
@@ -7051,7 +7186,6 @@ export function buildCliInvocation(
       }
     }
 
-    // Track exclusive groups across args and flags
     const groupHits = new Map<string, string[]>();
     const trackExclusive = (group: string | undefined, label: string, active: boolean) => {
       if (!group || !active) return;
@@ -7060,7 +7194,6 @@ export function buildCliInvocation(
       groupHits.set(group, list);
     };
 
-    // Positionals come after selected subcommand segments (except command-level positionals? No command with subcommands has parent args)
     argvTokens.push(...chain.resolvedPath);
 
     let firstSkippedOptionalArg: string | null = null;
@@ -7149,7 +7282,6 @@ export function buildCliInvocation(
     }
   }
 
-  // Evaluate guard conditions
   let guardReason: string | null = null;
   if (mode === "execute") {
     if (effectiveMeta.guard?.disabled) {
@@ -7185,13 +7317,11 @@ export function buildCliInvocation(
     }
   }
 
-  // Evaluate confirmation gate (disabled when running Help)
   let requiresConfirm = false;
   let confirmMessage: string | null = null;
   if (mode === "execute" && effectiveMeta.confirm && effectiveMeta.confirm.mode !== "none") {
     const rule = effectiveMeta.confirm;
     if (rule.mode === "always") {
-      // studio:init with --dry is non-mutating
       if (!(command.id === "studio:init" && isBooleanActive(flags["--dry"]))) {
         requiresConfirm = true;
         confirmMessage = rule.message;
@@ -7217,7 +7347,6 @@ export function buildCliInvocation(
     }
   }
 
-  // Missing env status groups (all keys in an OR group missing -> surface warning pill)
   const missingEnvGroups: CliEnvKey[][] = [];
   if (context?.envStatus) {
     const requiredGroups: CliEnvKey[][] = [

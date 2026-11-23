@@ -1,6 +1,3 @@
-// Notes spoken in the studio: one JSON object per line in notes/notes.jsonl, so an AI agent can read them. Pictures sit beside
-// them in notes/img. Notes are an hour of someone's work: one bad line can't hide the rest, a crash mid-write can't cut the file,
-// × only moves a note to notes/deleted.jsonl, and copies pile up in renders/notes_backup.
 import {
   appendFileSync,
   closeSync,
@@ -83,8 +80,6 @@ export const readDeletedNotes = (project) =>
     .map(parseArchiveLine)
     .filter((note) => note !== undefined);
 
-// #N, as every command names a note (notes, note, at): its place among every note written, in the order written, the ones
-// the creator deleted counted too. Keep historical slots even when an archive row fails recovery validation. id -> {n, gone}
 export const noteNumbers = (project) => {
   const seen = new Map();
   for (const [notes, gone] of [
@@ -96,7 +91,6 @@ export const noteNumbers = (project) => {
   const byAge = [...seen].toSorted(([, a], [, b]) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
   return new Map(byAge.map(([id, { gone }], i) => [id, { n: i + 1, gone }]));
 };
-// A note as the commands take it, by its id or its number (#N or N): {id, n, gone}, or null when no whole note is that
 export const findNote = (project, key) => {
   const numbers = noteNumbers(project);
   if (numbers.has(key)) return { id: key, ...numbers.get(key) };
@@ -131,7 +125,7 @@ export const createNotes = (project) => {
 
   let backedUp = 0;
   const backup = () => {
-    if (Date.now() - backedUp < BACKUP_EVERY || !existsSync(file) || !statSync(file).size) return; // gone is no reason to refuse the next note
+    if (Date.now() - backedUp < BACKUP_EVERY || !existsSync(file) || !statSync(file).size) return;
     backedUp = Date.now();
     copyFileSync(
       file,
@@ -146,7 +140,6 @@ export const createNotes = (project) => {
         renameSync(fresh, target);
         return;
       } catch (e) {
-        // Windows refuses while something is reading it
         if (i >= 20) throw e;
         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
       }
@@ -185,8 +178,6 @@ export const createNotes = (project) => {
     return { ok: true, rel };
   };
 
-  // A new note, with its pictures (data URLs): the film's (img, crop, strip, frames) and the creator's own pasted ones (refs).
-  // What has been done to a note is the server's to say
   const add = ({ note, img: picture, crop, strip, frames, refs }, stamp) => {
     for (const k of [
       "crop",
@@ -228,10 +219,9 @@ export const createNotes = (project) => {
       });
     Object.assign(note, stamp);
     const all = read();
-    if (!all.some((n) => n.id === note.id)) write([...all, note]); // a retry after a lost answer isn't a second note
+    if (!all.some((n) => n.id === note.id)) write([...all, note]);
   };
 
-  // {remove} and {restore} move the note between the files; every other change is note-state.mjs's. Says whether it applied, and why not
   const change = (id, c) => {
     const all = read();
     let n = all.find((x) => x.id === id);

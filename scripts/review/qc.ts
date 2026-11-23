@@ -383,7 +383,6 @@ function runCompare(argv: string[]): number {
   return 0;
 }
 
-// The reference's frame at a second: its index (round(s x fps)) picked by select=eq(n,N), as frames are counted
 function referenceFrame(
   video: string,
   at: number,

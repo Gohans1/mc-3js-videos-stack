@@ -1,4 +1,3 @@
-// GPU-composited WAAPI fold-out / fold-in animations for Lessons Miller columns (emil-design-eng + md-phone).
 import { EASE_OUT, prefersReduced } from "../components/Motion";
 import { classifyLessonTrailTransition, type LessonTrail } from "./tree";
 
@@ -37,7 +36,6 @@ export interface ClipRectLike {
   height: number;
 }
 
-/** Intersects snapshot and live deck bounds so exiting fold-in panels stay clipped strictly inside the Lessons pane and never bleed over the Stage. */
 export function computeDeckClipBounds(
   snapshotRect: ClipRectLike,
   liveRect: ClipRectLike,
@@ -61,7 +59,6 @@ export function computeDeckClipBounds(
   };
 }
 
-/** Filters outgoing panels to only those overlapping the visible clipped overlay rect. */
 export function selectVisibleOutgoing<T extends { rect: ClipRectLike }>(
   outgoing: readonly T[],
   clip: ClipRectLike,
@@ -121,7 +118,6 @@ const cloneGhost = (panel: PanelSnapshot, deckRect: DOMRect, z: number): HTMLEle
   return ghost;
 };
 
-/** Captures live bounding boxes and clones outgoing column snapshots synchronously before folding state changes. */
 export function captureDeckSnapshot(deck: HTMLElement | null): DeckSnapshot | null {
   if (!deck) return null;
   const cols = [...deck.querySelectorAll<HTMLElement>("[data-lessons-col]")].map((el, i) =>
@@ -134,7 +130,6 @@ export function captureDeckSnapshot(deck: HTMLElement | null): DeckSnapshot | nu
   return { deckRect: deck.getBoundingClientRect(), cols, content };
 }
 
-/** Runs clipped fold-in ghosts and interruptible fold-out / FLIP transitions on the Lessons deck. */
 export function animateDeckTransition({
   deck,
   overlayHost,

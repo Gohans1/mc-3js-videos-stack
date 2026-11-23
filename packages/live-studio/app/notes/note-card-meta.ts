@@ -1,4 +1,3 @@
-// Pure metadata and picture-URL helpers shared by NoteList.tsx, notes.ts, scripts/at.ts and tests.
 import { frameAt, frameVisible, type TimingClock, visibleOutputAt } from "../../src/timing.mjs";
 import type { Fix } from "./slice";
 
@@ -69,7 +68,6 @@ export const resolveNoteMedia = (
     typeof note.crop === "string" && note.crop
       ? `/api/note-img/${note.id}_crop.jpg`
       : (queued?.crop ?? null);
-  // the creator's pasted pictures, saved as notes/img/<id>_r<i>.jpg
   const refs = Array.isArray(note.refs)
     ? note.refs.map((r) => `/api/note-img/${String(r).split("/").pop()}`)
     : (queued?.refs ?? []);
@@ -85,7 +83,6 @@ export const resolveNoteMedia = (
   return { thumb, crop, refs, after, noAfterReason, afterCam, afterTime };
 };
 
-// Strip developer file provenance like "silverfish (src/silverfish.ts, game model)" -> "silverfish" for compact card chips
 export const pinShortLabel = (what: string | undefined | null): string | null => {
   const trimmed = what?.trim() ?? "";
   if (!trimmed) return null;
@@ -112,9 +109,7 @@ export const noteNumberMap = (
         }
         if (valid) return out;
       }
-    } catch {
-      // ignore malformed server header and fall back to list order
-    }
+    } catch {}
   }
   const fallback: Record<string, number> = {};
   notes.forEach((n, i) => {
@@ -160,9 +155,6 @@ interface NoteWhere {
   context?: { shot?: { into?: unknown } };
 }
 
-// The scene second a note's picture is at now: the one kept with it (since 2026-11-13), else its place in its shot, the shot
-// found by name since shots added or removed before it renumber it. shots: today's, in scene seconds, with their names.
-// The studio's note list and bun run at both place notes with this, so they agree
 export const noteScene = (n: NoteWhere, shots: readonly { t: number; name?: string }[]) => {
   if (typeof n.scene === "number") return { at: n.scene, shot: null };
   const into = n.context?.shot?.into;
@@ -174,9 +166,6 @@ export const noteScene = (n: NoteWhere, shots: readonly { t: number; name?: stri
   return shots[i] ? { at: shots[i].t + into, shot: i } : null;
 };
 
-// Where a note is heard now: its picture (noteScene) through today's Speed and Freeze, else its narration second, which follows
-// voice edits but not Speed or Freeze. A held picture is heard over a stretch: a note whose own second still shows its picture
-// stays there; moved, it goes to the picture's first heard second
 export const noteActionTarget = (num: number | null, timeText: string): string =>
   num != null ? `#${num} at ${timeText}` : `at ${timeText}`;
 
@@ -195,7 +184,7 @@ export const noteSecond = (
   const hasT = typeof n.t === "number" && Number.isFinite(n.t) && n.t >= 0;
   const s = noteScene(n, shots);
   if (!s) return typeof n.srcT === "number" && Number.isFinite(n.srcT) ? fromSource(n.srcT) : n.t;
-  const matches = hasT && Math.abs(frameAt(clock, n.t) - s.at) < 0.002; // seconds are kept to the millisecond
+  const matches = hasT && Math.abs(frameAt(clock, n.t) - s.at) < 0.002;
   if (matches && frameVisible(clock, n.t)) return n.t;
   return visibleOutputAt(clock, s.at) ?? (matches ? n.t : clock.outputAt(s.at, "before"));
 };
@@ -237,7 +226,6 @@ const lineTriple = (line: string | undefined, key: string): [number, number, num
   return vec3Tuple([Number(m[1]), Number(m[2]), Number(m[3])]);
 };
 
-// Restores the saved free-camera pose from a note (`cam.world`, with `cam.line` fallback for older notes).
 export const noteFreeView = (note: { freeCam?: boolean; cam?: unknown }): NoteFreeView | null => {
   if (!note.freeCam || !note.cam || typeof note.cam !== "object") return null;
   const cam = note.cam as Record<string, unknown>;

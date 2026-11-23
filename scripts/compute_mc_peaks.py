@@ -28,7 +28,6 @@ def peaks_via_soundfile(path: Path):
     mono = np.max(np.abs(data), axis=1)
     n_bins = max(1, round(frames / sr / STEP))
     edges = np.linspace(0, frames, n_bins + 1, dtype=np.int64)
-    # Vectorized reduceat over bin starts; clamp empty slices safely
     starts = np.minimum(edges[:-1], frames - 1)
     raw = np.maximum.reduceat(mono, starts)
     empty = edges[1:] <= edges[:-1]

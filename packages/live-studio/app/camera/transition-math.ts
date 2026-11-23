@@ -41,7 +41,6 @@ export const transitionSupportsFeather = (fx?: TransitionMeta): boolean => {
   return typeof fx.glsl === "string" ? fx.glsl.includes("uFeather") : true;
 };
 
-// Natural plays raw progress unless the transition carries its own curve, so Linear would repeat it
 export const transitionEaseChoices = (fx?: TransitionMeta, current?: TransitionEase) =>
   TRANSITION_EASES.filter((e) => e.id !== "linear" || fx?.ease || current === "linear");
 
@@ -70,7 +69,6 @@ export const tidyTransition = (tr: TransitionData): TransitionData => {
   return next;
 };
 
-// Every built-in has its own thumbnail in TransitionLibrary's Look; a film's own transition shows its category's
 const PREVIEW_IDS = new Set<string>(TRANSITIONS.map((t) => t.id));
 
 export const transitionPreviewKind = (fx: TransitionMeta): string =>

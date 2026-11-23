@@ -31,7 +31,6 @@ const renderShot = async (opts: {
   return { ...r, px, at, box };
 };
 
-// Local contrast: average absolute horizontal neighbour jump across a checkerboard region.
 const edgeContrast = (
   s: Awaited<ReturnType<typeof renderShot>>,
   x0: number,

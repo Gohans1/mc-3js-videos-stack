@@ -1,4 +1,3 @@
-// bun run check: a remake cuts where its reference cuts; a cut the reference lacks shows as a teleport mid-move
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -48,7 +47,6 @@ test("a camera cut away from every reference cut, and a reference cut the camera
   assert.match(warning, /renders\/reference\/ref\/run-1\/study\.json/);
 });
 
-// check and sweep say the same of a cut: one inside a reference whip is a look either way
 test("a camera cut inside a reference whip, and a reference cut inside its own whip, are looks", () => {
   const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
   const file = study(dir, "ref", "run-1", [cut(5.839)], new Date());
@@ -99,12 +97,10 @@ test("a reference with no study is named, since the cut check and the coverage a
   assert.equal(unstudiedWarning(dir), "");
 });
 
-// a film keeps the download beside its H.264 copy (orig.mp4, a 4K AV1): the one measured is the reference
 test("the film's reference video is the one its newest study measured, else ref.*, never a download", () => {
   const dir = mkdtempSync(join(tmpdir(), "ref-cuts-"));
   assert.equal(referenceVideo(dir), null);
   mkdirSync(join(dir, "references"));
-  // a lone technique clip is not what the film remakes: nothing weighs the film against it
   writeFileSync(join(dir, "references/orig.mp4"), "");
   assert.equal(referenceVideo(dir), null);
   for (const f of ["ref.mp4", "clip-source.mp4", "vox.wav"])
@@ -130,7 +126,6 @@ test("a sound file that is a reference's own audio, byte for byte, is named by t
   );
 });
 
-// the reference's cuts from its study, its whips (a swing around a cut, or a fast move a cut detector can take for one)
 test("cuts are matched to the reference's, and one inside a whip of it is a look, not a fault", () => {
   const study = {
     fps: 30,

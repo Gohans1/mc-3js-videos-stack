@@ -1,4 +1,3 @@
-// Browser singleton adapter around createVoiceLibraryClient and SSE events.
 import { useEffect, useSyncExternalStore } from "react";
 
 import { scheduleIdleBatch } from "../core/search";
@@ -24,7 +23,6 @@ export const loadVoiceLibrary = client.loadVoiceLibrary;
 export const handleVoiceLibraryEvent = client.handleVoiceLibraryEvent;
 export const syncVoiceLibraryNow = client.syncVoiceLibraryNow;
 
-// Fetches /api/voice/library lazily on first activation (enabled=true) instead of eagerly mounting all Audio panels
 export const useVoiceLibrary = (enabled = true): VoiceLibraryClientState => {
   const state = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   useEffect(() => {

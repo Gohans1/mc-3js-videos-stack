@@ -342,7 +342,6 @@ export const phraseBrickWindows = (
   });
 };
 
-// Slices a narration clip directly in source coordinates so timeline speeds and freezes never truncate phrase bricks.
 export const sliceNarrationClip = <
   T extends GainClip &
     AudioProcessing &

@@ -1,7 +1,4 @@
 // @ts-nocheck
-// What a film's draw.checks runs for an actor's feet (bun run render stills --check slide:0,108), which stills cannot show.
-//   draw.checks = footChecks({ perform, steve, now })  perform(t): poses the actor at film time t and leaves its planted
-//   soles in now.feet (feet.ts makeFeet's result for t); steve: makePlayer's actor.
 import * as THREE from "three";
 
 export function footChecks({ perform, steve, now }) {
@@ -24,8 +21,6 @@ export function footChecks({ perform, steve, now }) {
       .join(" | ");
   };
   return {
-    // slide:from,to: every stretch where a sole flat on the stone (under 1.5 cm: a step lifts it higher) creeps over it by
-    // more than 2 cm, every sole sunk into the floor, and every planted sole the leg cannot reach
     slide: (from, to) => {
       const out = [],
         q = new THREE.Vector3(),
@@ -65,7 +60,6 @@ export function footChecks({ perform, steve, now }) {
           }
         }
       }
-      // a fault still going at `to` is reported too, and a clean stretch says so: silence would read as "check didn't run"
       for (const sd of ["L", "R"]) {
         if (touch[sd]?.far > 0.02)
           out.push(
@@ -79,7 +73,6 @@ export function footChecks({ perform, steve, now }) {
       }
       return out.length ? out : [`${from}-${to}: no sliding, sunk or unreachable sole`];
     },
-    // trace:from,to,step: the soles (world x y z) and their planted targets, one line per sample
     trace: (from, to, step) => {
       const out = [];
       for (let t = from; t <= to + 1e-6; t += step) out.push(`${t.toFixed(3)} ${soles(t)}`);

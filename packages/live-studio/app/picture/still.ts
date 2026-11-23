@@ -1,8 +1,5 @@
 import { S } from "../core/state";
 import { say } from "../core/store";
-// CapCut's Export still frame (its Player menu): the frame on screen at final quality, the free camera's view included and the
-// studio's overlays left out, saved as a picture for a thumbnail. As in CapCut the dev picks the name, the folder and PNG or JPEG,
-// here in the browser's own Save dialog; a browser without one (Firefox, Safari) downloads a PNG
 import { stamp } from "../core/time";
 import { setPlaying } from "../playback/transport";
 
@@ -30,8 +27,6 @@ const download = (name: string): Place => ({
     setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
   },
 });
-// Where the picture goes, asked before anything is drawn: the dialog needs the click that opened it, and building the final
-// renderer the first time takes longer than the click counts for. null: the dialog was closed
 const pickPlace = async (name: string): Promise<Place | null> => {
   if (!window.showSaveFilePicker) return download(name);
   try {
@@ -53,7 +48,7 @@ const pickPlace = async (name: string): Promise<Place | null> => {
       },
     };
   } catch (e) {
-    return (e as DOMException).name === "AbortError" ? null : download(name); // refused (no click to go on, a policy): a download
+    return (e as DOMException).name === "AbortError" ? null : download(name);
   }
 };
 
@@ -67,7 +62,7 @@ export const exportStill = async () => {
   if (S.t !== t) {
     say("The playhead moved before the frame was drawn: export it again");
     return;
-  } // a scrub during the first build
+  }
   const c = document.createElement("canvas");
   await captureFinalFrame(t, (from) => {
     c.width = from.width;

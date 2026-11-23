@@ -1,4 +1,3 @@
-// The creator's notes for the AI about to act on them; HELP below
 import { existsSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 
@@ -203,12 +202,10 @@ if (ids.length && (shot !== null || limitArg !== undefined)) {
   process.exit(2);
 }
 const limit = limitArg ?? DEFAULT_LIMIT;
-// a film, or at least a folder the studio has written notes into
 if (!existsSync(join(ROOT, "notes/notes.jsonl"))) needFilm(ROOT);
 const { notes, deleted } = loadNotes(archived);
 let pick;
 if (ids.length) {
-  // a note by its id or by the #N the list shows
   const byKey = new Map(
     notes.flatMap((n) => [
       [n.id, n],
@@ -241,7 +238,6 @@ if (ids.length) {
   pick = notes.filter((n) => archived || done || isOpen(n));
   if (shot !== null) pick = pick.filter((n) => n.shot === shot);
 }
-// how many shots the film has, when its shots file says (a number past them is a typo, not a quiet shot)
 const shotCount = () => {
   try {
     const rel = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"))["live-studio"]
@@ -303,8 +299,6 @@ if (shot !== null && !pick.length) {
   );
 }
 if (ids.length || shot !== null) {
-  // only here, where one note is read in full: the list stays one line a note, and Jev is paid only once a note's words change.
-  // A note to remember too, answered or not: its rule joins the file Jev picks
   const lessons = noLessons
     ? new Map()
     : await lessonsFor(
@@ -329,7 +323,6 @@ if (ids.length || shot !== null) {
             : `Reading notes ${nums.join(", ")}`,
       notes: shown.map((n) => n.id),
     });
-  // the files as the studio's Lessons tab names them (scoped when project lessons are active)
   const pickedPicks = [...lessons.values()].flatMap((l) => l.picks ?? []);
   const picked = [
     ...new Set(

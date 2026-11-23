@@ -40,7 +40,6 @@ export const canPlaceCameraCut = (picture, at) => {
   );
 };
 
-// a camera key's cut this close to a shot's start (seconds) is that shot's own cut
 export const SHOT_CUT_NEAR = 0.5 / 30;
 export const cameraShotAtBoundary = (clock, time) =>
   clock.cameraShotStarts?.findIndex((start) => Math.abs(start - time) < SHOT_CUT_NEAR) ?? -1;

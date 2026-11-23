@@ -1,7 +1,3 @@
-// Puts the demo's outside files in place, all gitignored: in public/vendor Steve's skin out of the game's client jar
-// (Mojang's: never commit or publish it) and MCprep's player rig (CC-BY 3.0, BoxScape Studios + TheDuckCow); in
-// public/motion/mixamo the Mixamo clips the mocap scene plays (free to use in a film, never to redistribute as files).
-// Paths: env JAR, RIG, MOTION.
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 

@@ -20,10 +20,6 @@ import {
 import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-// CapCut's right-panel parts, so every details tab is laid out the same way: Segmented (the bar under the tabs: Basic | Voice
-// changer, In | Out | Combo), Section (a header with an optional checkbox, the title and its chevron, then reset and ◁◇▷ on the right,
-// over a thin line), SliderRow (the label, then on one line the slider, the value box, its ▲▼ and ◁◇▷), FieldRow (the label on
-// the left, boxes after it), KeyNav (◁◇▷), Reset and Footer (buttons at the bottom right)
 import { cn } from "@/lib/utils";
 
 import { prefersReduced } from "./Motion";
@@ -33,7 +29,6 @@ import { Tip } from "./Tip";
 const REVEAL_MARGIN_BOTTOM = 12;
 const REVEAL_MARGIN_TOP = 8;
 
-/** Briefly pulses an inset Flexoki primary wash when a user expands an off-fold panel or editor. */
 export function pulseRevealSurface(el: HTMLElement | null): () => void {
   if (!el || prefersReduced()) return () => {};
   el.removeAttribute("data-reveal-pulse");
@@ -82,7 +77,6 @@ function computeRevealScrollDelta(
   return 0;
 }
 
-/** Scrolls the nearest scrollable ancestor so a user-expanded panel enters view while keeping its header visible. */
 export function revealInScrollContainer(
   targetEl: HTMLElement | null,
   opts?: {
@@ -128,7 +122,6 @@ export function revealInScrollContainer(
       scroller.scrollBy({ top: delta, behavior });
       return;
     }
-    // Near the bottom edge while height animates from 0, wait for the expanded height so scrollBy isn't clamped.
     const settle = () => {
       if (cancelled) return;
       cancelScroll();
@@ -156,7 +149,6 @@ export function revealInScrollContainer(
   };
 }
 
-// vertical: CapCut's column of a library's sections down its left edge (Music, Sound effects, Favorites)
 export function Segmented<T extends string>({
   value,
   items,
@@ -306,7 +298,6 @@ export function Segmented<T extends string>({
   );
 }
 
-// One entry of CapCut's category tree down a library's left edge (the Audio and Film tabs): the open one in the accent on a raised fill
 export function NavItem({
   title,
   count,
@@ -412,7 +403,6 @@ export function ChipGroup<T extends string>({
   );
 }
 
-// on: the checkbox (CapCut's: the section's effect on or off); right: reset, ◁◇▷
 export function Section({
   title,
   on,
@@ -522,7 +512,6 @@ export function Reset({
   );
 }
 
-// ◁ ◇ ▷: the key before the playhead, a key here (filled: there is one, click deletes it; hollow: click adds one), the key after
 export function KeyNav({
   what,
   prev,
@@ -594,7 +583,6 @@ export function KeyNav({
   );
 }
 
-// The value box with CapCut's ▲▼ beside it and the unit inside it ("0.0dB", "1.5s")
 export function ValueBox({
   name,
   value,
@@ -695,8 +683,6 @@ export function ValueBox({
 
 const one = (v: number | readonly number[]) => (typeof v === "number" ? v : v[0]);
 
-// The label over the slider, the value box and ◁◇▷ after it. A drag previews (preview) and saves once on release (save), the
-// state before the drag put back first (doc), so the whole drag is one undo step
 export function SliderRow({
   label,
   value,
@@ -736,7 +722,6 @@ export function SliderRow({
   hint?: ReactNode;
   compact?: boolean;
   gradient?: string;
-  // the track runs in octaves (min > 0): frequencies, so 20-200 Hz gets as much room as 2-20 kHz; the box still takes the value
   log?: boolean;
 }) {
   const pos = (v: number) => (log ? Math.log2(v) : v),
@@ -819,7 +804,6 @@ export function SliderRow({
   );
 }
 
-// The label on the left and what it sets after it, ◁◇▷ last (CapCut's Position and Rotate rows)
 export function FieldRow({
   label,
   children,

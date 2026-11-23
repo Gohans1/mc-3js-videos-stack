@@ -151,7 +151,6 @@ const mixVec3 = (a: Vec3, b: Vec3, u: number): Vec3 => [
 
 const byteHex = (v: number): string => clamp(Math.round(v), 0, 255).toString(16).padStart(2, "0");
 
-/** Convert a correlated color temperature in Kelvin [1000..40000] to `#rrggbb`. */
 export function kelvinToHex(kelvin: number): string {
   const temp = clamp(Number.isFinite(kelvin) ? kelvin : 5600, 1000, 40000) / 100;
   const r = temp <= 66 ? 255 : 329.698727446 * (temp - 60) ** -0.1332047592;
@@ -575,7 +574,6 @@ export interface ResolvedLightKey {
   state: LightsState;
 }
 
-/** Resolve carried-forward state at every sorted keyframe, resetting cleanly on `cut: true` or presets. */
 export function resolveLightKeys(
   input: LightsDoc | LightKey[] | null | undefined,
 ): ResolvedLightKey[] {
@@ -741,7 +739,6 @@ function interpolateLights(a: LightsState, b: LightsState, u: number): LightsSta
   };
 }
 
-/** Pure deterministic evaluation `f(t)` of lighting keyframes, returning defaults when absent. */
 export function lightsAt(input: LightsDoc | LightKey[] | null | undefined, t: number): LightsState {
   const resolved = resolveLightKeys(input);
   if (resolved.length === 0) return cloneLightsState(DEFAULT_LIGHTS);
@@ -783,7 +780,6 @@ const fract = (x: number): number => x - Math.floor(x);
 const seededNoise = (n: number, seed: number): number =>
   fract(Math.sin(n * 127.1 + seed * 311.7) * 43758.5453123);
 
-/** Seeded deterministic practical intensity at time `t` (never uses `Math.random`). */
 export function practicalIntensityAt(p: PracticalState, t: number, fallbackSeed = 0): number {
   if (!p.flicker) return Math.max(0, p.intensity);
   const cfg = p.flicker === true ? {} : p.flicker;

@@ -17,17 +17,6 @@ import { onClipActivity, paintActivityMark } from "../activity/timeline-activity
 import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
 import { shotIndex } from "../core/film";
-// The camera row under the timeline, on the same seconds as the stretch above it, laid out as CapCut's main track: each shot is
-// a block (its name and length in the header) holding a diamond per camera key (camera/cam.ts) and, between two keys, the
-// camera's speed through that span as its ease spends it (high: fast, flat on the floor: standing still). A shot's In and Out
-// show as bands at the foot of its block, a Combo as a band the whole way. A click picks a shot (its Camera and Animation tabs)
-// and leaves the playhead where it is; the playhead moves only when grabbed by its line (a touch drag scrubs anywhere). A mouse
-// drag draws the box over the rows (timeline/rowbox.ts) that picks the keys it covers, Shift/Ctrl+click adds or drops one;
-// dragging a picked key moves them all (cam.ts groupRoom) with whatever else the box picked on other rows (timeline/across.ts),
-// Delete removes them. A diamond is dragged to retime it inside its
-// shot, snapping to frames, the playhead and words (Shift: no snap); a click on one brings the playhead to it. The gap between two blocks is the cut: it drags too when the film keeps its shots as data (cam.ts
-// rollCut), the shots on both sides giving and taking. Right-click a block for its menu (CameraTrack.tsx).
-// In split mode (blade.ts) a click splits the shot there: the playhead goes to it, so the new shot's first frame shows.
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
 import { S } from "../core/state";
@@ -105,11 +94,10 @@ import {
   transitionSpan,
 } from "./transitions";
 
-// A shot is CapCut's video clip: its teal, a lighter tag holding its name, its other words dimmer on the clip (index.css tokens)
 const PAD = 2,
   HEAD = 15,
   BAND = 4,
-  FOOT = 3; // FOOT: room under the bands for the picked outline
+  FOOT = 3;
 const TRANSITION_TOP = HEAD + 1;
 
 const transitionBox = (i: number, w: number) => {
@@ -143,15 +131,14 @@ export const cutAtPointer = (e: { clientX: number }) => {
   return best;
 };
 
-let xs: number[] = []; // each key's x as last drawn, for the pointer
-let hover = -1; // the block under the pointer
+let xs: number[] = [];
+let hover = -1;
 let freezeGhost: { index: number; from: number; to: number } | null = null;
 const picks = () => {
   const { camKey: k, camPicks: ps } = get();
   return ps.length ? ps : k !== null ? [k] : [];
 };
 
-// The block a key belongs to: a cut opens its shot, any other key on a cut's second is the last of the shot before
 const owner = (i: number) => shotIndex(Math.max(0, keys[i].cut ? keys[i].t : keys[i].t - 1e-4));
 const shotAtX = (x: number, w: number) => {
   const t = timeAt(x, w);
@@ -214,8 +201,6 @@ const paintSpeed = (
   g.stroke();
 };
 
-// In and Out bands trim from their inner edge (CapCut's animation handles): handles only hit-test when visible on a picked or
-// hovered shot, map cleanly across timing speed/freezes, and disambiguate when In and Out meet in the middle of a shot
 const bandTop = (h: number) => h - PAD - FOOT - BAND;
 const animHandles = (w: number): AnimHandleCandidate[] => {
   const { a, v } = view(),
@@ -345,7 +330,6 @@ const drawAnimationBands = (
     cx1 = x1,
     foot = h - PAD - FOOT - BAND;
   const selected = get().shotPick === i || get().shotPicks.includes(i) || hover === i;
-  // In, Out, Combo at the foot of the block, mapped across timing speed and freezes
   const an = animOf(i),
     clock = clockOf(i, (span.from + span.to) / 2),
     src = shotSourceOf(i),
@@ -374,7 +358,6 @@ const drawAnimationBands = (
       bx1 = Math.min(x1, X(outBand.to));
     if (bx1 > bx0) g.fillRect(Math.min(bx0, x1 - 3), foot, Math.max(3, bx1 - bx0), BAND);
   }
-  // The trim handles on the picked or hovered shot, clamped inside [x0, x1] so 100%-duration handles stay visible
   if (selected) {
     g.fillStyle = tone("pick");
     if (inBand && inBand.handleAt !== null)
@@ -528,7 +511,6 @@ export const drawCamRow = () => {
   g.fillStyle = tone("main-track");
   g.fillRect(0, 0, w, h);
   g.textBaseline = "middle";
-  // Fixed opening keys still represent selectable shots, including a static first shot.
   const all = SHOTS_OUT.map(() => true),
     any = SHOTS_OUT.map(() => false);
   keys.forEach((_, i) => {
@@ -681,8 +663,6 @@ const freezeAt = (t: number) =>
   });
 const snapped = (s: number, perPx: number, off: boolean) =>
   snapTo(s, snapPoints(), perPx, off, true);
-// The key under x: the nearest within reach; of a shot's last key and the cut on the same second, the cut when it can roll (its
-// last key goes with it), else the last key
 const keyAt = (x: number, touch: boolean) => {
   const reach = keyReach(touch);
   let best = -1,
@@ -697,14 +677,12 @@ const keyAt = (x: number, touch: boolean) => {
   return best;
 };
 
-// As on the key rows: the playhead line comes first over the keys and cuts behind it, except the picked key
 const keyUnder = (x: number, y: number, w: number, h: number, touch: boolean) => {
   const i = keyAt(x, touch);
   if (insideOutputFreeze(i) && Math.abs(y - keyY(h)) > (touch ? 13 : 8)) return -1;
   return i >= 0 && onPlayhead(x, w, touch) && !picks().includes(i) ? -1 : i;
 };
 
-// The shot block under a right-click, for its menu (CameraTrack.tsx); -1 off the film
 export const cameraKeyAtPointer = (e: { clientX: number; clientY: number }) => {
   const bounds = S.el.camrow.getBoundingClientRect();
   const x = e.clientX - bounds.left;
@@ -720,8 +698,6 @@ export const shotAtPointer = (e: { clientX: number }) => {
   return shotAtX(e.clientX - r.left, r.width);
 };
 
-// The box over the rows (rowbox.ts), once it reaches this row, picks every block it touches with all its keys, as CapCut's box
-// picks every clip it touches; a click on a diamond (Shift or Ctrl adds) picks one key
 const shotsInBox = (r: { x0: number; x1: number; y0: number; y1: number }) => {
   const c = S.el.camrow.getBoundingClientRect();
   if (!c.height || r.y1 < c.top || r.y0 > c.bottom || !SHOTS_OUT.length) return [];
@@ -747,7 +723,6 @@ export const attachCamRow = () => {
     const r = c.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
   };
-  // group: the picked keys that move with the one held (just it when it is alone)
   let drag: {
     i: number;
     group: number[];
@@ -805,7 +780,6 @@ export const attachCamRow = () => {
     phase: "pending" | "dragging";
     magnet: ReturnType<typeof makeSnapper>;
   } | null = null;
-  // A press on a block: a click picks the shot, a mouse drag draws the box over the rows (rowbox.ts), a touch drag scrubs
   let press: { x: number; y: number; touch: boolean; shot: number; add: boolean } | null = null;
 
   const startScrub = () => {
@@ -864,8 +838,6 @@ export const attachCamRow = () => {
     const tr = transitionUnder(x, y, w);
     const edge = trim;
     const shotPicked = edge ? get().shotPick === edge.i || get().shotPicks.includes(edge.i) : false;
-    // Band handles win when the shot is picked or there is no transition box directly over the cut; on an unpicked shot's cut,
-    // clicking the transition box picks the transition instead of getting hijacked by a nearby handle
     if (edge && !onPlayhead(x, w, touch) && (tr <= 0 || shotPicked)) {
       set({
         ...transitionSelection({ kind: "shot", index: edge.i, side: "anim" }, get().side),
@@ -1233,8 +1205,6 @@ export const attachCamRow = () => {
     const { snap, shots, roll, moved, i, group, along, t: was, now: t } = drag;
     drag = null;
     c.style.cursor = "";
-    // A plain click brings the picture to the key, so the Camera tab and the frame show the same moment; on a picked group it
-    // picks that key alone, as CapCut does
     if (!moved) {
       if (group.length > 1 || along) setKey(i);
       seek(keys[i].t);

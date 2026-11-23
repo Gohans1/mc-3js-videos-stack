@@ -1,6 +1,3 @@
-// Lip sync data, on the CLI side: Rhubarb Lip Sync's mouth shapes for each take a character speaks on screen
-// (src/edit.json takes[].by) in voice/takes/<take>.mouth.json, and src/timeline/mouth.json gathering them where the voice
-// places each take (voice seconds). The scene reads that file through mouthCues (lips.ts).
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -65,7 +62,6 @@ const writeAtomic = (file, data, baseDir = null) => {
   writeAtomicSync(target, data);
 };
 
-// The takes said on screen, with their audio: [{ id, by, text, language, audio, shapes, fresh }]
 export const speakingTakes = (film) => {
   const root = resolve(film);
   let editFile;
@@ -93,7 +89,6 @@ export const speakingTakes = (film) => {
   });
 };
 
-// The map the scene reads, built from what is on disk now: the voice's own placement of each take (voice-map.mjs)
 const mapOf = (film) => {
   const has = new Map(speakingTakes(film).map((k) => [k.id, k]));
   const takes = planVoicePlacements(film).flatMap((p) => {
@@ -117,8 +112,7 @@ export const mouthFaults = (film) => {
       ? [
           `✖ take "${k.id}" (by ${k.by}) has no mouth shapes, so ${k.by}'s mouth stays shut while it plays: bun run voice:lips`,
         ]
-      : // check cues before freshness so corrupt/empty shapes still tell the author to regenerate them
-        !readMouthCues(k.shapes)
+      : !readMouthCues(k.shapes)
         ? [
             `✖ take "${k.id}" (by ${k.by}): ${relative(film, k.shapes).replaceAll("\\", "/")} holds no cues (not JSON, or no "cues" list), so ${k.by}'s mouth stays shut: bun run voice:lips makes them again`,
           ]
@@ -138,7 +132,6 @@ export const mouthFaults = (film) => {
   return faults;
 };
 
-// Rhubarb Lip Sync: RHUBARB names its program, else the vault's (vault/tools/Rhubarb-Lip-Sync-<version>-<os>/)
 export const rhubarbPath = () => {
   if (process.env.RHUBARB) return process.env.RHUBARB;
   const tools = fileURLToPath(new URL("../../../vault/tools/", import.meta.url));
@@ -152,9 +145,6 @@ export const rhubarbPath = () => {
   return join(tools, dir ?? "Rhubarb-Lip-Sync-1.14.0-Windows", exe);
 };
 
-// One take: its audio to a mono wav (Rhubarb reads wav and ogg only), line (its words without the voice's [tags]) as the
-// dialog file, the cues kept as [[take second, shape], ...]. English is recognised by word (pocketSphinx), any other
-// language by sound (phonetic)
 export const shapeTake = (take, line, rhubarb = rhubarbPath()) => {
   const tmp = mkdtempSync(join(tmpdir(), "lips-"));
   try {

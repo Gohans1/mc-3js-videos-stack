@@ -192,7 +192,6 @@ const gitTrackedVersionAsync = async (root) => {
   return desc.ok && out ? out : null;
 };
 
-// Tracked git films use `git describe --tags --always --dirty`; local/untracked/gitignored films use `local-<8hex>`.
 export const filmVersion = (project) => {
   const root = resolve(project);
   try {

@@ -1,6 +1,3 @@
-// CapCut's snapping line: while a drag holds a clip's edge, a key or a cut on a mark (the playhead, a cut, a word, another clip's
-// edge), a thin line runs there from the ruler to the foot of the rows, so the creator sees the two meet. Each row's drag sets it
-// (core/time.ts snappedTo) and hides it when let go; null hides it
 import { S } from "../core/state";
 import { view } from "./timeline";
 

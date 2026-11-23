@@ -1,4 +1,3 @@
-// The page's live events (app/core/events.ts) against a stand-in EventSource: Node runs the TypeScript as it is
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -20,13 +19,12 @@ const { onHello } = await import("../app/core/events.ts");
 const stream = () => streams.at(-1);
 
 test("a part of the page that listens late still tells the stream's first hello from a reconnect", () => {
-  // The stream opens with the page; the player only listens once the app has downloaded, after the first hello came
   stream().say("hello", "build-1");
   const heard = [];
   onHello((current, reconnect) => heard.push({ current, reconnect }));
   assert.deepEqual(heard, [{ current: true, reconnect: false }]);
-  stream().say("hello", "build-1"); // the line dropped and came back on the same code
-  stream().say("hello", "build-2"); // ... or on new code
+  stream().say("hello", "build-1");
+  stream().say("hello", "build-2");
   assert.deepEqual(heard.slice(1), [
     { current: true, reconnect: true },
     { current: false, reconnect: true },

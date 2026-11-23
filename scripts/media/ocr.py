@@ -166,10 +166,7 @@ def caption_block(boxes, row):
     return reading_order([b for line in block for b in line])
 
 
-# A read with a word below this is a caption caught mid-animation (popping in, scaling), unless the read next to it
-# reads alike (a stylised font reads low every time)
 SURE = 0.8
-# Neighbouring reads this alike are one caption misread by a letter; "more sugar" and "more salt" are two
 ALIKE = 0.9
 
 
@@ -222,7 +219,6 @@ def captions_from(reads, changes, start, end, read=None):
             return between[top][0]
         frames = [t for t, _ in between]
 
-        # nearer the caption before than the one after: a frame misread by a letter or two still counts
         def shows_before(i):
             text, _ = caption(read(frames[i]))
             return _likeness(text, before["text"]) > _likeness(text, after["text"])
@@ -383,7 +379,6 @@ def main():
                 extra = {}
 
                 def read_change(at):
-                    # a frame second from band_changes, rounded to the ms: seeking just before it decodes that frame
                     if at not in extra:
                         extra[at] = read_frame(len(times) + len(extra), at, max(0.0, at - 0.002))["text"]
                     return extra[at]

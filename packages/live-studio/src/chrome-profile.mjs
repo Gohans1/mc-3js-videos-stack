@@ -1,5 +1,3 @@
-// Reusable, lock-protected headless Chrome profile slots under <PROJECT>/renders/.chrome-cache/slot-<n>
-// so ANGLE/D3D11 GPU shader caches persist across render runs instead of recompiling from scratch every run.
 import { randomUUID } from "node:crypto";
 import {
   closeSync,
@@ -31,7 +29,6 @@ export const isPidAlive = (pid) => {
   }
 };
 
-// Returns "missing" (lock vanished), "stale" (dead PID or expired unreadable lock), or "live" (active/contended)
 export const inspectLock = (
   lockPath,
   isAlive = isPidAlive,
@@ -48,9 +45,7 @@ export const inspectLock = (
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && typeof parsed.pid === "number")
       return isAlive(parsed.pid) ? "live" : "stale";
-  } catch {
-    // Another process may still be flushing right after openSync("wx")
-  }
+  } catch {}
   try {
     return now() - statSync(lockPath).mtimeMs > staleGraceMs ? "stale" : "live";
   } catch (err) {
@@ -141,9 +136,7 @@ export function acquireChromeProfile(
         released = true;
         try {
           rmSync(dir, { recursive: true, force: true });
-        } catch {
-          // Chrome helper processes may briefly hold a file on Windows
-        }
+        } catch {}
       },
     };
   };
@@ -171,7 +164,6 @@ export function acquireChromeProfile(
     if (!attempt.ok && attempt.code === "EEXIST") {
       const state = inspectLock(lockPath, isAlive, now, staleGraceMs);
       if (state === "missing") {
-        // Disappeared between EEXIST and inspectLock: retry atomically without unlinking
         attempt = tryCreateLock(lockPath, payload);
       } else if (state === "stale") {
         const reclaimPath = `${lockPath}.reclaim`;

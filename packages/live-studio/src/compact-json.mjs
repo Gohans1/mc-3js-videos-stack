@@ -1,4 +1,3 @@
-// Matches the 140-column layout of the film timeline formatter.
 const WIDTH = 140;
 const oneLine = (v) =>
   Array.isArray(v)

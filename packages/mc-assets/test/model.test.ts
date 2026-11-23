@@ -278,21 +278,18 @@ describe("modelBounds", () => {
       },
     });
 
-    // 8x8 square rotated 45 deg around Y
     const post = modelBounds(resolveJson, "minecraft:block/diamond_post")!;
     const expectedSpan = Math.SQRT2 / 2;
     expect(post.size[0]).toBeCloseTo(expectedSpan, 6);
     expect(post.size[1]).toBeCloseTo(1, 6);
     expect(post.size[2]).toBeCloseTo(expectedSpan, 6);
 
-    // Rescale at 135 deg folds modulo 90 to 45 deg -> full [0..1] cube bounds
     const plant = modelBounds(resolveJson, "minecraft:block/cross_plant")!;
     expect(plant.min[0]).toBeCloseTo(0, 6);
     expect(plant.max[0]).toBeCloseTo(1, 6);
     expect(plant.min[2]).toBeCloseTo(0, 6);
     expect(plant.max[2]).toBeCloseTo(1, 6);
 
-    // Asymmetric multi-axis { x: 30, y: 45, z: 60 } matches Three.js rotateZ -> rotateY -> rotateX
     const asym = modelBounds(resolveJson, "minecraft:block/asym_multi")!;
     const pivot = new THREE.Vector3(6, 7, 8);
     const rotGroup = new THREE.Group();
@@ -317,7 +314,6 @@ describe("modelBounds", () => {
     expect(asym.max[1]).toBeCloseTo(refBox.max.y / 16, 6);
     expect(asym.max[2]).toBeCloseTo(refBox.max.z / 16, 6);
 
-    // Combined blockstate { x: 90, y: 90 } matches Three.js Euler(-90, -90, 0, "ZYX") around [8,8,8]
     const bsRot = modelBounds(resolveJson, "minecraft:block/asym_box", { x: 90, y: 90 })!;
     const bsMat = new THREE.Matrix4().makeRotationFromEuler(
       new THREE.Euler(THREE.MathUtils.degToRad(-90), THREE.MathUtils.degToRad(-90), 0, "ZYX"),
@@ -336,7 +332,6 @@ describe("modelBounds", () => {
     expect(bsRot.max[1]).toBeCloseTo(bsBox.max.y / 16, 6);
     expect(bsRot.max[2]).toBeCloseTo(bsBox.max.z / 16, 6);
 
-    // Non-finite blockstate rotation values are ignored cleanly without NaN
     const safeNan = modelBounds(resolveJson, "minecraft:block/asym_box", {
       x: Number.NaN,
       y: Infinity,
@@ -386,7 +381,6 @@ describe("modelBounds", () => {
   });
 });
 
-// films unzipped the jar themselves to texture hand-built props (a copy in each film's src/mc.ts), skipping resource packs
 describe("texture", () => {
   test("reads a texture through the asset stack as a pixel-sharp sRGB texture, and names a missing one", async () => {
     const read: string[] = [];
@@ -478,7 +472,6 @@ describe("blockModel and itemModel", () => {
   });
 
   test("itemModel uses parseItemDefinition for 1.21.4+ bare/composite items, falls back on missing sentinel, and resolves explicit '/' paths directly", async () => {
-    // 1. 1.21.4+ composite item returning multiple parts
     const composite = makeFakeRenderer({
       itemParts: [
         { type: "item", model: "minecraft:item/potion_overlay", tints: ["#385dc6"] },
@@ -499,7 +492,6 @@ describe("blockModel and itemModel", () => {
       5,
     );
 
-    // 2. Legacy 1.20.1 mod item without items/<id>.json: parseItemDefinition returns missing sentinel -> falls back to mod:item/<id>
     const legacy = makeFakeRenderer({
       itemParts: [{ type: "item", model: "block-model-renderer:missing" }],
     });
@@ -512,7 +504,6 @@ describe("blockModel and itemModel", () => {
     ]);
     expect(new THREE.Box3().setFromObject(mug).getSize(new THREE.Vector3()).y).toBeCloseTo(0.42, 5);
 
-    // 3. Explicit model path containing '/' bypasses parseItemDefinition
     for (const [input, expected] of [
       ["mod:block/tray", "mod:block/tray"],
       ["mod:item/coffee_mug", "mod:item/coffee_mug"],
@@ -566,7 +557,6 @@ describe("blockModel and itemModel", () => {
         ),
         "assets/testmod/textures/item/mug.png": whitePx,
       });
-      // Pin version "1.21.11" so parseItemDefinition returns the missing sentinel for legacy_mug and exercises isMissingSentinel end-to-end
       const sources = await core.prepareAssets([legacyModZip, jarPath], {
         cache: true,
         version: "1.21.11",
@@ -616,7 +606,6 @@ describe("blockModel and itemModel", () => {
         return missing;
       };
 
-      // Negative control: prove hasMissing catches missing items on real block-model-renderer
       expect(
         hasMissing(
           await itemModel(sources as never, "minecraft:nonexistent_item_xyz", 0.42, {
@@ -625,7 +614,6 @@ describe("blockModel and itemModel", () => {
         ),
       ).toBe(true);
 
-      // Emissive block preservation via block placement context
       const lantern = await blockModel(
         sources as never,
         "minecraft:lantern",
@@ -648,7 +636,6 @@ describe("blockModel and itemModel", () => {
       expect(hasEmission(litLamp)).toBe(true);
       expect(hasEmission(offLamp)).toBe(false);
 
-      // 1.21.4+ items resolved via parseItemDefinition (block-item, extruded, special, tinted)
       for (const id of [
         "minecraft:oak_planks",
         "minecraft:apple",
@@ -665,7 +652,6 @@ describe("blockModel and itemModel", () => {
         expect(sz.z, `${id} depth`).toBeGreaterThan(0.01);
       }
 
-      // Legacy 1.20.1 mod item without items/<id>.json falls back cleanly to models/item/<id>.json under pinned 1.21.11
       const mug = await itemModel(sources as never, "testmod:legacy_mug", 0.5, { renderer: core });
       expect(hasMissing(mug)).toBe(false);
       const mugSize = new THREE.Box3().setFromObject(mug).getSize(new THREE.Vector3());

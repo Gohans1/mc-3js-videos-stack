@@ -33,9 +33,9 @@ from studio_tell import job  # noqa: E402
 
 USAGE = "bun run deliver [<video>] [--youtube [<from>-<to>]] (--help for more)"
 SHORTS_LONGEST = 180
-PREVIEW = {"wide": (2560, "4M"), "upright": (1080, "3M")}  # (width, AV1 bitrate)
-BANDS = 5.0  # CAMBI a viewer starts to notice
-ADDED = 3.0  # how much more the re-encode bands than the upload before it is the re-encode's doing
+PREVIEW = {"wide": (2560, "4M"), "upright": (1080, "3M")}
+BANDS = 5.0
+ADDED = 3.0
 
 
 def probe(video):
@@ -495,7 +495,6 @@ def main(args):
     else:
         print("passes configured technical upload checks" + (" (review the ADVICE lines)" if found else ""))
     print("For picture, audio content and precise A/V timing, inspect the encoded file with sheet and earshot.")
-    # sound alone has no picture to re-encode: its FIX line already says so
     bands = []
     if preview and pic:
         sequential = info["format"].get("format_name") in DECODE_BEFORE_TRIM or len(formats) > 1
@@ -509,7 +508,6 @@ def main(args):
     else:
         print(f"next: bun run deliver {argument + ' ' if named else ''}--youtube makes an approximate local compression preview and shows where it "
               f"bands (about {max(10, long * 3):.0f} s here{'; a few seconds judge it as well: --youtube <from>-<to>' if long > 60 else ''})")
-    # a whole film's seconds are the studio's; a chunk's or a span's start elsewhere, so their bands are named, not lit
     ended(f"{video.as_posix()}: {fixes} to fix before upload" if fixes else
           f"{video.as_posix()}: technical checks pass" + (f"; local preview bands {len(bands)} stretch{'es' if len(bands) > 1 else ''}" if bands else ""),
           level="fail" if fixes else "warn" if bands else "ok",

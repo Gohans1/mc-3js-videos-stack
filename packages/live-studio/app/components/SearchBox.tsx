@@ -1,7 +1,6 @@
 import { Search } from "lucide-react";
 import { useId } from "react";
 
-// The search box over a library (sounds, objects, animations). What is typed stays in the box: the studio's shortcuts never see it
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 

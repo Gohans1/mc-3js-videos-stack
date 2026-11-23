@@ -51,7 +51,6 @@ describe("kelvinToHex & LIGHT_PRESETS", () => {
     const [br, , bb] = hexToRgb(blueSky);
     expect(bb).toBeGreaterThan(br);
 
-    // Clamps extreme inputs cleanly without NaN
     expect(kelvinToHex(100)).toBe(kelvinToHex(1000));
     expect(kelvinToHex(100000)).toBe(kelvinToHex(40000));
   });
@@ -140,11 +139,9 @@ describe("lightsAt interpolation, cuts, presets, and deterministic flicker", () 
     expect(mid.key.intensity).toBeCloseTo(2, 5);
     expect(mid.key.elevation).toBeCloseTo(40, 5);
     expect(mid.key.shadowRadius).toBeCloseTo(4, 5);
-    // Wraps 350 -> 10 across 0 instead of swinging backward through 180
     expect(mid.key.azimuth).toBeCloseTo(0, 4);
     expect(mid.fog.near).toBeCloseTo(15, 5);
     expect(mid.fog.far).toBeCloseTo(40, 5);
-    // Midpoint in linear RGB between #ff0000 (1,0,0) and #0000ff (0,0,1) -> (0.5,0,0.5) linear = ~#bc00bc sRGB
     const [mr, mg, mb] = hexToRgb(mid.key.color);
     expect(mr).toBeGreaterThan(170);
     expect(mg).toBe(0);
@@ -358,11 +355,9 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(rig.key.intensity).toBeCloseTo(2.5, 5);
     expect(rig.key.castShadow).toBe(true);
     expect(rig.key.shadow.radius).toBeCloseTo(3.5, 5);
-    // Azimuth 90, Elevation 0 places key along +X from target [2, 1, 2]
     expect(rig.key.position.x).toBeCloseTo(2 + 12, 3);
     expect(rig.key.position.y).toBeCloseTo(1, 3);
     expect(rig.key.position.z).toBeCloseTo(2, 3);
-    // Negative fill attenuates ground bounce / ambient & fill contrast without invalid negative light
     expect(rig.fill.intensity).toBeLessThan(0.5);
     expect(rig.ambient.intensity).toBeLessThan(0.8);
     expect(scene.fog).toBeInstanceOf(THREE.FogExp2);
@@ -379,7 +374,6 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(scene.children).toContain(sLight);
     expect(scene.children).toContain(sLight?.target);
 
-    // Switching fog mode to linear then none updates scene.fog cleanly; removing practical removes from scene
     const sampleLinear = lightsAt(
       [
         {
@@ -420,7 +414,6 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(lightsAt(coincident, 0).key.intensity).toBe(5);
     expect(lightsAt(coincident.slice(0, 2), 0).key.intensity).toBe(5);
 
-    // Overshoot bezier dips below 0 and exceeds 1 around endpoints
     const overshootKeys: LightKey[] = [
       {
         t: 0,
@@ -550,7 +543,6 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect((scene.background as THREE.Color).getHexString()).toBe("111111");
     expect(scene.fog).toBeNull();
 
-    // Clearing world.background restores initial background cleanly
     applyLightingRig(rig, lightsAt([{ t: 0, world: { background: null } }], 0), 0);
     expect(scene.background).toBe(initialBg);
 
@@ -615,7 +607,6 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
       expect(firstBlur.variance).toBeLessThanOrEqual(0.5);
     }
 
-    // Kernel change clears previous blurPass cleanly before setParams instead of keeping disposed pass
     const firstKernel = firstBlur && typeof firstBlur === "object" ? firstBlur.kernelSize : -1;
     let disposedCount = 0;
     const oldBlur = {
@@ -632,11 +623,9 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     expect(disposedCount).toBe(1);
     expect(passAny.blurPass).not.toBe(oldBlur);
 
-    // Repeating identical params does not re-invoke setParams
     wrapper.update({ ...rayState, edgeRadius: 6 }, "#ffffff");
     expect(captured).toHaveLength(2);
 
-    // Gated off cleanly when castShadow=false or visible=false or density/weight <= 0
     dir.castShadow = false;
     wrapper.update(rayState, "#ffffff");
     expect(wrapper.pass?.enabled).toBe(false);
@@ -650,7 +639,6 @@ describe("Three.js lighting rig, practical lifecycle, godrays wrapper & dispose"
     wrapper.update({ ...rayState, weight: 0 }, "#ffffff");
     expect(wrapper.pass?.enabled).toBe(false);
 
-    // Clamp maxDensity <= 0.999 so godrays.frag never executes -log(1.0 - 1.0)
     captured.length = 0;
     wrapper.update({ ...rayState, maxDensity: 1.0, weight: 2.0 }, "#ffffff");
     expect(captured).toHaveLength(1);
@@ -676,7 +664,6 @@ describe("Round 2 regression guards", () => {
     expect(lightsAt(doc, 2).key.intensity).toBe(4);
     expect(lightsAt(doc, 0).target).toEqual([0, 1, 0]);
 
-    // In-place mutations (nested key value, middle key swap, doc target mutation) must reflect immediately
     doc.keys[0].key!.intensity = 9;
     doc.keys[1] = { t: 2, key: { intensity: 10 } };
     doc.target![1] = 8;
@@ -685,7 +672,6 @@ describe("Round 2 regression guards", () => {
     expect(lightsAt(doc, 2).key.intensity).toBe(10);
     expect(lightsAt(doc, 0).target).toEqual([0, 8, 0]);
 
-    // Mutating returned resolveLightKeys output must not pollute subsequent evaluations
     resolved1[0].state.key.intensity = 999;
     expect(lightsAt(doc, 0).key.intensity).toBe(9);
   });

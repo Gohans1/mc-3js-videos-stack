@@ -1,6 +1,3 @@
-// CapCut's Color oscilloscope (Settings, Picture; kept in this browser): a strip under the picture, as CapCut's Player shows
-// it, with the three scopes of the frame on screen side by side (scopes.ts measures and draws them). For a dark film: a trace
-// pressed flat on the 0 line is black with no detail left in it. Not on a phone: it needs the room
 import { useEffect, useRef } from "react";
 
 import type { Bind } from "../core/state";
@@ -28,7 +25,6 @@ const PANES = [
 export function Oscilloscope({ bind }: { bind: Bind }) {
   const on = useStudio((s) => s.scopes),
     strip = useRef<HTMLDivElement>(null);
-  // Shown, or resized: draw them again from a fresh frame
   useEffect(() => {
     const el = strip.current;
     if (!el) return;

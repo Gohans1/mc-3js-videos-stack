@@ -1,4 +1,3 @@
-// The demo page (bun run demo): reachable through `tailscale serve` too, whose requests carry the *.ts.net host name
 import { defineConfig } from "vite";
 
 export default defineConfig({

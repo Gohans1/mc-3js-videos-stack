@@ -9,8 +9,6 @@ import { fileURLToPath } from "node:url";
 import { loopPasses, loopPeriod } from "../app/sound/loop.ts";
 
 const SR = 48000;
-// The looped stream every renderer must make of file x (interleaved stereo, D frames) at stream frame p: pass k starts
-// k periods in, fades in on sin over its first xf frames (all but the first) and out on cos over its last
 const stream = (x, D, p, c) => {
   const xf = Math.min(1.5 * SR, Math.floor(D / 4)),
     P = D - xf;
@@ -29,7 +27,6 @@ const stream = (x, D, p, c) => {
 const PROCESS = fileURLToPath(new URL("../../../scripts/sound/process.py", import.meta.url));
 
 test("a looped bed plays its file in passes that overlap by the crossfade, the first never faded in", () => {
-  // a 4 s file crossfades over a quarter of itself (1 s, under the 1.5 s cap), so each pass starts 3 s after the last
   assert.equal(loopPeriod(4), 3);
   assert.equal(loopPeriod(20), 18.5);
   assert.deepEqual(loopPasses(4, 1, 10), [
@@ -39,14 +36,12 @@ test("a looped bed plays its file in passes that overlap by the crossfade, the f
     { t: 8, offset: 0, end: 10, fadeIn: 8, fadeOut: 11 },
   ]);
 
-  // a bed that ends inside its file plays it as it is, with no pass and no fade
   assert.deepEqual(loopPasses(4, 2.5, 1), [
     { t: 0, offset: 2.5, end: 1, fadeIn: null, fadeOut: Infinity },
   ]);
   assert.deepEqual(loopPasses(4, 0, 4), [
     { t: 0, offset: 0, end: 4, fadeIn: null, fadeOut: Infinity },
   ]);
-  // a start inside the overlap hears both passes mid-crossfade, as the rendered stream has them
   assert.deepEqual(loopPasses(4, 3.5, 2), [
     { t: 0, offset: 3.5, end: 0.5, fadeIn: null, fadeOut: -0.5 },
     { t: 0, offset: 0.5, end: 2, fadeIn: -0.5, fadeOut: 2.5 },
@@ -64,7 +59,6 @@ for (const [start, len] of [
       assert.equal(r.status, 0, String(r.stderr));
     };
     try {
-      // two ramps, so the end of the file differs from its start and a hard loop would jump
       run("ffmpeg", [
         "-v",
         "error",
@@ -134,7 +128,6 @@ test("the preview plays the same stream through Web Audio, also when it joins mi
       for (const c of [0, 1])
         y[c].forEach((v, i) => {
           const p = i * 97 + (start + u0) * SR;
-          // a bed that ends inside its file is the file itself
           const want = start + len <= 4 ? ramp(p, c) : stream(ramp, 4 * SR, p, c);
           worst = Math.max(worst, Math.abs(v - want));
         });

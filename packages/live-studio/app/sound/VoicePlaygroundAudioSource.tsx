@@ -66,9 +66,6 @@ export function buildFilmTakeAudioOptions(
   return list;
 }
 
-/**
- * Shared audio input selector supporting local file upload, archived Playground clip, or Film Take.
- */
 export function VoicePlaygroundAudioSource({
   title,
   sourceKind,

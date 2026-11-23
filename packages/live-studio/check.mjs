@@ -1,4 +1,3 @@
-// The film contract checked without a studio; HELP below
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -7,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { ANIMS } from "film-stage/animate";
 import { SHAKES } from "film-stage/camera";
 import { LOOK_IDS } from "film-stage/looks";
-import { TEXT_ITEM_KEYS } from "film-stage/titles";
+import { KINDS as TITLE_KINDS, TEXT_ITEM_KEYS } from "film-stage/titles";
 import { TONE_MAPS } from "film-stage/tone";
 import { TRANSITIONS } from "film-stage/transitions";
 
@@ -89,12 +88,10 @@ const jsonPlace = (rel) => {
   );
   return /(line \d+ column \d+)/.exec(r.stderr ?? "")?.[1];
 };
-// what a file should look like: the template film's own copy is one that works
 const TEMPLATE = join(
   dirname(realpathSync(fileURLToPath(import.meta.url))),
   "../../templates/film",
 );
-// package.json names every other file checked: until it reads, nothing more can be said
 const stop = (issue) => {
   if (json)
     console.log(
@@ -119,15 +116,11 @@ if (!conf || typeof conf !== "object" || Array.isArray(conf))
   stop(
     `✖ no "live-studio": {...} in it, so the studio knows none of the film's files. git restore package.json, or compare with ${join(TEMPLATE, "package.json").replaceAll("\\", "/")}`,
   );
-// a value of the wrong shape ("soundTimeline": 123) is opened by every check after: said alone, before any is
 const confFaults = schemaProblems(StudioConfig, conf, "package.json");
 if (confFaults.length) stop(confFaults.map((p) => p.split("\n").slice(1).join("\n")).join("\n"));
-// the template film's paths, named as examples: none when the studio runs outside this repo
 const template = existsSync(join(TEMPLATE, "package.json"))
   ? (JSON.parse(readFileSync(join(TEMPLATE, "package.json"), "utf8"))["live-studio"] ?? {})
   : {};
-// the files every check after opens: one outside the film (the studio refuses it, assertInsideDir) or a folder
-// (src/timeline, read as no file) is said alone, before any is opened
 const pathFaults = [
   ...CONFIG_KEYS.filter((k) => k.endsWith("Timeline")).map((k) => [k, conf[k], true]),
   ...Object.keys(conf.keyFiles ?? {}).map((rel) => ["keyFiles", rel, true]),
@@ -170,7 +163,6 @@ const found = checkFiles(contractFiles(PROJECT)).map((text) => {
   return { where, issue: rest.join("\n") };
 });
 
-// The JSON the scene imports itself (a timeline the studio is not told of): a broken one breaks the film's build
 for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFileTypes: true })) {
   if (!file.isFile() || !file.name.endsWith(".json")) continue;
   const rel = relative(PROJECT, join(file.parentPath, file.name)).replaceAll("\\", "/");
@@ -182,8 +174,6 @@ for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFile
   }
 }
 
-// A JSON file the film's code imports and that is gone: the film no longer builds. Bun's own parser reads the imports, so
-// one in a comment or a string is none; a file it cannot parse is the build's to name
 for (const file of readdirSync(join(PROJECT, "src"), { recursive: true, withFileTypes: true })) {
   if (!file.isFile() || !/\.[mc]?[jt]sx?$/.test(file.name)) continue;
   const code = readFileSync(join(file.parentPath, file.name), "utf8");
@@ -231,13 +221,11 @@ for (const p of found) {
     if (at) p.issue += ` (at ${at})`;
   } else if (existsSync(join(TEMPLATE, file))) {
     const near = relative(PROJECT, join(TEMPLATE, file)).replaceAll("\\", "/");
-    // a film outside the repo: the full path reads better than ../ ten times
     const shown = near.startsWith("../../../") ? join(TEMPLATE, file).replaceAll("\\", "/") : near;
     p.issue += `\n  a working ${file} to compare with: ${shown}`;
   }
 }
 
-// a take said on screen (src/edit.json takes[].by) moves its character's mouth only once voice:lips has heard it
 const lips = mouthFaults(PROJECT);
 if (lips.length) found.push({ where: MOUTH_MAP, issue: lips.join("\n") });
 
@@ -252,14 +240,10 @@ const distance = (a, b) => {
   return row[b.length];
 };
 
-// two neighbouring letters swapped (gian for gain)
 const swapped = (a, b) => {
   const at = [...a].flatMap((c, i) => (c === b[i] ? [] : [i]));
   return at.length === 2 && at[1] === at[0] + 1 && a[at[0]] === b[at[1]] && a[at[1]] === b[at[0]];
 };
-// the known name a word is taken for a typo of: neighbouring letters swapped (from three letters), a letter dropped or
-// added (the shorter word four letters or more), one changed (five or more), or only the case (Fov). Under that a key of the film's own is a word
-// of its own: fog by fov, cute by cut, span by pan, uid by id, ot by to; letters further apart too (laces by scale)
 const nearName = (k, names) =>
   names.includes(k)
     ? null
@@ -271,12 +255,8 @@ const nearName = (k, names) =>
         return a.length >= 3 && (swapped(a, b) || (a.length >= 5 && distance(a, b) === 1));
       });
 
-// A fault in the lanes must not hide the others (an AI fixes what it is shown and meets the rest a run later):
-// names are checked whenever the file parses; gains, keys and the end need rows of the right shape
 const soundBroken = found.find((p) => p.where === conf.soundTimeline);
 const soundParses = !soundBroken || !/not (valid )?JSON/.test(soundBroken.issue);
-// the film's length is read through edit.json and timing.json: a fault in either would throw there, so the checks
-// against the end wait for it
 const clockBroken = found.find(
   (p) => p.where === conf.timingTimeline || p.where === "src/edit.json",
 );
@@ -284,7 +264,6 @@ if (clockBroken)
   clockBroken.issue += `\n  sounds after the end and on-screen text (too brief, too small) are checked once this is fixed`;
 const filmEnds = () => (clockBroken ? null : heardLength(PROJECT, conf));
 
-// a sound folder the studio refuses (outside the film, a symlink): a fault, not a crash
 const sound = (() => {
   try {
     return conf.soundTimeline && conf.sfx ? openSound(PROJECT, conf) : null;
@@ -313,7 +292,6 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
       .sort((a, b) => a[1] - b[1])
       .slice(0, 3)
       .map(([n]) => n);
-  // one line per missing name, with every place it is used
   const missing = new Map(),
     used = new Set();
   for (const list of ["beds", "sfx"])
@@ -324,15 +302,12 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
         if (!known.has(name)) missing.set(name, [...(missing.get(name) ?? []), `${list}[${i}]`]);
       }
     });
-  // most names missing at once is a machine without the film's sounds, not a film of wrong names
-  // (said once, with a few of the names: a "did you mean" for each would send an AI hunting for other sounds)
   const absent = missing.size >= 5 && missing.size >= used.size / 2;
   if (absent)
     found.push({
       where: conf.soundTimeline,
       issue: `✖ ${missing.size} of the ${used.size} sounds it names are not on this machine (${[...missing.keys()].slice(0, 5).join(", ")}${missing.size > 5 ? ", ..." : ""}): most of the sound files are not here yet, so the names cannot be checked (a typo among them shows once they are). 1. bun run sfx:get fetches the film's own (CC0 from Freesound into ${conf.sfx}/); 2. ${conf.soundVault === false ? 'drop "soundVault": false from package.json to hear the vault' : "cd ../.. && bun run link connects the vault"}; 3. bun run check again`,
     });
-  // a film's own sounds are heard by it alone: a name copied from another film is found in that film's folder
   let siblingDirs;
   const elsewhere = (name) => {
     siblingDirs ??= readdirSync(dirname(PROJECT), { withFileTypes: true }).flatMap((d) => {
@@ -365,8 +340,6 @@ if (lanesFile && existsSync(lanesFile) && soundParses) {
       `  ${missing.size} name${missing.size === 1 ? "" : "s"}. A sound lives in ${conf.sfx}/ (the film's own: bun run sfx:get fetches the CC0 ones it pins) or the vault; pick another: bun run find <words>`,
       `  replace a name: its "name" in ${conf.soundTimeline} (the row named above) with an id bun run find prints, or swap the clip in the studio's Sound panel`,
     );
-  // a name find printed but this film cannot hear: the vault itself is out of its reach, not the name wrong (most names
-  // missing already said how to reach it)
   const vaults = findVaults(PROJECT, conf);
   if (missing.size && !absent && conf.soundVault === false)
     issues.push(
@@ -400,21 +373,13 @@ if (soundBroken) {
   if (tail) tail.issue += `\n  gains and sounds after the end are checked once these are fixed`;
 }
 
-// Where the sounds sit, read through the clocks the studio plays them on (the film's end: src/edit.json end, through the
-// voice edit and Speed/Freeze). A sound after the end is never heard; a gain far over the file's own level is allowed, said once
 const warnings = [];
-// advice under the warnings, for a reader: text output only, never a --json warning
 const hints = [];
-// what the film has against the reference, in heard seconds, for the coverage line (src/ref-coverage.mjs)
 const covered = { sfx: [], text: [], cameraCuts: [], cameraUntil: 0 };
-// the studio opens the film's sounds through its sfx folder: without one no name can be looked up
 if (conf.soundTimeline && !conf.sfx)
   warnings.push(
     `⚠ package.json "live-studio" names no "sfx" folder, so no sound name in ${conf.soundTimeline} is checked${template.sfx ? ` (the template film's: "${template.sfx}")` : ""}`,
   );
-// a misspelt key is read by nothing: named whenever its file parses, even beside the shape faults it causes (gian for a
-// missing gain). A warning, not a problem: it is a guess, and a key of the film's own that looks like one (waves by wave)
-// has no other way to pass
 const keyTypos = (where, lines) => {
   if (!lines.length) return;
   warnings.push(...lines.map((l) => `⚠ ${where} ${l}`));
@@ -430,8 +395,6 @@ const readJson = (rel) => {
     return null;
   }
 };
-// a film may put keys of its own on a sound row too (the Film tab lists them): as on a camera key, only a letter off or swapped
-// is taken for a typo
 const nearKeys = (obj, keys) =>
   Object.keys(obj).flatMap((k) => {
     const near = nearName(k, keys);
@@ -452,14 +415,12 @@ if (lanesRead && typeof lanesRead === "object")
       ),
     ].map(([k, near]) => `${k}: no key the mix reads; did you mean "${near}"?`),
   );
-// a misspelt config key leaves its file read by nothing, schema checks included
 keyTypos(
   'package.json "live-studio"',
   nearKeys(conf, CONFIG_KEYS).map(
     ([k, near]) => `"${k}": no key the studio reads; did you mean "${near}"?`,
   ),
 );
-/** Validates a preset name field against known catalog IDs and reports near-miss suggestions. */
 const checkPreset = (where, slot, value, known, kind, { ignore = [], exact = true } = {}) => {
   if (typeof value !== "string" || !value) return;
   const clean = value.trim();
@@ -482,7 +443,6 @@ const checkPreset = (where, slot, value, known, kind, { ignore = [], exact = tru
   });
 };
 
-// a film may put keys of its own on a camera key (cell-break's live, size): only a letter off or swapped is taken for a typo
 const camRead = readJson(conf.camTimeline);
 if (Array.isArray(camRead)) {
   keyTypos(
@@ -530,8 +490,6 @@ if (Array.isArray(camRead)) {
     }
   });
 }
-// a shot, a text item and an adjustment layer take keys of the film's own too: only a near miss of a key the studio
-// reads is a typo, on the row and in its slots ("anim.in", "transition", a text's "in")
 const rowTypos = (rel, rows, prefix, keys, slotKeys = []) => {
   const slots = Map.groupBy(slotKeys, (p) => p.slice(0, p.lastIndexOf(".")));
   keyTypos(
@@ -590,8 +548,6 @@ if (Array.isArray(adjRead?.items))
   adjRead.items.forEach((it, i) =>
     checkLook(conf.adjustmentTimeline, `items[${i}].grade.look`, it?.grade?.look),
   );
-// every top key of edit.json and timing.json is optional to the studio (timing.json's schema even drops one it does not
-// know), so a near miss ("endd", "speed") is read by nothing and no fault says so
 for (const [rel, keys] of [
   ["src/edit.json", EDIT_KEYS],
   [conf.timingTimeline, TIMING_KEYS],
@@ -605,8 +561,6 @@ for (const [rel, keys] of [
       ),
     );
 }
-// a transition or anim name nothing has plays a hard cut or no move, silently; a film's own names (passed to
-// makeTransitions, or in draw.anims) are not known here, so only a near miss of a built-in is named
 const shotsRead = readJson(conf.shotsTimeline);
 if (Array.isArray(shotsRead)) {
   const ids = (list) => list.map((x) => x.id);
@@ -687,7 +641,6 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
         ...(list === "sfx" && clip.name === lanes.narration && { _narration: true }),
       };
     });
-  // a muted track is left out of every mix (scripts/sound/mix.py MUTED): its rows are never heard, so never judged
   const muted = new Set((lanes.tracks ?? []).flatMap((k) => (k?.mute ? [k.id] : [])));
   for (const list of ["beds", "sfx"])
     (lanes[list] ?? []).forEach((e, i) => {
@@ -791,7 +744,13 @@ if (textBroken)
   textBroken.issue += `\n  on-screen text (too brief, too small) is checked once this is fixed`;
 const textRead = textPath && !textBroken && readJson(conf.textTimeline);
 if (Array.isArray(textRead?.items)) {
-  // the heard seconds need the film's length (edit.json end); without it only the size floor is said
+  textRead.items.forEach((it, i) => {
+    const to = typeof it?.kind === "string" && nearName(it.kind, TITLE_KINDS);
+    if (to)
+      warnings.push(
+        `⚠ ${conf.textTimeline} items[${i}].kind "${it.kind}": no built-in has that name; did you mean "${to}"? (left as it is it draws a box outline, unless the film defines its own)`,
+      );
+  });
   const ends = filmEnds();
   const textClock = ends ? clockForTimeline("text") : null;
   const textEnd = textClock ? Math.min(ends.layers, textClock.duration) : ends?.layers;
@@ -801,9 +760,7 @@ if (Array.isArray(textRead?.items)) {
     brief = [];
   textRead.items.forEach((it, i) => {
     const h = heard?.items?.[i];
-    // h.to <= h.from: the edit cuts the item out whole, so it is never on screen
     if (heard && (!h || h.to <= h.from)) return;
-    // after the end, as a sound there: decor too, since nothing past the end is drawn
     if (h && !it.hidden && !textRead.tracks?.[it.track ?? 0]?.hidden && h.from >= textEnd) {
       late.push(
         `✖ items[${i}] "${String(it.text ?? it.kind).split("\n")[0]}" at ${+(+it.from).toFixed(2)}: after the film ends (${textEnd.toFixed(2)} s heard), so never on screen${Math.abs(h.from - it.from) > 0.01 ? ` (it would show at ${h.from.toFixed(2)} s heard)` : ""}`,
@@ -825,8 +782,6 @@ if (Array.isArray(textRead?.items)) {
       },
     );
   });
-  // a Short's captions, cut per phrase, run faster than subtitles: past three, one line says them all to a reader;
-  // --json keeps each, for the one fixing them
   const folded = new Set(brief.length > 3 && !json ? brief.map((b) => b.line) : []);
   const lines = [
     ...(folded.size
@@ -884,7 +839,6 @@ if (
   }
 }
 
-// ---------- pack/picks.json & placed objects (MC vault & local gohans pack) ----------
 {
   const vaultRoot = process.env.MC_VAULT_ROOT?.trim()
     ? vaultPath(process.env.MC_VAULT_ROOT.trim())
@@ -1201,7 +1155,6 @@ if (
   }
 }
 
-// Key files whose arrays of objects hide nested timed {t} arrays are invisible to Studio's keyRows()
 for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
   if (editKey === "placed") continue;
   const data = readJson(rel);
@@ -1214,8 +1167,6 @@ for (const [rel, editKey] of Object.entries(conf.keyFiles ?? {})) {
   }
 }
 
-// the camera's cuts in heard seconds, against the reference's (bun run reference study): a remake's cut the reference
-// lacks is the jump mid-move that --check motion:cam would show
 const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =>
   Number.isFinite(k?.t),
 );
@@ -1258,8 +1209,6 @@ for (const [name, copy] of copies)
     `⚠ ${conf.soundTimeline} "${name}" is ${copy} byte for byte, the reference's own recording: mark its rows "guide": true so bun run mix refuses to ship it`,
   );
 
-// a film made before a command joined the template has no script for it, and bun run says only "Script not found".
-// Only a script whose file this folder reaches is offered (../../scripts is there in films/<name>, not elsewhere)
 let filmScripts = null;
 try {
   filmScripts = JSON.parse(readFileSync(pkgFile, "utf8")).scripts;
@@ -1290,7 +1239,6 @@ if (unstudied) warnings.push(unstudied);
 const toolsWarning = ownToolsWarning(PROJECT);
 if (toolsWarning) warnings.push(toolsWarning);
 
-// one problem per file, as --help says: a file faulted by two checks (its schema, its sound names) has both under it
 const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
   where,
   issue: ps.map((p) => p.issue).join("\n"),

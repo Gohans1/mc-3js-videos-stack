@@ -1,7 +1,3 @@
-// The Review room: the notes alone beside the picture, in place of the timeline and the panels (N, or the button over the notes).
-// It is where the creator and the AI pass a note back and forth (src/note-state.mjs): the AI fixes or asks, the creator looks at
-// the moment then and now, approves, or sends words back; and may ask the AI to remember what a note teaches. Frame.io's review
-// is the model (Approve / Needs work, a reply thread on the comment, compare versions with an overlay slider); CapCut has none.
 import {
   Bookmark,
   BookmarkCheck,
@@ -87,7 +83,6 @@ import type { Note, ReviewTab } from "./slice";
 
 const when = (at: string) => (at ? formatShortDate(at) : "");
 const lastFix = (n: Note) => n.fixes?.at(-1);
-// What the creator can do with a note now, and the words the reply box offers for it
 type Kind = "fix" | "ask" | "open" | "done";
 const kindOf = (n: Note): Kind => {
   const s = noteState(n);
@@ -107,7 +102,6 @@ const TABS: { id: ReviewTab; title: string }[] = [
 ];
 const pic = (rel: string) => `/api/note-img/${rel.split("/").pop()}`;
 
-// The note's own picture over the AI after shot or the film as it is now, split by a handle: drag it, or use the arrow keys on it
 function Compare({ n, at }: { n: Note; at: number }) {
   const media = noteMedia(n);
   const then = media.thumb;
@@ -117,8 +111,6 @@ function Compare({ n, at }: { n: Note; at: number }) {
   const loading = useStudio((s) => s.loading),
     final = useStudio((s) => s.final),
     pictureRev = useStudio((s) => s.pictureRev);
-  // drawn by the film's renderer, outside React's render, after the room has painted: a render of the film takes a moment.
-  // Keyed by note + timestamp + revision so switching notes never bleeds a previous note's captured Now picture.
   const nowKey = `${n.id}|${at.toFixed(3)}|${final ? 1 : 0}|${pictureRev}`;
   const [liveNowState, setLiveNowState] = useState<{ key: string; url: string | null } | null>(
     null,
@@ -294,7 +286,6 @@ function Compare({ n, at }: { n: Note; at: number }) {
   );
 }
 
-// The other pictures saved with the note: the seconds around it, the close-up under the tap, one per drawn moment
 function Pictures({ n, open }: { n: Note; open: (p: { src: string; alt: string }) => void }) {
   const media = noteMedia(n);
   const list: { src: string; alt: string; wide?: boolean }[] = [
@@ -340,7 +331,6 @@ function Pictures({ n, open }: { n: Note; open: (p: { src: string; alt: string }
   );
 }
 
-// The conversation, oldest first: the creator's note, then each fix or question from the AI and each answer back
 function Thread({ n }: { n: Note }) {
   const [showEdits, setShowEdits] = useState(false);
   const editsCount = n.edits?.length ?? 0;
@@ -584,7 +574,6 @@ function Detail({
             { duration: 140, easing: EASE_OUT },
           );
     return () => anim.cancel();
-    // Play only on fresh Detail mount (key={p.n.id}) so deliberate clicks/approvals animate while arrow keys stay 0ms
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const send = () => {
@@ -886,7 +875,7 @@ export function ReviewRoom() {
     shotFilter = useStudio((s) => s.noteShot),
     facets = useStudio((s) => s.noteFacets),
     composeOpen = useStudio((s) => !!s.compose);
-  useStudio((s) => (scope === "shot" ? s.shot : "")); // Follow current shot filter if locked to playhead
+  useStudio((s) => (scope === "shot" ? s.shot : ""));
   const hasSideFilters = scope === "shot" || shotFilter !== null || facets.length > 0;
   const lists = {
     check: reviewList("check"),
@@ -912,14 +901,12 @@ export function ReviewRoom() {
     if (targetId) focusReviewRow(targetId);
     else roomRef.current?.focus({ preventScroll: true });
   }, []);
-  // the picture beside goes to the note picked
   const pick = (to: Placed | undefined, motion: "action" | "pick" | null = "pick") => {
     if (!to) return;
     setDetailEnterMotion(motion);
     set({ reviewPick: to.n.id });
     goToNote(to.n);
   };
-  // after an answer the note leaves this list: the one after it, else the one before, is next
   const next = () => {
     const nextId = nextReviewNeighborId(
       list.map((x) => x.n.id),

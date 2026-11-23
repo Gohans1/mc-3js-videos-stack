@@ -342,7 +342,6 @@ export const compareVariants = (
   return NATURAL_COLLATOR.compare(a.name, b.name);
 };
 
-// Separate namespaces: a lone sound may be named exactly like some family's slug
 const familyKeyOf = (item: Pick<LibraryItem, "name" | "family">): string =>
   item.family ? `family:${item.family}` : `name:${item.name}`;
 
@@ -569,7 +568,9 @@ export const originOptions = (items: readonly LibraryItem[]): OriginOption[] => 
     { id: ALL, title: originTitle(ALL), count: countDistinctFamilies(items) },
     { id: "real", title: originTitle("real"), count: real.size },
     { id: "synth", title: originTitle("synth"), count: synth.size },
-    ...(unknown.size ? [{ id: "unknown" as const, title: originTitle("unknown"), count: unknown.size }] : []),
+    ...(unknown.size
+      ? [{ id: "unknown" as const, title: originTitle("unknown"), count: unknown.size }]
+      : []),
   ];
 };
 
@@ -687,7 +688,6 @@ export const filterAndSortLibrary = ({
   const matched = matchLibraryItems(soundItems, query);
   const tree = buildNavTree(matched, favs, kindOf, voiceCount, voiceSection);
 
-  // Resolve valid leaf (keep user's selected leaf for yours/voices so 0 hits doesn't snap back to "all")
   const section = tree.find((s) => s.id === nav.group)!;
   const keepLeaf = nav.group === "yours" || nav.group === "voices";
   const validLeaf = keepLeaf || section.leaves.some((l) => l.id === nav.leaf) ? nav.leaf : ALL;
@@ -719,18 +719,21 @@ export const filterAndSortLibrary = ({
     !isTimeline && !isMc && (origin === "real" || origin === "synth" || origin === "unknown")
       ? origin
       : ALL;
-  const origins: OriginOption[] = isMc || isTimeline
-    ? []
-    : scoped.length
-      ? originOptions(scoped)
-      : activeOrigin !== ALL
-        ? [
-            { id: ALL, title: originTitle(ALL), count: 0 },
-            { id: "real", title: originTitle("real"), count: 0 },
-            { id: "synth", title: originTitle("synth"), count: 0 },
-            ...(activeOrigin === "unknown" ? [{ id: "unknown" as const, title: originTitle("unknown"), count: 0 }] : []),
-          ]
-        : [];
+  const origins: OriginOption[] =
+    isMc || isTimeline
+      ? []
+      : scoped.length
+        ? originOptions(scoped)
+        : activeOrigin !== ALL
+          ? [
+              { id: ALL, title: originTitle(ALL), count: 0 },
+              { id: "real", title: originTitle("real"), count: 0 },
+              { id: "synth", title: originTitle("synth"), count: 0 },
+              ...(activeOrigin === "unknown"
+                ? [{ id: "unknown" as const, title: originTitle("unknown"), count: 0 }]
+                : []),
+            ]
+          : [];
   const activeEdition: EditionFilter =
     isMc && (edition === "vanilla" || edition === "modded") ? edition : ALL;
   const editions: EditionOption[] = !isMc
@@ -909,7 +912,6 @@ const normalizeCompoundAudioWord = (word: string): string | null => {
   return changed ? out.join("") : null;
 };
 
-/** Cleans raw SFX/music filenames into consistent, scannable UI display titles. */
 export const cleanAudioTitle = (raw: string, opts?: { mc?: boolean }): string => {
   const base = raw
     .replace(/\.(wav|mp3|ogg|flac|aif)$/i, "")

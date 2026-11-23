@@ -1,6 +1,3 @@
-// The lesson files (global LESSONS or a film's lessons/) as the studio's Lessons tab reads and writes them. A save names the version it was
-// made on (tag): the AI may have changed the file meanwhile (bun run note learned), and its words are never written over.
-// The page edits plain lines (a textarea turns CRLF into LF), so a file's byte-order mark and CRLF lines are put back on save
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -23,7 +20,7 @@ const BOM = String.fromCharCode(0xfeff);
 const plain = (raw) => (raw.startsWith(BOM) ? raw.slice(1) : raw).replace(/\r\n/g, "\n");
 
 export const openLessonFiles = (dir = LESSONS) => {
-  const seen = new Map(); // path: the tag last known there, read by watch or written by the studio; null once gone
+  const seen = new Map();
   const fileOf = (path) => {
     if (typeof path !== "string" || !NAME.test(path)) return null;
     const file = join(dir, path),
@@ -46,7 +43,6 @@ export const openLessonFiles = (dir = LESSONS) => {
           .filter((f) => NAME.test(f.path))
           .toSorted((a, b) => (a.path < b.path ? -1 : 1))
       : [];
-  // base: the tag the page read, or null for a new file
   const write = (path, text, base) => {
     const file = fileOf(path);
     if (!file)
@@ -91,8 +87,6 @@ export const openLessonFiles = (dir = LESSONS) => {
     }
     return { removed: true };
   };
-  // onChange(paths): the files someone else (the AI) changed, together once the writes settle, so a whole folder copied in is
-  // one change; a file written again with the same words is no change. Gives the way to stop
   const watch = (onChange) => {
     const waiting = new Set();
     let timer;

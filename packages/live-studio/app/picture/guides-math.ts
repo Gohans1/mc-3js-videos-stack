@@ -1,10 +1,9 @@
 import type { Ratio } from "../../src/frame.ts";
 import type { GuideMode } from "./director-eye";
 
-export const PHI_MINOR = (3 - Math.sqrt(5)) / 2; // 38.1966...%
-export const PHI_MAJOR = (Math.sqrt(5) - 1) / 2; // 61.8034...%
+export const PHI_MINOR = (3 - Math.sqrt(5)) / 2;
+export const PHI_MAJOR = (Math.sqrt(5) - 1) / 2;
 
-// Clear zone of a 1080x1920 frame across YouTube Shorts and TikTok In-Feed templates
 export const PHONE_SAFE_POLYGON: readonly [number, number][] = [
   [120, 288],
   [888, 288],
@@ -52,9 +51,6 @@ export function linesToPath(lines: readonly GuideLine[]): string {
   return lines.map((l) => `M${l.x1} ${l.y1}L${l.x2} ${l.y2}`).join("");
 }
 
-/**
- * Pure geometry builder for composition guides in frame-space [W, H] matching CSS aspect/letterbox framing.
- */
 export function computeGuideGeometry(
   w: number,
   h: number,
@@ -68,12 +64,10 @@ export function computeGuideGeometry(
   let diagonalsMain: GuideLine[] = [];
   let diagonalsReciprocal: GuideLine[] = [];
   if (mode === "diagonals" || mode === "all") {
-    // Baroque (ascending left-to-right) and Sinister (descending left-to-right) corner axes
     diagonalsMain = [
       { x1: 0, y1: h, x2: w, y2: 0 },
       { x1: 0, y1: 0, x2: w, y2: h },
     ];
-    // Dynamic Symmetry reciprocals: perpendicular to main diagonals from each corner
     const rx = w >= h ? (h * h) / w : w;
     const ry = w >= h ? h : (w * w) / h;
     diagonalsReciprocal = [

@@ -86,11 +86,9 @@ export const loadProcessed = (spec: ProcessSpec): Promise<Result | null> => {
   const token = Symbol();
   const job = (async () => {
     try {
-      // Timeline trims replace the requested source region on every pointer move; replan retires those before starting DSP.
       await new Promise((done) => window.setTimeout(done, 180));
       const pending = cache.get(key);
       if (pending?.status !== "loading" || pending.token !== token) return null;
-      // away from this machine (a phone over Tailscale) as Opus: a 54 s narration lane was 41.6 MB of float WAV
       const r = await fetch(`/api/sound/process${SMALL_SOUND ? "?small=1" : ""}`, {
         method: "POST",
         headers: { "content-type": "application/json" },

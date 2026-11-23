@@ -1,5 +1,3 @@
-// Markdown reading, heading bullet outline, and diacritic-insensitive search helpers ported from md-phone.
-
 export type InlineToken =
   | { kind: "break" }
   | { kind: "text"; text: string }
@@ -10,7 +8,7 @@ export type InlineToken =
   | { kind: "link"; text: string; href: string };
 
 export interface LessonHeading {
-  line: number; // 1-based
+  line: number;
   depth: number;
   title: string;
   bullets: number;
@@ -61,7 +59,6 @@ function foldWithOffsets(text: string): { folded: string; offsets: number[] } {
 
 let cachedFold: { text: string; folded: string; offsets: number[] } | null = null;
 
-/** Matches `query` inside `text` without requiring Vietnamese diacritics. */
 export function findFoldedMatches(text: string, query: string): { start: number; end: number }[] {
   const needle = foldText(query.trim());
   if (!needle) return [];
@@ -104,7 +101,6 @@ const closesFence = (line: string, fence: string): boolean => {
   );
 };
 
-/** Parses headings with bullet counts for the Lessons Contents outline. */
 export function parseLessonHeadings(text: string): LessonHeading[] {
   const lines = stripBomAndLines(text);
   const first = bodyStartIndex(lines);
@@ -236,7 +232,6 @@ const parseTask = (raw: string): { checked: boolean | null; body: string } => {
   return { checked: m[1]!.toLowerCase() === "x", body: m[2]! };
 };
 
-/** Parses a lesson file into line-indexed blocks for Read view rendering. */
 export function parseLessonBlocks(text: string): LessonBlock[] {
   const lines = stripBomAndLines(text);
   const start = bodyStartIndex(lines);
@@ -333,7 +328,6 @@ export function parseLessonBlocks(text: string): LessonBlock[] {
       continue;
     }
 
-    // Paragraph (or Setext heading if next line underlines)
     const nextLine = lines[i + 1];
     const underline = nextLine ? UNDERLINE.exec(nextLine) : null;
     if (underline && !NOT_PROSE.test(line)) {
@@ -368,7 +362,6 @@ export interface FilteredLesson<F extends { path: string; text: string }> {
   snippet: string | null;
 }
 
-/** Filters lesson files by diacritic-insensitive path or content match and extracts the first matching line. */
 export function filterLessons<F extends { path: string; text: string }>(
   files: readonly F[],
   query: string,
@@ -399,7 +392,6 @@ export function filterLessons<F extends { path: string; text: string }>(
   return results;
 }
 
-/** Finds the heading line active at or just above `topLine`. */
 export function findActiveHeading(heads: readonly LessonHeading[], topLine: number): number | null {
   if (!heads.length) return null;
   let active = heads[0]!.line;

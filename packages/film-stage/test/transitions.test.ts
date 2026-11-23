@@ -343,16 +343,16 @@ function evalGlslTransition(
         continue;
       }
       if (toks[p] === "for") {
-        p += 3; // for ( int
+        p += 3;
         const vName = toks[p++];
-        p++; // =
+        p++;
         env[vName] = expr();
-        p++; // ;
+        p++;
         const condPos = p;
         while (toks[p] !== ";") p++;
         p++;
         const stepVar = toks[p++];
-        p += 2; // ++ )
+        p += 2;
         const bodyPos = p;
         while (true) {
           p = condPos;

@@ -1,6 +1,3 @@
-// CapCut's "Paste attributes?" box (Ctrl+Alt+V, or Paste attributes in a right-click menu): one tick per thing the copy holds,
-// all ticked to start, each with what it will paste; Paste puts the ticked ones onto what is picked, one undo step
-// (attributes.ts). Enter pastes, Esc cancels
 import { type RefObject, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -36,7 +33,6 @@ export function PasteAttributes() {
   );
 }
 
-// Mounted with the box, so its lines stay as they were while it closes
 function Body({ go }: { go: RefObject<HTMLButtonElement | null> }) {
   const [list] = useState(choices),
     [where] = useState(onto),

@@ -3,7 +3,6 @@ import { cn } from "@/lib/utils";
 
 import { type lessonChanges } from "./changes";
 
-/** Word-diff viewer for external/AI updates that have already been adopted. */
 export function LessonChanges({
   news,
   goTo,

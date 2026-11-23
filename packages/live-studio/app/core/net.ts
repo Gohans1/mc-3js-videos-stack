@@ -1,4 +1,3 @@
-// Asking the studio's server for files and sending it changes
 export const wait = (ms: number) => new Promise((done) => setTimeout(done, ms));
 
 const prefetched = new Map<string, Promise<Response>>();
@@ -29,7 +28,6 @@ export const clearPrefetch = (url?: string) => {
   else prefetched.clear();
 };
 
-// A phone line drops for seconds at a time: a file the page can't do without is asked for again until it comes
 export const getFile = async (url: string) => {
   const hit = prefetched.get(url);
   if (hit) {

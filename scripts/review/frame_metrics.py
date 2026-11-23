@@ -253,7 +253,6 @@ def cmd_vs(
     lr, lo = float(_luma(part_r).mean()), float(_luma(part_o).mean())
     out["region"] = {
       "rect": region_raw, "reference": round(sr, 2), "ours": round(so, 2), "sharpnessRatio": _ratio(so, sr),
-      # a set lit or painted off the reference's shows here: the mean colour and brightness of the same part
       "rgb": {"reference": rgb(part_r), "ours": rgb(part_o)},
       "luma": {"reference": round(lr, 1), "ours": round(lo, 1)}, "lumaRatio": _ratio(lo, lr),
     }

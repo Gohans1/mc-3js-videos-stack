@@ -1,9 +1,7 @@
-// A Markdown file's frontmatter lines and ATX headings (CommonMark: up to 3 spaces, 1-6 #, then a space or the line's end),
-// skipping fenced code. What Jev reads of a lesson file (lessons.mjs) and the Lessons tab's contents are the same headings
 export interface MdHead {
-  line: number; // 1-based
+  line: number;
   depth: number;
-  head: string; // the heading line, whitespace folded
+  head: string;
 }
 const BOM = String.fromCharCode(0xfeff);
 export const mdHeads = (text: string) => {

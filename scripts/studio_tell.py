@@ -38,7 +38,7 @@ def tell(project, say, **fields):
                 fields[k] = fields[k][:most]
         body = json.dumps({**fields, "say": _cut(say, 200)}).encode()
         req = urllib.request.Request(f"http://127.0.0.1:{port}/api/activity", body, {"content-type": "application/json"})
-        with _direct.open(req, timeout=2) as r:  # src/tell.mjs WAIT_MS: a studio rebuilding answers late
+        with _direct.open(req, timeout=2) as r:
             return r.status == 200
     except Exception:
         return False

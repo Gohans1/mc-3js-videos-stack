@@ -1,11 +1,4 @@
 import { hash } from "./hash";
-// The small, never-repeating drift of a living body, with no keys: every joint wanders a fraction of a degree on smooth
-// coherent noise (Ken Perlin's 1D gradient noise, as his Improv system used it for "the small motions of a character
-// trying to maintain balance": viewers read the statistics of the motion, not its cause; Perlin & Goldberg, SIGGRAPH
-// 1996). Two octaves per axis, each axis its own stream, so no two joints move together and nothing loops. Keep it below
-// notice: if it shows at first glance it is too strong.
-//   const drift = micro();   pose = addPose(pose, drift(t))   (after head IK: the head wanders a little round its target)
-// amount scales every joint (src/effort.ts: lower for bound, higher for indirect); period is the slow octave's seconds.
 import type { Pose } from "./pose";
 
 export const MICRO: Record<string, [number, number, number]> = {
@@ -14,9 +7,8 @@ export const MICRO: Record<string, [number, number, number]> = {
   body: [0.15, 0.2, 0.15],
   uaL: [0.5, 0.2, 0.4],
   uaR: [0.5, 0.2, 0.4],
-}; // degrees each way
+};
 
-// Perlin's 1D gradient noise: a random slope at each integer, quintic fade between; scaled to about -1..1
 export const noise1 = (x: number, seed: number) => {
   const i = Math.floor(x),
     f = x - i,

@@ -1,5 +1,3 @@
-// What the studio imports from a film (the film contract: bun run skills get core --ref contract). Vite resolves film/* to the film's src/ (src/vite_film.mjs);
-// src/contract.mjs checks the same shapes at run time, since a film is plain code the studio did not write.
 declare module "film/scene" {
   import type * as THREE from "three";
 
@@ -51,7 +49,7 @@ declare module "film/scene" {
     camera: import("film-stage/camera").RigCamera;
     look: THREE.Vector3;
     free: FreeCam;
-    home?: { p: [number, number, number]; l: [number, number, number]; fov?: number }; // where the first free camera after a reload starts
+    home?: { p: [number, number, number]; l: [number, number, number]; fov?: number };
     objects?: [THREE.Object3D, string][];
     targets?: import("./objects/targets").SceneTarget[];
     renderer?: THREE.WebGLRenderer;
@@ -85,7 +83,6 @@ declare module "film/scene" {
     placed?: Placed;
     titles?: Titles;
   }
-  // film-stage/titles.ts makeTitles: draws text.json's items over the frame, and tells the studio where each one is
   export interface TitleFx {
     id: string;
     title: string;
@@ -124,7 +121,6 @@ declare module "film/scene" {
     anims: { text: { in: TitleFx[]; out: TitleFx[] }; shape: { in: TitleFx[]; out: TitleFx[] } };
     disposeTitles?(): void;
   }
-  // mc-assets/placed.ts: objects dropped in from the Objects library, stored in the keyFiles entry whose EDIT key is `key`
   export interface Placed {
     key: string;
     root: THREE.Object3D;
@@ -134,9 +130,7 @@ declare module "film/scene" {
     objectOf(name: string): THREE.Object3D | null;
     nameOf(o: THREE.Object3D): string | null;
     clipsOf(name: string): string[];
-    // The clip running at t and the second it started (the key naming it; the first key for the object's own)
     clipAt(name: string, t: number): { clip?: string; from: number; rate: number } | null;
-    // A point per frame (fps, default 30) from its first key to its last, and one per key, in world space
     pathOf(name: string, fps?: number): { frames: THREE.Vector3[]; keys: THREE.Vector3[] };
     catalog(): Promise<{ what: string; kind: "block" | "mob" | "custom"; title: string }[]>;
     icon(what: string, size?: number): Promise<string | null>;
@@ -152,9 +146,8 @@ declare module "film/scene" {
     set(id: string): void;
     pick: { id: string; title: string };
     ranges: [number, number][];
-    off?: boolean; // set("off") hides it: the studio adds an Off chip
+    off?: boolean;
   }
-  // film-stage/animate.ts ANIMS: what a shot's "anim" {in, out, combo} may name (fx: id), for the studio's Animation tab
   export interface AnimFx {
     id: string;
     title: string;
@@ -182,9 +175,9 @@ declare module "film/scene" {
     inspectOpenFilm?: () => import("film-stage/openfilm").OverlayInspection[];
     tools: Tools;
     describe?: (t: number) => ReviewSection[];
-    checks?: Record<string, (...args: number[]) => string | string[]>; // --check name:args in a draft render (render.mjs)
+    checks?: Record<string, (...args: number[]) => string | string[]>;
     variants?: Variant[];
-    eases?: Record<string, (x: number) => number>; // the camera keys' named eases (film-stage EASES), for the camera row
+    eases?: Record<string, (x: number) => number>;
     keyEases?: { edit: string; path: string[]; names: string[] }[];
     anims?: { in: AnimFx[]; out: AnimFx[]; combo: AnimFx[] };
     transitions?: readonly {

@@ -175,12 +175,10 @@ test("followTarget chases 3D path deterministically at any t, applies offset, an
     offset: [0, 1, -3],
     lead: 0.4,
   });
-  // Random-access purity (identical regardless of evaluation order)
   const a = lag(2.7);
   expect(lag(0.5)).toBeDefined();
   expect(lag(2.7)).toEqual(a);
   expect(a[1]).toBeCloseTo(2.5, 3);
-  // Lead stays ahead along +x velocity
   expect(lead(2.0)[0]).toBeGreaterThan(lag(2.0)[0]);
   expect(() => followTarget(path, { from: 5, to: 1 })).toThrow(/to >= from/);
 });

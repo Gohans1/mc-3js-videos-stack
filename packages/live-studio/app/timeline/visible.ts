@@ -27,13 +27,11 @@ const getRo = () => {
   return ro;
 };
 
-/** Invalidates one or all cached element visibility states before synchronous redraws. */
 export function invalidateShown(el?: Element): void {
   if (el) shown.delete(el);
   else shown = new WeakMap<Element, boolean>();
 }
 
-/** Observes resize/reveal through the shared observer so visibility updates before listeners draw. */
 export function onShownResize(el: Element, cb: () => void): () => void {
   let cbs = listeners.get(el);
   if (!cbs) {
@@ -59,7 +57,6 @@ export function onShownResize(el: Element, cb: () => void): () => void {
   };
 }
 
-/** Cached layout visibility check that avoids per-frame getClientRects() flushes at 60 fps. */
 export function isElementShown(el: Element): boolean {
   const observer = getRo();
   if (!el.isConnected) {

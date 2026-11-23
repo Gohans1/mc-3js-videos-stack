@@ -1,11 +1,3 @@
-// Hands that travel on arcs: a body moves by turning joints, so a hand swings round its shoulder; a hand target blended
-// in a straight line (what keying an IK hand gives) slides like a machine (the "Arcs" principle of Thomas & Johnston's
-// twelve; animators fix it with breakdown keys, Animlog / Inspired 3D). Here the in-between is taken round the pivot
-// instead: the direction from the pivot turns at an even rate (slerp) while the distance changes linearly, which is the
-// path a two-bone arm swinging from the shoulder takes. Same keys, same timing, only the path changes.
-//   handTarget = arc(shoulder, keyA, keyB, k)   (k: the blend's own 0..1 progress, eased as before)
-// Points are [x, y, z] in any one frame. A move straight away from or through the pivot keeps the straight line; a move
-// to the opposite side swings through `bend` (the side to pass, e.g. the character's forward).
 type V = number[];
 const DEFAULT_BEND: V = [0, 0, 1];
 
@@ -79,7 +71,6 @@ export function arcInto(
   ex *= invAxis;
   ey *= invAxis;
   ez *= invAxis;
-  // Rodrigues: u turned by k * angle about the axis
   const th = k * angle,
     c = Math.cos(th),
     s = Math.sin(th),

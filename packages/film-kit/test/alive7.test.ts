@@ -16,7 +16,6 @@ test("mcmotion: the game's jump (1.25 blocks, lands after 12 ticks) and a hit's 
   expect(j.height).toBeCloseTo(1.2522, 3);
   expect(j.ticks).toBe(12);
   const b = mcBody([0, 0, 0], [{ t: 1, from: [0, -1] }], { end: 5 });
-  // pushed away from the attacker (+z), off the ground for a moment, red for 10 ticks, then still
   expect(b(1.2).onGround).toBe(false);
   expect(b(1 + 9 / TPS).red).toBe(true);
   expect(b(1 + 11 / TPS).red).toBe(false);
@@ -28,7 +27,6 @@ test("mcmotion: the game's jump (1.25 blocks, lands after 12 ticks) and a hit's 
 });
 
 test("mcmotion: a hit keyed by side follows him; by floor point it does not", () => {
-  // after the first hit he is ~3 blocks away; a second hit from his front (-x) must still push him +x
   const ev = [
     { t: 0.5, from: [0, -1] as [number, number] },
     { t: 3, from: [-1, 0] as [number, number] },
@@ -55,7 +53,6 @@ test("mcmotion: an arrow sticks where it lands; an item bounces to a stop", () =
 });
 
 test("steps: heel strikes from the soles, a step sound each, never the same variant twice in a row", () => {
-  // two feet stepping in turn: each swings forward 1.2 m in 0.3 s every 0.8 s and stands still the rest, half a cycle apart
   const sole = (phase: number) => (t: number) => {
     const n = Math.floor((t + phase) / 0.8),
       u = Math.min(1, ((t + phase) % 0.8) / 0.3);
@@ -73,7 +70,6 @@ test("steps: heel strikes from the soles, a step sound each, never the same vari
     true,
   );
   for (let i = 1; i < sounds.length; i++) expect(sounds[i].variant).not.toBe(sounds[i - 1].variant);
-  // carpet: its own step plus the block below, quieter and lower
   const carpet = stepSounds(s.slice(0, 1), (_x, y) => (y > -0.5 ? "white_carpet" : "stone"));
   expect(carpet.length).toBe(2);
   expect(carpet[1].volume).toBeCloseTo(STEP.volume * STEP.layered.volume, 6);
@@ -98,12 +94,10 @@ test("yawn: in 5.9 s at the mean pace; eyes shut and head back at the acme; drop
   expect(acme.lids).toBeGreaterThan(0.95);
   expect(yawnPose(acme).head![0]).toBeLessThan(-0.9 * YAWN.neck);
   expect(y(2 + total + YAWN.pause + 0.01)).toBeNull();
-  // a tempo stretches every phase; a gasp overlapping it drops it (face and breath together)
   expect(yawns([{ t: 2, tempo: 0.6 }])(2 + YAWN.inhale * 0.6 + 0.1)!.phase).toBe("acme");
   const hit = yawns([{ t: 2 }], { gasps: [{ t: 4 }] });
   expect(hit(3)).toBeNull();
   expect(hit.spans.length).toBe(0);
-  // by themselves only while sleepy, about a bout apart
   expect(yawnTimes(600, () => 0).length).toBe(0);
   const sleepy = yawnTimes(600, () => 1);
   expect(sleepy.length).toBeGreaterThan(4);
@@ -152,7 +146,6 @@ test("posture: follows the face's emotion at the face's pace; sad hangs the head
   expect(p(15).head![0]).toBeCloseTo(POSTURE.shape.sadness.head![0], 6);
   expect(p(30).head![0]).toBeCloseTo(POSTURE.shape.joy.head![0], 6);
   expect(p.amp(15)).toBeCloseTo(POSTURE.amp.sadness, 6);
-  // a change cut short goes on from where it had got to
   const cut = posture([
     { t: 0, mood: "neutral" },
     { t: 5, mood: "sad" },
@@ -172,9 +165,7 @@ test("touch: about 23 an hour, more when stressed; only with a free hand, and an
   const busy = (t: number) => t >= 100 && t < 300;
   const T = touches(1200, { free: (t) => !busy(t) });
   expect(T.list.some((x) => x.t < 300 && x.end > 100)).toBe(false);
-  // right after the busy span nothing piled up fires at once
   expect(T.list.filter((x) => x.t >= 300 && x.t < 301).length).toBe(0);
-  // one touch: up in reach, held, back
   const k = touches(30, { keys: [{ t: 5, spot: "chin", side: "L", hold: 2 }], rate: () => 0 });
   expect(k(5 + TOUCH.reach / 2)!.w).toBeGreaterThan(0.3);
   expect(k(5 + TOUCH.reach + 1)!.w).toBe(1);

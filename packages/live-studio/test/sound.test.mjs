@@ -31,7 +31,6 @@ test("runtime sound discovery excludes the raw download and backup root", () => 
   assert.deepEqual(findVaults(join(repo, "films/demo"), {}), [join(repo, "vault/sound")]);
 });
 
-// A mono 16 bit WAV: one second of silence, then one at half level
 const wav = (file, rate = 8000) => {
   const n = rate * 2,
     data = Buffer.alloc(n * 2);
@@ -206,7 +205,7 @@ test("a save made on an old version is refused, a bad one is named, a good one i
     name: "tap",
     gain: 0,
     try: ["knock"],
-  }); // the film's own keys stay
+  });
   assert.ok(s.write(version, data).version, "known-base repeated saves converge");
   assert.deepEqual(s.write("unknown", data), { conflict: true });
   writeFileSync(file, readFileSync(file, "utf8").replace("2.5", "3"));
@@ -221,9 +220,9 @@ test("shared vault folders define kind and category automatically while film fil
   mkdirSync(join(repo, "vault/sound/bgm/electronic"), { recursive: true });
   mkdirSync(join(repo, "vault/sound/sfx/transitions"), { recursive: true });
   mkdirSync(join(repo, "vault/sound/sfx/footsteps"), { recursive: true });
-  wav(join(repo, "vault/sound/bgm/electronic/bgm-pulse.wav"), 4000); // 2s file, still kind "bgm" from folder
+  wav(join(repo, "vault/sound/bgm/electronic/bgm-pulse.wav"), 4000);
   wav(join(repo, "vault/sound/sfx/transitions/mixkit-168.wav"), 8000);
-  wav(join(repo, "vault/sound/sfx/footsteps/gravel.wav"), 8000); // custom folder with no SOURCES.json entry
+  wav(join(repo, "vault/sound/sfx/footsteps/gravel.wav"), 8000);
   writeFileSync(
     join(repo, "vault/sound/SOURCES.json"),
     JSON.stringify({
@@ -241,7 +240,7 @@ test("shared vault folders define kind and category automatically while film fil
   const film = join(repo, "films/demo");
   mkdirSync(join(film, "sound/sfx/doors"), { recursive: true });
   wav(join(film, "sound/sfx/doors/creak.wav"), 8000);
-  wav(join(film, "sound/sfx/mixkit-168.wav"), 16000); // film-local override (rate 16000 -> still 2s, distinct path)
+  wav(join(film, "sound/sfx/mixkit-168.wav"), 16000);
   writeFileSync(
     join(film, "sound/sfx/SOURCES.json"),
     JSON.stringify({
@@ -277,7 +276,6 @@ test("shared vault folders define kind and category automatically while film fil
   assert.equal(s.fileOf(".hidden"), null);
   assert.equal(s.peaks("gravel").peaks.at(-1), 0.5);
 
-  // Fallback for narration stem when conf.soundSources is omitted (e.g. assemble.ts --clips on bare config)
   mkdirSync(join(film, "assets/public/agent"), { recursive: true });
   wav(join(film, "assets/public/agent/full_voice.wav"), 8000);
   assert.equal(s.fileOf("narration"), join(film, "assets/public/agent/full_voice.wav"));
@@ -381,7 +379,6 @@ test("oggInfo reads duration and sample rate from Ogg Vorbis headers, and openSo
   assert.equal(byName["bgm-wither-storm-theme"].kind, "bgm");
   assert.equal(byName["bgm-wither-storm-theme"].category, "boss");
 
-  // Film-local .ogg without PEAKS.json still gets duration via oggInfo and peaks via ffmpeg fallback
   assert.ok(Math.abs(byName["custom-hit"].seconds - 0.25) < 0.05);
   assert.ok(s.peaks("custom-hit").peaks.some((p) => p > 0.2));
 });
@@ -390,7 +387,7 @@ test("wavInfo and wavPeaks reject zero-channel, zero-rate and truncated-chunk WA
   const zeroCh = join(dir, "zero-ch.wav");
   wav(zeroCh, 8000);
   const b1 = readFileSync(zeroCh);
-  b1.writeUInt16LE(0, 22); // channels = 0
+  b1.writeUInt16LE(0, 22);
   writeFileSync(zeroCh, b1);
 
   assert.equal(wavInfo(zeroCh), null);
@@ -408,7 +405,7 @@ test("wavInfo and wavPeaks reject zero-channel, zero-rate and truncated-chunk WA
   const zeroRate = join(dir, "zero-rate.wav");
   wav(zeroRate, 8000);
   const b2 = readFileSync(zeroRate);
-  b2.writeUInt32LE(0, 24); // rate = 0
+  b2.writeUInt32LE(0, 24);
   writeFileSync(zeroRate, b2);
   assert.equal(wavInfo(zeroRate), null);
   assert.equal(wavPeaks(zeroRate), null);
@@ -465,12 +462,10 @@ test("openSound hot-discovers newly materialized vault/mc-sound without restart,
   mkdirSync(join(film, "sound/sfx"), { recursive: true });
   writeFileSync(join(film, "audio.json"), JSON.stringify({ beds: [], sfx: [] }));
 
-  // Start openSound BEFORE vault/mc-sound exists
   const s = openSound(film, { soundTimeline: "audio.json", sfx: "sound/sfx" });
   assert.deepEqual(s.library(), []);
   assert.equal(s.fileOf("mc-step-stone-1"), null);
 
-  // Materialize vault/mc-sound with UTF-8 BOM JSON files while studio is already running
   mkdirSync(join(repo, "vault/mc-sound/mc/footsteps"), { recursive: true });
   const step1 = join(repo, "vault/mc-sound/mc/footsteps/mc-step-stone-1.ogg");
   ogg(step1, 0.3, 330);
@@ -502,22 +497,19 @@ test("openSound hot-discovers newly materialized vault/mc-sound without restart,
   assert.equal(s.fileOf("mc-step-stone-1"), step1);
   assert.deepEqual(s.peaks("mc-step-stone-1"), { step: 0.02, peaks: [0.4, 0.5] });
 
-  // audioPeaks forwards digits argument
   const coarse = audioPeaks(step1, 0.05, 1);
   assert.ok(coarse.peaks.every((p) => Math.round(p * 10) === p * 10));
 
-  // oggInfo ignores a trailing foreign-serial OggS page appended after the valid stream
   const chained = join(repo, "chained.ogg");
   const validBytes = readFileSync(step1);
   const fakePage = Buffer.alloc(32);
   fakePage.write("OggS", 0);
   fakePage[4] = 0;
-  fakePage.writeBigInt64LE(44100n * 999n, 6); // bogus 999s granule
-  fakePage.writeUInt32LE((validBytes.readUInt32LE(14) ^ 0xdeadbeef) >>> 0, 14); // different serial
+  fakePage.writeBigInt64LE(44100n * 999n, 6);
+  fakePage.writeUInt32LE((validBytes.readUInt32LE(14) ^ 0xdeadbeef) >>> 0, 14);
   writeFileSync(chained, Buffer.concat([validBytes, fakePage]));
   assert.ok(Math.abs(oggInfo(chained).seconds - 0.3) < 0.06);
 
-  // Guard against accidental UTF-8 BOMs in live-studio runtime modules
   for (const rel of ["../src/sound.mjs", "../src/api.mjs", "../render.mjs"]) {
     const raw = readFileSync(join(import.meta.dirname, rel));
     assert.equal(

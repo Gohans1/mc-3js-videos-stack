@@ -300,19 +300,15 @@ test("a picture's pixel meets a world plane through the camera as the film orien
   const size: [number, number] = [1080, 1920];
   const centre = pixelOnPlane(cam, undefined, [540, 960], size, { axis: "z", at: 0 });
   expect(centre).toEqual([expect.closeTo(0, 9), expect.closeTo(1, 9), expect.closeTo(0, 9)]);
-  // the top edge is half the vertical fov above the aim: 5 m away, tan(30 deg) * 5 higher
   const top = pixelOnPlane(cam, undefined, [540, 0], size, { axis: "z", at: 0 });
   expect(top?.[1]).toBeCloseTo(1 + 5 * Math.tan(Math.PI / 6), 6);
-  // a quarter turn of roll lays the picture's top edge along the world's x
   const rolled = pixelOnPlane({ ...cam, roll: Math.PI / 2 }, undefined, [540, 0], size, {
     axis: "z",
     at: 0,
   });
   expect(Math.abs(rolled![0])).toBeCloseTo(5 * Math.tan(Math.PI / 6), 6);
   expect(rolled![1]).toBeCloseTo(1, 6);
-  // a ray running away from the plane meets nothing
   expect(pixelOnPlane(cam, undefined, [540, 0], size, { axis: "y", at: 0 })).toBeNull();
-  // the rig places the camera as the film draws it: a one-node position, a lens shift, a parallel projection
   const fromNode = pixelOnPlane(cam, { look: "one-node", position: [2, 1, 5] }, [540, 960], size, {
     axis: "z",
     at: 0,
@@ -322,14 +318,12 @@ test("a picture's pixel meets a world plane through the camera as the film orien
     axis: "z",
     at: 0,
   });
-  // a lens shift of 0.5 slides the frame a quarter of its height down: its middle pixel looks below the aim
   expect(shifted![1]).toBeCloseTo(1 - 0.5 * 5 * Math.tan(Math.PI / 6), 6);
   const parallel = pixelOnPlane(cam, { projection: "orthographic" }, [540, 0], size, {
     axis: "z",
     at: 0,
   });
   expect(parallel![1]).toBeCloseTo(1 + 10 * Math.tan(Math.PI / 6), 6);
-  // a rig that moves the aim as the shot plays needs the film running: no pixel from a still pose
   expect(() => pixelOnPlane(cam, { lead: 0.2 }, [540, 960], size, { axis: "z", at: 0 })).toThrow(
     /lead/,
   );
@@ -344,8 +338,6 @@ test("the picture's right and up are named as world directions, turned with the 
     return { right: right.map(round), up: up.map(round) };
   };
   expect(axes(facing)).toEqual({ right: [1, 0, 0], up: [0, 1, 0] });
-  // turned to look back down +z, the picture's right is the world's -x
   expect(axes({ ...facing, p: [0, 1, -5] })).toEqual({ right: [-1, 0, 0], up: [0, 1, 0] });
-  // a quarter turn of roll stands the picture's right up the world's y
   expect(axes({ ...facing, roll: Math.PI / 2 })).toEqual({ right: [0, 1, 0], up: [-1, 0, 0] });
 });

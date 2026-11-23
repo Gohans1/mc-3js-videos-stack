@@ -1,5 +1,3 @@
-// bun run gap: what an agent needed and no command gave, with what it did instead. The commands only know what their
-// authors thought of; a gap kept here is how the next one gets built (the creator, or an AI, reads bun run gap)
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";

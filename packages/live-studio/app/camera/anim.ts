@@ -1,8 +1,3 @@
-// A shot's In, Out and Combo (CapCut's Animation tab, for a 3D camera), kept on the shot in shots.json as "anim" {in, out,
-// combo}, each {fx, len?, k?, curve?, flip?, optics?}, and drawn by the film (film-stage/animate.ts) on top of its camera keys:
-// None takes one off and its length stays a number. The effects listed are the film's own (draw.anims). Each change is one undo
-// step (shotsDoc); trying one on (hover) is a preview the picture plays without sound, put back when the pointer leaves. The In
-// and Out bands on the camera row trim by dragging their inner edge.
 import type { AnimCurve } from "film-stage/animate";
 import type { AnimFx } from "film/scene";
 
@@ -83,20 +78,19 @@ export const metricsOf = (i: number, clock = clockOf(i)) => {
     fxOf("out", an.out?.fx)?.len ?? 0.5,
   );
 };
-// The shot the Camera and Animation tabs show: the block picked on the camera row, else the picked key's, else the playhead's
 export const shownShot = () => {
   const { shotPick: s, camKey: k } = get();
   return s !== null && SHOTS_OUT[s]
     ? s
-    : k !== null && keys[k] ? cameraKeyShotIndex(k) : cameraShotIndex(S.t);
+    : k !== null && keys[k]
+      ? cameraKeyShotIndex(k)
+      : cameraShotIndex(S.t);
 };
-// A shot block clicked on the camera row: its details show, in the Animation tab if that is open, else the Camera tab
 export const pickShot = (i: number | null, side?: Side) => {
   set(transitionSelection({ kind: "shot", index: i, side }, get().side));
   S.dirty = true;
 };
 
-// Output-clock duration and max room for an In or Out (mapped through timingClock when speed/freezes are active)
 export const roomFor = (i: number, slot: "in" | "out") => {
   const m = metricsOf(i);
   return slot === "in" ? m.inRoom : m.outRoom;
@@ -133,8 +127,6 @@ const put = (d: ShotRow[], i: number, slot: Slot, v: AnimSet | null) => {
   if (Object.keys(a).length) d[i].anim = a;
   else delete d[i].anim;
 };
-// What picking an effect stores: an In or Out with the effect's own length, cut to the room the shot has. The curve, mirror
-// and optics choices of `from` (the effect being replaced) come along, but only when the new effect can still use them.
 const fresh = (i: number, slot: Slot, id: string, from?: AnimSet): AnimSet => {
   const fx = fxOf(slot, id),
     m = slot === "combo" ? null : metricsOf(i);
@@ -168,7 +160,6 @@ export const setAnim = (i: number, slot: Slot, id: string | null) => {
 };
 export const previewAnim = (i: number, slot: Slot, id: string | null) =>
   shotsDoc.preview((d) => writeWithPair(d, i, slot, id));
-// Output duration for an In or Out (converted back to source seconds in shots.json), k (strength) for a Combo
 export const setAmount = (i: number, slot: Slot, v: number, keep = true, clock = clockOf(i)) => {
   const an = animOf(i),
     cur = an[slot];
@@ -195,9 +186,6 @@ export const setAmount = (i: number, slot: Slot, v: number, keep = true, clock =
   if (keep) shotsDoc.edit(apply);
   else shotsDoc.preview(apply);
 };
-// The curve, mirror and optics choices (CapCut's curve picker and mirror, plus an Optics dial for the optical effects). A
-// choice that is back at its default is deleted, so a film keeps the same data it had before the choice existed; a paired
-// In/Out on the cut takes the same choice (when supported), so the seam stays one move
 export const setOption = (
   i: number,
   slot: Slot,
@@ -241,9 +229,6 @@ export const setStrength = (i: number, slot: Slot, v: number, keep = true) => {
   if (keep) shotsDoc.edit(apply);
   else shotsDoc.preview(apply);
 };
-// Paste attributes (timeline/attributes.ts): a shot's In and Out ("anim", CapCut's Animation) and its Combo, as `from` has them
-// (none takes one off), onto shot i, one undo step. An In and Out that don't fit the shot are shortened together, as CapCut
-// shortens an animation to fit a short clip; short says so
 export const animFit = (i: number, from: ShotAnim) => {
   const [a, b] = shotSourceOf(i),
     lens = (["in", "out"] as const).map((s) =>
@@ -277,8 +262,6 @@ export const clearAnims = (i: number) => {
   say(`Shot ${i} has no animation now. Ctrl+Z to undo`);
 };
 
-// The seconds that show an effect: an In from the shot's start to a little after it lands, an Out from a little before it into
-// the cut, a Combo the whole shot, and across the cut boundary when a paired cross-cut seam animation is active.
 export const spanOf = (i: number, slot: Slot): [number, number] => {
   const occurrence = occurrenceAt(i, S.t);
   const [a, b] = occurrence ? [occurrence.from, occurrence.to] : shotSpan(i);
@@ -310,8 +293,6 @@ export const spanOf = (i: number, slot: Slot): [number, number] => {
   return [Math.max(a, Math.min(last, at(end - srcOut + delay)) - 0.8), last];
 };
 
-// The picture plays a stretch on its own, without sound (an effect tried on), then the playhead goes back where it was. Pressing
-// play or seeking meanwhile ends it there
 let run = 0,
   home: number | null = null,
   expect = -1;
@@ -321,7 +302,7 @@ export const playSpan = (a: number, b: number, loop = false) => {
   home ??= S.t;
   const id = run,
     t0 = performance.now(),
-    rate = Math.max(1, (b - a) / 4); // a long Combo plays faster, in about 4 s
+    rate = Math.max(1, (b - a) / 4);
   const step = () => {
     if (id !== run) return;
     if (S.playing || (expect >= 0 && Math.abs(S.t - expect) > 0.05)) {

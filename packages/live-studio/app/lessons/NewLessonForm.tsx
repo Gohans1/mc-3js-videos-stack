@@ -10,7 +10,6 @@ import { Segmented } from "../components/inspector";
 import { SCOPE_LABEL } from "./lesson-ui";
 import { type LessonScope } from "./lessons";
 
-/** Inline creation form for a new project-local or global lesson markdown file. */
 export function NewLessonForm({
   nameInputRef,
   hasProject,

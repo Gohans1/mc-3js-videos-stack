@@ -51,14 +51,6 @@ import {
   ToneMappingEffect,
   VignetteEffect,
 } from "postprocessing";
-// A new Minecraft film: a room, Steve and one keyed camera, made to be replaced shot by shot. Blocks are the game's own
-// models (block-model-renderer) plus the shared props (mc-assets/pack) and this film's picks (pack/picks.json); Steve is
-// MCprep's rig (mc-actor/player.ts) acting from src/timeline/steve.json (mc-actor/perform.ts, feet.ts); the camera follows
-// src/timeline/cam.json (film-stage/camera.ts). draw(t) draws any moment straight away (the studio's film contract:
-// bun run skills get core --ref contract). Mojang files come through assets/public links into the vault (bun run link).
-// Pre-installed extras: rigid-body physics via @dimforge/rapier3d-compat (pre-bake in Bun to src/timeline/*.json for
-// deterministic draw(t)); ambient occlusion & post FX via n8ao (N8AOPostPass) + postprocessing (EffectComposer, below);
-// volumetric godrays via three-good-godrays (GodraysPass; PointLight or DirectionalLight only, not SpotLight, before ToneMappingEffect).
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";
@@ -66,7 +58,7 @@ import { blinkAt, bodyAt, moodAt, readLook, targetAt } from "./steve";
 import { buildWorld, ROOM } from "./world";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
-const S = 1 / 16; // block-model-renderer works in pixels, the film in blocks
+const S = 1 / 16;
 
 export const SHOTS = [];
 export let DURATION = 0;
@@ -105,7 +97,6 @@ export async function buildScene(canvas, W, H, draft = false) {
   let camera = perspective;
   scene.add(perspective, parallel);
 
-  // client.jar without its Java code (scripts/mc/slim_jar.mjs), then the props and the picks stacked above it
   const jarFile = await fetch("mc/client_assets.zip");
   if (!jarFile.ok)
     throw new Error(
@@ -113,8 +104,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     );
   const jar = new Uint8Array(await jarFile.arrayBuffer());
   const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
-  // prepared once, with block-model-renderer's cross-call cache: a createScene handed raw zips unpacks the 5 MB jar again
-  // and decodes every texture again on each call
   const sources = await prepareAssets([pack, picked, jar], { cache: true });
   const blocks = buildWorld();
   const roofLevel = ROOM.top + 1;
@@ -140,7 +129,6 @@ export async function buildScene(canvas, W, H, draft = false) {
   }
   const cameraGroups = { Roof: roof.group };
 
-  // Steve's skin comes out of the same zip
   const SKIN = "assets/minecraft/textures/entity/player/wide/steve.png";
   const skinUrl = URL.createObjectURL(
     new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }),
@@ -148,8 +136,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });
   URL.revokeObjectURL(skinUrl);
   scene.add(steve.g);
-  const placed = await makePlaced(scene, sources, EDIT, "placed"); // what the creator drops in from the studio's Objects tab
-  // mocap clips the moves name, baked once here: draw(t) only reads them
+  const placed = await makePlaced(scene, sources, EDIT, "placed");
   const clips = await loadClips(
     EDIT.steve.moves.filter((m) => m.clip).map((m) => m.clip),
     steve,
@@ -187,7 +174,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     multisampling: 4,
   });
   const fade = makeFade(renderer);
-  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items }); // the titles and Cinetic annotation shapes of src/timeline/text.json, over everything; ready waits on their fonts only
+  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items });
   const anims = ANIMS;
   await titles.ready;
   composer.addPass(new RenderPass(scene, camera));
@@ -228,8 +215,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade)),
   ]);
 
-  // Steve at time t: body from the move keys, then each hand reaches its target and the head turns to its look point.
-  // A target is a world point [x, y, z]; a film with props adds named anchors here (a handle that moves with its drawer)
   const anchor = (a) => V(...a);
   const now = {};
   const feetAt = makeFeet(steve, () => EDIT.end, bodyAt, clips);
@@ -249,8 +234,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     const patch = [];
     for (const sd of ["L", "R"]) if (feet[sd]) patch.push([steve.legTo(sd, feet[sd]), 1]);
     if (look) patch.push([{ head: steve.headTo(look.p) }, look.w]);
-    // hand IK the film-kit way: the elbow on a pole, down and out, and blended into the pose's own arm by
-    // quaternion slerp; twist-free with an Euler blend, a hand reaching low in front raised the elbow over his shoulder
     const arms = [
       [R, "R", [-0.6, -1, -0.2]],
       [Lh, "L", [0.6, -1, -0.2]],
@@ -483,7 +466,6 @@ export async function buildScene(canvas, W, H, draft = false) {
     Object.assign(now, { cam });
 
     const mood = moodAt(EDIT.steve.face, t);
-    // lip sync: the takes with "by": "steve" in edit.json (bun run voice:lips); any mouth of the film's own reads the same cues
     const mouth = mouthAt(mouthCues(EDIT, "steve"), t);
     steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
     now.mood = mood;
@@ -592,7 +574,6 @@ export async function buildScene(canvas, W, H, draft = false) {
   }, composite);
   draw.velocity = true;
   draw.velocityEffects = velocityEffect.effects;
-  // A draft frame's list (--list): what is going on at t and which file holds it
   draw.describe = (t) => {
     const idx = Math.max(0, shotAt(t)),
       s = SHOTS_OUT[idx],
@@ -727,9 +708,9 @@ export async function buildScene(canvas, W, H, draft = false) {
       },
     ],
   };
-  draw.eases = EASES; // the studio's camera row draws the keys' eases with these
+  draw.eases = EASES;
   draw.keyEases = [{ edit: "steve", path: ["moves"], names: Object.keys(EASES) }];
-  draw.anims = anims; // the studio's Animation tab lists these
+  draw.anims = anims;
   draw.adjustments = {
     prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]),
   };

@@ -1,5 +1,3 @@
-// What the page plays itself (options to try, beat sounds, the live sound lanes) runs on the mix's clock: the <audio> element
-// plays the mix, and every 50 ms each player schedules what is due in the next LOOKAHEAD seconds against it
 import { S, wake } from "../core/state";
 
 let ctx: AudioContext | null = null,
@@ -19,7 +17,6 @@ export const onAudioReady = (fn: (ctx: AudioContext, master: GainNode) => void) 
 export const getAudio = (): { ctx: AudioContext; master: GainNode } => {
   if (!ctx || !masterNode || !monitorNode) {
     ctx = new AudioContext();
-    // Everything the page plays sums here at the film's own level, where the meter reads it (meter.ts); the volume slider comes after
     masterNode = ctx.createGain();
     monitorNode = ctx.createGain();
     const audio = S.el?.audio;
@@ -35,13 +32,11 @@ export const getMaster = () => getAudio().master;
 export const resumeAudio = () => {
   void getAudioCtx().resume();
 };
-// Read as a stereo file is: a mono sound comes out of both sides, as ffmpeg makes it stereo in the final mix
 export const STEREO = {
   channelCount: 2,
   channelCountMode: "explicit",
   channelInterpretation: "speakers",
 } as const;
-// An AudioWorklet module (loaded by URL) added to a context once
 const added = new WeakMap<BaseAudioContext, Map<string, Promise<void>>>();
 export const addModule = (ctx: BaseAudioContext, url: string) => {
   const mine = added.get(ctx) ?? new Map<string, Promise<void>>();
@@ -54,9 +49,9 @@ export interface Window {
   now: number;
   speed: number;
   until: number;
-  due: (at: number) => boolean; // a moment first inside this window, so it is played once
-  when: (at: number) => number; // the context time of film second at, never in the past
-  ctxAt: (at: number) => number; // the same, unclamped: for envelopes that started before now
+  due: (at: number) => boolean;
+  when: (at: number) => number;
+  ctxAt: (at: number) => number;
 }
 interface Player {
   tick: (w: Window) => void;
@@ -67,8 +62,6 @@ export const addPlayer = (p: Player) => {
   players.push(p);
 };
 
-// A main-thread stall longer than this starts a one-shot late, its head cut (a quarter second cut 190 ms off sounds under
-// jank); what is scheduled but not yet heard is stopped by silence() on a seek or an edit, so a long window costs nothing
 const LOOKAHEAD = 1;
 let sounding: AudioScheduledSourceNode[] = [],
   anchor: { base: number; speed: number; from: number } | null = null;
@@ -90,7 +83,6 @@ const silence = () => {
   anchor = null;
   for (const p of players) p.reset();
 };
-// Something heard changed (an option picked): what is sounding stops and starts again from here
 export const restart = () => {
   if (anchor && ctx) {
     silence();
@@ -105,7 +97,7 @@ export const syncMonitorGain = () => {
   if (masterLevel !== level) {
     masterLevel = level;
     monitorNode.gain.setTargetAtTime(level, ctx.currentTime, 0.015);
-  } // eased, or a slider drag clicks
+  }
 };
 
 const tick = () => {
@@ -124,7 +116,6 @@ const tick = () => {
   const now = audio.currentTime,
     speed = audio.playbackRate,
     base = activeCtx.currentTime - now / speed;
-  // A seek shows up as a jump in the sound's clock; small wobble in that clock is ignored, so the rhythm of the presses stays even
   if (!anchor || anchor.speed !== speed || Math.abs(anchor.base - base) > 0.05) {
     silence();
     anchor = { base, speed, from: now };

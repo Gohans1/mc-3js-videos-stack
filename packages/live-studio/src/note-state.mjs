@@ -1,17 +1,7 @@
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
-// A note's life, decided in this one place: the studio's server writes with it, the page shows a change with it before the server
-// has it, and the CLIs read the state with it.
-//   open  --AI: fix (or ask)-->            check   the AI says it is fixed, or asks something; the creator looks
-//   check --creator: approve-->            done    only a fix can be approved, a question wants an answer; a done note
-//                                                  takes no fix until the creator reopens it
-//   check | done --creator: again "words"--> open  needs work: the words join the thread, the note's own words stay
-//   any   --creator: text "new words"-->   open    the old words go to edits
-// done stays written beside state for scripts that only know it (older film scripts): true whenever the note is
-// not the AI's to work on. Notes from before states: done true is done, else open.
 export const STATES = ["open", "check", "done"];
 export const noteState = (n) => (STATES.includes(n.state) ? n.state : n.done ? "done" : "open");
-// a line of notes.jsonl that is a note: #N counts only these, so every CLI numbers them alike
 export const wholeNote = (n) =>
   n !== null &&
   typeof n === "object" &&
@@ -71,7 +61,6 @@ const STEPS = {
     n.fixes = [...(n.fixes ?? []), entry];
     to(n, "check");
   },
-  // a page loaded before states sends done:false for Reopen; an old film script done:true for "fixed"
   done: (n, done, at) =>
     !done
       ? to(n, "open")
@@ -108,7 +97,6 @@ const STEPS = {
   },
 };
 
-// Applies one change ({fix}, {approve}, {again}, {text}, {remember}, {learned} or the old {done}) to the note in place
 export const applyChange = (n, change, at = new Date().toISOString()) => {
   const keys = Object.keys(change);
   if (keys.length !== 1 || !STEPS[keys[0]])
@@ -117,9 +105,6 @@ export const applyChange = (n, change, at = new Date().toISOString()) => {
   return why ? { ok: false, why } : { ok: true };
 };
 
-// The conversation on a note, oldest first: the creator's note, then each fix or question from the AI and each answer back.
-// rewordings: each time the creator changed the note's words too, as {reworded, text: the words before}, for the AI to tell
-// which words a fix answered
 export const noteThread = (n, { rewordings = false } = {}) => [
   { by: "creator", text: n.text, at: n.at ?? "" },
   ...[
@@ -141,6 +126,4 @@ export const noteThread = (n, { rewordings = false } = {}) => [
   ].toSorted((a, b) => (a.at > b.at) - (a.at < b.at)),
 ];
 
-// A narrated word further than this (s) from a note's second is not what the note is about: across a silence the nearest one
-// can be a minute away
 export const WORD_NEAR = 1.5;

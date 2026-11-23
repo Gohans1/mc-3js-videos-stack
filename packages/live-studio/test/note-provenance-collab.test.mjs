@@ -69,16 +69,13 @@ test("filmVersion returns git describe for tracked films and deterministic local
     encoding: "utf8",
   }).trim();
 
-  // Tracked film uses git describe
   assert.equal(filmVersion(trackedFilm), commitHash);
   assert.equal(await filmVersionAsync(trackedFilm), commitHash);
 
-  // Dirty tracked film gets -dirty
   writeFileSync(join(trackedFilm, "src/scene.ts"), "export const v = 2;\n");
   assert.equal(filmVersion(trackedFilm), `${commitHash}-dirty`);
   assert.equal(await filmVersionAsync(trackedFilm), `${commitHash}-dirty`);
 
-  // Gitignored local film inside parent git repo gets local-<8hex> (never parent hash)
   const ignoredFilm = join(repo, "films/local-one");
   mkdirSync(join(ignoredFilm, "src/timeline"), { recursive: true });
   writeFileSync(join(ignoredFilm, "package.json"), JSON.stringify({ name: "local-one" }));
@@ -90,33 +87,28 @@ test("filmVersion returns git describe for tracked films and deterministic local
   assert.equal(await filmVersionAsync(ignoredFilm), v1);
   assert.ok(!v1.includes(commitHash));
 
-  // Changing files in renders/ or notes/ must NOT change the local fingerprint
   mkdirSync(join(ignoredFilm, "renders/live"), { recursive: true });
   mkdirSync(join(ignoredFilm, "notes"), { recursive: true });
   writeFileSync(join(ignoredFilm, "renders/draft.mp4"), "fake-video");
   writeFileSync(join(ignoredFilm, "notes/notes.jsonl"), '{"id":"n1"}\n');
   assert.equal(filmVersion(ignoredFilm), v1);
 
-  // Changing a file in src/ immediately changes the local fingerprint
   writeFileSync(join(ignoredFilm, "src/timeline/cam.json"), '[{"t":0}]\n');
   const v2 = filmVersion(ignoredFilm);
   assert.match(v2, /^local-[0-9a-f]{8}$/);
   assert.notEqual(v2, v1);
 
-  // Changing package.json also changes the local fingerprint
   writeFileSync(join(ignoredFilm, "package.json"), JSON.stringify({ name: "local-one-v2" }));
   const v3 = filmVersion(ignoredFilm);
   assert.match(v3, /^local-[0-9a-f]{8}$/);
   assert.notEqual(v3, v2);
 
-  // Untracked folder inside parent git repo (not in .gitignore) also gets local-<8hex>
   const untrackedFilm = join(repo, "untracked/film-a");
   mkdirSync(join(untrackedFilm, "src"), { recursive: true });
   writeFileSync(join(untrackedFilm, "package.json"), JSON.stringify({ name: "film-a" }));
   writeFileSync(join(untrackedFilm, "src/scene.ts"), "export const a = 1;\n");
   assert.match(filmVersion(untrackedFilm), /^local-[0-9a-f]{8}$/);
 
-  // Directory completely outside any git repo gets deterministic local-<8hex>
   const outsideFilm = makeDir(t, "fv-outside-");
   mkdirSync(join(outsideFilm, "src"), { recursive: true });
   writeFileSync(join(outsideFilm, "package.json"), JSON.stringify({ name: "outside" }));
@@ -125,16 +117,13 @@ test("filmVersion returns git describe for tracked films and deterministic local
   assert.match(outV, /^local-[0-9a-f]{8}$/);
   assert.equal(await filmVersionAsync(outsideFilm), outV);
 
-  // Symlink inside src/ pointing outside project is skipped safely without crashing or altering hash
   const externalSecret = join(makeDir(t, "fv-ext-"), "secret.txt");
   writeFileSync(externalSecret, "outside-content");
   let linked = false;
   try {
     symlinkSync(externalSecret, join(outsideFilm, "src/escape.ts"));
     linked = true;
-  } catch {
-    // Windows without symlink privilege: skip symlink assertion gracefully
-  }
+  } catch {}
   if (linked) {
     assert.equal(filmVersion(outsideFilm), outV);
   }
@@ -160,7 +149,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
   });
 
   try {
-    // 1) Save a stale-build note through POST /api/notes
     const resStale = await app.request("/api/notes", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -179,7 +167,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     });
     assert.equal(resStale.status, 200);
 
-    // 2) Save a clean note (staleBuild: false should not be persisted)
     const resClean = await app.request("/api/notes", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -205,7 +192,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     assert.equal(saved[1].version, v1);
     assert.equal("staleBuild" in saved[1], false);
 
-    // 3) Unit check noteDetailFormat directly when currentVersion matches, differs, or version is absent
     const sameFmt = noteDetailFormat({
       root: dir,
       dir: join(dir, "no-lessons"),
@@ -236,7 +222,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     ).join("\n");
     assert.ok(versionlessOut.includes("written at 2026-11-19T19:00:05Z"), versionlessOut);
 
-    // Out-of-range finite numeric timestamp must not throw RangeError
     const badAtOut = sameFmt(
       {
         n: 4,
@@ -253,7 +238,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     assert.ok(badAtOut.includes("NOTE: invalid numeric date"), badAtOut);
     assert.ok(!badAtOut.includes("written at"), badAtOut);
 
-    // 4) Modify src/scene.ts -> filmVersion changes to v2 -> notes.mjs CLI flags mismatch & staleBuild & timestamp
     writeFileSync(join(dir, "src/scene.ts"), "export const rev = 2;\n");
     const v2 = filmVersion(dir);
     assert.notEqual(v2, v1);
@@ -278,7 +262,6 @@ test("POST /api/notes persists staleBuild:true with local-<8hex> version, and no
     assert.ok(detailOut.includes("2026-11-19T18:22:10Z"), detailOut);
     assert.ok(detailOut.includes("⚠ captured on an older Studio build before reload"), detailOut);
 
-    // 5) markDone in note-cli.mjs stamps fix.checkpoint with local-<8hex> (never "no git")
     await markDone(dir, "cl1", "widened shot", { noAfterReason: "unit test" });
     const afterFix = createNotes(dir)
       .read()
@@ -310,7 +293,6 @@ test("warnProtectedEdits resolves /@<uuid>/p and /@<uuid> to human-readable shor
   protection.protect(initial, human, "person");
   protection.remember("v2", human);
 
-  // Collide on both /@uuid1/p and /@uuid2/fov
   protection.reconcile(initial, () => []);
 
   const warnings = captureWarnings(project);
@@ -319,7 +301,6 @@ test("warnProtectedEdits resolves /@<uuid>/p and /@<uuid> to human-readable shor
   assert.ok(warnings[0].includes("/@a1b2c3d4/fov (t=0s)"), warnings[0]);
   assert.ok(!warnings[0].includes(uuid1), `should shorten UUID in warning:\n${warnings[0]}`);
 
-  // Whole-row protected deletion resolves row timestamp from incoming/history even when removed on disk
   const uuid3 = "deadbeef-0000-1111-2222-333344445555";
   const shotsRel = "src/timeline/shots.json";
   const shotsInitial = [
@@ -390,13 +371,11 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
       JSON.stringify({ project: dir, port: server.port }),
     );
 
-    // Create a human edit on k1.p and trigger a direct-write collision notice
     const cam0 = film.cam.read();
     film.cam.write(cam0.version, [k0, { ...k1, p: [3, 2, 6] }]);
     writeFileSync(camFile, JSON.stringify([k0, k1]));
     film.cam.read();
 
-    // 1) Default collab read strips bulky `incoming` and keeps id/at/kind/paths/pathLabels
     const leanRes = await runCollab(["read", "cam"], { cwd: dir });
     assert.equal(leanRes.status, 0, leanRes.stderr);
     const leanJson = JSON.parse(leanRes.stdout);
@@ -410,7 +389,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.deepEqual(leanNotice.paths, [`/@${camUuid}/p`]);
     assert.deepEqual(leanNotice.pathLabels, ["/@550e8400/p (t=13.7s)"]);
 
-    // 2) collab read --full includes raw incoming, and notices.jsonl on disk keeps incoming untouched
     const fullRes = await runCollab(["read", "cam", "--full"], { cwd: dir });
     assert.equal(fullRes.status, 0, fullRes.stderr);
     const fullJson = JSON.parse(fullRes.stdout);
@@ -422,7 +400,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
       .map((l) => JSON.parse(l));
     assert.deepEqual(auditLog[0].incoming[1].p, [2, 1, 5]);
 
-    // 3) collab write --quiet prints compact summary without dumping document data
     const quietWrite = await runCollab(["write", "cam", "-", "--quiet"], {
       cwd: dir,
       stdin: JSON.stringify({
@@ -438,7 +415,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.deepEqual(quietOut.retained, []);
     assert.equal("data" in quietOut, false);
 
-    // 3b) collab write --quiet still reports conflict (exit 1) on stale base
     const staleQuiet = await runCollab(["write", "cam", "-", "--quiet"], {
       cwd: dir,
       stdin: JSON.stringify({ base: "stale-v0", data: [k0, k1] }),
@@ -446,7 +422,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.equal(staleQuiet.status, 1);
     assert.equal(JSON.parse(staleQuiet.stdout).conflict, true);
 
-    // 4) Address keyFiles by edit name (`cast`) for both read and write
     const readCast = await runCollab(["read", "cast"], { cwd: dir });
     assert.equal(readCast.status, 0, readCast.stderr);
     const castJson = JSON.parse(readCast.stdout);
@@ -467,25 +442,21 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
       elon: [{ t: 0, x: 4, z: 5 }],
     });
 
-    // 5) Unknown doc name exits 2 and lists available names
     const badName = await runCollab(["read", "nonexistent"], { cwd: dir });
     assert.equal(badName.status, 2);
     assert.match(badName.stderr, /unknown document/i);
     assert.match(badName.stderr, /cast/);
     assert.match(badName.stderr, /placed/);
 
-    // 6) Invalid flag combinations and malformed doc names exit 2
     assert.equal((await runCollab(["read", "cam", "--quiet"], { cwd: dir })).status, 2);
     assert.equal((await runCollab(["write", "cam", "-", "--full"], { cwd: dir })).status, 2);
     assert.equal((await runCollab(["read", ""], { cwd: dir })).status, 2);
     assert.equal((await runCollab(["read", "keys/00"], { cwd: dir })).status, 2);
 
-    // 7) Atomic collab write-many updates cam + shots + cast together via /api/together
     const curCam = JSON.parse((await runCollab(["read", "cam"], { cwd: dir })).stdout);
     const curShots = JSON.parse((await runCollab(["read", "shots"], { cwd: dir })).stdout);
     const curCast = JSON.parse((await runCollab(["read", "cast"], { cwd: dir })).stdout);
 
-    // 7a) Stale base on one doc (including a real historical ancestor version) aborts the entire batch atomically
     const camBefore = readFileSync(camFile, "utf8");
     const shotsBefore = readFileSync(shotsFile, "utf8");
     const staleMany = await runCollab(["write-many", "-"], {
@@ -508,7 +479,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     assert.equal(readFileSync(camFile, "utf8"), camBefore);
     assert.equal(readFileSync(shotsFile, "utf8"), shotsBefore);
 
-    // 7b) Duplicate canonical target (cast + keys/0) and leading-zero keys/00 exit 2 before calling Studio
     const dupMany = await runCollab(["write-many", "-"], {
       cwd: dir,
       stdin: JSON.stringify({
@@ -530,7 +500,6 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
     });
     assert.equal(leadingZeroMany.status, 2);
 
-    // 7c) Valid write-many --quiet atomically shifts cut across cam + shots + cast
     const okMany = await runCollab(["write-many", "-", "--quiet"], {
       cwd: dir,
       stdin: JSON.stringify({
@@ -563,11 +532,9 @@ test("collab CLI supports lean notices (--full), write --quiet, keyFiles edit na
       elon: [{ t: 0, x: 9, z: 9 }],
     });
 
-    // 7d) write-many uses actor:"agent", so its edits are NOT locked as human-protected
     assert.equal(film.shots.collaboration().protected.length, 0);
     assert.equal(film.keyFiles[0].collaboration().protected.length, 0);
 
-    // 7e) Non-quiet write-many and {"files":[...]} input format remap versions & files keys cleanly
     const afterManyCam = JSON.parse((await runCollab(["read", "cam"], { cwd: dir })).stdout);
     const afterManyCast = JSON.parse((await runCollab(["read", "cast"], { cwd: dir })).stdout);
     const nonQuietFiles = await runCollab(["write-many", "-"], {
@@ -648,12 +615,10 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
       JSON.stringify({ project: dir, port: server.port }),
     );
 
-    // 1) Direct HTTP GET /api/collaboration/<editName> resolves cast directly
     const directCast = await app.request("/api/collaboration/cast?full=0");
     assert.equal(directCast.status, 200);
     assert.deepEqual((await directCast.json()).data, { elon: [{ t: 0, x: 1 }] });
 
-    // 2) Reorder keyFiles in package.json on disk while Studio is STILL running (cast moves index 0 -> 1 on disk)
     writeFileSync(
       pkgPath,
       JSON.stringify({
@@ -681,7 +646,6 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
     assert.deepEqual(JSON.parse(readFileSync(castFile, "utf8")), { elon: [{ t: 0, x: 7 }] });
     assert.deepEqual(JSON.parse(readFileSync(placedFile, "utf8")), {});
 
-    // 3) Direct HTTP POST /api/together rejects duplicate alias (cast + keys/0 -> 400) without writing
     const curCast = film.keyFiles[0].read();
     const dupAlias = await app.request("/api/together", {
       method: "POST",
@@ -697,7 +661,6 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
     assert.equal(dupAlias.status, 400);
     assert.deepEqual(JSON.parse(readFileSync(castFile, "utf8")), { elon: [{ t: 0, x: 7 }] });
 
-    // 4) Direct HTTP POST /api/together with actor:"agent" aborts atomically on schema 400
     const camNow = film.cam.read();
     const shotsNow = film.shots.read();
     const camBefore = readFileSync(camFile, "utf8");
@@ -724,10 +687,8 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
     assert.equal(readFileSync(camFile, "utf8"), camBefore);
     assert.equal(readFileSync(shotsFile, "utf8"), shotsBefore);
 
-    // 5) write-many clears a modified human-protected field (fov) while keeping an untouched human field (p) protected
     const h0 = film.cam.read();
     film.cam.write(h0.version, [k0, { ...k1, p: [9, 2, 6], fov: 65 }]);
-    // Direct write triggers a pending notice
     writeFileSync(camFile, JSON.stringify([k0, k1]));
     film.cam.read();
     assert.equal(captureWarnings(dir).length, 1);
@@ -745,7 +706,6 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
     });
     assert.equal(selective.status, 0, selective.stderr);
     assert.deepEqual(captureWarnings(dir), [], "agent write-many acknowledges pending warning");
-    // Direct write afterwards can change acknowledged fov, while untouched human p stays retained!
     const afterSel = film.cam.read().data;
     writeFileSync(
       camFile,
@@ -755,10 +715,8 @@ test("collab sends edit names on the wire so live Studio stays accurate after pa
     assert.deepEqual(reconciled[1].p, [9, 2, 6], "untouched human p remains protected");
     assert.equal(reconciled[1].fov, 33, "agent-revised fov guard was cleared");
 
-    // 6) Studio UI backward compatibility: POST /api/together without actor merges against a historical ancestor base as "person"
     const ancCam = film.cam.read();
     const ancShots = film.shots.read();
-    // External write modifies k0.fov and s0.name after ancCam/ancShots
     writeFileSync(camFile, JSON.stringify([{ ...ancCam.data[0], fov: 48 }, ancCam.data[1]]));
     writeFileSync(
       shotsFile,
@@ -821,10 +779,8 @@ test("GET /api/collaboration/:name resolves human-deleted row timestamps in prot
 
   try {
     const s0 = film.shots.read();
-    // Human deletes deletedUuid AND renames s0 -> "human-open"
     film.shots.write(s0.version, [{ id: "s0", t: 0, name: "human-open" }]);
 
-    // BEFORE any collision, GET /api/collaboration/shots?full=0 resolves deletedUuid's timestamp from history snapshots!
     const beforeCollision = await (await app.request("/api/collaboration/shots?full=0")).json();
     assert.equal(beforeCollision.notices.length, 0);
     assert.ok(
@@ -832,7 +788,6 @@ test("GET /api/collaboration/:name resolves human-deleted row timestamps in prot
       JSON.stringify(beforeCollision.protectedLabels),
     );
 
-    // Later direct write collides on s0.name WITHOUT mentioning deletedUuid in incoming at all
     writeFileSync(shotsFile, JSON.stringify([{ id: "s0", t: 0, name: "agent-open" }]));
     const afterCollision = await (await app.request("/api/collaboration/shots?full=0")).json();
     assert.equal(afterCollision.notices.length, 1);

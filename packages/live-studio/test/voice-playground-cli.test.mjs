@@ -1277,8 +1277,6 @@ test("batch resume records each outcome and recovers saved items despite an inde
   const partial = await run(["resume", checkpoint, "--wait", "2"], options);
   expect(partial.code).toBe(1);
   expect(history).toEqual(["remote_failed", "remote_ready"]);
-  // a provider outage read as a Studio fault was retried blind, with no word on what it had cost: each failure says
-  // its own cause (a local one here, the provider's there) and its cost
   const failure = JSON.parse(partial.errors);
   expect(failure.failed).toEqual([
     {

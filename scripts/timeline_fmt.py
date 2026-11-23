@@ -5,7 +5,7 @@ from timeline_fmt import save     save("steve", data) from another script"""
 import argparse, json, sys
 from pathlib import Path
 
-DIR = Path.cwd() / "src/timeline"  # run from the film folder
+DIR = Path.cwd() / "src/timeline"
 WIDTH = 140
 
 

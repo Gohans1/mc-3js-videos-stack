@@ -1,5 +1,3 @@
-// GenVoice (ElevenLabs v4 wrapper) HTTP client, built-in model/language catalogs,
-// key resolution/masking, SSRF-safe media downloads, and audio parameter validators.
 import { lookup as dnsLookup } from "node:dns/promises";
 import {
   existsSync,
@@ -194,7 +192,6 @@ export const parseEnvFile = (filePath) => {
   }
 };
 
-// Built-in GenVoice ElevenLabs model metadata matching GET /v1/models capability flags
 export const BUILTIN_GENVOICE_MODELS = [
   {
     model_id: "eleven_v4",
@@ -598,7 +595,7 @@ const hasValidMpegSync = (buf) => {
   if (buf.byteLength < 4 || buf[0] !== 0xff || (buf[1] & 0xe0) !== 0xe0) return false;
   const version = (buf[1] >> 3) & 0x03;
   const layer = (buf[1] >> 1) & 0x03;
-  if (layer === 0) return (buf[1] & 0xf6) === 0xf0; // ADTS AAC sync
+  if (layer === 0) return (buf[1] & 0xf6) === 0xf0;
   const bitrateIdx = (buf[2] >> 4) & 0x0f;
   const sampleRateIdx = (buf[2] >> 2) & 0x03;
   return version !== 1 && bitrateIdx !== 0 && bitrateIdx !== 0x0f && sampleRateIdx !== 3;
@@ -651,7 +648,6 @@ export const containerHasAudio = async (extension, bytes, signal) => {
   return code === 0 && streams.split(/\r?\n/).some((count) => Number(count) > 0);
 };
 
-/** Returns true only when bytes look like headerless PCM rather than a self-describing container. */
 export const isRawHeaderlessPcm = (audioBytes, url, contentType) => {
   const buf = Buffer.isBuffer(audioBytes) ? audioBytes : Buffer.from(audioBytes ?? []);
   if (buf.byteLength === 0) return false;
@@ -664,9 +660,7 @@ export const isRawHeaderlessPcm = (audioBytes, url, contentType) => {
     try {
       const pExt = extname(new URL(url).pathname).toLowerCase();
       if (CONTAINER_EXTS.has(pExt)) return false;
-    } catch {
-      /* ignore invalid URL */
-    }
+    } catch {}
   }
   return true;
 };
@@ -683,9 +677,7 @@ export const extFromDownload = (url, contentType, audioBytes) => {
   try {
     const pExt = extname(new URL(url).pathname).toLowerCase();
     if ([".mp3", ".wav", ".ogg", ".m4a", ".webm"].includes(pExt)) return pExt;
-  } catch {
-    /* fallback to mp3 */
-  }
+  } catch {}
   return ".mp3";
 };
 
@@ -783,9 +775,6 @@ const normalizeCatalogModel = (m, fallback) => {
   };
 };
 
-/**
- * Stateful GenVoice HTTP client handling API key resolution, catalog caching, shared voice search, and task polling.
- */
 export const openGenvoiceClient = ({
   fetchImpl,
   env,
@@ -840,9 +829,7 @@ export const openGenvoiceClient = ({
       if (typeof candidate === "string" && candidate.trim()) {
         try {
           apiBase = normalizeApiBase(candidate);
-        } catch {
-          /* ignore invalid persisted candidate */
-        }
+        } catch {}
       }
     }
 

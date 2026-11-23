@@ -1,6 +1,3 @@
-// --check probe:<t> or --check probe:<filter>,<t> (heard seconds), built in for every film:
-// evaluates draw(t) once (honoring the --inspect Free Cam when given) and reports world positions, Box3 bounds,
-// bone/empty local +Y/+Z axes, camera distances, and normalized [0..1] screen rects to renders/probe_<t>s.json.
 import { blurPx } from "film-kit/lens";
 import * as THREE from "three";
 
@@ -22,7 +19,6 @@ export interface ProbeScreen {
   y1: number;
   inView: boolean;
   behind?: boolean;
-  /** how far the box reaches past each frame edge, in frame widths/heights; only the edges it crosses */
   past?: Partial<Record<"left" | "top" | "right" | "bottom", number>>;
 }
 
@@ -34,7 +30,6 @@ export interface ProbeTarget {
   axes?: { y: Vec3Tuple; z: Vec3Tuple };
   cameraDist: number;
   screen: ProbeScreen;
-  /** the depth of field's blur circle at the target's distance, in px of a frame 1920 on its long side */
   blurPx?: number;
 }
 
@@ -46,7 +41,6 @@ export interface ProbeReport {
     l: Vec3Tuple;
     fov: number | null;
     mode: "inspect" | "film";
-    /** the lens's focus when its aperture blurs (fstop > 0): draw.tools.optics */
     focus?: { m: number; target: string | null; fstop: number; mm: number };
   };
   targets: ProbeTarget[];
@@ -179,7 +173,6 @@ export function projectBoundsToScreen(
 
   const inView = maxX >= 0 && minX <= 1 && maxY >= 0 && minY <= 1 && minZ <= 1;
   const past: NonNullable<ProbeScreen["past"]> = {};
-  // a box the near plane cuts (a room around the camera) reaches past every edge without bound: nothing to say
   if (inView && clips.every((c) => c.w > 1e-6 && c.z + c.w >= 0)) {
     if (minY < 0) past.top = round4(-minY);
     if (maxX > 1) past.right = round4(maxX - 1);
@@ -289,7 +282,6 @@ export function collectProbeTargets(
     out.push({ obj, name });
   }
 
-  // Disambiguate colliding base names (e.g. two actors both exposing a "Head" bone)
   const countNames = (list: { name: string }[]) => {
     const map = new Map<string, number>();
     for (const entry of list) map.set(entry.name, (map.get(entry.name) ?? 0) + 1);
@@ -357,8 +349,6 @@ const isFiniteBox = (b: THREE.Box3): boolean =>
   Number.isFinite(b.max.y) &&
   Number.isFinite(b.max.z);
 
-// Compute world AABB over visible descendants while still measuring the root target itself
-// (so probing a hidden root reports its bounds with visible: false), recomputing dynamic bounds.
 export function computeVisibleBounds(obj: THREE.Object3D): THREE.Box3 {
   obj.updateWorldMatrix(true, true);
   const out = new THREE.Box3();

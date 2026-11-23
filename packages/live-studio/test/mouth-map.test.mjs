@@ -153,7 +153,6 @@ else if (mode === "bad-json") writeFileSync(out, "{not json");
     /ffmpeg could not read/,
   );
 
-  // writeMouthMap refuses junctioned src/timeline escaping root
   rmSync(join(dir, "src/timeline"), { recursive: true, force: true });
   let linked = false;
   try {

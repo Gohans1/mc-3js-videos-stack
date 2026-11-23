@@ -90,7 +90,6 @@ describe("createVoiceLibraryClient", () => {
     expect(client500.getSnapshot().loading).toBe(false);
     expect(client500.getSnapshot().error).toBe("Could not load voice library");
 
-    // Revisit retries cleanly once server recovers
     shouldFail = false;
     const release = client500.acquireConsumer();
     await flush();
@@ -173,7 +172,6 @@ describe("createVoiceLibraryClient", () => {
     expect(registered).toEqual([1]);
     expect(warmed).toEqual([1]);
 
-    // SSE progress tick 1 & 2 while syncedAt is unchanged: meta-only, same voices reference
     calls.length = 0;
     client.handleVoiceLibraryEvent();
     await flush();
@@ -188,7 +186,6 @@ describe("createVoiceLibraryClient", () => {
     expect(registered).toEqual([1]);
     expect(warmed).toEqual([1]);
 
-    // Sync completes with new syncedAt and truncated flag -> single full reload
     calls.length = 0;
     metaResponse = {
       status: "ready",
@@ -262,14 +259,12 @@ describe("createVoiceLibraryClient", () => {
     calls.length = 0;
     release();
 
-    // Multiple SSE ticks while hidden produce zero fetches
     client.handleVoiceLibraryEvent();
     client.handleVoiceLibraryEvent();
     client.handleVoiceLibraryEvent();
     await flush();
     expect(calls).toEqual([]);
 
-    // Switching back to Voices checks meta once; new syncedAt triggers full reload
     syncedAt = "2026-11-15T02:00:00Z";
     const release2 = client.acquireConsumer();
     await flush();
@@ -377,7 +372,6 @@ describe("createVoiceLibraryClient", () => {
 
     const release = client.acquireConsumer();
     await flush();
-    // SSE fires while the initial GET is still in flight
     client.handleVoiceLibraryEvent();
     releaseFirstGet();
     await flush();
@@ -491,7 +485,6 @@ describe("createVoiceLibraryClient", () => {
     expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_old"]);
     calls.length = 0;
 
-    // Server sync finishes, meta succeeds, but full GET fails transiently
     serverSyncedAt = "2026-11-15T02:00:00Z";
     serverVoices = [voice("v_new")];
     failFullReload = true;
@@ -499,7 +492,6 @@ describe("createVoiceLibraryClient", () => {
     await flush();
     await flush();
 
-    // Cached voices preserved AND retry pending when server recovers
     expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_old"]);
     expect(client.getSnapshot().syncedAt).toBe("2026-11-15T01:00:00Z");
 
@@ -572,7 +564,6 @@ describe("createVoiceLibraryClient", () => {
       warmVoiceSearchTokens: () => {},
     });
 
-    // Open Voices (starts GET), switch away before GET resolves, SSE fires while hidden
     const release = client.acquireConsumer();
     await flush();
     release();
@@ -581,7 +572,6 @@ describe("createVoiceLibraryClient", () => {
     await flush();
     expect(calls).toEqual(["/api/voice/library"]);
 
-    // Returning to Voices detects the missed SSE update and loads final catalog
     const release2 = client.acquireConsumer();
     await flush();
     await flush();
@@ -658,20 +648,17 @@ describe("createVoiceLibraryClient", () => {
     await flush();
     expect(client.getSnapshot().loaded).toBe(true);
 
-    // ?meta=1 reports T2, triggering a full reload that is now inFlight
     calls.length = 0;
     client.handleVoiceLibraryEvent();
     await flush();
     expect(calls).toEqual(["/api/voice/library?meta=1", "/api/voice/library"]);
     expect(client.getSnapshot().loading).toBe(true);
 
-    // Another SSE arrives while full reload is still inFlight: must NOT hit ?meta=1 or clear loading
     client.handleVoiceLibraryEvent();
     await flush();
     expect(calls).toEqual(["/api/voice/library?meta=1", "/api/voice/library"]);
     expect(client.getSnapshot().loading).toBe(true);
 
-    // Reload settles with syncedAt T2 -> runs single ?meta=1 confirm; since syncedAt matches T2, no 3rd full GET
     releaseReload();
     await flush();
     await flush();

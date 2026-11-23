@@ -1,5 +1,3 @@
-// The free camera flies like Minecraft's creative flight (app/picture/flight.ts): held keys move it every frame by time, not by
-// the keyboard's repeat
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -51,7 +49,6 @@ test("W pressed twice quickly sprints SPRINT times faster until it is let go; he
   tapped.press("KeyW", 0);
   tapped.release("KeyW");
   tapped.press("KeyW", 0.2);
-  // a held key repeats its keydown: half a second, then every 33 ms
   held.press("KeyW", 0);
   held.press("KeyW", 0.5);
   held.press("KeyW", 0.533);
@@ -59,7 +56,7 @@ test("W pressed twice quickly sprints SPRINT times faster until it is let go; he
   assert.ok(Math.abs(ratio - SPRINT) < 0.05, `${ratio}`);
   tapped.release("KeyW");
   tapped.press("KeyW", 5);
-  hold(tapped, 1, 60); // up to full speed again
+  hold(tapped, 1, 60);
   assert.ok(
     Math.abs(hold(tapped, 1, 60)[0] - 4) < 0.05,
     "a new press after letting go walks again",

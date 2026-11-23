@@ -1,9 +1,6 @@
-﻿// The film files the studio edits (app/core/doc.ts): a preview (a drag on its way, a hovered effect) never reaches a save or an
-// undo, and an agent's version arriving during one waits for its end, then wins
-import assert from "node:assert/strict";
+﻿import assert from "node:assert/strict";
 import { test } from "node:test";
 
-// doc.ts asks the server through ./net and talks through ./store: both answered here by a fake server and a silent page
 if (typeof Bun !== "undefined") {
   const { mock } = await import("bun:test");
   const stub = () => ({
@@ -65,7 +62,6 @@ globalThis.fake = {
     return Response.json({ version: files.get(name).version });
   },
 };
-// An agent writing the file, as the AI does between two of the creator's moves
 const agentWrites = (name, data) => files.set(name, { version: `v${++n}`, data });
 const settle = () => new Promise((done) => setImmediate(done));
 const open = async (t, name, data) => {
@@ -305,7 +301,7 @@ test("a save sends what was kept, not the preview on screen when it fires", asyn
   });
   doc.preview((d) => {
     d.fx = "B";
-  }); // the pointer rests on another effect before the save goes
+  });
   assert.equal(doc.data.fx, "B");
   await saveNow(t);
   assert.deepEqual(posts.at(-1), { name: "a.json", data: { fx: "A" } });
@@ -344,13 +340,13 @@ test("an unknown base refuses the save without discarding the person's unsaved d
   doc.restore(snap);
   doc.preview((d) => {
     d.t = 3;
-  }); // the next move
+  });
   await settle();
   assert.equal(doc.data.t, 3, "still the drag: the agent's version waits");
   doc.restore(snap);
   doc.edit((d) => {
     d.t = 3;
-  }); // the drop
+  });
   await saveNow(t);
   assert.deepEqual(
     files.get("b.json").data,
@@ -371,7 +367,7 @@ test("a drag back where it started still holds the agent's version off, and its 
   doc.restore(snap);
   doc.preview((d) => {
     d.t = 1;
-  }); // back over its first place: drawn the same as kept
+  });
   await settle();
   assert.equal(doc.data.note, undefined, "not loaded under the pointer mid-drag");
   doc.restore(snap);
@@ -510,7 +506,6 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   });
   await doc.load();
 
-  // Edits stay in preview without hitting disk even after the auto-save debounce timer passes
   doc.edit((d) => {
     d.camera = 68;
   });
@@ -520,7 +515,6 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   await saveNow(t);
   assert.equal(files.get("confirm-gate").data.camera, 50, "server file untouched before Confirm");
 
-  // Reverting restores the exact on-disk baseline (and pulls any newer agent edits on disk)
   agentWrites("confirm-gate", { camera: 52, roll: 0.1 });
   await revertDocs();
   assert.equal(doc.data.camera, 52);
@@ -528,7 +522,6 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   assert.equal(savedState, null);
   assert.deepEqual(getPendingSnapshot(), []);
 
-  // Editing and returning back to the baseline value automatically clears pending status
   doc.edit((d) => {
     d.camera = 75;
   });
@@ -539,7 +532,6 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   assert.equal(getPendingSnapshot().length, 0);
   assert.equal(savedState, null);
 
-  // Confirming explicitly writes the staged changes to disk and clears pending state
   doc.edit((d) => {
     d.camera = 84;
   });

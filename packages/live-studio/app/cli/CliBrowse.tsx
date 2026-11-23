@@ -341,7 +341,6 @@ export function CliBrowse({
           {filteredCommands.length} {filteredCommands.length === 1 ? "command" : "commands"}
           {categoryLabel ? ` in ${categoryLabel}` : ""}
         </p>
-        {/* Saved Templates */}
         {(!searchQuery.trim() || filteredTemplates.length > 0) && (
           <section aria-label="Saved templates" className="flex min-w-0 flex-col gap-2">
             <div className="flex items-center justify-between gap-2 px-1">
@@ -471,7 +470,6 @@ export function CliBrowse({
           </section>
         )}
 
-        {/* Categorized Command Directory */}
         {groupedCommands.length === 0 ? (
           <Empty>
             <EmptyHeader>

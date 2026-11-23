@@ -230,7 +230,6 @@ def main():
                                  capture_output=True, text=True, check=True, timeout=min(10, deadline - time.monotonic()))
         result["detector"]["version"] = version.stdout.strip()
         save()
-        # Minimum spacing needs earlier cuts, and flash merging needs the following quiet interval.
         run_detector(command, run / "detector.log", deadline - time.monotonic())
         scenes = read_scenes(run / "scenes.csv")
         edges = times[:]

@@ -1,6 +1,3 @@
-// Settings, in the panel the "…" button opens (Transport.tsx), organized into 4 category tabs so every preference
-// and shortcut is easy to discover without scrolling. Heavy or slow options sit in their own warned card; every option whose
-// name doesn't explain itself has a "?"
 import {
   Aperture,
   Bot,
@@ -964,7 +961,6 @@ function ShortcutsSection() {
   );
 }
 
-// Its own part: the frame time changes twice a second, and nothing else here should redraw for it
 function Footer() {
   const shot = useStudio((s) => s.shot),
     perf = useStudio((s) => s.perf);
@@ -1103,7 +1099,6 @@ export function Settings() {
               hidden={tab !== "view"}
               className={tab === "view" ? "flex flex-col gap-3.5" : "hidden"}
             >
-              {/* No keyboard on a phone: every key it would need has a button here */}
               <SettingCard title="Jump" className="hidden pointer-coarse:flex">
                 <div className="grid grid-cols-4 gap-1.5">
                   <Button variant="secondary" className="h-11" onClick={() => step(-5)}>
@@ -1206,7 +1201,6 @@ export function Settings() {
                   checked={s.captions}
                   onChange={(on) => setPref("captions", on)}
                 />
-                {/* Also under the picture, but that button gives way first on the narrowest phones (Transport.tsx) */}
                 <SwitchRow
                   id="guides"
                   label="Guides"
@@ -1251,7 +1245,6 @@ export function Settings() {
                   onChange={(on) => setPref("guideSafe", on)}
                   help="Include 93% action / 90% title safe boxes (16:9) or Shorts/TikTok safe zone (9:16) inside framing guides."
                 />
-                {/* CapCut's Player menu > Color oscilloscope: a strip under the picture, too big for a phone (picture/Oscilloscope.tsx) */}
                 <div className="upright:hidden sideways:hidden contents">
                   <SwitchRow
                     id="scopes"
@@ -1489,7 +1482,6 @@ export function Settings() {
                     }}
                     help={`Draws the paused frame at ${frameSize(1920).join("×")} with every effect, as in the video. Pauses playback. The first time takes about 10 s.`}
                   />
-                  {/* CapCut's Player menu > Export still frame (picture/still.ts) */}
                   <Row>
                     <span className="flex min-w-0 flex-1 items-center gap-1.5">
                       <span className="text-foreground text-sm">Still frame</span>

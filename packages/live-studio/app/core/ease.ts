@@ -1,6 +1,3 @@
-// How a span between two keys spends its time, as the film draws it (the later key's ease): a named ease the film shares with
-// draw (draw.eases, film-stage's EASES) or a CSS cubic-bezier [x1, y1, x2, y2], which the studio works out itself with
-// bezier-easing, the library film-stage uses, so the tiles and the camera row show what the film plays
 import {
   type Bezier,
   bezierEaseFn,
@@ -95,8 +92,6 @@ export const alignedExitCurve = ({
   return [cx1, cy1, x2, y2];
 };
 
-// film-stage's eases by the names CapCut's keyframe Preset curves give the same shapes (Ease In: a slow start, Ease Out: a slow
-// stop, Ease: both); a film's own extra ones go by their name
 const TITLES: Record<string, string> = {
   smooth: "Smooth",
   linear: "Linear",

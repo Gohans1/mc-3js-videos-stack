@@ -1,6 +1,3 @@
-// A pasted picture opened big, to see what is being sent and to draw on it: freehand strokes in a few colours and sizes,
-// shaped by perfect-freehand (Steve Ruiz, tldraw's ink) and painted on a canvas at the picture's own size. Each stroke ends
-// flattened into the JPEG the note sends (refs.ts); the strokes are kept apart, so Undo and Clear never lose the picture
 import { Eraser, Trash2, Undo2 } from "lucide-react";
 import { getStroke } from "perfect-freehand";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -22,14 +19,12 @@ const COLORS = [
   { name: "White", value: "#FFFCF0" },
   { name: "Black", value: "#100F0F" },
 ];
-// a share of the picture's long side, so a stroke looks the same on a small or a big picture
 const SIZES = [
   { name: "Thin", k: 0.005 },
   { name: "Medium", k: 0.01 },
   { name: "Thick", k: 0.02 },
 ];
 
-// perfect-freehand's README: its outline points as an SVG path of quadratic curves through their midpoints
 const avg = (a: number, b: number) => (a + b) / 2;
 const svgPath = (p: number[][]) => {
   if (p.length < 4) return "";
@@ -43,7 +38,6 @@ const svgPath = (p: number[][]) => {
   }
   return `${d}Z`;
 };
-// pressure as the pointer gave it: a pen's own, 0.5 for a mouse or finger (an even line, as a marker draws)
 const paint = (g: CanvasRenderingContext2D, s: RefStroke) => {
   g.fillStyle = s.color;
   g.fill(
@@ -114,7 +108,6 @@ export function RefSketchBoard({
       b = base.current;
     if (!c || !b) return;
     live.current = null;
-    // drawn here first so the flattened picture is the one with these strokes, then sent on as it is
     const g = c.getContext("2d");
     if (!g) return;
     g.drawImage(b, 0, 0, c.width, c.height);
@@ -245,7 +238,6 @@ export function RefSketchBoard({
   );
 }
 
-// The picture open in the note box, by id; gone (removed) closes it
 export function RefSketch({
   r,
   n,
@@ -264,8 +256,6 @@ export function RefSketch({
       <DialogContent
         font="md"
         className="max-h-[94vh] grid-rows-[auto_minmax(0,1fr)] sm:max-w-[min(94vw,1400px)]"
-        // on the whole dialog, wherever the focus is after a stroke: the studio's own shortcuts (Space plays, Ctrl+Z undoes an
-        // edit of the film) stay out while drawing
         onKeyDown={(e) => {
           if (e.key === "Escape") return;
           e.stopPropagation();

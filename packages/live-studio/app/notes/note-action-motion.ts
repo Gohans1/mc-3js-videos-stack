@@ -1,4 +1,3 @@
-// Interruptible GPU-composited feedback & exit motion for Approve, Delete, Done, Reopen, and Save note transitions (/animate & /emil-design-eng).
 import {
   createContext,
   type RefObject,
@@ -70,7 +69,6 @@ export type AnimatedEntry<T> =
   | { exiting: false; item: T; key: string }
   | { exiting: true; id: string; item: T; kind: NoteMotionKind; key: string };
 
-/** Merges recently approved/deleted/reopened items back at their prior slot for one short exit duration, canceling cleanly on undo or filter switch. */
 export function useExitedNotes<T>(
   items: readonly T[],
   getId: (item: T) => string,
@@ -148,7 +146,6 @@ export function useExitedNotes<T>(
   }, [items, getId, exiting, enabled]);
 }
 
-/** Runs exit WAAPI on a departing note card (translate/scale/opacity + optional height collapse), respecting reduced motion. */
 export function usePlayNoteExit(
   wrapRef: RefObject<HTMLElement | null>,
   cardRef: RefObject<HTMLElement | null>,
@@ -220,7 +217,6 @@ export function usePlayNoteExit(
   }, [wrapRef, cardRef, kind, collapseHeight]);
 }
 
-/** Runs an interruptible confirmation settle animation whenever a note enters Done, Reopen, Save, or Restore state. */
 export function useNoteSettleMotion(
   ref: RefObject<HTMLElement | null>,
   id: string,
@@ -286,7 +282,6 @@ export function useNoteSettleMotion(
   }, [ref, id, state, enabled]);
 }
 
-/** Coordinates settle motion and suppresses duplicate tracking attributes inside an exiting ghost card. */
 export function useNoteMotion<T extends HTMLElement = HTMLElement>(id: string, state: NoteState) {
   const ref = useRef<T>(null);
   const exiting = useContext(NoteExitingContext);

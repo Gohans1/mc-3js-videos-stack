@@ -1,10 +1,4 @@
 import { SMALL_SOUND } from "../core/device";
-// The sound lanes heard as they are edited, for a film with package.json "live-studio": { liveLanes: true }. Its sound.py then
-// mixes without them, and this plays every bed and one-shot of the timeline file on the mix's clock the way the film's
-// scripts/sound/mix.py builds them: a bed looped from..to, a one-shot from start for length, gains in dB, fades (envelope.ts),
-// its filters (EQ and width, eq.ts), its track's volume, and an option picked in its place at the level of the sound it stands in for. All of it goes
-// through the mix's master stage: audio.drive dB into mix.py's limiter at 0.45 (brickwall.ts), with the narration summed in before it.
-// A drag is heard on the next tick, nothing is remixed. The final render still comes from mix.py.
 import { DURATION } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { S, wake } from "../core/state";
@@ -93,7 +87,6 @@ interface Sound {
   mean: number;
 }
 
-// Silent until the limiter's module has loaded (a moment after the page opens): an offline render waits for `ready`
 const stage = (ctx: BaseAudioContext, out: AudioNode) => {
   const bus = ctx.createGain(),
     drive = ctx.createGain();
@@ -122,8 +115,6 @@ const getLive = () => {
 let source: Source | null = null,
   on = false,
   routed: MediaElementAudioSourceNode | null = null;
-// The mix element's own volume is applied before it reaches here, and the volume after master applies it again: undone, so it
-// counts once. A soloed track silences the narration as it does every other track
 const levelMix = () => {
   if (!fromMix) return;
   const a = S.el.audio,
@@ -133,23 +124,20 @@ const levelMix = () => {
 const ensureRouting = () => {
   const { ctx, master } = getAudio();
   fromMix ??= ctx.createGain();
-  // Through the page's own graph either way, so the meter hears the mix (meter.ts)
   if (!routed) {
     routed = ctx.createMediaElementSource(S.el.audio);
     routed.connect(fromMix);
   }
-  // The mix goes through the master stage only while the lanes are summed with it; otherwise it already went through mix.py's
   fromMix.disconnect();
   fromMix.connect(wantLive ? getLive().bus : master);
   levelMix();
 };
 
-// ---------- The lanes' sound files, decoded once, with ffmpeg volumedetect's mean_volume for an option's level
 const sounds = new Map<string, Promise<Sound | null>>(),
   ready = new Map<string, Sound>();
 const load = (name: string) => {
   if (!sounds.has(name)) {
-    const url = `/api/sfx/${encodeURIComponent(name)}.${SMALL_SOUND ? "webm" : "wav"}`; // anything but this machine gets Opus, a tenth of it
+    const url = `/api/sfx/${encodeURIComponent(name)}.${SMALL_SOUND ? "webm" : "wav"}`;
     sounds.set(
       name,
       getFile(url)
@@ -353,7 +341,6 @@ const resetBusConvolvers = (bus: AudioNode | undefined | null) => {
   convolversByBus.delete(bus);
 };
 
-// A file changed on disk (a new download): its old decode goes
 export const forgetSounds = () => {
   sounds.clear();
   ready.clear();
@@ -367,9 +354,7 @@ export const forgetSounds = () => {
   convolversByBus = new WeakMap();
   clearProcessed();
 };
-// A library sound decoded, as the lanes play it (sweeten.ts reads where its moment is)
 export const decoded = (name: string) => load(name).then((s) => s?.buf ?? null);
-// The mix element's own sound decoded, kept until a remix changes its URL: the meter's render and the skims play it
 let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
 const mixBuffer = () => {
   const url = S.el?.audio?.currentSrc;
@@ -385,8 +370,6 @@ const mixBuffer = () => {
   return mixDecoded.buf;
 };
 
-// ---------- mix.py's ffmpeg filters as the same difference equations (eq.ts), and extrastereo as its mid/side scale:
-// L' = M + m S, R' = M - m S, so L' = (1+m)/2 L + (1-m)/2 R. A filter with no exact preview is skipped with a note
 const warned = new Set<string>();
 const attach = (ctx: BaseAudioContext, from: AudioNode, spec: string): AudioNode => {
   const sections = coefficients(spec, ctx.sampleRate),
@@ -401,7 +384,7 @@ const attach = (ctx: BaseAudioContext, from: AudioNode, spec: string): AudioNode
       split = ctx.createChannelSplitter(2),
       merge = ctx.createChannelMerger(2);
     up.channelCount = 2;
-    up.channelCountMode = "explicit"; // a mono file reaches both sides, as after mix.py's aformat
+    up.channelCountMode = "explicit";
     from.connect(up).connect(split);
     for (const [side, to, k] of [
       [0, 0, (1 + m) / 2],
@@ -422,8 +405,6 @@ const attach = (ctx: BaseAudioContext, from: AudioNode, spec: string): AudioNode
   return from;
 };
 
-// ---------- What sounds where: mix.py's build() over the lanes, with the studio's picks (mix.py chosen/as_option) and its muted tracks;
-// in the page also its soloed ones, unless `all` (the meter's render of the film as mix.py makes it)
 const clips = (l: Lanes, all = false): Clip[] => {
   const out: Clip[] = [],
     muted = new Set((l.tracks ?? []).filter((t) => t.mute).map((t) => t.id)),
@@ -490,7 +471,7 @@ const clips = (l: Lanes, all = false): Clip[] => {
       load(p.name);
       return;
     }
-    const start = p.own ? (s.start ?? 0) : 0; // an option plays from its own start
+    const start = p.own ? (s.start ?? 0) : 0;
     const t1 = s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1));
     out.push({
       key: `sfx:${i}`,
@@ -558,7 +539,6 @@ const cachedDuckWindows = (lines: readonly { s: number; e: number }[]) => {
   }
   return cached;
 };
-// One clip from film second at (inside it) on; w maps film seconds onto ctx's clock
 const play = (
   ctx: BaseAudioContext,
   bus: AudioNode,
@@ -615,8 +595,6 @@ const play = (
   tail = tail.connect(volume);
   tail = tail.connect(gain);
   if (c.pan) {
-    // mix.py pan_filter: equal-power balance on the stereo signal; explicit stereo, so a mono file is made stereo first as
-    // ffmpeg's aformat does (the SQRT1_2 above) rather than panned by the mono rule
     const p = ctx.createStereoPanner();
     p.channelCountMode = "explicit";
     p.channelCount = 2;
@@ -727,7 +705,7 @@ addPlayer({
     if (liveStage) resetBusConvolvers(liveStage.bus);
   },
   tick: (w) => {
-    if (routed) levelMix(); // the mix plays through the graph whether or not the lanes do
+    if (routed) levelMix();
     const l = on && source?.lanes();
     if (!l) return;
     const ctx = getAudioCtx(),
@@ -754,8 +732,6 @@ addPlayer({
   },
 });
 
-// A lane edit or a pick: what is sounding fades out in a few ms and the next tick starts it again as it now is. While a
-// clip is being dragged that waits until the hand rests a moment
 let replanTimer = 0,
   plans = 0;
 export const replan = () => {
@@ -775,7 +751,6 @@ export const replan = () => {
   }, 60);
 };
 
-// ---------- Options on the lanes (a "try" list), as option groups: picked like any other, played by this
 const auditioning: Voice[] = [];
 const previewSrcs = new Set<AudioScheduledSourceNode>();
 export const hasPreviewSounding = () => previewSrcs.size > 0;
@@ -829,7 +804,6 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
   ] as const) {
     l[list].forEach((e, i) => {
       if (!e.try?.length) return;
-      // mix.py groups a sound by name and takes the first entry's options
       out[e.name] ??= {
         title: `${e.name.replace(/_/g, " ")} (${kind})`,
         options: [e.name, ...e.try].map((id) => ({
@@ -848,8 +822,6 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
   return out;
 };
 
-// ---------- A skim (timeline/peek.ts): the next len seconds from film second t, everything as playback sounds there, each
-// one cutting the last off, as audio scrubbing in an editor does
 interface SkimEntry {
   out: GainNode;
   srcs: AudioScheduledSourceNode[];
@@ -933,7 +905,7 @@ export const playSlice = async (t: number, len: number) => {
       if (v) srcs.push(...v.srcs);
     }
   }
-  for (const s of srcs) s.stop(end); // the last stop called is the one kept
+  for (const s of srcs) s.stop(end);
   const autoDelayMs = Math.max(40, Math.ceil((end - ctx.currentTime + 0.08) * 1000));
   let doneTimer = 0;
   const entry: SkimEntry = {
@@ -958,7 +930,6 @@ export const playSlice = async (t: number, len: number) => {
   trackPreview(srcs);
 };
 
-// ---------- On and off, from the server's word (GET /api/sound live)
 export const setLive = (live_: boolean, src: Source) => {
   source = src;
   wantLive = live_;
@@ -1029,7 +1000,6 @@ const renderLanesSpan = async (
   if (decoder) await preloadReverbIrs(l, decoder);
   const customIrs = decoder ? irCtxBuffers.get(decoder) : undefined;
 
-  // The convolution and limiter need the input that can still affect the first exported sample.
   let start = from;
   for (const { t0, t1, reverb } of preceding) {
     if (!reverb) continue;
@@ -1076,7 +1046,6 @@ const renderLanesSpan = async (
   return out;
 };
 
-// The lanes from..to as heard here, rendered offline: RMS per half second and the peak, to set against mix.py's own render
 window.__lanesRender = async (from: number, to: number) => {
   const l = source?.lanes();
   if (!l || to <= from) return null;
@@ -1101,10 +1070,6 @@ window.__lanesRender = async (from: number, to: number) => {
   return { rms, peak: +peak.toFixed(4) };
 };
 
-// The film's whole sound as mix.py builds it before its loudness pass (narration, beds and one-shots into the drive and the
-// limiter; every track but the muted ones, soloed or not), rendered offline into the node `into` makes: the meter measures the
-// gain that pass will add (meter.ts). Gives the lanes it built from, or null when the page doesn't play the lanes, so it can't
-// build the film's sound itself
 export const renderFilm = async (
   into: (ctx: OfflineAudioContext) => Promise<AudioNode>,
 ): Promise<Lanes | null> => {
@@ -1114,7 +1079,6 @@ export const renderFilm = async (
   const all = clips(l, true);
   const [voice, loaded] = await Promise.all([mixBuffer(), Promise.all(all.map(loadClip))]);
   if (loaded.some((s) => !s)) return null;
-  // One channel out: the measuring node hears the stereo sum, and the rendered buffer nobody reads stays half the size
   const rate = 48000,
     ctx = new OfflineAudioContext(1, Math.ceil(DURATION * rate), rate),
     st = stage(ctx, await into(ctx));
@@ -1142,7 +1106,6 @@ export const renderFilm = async (
   return l;
 };
 
-// Render stereo [from, to] audio segment for direct in-browser low-res MP4 clip export.
 export const renderAudioSpan = async (
   from: number,
   to: number,

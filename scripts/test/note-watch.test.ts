@@ -35,7 +35,6 @@ const repo = () => {
   return { root, film };
 };
 
-// the studio cannot tell a running AI that the creator wrote a note; the output that says so is often read cut
 test("notes the AI has not listed are said beside a command run in their film, once", () => {
   const { root, film } = repo();
   try {
@@ -46,7 +45,6 @@ test("notes the AI has not listed are said beside a command run in their film, o
     expect(first.text).toContain('3.33 s "the glow is too bright"');
     expect(first.text).toContain('13.6 s "he should try several jars"');
     expect(nudge(root, film, "bun run check", first.said).text).toBe("");
-    // a command naming the film from the repo root counts as its own
     expect(
       nudge(root, root, "cd films/cookie && bun run mix renders/draft_video.mp4", {}).text,
     ).toContain("films/cookie");

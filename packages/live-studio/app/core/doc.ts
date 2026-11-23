@@ -1,6 +1,4 @@
 import { equalJson, mergeEdits } from "../../src/merge-edits.mjs";
-// Studio edits merge against their explicit base; conflicting fields keep the person's value.
-// Unsaved edits remain recoverable if their base is no longer available.
 import { getFile, postJson } from "./net";
 import { say, showError } from "./store";
 
@@ -12,24 +10,21 @@ export interface PendingDoc {
 
 export interface Doc<T> {
   readonly data: T | null;
-  load: (query?: string, onJson?: (got: unknown) => void) => Promise<Response | null>; // the server's answer, for what else it sent (the sound library)
+  load: (query?: string, onJson?: (got: unknown) => void) => Promise<Response | null>;
   edit: (change: (d: T) => void) => void;
-  preview: (change: (d: T) => void) => void; // drawn, not kept: a drag's end makes it one edit
+  preview: (change: (d: T) => void) => void;
   snapshot: () => string;
   restore: (snap: string) => void;
 }
 export interface Hooks<T> {
-  label: string; // what the say lines call it: "audio", "camera"
-  changed: () => void; // after every change to data
-  tidy?: (d: T) => void; // after every kept edit and every load, before drawing
+  label: string;
+  changed: () => void;
+  tidy?: (d: T) => void;
   received?: (before: T, after: T) => void;
   saved?: (state: SaveState) => void;
-  // After undo, redo or a load put other data in (was: what it held): picks kept as places in a list may now point at other
-  // things (an undone paste leaves the next clip at its place), so each file drops its picks when its lists changed length
   replaced?: (was: T | null) => void;
 }
 
-// One file's saving state, reachable from the others it must be saved with
 interface Side {
   name: string;
   label: string;
@@ -37,11 +32,11 @@ interface Side {
   version: string;
   saving: boolean;
   unsaved: boolean;
-  partners: Set<Side>; // changed together with this one since the last save
+  partners: Set<Side>;
   later: (ms?: number) => void;
   load: () => Promise<unknown>;
   saved?: (state: SaveState) => void;
-  swap: (snap: string) => string; // undo/redo: put snap in, give back what it held
+  swap: (snap: string) => string;
   accept: (sent: unknown, data: unknown) => void;
   revert: () => void;
   cancelTimer: () => void;
@@ -92,7 +87,6 @@ export const setAutoSave = (on: boolean) => {
 type Entry = { side: Side; snap: string; group: number };
 const undos: Entry[] = [],
   redos: Entry[] = [];
-// Edits made inside together() (one drag over keys in two files) are undone, redone and saved as one
 let group = 0,
   touched: Set<Side> | null = null;
 const mutListeners = new Set<() => void>();
@@ -138,7 +132,7 @@ const saveTeam = async (me: Side) => {
   if (team.some((s) => s.saving)) {
     me.later();
     return;
-  } // one of them is on its way: again once it's back
+  }
   if (team.some((s) => s.data() === null)) return;
   for (const s of team) {
     s.saving = true;
@@ -170,7 +164,6 @@ const saveTeam = async (me: Side) => {
       );
       return;
     }
-    // Refused as it stands (the file's schema): the same data would be refused again, so it waits for the next change or undo
     if (r.status === 400) {
       showError(`Couldn't save ${labels}:\n\n${((await r.json()).problems ?? []).join("\n\n")}`);
       failed();
@@ -196,7 +189,7 @@ const saveTeam = async (me: Side) => {
       say(`Kept your edits while merging ${labels}: ${got.retained.join(", ")}`, 6000);
   } catch {
     failed();
-    if (autoSave) me.later(3000); // a dropped line: tried again when auto-saving
+    if (autoSave) me.later(3000);
     emitPending();
     return;
   }
@@ -249,8 +242,6 @@ export const revertDocs = async () => {
 type Got<T> = { version: string; data: T };
 
 export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
-  // data is what is drawn, kept (JSON) the last state worth saving, diskJson the last state confirmed on disk. shown: a preview is on,
-  // from its first change to the restore or edit that ends it, even while a drag is back where it started and data equals kept
   const orderedRows = name === "cam" || name === "shots";
   let data: T | null = null,
     kept = "null",
@@ -367,8 +358,8 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     if (!r.ok) return null;
     const got = (await r.json()) as Got<T>;
     onJson?.(got);
-    if (side.unsaved || side.saving) return r; // our own change is on its way
-    if (got.version === side.version) return r; // news of this page's own save, or a reconnect with nothing new
+    if (side.unsaved || side.saving) return r;
+    if (got.version === side.version) return r;
     if (shown) held = got;
     else take(got);
     return r;
@@ -380,7 +371,6 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     load,
     edit: (change: (d: T) => void) => {
       if (!data) return;
-      // An edit never keeps a preview it didn't make, nor a snapshot restored over a version an agent loaded since it was taken
       const editBase = restoredPreviewBase;
       restoredPreviewBase = null;
       if (editBase !== null) data = JSON.parse(editBase);
@@ -396,7 +386,6 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
         release();
         return;
       }
-      // The saved base lets the server merge the committed drag with edits made meanwhile.
       held = null;
       if (touched) touched.add(side);
       else group++;
@@ -422,8 +411,6 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       }
     },
     snapshot: () => JSON.stringify(data),
-    // Only a preview is taken back: with none on, the snapshot may be older than a version an agent loaded since. A drag
-    // redraws its preview right after (same task); with no preview back, a held version loads
     restore: (snap: string) => {
       if (!shown) return;
       shown = false;

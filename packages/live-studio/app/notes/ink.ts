@@ -3,10 +3,6 @@ import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
-// Drawing on the picture for a note: a pen, an arrow, a box, and a path that is one point per moment ("here at 1:10, then here at
-// 1:12": the AI reads it as a move between them). Every stroke belongs to the film second it was drawn on; strokes from other
-// seconds of the same note stay faintly visible with their time (onion skin), and a path shows where it says things should be now.
-// A note keeps its strokes; while the film plays, an open note's strokes come up around their seconds as its pin does.
 import { lookOnPlane } from "../picture/look";
 import { picturePoint } from "../picture/preview-state";
 import { tone } from "../timeline/canvas";
@@ -28,8 +24,7 @@ export const inkHooks = {
   changed: () => {},
   anchor: (_a: StageAnchor) => {},
   cancelEmpty: () => {},
-}; // notes.ts: the note being written is kept on the device with its strokes
-// A path point added at a new second changes what is said without adding a stroke, so the count alone can't drive the note box
+};
 const said = () => {
   if (!inkMarks.length) return "";
   const t = inkTimes(inkMarks);
@@ -54,8 +49,6 @@ export const clearInk = () => {
   keep();
 };
 let resetActiveInk = () => {};
-// Putting the pen down with a note open gives the keyboard back to the note's box, so typing goes on and Esc then closes the
-// note. Not on a phone, where that focus would raise its keyboard over the picture
 export const setInk = (tool: InkKind | null) => {
   if (!tool) resetActiveInk();
   set({ ink: tool });
@@ -63,12 +56,10 @@ export const setInk = (tool: InkKind | null) => {
   if (!tool && get().compose && !PHONE) ui.focusNote();
 };
 
-// The drawing tools are on screen: one in hand (InkBar), or a note's pin just placed (PinTools). Then 1 to 4 pick them in this order
 export const INK_KEYS: InkKind[] = ["pen", "arrow", "box", "path"];
 export const toolsOpen = (s: { ink: InkKind | null; compose: Compose | null; playing: boolean }) =>
   !!s.ink || !!(s.compose?.kind === "create" && s.compose.pin && !s.playing);
 
-// Every second a note's strokes were drawn at, first to last
 export const inkTimes = (marks: Mark[]) => {
   const all = marks.flatMap((m) => m.ts ?? [m.t]).sort((a, b) => a - b);
   return all.filter((t, i) => i === 0 || t - all[i - 1] > SAME);
@@ -89,7 +80,6 @@ export const undoInk = () => {
   return true;
 };
 
-// ---------- Drawing a stroke, in fractions of the picture
 const path = (g: CanvasRenderingContext2D, pts: [number, number][], w: number, h: number) => {
   g.beginPath();
   pts.forEach(([x, y], i) => (i ? g.lineTo(x * w, y * h) : g.moveTo(x * w, y * h)));
@@ -126,7 +116,6 @@ const label = (
   g.fillStyle = color;
   g.fillText(text, x + pad, y + 0.5);
 };
-// A note's words under where its drawing starts, as a pin's (studio.css .pin i): one line cut with an ellipsis, inside the picture
 interface LabelBox {
   left: number;
   top: number;
@@ -185,7 +174,6 @@ const words = (
   placed.push({ left, top: cy - hh / 2, right: left + lw, bottom: cy + hh / 2 });
   label(g, s, left, cy, tone("foreground"), scale);
 };
-// One mark as seen at film second `now`: solid on its own frame, faint with its time elsewhere
 export const drawMark = (
   g: CanvasRenderingContext2D,
   m: Mark,
@@ -229,7 +217,6 @@ export const drawMark = (
     g.lineWidth = width;
     arrowHead(g, P[0], P[1], 14 * scale);
   } else {
-    // A path: the line between its moments, a dot at each with its time, and a ring where it says things are at `now`
     const ts = m.ts!;
     if (P.length > 1) stroke(() => path(g, m.pts, w, h), true);
     P.forEach(([x, y], i) => {
@@ -268,10 +255,8 @@ export const drawMark = (
   g.restore();
 };
 
-// ---------- The layer over the picture: the note being drawn, then open notes' strokes around their seconds
 let canvasSize = "";
-let inked = false; // whether the layer holds anything: a layer with nothing on it costs no clear and no layout read a frame
-// saved: the open notes with strokes, each with the seconds they span (notes.ts drawnNotes)
+let inked = false;
 export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[]) => {
   const c = S.el?.ink;
   if (!c) return;
@@ -318,7 +303,6 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
     words(g, draft, inkMarks[0].pts[0], w, h, scale, placedLabels);
 };
 
-// ---------- Drawing with the pointer. look(x, y) names what is under a point at the current frame, as a pin's tap does
 const pointSegmentDist = (p: [number, number], a: [number, number], b: [number, number]) => {
   const dx = b[0] - a[0],
     dy = b[1] - a[1],
@@ -502,8 +486,6 @@ const dropStroke = () => {
     inkHooks.cancelEmpty();
   }
 };
-// A drag with the right mouse button, a tool in hand or not (picture/pointer.ts on the picture): drawn as a pen stroke, then on
-// release made the arrow, box or pen stroke its shape reads as (shape.ts)
 export const sketch = {
   start: (e: PointerEvent, from: PointerEvent) => {
     startStroke("pen", at(from), true, pointerOrigin(from));
@@ -600,8 +582,7 @@ export const attachInk = (opts: typeof hooks) => {
       if (same >= 0) {
         m.pts[same] = p;
         m.hits![same] = hit;
-      } // the same moment again moves its point
-      else {
+      } else {
         const i = m.ts!.findIndex((t) => t > S.t),
           k = i < 0 ? m.ts!.length : i;
         m.pts.splice(k, 0, p);
@@ -650,7 +631,6 @@ export const attachInk = (opts: typeof hooks) => {
   });
 };
 
-// What a note's strokes say, in words, for the note list and the copied text
 export const inkWords = (marks: Mark[]) =>
   marks
     .map((m) => {

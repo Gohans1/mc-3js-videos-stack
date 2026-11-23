@@ -2,7 +2,6 @@ import { Slider as SliderPrimitive } from "@base-ui/react/slider";
 
 import { cn } from "@/lib/utils";
 
-// origin: a two-way value (pan, roll) fills from it to the thumb, so its centre reads as nothing rather than half
 function Slider({
   className,
   defaultValue,
@@ -19,10 +18,8 @@ function Slider({
   appearance?: "default" | "adjust" | "scrub" | "accent";
   thumbLabels?: string[];
 }) {
-  // A single number is one thumb; only an empty slider shows a range
   const _values = [value, defaultValue].find((v) => v != null) ?? [min, max];
   const thumbs = Array.isArray(_values) ? _values.length : 1;
-  // Where a thumb's centre sits, in the track: thumbAlignment "edge" keeps the 12px thumb inside it
   const at = (v: number) => {
     const p = ((v - min) / (max - min)) * 100;
     return `calc(${p}% + ${6 - p * 0.12}px)`;
@@ -72,7 +69,6 @@ function Slider({
           <SliderPrimitive.Thumb
             data-slot="slider-thumb"
             key={index}
-            // The name belongs on the thumb: its <input type="range"> is what a screen reader lands on
             aria-label={thumbLabels?.[index] ?? ariaLabel}
             className={cn(
               "ring-ring/30 border-slider-thumb bg-slider-thumb has-[:focus-visible]:ring-ring relative block shrink-0 rounded-full border transition-[color,box-shadow] select-none after:absolute after:-inset-2 hover:ring-2 focus-visible:ring-2 focus-visible:outline-hidden active:ring-2 disabled:pointer-events-none disabled:opacity-50 has-[:focus-visible]:ring-2",

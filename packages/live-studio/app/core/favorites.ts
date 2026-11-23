@@ -1,5 +1,3 @@
-// The creator's favorites, CapCut's star: sounds by file name, effects by id ("move:push", "fade:dip"). They are the person's,
-// kept by the server for every film and device (src/favorites.mjs), so the page asks for them and shows a change at once
 import { getFile, postJson } from "./net";
 import { get, say, set } from "./store";
 
@@ -11,7 +9,6 @@ export const loadFavorites = async () => {
   if (r.ok) set({ favorites: await r.json() });
 };
 
-// name: what the line over the picture calls it
 export const toggleFavorite = async (kind: FavoriteKind, id: string, name: string) => {
   const was = get().favorites,
     on = !was[kind].includes(id),

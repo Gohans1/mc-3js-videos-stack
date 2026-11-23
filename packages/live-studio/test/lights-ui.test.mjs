@@ -257,7 +257,6 @@ test("LightPanel presets, Kelvin quick-chips, practical intensity >= 100, and Fo
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.godrays?.enabled`)).toBe(true);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.fog?.mode`)).toBe("exp2");
 
-  // 9000K quick-chip clears stale preset tag while preserving edits
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('9000K')).click()`,
   );
@@ -266,7 +265,6 @@ test("LightPanel presets, Kelvin quick-chips, practical intensity >= 100, and Fo
   );
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
 
-  // Adding a Spot practical keeps it across preset switch and exposes slider max >= 100
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Spot').click()`,
   );
@@ -284,7 +282,6 @@ test("LightPanel presets, Kelvin quick-chips, practical intensity >= 100, and Fo
   })()`);
   expect(spotIntensityMax).toBeGreaterThanOrEqual(100);
 
-  // Switch Fog mode to Linear and poll /api/lights persistence deterministically
   await page.evaluate(
     `(() => { if (![...document.querySelectorAll('button,[role="tab"],[role="radio"]')].some((b) => b.textContent.trim() === 'Linear')) [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Fog')?.click(); })()`,
   );
@@ -309,7 +306,6 @@ test("ColorKelvinField skips unchanged focus+blur, supports Escape cancel, Enter
   await waitForPosts(0);
   const postsBeforeBlur = serverState.posts;
 
-  // Focus & blur unchanged must NOT clear preset or schedule another save POST
   await page.evaluate(`(() => {
     const input = document.querySelector('input[aria-label="Key hex color"]');
     input.focus();
@@ -342,7 +338,6 @@ test("ColorKelvinField skips unchanged focus+blur, supports Escape cancel, Enter
   );
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBe("golden-hour");
 
-  // Trimmed 3-digit hex commits on Enter
   await page.evaluate(`(() => {
     const input = document.querySelector('input[aria-label="Key hex color"]');
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -388,7 +383,6 @@ test("PracticalNameInput Escape cancels draft without blur commit and Enter comm
 });
 
 test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, updateLightKey preset clear, and undo", async () => {
-  // Load a doc with explicit per-key target & preset to test target preservation and updateLightKey
   await page.evaluate(
     `window.testLights.resetServer(${JSON.stringify({
       target: [0, 1.5, 0],
@@ -401,7 +395,6 @@ test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, 
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.target`)).toEqual([5, 2, 1]);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
 
-  // Re-apply preset then updateLightKey must clear preset
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent.includes('Noir Night')).click()`,
   );
@@ -409,7 +402,6 @@ test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, 
   await page.evaluate(`window.testLights.updateKey(0, 0)`);
   expect(await page.evaluate(`window.testLights.edit().keys[0]?.preset`)).toBeUndefined();
 
-  // Seek to t=4 and add second keyframe via UI
   await page.evaluate(`window.testLights.seek(4)`);
   await waitUntil(`document.body.textContent.includes('1 key · @')`);
   await page.evaluate(
@@ -417,7 +409,6 @@ test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, 
   );
   await waitUntil(`window.testLights.edit().keys.length === 2`);
 
-  // Under timing freeze [2..5] at frame t=2, edits at t=2.5 and t=4.2 deduplicate to one key at t=2
   await page.evaluate(`window.testLights.setTiming({ freezes: [{ at: 2, duration: 3 }] }, 10)`);
   expect(await page.evaluate(`window.testLights.sampleAt(4).key.intensity`)).toBeCloseTo(
     await page.evaluate(`window.testLights.sampleAt(2).key.intensity`),
@@ -429,7 +420,6 @@ test("Keyframe CRUD, freeze editTimeAt dedup, keyFromState target preservation, 
   expect(await page.evaluate(`window.testLights.findKeyAt(4.2).exactIndex`)).not.toBeNull();
   expect(await page.evaluate(`window.testLights.sampleAt(2).key.intensity`)).toBeCloseTo(8.8, 3);
 
-  // Undo reverts latest freeze edit cleanly
   await page.evaluate(`window.testLights.undo()`);
   expect(await page.evaluate(`window.testLights.sampleAt(2).key.intensity`)).toBeCloseTo(6.2, 3);
   expect(await page.evaluate(`window.errors`)).toEqual([]);
@@ -503,7 +493,6 @@ test("editing a Freeze after fractional speed leaves the source cut at its autho
 });
 
 test("Side wide and narrow route lights-only cleanly when side is cam or transition", async () => {
-  // Wide mode with side: "cam" and cam: false renders only Light tab (no Cam/Speed/Anim/Adjust)
   await page.evaluate(
     `(() => { window.testLights.setState({ cam: false, lights: true, side: 'cam' }); window.testLights.setMode('side-wide-lights-only'); })()`,
   );
@@ -515,7 +504,6 @@ test("Side wide and narrow route lights-only cleanly when side is cam or transit
   expect(wideTabs).not.toContain("Cam");
   expect(wideTabs).not.toContain("Speed");
 
-  // Wide mode with side: "transition" falls away from dead Transition tab cleanly
   await page.evaluate(
     `window.testLights.setState({ cam: false, lights: true, side: 'transition' })`,
   );
@@ -523,7 +511,6 @@ test("Side wide and narrow route lights-only cleanly when side is cam or transit
     `![...document.querySelectorAll('[role="tab"]')].some((el) => el.textContent.trim() === 'Transition')`,
   );
 
-  // Narrow mode with side: "cam" hides Camera-part Segmented switcher and mounts LightPanel directly
   await page.evaluate(
     `(() => { window.testLights.setState({ cam: false, lights: true, side: 'cam' }); window.testLights.setMode('side-narrow-lights-only'); })()`,
   );
@@ -532,7 +519,6 @@ test("Side wide and narrow route lights-only cleanly when side is cam or transit
     false,
   );
 
-  // Narrow mode with side: "transition" falls back cleanly to Notes instead of falling through to LessonsPanel
   await page.evaluate(
     `window.testLights.setState({ cam: false, lights: true, side: 'transition' })`,
   );

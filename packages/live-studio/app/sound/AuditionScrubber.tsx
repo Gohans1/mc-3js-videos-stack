@@ -12,7 +12,6 @@ import {
   subscribeAudition,
 } from "./sound";
 
-// Subscribes solely to the auditioning Audio element so scrubbing/playing updates only the one active card
 export function AuditionScrubber({
   id,
   label,

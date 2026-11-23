@@ -1,7 +1,7 @@
 import type { CameraRig } from "film-stage/camera";
 
-import { frameVisible, playRanges } from "../../src/timing.mjs";
 import { cameraTimesAt, clockForTimeline, timingClock } from "../../src/timing-state.mjs";
+import { frameVisible, playRanges } from "../../src/timing.mjs";
 import { shotEnd, shotIndex } from "../core/film";
 import { SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
@@ -11,7 +11,10 @@ export const cameraShotIndex = (time: number) => {
   const starts = get().timing ? clockForTimeline("cam").cameraShotStarts : undefined;
   if (!starts?.length) return shotIndex(time);
   const { world } = cameraTimesAt(time);
-  return Math.max(0, starts.findLastIndex((start) => start <= world));
+  return Math.max(
+    0,
+    starts.findLastIndex((start) => start <= world),
+  );
 };
 
 export const visibleCameraShotFrame = (shot: number, time: number): number | undefined => {
@@ -28,7 +31,6 @@ export const visibleCameraShotFrame = (shot: number, time: number): number | und
   const to = starts?.[shot + 1] ?? timingClock.sourceDuration;
   let play: number | undefined;
   for (const range of playRanges(timingClock, from, to)) {
-    // Speed conversion can round the first output instant back across the source cut.
     const interior = range.from + Math.min(1e-6, (range.to - range.from) / 2);
     play = [range.from, interior].find(showsShot);
     if (play !== undefined) break;

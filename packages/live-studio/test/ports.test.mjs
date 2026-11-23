@@ -229,7 +229,6 @@ describe("parseLiveHosts", () => {
       "phone.taild3d41b.ts.net",
       "tablet.taild3d41b.ts.net",
     ]);
-    // Must mirror film.mjs split(/\s+/) without stripping # so UI badges never disagree with live.mjs 403 checks.
     expect(parseLiveHosts("# disabled-in-future\nanphat.taild3d41b.ts.net")).toEqual([
       "#",
       "disabled-in-future",
@@ -446,12 +445,10 @@ describe("createPortsService", () => {
       },
     ]);
 
-    // Sorted: current (4600) first, then ascending port: 4325, 4327, 4583
     expect(snap.studios.map((s) => s.port)).toEqual([4600, 4325, 4327, 4583]);
 
     const [s4600, s4325, s4327, s4583] = snap.studios;
 
-    // Priority 1 (exact via /api/film.json project)
     expect(s4600.current).toBe(true);
     expect(s4600.matchConfidence).toBe("exact");
     expect(s4600.worktree?.name).toBe("gohans-wt-ports");
@@ -459,7 +456,6 @@ describe("createPortsService", () => {
     expect(s4600.notes).toBeNull();
     expect(s4600.status).toBe("ready");
 
-    // Priority 3 (ambiguous across two worktrees -> worktree MUST be null, allowed MUST be null)
     expect(s4325.matchConfidence).toBe("ambiguous");
     expect(s4325.worktree).toBeNull();
     expect(s4325.project).toBeNull();
@@ -477,7 +473,6 @@ describe("createPortsService", () => {
       },
     ]);
 
-    // Priority 3 (unique studio.json match -> inferred, .live_hosts allowed true)
     expect(s4327.matchConfidence).toBe("inferred");
     expect(s4327.worktree?.name).toBe("gohans-monorepo-3js-mc");
     expect(s4327.project).toBe(
@@ -493,7 +488,6 @@ describe("createPortsService", () => {
       },
     ]);
 
-    // Priority 2 (exact via cmdline worktree + package.json name fallback "pg-custom" in "custom-dir")
     expect(s4583.matchConfidence).toBe("exact");
     expect(s4583.worktree?.name).toBe("gohans-wt-voice-playground");
     expect(s4583.project).toBe(
@@ -612,7 +606,6 @@ describe("createPortsService", () => {
     expect(s4991.matchConfidence).toBe("unknown");
     expect(s4992.status).toBe("error");
     expect(s4992.matchConfidence).toBe("unknown");
-    // Priority 2 with failed probe -> cmdline worktree matched, inferred (since film name unknown)
     expect(s4993.status).toBe("unreachable");
     expect(s4993.matchConfidence).toBe("inferred");
     expect(s4993.worktree?.name).toBe("gohans-wt-ports");
@@ -625,23 +618,20 @@ describe("createPortsService", () => {
       service.getSnapshot({ currentPort: 4325 }),
       service.getSnapshot({ currentPort: 4327 }),
     ]);
-    expect(calls.commands).toHaveLength(4); // netstat + powershell + git + tailscale
+    expect(calls.commands).toHaveLength(4);
     expect(a.studios[0].port).toBe(4325);
     expect(a.studios[0].current).toBe(true);
     expect(b.studios[0].port).toBe(4327);
     expect(b.studios[0].current).toBe(true);
 
-    // Within 2000ms -> uses cache
     advance(1500);
     const c = await service.getSnapshot({ currentPort: 4600 });
     expect(calls.commands).toHaveLength(4);
     expect(c.studios[0].port).toBe(4600);
 
-    // forceRefresh -> bypasses cache
     await service.getSnapshot({ currentPort: 4600, forceRefresh: true });
     expect(calls.commands).toHaveLength(8);
 
-    // After 2000ms -> expires cache
     advance(2001);
     await service.getSnapshot({ currentPort: null });
     expect(calls.commands).toHaveLength(12);

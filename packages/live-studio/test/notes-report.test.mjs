@@ -1,5 +1,3 @@
-// bun run notes, what the AI reads before acting: notes come in the order the creator wrote them, since a later note
-// often builds on or takes back an earlier one, and film order would hide that
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -705,7 +703,6 @@ test("notes CLI reads both project and global lessons, outputs both with scopes,
       out,
     );
     assert.ok(out.includes("6 ## Never roll the camera"), out);
-    // Remember prompt mentions both folders and topics from both scopes
     assert.ok(out.includes("lessons/<topic>.md"), out);
     assert.ok(out.includes("../../global-lessons/<topic>.md"), out);
     assert.ok(out.includes("camera, props"), out);

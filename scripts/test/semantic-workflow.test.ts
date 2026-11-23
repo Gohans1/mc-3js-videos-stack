@@ -309,7 +309,6 @@ test("film commands share expanded dotenv defaults with direct flags and nested 
       expect(child.exitCode, child.stderr.toString()).toBe(0);
       return JSON.parse(child.stdout.toString());
     };
-    // Bun run starts another runtime; CLI flags stay with the parent, unlike BUN_OPTIONS.
     expect(wrapper(["--no-env-file"]).rootKeyLoaded).toBe(true);
     expect(wrapper([`--env-file=${profile}`])).toMatchObject({
       dailyLimit: 42,

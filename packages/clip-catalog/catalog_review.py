@@ -32,16 +32,16 @@ MOODS = {"neutral", "calm", "happy", "excited", "proud", "sad", "tired", "scared
 PROPS = {"none", "floor", "wall", "door", "table", "chair", "bed", "box", "object", "phone", "screen", "book", "paper",
          "person", "ledge", "ladder", "lever", "button"}
 STYLES = {
-    "natural",     # a real person's size and timing
-    "theatrical",  # big, clear, mimed gestures that read from far away
-    "cartoonish",  # comic exaggeration: double takes, flailing, silly walks
-    "feminine",    # a feminine gait or carriage: hips, wrists, posture
-    "athletic",    # sport, fitness, stunts, parkour
-    "game",        # stiff game-style loop or transition, little weight shift
+    "natural",
+    "theatrical",
+    "cartoonish",
+    "feminine",
+    "athletic",
+    "game",
     "dance",
-    "pose",        # a single held frame, no motion
+    "pose",
 }
-CAP = 40  # caption band over each sheet: name, then tags
+CAP = 40
 
 
 def load_review():
@@ -172,7 +172,6 @@ def apply(a):
         if not isinstance(notes, dict) or set(notes) != {str(k + 1) for k in range(len(refs))}:
             raise ValueError(f"page {a.page}: notes must contain exactly slots 1..{len(refs)}")
         rv = load_review()
-        # every clip's notes once merged must hold desc, mood, prop and style, in the fixed words
         for k, ref in enumerate(refs):
             change = notes[str(k + 1)]
             validate(change, rows[ref])

@@ -1,5 +1,3 @@
-// The caption under the picture: the voice line being said now. One transcribed line can run to 95 words, so a caption is
-// the piece being said now, cut where a reader would pause
 import type { Line } from "../core/state";
 import { S } from "../core/state";
 

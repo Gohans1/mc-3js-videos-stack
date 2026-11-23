@@ -1,4 +1,3 @@
-// bun run voice:lips: Rhubarb Lip Sync mouth shapes for the takes a character speaks on screen, then src/timeline/mouth.json
 import { existsSync, lstatSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";

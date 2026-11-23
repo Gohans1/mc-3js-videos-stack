@@ -1,6 +1,3 @@
-// CapCut's Text library: Default text and the film-maker's titles, then Shapes (an arrow, a circle), each added at the playhead on
-// the first text track with room by a click on its tile (text.ts addPreset). Each tile shows the look it adds, in the film's own
-// fonts (the film loads them with film-stage/titles.ts)
 import { Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -8,9 +5,9 @@ import { cn } from "@/lib/utils";
 import { Tip } from "../components/Tip";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
+import { AssetSource } from "../openfilm/Source";
 import { FILM_MADE, FilmMark } from "../own/FilmMark";
 import { addPreset, type Preset, PRESETS, SHAPES } from "./text";
-import { AssetSource } from "../openfilm/Source";
 
 const familyOf = (font?: string) =>
   S.tools?.titles?.fonts.find((f) => f.id === font)?.css ?? "system-ui, sans-serif";
@@ -141,7 +138,13 @@ function Tile({ p, own }: { p: Preset; own?: boolean }) {
   );
 }
 
-export function TextLibrary() { return <AssetSource category="text"><NativeTextLibrary /></AssetSource>; }
+export function TextLibrary() {
+  return (
+    <AssetSource category="text">
+      <NativeTextLibrary />
+    </AssetSource>
+  );
+}
 function NativeTextLibrary() {
   useStudio((s) => s.ready);
   const extraShapes: Preset[] = (S.tools?.titles?.shapes ?? [])

@@ -282,7 +282,6 @@ def solve(source, shot, out):
     fov = shot.get("fov")
     searched = fov is None
     if searched:
-        # the lens that fits a sample of the span best: a coarse sweep, then a golden-section search around it
         sample = frames[:: max(1, len(frames) // FOV_SAMPLE_FRAMES)]
 
         def trial(f):
@@ -344,7 +343,6 @@ def solve(source, shot, out):
     worst = max(table, key=lambda r: r["err"])
     summary = {"solved": len(solved), "of": len(frames), "rmsMean": round(mean_err(sol), 2), "rmsMax": worst["err"],
                "worstAt": worst["t"], "positionOnly": sum(1 for r in table if r.get("positionOnly"))}
-    # the check sheet: up to 8 frames across the span, each point as tracked (yellow ring) and as solved (cyan cross)
     pick = [solved[round(j * (len(solved) - 1) / 7)] for j in range(min(8, len(solved)))]
     tiles, scale = [], 640 / max(width, height)
     mark = max(4, round(0.008 * max(width, height)))

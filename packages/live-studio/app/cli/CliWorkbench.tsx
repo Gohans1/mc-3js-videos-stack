@@ -48,7 +48,6 @@ import {
 
 export type CliCompactTab = "builder" | "output";
 
-/** Computes compact Configure/Output tab transitions on run start, Browse focus, or scope change. */
 export function nextCompactTabForChange(input: {
   currentTab: CliCompactTab;
   prevRunId: string | undefined;

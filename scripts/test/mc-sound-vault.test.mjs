@@ -113,7 +113,6 @@ test("buildMcSoundVault materializes a fresh machine from mc-sound-packs.json + 
   const chestHash = sha1(chestOpen);
   const musicHash = sha1(c418Music);
 
-  // Put stone1 in local .minecraft cache; stone2 + chestOpen come from CDN
   const mcAssetsDir = join(root, "dot-minecraft/assets");
   mkdirSync(join(mcAssetsDir, "objects", stone1Hash.slice(0, 2)), { recursive: true });
   writeFileSync(join(mcAssetsDir, "objects", stone1Hash.slice(0, 2), stone1Hash), stone1);
@@ -123,7 +122,6 @@ test("buildMcSoundVault materializes a fresh machine from mc-sound-packs.json + 
       "assets/presencefootsteps/sounds/bluntwood/bluntwood_walk1.ogg": stone1,
       "assets/presencefootsteps/sounds/bluntwood/bluntwood_walk2.ogg": stone2,
       "assets/presencefootstepsmono/sounds/bluntwood/bluntwood_walk1.ogg": stone1,
-      // Second namespace inside same pack with identical dir/base -> must get distinct family slug!
       "assets/pf_extra/sounds/bluntwood/bluntwood_walk1.ogg": stone1,
       "assets/pf_extra/sounds/bluntwood/bluntwood_walk2.ogg": stone2,
     }),
@@ -227,7 +225,6 @@ test("buildMcSoundVault materializes a fresh machine from mc-sound-packs.json + 
     }),
   );
 
-  // Fresh external vault with ZERO pre-downloaded packs!
   const external = join(root, "external");
   const summary = await buildMcSoundVault({
     root,
@@ -241,13 +238,11 @@ test("buildMcSoundVault materializes a fresh machine from mc-sound-packs.json + 
   assert.equal(fetchedPaths.includes(`/${musicHash.slice(0, 2)}/${musicHash}`), false);
   assert.equal(existsSync(join(external, "packs/presence-footsteps.jar")), true);
 
-  // 3 vanilla + 4 pf (2 namespaces * 2 variants) + 1 weather + 1 wither-storm = 9
   assert.equal(summary.total, 9);
   const outDir = join(external, "mc-sound");
   const sources = JSON.parse(readFileSync(join(outDir, "SOURCES.json"), "utf8"));
   assert.equal(Object.keys(sources).length, 9);
 
-  // Multi-namespace families inside the same pack get distinct family slugs
   const pfFamilies = new Set(
     Object.values(sources)
       .filter((s) => s.source === "presence-footsteps")
@@ -255,13 +250,11 @@ test("buildMcSoundVault materializes a fresh machine from mc-sound-packs.json + 
   );
   assert.equal(pfFamilies.size, 2);
 
-  // Singleton trailing "_1" stripped from human title; CC-BY-4.0 attribution preserved
   const rainEntry = sources["mc-gentler-weather-sounds-weather-gentle-rain-1"];
   assert.equal(rainEntry.title, "Weather · Gentle Rain");
   assert.equal(rainEntry.license, "Apache-2.0 / CC-BY-4.0");
   assert.match(rainEntry.for, /bone666138/);
 
-  // Precomputed PEAKS.json has accurate durations and normalized 0..1 peak arrays
   const peaks = JSON.parse(readFileSync(join(outDir, "PEAKS.json"), "utf8"));
   assert.ok(Math.abs(peaks["mc-step-stone-1"].seconds - 0.22) < 0.08);
   assert.ok(peaks["mc-step-stone-1"].peaks.some((p) => p > 0.2));

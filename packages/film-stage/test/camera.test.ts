@@ -9,6 +9,7 @@ import {
   cameraKeyOptics,
   cameraMotionSpans,
   EASES,
+  inView,
   onScreenRanges,
   resolveFocusDistance,
   SHAKES,
@@ -471,7 +472,6 @@ test("matched spans preserve distinct authored ease shapes while keeping exact j
   expect(midSpeed(bezA)).toBeGreaterThan(midSpeed(bezB) * 1.5);
   expect(cameraAt(1.6, outMid).base.p.x - cameraAt(1.6, expoMid).base.p.x).toBeGreaterThan(1.5);
 
-  // Steep slopes (m0 >= 4, m1 >= 4) must remain strictly monotone with zero overshoot (plain Hermite overshoots here).
   for (const ease of [EASES.inout, EASES.linear, EASES.out]) {
     const curve = matchedSpanEase(ease, 5, 5);
     expect(curve(0)).toBe(0);
@@ -697,7 +697,6 @@ test("matchSpeed carries velocity across orbit-to-orbit, varying-radius orbit-to
 
 test("hold spans on either side of a key ignore matchSpeed", () => {
   const dt = 0.0001;
-  // Use linear easing (natural slope 1) so wrongly braking to slope 0 at a hold join is caught.
   const holdIn = [
     { t: 0, p: [0, 0, 5], l: [0, 0, 0], wave: 0 },
     { t: 1, p: [5, 0, 5], l: [0, 0, 0], wave: 0, motion: "hold", matchSpeed: true },
@@ -966,7 +965,6 @@ test("handheld accepts case-insensitive Shakify names and keeps cam.base free of
   expect(b.base.p.toArray()).toEqual([0, 1.5, 6]);
   expect(a.p.distanceTo(a.base.p)).toBeGreaterThan(1e-4);
   expect(a.p.distanceTo(b.p)).toBeGreaterThan(1e-4);
-  // Pure function of t
   expect(cameraAt(0.5, keys).p.toArray()).toEqual(a.p.toArray());
 
   const zeroed = cameraAt(0.5, [
@@ -1033,7 +1031,6 @@ test("resolveFocusDistance handles meters, dot-targets, offsets, missing targets
   expect(rackMid.distance).toBeCloseTo(7, 5);
   expect(rackMid.label).toBe("Near->Far");
 
-  // Caller reusing a single mutable scratch Vector3 across targets must not break rack-focus interpolation
   const scratch = new THREE.Vector3();
   const sharedLookup = (name: string) => {
     const v = targets[name];
@@ -1053,7 +1050,6 @@ test("resolveFocusDistance handles meters, dot-targets, offsets, missing targets
 
 test("onScreenRanges respects mm lens sizing via aspect", () => {
   const box = new THREE.Box3(new THREE.Vector3(2.8, -0.5, -0.5), new THREE.Vector3(3.2, 0.5, 0.5));
-  // At 5m away, x=3m is inside 24mm wide view (~73.7deg HFOV) but outside 85mm telephoto view (~23.9deg HFOV)
   const wide = onScreenRanges(box, [{ t: 0, p: [0, 0, 5], l: [0, 0, 0], mm: 24 }], 1, 16 / 9);
   const tele = onScreenRanges(box, [{ t: 0, p: [0, 0, 5], l: [0, 0, 0], mm: 85 }], 1, 16 / 9);
   expect(wide.length).toBe(1);
@@ -1397,4 +1393,85 @@ test("applyCameraFeel applies wave, bob, and handheld consistently for film and 
   expect(freeOut.roll).toBeCloseTo(keyed.roll, 6);
   expect(freeP.distanceTo(keyed.p)).toBeLessThan(1e-6);
   expect(freeL.distanceTo(keyed.l)).toBeLessThan(1e-6);
+});
+
+test("inView performs exact convex frustum-AABB intersection for large tele-lens walls and corner misses", () => {
+  const cam = new THREE.PerspectiveCamera(15, 16 / 9, 0.5, 50);
+  cam.position.set(0, 0, 10);
+  cam.lookAt(0, 0, 0);
+  cam.updateProjectionMatrix();
+  cam.updateMatrixWorld();
+  const frustum = new THREE.Frustum().setFromProjectionMatrix(
+    new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+  );
+
+  const offCenterWall = new THREE.Box3(
+    new THREE.Vector3(-10, -10, -5),
+    new THREE.Vector3(1000, 1000, -4.5),
+  );
+  expect(inView(frustum, offCenterWall)).toBe(true);
+
+  const enclosingBox = new THREE.Box3(
+    new THREE.Vector3(-100, -100, -100),
+    new THREE.Vector3(1000, 1000, 100),
+  );
+  for (let ix = 0; ix < 2; ix++)
+    for (let iy = 0; iy < 2; iy++)
+      for (let iz = 0; iz < 2; iz++) {
+        expect(
+          frustum.containsPoint(
+            new THREE.Vector3(
+              ix ? enclosingBox.max.x : enclosingBox.min.x,
+              iy ? enclosingBox.max.y : enclosingBox.min.y,
+              iz ? enclosingBox.max.z : enclosingBox.min.z,
+            ),
+          ),
+        ).toBe(false);
+      }
+  expect(inView(frustum, enclosingBox)).toBe(true);
+
+  expect(inView(frustum, new THREE.Box3())).toBe(false);
+
+  const behindCamera = new THREE.Box3(new THREE.Vector3(-5, -5, 12), new THREE.Vector3(5, 5, 20));
+  expect(inView(frustum, behindCamera)).toBe(false);
+
+  const outsideLeft = new THREE.Box3(new THREE.Vector3(-40, -5, -10), new THREE.Vector3(-12, 5, 5));
+  expect(inView(frustum, outsideLeft)).toBe(false);
+
+  const outsideNearCorner = new THREE.Box3(
+    new THREE.Vector3(2, 2, 9.6),
+    new THREE.Vector3(3, 3, 9.9),
+  );
+  expect(inView(frustum, outsideNearCorner)).toBe(false);
+
+  const grazingCam = new THREE.PerspectiveCamera(45, 1, 1, 50);
+  grazingCam.position.set(0, 0, 0);
+  grazingCam.lookAt(1, 0, -1);
+  grazingCam.rotateZ(1e-7);
+  grazingCam.updateProjectionMatrix();
+  grazingCam.updateMatrixWorld();
+  const grazingFrustum = new THREE.Frustum().setFromProjectionMatrix(
+    new THREE.Matrix4().multiplyMatrices(
+      grazingCam.projectionMatrix,
+      grazingCam.matrixWorldInverse,
+    ),
+  );
+
+  const conservativeFalsePositive = new THREE.Box3(
+    new THREE.Vector3(-5, -5, 0),
+    new THREE.Vector3(3, 3, 8),
+  );
+  expect(grazingFrustum.intersectsBox(conservativeFalsePositive)).toBe(true);
+  expect(inView(grazingFrustum, conservativeFalsePositive)).toBe(false);
+
+  const p0 = grazingFrustum.planes[0]!;
+  const y0 = 12.2;
+  const z0 = -10;
+  const x0 = -(p0.normal.y * y0 + p0.normal.z * z0 + p0.constant + 5e-7) / p0.normal.x;
+  const grazingOutsideBox = new THREE.Box3(
+    new THREE.Vector3(x0, y0, z0 - 2),
+    new THREE.Vector3(x0 + 6, y0 + 12, z0),
+  );
+  expect(grazingFrustum.intersectsBox(grazingOutsideBox)).toBe(true);
+  expect(inView(grazingFrustum, grazingOutsideBox)).toBe(false);
 });

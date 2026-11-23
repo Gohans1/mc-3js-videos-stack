@@ -1,6 +1,3 @@
-// A bed's ducking under the narration as the page plays it (app/sound/duck.ts) must match the film's mix (scripts/sound/mix.py
-// duck_expr). The mix's levels were measured with ffmpeg on a 220 Hz sine ducked 12 dB under sealed-room's first four lines:
-// -24 dB at rest, -36 dB from each line's first word to its last, ramps of 0.3 s before and 0.8 s after
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

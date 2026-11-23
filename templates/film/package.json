@@ -55,6 +55,7 @@
     "test": "bun node_modules/live-studio/wrong-place.mjs test",
     "test:parallel": "bun node_modules/live-studio/wrong-place.mjs test:parallel",
     "ci": "bun node_modules/live-studio/wrong-place.mjs ci",
+    "comments": "bun node_modules/live-studio/wrong-place.mjs comments",
     "doctor": "bun node_modules/live-studio/wrong-place.mjs doctor",
     "verify": "bun node_modules/live-studio/wrong-place.mjs verify",
     "lint": "bun node_modules/live-studio/wrong-place.mjs lint",

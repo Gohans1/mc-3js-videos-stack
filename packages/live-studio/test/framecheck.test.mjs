@@ -1,4 +1,3 @@
-// framecheck.mjs: the encoded video's picture faults, measured at the film's own shape
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -32,7 +31,6 @@ const framecheck = (dir, ...args) =>
 
 test("a Short's draft is measured whole: a box snapping in its lower half is a JUMP", (t) => {
   const dir = film(t, "9:16");
-  // a 72x128 Short with an 8 px strip under it; a white box at y 90, far below the top 9:16-of-the-width band
   const r = spawnSync("ffmpeg", [
     "-v",
     "error",
@@ -69,7 +67,6 @@ test("a picture given in place of a video is a wrong word: exit 2, nothing measu
   assert.match(out.stderr, /still\.png is no video/);
 });
 
-// 2 s at 30 fps, grey, turning white at the video's 1.00 s: a JUMP there
 const flip = (file) => {
   media(file, [
     "-f",
@@ -81,7 +78,6 @@ const flip = (file) => {
   ]);
 };
 
-// a remake copies its reference's moves: a jump the reference makes at the same heard second is not the first to look at
 test("a jump the reference makes too is said so; one it does not is OURS ONLY", (t) => {
   const dir = film(t, "16:9");
   flip(join(dir, "renders/draft_video.mp4"));
@@ -109,8 +105,6 @@ test("a jump the reference makes too is said so; one it does not is OURS ONLY", 
     /^OURS ONLY: ours changes \d+\.\d%, the reference 0\.0% a frame$/,
   );
   assert.ok(jump.reference.oursChange > 0.3);
-  // a reference busy every frame (a smeared whip measures under our sharp one) moves as fast: no pop of ours, and one
-  // change between two stills is a single jump (a cut the render did not record), not a move in steps
   media(join(dir, "busy.mp4"), [
     "-f",
     "lavfi",
@@ -141,7 +135,6 @@ test("a --span run's video is measured on the film's clock, with only the cuts i
   flip(join(dir, "renders/span_9-11.mp4"));
   const cuts = join(dir, "renders/cuts.json");
   writeFileSync(cuts, "[3, 50]");
-  // written before the span, the list is the render's own
   const before = new Date(Date.now() - 60_000);
   utimesSync(cuts, before, before);
   const out = framecheck(dir, "renders/span_9-11.mp4");
@@ -164,7 +157,6 @@ test("a fault's picture is the frame before it, the frame, and the frame after",
   const next = JSON.parse(framecheck(dir, "--json").stdout);
   assert.notEqual(next.index, report.index);
   assert.ok(readFileSync(strip).length);
-  // the left tile of the three is the last grey frame
   const px = spawnSync(
     "ffmpeg",
     [
@@ -229,7 +221,6 @@ test("a stale picture is measured without jump exemptions from the current edit"
   assert.doesNotMatch(out.stdout, /bun run at /);
 });
 
-// a move the reference makes every frame that ours makes in steps, a dead frame between them, is a stutter of ours
 test("jumps with a still frame between them while the reference keeps moving are OURS STEPS", (t) => {
   const dir = film(t, "16:9");
   media(join(dir, "renders/draft_video.mp4"), [
@@ -260,8 +251,6 @@ test("jumps with a still frame between them while the reference keeps moving are
     );
 });
 
-// bun run render clip --chunks 1 joins chunk 0 as it was drawn: the draft is stale for the timeline, while the cuts it was
-// drawn with, the reference and the strip under the picture are still its own
 test("a draft joining an older chunk keeps its recorded cuts and its reference", (t) => {
   const dir = film(t, "16:9");
   const video = join(dir, "renders/draft_video.mp4");
@@ -396,7 +385,6 @@ test("--start takes heard seconds as notes print them", (t) => {
   const out = framecheck(dir, "--start", "1:00");
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /JUMP 61\.00/);
-  // the commands it hands on read the same seconds only with the same --start
   assert.match(
     out.stdout.trim().split(/\r?\n/).at(-1),
     /next: bun run sheet renders\/draft_video\.mp4 frames 61 --start 60/,

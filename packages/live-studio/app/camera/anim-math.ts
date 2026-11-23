@@ -1,4 +1,3 @@
-// Pure animation state, clock mapping and timeline handle geometry shared by camera/anim.ts, camera/camrow.ts and tests.
 import {
   ANIM_CATEGORIES,
   type AnimCurve,
@@ -62,7 +61,6 @@ export const animationOccurrenceClock = (clock: TimingClock, span: PlaySegment):
 export const MIN_ANIM = 0.1;
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-// Loops run off the clock and a pure black fade has no camera travel, so a motion curve only applies outside those two.
 export const fxSupportsCurve = (fx: AnimFxMeta | undefined): boolean =>
   Boolean(fx && !fx.loop && !(fx.black && !fx.move));
 
@@ -93,8 +91,6 @@ export const orderedAnimCategories = (
   ];
 };
 
-// Strip defaults (curve undefined, flip false, seam true, k 1, optics 1) and clamp optics to [0..1]; when `fx` is known, also
-// drop capabilities the preset cannot express so shots.json never accumulates dead fields.
 export const tidyAnimSet = (a: AnimSetData, fx?: AnimFxMeta): AnimSetData => {
   const next: AnimSetData = { ...a };
   const isCustom = Boolean(
@@ -257,8 +253,6 @@ export const applyAnimDuration = (
       )
     : Math.max(MIN_ANIM, r2(Math.min(clampedOut, maxSrc)));
   const next: ShotAnimData = { ...an, [slot]: { ...cur, len: srcLen } };
-  // If both slots previously overlapped (e.g. 3s + 3s fitted to 2s + 2s on a 4s shot), pin the other slot at its displayed
-  // fitted length so shrinking this slot does not make the other slot suddenly expand into the freed space.
   const otherSlot = slot === "in" ? "out" : "in";
   const other = an[otherSlot];
   const rawSpan = Math.max(0, shotSource[1] - shotSource[0]);
@@ -275,7 +269,6 @@ export const applyAnimDuration = (
   return next;
 };
 
-// Intersection of an In/Out animation with one visible play segment on the camera row, plus where its inner trim handle sits.
 export const animBandOnSegment = (
   shotSource: [number, number],
   clock: TimingClock | null,
@@ -328,7 +321,6 @@ export const pickAnimEdge = (
   pickedShot: number | null,
   hoverShot: number,
 ): (AnimHandleCandidate & { seam: boolean }) | null => {
-  // Group active handles by shot so colliding In/Out handles on the same shot can be disambiguated cleanly.
   const byShot = new Map<number, { in?: AnimHandleCandidate; out?: AnimHandleCandidate }>();
   for (const h of handles) {
     if (!activeShots.has(h.i)) continue;

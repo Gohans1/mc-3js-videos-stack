@@ -1,13 +1,4 @@
 // @ts-nocheck
-// The players: MCprep's Simple Player rig (BoxScape Studios + TheDuckCow, CC-BY 3.0; assets/public/rig/player.glb), one
-// SkeletonUtils clone per character with its own skin. It is the real 32 px tall player (1.875 blocks, feet at y 0, facing +z)
-// with 13 joints: center (hips), Body (waist), Chest, Head, and upper/lower bones for each arm and leg, so elbows and knees
-// bend. Every frame starts from the rest pose and is posed from film time only, so any frame seeks.
-// Rotations are given in the character's own frame (x = his left, y = up, z = forward) in degrees; a child joint turns
-// with its parent, as in any FK rig.
-// The rig has no face bones: eyes (lids, iris, pupil), brows and a mouth float a hair off the head and ride the Head
-// bone, the way Minecraft animation rigs build faces. Mouth shapes are Rhubarb Lip Sync's A-H and X (this film's
-// narrator is off screen: Steve's mouth stays shut).
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -16,11 +7,10 @@ import { clamp01, smooth } from "./ease";
 import { updaterTo } from "./matrices";
 import { BOX, facesOf } from "./skin-paint";
 
-export const PX = 1.875 / 32; // one skin pixel at the size the game draws a player
-// Standard 64x64 Steve skin UV rects ([x, y, w, h]) for all 6 inner Layer-1 and 6 outer Layer-2 body boxes
+export const PX = 1.875 / 32;
 export const SKIN_UV = Object.fromEntries(Object.entries(BOX).map(([k, box]) => [k, facesOf(box)]));
 const D = Math.PI / 180;
-const LEG = 6 * PX; // thigh and shin are each half of the 12 px leg
+const LEG = 6 * PX;
 // GLTFLoader strips ":" from node names (PropertyBinding.sanitizeNodeName), so "Arm:Left:Upper" is "ArmLeftUpper"
 const BONES = {
   root: "center",
@@ -47,18 +37,14 @@ const loadImage = (url) =>
     i.src = url;
   });
 
-// ---- poses: {joint: [x, y, z]} in degrees, plus root: {y, x, z (metres), rx, ry, rz (degrees)} ----
-// arm(fwd, out, twist, elbow): fwd raises it to the front, out lifts it to his side, elbow bends the forearm forward
 export const arm = (side, fwd = 0, out = 0, twist = 0, elbow = 0) => ({
   [`ua${side}`]: [-fwd, twist * (side === "L" ? 1 : -1), out * (side === "L" ? 1 : -1)],
   [`la${side}`]: [-elbow, 0, 0],
 });
-// leg(fwd, out, knee): fwd kicks it forward, knee bends the shin back
 export const leg = (side, fwd = 0, out = 0, knee = 0) => ({
   [`ul${side}`]: [-fwd, 0, out * (side === "L" ? 1 : -1)],
   [`ll${side}`]: [knee, 0, 0],
 });
-// Squat with both feet planted: thighs forward by a, shins back by 2a, hips drop by exactly the legs' lost height
 export const squat = (a) => ({
   ...leg("L", a, 4, 2 * a),
   ...leg("R", a, 4, 2 * a),
@@ -87,7 +73,6 @@ const merge = (...ps) => {
   return out;
 };
 
-// One gesture at local time s (seconds since it started) and progress u (0..1 of its length)
 export const GESTURES = {
   idle: () => ({}),
   stomach: () =>
@@ -98,7 +83,6 @@ export const GESTURES = {
   wave: (s) =>
     merge(arm("R", 15, 150, 10, 25), { laR: [0, 0, 28 * Math.sin(s * 9)], head: [-4, 0, 6] }),
   swing: (s, u) => {
-    // wind-up, strike, follow-through: the right arm comes over the top while the chest turns into it
     const up = smooth(u / 0.35),
       hit = smooth((u - 0.35) / 0.25);
     const fwd = 150 * up - 175 * hit;
@@ -218,17 +202,8 @@ export const GESTURES = {
   sleep: () => merge(GESTURES.lie(), arm("L", 0, 12, 0, 10), arm("R", 0, 12, 0, 10)),
 };
 
-// One step is half a metre: on 12 px legs (0.70 m) a planted foot a quarter metre ahead of (or behind) the hips is reached
-// with the hips 8 cm down (3 cm all along, a planted leg is never quite straight). The thigh swing (21 degrees) carries the foot that far, so the pose's soles and the planted ones (src/feet.ts)
-// agree. At 1.05 m a step (34 degrees) every planted foot slid 25-43 cm and both feet left the floor together
 const STRIDE = 0.5;
-// The gait at a walked distance: phase (the left foot is on the floor while cos(ph) < 0, the right while cos(ph) > 0) and
-// how much of a walk it is (0 standing, 1 full pace)
 export const gaitOf = (dist, speed) => ({ ph: (dist * Math.PI) / STRIDE, w: clamp01(speed / 1.2) });
-// Walk or run, phase from the distance walked: thighs swing, the knee folds while the leg swings forward, the arms
-// counter-swing with a little elbow, the chest twists against the hips. The hips are lowest as one foot lands and the other
-// pushes off (both on the floor) and highest as one passes the other. Everything scales with the gait's weight w, the
-// splay too, so a walk grows out of standing and settles back into it without a jump
 export const walkPose = (dist, speed) => {
   const { ph, w } = gaitOf(dist, speed),
     run = clamp01((speed - 4) / 2);
@@ -262,7 +237,6 @@ export const idlePose = (t, seed) =>
     },
   );
 
-// Blend b over a by weight k, joint by joint
 export const blendPose = (a, b, k) => {
   const ok = 1 - k;
   const root = a.root ? { ...a.root } : {};
@@ -289,8 +263,6 @@ export const blendPose = (a, b, k) => {
 };
 export { merge as addPose };
 
-// ---- face ----
-// Moods: brows (y raise, tilt > 0 lifts the inner ends), eyes (open, squint, pupil size), smile (-1 frown .. 1 smile)
 export const MOODS = {
   neutral: { y: 0, tilt: 0, open: 0.9, squint: 0, pupil: 1, smile: 0 },
   happy: { y: 0.35, tilt: 0, open: 0.8, squint: 0.35, pupil: 1, smile: 1 },
@@ -313,7 +285,6 @@ export const MOODS = {
   sleepy: { y: -0.1, tilt: 6, open: 0.35, squint: 0.1, pupil: 1, smile: 0 },
   sad: { y: 0.2, tilt: 30, open: 0.75, squint: 0.1, pupil: 1, smile: -1 },
 };
-// Rhubarb's mouth shapes as an opening in skin pixels: [width, height, teeth (top strip), tongue (bottom strip)]
 const MOUTH = {
   X: [0, 0, 0, 0],
   A: [0, 0, 0, 0],
@@ -325,9 +296,6 @@ const MOUTH = {
   G: [2, 0.45, 0.4, 0],
   H: [2.2, 1.1, 0.25, 0.55],
 };
-// The shape at time s of cues [[second, "A".."H"|"X"], ...] (Rhubarb's, which already anticipate vowels and put in-betweens).
-// Each move into a shape ends on its cue's second, so the mouth may lead the sound but never trails it (Williams); the lead
-// is up to 60 ms and at most half the shape before, so a 70 ms lip closure still shuts whole.
 export const mouthAt = (cues, s) => {
   if (!cues?.length || s < cues[0][0] - 0.06) return MOUTH.X;
   let i = -1;
@@ -363,8 +331,6 @@ const flat = (color, glow = 0.12) =>
     emissiveIntensity: glow,
   });
 
-// The face in the rig's rest pose, measured from the head's own skinned vertices: pixel size, front plane and the head
-// bone's axes. Pieces are placed in the root's frame and then attached to the head bone, so they follow every turn
 const faceFrame = (root, head) => {
   root.updateMatrixWorld(true);
   const box = new THREE.Box3(),
@@ -389,7 +355,6 @@ const faceFrame = (root, head) => {
   );
   const up = new THREE.Vector3(0, 1, 0).applyMatrix3(toHead).normalize(),
     right = new THREE.Vector3(1, 0, 0).applyMatrix3(toHead).normalize();
-  // x in pixels from the face's middle (+ = his left, the viewer's right), y in rows from the top of the face, z off the face
   const add = (m, x, y, z) => {
     m.position.set(mid.x + x * px, box.max.y - y * px, box.max.z + z * px);
     m.castShadow = false;
@@ -469,7 +434,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
     );
     return { m, side, base: m.position.clone(), q: m.quaternion.clone() };
   });
-  // mouth: a dark opening with a strip of teeth along the top and the tongue along the bottom; corners lift for a smile
   const mouthMat = layer(flat(initCol.mouthCol, 0), 0),
     teethMat = layer(flat("#efeee4", whiteGlow), 1),
     tongueMat = layer(flat("#b9534f", 0.1), 1);
@@ -495,7 +459,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
     o.userData.p0 = o.position.clone();
     o.userData.s0 = o.scale.clone();
   }
-  // x, y: centre in face pixels (y = rows down from the top of the face); w, h: size in pixels
   const rect = (o, x, y, w, h) => {
     o.visible = w > 0.05 && h > 0.05;
     if (!o.visible) return;
@@ -513,7 +476,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
     line,
     ...corners,
   ];
-  // mood: blended mood values; m: mouth [w, h, teeth, tongue]; blink 0..1; look [x, y] in -1..1
   return Object.assign(
     (mood, m, blink, look) => {
       const gx = Math.max(-1, Math.min(1, look[0])),
@@ -545,7 +507,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
         const by = ov?.y ?? mood.y;
         const tilt = ov?.tilt ?? mood.tilt;
         b.m.position.copy(b.base).addScaledVector(up, (by - 0.3 * blink) * localPx);
-        // tilt > 0 lifts the inner end (the end nearer the nose)
         rot.setFromAxisAngle(fwdAxis, -b.side * tilt * D);
         b.m.quaternion.copy(rot).multiply(b.q);
       }
@@ -554,7 +515,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       rect(hole, 0, 6 + h / 2, w, h);
       rect(teeth, 0, 6 + th / 2, w * 0.9, Math.min(th, h));
       rect(tongue, 0, 6 + h - tg / 2, w * 0.7, Math.min(tg, h));
-      // shut mouth: the skin's own painted mouth shows; a smile or frown adds a line and turned corners over it
       const shut = h < 0.2,
         lw = 2,
         cw = Math.max(w, lw) / 2 + 0.25,
@@ -568,7 +528,6 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       meshes,
       recolor,
       white,
-      // a hidden head hides the face; per-mesh visible is the face's own, set on every call
       show: (on) => {
         for (const m of [white, iris, dark, lid, browMat, mouthMat, teethMat, tongueMat])
           m.visible = on;
@@ -577,26 +536,14 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
   );
 };
 
-// ---- faces without eyes ----
-// For a film that carries every feeling in its narrator: the skin's own face, lit as ever, with no eyes to read and
-// nothing moving. "closed" is the floating face held once with its lids shut and mouth closed (the look the clip
-// catalogue's sheets have, minus their open mouth); the others hide the floating face and each repaints pixels of the head's front in the skin (8 x 8 px from
-// (8, 8); row 4 holds the eyes); colour(x, y) gives a pixel as a multiple of the skin's own tone (its cheek), or null to
-// keep the skin's pixel, so any skin keeps its colour. "game" is the floating expressive face above, and a player's face
-// until setFace picks another.
 const EYE = (x, y) => y === 4 && (x === 1 || x === 2 || x === 5 || x === 6);
 export const FACES = [
-  // the eyes painted over with the skin round them (row 4 is a shade darker than the cheek)
   { id: "noeyes", title: "no eyes, skin over them", colour: (x, y) => (EYE(x, y) ? 0.95 : null) },
   { id: "closed", title: "eyes shut, mouth shut", hold: [MOODS.neutral, [0, 0, 0, 0], 1, [0, 0]] },
-  // the eyes cut out as black holes
   { id: "holes", title: "no eyes, black holes", colour: (x, y) => (EYE(x, y) ? 0.03 : null) },
   { id: "game", title: "game face (eyes, brows, mouth)" },
-  // the skin exactly as painted: for skins whose face carries the likeness (a 128 px HD skin's 16 x 16 face), which the
-  // game face's eyes would cover
   { id: "skin", title: "the skin's own face, nothing over it" },
 ];
-// Each body part's inner box and its second layer, for showParts
 const PART_LAYERS = {
   head: ["head", "hat"],
   body: ["body", "jacket"],
@@ -629,11 +576,10 @@ const hideSkinParts = (ctx, shown) => {
         for (const [x, y, w, h] of skinRects(ctx, SKIN_UV[k])) ctx.clearRect(x, y, w, h);
 };
 
-// Paint face f's eye-row pixels onto ctx using the cheek tone sampled from immutable baseCtx
 const paintFacePixels = (ctx, baseCtx, f) => {
   if (!f.colour) return;
   const s = Math.max(1, Math.round(baseCtx.canvas.width / 64));
-  const d = baseCtx.getImageData(9 * s, 11 * s, 1, 1).data; // the cheek, face pixel (1, 3)
+  const d = baseCtx.getImageData(9 * s, 11 * s, 1, 1).data;
   for (let y = 0; y < 8; y++)
     for (let x = 0; x < 8; x++) {
       const k = f.colour(x, y);
@@ -643,10 +589,6 @@ const paintFacePixels = (ctx, baseCtx, f) => {
     }
 };
 
-// Skin UVs sampled inside their own triangle. Under MSAA (films render with multisampling 4 for N8AO) an edge pixel's
-// UV is extrapolated past the face into the next skin texel: the outer layer's jacket top drew a 1 px shirt-coloured line
-// under the chin in close-ups. GLSL "centroid" is the hardware fix; three.js has no switch for it, so it is patched in.
-// Any box model on a skin atlas wants it (silverfish.ts).
 export const centroidUv = (m) => {
   const cen = (c) => c.replace(/varying vec2 (vMapUv|vEmissiveMapUv)/g, "centroid varying vec2 $1");
   m.onBeforeCompile = (s) => {
@@ -663,7 +605,6 @@ export const centroidUv = (m) => {
   return m;
 };
 
-// ---- one character ----
 export type FaceColorValue =
   string | number | { readonly isColor: true; r: number; g: number; b: number };
 
@@ -748,11 +689,9 @@ export async function makePlayer(
       ctx.restore?.();
     }
     liveMap.needsUpdate = true;
-    // lids and mouth take the skin as drawn, so a tinted or overlaid face blinks in its own colour
     gameFace?.recolor(ctx);
   };
   redrawSkin();
-  // a touch of self light from the skin itself, so faces still read under the night's single sodium lamp
   const look = {
     map: liveMap,
     roughness: 0.9,
@@ -773,7 +712,7 @@ export async function makePlayer(
       o.frustumCulled = false;
     }
   });
-  const g = new THREE.Group(); // feet on the floor at the origin, facing +z
+  const g = new THREE.Group();
   g.add(rig);
   const all = {};
   rig.traverse((o) => {
@@ -796,7 +735,6 @@ export async function makePlayer(
       qCi: bone.quaternion.clone().multiply(Ci),
     };
   }
-  // the hips' parent is rotated and scaled: a move in character metres becomes this in its own units
   b.root.parent.updateWorldMatrix(true, false);
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
@@ -815,7 +753,7 @@ export async function makePlayer(
     redrawSkin();
     if (id === "game" || f.hold || gameFace) {
       const gf = ensureGameFace();
-      for (const o of gf.meshes) o.visible = id === "game" || !!f.hold; // the next face() call shuts what should be shut
+      for (const o of gf.meshes) o.visible = id === "game" || !!f.hold;
       if (f.hold) gf(...f.hold);
     }
   };
@@ -855,8 +793,6 @@ export async function makePlayer(
     overlayFn = typeof drawFn === "function" ? drawFn : null;
     redrawSkin();
   };
-  // parts: { [SKIN_UV name]: colour } multiplies those boxes' pixels, alpha kept (a face going red is { head: "#ff8a78" });
-  // null clears. It is drawn under paintSkinOverlay and kept across setSkin
   const tintParts = (parts) => {
     for (const k of Object.keys(parts ?? {}))
       if (!SKIN_UV[k])
@@ -865,7 +801,6 @@ export async function makePlayer(
     tint = list.length ? list.map(([k, c]) => [SKIN_UV[k], new THREE.Color(c).getHex()]) : null;
     redrawSkin();
   };
-  // Draws only these parts (each with its second layer), e.g. ["armR"] for a hand in close-up; null draws all again
   const showParts = (parts) => {
     for (const k of parts ?? [])
       if (!PART_LAYERS[k])
@@ -883,9 +818,9 @@ export async function makePlayer(
   const face = (...a) => {
     if (faceId === "game") ensureGameFace()(...a);
   };
-  const hand = new THREE.Group(); // the right hand's grip, for held items
+  const hand = new THREE.Group();
   hand.name = "handR"; // so live-studio's --check motion:handR,from,to finds it
-  hand.position.set(-6 * PX, 12 * PX, 2 * PX); // vanilla: the right shoulder pivot (-5, 22, 0) px, then 10 down the arm, 2 forward, 1 out
+  hand.position.set(-6 * PX, 12 * PX, 2 * PX);
   rig.add(hand);
   b.laR.attach(hand);
   const handL = new THREE.Group();
@@ -893,9 +828,6 @@ export async function makePlayer(
   handL.position.set(6 * PX, 12 * PX, 2 * PX);
   rig.add(handL);
   b.laL.attach(handL);
-  // handR / handL local axes (1:1 metres, attached to lower-arm bones; call holdProp during setup, not per-frame):
-  //   -y = down the arm toward fingertips, +z = forward out of knuckles,
-  //   +x = character's left (inward/thumb-side on handR, outward on handL); pos in metres, rot in radians
   const holdProp = (side, mesh, opts) => {
     const { pos, rot } = opts ?? {};
     const parent = side === "L" ? handL : side === "R" ? hand : null;
@@ -919,18 +851,15 @@ export async function makePlayer(
     parent.add(wrist);
     return wrist;
   };
-  // Two-bone arm IK and head aim, measured from the rest pose: shoulder pivot to elbow, elbow to the end of the hand
   const restAt = (bone) => bone.getWorldPosition(new THREE.Vector3());
   const ARM = Object.fromEntries(
     ["L", "R"].map((sd) => {
       const S0 = restAt(b[`ua${sd}`]),
         E0 = restAt(b[`la${sd}`]);
-      const end = 12 * PX - 0.02; // the bottom of the arm box, just inside it, so a touch sinks the hand in by 2 cm and never floats
+      const end = 12 * PX - 0.02;
       return [sd, { L1: S0.distanceTo(E0), L2: Math.max(0.05, E0.y - end) }];
     }),
   );
-  // Legs the same way: hip pivot to knee, knee to the middle of the sole (on the floor at rest), kept in the shin's own
-  // frame so soleAt finds it in any pose
   const LEGS = Object.fromEntries(
     ["L", "R"].map((sd) => {
       const H0 = restAt(b[`ul${sd}`]),
@@ -960,7 +889,6 @@ export async function makePlayer(
     v = new THREE.Vector3();
   const jointQuat = (k, a) => {
     R.setFromEuler(e.set(a[0] * D, a[1] * D, a[2] * D, "YXZ"));
-    // local = rest * C^-1 R C: R turns the joint in the character's own axes, about the joint itself
     return T.copy(rest[k].qCi).multiply(R).multiply(rest[k].C);
   };
   // Each bone's turn is worked out in T and set once: three re-derives .rotation on every change to .quaternion, which was
@@ -989,7 +917,6 @@ export async function makePlayer(
     v.set(r.x ?? 0, r.y ?? 0, r.z ?? 0).applyMatrix3(rootIn);
     b.root.position.copy(rest.root.p).add(v);
   };
-  // Pure Matrix4 leg FK for feet.ts bake(): skips Euler sync callbacks on Object3D.rotation and all upper-body bones
   const fastLegsOk =
     !!b.root?.parent &&
     b.ulL.parent === b.root &&
@@ -1046,8 +973,6 @@ export async function makePlayer(
     doLeg("ulL", "llL", LEGS.L.sole, wantL, hipL);
     doLeg("ulR", "llR", LEGS.R.sole, wantR, hipR);
   };
-  // The joint's parent turn now, relative to its rest, in the rig's rest-scale frame (rig.matrixWorld * rigRest^-1
-  // inverted) so uniform/non-uniform scale, rotated/lying roots, and scaled parents keep exact limb reach and shear-free turns
   const Q = new THREE.Quaternion(),
     Qi = new THREE.Quaternion(),
     S = new THREE.Vector3(),
@@ -1072,11 +997,6 @@ export async function makePlayer(
     return out;
   };
   const parentTurnLocal = (k, inv) => localQuat(b[k].parent, inv, Q).multiply(parentRest[k]);
-  // Call after setPose with everything but this arm, then g.updateMatrixWorld(true). Returns the arm's joints (degrees) that
-  // put the end of the hand on the world point: the elbow folds forward (it points back), the upper arm takes the rest
-  // pole [x, y, z] (his left, up, forward, in the chest's axes): where the elbow should point. Without one the upper arm
-  // never twists, which puts a hand near his own face on an elbow raised sideways at shoulder height; with one the arm
-  // takes the twist too (a full 3-joint upper arm), so a hand to the chin comes up on an elbow hanging down and out
   const armTo = (sd, target, pole = null) => {
     const { L1, L2 } = ARM[sd],
       k = `ua${sd}`;
@@ -1096,7 +1016,6 @@ export async function makePlayer(
     const e =
       Math.PI -
       Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
-    // the hand's direction with the arm hanging and only the elbow bent, then the shoulder's out (z) and forward (x) turns
     const wy = -(L1 + L2 * Math.cos(e)) / n,
       wz = (L2 * Math.sin(e)) / n;
     const g = Math.asin(THREE.MathUtils.clamp(d.x / -wy, -1, 1));
@@ -1127,7 +1046,6 @@ export async function makePlayer(
     const len = dd.length();
     const n = THREE.MathUtils.clamp(len, Math.abs(L1 - L2) + 1e-3, L1 + L2 - 1e-3);
     const dh = len < 1e-6 ? new THREE.Vector3(0, -1, 0) : dd.clone().divideScalar(len);
-    // the elbow on the circle of possible elbows, on the pole's side of the shoulder-hand line
     P.set(...pole)
       .addScaledVector(dh, -P.set(...pole).dot(dh))
       .normalize();
@@ -1138,7 +1056,6 @@ export async function makePlayer(
     const e =
       Math.PI -
       Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
-    // the forearm's way from the elbow; the upper arm turns so its own forward (where the elbow folds) points along it
     F.copy(dh).multiplyScalar(n).addScaledVector(U, -L1).normalize();
     B.copy(F).addScaledVector(U, -F.dot(U));
     if (B.lengthSq() < 1e-8) B.copy(P).addScaledVector(U, -P.dot(U)).negate();
@@ -1148,10 +1065,6 @@ export async function makePlayer(
     PE.setFromQuaternion(PQ, "YXZ");
     return { [`ua${sd}`]: [PE.x / D, PE.y / D, PE.z / D], [`la${sd}`]: [-e / D, 0, 0] };
   };
-  // Call after setPose with the pose to keep, then g.updateMatrixWorld(true). Returns the leg's joints (degrees) that put
-  // the sole on the world point, the knee pointing where the pose's knee points (the pole of two-bone IK in game engines),
-  // so a kneel, a crossed leg or a turned-out knee keeps its plane. A target past the leg's reach leaves it straight towards it.
-  // Apply it at full weight: its angles are read off a turn, and an angle-by-angle blend of them can flip a thigh near 90
   const legTo = (sd, target) => {
     const { L1, L2 } = LEGS[sd],
       k = `ul${sd}`;
@@ -1161,8 +1074,6 @@ export async function makePlayer(
     S.setFromMatrixPosition(b[k].matrixWorld).applyMatrix4(inv);
     Qi.copy(parentTurnLocal(k, inv)).invert();
     d.copy(target).applyMatrix4(inv).sub(S).applyQuaternion(Qi);
-    // the knee's hinge axis in the pose (its thigh turn in the character's axes, setPose: world = parentTurn * R * C), swung
-    // with the leg from the pose's own hip-to-sole line onto the line to the target: the knee front is that line x the axis
     R.copy(Qi)
       .multiply(localQuat(b[k], inv, Q))
       .multiply(rest[k].Ci);
@@ -1176,11 +1087,10 @@ export async function makePlayer(
     const e =
       Math.PI -
       Math.acos(THREE.MathUtils.clamp((L1 * L1 + L2 * L2 - n * n) / (2 * L1 * L2), -1, 1));
-    const al = Math.acos(THREE.MathUtils.clamp((L1 * L1 + n * n - L2 * L2) / (2 * L1 * n), -1, 1)); // thigh off the hip-sole line
+    const al = Math.acos(THREE.MathUtils.clamp((L1 * L1 + n * n - L2 * L2) / (2 * L1 * n), -1, 1));
     pole.crossVectors(d, tx);
-    if (pole.lengthSq() < 1e-6) pole.set(0, 0, 1).addScaledVector(d, -d.z); // the axis points at the sole: knee forward
+    if (pole.lengthSq() < 1e-6) pole.set(0, 0, 1).addScaledVector(d, -d.z);
     pole.normalize();
-    // the thigh's axes: down the thigh is -y, the knee's front +z (the shin folds back from it about x, as ll's turn does)
     ty.copy(d).multiplyScalar(-Math.cos(al)).addScaledVector(pole, -Math.sin(al));
     tz.copy(pole).multiplyScalar(Math.cos(al)).addScaledVector(d, -Math.sin(al));
     tx.crossVectors(ty, tz);
@@ -1189,10 +1099,8 @@ export async function makePlayer(
   };
   const soleAt = (sd, out = new THREE.Vector3()) =>
     b[`ll${sd}`].localToWorld(out.copy(LEGS[sd].sole));
-  // soleAt off matrices already updated (updateBones or g.updateMatrixWorld): localToWorld walks every parent again
   const soleNow = (sd, out = new THREE.Vector3()) =>
     out.copy(LEGS[sd].sole).applyMatrix4(b[`ll${sd}`].matrixWorld);
-  // g.updateMatrixWorld(true) for his bones alone (matrices.ts): update all of him before anything else reads it
   const updateBones = updaterTo(g, Object.values(b));
   const baseLegReach = LEGS.L.L1 + LEGS.L.L2;
   const legReachNow = () => {
@@ -1200,7 +1108,6 @@ export async function makePlayer(
     M_actor.multiplyMatrices(rig.matrixWorld, rigRestInv);
     return baseLegReach * tmpS.setFromMatrixColumn(M_actor, 1).length();
   };
-  // Head angles [down, to his left, 0] that turn the face to a world point, held inside a natural neck range
   const headTo = (target) => {
     b.head.updateWorldMatrix(true, false);
     const inv = actorInv();
@@ -1212,16 +1119,14 @@ export async function makePlayer(
       .applyQuaternion(Qi.copy(parentTurnLocal("head", inv)).invert());
     d.y -= 4 * PX;
     const yaw = THREE.MathUtils.clamp(Math.atan2(d.x, d.z) / D, -75, 75);
-    const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42); // past this the neck reads broken: the eyes do the rest
+    const down = THREE.MathUtils.clamp(Math.atan2(-d.y, Math.hypot(d.x, d.z)) / D, -40, 42);
     return [down, yaw, 0];
   };
-  // The game face's eye whites: a colour (bloodshot pink) or null for the film's faceColors.white, else plain white
   const eyeWhite = (c = null) => {
     const w = ensureGameFace().white;
     w.color.set(c ?? savedFaceColors?.white ?? "#f4f4f4");
     w.emissive.copy(w.color);
   };
-  // Minecraft's hurt overlay: the skin goes red while hurt or dying (on/off, as in the game)
   const red = (on) => {
     for (const m of [inner, outer]) {
       m.color.setRGB(1, on ? 0.45 : 1, on ? 0.45 : 1);

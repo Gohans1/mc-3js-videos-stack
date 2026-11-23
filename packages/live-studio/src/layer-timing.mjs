@@ -47,7 +47,6 @@ export const remapOutputTime = (before, after, t, edge = "after") => {
   return after.outputAt(before.sourceAt(t, edge), edge);
 };
 
-// A linkage edit maps the layers' current output through the change in the main track; their original source clock stays intact.
 const compose = (layer, before, after) => {
   const outputAt = (t, edge = "after") =>
     remapOutputTime(before, after, layer.outputAt(t, edge), edge);

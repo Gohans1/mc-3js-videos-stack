@@ -108,7 +108,6 @@ function focusReaderLine(scroller: HTMLElement | null, line: number) {
   return true;
 }
 
-/** Reader, painted live editor, Contents navigator, and AI word-diff sheet for one lesson file. */
 export function LessonFileView({
   path: key,
   initialLine,
@@ -165,13 +164,11 @@ export function LessonFileView({
   const headingLines = useMemo(() => new Set(heads.map((heading) => heading.line)), [heads]);
   const activeHeadLine = useMemo(() => findActiveHeading(heads, activeLine), [heads, activeLine]);
 
-  // Clean up any running flyTo scroll animation on unmount or file switch
   useEffect(() => () => flyStop.current?.(), []);
   useEffect(() => {
     viewRef.current = effectiveView;
   }, [effectiveView]);
 
-  // A file just created via New picks its template heading immediately in Edit mode
   useEffect(() => {
     const picked = takePick(key);
     if (picked) {
@@ -540,7 +537,6 @@ export function LessonFileView({
             onScroll={(e) => setActiveLine(findVisibleLine(e.currentTarget))}
             className="scroll-fade min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-1"
           >
-            {/* the painted copy sets the height and draws the words; the textarea over it takes the typing, its own words see-through */}
             <div className="focus-within:ring-ring relative mx-auto grid w-full max-w-[42rem] grid-cols-[minmax(0,1fr)] rounded-md focus-within:ring-2 focus-within:ring-inset">
               <pre
                 ref={painted}

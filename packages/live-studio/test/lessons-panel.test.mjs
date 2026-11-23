@@ -507,7 +507,6 @@ describe("LessonsPanel rendered component behavior", () => {
     assert.match(html, /aria-label="Line 1: blank line"/);
     assert.match(html, /aria-label="Line 2, added: blank line"/);
 
-    // Boundary ArrowLeft / ArrowRight inside columns stops propagation so timeline seek hotkeys do not fire
     assert.equal(panelMod.isDeckBoundaryKey("ArrowLeft"), true);
     assert.equal(panelMod.isDeckBoundaryKey("ArrowRight"), true);
     assert.equal(panelMod.isDeckBoundaryKey("Enter"), false);

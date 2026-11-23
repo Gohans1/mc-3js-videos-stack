@@ -1,5 +1,3 @@
-// Accent-to-ink colour mixing in OKLab (ported from Cinetic's color.ts), so a tint cooling into the text colour never goes
-// muddy through grey. Takes any CSS colour a film writes: the 148 named ones (three's Color.NAMES), hex, rgb() and hsl().
 import { Color } from "three";
 
 import { clamp01 } from "./titles-text";

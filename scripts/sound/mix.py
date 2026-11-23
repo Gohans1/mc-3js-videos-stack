@@ -30,7 +30,7 @@ from studio_tell import job  # noqa: E402
 from review.stale import render_context  # noqa: E402
 from seconds import heard_second  # noqa: E402
 
-ROOT = Path.cwd()  # the film's folder: bun run mix runs it there
+ROOT = Path.cwd()
 REAL_ROOT = ROOT.resolve()
 READ_DOCUMENTS = {}
 ALLOWED_AUDIO_FILTER = re.compile(
@@ -114,7 +114,6 @@ _RAW_LIVE_LANES = False
 _MEASURE_ARGS = None
 _VIDEO_ARG = None
 
-# bun run mix [video]: every word checked before the mix starts (--raw and --measure are the studio's own calls)
 if _IS_MAIN:
     _argv = sys.argv[1:]
     if _argv[:1] == ["help"] or "-h" in _argv or "--help" in _argv:
@@ -204,8 +203,6 @@ try:
 except ValueError as e:
     raise SystemExit(str(e))
 A = _read_stdin_json("Audio timeline stdin") if _MODE == "measure" else _read_json(SOUND_PATH, SOUND_REL)
-# A track muted in the studio (audio.json "tracks", mute) is left out of every mix; a track's gain (dB) is a volume after each
-# clip's own chain, so normalizing a clip (measure_clip) leaves it out
 _tracks = A.get("tracks") if isinstance(A, dict) and isinstance(A.get("tracks"), list) else []
 MUTED = {t["id"] for t in _tracks if isinstance(t, dict) and t.get("mute") and isinstance(t.get("id"), str)}
 if isinstance(A, dict) and _MODE != "measure":
@@ -484,7 +481,6 @@ def _safe_filters(items):
     return out
 
 
-# What was picked in the studio: {sound name: {set: option name, gain: x}}. The studio writes it, never this script
 CHOICES = next((ROOT / f for f in ("choices.json", "sound_choices.json") if (ROOT / f).exists()), ROOT / "choices.json")
 try:
     choice_file = _assert_in_root(CHOICES, CHOICES.name) if CHOICES.exists() else None
@@ -501,7 +497,7 @@ for _cname, _centry in CHOICES_MAP.items():
         raise SystemExit(f"{CHOICES.name}: {_cname!r}.set must be a string")
     if _centry.get("gain") is not None and (not _is_num(_centry["gain"]) or _centry["gain"] <= 0):
         raise SystemExit(f"{CHOICES.name}: {_cname!r}.gain must be a positive number")
-STEMS = ROOT / "assets/public/agent/stems"  # served by the studio as /agent/stems
+STEMS = ROOT / "assets/public/agent/stems"
 
 
 def _repo_vault_root():
@@ -1096,10 +1092,9 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
             source_bindings["files"][stored] = media_identity(path)
             if processing and processing.get("name"):
                 source_bindings["names"][processing["name"]] = stored
-        i = len(chains)  # one chain per input file, so this is the input's index
+        i = len(chains)
         timing = (processing or {}).get("__timing")
         rate = float((processing or {}).get("rate") or 1)
-        # a bed that runs past its file's end crossfades into the next pass (process.py loop_xfade), never a hard -stream_loop jump
         file = seconds(processing["name"]) if loop and processing else 0
         wraps = bool(loop and processing and length is not None) and start + length * rate > file
         if processing and (timing or wraps or processing.get("dialogue") or rate != 1 or (processing.get("pitch") or 0) or processing.get("reverse") or ((processing.get("voiceFilter") or "none") != "none" and (processing.get("voiceStrength") if processing.get("voiceStrength") is not None else 100) > 0)):
@@ -1193,8 +1188,6 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         f.append(f"adelay={samples}S|{samples}S")
         chains.append(f"[{i}:a]{','.join(f)}[a{i}]")
 
-    # Dialogue compression (4:1 above -30 dBFS, fast attack) and a voice limiter bring the hushed narration's peaks to
-    # about 11 dB over its loudness, so the loudness pass below can stay linear
     has_voice = A.get("voice") is True or (A.get("voice") is None and (ROOT / "assets/public/agent/full_voice.wav").is_file())
     if voice and not A.get("narration") and has_voice:
         add(_assert_in_root(ROOT / "assets/public/agent/full_voice.wav", "Voice audio"), 0, float(A.get("voiceGain") or 0), length=END,
@@ -1218,15 +1211,11 @@ def _build(out, beds, sfx, voice, span, master, float_output, end, folder, sourc
         mid_t = float(s["at"]) + 0.5 * eff_len
         rev = resolve_clip_reverb(s.get("reverb"), _cam_source_time(mid_t), spaces, film_reverb)
         add(present(s["name"]), float(s["at"]), float(s["gain"]), start_at, s_len, float(s.get("fadeIn") or 0), float(s.get("fadeOut") or 0), gain_keys=s.get("gainKeys"), processing=s, extra=[*_safe_filters(s.get("filters")), *track_chain(s), *([pan_filter(float(s["pan"]))] if s.get("pan") else [])], reverb_spec=rev, spatial_spec=s.get("spatial"))
-    if not chains:  # a film with no sound yet: silence as long as the film
+    if not chains:
         inputs.extend(["-f", "lavfi", "-t", str(end), "-i", "anullsrc=r=48000:cl=stereo"])
         chains.append("[0:a]anull[a0]")
     drive_db = float(A.get("drive") or 0)
     graph = chains + [
-        # audio.drive dB into the limiter first: hits (a slam, a drawer) stand ~20 dB over the average, too far apart for the
-        # linear -14 LUFS pass below; the limiter trims them so the gap fits. Then the
-        # safety limiter at about -7 dBFS. The loudness pass after it stays linear (listen.level): a dynamic one lifts
-        # every quiet stretch (the CCTV hiss came up level with the voice), so drive is the only lever for more loudness
         f"{''.join(f'[a{i}]' for i in range(len(chains)))}amix=inputs={len(chains)}:normalize=0,apad=whole_dur={end},asetpts=N/SR/TB,atrim=duration={end}"
         + (f",volume={drive_db}dB,alimiter=limit=0.45:level=false:latency=true" if master else "")
         + (f",atrim={span[0]}:{span[1]},asetpts=PTS-STARTPTS" if span else "") + "[out]",
@@ -1256,7 +1245,7 @@ def measure_clip(kind, index):
     rows = A.get(kind)
     if not isinstance(rows, list) or index < 0 or index >= len(rows) or not isinstance(rows[index], dict):
         raise ValueError(f"{kind}[{index}] does not exist")
-    c = chosen({**rows[index], "track": None})  # --measure reads the unsaved lanes, unfiltered, from stdin
+    c = chosen({**rows[index], "track": None})
     if c is None:
         raise ValueError("Choose an audible sound option before normalizing")
     start_key = "from" if kind == "beds" else "at"
@@ -1310,7 +1299,7 @@ def studio(out):
         for kind, e in group:
             if kind == "bed":
                 spans.append((float(e["from"]), float(e["to"])))
-            else:  # a one-shot without a length rings as long as its longest option
+            else:
                 spans.append((float(e["at"]), float(e["at"] + _sfx_options_length(e))))
         span = (min(a for a, _ in spans), max(b for _, b in spans))
         (safe_stems / name).mkdir(parents=True, exist_ok=True)
@@ -1381,7 +1370,6 @@ if _IS_MAIN:
         raise SystemExit(2)
     if context and context["stale"]:
         print(f"STALE: {context['stale']['message']}", file=sys.stderr)
-    # a guide sound (the reference's voice to time against, a temp track) is scratch audio: drafts carry it, a final never
     guides = [e["name"] for kind in ("beds", "sfx") for e in A[kind] if e.get("guide") and chosen(e)]
     if guides and whole and render["final"]:
         print(f'{SOUND_REL}: guide sound {", ".join(json.dumps(n) for n in dict.fromkeys(guides))} is not for release: '

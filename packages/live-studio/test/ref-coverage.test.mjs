@@ -1,5 +1,3 @@
-// A remake said "polish later" for hours while 0 of the reference's sounds had a cue: bun run check now counts how much
-// of the reference the film has matched, per track, so a goal or a stop hook can read it
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

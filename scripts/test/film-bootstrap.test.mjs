@@ -241,7 +241,6 @@ test("empty asset folders do not count as a prepared vault", () => {
 test("setup returns failure when local assets are missing, then succeeds after restore", () => {
   const root = fixture();
   try {
-    // Downloads are replaced at the network boundary; install and link still run for real.
     put(root, "scripts/setup_vault.mjs", "console.log('fixture vault prepared');");
     rmSync(join(root, "vault/packs"), { recursive: true });
     const missing = run(root, "scripts/setup.mjs");

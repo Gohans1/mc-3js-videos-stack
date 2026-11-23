@@ -1,6 +1,3 @@
-// The sound tracks' canvas (lanes.ts draws it and takes the pointer) and its right-click menu, as CapCut's on a clip: copy,
-// cut, paste, delete, split at the playhead, copy and paste attributes. A right-click on a clip not yet picked picks it alone
-// first; on empty space the menu only pastes. Every item is a key too (Settings, Shortcuts)
 import { useState } from "react";
 
 import {

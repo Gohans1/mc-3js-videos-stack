@@ -4,11 +4,6 @@ import ccS from "../pack/assets/gohans/blockstates/cctv_camera.json";
 import domeS from "../pack/assets/gohans/blockstates/cctv_dome.json";
 import cmS from "../pack/assets/gohans/blockstates/cctv_mount.json";
 import cartS from "../pack/assets/gohans/blockstates/chest_minecart.json";
-// The shared props (pack/assets/gohans): things the game lacks, written as vanilla Java block models on the game's own
-// textures, so Blockbench opens them and block-model-renderer lights them like every other block. Bundled into the page
-// and served from memory as a block-model-renderer source, stacked above client.jar: createScene([props, ...film's, jar]).
-// A new prop for every film: its blockstate and model in pack/assets/gohans, imported here (both bundlers need a plain
-// import per file). A prop only one film needs: that film's own pack, the same way through packOf.
 import computerS from "../pack/assets/gohans/blockstates/computer.json";
 import beigeS from "../pack/assets/gohans/blockstates/computer_beige.json";
 import beigeKS from "../pack/assets/gohans/blockstates/computer_beige_keys.json";
@@ -83,7 +78,6 @@ const MODELS = {
   book_pulled: [booksS, booksM],
 };
 
-/** A block-model-renderer source serving block models from memory: { "assets/<ns>/...json": parsed JSON }. */
 export function packOf(files) {
   return {
     read: (path) => (path in files ? JSON.stringify(files[path]) : null),

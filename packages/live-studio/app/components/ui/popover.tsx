@@ -15,7 +15,6 @@ function PopoverTrigger({ ...props }: PopoverPrimitive.Trigger.Props) {
 const POPUP_MOTION =
   "transition-[opacity,scale] duration-160 ease-studio-out data-starting-style:opacity-0 data-starting-style:scale-[0.96] data-ending-style:opacity-0 data-ending-style:scale-[0.96] data-ending-style:duration-120 motion-reduce:transition-opacity motion-reduce:duration-100 motion-reduce:data-starting-style:scale-100 motion-reduce:data-ending-style:duration-100 motion-reduce:data-ending-style:scale-100";
 
-// flush: a panel that lays itself out (Settings), with no padding or gap of the popover's own
 const popoverContentVariants = cva(
   "bg-popover text-ui/normal text-popover-foreground ring-foreground/10 z-50 flex w-72 origin-(--transform-origin) flex-col rounded-lg border border-transparent shadow-md ring-1 outline-hidden forced-colors:border-[CanvasText]",
   {
@@ -54,7 +53,6 @@ function PopoverContent({
         className="isolate z-50"
       >
         <PopoverPrimitive.Popup
-          // Focus goes back to the trigger only after a keyboard close: after a click Space must play the film, not reopen this
           finalFocus={(closedBy) => closedBy === "keyboard"}
           data-slot="popover-content"
           className={cn(popoverContentVariants({ variant, motion }), className)}

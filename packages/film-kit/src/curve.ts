@@ -1,17 +1,8 @@
-// Keyframes that keep their speed through every key, the way Blender's default "Auto Clamped" handles do: a smoothstep
-// per key stops the motion dead at each key (move, freeze, move: the robot look). Tangents are PCHIP's (Fritsch-Butland,
-// MATLAB pchip): flat at a peak or trough, never overshooting a keyed value, and continuous in speed elsewhere.
-//   const x = curve([{ t: 0, v: 0 }, { t: 1, v: 2 }, { t: 2, v: 3, stop: true }]);  x(1.5), x.vel(1.5)
-// Per key: stop (arrives and leaves at rest), hold (keeps its value until the next key, then jumps), linear (straight to the
-// next key). v may be a number or an array (each component on its own). angle: true unwraps degrees so 350 -> 10 turns +20.
-// through(...) is one segment of the same curve for keys whose values move (src/pose.ts blends whole poses with it).
-
 export type Value = number | number[];
 export type Key = { t: number; v: Value; stop?: boolean; hold?: boolean; linear?: boolean };
 export type Curve = ((t: number) => Value) & { vel: (t: number) => Value; keys: Key[] };
 
 const arr = (v: Value) => (Array.isArray(v) ? v : [v]);
-// PCHIP tangent at a key between segments of length h0, h1 and slopes s0, s1
 export const pchip = (h0: number, h1: number, s0: number, s1: number) =>
   s0 * s1 <= 0 ? 0 : (3 * (h0 + h1)) / ((2 * h1 + h0) / s0 + (h1 + 2 * h0) / s1);
 export const hermite = (p0: number, p1: number, m0: number, m1: number, u: number) => {
@@ -22,9 +13,6 @@ export const hermite = (p0: number, p1: number, m0: number, m1: number, u: numbe
   );
 };
 
-// One segment of such a curve when the key values are themselves moving (each key a pose still breathing): va at ta to
-// vb at tb, with the keys either side (vp at tp, vn at tn; null for none, which arrives or leaves at rest). With no
-// neighbours, or flat ones, it is exactly smoothstep.
 export function through(
   vp: number | null,
   va: number,
@@ -57,7 +45,6 @@ export function curve(input: Key[], { angle = false } = {}): Curve {
     for (let i = 1; i < n; i++)
       for (let d = 0; d < dims; d++) V[i][d] += 360 * Math.round((V[i - 1][d] - V[i][d]) / 360);
 
-  // slope of each segment, then the tangent at each key
   const S = Array.from({ length: n - 1 }, (_, i) =>
     V[i].map((v, d) => (V[i + 1][d] - v) / (T[i + 1] - T[i] || 1e-9)),
   );

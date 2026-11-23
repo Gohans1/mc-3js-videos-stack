@@ -341,13 +341,11 @@ test("AiPresence preserves min-w-10 floor and collapses 'AI idle' cleanly to ico
   await page.evaluate(`window.__TL_TEST__.set({ free: true })`);
   await Bun.sleep(60);
 
-  // Default 400px Library -> 1156px stage: full "AI idle" visible, unclipped
   const wide = await measureTransport();
   expect(wide.overlaps).toEqual([]);
   expect(wide.hasIdleLabel).toBe(true);
   expect(wide.idleNotClipped).toBe(true);
 
-  // Drag Library to 800px -> 756px stage with Free Cam ON: "AI idle" collapses to icon-only instead of "AI i"
   await page.evaluate(`window.__TL_TEST__.setLayout(800, 340)`);
   await waitUntil(`(() => {
     const aiBtn = document.querySelector('button[aria-label*="What the AI is doing"]');
@@ -359,7 +357,6 @@ test("AiPresence preserves min-w-10 floor and collapses 'AI idle' cleanly to ico
   expect(narrow.aiWidth).toBeGreaterThanOrEqual(40);
   expect(narrow.hasIdleLabel).toBe(false);
 
-  // Drag back to 400px Library -> full "AI idle" returns cleanly without clipping
   await page.evaluate(`window.__TL_TEST__.setLayout(400, 340)`);
   await waitUntil(`(() => {
     const aiBtn = document.querySelector('button[aria-label*="What the AI is doing"]');

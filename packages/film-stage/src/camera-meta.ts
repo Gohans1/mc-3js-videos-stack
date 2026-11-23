@@ -4,7 +4,6 @@ import BezierEasing from "bezier-easing";
 export const CAMERA_CHANNELS = ["position", "aim", "lens", "dof", "roll", "shake"] as const;
 export type CameraChannel = (typeof CAMERA_CHANNELS)[number];
 
-// Pure Cinetic exponential, log-scale, impact-pulse and monotone-spline primitives so films and the studio share one math bank.
 export const expOut = (k = 6) => {
   const d = 1 - Math.exp(-k);
   return (t) => (t <= 0 ? 0 : t >= 1 ? 1 : (1 - Math.exp(-k * t)) / d);
@@ -71,8 +70,6 @@ export const hitPulse = (u) => {
   return u < 0.18 ? SNAP_OUT(u / 0.18) : 1 - GLIDE_OUT((u - 0.18) / 0.82);
 };
 
-// How a span between two keys spends its time (the later key's `ease`), each EASES entry with one job (bun run find
-// reads these with the curve's own shape)
 export const EASE_JOBS = {
   base: {
     eases: ["smooth", "linear", "out", "in", "inout", "expo"],
@@ -115,7 +112,6 @@ export const EASES = {
   launchIn: BezierEasing(0.556, 0.053, 0.835, 0.188),
   xpLeave: expIn(6),
 };
-// A key's ease may also be a CSS cubic-bezier [x1, y1, x2, y2] (the studio's curve editor writes these)
 const beziers = new WeakMap();
 export const easeOf = (e) => {
   if (typeof e === "string" && e.startsWith("reverse:")) {

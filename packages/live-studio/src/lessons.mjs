@@ -1,8 +1,3 @@
-// The lessons the creator's notes taught: both global (the repo's lessons/) and per-film (this film's lessons/), as recursive .md files.
-// bun run notes ID names the files a note needs, each with every heading and its line: by default Jev reads only a file's path,
-// frontmatter and headings, never the words under them, and the AI picks the headings to open (the creator's call: Jev finds
-// the topic, the AI the part). The answer is kept in the film's notes/ until the note's words or what Jev reads of the
-// lessons change, so reading a note again costs nothing.
 import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -12,7 +7,6 @@ import { jevJudge } from "../../clip-catalog/jev.ts";
 import { DEFAULT_LESSON_JEV_CONFIG, fillTemplate, LessonJevConfigSchema } from "./lesson-config.ts";
 import { mdHeads } from "./md-heads.ts";
 
-// MC_LESSONS: another folder (a test points it at an empty one, so no test pays Jev)
 export const LESSONS =
   process.env.MC_LESSONS ?? fileURLToPath(new URL("../../../lessons", import.meta.url));
 
@@ -34,7 +28,6 @@ const mdFiles = (dir, scope = "all") =>
         .toSorted((a, b) => (a.path < b.path ? -1 : 1))
     : [];
 
-// The topics there are, as "craft/walk" for lessons/craft/walk.md
 export const lessonTopics = (dir = LESSONS) => mdFiles(dir).map(({ rel }) => rel.slice(0, -3));
 
 const flat = (s) => s.replace(/\s+/g, " ").trim();
@@ -76,9 +69,6 @@ const lessonFile = (
   };
 };
 
-// Jev's Choice ranks every file, then a Noul each checks the first few (jev.ts jevJudge). Measured against one Noul per file
-// in one request (TypeSafe's record pattern): that said yes too readily, 20/25 holdout to this 23/25. The note's frame sent
-// along (docs.typesafe.ai/images) was measured on 87 real notes too: 65/87 to words alone 69/87, and 0.5 s slower a note
 export const lessonQuestion = (text, config = DEFAULT_LESSON_JEV_CONFIG) => ({
   wanted: [config.systemPreamble, fillTemplate(config.wantedTemplate, { note: text })]
     .filter(Boolean)
@@ -174,9 +164,6 @@ const readCache = (file) => {
   }
 };
 
-// note id -> {picks: [{path, sure, heads: [{line, head}]}]} (best first; sure: Jev's yes, else it was unsure; heads: every
-// heading of the file, for the AI to open the lines it needs) or {why} when Jev could not answer; no entry when there are no
-// lessons yet
 export async function lessonsFor(
   notes,
   {
@@ -211,10 +198,8 @@ export async function lessonsFor(
   const plan = [];
   const pendingByKey = new Map();
   for (const n of notes) {
-    // the creator's answers after it as well: "and the hinge squeak is missing" may need another lesson than the note's words
     const words = [n.text, ...(n.asks ?? []).map((a) => a.text)].join("\n"),
       key = lessonCacheKey(words, pool, config);
-    // an entry from before picks (it kept paths) is asked again
     const entry = kept[n.id];
     const valid =
       entry?.key === key &&
@@ -280,7 +265,6 @@ export async function lessonsFor(
       }
       kept[n.id] = {
         key,
-        // the files, not their heading lines: an edit under a heading moves them without asking Jev again
         picks: res.picks.map((p) => ({ ...p })),
       };
       changed = true;

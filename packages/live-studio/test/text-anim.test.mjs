@@ -45,7 +45,6 @@ test("voice capability flags and defaults match Cinetic word-stagger, OKLab-tint
     tidyTitleFx({ fx: "aiPrism", len: 0.6, stagger: 0.3, tint: "cyan" }, customVoice),
     { fx: "aiPrism", len: 0.6, stagger: 0.3, tint: "cyan" },
   );
-  // Unknown AI voice without explicit stagger:false / tint:false never strips AI-authored stagger or tint
   const bareCustom = { id: "aiBare", title: "AI Bare", len: 0.5 };
   assert.deepEqual(
     tidyTitleFx({ fx: "aiBare", len: 0.5, stagger: 0.2, tint: "#ff6b2c" }, bareCustom),

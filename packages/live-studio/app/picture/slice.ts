@@ -1,4 +1,3 @@
-// The picture's part of the page state (core/store.ts). Fields kept between visits come from core/prefs.ts
 import type { FocusTargetSpec } from "film-stage/camera";
 
 import type { Ratio } from "../../src/frame.ts";
@@ -15,16 +14,16 @@ export type FreeTouched = Partial<
 >;
 
 export interface PictureSlice {
-  ratio: Ratio; // the film's frame shape (frame.ts), from its package.json
+  ratio: Ratio;
   captions: boolean;
-  guides: boolean; // framing guides over the picture (Guides.tsx)
+  guides: boolean;
   guideMode: GuideMode;
   guideSafe: boolean;
-  valueCheck: ValueCheckMode; // viewport luminance check only, never touches film grade
-  ghost: boolean; // cut-boundary onion skin overlay (GhostOverlay.tsx)
+  valueCheck: ValueCheckMode;
+  ghost: boolean;
   ghostOpacity: number;
-  blindAudio: boolean; // audio-only listening curtain over Stage
-  colorScript: boolean; // horizontal shot/palette/pacing strip (ColorScript.tsx)
+  blindAudio: boolean;
+  colorScript: boolean;
   freeLook: boolean;
   freeLocked: boolean;
   freeNavigation: "fly" | "walk";
@@ -40,19 +39,19 @@ export interface PictureSlice {
   freeTouched: FreeTouched;
   freePoseRev: number;
   freeHistoryRev: number;
-  flySpeed: number; // the free camera's, blocks a second (flight.ts)
-  nightVision: boolean; // the free camera's view lit up to find the way (nightvision.ts)
-  scopes: boolean; // CapCut's Color oscilloscope under the picture (Oscilloscope.tsx, scopes.ts)
-  filmView: FilmViewSize; // the film camera's corner picture beside the free camera (filmcam.ts): its size, split, or off
-  filmViewWidth: number | null; // user-dragged pixel width of Film camera PiP; null keeps compact small default
+  flySpeed: number;
+  nightVision: boolean;
+  scopes: boolean;
+  filmView: FilmViewSize;
+  filmViewWidth: number | null;
   preview: PreviewOptions;
   pinnedAngles: (PinnedAngle | null)[];
   compareGrid: boolean;
   shotList: boolean;
   final: boolean;
-  pickFocus: CameraKeyIdentity | "free" | null; // active keyframe target or "free" waiting for click-on-stage focus pick
-  still: PreviewStill | null; // the snapshot to compare against (snapshot.ts)
-  comparing: boolean; // the snapshot shows over the picture while \ is held
+  pickFocus: CameraKeyIdentity | "free" | null;
+  still: PreviewStill | null;
+  comparing: boolean;
 }
 export const pictureSlice: Omit<
   PictureSlice,

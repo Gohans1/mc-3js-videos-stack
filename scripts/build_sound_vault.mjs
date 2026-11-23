@@ -54,7 +54,6 @@ const MIXKIT_CATEGORY = {
   tick: "foley",
   paper: "foley",
 };
-// The catalogue's role is the sound's job, not always its category: a UI chime and a glass clink
 const MIXKIT_ID_CATEGORY = { "mixkit-1107": "notifications", "mixkit-154": "foley" };
 
 const MIXKIT_SWEETENERS = {
@@ -68,7 +67,6 @@ const MIXKIT_SWEETENERS = {
   "mixkit-2182": "impact",
 };
 
-// Public CDN -hq.ogg previews for Earshot's 15 CC0 1.0 Freesound source recordings (earshot/forge/bank/fit.json).
 const FREESOUND_PREVIEWS = {
   "fs-452379": "https://cdn.freesound.org/previews/452/452379_1844073-hq.ogg",
   "fs-167829": "https://cdn.freesound.org/previews/167/167829_71257-hq.ogg",
@@ -211,7 +209,6 @@ const fitCategoryOf = (fitId, fsId) => {
   return "clicks";
 };
 
-// A rebuild that re-files a sound moves it, so it never sits in two categories
 const moveIntoCategory = (vaultSound, kind, target) => {
   if (existsSync(target)) return;
   const kindDir = join(vaultSound, kind);
@@ -226,8 +223,6 @@ const moveIntoCategory = (vaultSound, kind, target) => {
   }
 };
 
-// normalize: bring every sound's peak to -1 dBFS (a library's quiet takes come up, at most MAX_BOOST_DB); otherwise only
-// a hot one comes down
 const MAX_BOOST_DB = 30;
 const peakOf = async (raw, seek = []) => {
   const stat = await run(
@@ -240,7 +235,6 @@ const peakOf = async (raw, seek = []) => {
     .filter(Number.isFinite);
   return peaks.length ? Math.max(...peaks) : -1;
 };
-// from/to: one take of a longer file, faded in 3 ms and out 10 ms so its cut never clicks
 export async function convertToPcmWav(
   raw,
   target,
@@ -320,7 +314,6 @@ const slug = (s) =>
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
-// "impactWood_heavy" -> "Impact wood heavy"; an all-caps word stays ("jingles_NES" -> "Jingles NES")
 const humanize = (s) => {
   const t = s
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -331,7 +324,6 @@ const humanize = (s) => {
     .join(" ");
   return t.charAt(0).toUpperCase() + t.slice(1);
 };
-// Takes of one sound differ only by a trailing number ("click_003", "footstep07"); a name that is only a number is its own
 const baseOf = (stem) => stem.match(/^(.*?[^\d\s_-])[\s_-]*\d+$/)?.[1] ?? stem;
 const audioFiles = (dir, at = "") =>
   readdirSync(join(dir, at), { withFileTypes: true })
@@ -350,11 +342,6 @@ const secondsOf = async (file) => {
   );
   return Number(stdout.trim());
 };
-// A file of many takes cut at its silences, as an editor's strip silence does (Sound Forge "remove silence between
-// phrases"), on a 5 ms peak envelope: a gap is 0.35 s below 45 dB under the file's peak. A stretch more than
-// MAX_BOOST_DB under that peak is noise between takes, not a take. Each take's edges are found again against its own
-// peak (a quiet take's file-level gap is still inside its attack and tail): 10 ms before the first block within 40 dB
-// of it, 20 ms after the last, at most 0.5 s past where the file-level gap began, never past half the gap
 const TAKE = {
   rate: 16000,
   blockS: 0.005,
@@ -366,9 +353,7 @@ const TAKE = {
   tailMaxS: 0.5,
   shortestS: 0.05,
 };
-// Longer than this is an ambience, not a row of takes: never decoded to look for gaps
 const SPLIT_MAX_S = 300;
-// A Mixkit sound longer than this is cut into its takes: the Sonniss source's maxSeconds in scripts/sound-raw.json
 const MIXKIT_MAX_S = 12;
 async function takesOf(file) {
   const { stdout } = await run(
@@ -411,7 +396,6 @@ async function takesOf(file) {
     return span[1] - span[0] >= TAKE.shortestS ? [span] : [];
   });
 }
-// Each file's length and takes, kept beside the pack so a rebuild reads no long file twice
 const packCache = (dir) => {
   const file = join(dir, ".sort-cache.json");
   const params = JSON.stringify(TAKE);
@@ -438,7 +422,6 @@ const packCache = (dir) => {
       e.seconds ??= await secondsOf(join(dir, rel));
       return e.seconds;
     },
-    // Saved after each file it decodes (seconds each on a busy disk), so a stopped build loses none of them
     takes: async (rel) => {
       const e = entry(rel);
       if (!e.takes) {
@@ -459,13 +442,6 @@ const pool = async (items, n, work) => {
   );
 };
 
-// The raw packs fetch:sound-raw unpacked, each file filed by the first sort rule that matches its name, else its path
-// in the pack (a folder named "Hits & Whooshes" holds both): the pack's own rules, then its source's. A file longer
-// than "maxSeconds" (the rule's, else the source's) gives one sound per take when its silences cut it into takes
-// that fit, and is left out otherwise.
-// A file no rule takes is named, never guessed into a category; a rule with "skip" leaves files out on
-// purpose. Sounds whose names differ only by a trailing number become one family of takes, unless the rule says
-// "takes": false. A rule's "title" wraps the file's name ("{name} (female voice)")
 async function buildRawPacks({ root, external, vaultSound, sources, log }) {
   const file = join(root, "scripts/sound-raw.json");
   if (!existsSync(file)) return;
@@ -474,7 +450,6 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
     for (const pack of src.packs) {
       const dir = join(external, "sound-raw", srcId, pack.id),
         packId = `${srcId}/${pack.id}`;
-      // fetch:sound-raw writes .pack.json once a pack is whole: a torrent still running holds half-written files
       if (!existsSync(join(dir, ".pack.json"))) {
         log(`${packId}: not downloaded yet (bun run fetch:sound-raw)`);
         continue;
@@ -484,7 +459,6 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
         re: new RegExp(r.match),
       }));
       const files = audioFiles(dir).filter((rel) => !skip?.test(rel));
-      // "take 12.M": a mono file's mark, not part of its name
       const stemOf = (rel) =>
         basename(rel)
           .replace(RAW_AUDIO, "")
@@ -498,10 +472,8 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
           rules.find((r) => r.re.test(basename(rel))) ?? rules.find((r) => r.re.test(rel));
         if (!rule) unsorted.push(rel);
         if (!rule || rule.skip) continue;
-        // "takes": false = the number names a different line ("round_2"), not another take of one sound
         const stem = stemOf(rel),
           base = rule.takes === false ? stem : baseOf(stem);
-        // the same file name in two folders of a pack (Female/go, Male/go) takes its folder into its name
         const own = stems.get(stem).length > 1 ? `${basename(dirname(rel))}-${stem}` : stem;
         picked.push({
           rel,
@@ -515,8 +487,6 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
           ),
         });
       }
-      // A long file is an ambience or many takes in one: not a sound to drop on a cue as it is. One whose silences cut
-      // it into takes that each fit the limit gives one sound per take; any other stays out
       const cache = packCache(dir);
       const long = new Map();
       await pool(
@@ -537,7 +507,6 @@ async function buildRawPacks({ root, external, vaultSound, sources, log }) {
         },
       );
       cache.save();
-      // A take's span (seconds in its file, to the ms) is kept in SOURCES.json: a take whose span moved is cut again
       picked = picked.flatMap((p) =>
         !long.has(p)
           ? [p]
@@ -616,12 +585,9 @@ export async function buildSoundVault({
   const sources = existsSync(sourcesFile) ? JSON.parse(readFileSync(sourcesFile, "utf8")) : {};
   const dropDir = pixabayDir ?? (local === LOCAL ? join(homedir(), "Downloads") : undefined);
 
-  // 1. Mixkit curated SFX: the cinetic kit's catalogue.sounds (catalogue.rejected excluded), filed by role, and the
-  // vault's own picks (scripts/sfx-picks.json), each naming its category; reuse the vault/sfx/mixkit cache
   const catalogue = JSON.parse(readFileSync(join(root, "scripts/sfx-catalogue.json"), "utf8"));
   const picksFile = join(root, "scripts/sfx-picks.json");
   const picks = existsSync(picksFile) ? JSON.parse(readFileSync(picksFile, "utf8")).sounds : [];
-  // a sound both name is filed once, as the vault's own pick says: the studio keys sounds by name, one category each
   const mixkitKept = [
     ...new Map([...(catalogue.sounds ?? []), ...picks].map((s) => [s.id, s])).values(),
   ];
@@ -638,7 +604,6 @@ export async function buildSoundVault({
     );
   for (const s of mixkitKept) {
     moveIntoCategory(vaultSound, "sfx", filed(s));
-    // an earlier build's copy under another category (both lists filed it) is a second sound of the same name
     const sfxDir = join(vaultSound, "sfx");
     for (const cat of existsSync(sfxDir) ? readdirSync(sfxDir, { withFileTypes: true }) : [])
       if (cat.isDirectory() && join(sfxDir, cat.name, `${s.id}.wav`) !== filed(s))
@@ -647,9 +612,6 @@ export async function buildSoundVault({
     await download(s.file_url, join(mixDir, `${s.id}.wav`), validWav);
     fetched.add(s);
   }
-  // A cached sound longer than a Sonniss one may be is many calls in one file when its silences cut it into takes that
-  // each fit: one sound per take, as for a raw pack. A rhythm (ticking, a heartbeat) cuts into single beats: its pick's
-  // "maxSeconds" keeps it whole. A pick with no cached file stays as it is
   const cache = existsSync(mixDir) ? packCache(mixDir) : null;
   const cut = new Map();
   let longWhole = 0;
@@ -728,7 +690,6 @@ export async function buildSoundVault({
       `Mixkit SFX: ${longWhole} sounds longer than their limit kept whole: no silences cut them into takes that fit (a pick's maxSeconds in scripts/sfx-picks.json says it is meant to be long)`,
     );
 
-  // 2. Earshot 252 DSP recipes + 15 curated CC0 1.0 Freesound original recordings (fit.json)
   const earshotDir = join(local, "tools/earshot");
   if (!skipEarshot && existsSync(join(earshotDir, "earshot/forge/bank.py"))) {
     const py = process.platform === "win32" ? "python" : "python3";
@@ -794,7 +755,6 @@ export async function buildSoundVault({
     );
   }
 
-  // 3. Cinetic BGM shortlist (direct URLs + user-dropped Pixabay files -> -1 dBFS 44.1 kHz PCM WAV)
   const shortlistPath = [".claude", ".agents"]
     .map((d) => join(root, d, "skills/cinetic/assets/music/shortlist.json"))
     .find(existsSync);
@@ -856,7 +816,6 @@ export async function buildSoundVault({
     );
   }
 
-  // 4. Raw packs (scripts/sound-raw.json), when the external vault holds them
   await buildRawPacks({ root, external, vaultSound, sources, log });
   saveSources(sourcesFile, sources);
   syncSoundVaultPeaks(vaultSound);

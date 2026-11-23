@@ -119,7 +119,6 @@ test("GET /api/sound compresses large library payloads with Brotli, supports If-
   assert.equal(lanesBody.version, "v1");
   assert.equal(libraryCalls, callsBeforeLanes, "?lanes=1 must skip film.sound.library()");
 
-  // POST /api/sound/measure must also verify clip.try candidates exist via fileOf
   const badTryRes = await app.request("/api/sound/measure", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -180,13 +179,11 @@ test("GET / drops cached ?v= boot tags when film-local SFX overrides change reso
   assert.ok(tagsBefore["/api/sfx/hit.wav"]);
   assert.ok(tagsBefore["/api/sfx/hit.webm"]);
 
-  // Switch fileOf("hit") to a film-local override: both .wav and .webm boot tags must be evicted
   currentWav = localWav;
   const tagsAfterPathChange = await extractTags();
   assert.equal(tagsAfterPathChange["/api/sfx/hit.wav"], undefined);
   assert.equal(tagsAfterPathChange["/api/sfx/hit.webm"], undefined);
 
-  // Re-prime .webm tag, then mutate localWav size/mtime without touching smallWebm -> .webm tag must evict
   assert.equal((await app.request("/api/sfx/hit.webm")).status, 200);
   assert.ok((await extractTags())["/api/sfx/hit.webm"]);
   writeFileSync(localWav, Buffer.from("RIFFlocalOverrideModifiedSize0000"));
@@ -307,7 +304,6 @@ test("GET / evicts /api/mix_small.webm ?v= boot tag when film.MIX changes withou
   assert.equal(smallCalls, 1);
   assert.ok((await extractTags())["/api/mix_small.webm"]);
 
-  // Mutate mix.wav (e.g. voice render or remix without sound.json version change) while mix_small.webm hasn't rebuilt yet
   writeFileSync(mixWav, Buffer.from("RIFFmix-v2-different-audio-length"));
   assert.equal((await extractTags())["/api/mix_small.webm"], undefined);
 });

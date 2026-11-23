@@ -1,6 +1,3 @@
-// The page state React draws from: one Zustand store made of each feature's slice (zustand's slices pattern), so a feature's
-// fields and types live in its own folder (camera/slice.ts, notes/slice.ts…). The engine writes it; React reads it. What
-// changes every frame (the clock, captions, the timelines, the film camera corner) is drawn straight into its element instead
 import { useEffect } from "react";
 import { createStore, useStore } from "zustand";
 
@@ -42,7 +39,7 @@ export type ModalKind =
 interface PageSlice {
   ready: boolean;
   metaRev: number;
-  newBuild: boolean; // the film's code changed since this page loaded
+  newBuild: boolean;
   hasVideo: boolean;
   downloading: boolean;
   loading: string;
@@ -84,12 +81,12 @@ interface PageSlice {
     | "film"
     | "lessons"
     | "ports"
-    | "cli"; // on a wide screen: the left column's tab (side then picks the right column's)
-  filmKind: string | null; // the Film tab's open kind (own-work.ts group id, "now" for On screen); null: its first
-  favorites: Favorites; // core/favorites.ts
-  easeTemplates: EaseTemplate[]; // core/ease.ts
+    | "cli";
+  filmKind: string | null;
+  favorites: Favorites;
+  easeTemplates: EaseTemplate[];
   gradeLibrary: GradeLibrary;
-  aiActivity: boolean; // what the AI is doing shown as it works (a setting, core/prefs.ts; activity/activity.ts)
+  aiActivity: boolean;
   noteNotify: boolean;
   activityChime: boolean;
   autoConnectEase: boolean;
@@ -148,7 +145,6 @@ export const useStudio = <T>(pick: (s: StudioState) => T) => useStore(studio, pi
 export const set = studio.setState;
 export const get = studio.getState;
 
-/** Sync open state of note/review dialogs with store.modal so studio hotkeys stay blocked while open. */
 export function useDialogModal(kind: Exclude<ModalKind, null>, open: boolean) {
   useEffect(() => {
     if (open) set({ modal: kind });
@@ -159,22 +155,18 @@ export function useDialogModal(kind: Exclude<ModalKind, null>, open: boolean) {
   }, [kind, open]);
 }
 
-// A setting this browser keeps (core/prefs.ts): shown at once, remembered for the next visit
 export const setPref = <K extends keyof Prefs>(k: K, v: Prefs[K]) => {
   set({ [k]: v } as Partial<StudioState>);
   savePref(k, v);
   S.dirty = true;
 };
 
-// Whether a timeline drag skips snapping: the toolbar's magnet off, or Shift held
 export const noSnap = (e: { shiftKey: boolean }) => e.shiftKey || !studio.getState().magnet;
 
-// The box over the picture, kept until closed: what broke and where, as the old page showed it
 export const showError = (e: unknown) =>
   set({ error: e instanceof Error ? (e.stack ?? e.message) : String(e) });
 
 let statusTimer = 0;
-// A line over the picture that says what just happened, gone after a few seconds
 export const say = (words: string, hold = 3000) => {
   set({ status: words });
   clearTimeout(statusTimer);

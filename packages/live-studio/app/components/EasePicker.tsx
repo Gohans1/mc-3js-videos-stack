@@ -1,6 +1,3 @@
-// How a key is eased into, picked as CapCut's Speed > Curve tiles: the film's named eases (draw.eases), user-saved
-// reusable ease templates (never mutating built-in presets), the pro tools' presets when the film shares none, and a custom
-// curve with its editor (bezier-easing-editor, a CSS cubic-bezier).
 import BezierEditor, { type BezierValue } from "bezier-easing-editor";
 import { Check, Pencil, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
@@ -34,8 +31,6 @@ import { Tip } from "./Tip";
 
 let customCurvePickAt = 0;
 
-// What each of film-stage's named eases does (formulas in film-stage/src/camera.ts EASES; titles in core/ease.ts). smooth is
-// 60% smoothstep + 40% linear, so it never comes to a full stop at a keyframe; inout does
 const TIPS: Record<string, string> = {
   smooth: "Eases a little at both ends, never fully stops",
   linear: "Constant speed. Looks mechanical; use mid-move",
@@ -60,9 +55,6 @@ const TIPS: Record<string, string> = {
   launchIn: "Leave: holds back then launches hard right at the cut",
   xpLeave: "Leave: pure exponential acceleration (k=6) into the cut",
 };
-// For a film that shares no named eases: the pro tools' presets as cubic-beziers, each editable after, named as above. Ease is
-// After Effects Easy Ease (F9: speed 0, influence 33.33%), the default of Blender (Auto Clamped), Unreal (Cubic Auto) and
-// Cinemachine too; Ease Out and Ease In keep the other end linear, as After Effects' Easy Ease In and Out do (Shift+F9, Ctrl+Shift+F9)
 const CURVES: { id: string; title: string; tip: string; v: Bezier }[] = [
   {
     id: "c-ease",
@@ -85,8 +77,6 @@ const CURVES: { id: string; title: string; tip: string; v: Bezier }[] = [
 ];
 const round = (v: number[]) => v.map((x) => Math.round(x * 1000) / 1000) as Bezier;
 
-// A tile's picture of an ease as CapCut draws its speed curves: time across, speed up, the dashed line the average speed (the
-// speed a linear move keeps), the same yellow as the speed shape on the camera row
 const N = 32;
 function Graph({ f }: { f: ((x: number) => number) | null }) {
   const d = 1 / N,
@@ -222,7 +212,6 @@ function BezierCurveFields({
           textStyle={{ fill: tone("muted-foreground"), fontSize: 11, fontFamily: "inherit" }}
         />
       </div>
-      {/* The same four numbers by keyboard with individual resets so no one has to memorize defaults. */}
       <div className="grid grid-cols-4 gap-1.5">
         {CURVE_AXES.map((n, k) => {
           const def = Math.round(defaultValue[k] * 1000) / 1000;
@@ -278,7 +267,6 @@ const uniqueTemplateName = (base: string, existing: EaseTemplate[]) => {
   return `${seed} ${n}`;
 };
 
-// value: the key's ease as stored, none meaning fallback (what the film gives a key without one); onPick saves, one undo step
 export function EaseTiles({
   value,
   fallback,
@@ -548,8 +536,6 @@ type CurveDrag =
       end: AbortController;
     };
 
-// The custom curve's editor: a drag previews (doc.preview) and its release saves once (onSave), so a whole drag is one undo step.
-// bezier-easing-editor follows a handle on window, so a release off its box is common: the drag ends on window as well
 export function CurveEditor({
   value,
   defaultValue = DEFAULT_CUSTOM_CURVE,

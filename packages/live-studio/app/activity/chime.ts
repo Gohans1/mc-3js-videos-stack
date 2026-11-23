@@ -41,7 +41,6 @@ const scheduleTing = (ctx: AudioContext, volume: number) => {
     envelope.gain.setValueAtTime(0, start);
     envelope.gain.linearRampToValueAtTime(peak, start + 0.008);
     envelope.gain.exponentialRampToValueAtTime(0.0005, start + decay);
-    // The film mix and meter do not receive notification audio.
     tone.connect(envelope).connect(ctx.destination);
     tone.onended = () => envelope.disconnect();
     tone.start(start);

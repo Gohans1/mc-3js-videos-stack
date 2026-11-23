@@ -36,7 +36,6 @@ function fixture(t) {
   for (const file of ["link.ts", "vault.mjs"])
     if (existsSync(join(scripts, file)))
       copyFileSync(join(scripts, file), join(root, "scripts", file));
-  // every script's --help and option check (packages/live-studio/src/cli.mjs)
   mkdirSync(join(root, "packages/live-studio/src"), { recursive: true });
   for (const file of ["cli.mjs", "edit-protection.mjs", "merge-edits.mjs"])
     copyFileSync(
@@ -339,11 +338,10 @@ test("slim_jar.mjs strips .class and META-INF while keeping assets, data/minecra
     "data/minecraft/structure/igloo/top.nbt",
     "pack.mcmeta",
   ]);
-  // Second call verifies cached client_assets.zip without failing; corrupting it triggers a clear error
   slimJar({ mcDir });
   writeFileSync(join(mcDir, "client_assets.zip"), "corrupted");
   const later = new Date(Date.now() + 60_000);
-  utimesSync(join(mcDir, "client_assets.zip.br"), later, later); // still counts as made: only checked
+  utimesSync(join(mcDir, "client_assets.zip.br"), later, later);
   assert.throws(() => slimJar({ mcDir }), /Corrupt/);
 });
 
@@ -360,7 +358,6 @@ test("slim_jar.mjs stores the files as they are and squeezes the whole zip once 
     Array.from({ length: 40 }, (_, i) => [`assets/minecraft/models/block/b${i}.json`, model]),
   );
   writeFileSync(join(mcDir, "client.jar"), zipSync(files));
-  // a zip from before (deflated, no .br beside it) is made again, not kept as verified
   writeFileSync(join(mcDir, "client_assets.zip"), zipSync(files, { level: 6 }));
   const after = new Date(Date.now() + 60_000);
   utimesSync(join(mcDir, "client_assets.zip"), after, after);
@@ -556,7 +553,6 @@ test("buildSoundVault files a sound both lists name once, where the vault's own 
     "hex",
   );
   writeFileSync(join(local, "sfx/mixkit/mixkit-1115.wav"), wav);
-  // the copy an earlier build filed by the catalogue's role
   mkdirSync(join(local, "sound/sfx/clicks"), { recursive: true });
   writeFileSync(join(local, "sound/sfx/clicks/mixkit-1115.wav"), wav);
   const pen = { id: "mixkit-1115", title: "Pen click", page: "https://mixkit.co" };
@@ -670,11 +666,9 @@ test("a Mixkit pick longer than 12 s is cut at its silences into one sound per t
     );
     assert.equal(r.status, 0, r.stderr);
   };
-  // three 1 s calls, 5 s apart (twice: one is a rhythm to keep whole); and a 14 s bed
   wav("mixkit-9001", "0.5*sin(2*PI*440*t)*lt(mod(t\\,6)\\,1)");
   wav("mixkit-9003", "0.5*sin(2*PI*440*t)*lt(mod(t\\,6)\\,1)");
   wav("mixkit-9002", "0.5*sin(2*PI*220*t)");
-  // the whole long file an earlier build filed
   mkdirSync(join(local, "sound/sfx/nature"), { recursive: true });
   copyFileSync(
     join(local, "sfx/mixkit/mixkit-9001.wav"),
@@ -746,11 +740,9 @@ test("a Mixkit pick longer than 12 s is cut at its silences into one sound per t
     lines.some((l) => /Mixkit SFX: 1 sounds? longer than their limit kept whole/.test(l)),
     lines.join("\n"),
   );
-  // a second build keeps the takes as they are
   const before = readFileSync(join(local, "sound/sfx/nature/mixkit-9001-take-2.wav"));
   await build();
   assert.deepEqual(readFileSync(join(local, "sound/sfx/nature/mixkit-9001-take-2.wav")), before);
-  // once its maxSeconds allows it, the pick is whole again and its takes are gone
   writePicks({ maxSeconds: 60 });
   await build();
   const now = JSON.parse(readFileSync(join(local, "sound/SOURCES.json"), "utf8"));
@@ -1054,7 +1046,6 @@ test("buildSoundVault ingests Pixabay drop MP3s, skips disputed journey-roa, and
   assert.equal(existsSync(join(local, "sound/sfx/clicks/fs-167829.wav")), true);
   assert.equal(existsSync(join(local, "sound/sfx/foley/fs-760337.wav")), true);
 
-  // Verify live-studio openSound().library() reads all metadata & categories cleanly
   writeFileSync(join(root, "vault.json"), JSON.stringify({ root: "./vault" }));
   const film = join(root, "films/demo");
   mkdirSync(join(film, "sound/sfx"), { recursive: true });
@@ -1117,7 +1108,6 @@ test("syncSoundVaultPeaks invalidates cached peaks when WAV content changes at i
   const firstPeak = JSON.parse(readFileSync(join(dir, "PEAKS.json"), "utf8")).punch.peaks[0];
   assert.ok(firstPeak > 0.2 && firstPeak < 0.3);
 
-  // Overwrite with same byte length (844 bytes) at a newer mtime and higher amplitude
   writeFileSync(wavPath, makeWav(24576));
   const future = new Date(Date.now() + 5000);
   utimesSync(wavPath, future, future);

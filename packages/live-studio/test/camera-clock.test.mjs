@@ -344,7 +344,6 @@ test("camera lookahead follows the active output occurrence through freeze and m
   }
 });
 
-// bun run check and reference solve --write read the cam clock a CLI sets up from the film's files alone
 test("heardLength sets the camera clock from the film's shots, so an output-clock shot moves through a freeze", () => {
   const dir = mkdtempSync(join(tmpdir(), "heard-shots-"));
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
@@ -374,12 +373,9 @@ test("camera keys with cut: true cut the picture at their heard second, after a 
   const keys = [{ t: 0, cut: true }, { t: 1 }, { t: 3, cut: true }, { t: 5 }, { t: 6, cut: true }];
   setTiming({}, 8, []);
   assert.deepEqual(cameraCutSeconds(keys), [3, 6]);
-  // before its first key the camera already holds that key's pose: a cut there changes nothing on screen
   assert.deepEqual(cameraCutSeconds([{ t: 0.5, cut: true }, { t: 2 }, { t: 3, cut: true }]), [3]);
-  // the first two source seconds play in one
   setTiming({ speeds: [{ from: 0, to: 2, rate: 2 }] }, 8, []);
   assert.deepEqual(cameraCutSeconds(keys), [2, 5]);
-  // a Freeze starting on the cut holds the new camera's first frame: the picture cuts where the Freeze starts
   const at = (t) => [{ t: 0 }, { t, cut: true }];
   setTiming({ freezes: [{ at: 4, duration: 3 }] }, 8, [{ t: 0 }, { t: 4 }]);
   assert.deepEqual(cameraCutSeconds(at(4)), [4]);
@@ -387,14 +383,12 @@ test("camera keys with cut: true cut the picture at their heard second, after a 
   assert.deepEqual(cameraCutSeconds(at(2)), [2]);
 });
 
-// a render's cuts: its shots' starts and its camera keys' cuts, each once, in order; a cam.json of { keys } reads the same
 test("a render's cuts join the shots' starts and the camera keys' cuts", (t) => {
   t.after(() => setTiming({}, 8, []));
   setTiming({}, 8, []);
   const keys = [{ t: 0 }, { t: 4, cut: true }, { t: 6, cut: true }];
   assert.deepEqual(renderCutTimes([4, 2], keys), [2, 4, 6]);
   assert.deepEqual(renderCutTimes([4], { keys }), [4, 6]);
-  // a key cut within half a frame of a shot's start is that shot's own cut, as the studio's camera row reads it
   assert.deepEqual(
     renderCutTimes([2.62], [{ t: 0 }, { t: 2.615, cut: true }, { t: 6, cut: true }]),
     [2.62, 6],

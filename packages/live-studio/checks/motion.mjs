@@ -1,17 +1,11 @@
-// How one point moves (a hand, the head, the camera), measured from its world positions sampled evenly in time: the numbers
-// an animator reads off a graph editor (speed over time, where each move peaks) and the faults reviewers of generated motion
-// count (a one-sample jump; a dead stop from speed, the "robot" stop). Positions in metres, times in seconds.
-//   measure([{ t, p: [x, y, z] }, ...], cuts?) gives { speed, peak, moves, pops, stops, cuts }; report(name, samples, m) the
-//   lines to print. cuts: the film's cut seconds; a step across one is the picture changing, not the thing moving, so it is
-//   left out of the speed and never a pop
-
 import { PAN_SECONDS as WIDTH_SECONDS } from "film-kit/lens";
+
 import { attributeCamKeySpan, viewVectorAngleDeg } from "../src/camera-speed.mjs";
 
-export const STILL = 0.05; // m/s: slower than this is at rest
-export const POP_STEP = 0.01; // m: a jump counts if one sample step is at least this ...
-export const POP_RATIO = 4; // ... and this many times the steps around it
-export const STOP_FROM = 0.5; // m/s: slower moves never count as dead stops
+export const STILL = 0.05;
+export const POP_STEP = 0.01;
+export const POP_RATIO = 4;
+export const STOP_FROM = 0.5;
 
 const sub = (a, b) => a.map((v, i) => v - b[i]);
 const len = (a) => Math.hypot(...a);
@@ -56,9 +50,6 @@ export function measure(samples, cuts = [], impulses = []) {
       pops.push({ t: samples[i].t, step: steps[i], around });
   }
 
-  // a move: a run above STILL; where its speed peaks, as a share of its length, says how it is eased. Its first or last
-  // sample step still at half its peak speed or more means it starts or stops dead, with no ease (runs cut by the window
-  // edge are not judged)
   const moves = [],
     stops = [],
     stepV = steps.map((s) => s / dt);
@@ -101,13 +92,10 @@ export function measure(samples, cuts = [], impulses = []) {
   };
 }
 
-// How a camera turns and zooms, which its position alone never shows (a pan from a still tripod reads 0 m/s): samples also
-// carry q, its world quaternion [x, y, z, w], fov (vertical, degrees) and aspect. Judged by RED's panning rule of thumb:
-// a frame width in under 7 s judders at 24 fps (reddigitalcinema.com/red-101/camera-panning-speed)
 export { WIDTH_SECONDS };
-export const FAST_FOV_RATE = 15; // deg/s threshold for flagging fast FOV changes
-const TURN_POP = 0.5; // degrees in one sample, and POP_RATIO times the steps around it
-const FOV_POP = 1.5; // degrees of FOV jump in one sample, and POP_RATIO times steps around it
+export const FAST_FOV_RATE = 15;
+const TURN_POP = 0.5;
+const FOV_POP = 1.5;
 
 const formatAttr = (t, { samples, camKeys, timing, worldPos } = {}) => {
   const parts = [];
@@ -241,7 +229,6 @@ export const easeOf = (peakAt) =>
       ? "slow start, fast finish (eases in)"
       : "even (eases in and out)";
 
-// turnFaults: count of camera turn/FOV faults (turns()), so fast pans, FOV pops, or turn pops never print "no pops, no dead stops"
 export function report(name, samples, m, turnFaults = 0, opts = {}) {
   const f = (x) => x.toFixed(2);
   const attr = (t) => formatAttr(t, { ...opts, samples });

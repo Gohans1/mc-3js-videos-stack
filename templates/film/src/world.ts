@@ -1,13 +1,8 @@
 // @ts-nocheck
-// The set as a list of the game's own blocks for block-model-renderer ({id, pos, properties}); one block is one metre.
-// A starter room to replace: stone-brick walls, an oak floor, a smooth-stone ceiling, inside x 0..ROOM.x1, z 0..ROOM.z1,
-// y 0..ROOM.top, with the shared props (mc-assets pack: "gohans:<prop>") placed like any block. Seeded: every build is the
-// same room.
 import { mulberry32 } from "math/random";
 
 export const ROOM = { x1: 6, z1: 6, top: 3 };
 
-// [block, share]: the first block takes whatever share is left
 const WALL = [["stone_bricks"], ["cracked_stone_bricks", 0.12], ["mossy_stone_bricks", 0.08]];
 const FLOOR = [["oak_planks"]];
 const CEILING = [["smooth_stone"]];

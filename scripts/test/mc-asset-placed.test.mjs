@@ -147,7 +147,6 @@ function makeEnv({ speedRate = 2 } = {}) {
     JSON.stringify({ animations: { walk: { length: 1.5, loop: true } } }),
   );
 
-  // Global props: one clean bundle, one importing an uncopied helper
   writeFileSync(
     join(vault, "props/signs/neon_sign.ts"),
     'import * as THREE from "three"; export const makeNeon = () => new THREE.Group();',
@@ -177,7 +176,6 @@ function makeEnv({ speedRate = 2 } = {}) {
 test("asset pick, timeline --lane picks, and unpick manage pack/picks.json and warn on placed refs", () => {
   const { film, run, json } = makeEnv();
 
-  // Ambiguous across decor-mod and other-decor -> exit 2 listing both sources
   const amb = run("pick", "block:decor:oak_chair", "--film", film);
   expect(amb.status).toBe(2);
   expect(amb.stderr).toContain("decor-mod");
@@ -207,13 +205,11 @@ test("asset pick, timeline --lane picks, and unpick manage pack/picks.json and w
   expect(tl.zip.blocks).toBe(1);
   expect(tl.zip.items).toBe(1);
 
-  // Place the picked block, then unpick -> warns that placed object still uses it
   json("use", "block:decor:oak_chair", "--film", film, "--from", "1");
   const unpick = json("unpick", "block:decor:oak_chair", "--film", film, "--source", "decor-mod");
   expect(unpick.removed).toEqual(["block:decor:oak_chair"]);
   expect(unpick.warnings.join("\n")).toContain("block:decor:oak_chair");
 
-  // --no-pick works even when the block exists in multiple packs without --source
   const np = json("use", "block:decor:oak_chair", "--film", film, "--from", "2", "--no-pick");
   expect(np.picked).toBeUndefined();
 }, 20000);
@@ -404,7 +400,6 @@ test("asset use reports unknown vanilla blockstate properties before rendering",
 test("asset use, timeline, edit, and remove on placed lane convert heard<->scene clocks", () => {
   const { film, run, json } = makeEnv({ speedRate: 2 });
 
-  // Place mod block with --source disambiguation, boolean/numeric blockstate traits & auto-pick
   const chair = json(
     "use",
     "block:decor:oak_chair",
@@ -426,16 +421,13 @@ test("asset use, timeline, edit, and remove on placed lane convert heard<->scene
   expect(chair.picked.added).toContain("block:decor:oak_chair");
   expect(chair.object.properties).toEqual({ facing: "north", open: true, count: 2 });
 
-  // Stored on disk in SCENE seconds (2s heard at 2x speed = 4s scene!)
   const disk = JSON.parse(readFileSync(join(film, "src/timeline/placed.json"), "utf8"));
   expect(disk.oak_chair.keys[0]).toMatchObject({ t: 4, at: [1, 0, 3], scale: 1.5 });
 
-  // timeline --lane placed returns HEARD seconds
   const view = json("timeline", "--film", film, "--lane", "placed");
   expect(view.data.oak_chair.keys[0].t).toBeCloseTo(2);
   expect(view.targets).toContain("placed:oak_chair");
 
-  // Edit at --from 3 heard (= 6s scene) inserts new sorted keyframe
   json(
     "edit",
     "placed:oak_chair",
@@ -450,11 +442,9 @@ test("asset use, timeline, edit, and remove on placed lane convert heard<->scene
   expect(disk2.oak_chair.keys).toHaveLength(2);
   expect(disk2.oak_chair.keys[1]).toMatchObject({ t: 6, at: [2, 0, 3] });
 
-  // Edit keyframe fields WITHOUT --from when multiple keys exist -> exit 2
   const ambEdit = run("edit", "placed:oak_chair", "--film", film, "--props", '{"at":[9,0,9]}');
   expect(ambEdit.status).toBe(2);
 
-  // Remove the added keyframe, then remove the whole object
   json("edit", "placed:oak_chair", "--film", film, "--from", "3", "--props", '{"removeKey":true}');
   expect(
     JSON.parse(readFileSync(join(film, "src/timeline/placed.json"), "utf8")).oak_chair.keys,
@@ -480,11 +470,9 @@ test("placed lane validates mob clips/rates, --source minecraft, and rejects inv
 
     const assets = openAssets(film, conf);
 
-    // Vanilla block with --source minecraft must place cleanly without calling updatePicksBatch
     const stone = await assets.use("block:minecraft:stone", { from: 0, source: "minecraft" });
     expect(stone.object.what).toBe("block:minecraft:stone");
 
-    // Cubic-bezier ease, rate: 0, and object clip/rate vs keyClip/keyRate isolation
     const mob = await assets.use("mob:armadillo", {
       from: 1,
       props: { clip: "none", rate: 0, keyClip: "walk", keyRate: 1.2, ease: [0.2, 0, 0, 1] },
@@ -518,7 +506,6 @@ test("placed lane validates mob clips/rates, --source minecraft, and rejects inv
     expect(onDisk.armadillo.rate).toBe(0.5);
     expect(onDisk.armadillo.keys[1]).toMatchObject({ t: 4, clip: "walk", rate: 2.5 });
 
-    // Reject silent no-ops and usage errors with code 2
     await expect(
       assets.change("placed:armadillo", { removeKey: true }, false, {}),
     ).rejects.toMatchObject({ code: 2 });
@@ -535,14 +522,12 @@ test("placed lane validates mob clips/rates, --source minecraft, and rejects inv
       code: 2,
     });
 
-    // Unpick --source wrongpack skips without deleting other jars
     assets.pick(["block:decor:oak_chair"], { source: "decor-mod" });
     const wrongUnpick = await assets.unpick(["block:decor:oak_chair"], { source: "wrongpack" });
     expect(wrongUnpick.removed).toEqual([]);
     expect(wrongUnpick.picks).toHaveLength(1);
     expect(wrongUnpick.warnings[0]).toContain("wrongpack");
 
-    // CLI exits 2 cleanly for --shot on 3D object & contradicting --kind
     expect(
       run("use", "block:gohans:computer", "--from", "0", "--shot", "1", "--film", film).status,
     ).toBe(2);
@@ -575,7 +560,6 @@ test("asset use prop:global copies into src/props, guards leaf symlinks/paths, a
   expect(run("use", "prop:global:C:bad", "--film", film).status).toBe(2);
   expect(run("use", "prop:global:.hidden", "--film", film).status).toBe(2);
 
-  // Directory junction escape check (works on Windows without elevation) + optional leaf file symlink check
   const outsideDir = join(film, "outside-props");
   mkdirSync(outsideDir, { recursive: true });
   writeFileSync(join(outsideDir, "secret.ts"), "keep");
@@ -659,17 +643,14 @@ test("placed lane supports slug != jar unpick/alreadyPicked, non-destructive rem
     const picked = assets.pick(["block:bakery:oven"], { source: "lets-do-bakery" });
     expect(picked.added).toEqual(["block:bakery:oven"]);
 
-    // alreadyPicked matches hit.pack even when slug != jar
     const placed = await assets.use("block:bakery:oven", { from: 0, source: "lets-do-bakery" });
     expect(placed.picked).toBeUndefined();
     expect(JSON.parse(readFileSync(join(film, "pack/picks.json"), "utf8"))).toHaveLength(1);
 
-    // unpick --source resolves slug via packs_index.json
     const unpicked = await assets.unpick(["block:bakery:oven"], { source: "lets-do-bakery" });
     expect(unpicked.removed).toEqual(["block:bakery:oven"]);
     expect(JSON.parse(readFileSync(join(film, "pack/picks.json"), "utf8"))).toEqual([]);
 
-    // Invalid props.keys / non-string clip exit cleanly with code 2 (not ZodError)
     await expect(
       assets.use("mob:armadillo", {
         from: 0,
@@ -694,7 +675,6 @@ test("placed lane supports slug != jar unpick/alreadyPicked, non-destructive rem
       }),
     ).rejects.toMatchObject({ code: 2 });
 
-    // Failed remove (remove = true) on code-duration film (edit.json = {}) must NOT wipe placed.json
     writeFileSync(join(film, "src/edit.json"), "{}");
     const codeAssets = openAssets(film, conf);
     const beforeRemove = readFileSync(join(film, "src/timeline/placed.json"), "utf8");
@@ -704,7 +684,6 @@ test("placed lane supports slug != jar unpick/alreadyPicked, non-destructive rem
       codeAssets.change("placed:oven", { remove: true }, false, { duration: 20 }),
     ).rejects.toMatchObject({ code: 2 });
 
-    // Prototype property names and cross-kind controls are rejected safely
     await expect(
       codeAssets.change("placed:toString", {}, true, { duration: 20 }),
     ).rejects.toMatchObject({ code: 1 });
@@ -732,7 +711,6 @@ test("placed lane supports slug != jar unpick/alreadyPicked, non-destructive rem
       }),
     ).rejects.toMatchObject({ code: 2 });
 
-    // asset plan --kind aligns with cli-catalog (accepted instead of exit-2 flag error)
     const planRes = spawnSync(
       "bun",
       [ASSET_MJS, "plan", "dissolve", "--kind", "transition", "--film", film],

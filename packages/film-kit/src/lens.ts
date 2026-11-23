@@ -1,15 +1,5 @@
-// Lenses in millimetres, the way cinematographers choose them, for a three.js camera whose fov is the vertical angle in
-// degrees. The sensor is full frame fitted to the image width (36 mm wide, Blender's default sensor and fit), so 50 mm is
-// about 40 degrees across, the same as a still photographer's 50 mm. three's own setFocalLength assumes a 35 mm gauge:
-// do not mix the two.
-// Pros pick a lens for what it does to the space (wide: inside the room, bends it; long: flattens the subject against
-// the background) and then move the camera to frame, instead of zooming to fix a composition; a set of primes keeps the
-// look of a film consistent.
-//   camera.fov = fovOf(50, 16 / 9);  mmOf(camera.fov, 16 / 9);  dollyZoom(3, fovOf(35, a), fovOf(85, a))
-
 export const PAN_SECONDS = 7;
-export const SENSOR = 36; // mm across the image
-/** Curated prime focal lengths and cinema starting apertures for 36mm full-frame horizontal fit. */
+export const SENSOR = 36;
 export const PRIME_LENSES = [
   {
     id: "14mm",
@@ -75,7 +65,6 @@ export const MAX_FOV = 179;
 export const clampFov = (v: number) => Math.max(MIN_FOV, Math.min(MAX_FOV, v));
 const rad = Math.PI / 180;
 
-// vertical fov (degrees) of a lens on an image of this aspect (width / height)
 export const fovOf = (mm: number, aspect = 16 / 9) =>
   (2 * Math.atan(SENSOR / 2 / mm / aspect)) / rad;
 export const mmOf = (fov: number, aspect = 16 / 9) =>
@@ -87,17 +76,12 @@ export const vfovOf = (horizontal: number, aspect = 16 / 9) =>
 export const nearestPrime = (mm: number) =>
   PRIMES.reduce((a, b) => (Math.abs(Math.log(b / mm)) < Math.abs(Math.log(a / mm)) ? b : a));
 
-// Distance that keeps a subject the same size on screen when the fov changes from fov0 at distance d0 to fov1 (the Vertigo
-// dolly zoom: the subject holds still while the background swells or shrinks).
 export const dollyZoom = (d0: number, fov0: number, fov1: number) =>
   (d0 * Math.tan((fov0 * rad) / 2)) / Math.tan((fov1 * rad) / 2);
 
-// Distance at which something `height` metres tall fills `fill` (0..1) of the frame height.
 export const distanceToFill = (height: number, fill: number, fov: number) =>
   height / (fill * 2 * Math.tan((fov * rad) / 2));
 
-// Thin-lens blur: diameter in pixels of the blur disc of a point `dist` metres away when a `mm` lens at f/`fstop` is focused
-// at `focus` metres, on an image `width` pixels wide. Under about 1 px a point reads as sharp.
 export function blurPx({
   mm,
   fstop,
@@ -128,7 +112,6 @@ export const SHOT_SIZES = {
 } as const;
 export type ShotSize = keyof typeof SHOT_SIZES;
 
-/** Camera distance (metres) placing a subject `height` m tall at `size` frame fill. */
 export function shotSize(
   size: ShotSize | number,
   {
@@ -161,7 +144,6 @@ export type FrameOpts = {
   thirdX?: number;
 };
 
-/** Pure-t framing helper returning camera position, look target, vertical fov, and mm. */
 export function frameSubject(
   target: readonly [number, number, number],
   {
@@ -229,9 +211,6 @@ export function frameSubject(
   return { p, l, fov, mm };
 }
 
-/** Map full-frame mm + aperture f-stop to postprocessing DepthOfFieldEffect parameters. bokehScale is the blur's radius
- * in full-resolution pixels (the bokeh passes step coc * scale texels) and also how fast the low-resolution blurred buffer
- * takes over from the sharp picture (the effect uses one scale for both). */
 export function dofParams({
   mm,
   fstop,
@@ -252,8 +231,6 @@ export function dofParams({
   const cocInfMm = (mm * mm) / (fstop * Math.max(10, s - mm));
   const pxInf = (cocInfMm / SENSOR) * 1920;
   const targetPx = Math.min(14, pxInf * 0.72);
-  // the depth in front of focus where the blur reaches targetPx (it grows faster in front than behind, and the effect's
-  // ramp is the same both ways)
   const sharpRange = Math.min(25, Math.max(0.15, (focusDistance * targetPx) / (pxInf + targetPx)));
   // SENSOR=36 fits horizontally, so pixel bokeh radius scales with horizontal render width (not height). Past 48 px the
   // 64-tap kernel's gaps show

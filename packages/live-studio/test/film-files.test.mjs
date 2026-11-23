@@ -83,7 +83,6 @@ test("a film file with a brotli copy beside it goes out as that copy to a browse
   assert.equal(plain.headers.get("content-encoding"), null);
   assert.equal((await plain.arrayBuffer()).byteLength, 4096);
 
-  // a zip remade after its copy: the stale copy is never sent
   const later = new Date(Date.now() + 60_000);
   utimesSync(zip, later, later);
   const remade = await app.request("/mc/client_assets.zip", {
@@ -91,7 +90,7 @@ test("a film file with a brotli copy beside it goes out as that copy to a browse
   });
   const body = Buffer.from(await remade.arrayBuffer());
   const got = remade.headers.get("content-encoding") === "br" ? brotliDecompressSync(body) : body;
-  assert.deepEqual(got, Buffer.alloc(4096, 1)); // the zip itself (squeezed as it goes), never the stale copy
+  assert.deepEqual(got, Buffer.alloc(4096, 1));
 });
 
 test("preloads use the asset version from the same boot metadata and discard stale tags", async (t) => {

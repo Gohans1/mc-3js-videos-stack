@@ -1,14 +1,3 @@
-// A camera held by a person: real recorded camera wobble from Camera Shakify (Ian Hubert & Nathan Vegdahl; the data is CC0,
-// data/shakify.LICENSE.txt; their add-on code is GPL and is not used here). Each recording loops seamlessly at 24 fps;
-// samples are joined by Catmull-Rom so any t reads directly. Unlike Shakify, each track is centred on its mean, so the shake
-// never shifts the framing you set (Investigation drifts the camera 6-12 cm off otherwise).
-// Shakes: INVESTIGATION, THE_CLOSEUP, THE_WEDDING, WALK_TO_THE_STORE, HANDYCAM_RUN, OUT_CAR_WINDOW (rotate and move);
-// BIKE_ON_GRAVEL_2D, SPACESHIP_SHAKE_2D, THE_ZEEK_2D (rotate only).
-//   const hold = handheld("THE_CLOSEUP", { amount: 0.6, offset: 12 });  const { pos, quat } = hold(t);
-//   after camera.lookAt(...): camera.translateX(pos[0]).translateY(pos[1]).translateZ(pos[2]); camera.quaternion.multiply(q.set(...quat))
-// pos is metres and rot degrees [x: tilt, y: pan, z: roll], both in the camera's own axes (three's: x right, y up, looking
-// down -z, the same as Blender's camera); quat applies rot in Blender's XYZ order. amount scales everything, move only the
-// position, speed the playback rate; offset (seconds) starts the recording elsewhere so shots do not share one wobble.
 import DATA from "../data/shakify.json";
 
 export type ShakeName = keyof typeof DATA;

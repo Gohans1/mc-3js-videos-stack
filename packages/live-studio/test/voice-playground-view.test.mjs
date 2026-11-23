@@ -1021,7 +1021,6 @@ describe("ElevenLabs v4 Audio Tags & Playground View Helpers", () => {
     });
     expect(tagFiltered.map((e) => e.uid)).toEqual(["take:01"]);
 
-    // Swap voice keeps template prompt & settings verbatim while changing only voice
     const tplEntry = unified.find((u) => u.id === "pg_1");
     const swappedDraft = entryToComposerDraft(tplEntry, { id: "v_new_voice", name: "Clara" });
     expect(swappedDraft.mode).toBe("tts");
@@ -1034,7 +1033,6 @@ describe("ElevenLabs v4 Audio Tags & Playground View Helpers", () => {
     expect(swappedDraft.voiceName).toBe("Clara");
     expect(swappedDraft.fromTemplateId).toBe("pg_1");
 
-    // Dialogue speaker-slot override updates only the targeted speaker while preserving others
     const dlgEntry = unified.find((u) => u.id === "pg_2");
     const dlgDraft = entryToComposerDraft(dlgEntry);
     expect({ voiceId: dlgDraft.voiceId, voiceName: dlgDraft.voiceName }).toEqual({

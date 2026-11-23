@@ -1,8 +1,3 @@
-// CapCut's Color oscilloscope (Oscilloscope.tsx shows it under the picture): the frame on screen copied in the same task as its
-// draw (the WebGL canvas keeps the frame only until the browser shows it), measured, then drawn as CapCut's three panes:
-// RGB parade (each channel's levels across the picture), RGB waveform (the three laid over one another: white where they agree)
-// and vectorscope (hue round the circle, saturation out from the middle). Levels read 0 to 1023 as CapCut and DaVinci label
-// them. The frame is read small (W x H)
 import { S } from "../core/state";
 import { get } from "../core/store";
 import { tone } from "../timeline/canvas";
@@ -36,16 +31,10 @@ const ensureBuffers = () => {
   rgba = new Uint8Array(W * H * 4);
 };
 
-// How bright a bin draws: a level a few pixels share still shows, a flat stretch of picture doesn't burn out
 const glow = (count: number, per: number) => Math.min(255, Math.sqrt(count / per) * 900);
 
-// How much of the picture is pure black or pure white (BT.709 luma at the very ends): detail lost there. Written in the
-// waveform's corner, amber past 2%
 const clipped = { black: 0, white: 0 };
 
-// src: the canvas just drawn, in this task (start.ts frame); null when the frame on screen wasn't drawn now. A copy is taken at
-// once, shrunk on the GPU, and read when the GPU hands it back. While playing, ten readings a second; paused, every frame. A
-// reading still running when the next frame comes reads that one after, so the scopes always end on the frame on screen
 let asked = 0,
   last = 0,
   busy = false,
@@ -88,10 +77,6 @@ const readAll = async () => {
   }
 };
 
-// The copy comes back through WebGPU, whose mapAsync hands the bytes over without the page ever waiting on the GPU. Every
-// WebGL or canvas way (getImageData, VideoFrame.copyTo, readPixels into a pixel buffer behind a fence) makes a call that waits
-// on Chrome's GPU process, about 24 ms while the film plays: a hitch in the film at every reading (measured). A browser
-// without WebGPU reads through a canvas, hitches and all
 type Gpu = { device: GPUDevice; frame: GPUTexture; out: GPUBuffer } | null;
 let gpu: Promise<Gpu> | null = null,
   flat: OffscreenCanvasRenderingContext2D | null = null;
@@ -130,7 +115,7 @@ const pixels = async (copy: ImageBitmap): Promise<Uint8Array | null> => {
     await g.out.mapAsync(GPUMapMode.READ);
   } catch {
     return null;
-  } // the device was lost: the next reading starts a new one
+  }
   rgba.set(new Uint8Array(g.out.getMappedRange()));
   g.out.unmap();
   return rgba;
@@ -153,7 +138,6 @@ const read = (px: Uint8Array) => {
       const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
       if (luma < 1.5) black++;
       else if (luma > 253.5) white++;
-      // Cb right, Cr up, each -0.5..0.5 of full scale across the pane
       const cb = (b - luma) / 1.8556 / 255,
         cr = (r - luma) / 1.5748 / 255;
       const vx = Math.max(0, Math.min(LEVELS - 1, Math.round(LEVELS / 2 + cb * LEVELS))),
@@ -201,7 +185,6 @@ const drawVector = () => {
   for (let k = 0; k < vCount.length; k++) {
     const count = vCount[k];
     if (!count) continue;
-    // Each dot in the picture's own colour there, lifted so a dark colour still shows
     const r = vSum[k * 3] / count,
       g = vSum[k * 3 + 1] / count,
       b = vSum[k * 3 + 2] / count,
@@ -215,7 +198,6 @@ const drawVector = () => {
   vector.x.putImageData(vector.img, 0, 0);
 };
 
-// The 75% colour bars' places, where a vectorscope's targets sit: R, Mg, B, Cy, G, Yl
 const TARGETS = [
   [191, 0, 0, "R"],
   [191, 0, 191, "Mg"],
@@ -260,7 +242,6 @@ const paint = (
     x.moveTo(cx, cy - s / 2);
     x.lineTo(cx, cy + s / 2);
     x.stroke();
-    // The skin tone line: where faces of every colour fall, about 123° round from Cb
     const skin = (-123 * Math.PI) / 180;
     x.beginPath();
     x.moveTo(cx, cy);
@@ -303,7 +284,6 @@ const paint = (
       x.stroke();
     }
   if (kind === "wave") {
-    // On a dark plate of its own, so a trace under it never hides it
     const pct = (f: number) => (f > 0 && f < 0.01 ? "<1" : String(Math.round(f * 100))),
       y = bottom - 9 * dpr;
     const black = `Black ${pct(clipped.black)}%`,

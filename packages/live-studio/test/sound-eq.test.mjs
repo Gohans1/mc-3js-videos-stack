@@ -94,7 +94,6 @@ test("withShelf, withBands and withWidth add, replace or drop their own entries 
   assert.equal(withWidth(["extrastereo=m=0.5:c=0"], 1), undefined);
 });
 
-// ffmpeg filters a unit impulse; the studio's coefficients run through the same difference equation must give it back
 const ffmpegImpulse = (filter, n = 4096) => {
   const impulse = new Float32Array(n);
   impulse[0] = 0.5;
@@ -166,11 +165,11 @@ test("syncPoint finds real-sound's start, attack, peak and end on a decoded soun
     left = new Float32Array(rate / 2),
     right = new Float32Array(rate / 2);
   const fill = (ch, from, to, v) => ch.fill(v, Math.round(from * rate), Math.round(to * rate));
-  fill(left, 0.1, 0.2, 0.05); // a breath 26 dB under the peak is not the attack
+  fill(left, 0.1, 0.2, 0.05);
   fill(left, 0.2, 0.3, 0.5);
-  fill(right, 0.3, 0.3025, 1); // the loudest 5 ms, on one side only
+  fill(right, 0.3, 0.3025, 1);
   fill(left, 0.3025, 0.4, 0.3);
-  fill(left, 0.4, 0.45, 0.004); // a tail above real-sound's -50 dB end
+  fill(left, 0.4, 0.45, 0.004);
   fill(left, 0.45, 0.5, 0.002);
   assert.equal(syncPoint([left, right], rate, "start"), 0);
   assert.equal(syncPoint([left, right], rate, "attack"), 0.2);

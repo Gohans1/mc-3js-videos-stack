@@ -1,4 +1,3 @@
-// render.mjs refuses a second past the film's end, or a --check range that runs backwards, before it builds anything
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -51,7 +50,6 @@ test("render refuses --at past the end and a backwards --check at once, saying t
   assert.match(late.stderr, /--at 99 is past the film's end: it runs 0-10\.00 s heard/);
   assert.doesNotMatch(late.stdout + late.stderr, /build/i);
 
-  // 10.02 s draws frame 301, past the last one: the page refuses it, so render does before clearing the old stills
   const hair = render(["--at", "10.02"]);
   assert.equal(hair.status, 2, hair.stdout + hair.stderr);
   assert.match(hair.stderr, /--at 10\.02 is past the film's end/);
@@ -64,12 +62,10 @@ test("render refuses --at past the end and a backwards --check at once, saying t
   assert.equal(back.status, 2, back.stdout + back.stderr);
   assert.match(back.stderr, /--check motion:cam,6,5: from 6 must come before to 5/);
 
-  // the page crashed Chrome on a range before the film starts
   const early = render(["--at", "4", "--check", "motion:cam,-1,2"]);
   assert.equal(early.status, 2, early.stdout + early.stderr);
   assert.match(early.stderr, /--check motion:cam,-1,2: from -1 is before the film starts \(0\)/);
 
-  // seconds as notes print them: --at passes, and --check reads 0:06 and 0:05 as 6 and 5
   const clock = render(["--at", "0:04", "--check", "motion:cam,0:06,0:05"]);
   assert.equal(clock.status, 2, clock.stdout + clock.stderr);
   assert.match(clock.stderr, /from 6 must come before to 5/);
@@ -88,7 +84,6 @@ test("render refuses --at past the end and a backwards --check at once, saying t
 test("a film whose code does not build is named by file and line, in plain words, with nothing rendered", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  // the build comes after render finds its Chrome: the vault's, as every film names it
   const chrome = resolve(
     STUDIO,
     "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
@@ -142,7 +137,6 @@ test("--span is refused before any build when it is misplaced, backwards, or sta
   assert.equal(back.status, 2, back.stdout + back.stderr);
   assert.match(back.stderr, /--span takes two heard seconds, the first before the second/);
 
-  // a 10 s film's last frame shows 9.967 s: a span from 9.99 would draw no frame at all
   const tail = render(["--span", "9.99,10.04"]);
   assert.equal(tail.status, 2, tail.stdout + tail.stderr);
   assert.match(tail.stderr, /--span 9\.99,10\.04 starts after the film's last frame \(9\.97 s\)/);
@@ -177,12 +171,10 @@ test("captions, final and stills refuse the options they would ignore", (t) => {
   assert.equal(captionsBlur.status, 2, captionsBlur.stdout + captionsBlur.stderr);
   assert.match(captionsBlur.stderr, /--samples does nothing for render captions/);
 
-  // a final takes half an hour and is the upload: a check goes on the stills before it
   const final = render("final", ["--check", "motion:cam,1,2"]);
   assert.equal(final.status, 2, final.stdout + final.stderr);
   assert.match(final.stderr, /--check goes with render stills/);
 
-  // --samples blurs the film's stills: a --check run without --at draws none, an --entry page draws its own
   const blurNone = render("stills", ["--check", "motion:cam,1,2", "--samples", "8"]);
   assert.equal(blurNone.status, 2, blurNone.stdout + blurNone.stderr);
   assert.match(
@@ -245,7 +237,6 @@ test("render poster draws one frame at the upload's size, no strip under it, and
   });
   assert.equal(out.status, 0, out.stdout + out.stderr);
   assert.match(out.stdout, /wrote renders\/poster_1s\.png \(1920x1080, 2 sub-frames\)/);
-  // a draft frame is taller than its picture by the strip; the poster is the picture alone
   const probe = spawnSync(
     "ffprobe",
     [
@@ -263,7 +254,6 @@ test("render poster draws one frame at the upload's size, no strip under it, and
   assert.ok(existsSync(join(dir, "renders/still_4s.jpg")), "the draft stills are kept");
 });
 
-// the demo with the vault's Chrome, null without it; a scene that draws `end` seconds
 const chromeFilm = (t, end, conf = {}) => {
   const chrome = resolve(
     STUDIO,
@@ -316,7 +306,6 @@ test("render final's captions are named as the upload's picture, never as the dr
 });
 
 test("a --chunks run that joins a chunk drawn before a narration move still says the video is stale", async (t) => {
-  // the mouths follow the narration clips: a scene that reads the sound timeline draws them
   const film = chromeFilm(t, 31, { soundTimeline: "src/timeline/audio.json" });
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
   const scene = join(film.dir, "src/scene.ts");
@@ -523,7 +512,6 @@ export function buildScene(canvas, W, H) {
 test("--samples gives a still the shutter's motion blur; without it a still is the one instant", (t) => {
   const film = chromeFilm(t, 2);
   if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
-  // red climbs 3000 a second from 128 at 1 s: the half-frame shutter after 1 s averages to about 153
   writeFileSync(
     join(film.dir, "src/scene.ts"),
     `export const DURATION=2, SHOTS_OUT=[];

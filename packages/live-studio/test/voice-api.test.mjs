@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import {
+  chmodSync,
   createReadStream,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   symlinkSync,
@@ -116,9 +118,7 @@ describe("openVoice & /api/voice endpoints", () => {
     writeFileSync(secretFile, "outside-secret");
     try {
       symlinkSync(secretFile, join(dir, "voice/takes/leak.mp3"));
-    } catch {
-      // Windows without symlink privilege skips symlink creation cleanly
-    }
+    } catch {}
 
     const voice = openVoice(dir, {});
     const app = createApi(
@@ -157,7 +157,6 @@ describe("openVoice & /api/voice endpoints", () => {
       assert.equal(blocked.status, 404, `expected 404 for ${bad}`);
     }
 
-    // Exercise realpathSync + inside() containment via directory junction (works without admin privilege on Windows)
     const juncDir = makeTempFilm();
     rmSync(join(juncDir, "voice/try"), { recursive: true, force: true });
     symlinkSync(outside, join(juncDir, "voice/try"), "junction");
@@ -167,7 +166,6 @@ describe("openVoice & /api/voice endpoints", () => {
 
   test("swaps a try take into voice/takes non-destructively (backing up original) and rejects mismatched IDs", async () => {
     const dir = makeTempFilm();
-    // Provide real MPEG-1 Layer III frames for 01_1.mp3 so pre-assembly ffmpeg probe validates real audio
     const mp3Frame = Buffer.alloc(417);
     mp3Frame[0] = 0xff;
     mp3Frame[1] = 0xfb;
@@ -219,9 +217,6 @@ describe("openVoice & /api/voice endpoints", () => {
 
   test("computes accurate MP3 duration from MPEG Layer III headers when .words.json is absent", async () => {
     const dir = makeTempFilm();
-    // Build a valid 20-frame MPEG-1 Layer III 128kbps 44.1kHz mono MP3 with an ID3v2 header (no .words.json)
-    // MPEG-1 (11), Layer III (01), no CRC (1) => 0xFF 0xFB; 128kbps (1001), 44100Hz (00), pad 0, priv 0 => 0x90; Mono (11) => 0xC0
-    // Frame length = floor(144 * 128000 / 44100) = 417 bytes; 20 frames = 8340 audio bytes => 8340 * 8 / 128000 = 0.52125s -> 0.521s
     const id3 = Buffer.from([
       0x49,
       0x44,
@@ -253,7 +248,6 @@ describe("openVoice & /api/voice endpoints", () => {
 
   test("useTry clears stale .words.json on unaligned tries, handles .mp3<->.wav swaps cleanly, and reassembles full_voice.wav", async () => {
     const dir = makeTempFilm();
-    // Create a valid PCM WAV helper (48kHz mono 16-bit)
     const makePcmWav = (durationSec, amp = 12000) => {
       const sr = 48000;
       const samples = Math.round(sr * durationSec);
@@ -276,12 +270,10 @@ describe("openVoice & /api/voice endpoints", () => {
       return buf;
     };
 
-    // Place silent initial full_voice.wav so we can verify useTry reassembles real audio into it
     mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
     const fullVoicePath = join(dir, "assets/public/agent/full_voice.wav");
     writeFileSync(fullVoicePath, makePcmWav(6.0, 0));
 
-    // 1. Add an unaligned MP3 try (20 frames = 0.521s, NO .words.json)
     const frame = Buffer.alloc(417);
     frame[0] = 0xff;
     frame[1] = 0xfb;
@@ -292,7 +284,6 @@ describe("openVoice & /api/voice endpoints", () => {
       Buffer.concat(Array.from({ length: 20 }, () => frame)),
     );
 
-    // 2. Add a cross-extension aligned WAV try (01_alt.wav + 01_alt.wav.words.json)
     writeFileSync(join(dir, "voice/try/01_alt.wav"), makePcmWav(0.8, 16000));
     writeFileSync(
       join(dir, "voice/try/01_alt.wav.words.json"),
@@ -316,7 +307,6 @@ describe("openVoice & /api/voice endpoints", () => {
       },
     );
 
-    // Promote unaligned MP3 try over aligned 01.mp3 -> stale 01.mp3.words.json MUST be removed!
     const afterUnaligned = await voice.useTry({ takeId: "01", tryFile: "01_unaligned.mp3" });
     assert.equal(
       afterUnaligned.takes[0].aligned,
@@ -328,7 +318,6 @@ describe("openVoice & /api/voice endpoints", () => {
     assert.equal(existsSync(join(dir, "voice/takes/01.mp3.words.json")), false);
     assert.ok(afterUnaligned.takes[0].tries.includes("01_orig.mp3"));
 
-    // Promote cross-extension 01_alt.wav over 01.mp3 -> 01.mp3 must be removed from voice/takes/, full_voice.wav rebuilt with loud signal
     const afterWav = await voice.useTry({ takeId: "01", tryFile: "01_alt.wav" });
     assert.equal(afterWav.takes[0].file, "01.wav");
     assert.equal(afterWav.takes[0].aligned, true);
@@ -349,7 +338,6 @@ describe("openVoice & /api/voice endpoints", () => {
     );
     assert.equal(buildVoiceMap(dir).lines[0].text, "He wakes.");
 
-    // 3. Promote a LONGER try take (2.2s) -> updates edit.json voice.lines and returns swapped span
     writeFileSync(join(dir, "voice/try/01_long.wav"), makePcmWav(2.2, 14000));
     writeFileSync(
       join(dir, "voice/try/01_long.wav.words.json"),
@@ -376,14 +364,12 @@ describe("openVoice & /api/voice endpoints", () => {
     const updatedEdit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
     assert.deepEqual(updatedEdit.voice.lines, [[4.3, 6.25]]);
 
-    // 4. Corrupt non-audio try file fails ffmpeg reassemble -> rolls back active take and returns 500
     writeFileSync(join(dir, "voice/try/01_corrupt.wav"), Buffer.from("NOT-A-VALID-WAV-FILE"));
     const failed = await voice.useTry({ takeId: "01", tryFile: "01_corrupt.wav" });
     assert.equal(failed.status, 500);
     assert.ok(typeof failed.error === "string" && failed.error.length > 0);
     assert.equal(buildVoiceMap(dir).lines[0].text, "He slowly wakes.");
 
-    // 5. Radio-Edit-First (omitted t): promoting a longer Take 01 also reports downstream Take 02's shifted span in swappedSpans
     writeFileSync(join(dir, "voice/takes/02.wav"), makePcmWav(0.9, 12000));
     writeFileSync(
       join(dir, "voice/takes/02.wav.words.json"),
@@ -407,8 +393,8 @@ describe("openVoice & /api/voice endpoints", () => {
         beats: {},
       }),
     );
-    await voice.useTry({ takeId: "01", tryFile: "01_alt.wav" }); // 0.8s -> 01: 0..0.8, 02: 1.2..2.1
-    const radioSwap = await voice.useTry({ takeId: "01", tryFile: "01_long.wav" }); // 2.2s -> 01: 0..2.2, 02: 2.6..3.5
+    await voice.useTry({ takeId: "01", tryFile: "01_alt.wav" });
+    const radioSwap = await voice.useTry({ takeId: "01", tryFile: "01_long.wav" });
     assert.equal(radioSwap.error, undefined);
     assert.equal(
       voice.ownEditWrite(),
@@ -429,8 +415,6 @@ describe("openVoice & /api/voice endpoints", () => {
       ],
     );
 
-    // 6. Promoting an unaligned try (01_unaligned.wav has no .words.json) when edit.voice is missing still initializes edit.voice.lines
-    // with [spokenStart, spokenEnd] for mix.py BGM ducking instead of dropping the unaligned take!
     writeFileSync(join(dir, "voice/try/01_unaligned.wav"), makePcmWav(0.8, 12000));
     writeFileSync(
       join(dir, "src/edit.json"),
@@ -451,7 +435,6 @@ describe("openVoice & /api/voice endpoints", () => {
       [1.25, 2.0],
     ]);
 
-    // 7. First-time failed swap on Take 02 must NOT leave an orphan 02_orig.wav in voice/try/
     writeFileSync(join(dir, "voice/try/02_corrupt.wav"), Buffer.from("NOT-A-VALID-WAV-FILE"));
     const failed02 = await voice.useTry({ takeId: "02", tryFile: "02_corrupt.wav" });
     assert.equal(failed02.status, 500);
@@ -462,7 +445,6 @@ describe("openVoice & /api/voice endpoints", () => {
     );
     assert.equal(existsSync(join(dir, "voice/try/02_orig.wav.words.json")), false);
 
-    // 8. Intra-directory symlinks inside voice/try/ or voice/takes/ must be rejected by audioFile
     let createdIntraSymlink = false;
     try {
       symlinkSync(join(dir, "voice/takes/02.wav"), join(dir, "voice/try/02_sym.wav"));
@@ -478,7 +460,6 @@ describe("openVoice & /api/voice endpoints", () => {
       );
     }
 
-    // 9. Pre-assembly (no full_voice.wav yet) must still probe tryFile decodability before overwriting active take or leaving _orig
     rmSync(join(dir, "assets/public/agent/full_voice.wav"), { force: true });
     const activeBeforePre = readFileSync(join(dir, "voice/takes/02.wav"));
     const failedPre = await voice.useTry({ takeId: "02", tryFile: "02_corrupt.wav" });
@@ -525,7 +506,6 @@ describe("openVoice & /api/voice endpoints", () => {
         assert.equal(take02.words, 0);
       }
 
-      // Warm cached read() returns the same snapshot reference until a new try file lands
       assert.equal(voice.read(), first);
 
       writeFileSync(
@@ -537,6 +517,82 @@ describe("openVoice & /api/voice endpoints", () => {
       assert.ok(afterTry.takes.find((t) => t.id === "02").tries.includes("02_fresh.mp3"));
     } finally {
       rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  test("syncEditVoiceLines cleans up temp .part files and warns when edit.json sync fails", async () => {
+    const dir = makeTempFilm();
+    const makePcmWav = (durationSec) => {
+      const sr = 48000;
+      const samples = Math.round(sr * durationSec);
+      const buf = Buffer.alloc(44 + samples * 2);
+      buf.write("RIFF", 0);
+      buf.writeUInt32LE(36 + samples * 2, 4);
+      buf.write("WAVEfmt ", 8);
+      buf.writeUInt32LE(16, 16);
+      buf.writeUInt16LE(1, 20);
+      buf.writeUInt16LE(1, 22);
+      buf.writeUInt32LE(sr, 24);
+      buf.writeUInt32LE(sr * 2, 28);
+      buf.writeUInt16LE(2, 32);
+      buf.writeUInt16LE(16, 34);
+      buf.write("data", 36);
+      buf.writeUInt32LE(samples * 2, 40);
+      return buf;
+    };
+
+    mkdirSync(join(dir, "assets/public/agent"), { recursive: true });
+    rmSync(join(dir, "voice/takes/01.mp3"), { force: true });
+    rmSync(join(dir, "voice/takes/01.mp3.words.json"), { force: true });
+    rmSync(join(dir, "voice/try/01_1.mp3"), { force: true });
+    rmSync(join(dir, "voice/try/01_1.mp3.words.json"), { force: true });
+    const fullPath = join(dir, "assets/public/agent/full_voice.wav");
+    writeFileSync(fullPath, makePcmWav(1.0));
+    writeFileSync(join(dir, "voice/takes/01.wav"), makePcmWav(0.4));
+    writeFileSync(join(dir, "voice/try/01_1.wav"), makePcmWav(0.6));
+    const editPath = join(dir, "src/edit.json");
+    writeFileSync(
+      editPath,
+      JSON.stringify({
+        end: 0.1,
+        voice: { lines: [], edits: {}, warp: [] },
+        takes: [{ id: "01", t: 0.5, text: "Hello." }],
+        beats: {},
+      }),
+    );
+
+    const origWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args.map(String).join(" "));
+    try {
+      const voice = openVoice(dir, {});
+      const srcDir = join(dir, "src");
+      if (process.platform === "win32") {
+        chmodSync(editPath, 0o444);
+      } else {
+        chmodSync(srcDir, 0o555);
+      }
+      try {
+        const res = await voice.useTry({ takeId: "01", tryFile: "01_1.wav" });
+        assert.equal(res.error, undefined);
+        assert.ok(Array.isArray(res.takes));
+      } finally {
+        if (process.platform === "win32") {
+          chmodSync(editPath, 0o666);
+        } else {
+          chmodSync(srcDir, 0o755);
+        }
+      }
+      const leftoverParts = readdirSync(srcDir).filter((f) => f.endsWith(".part"));
+      assert.deepEqual(leftoverParts, [], "must not leave orphan .part files after sync failure");
+      if (process.platform === "win32" || process.getuid?.() !== 0) {
+        assert.ok(
+          warnings.some((w) => /edit\.json/i.test(w)),
+          `expected edit.json sync warning on failed sync, got: ${JSON.stringify(warnings)}`,
+        );
+      }
+    } finally {
+      console.warn = origWarn;
     }
   });
 });

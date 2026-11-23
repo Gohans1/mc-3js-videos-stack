@@ -1,6 +1,3 @@
-// The grade as a film runs it (makeAdjustments on a postprocessing composer) over a known picture; test/grade-gpu.test.ts
-// calls window.grade(picture, basic, film) and reads the frame back as base64 RGB, top row first. film: the composer ends on an
-// EffectPass, as every film's does (scene.ts: look, feed), instead of on the RenderPass.
 import { EffectComposer, EffectPass, LUT3DEffect, RenderPass } from "postprocessing";
 import * as THREE from "three";
 
@@ -37,7 +34,6 @@ films.addPass(new EffectPass(camera));
 const filmAdjust = makeAdjustments(films, camera);
 const layerAdjust = makeLayerAdjustments(renderer);
 
-// sRGB levels 100 to 104 left to right, finer than 8 bits hold: a lit floor or a sky ramp before the picture leaves the GPU
 const ramp = () => {
   const data = new Float32Array(W * H * 4),
     c = new THREE.Color();

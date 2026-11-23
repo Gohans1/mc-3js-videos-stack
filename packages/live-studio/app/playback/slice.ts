@@ -1,4 +1,3 @@
-// The playhead's part of the page state (core/store.ts)
 export interface PlaybackSlice {
   playing: boolean;
   rate: number;

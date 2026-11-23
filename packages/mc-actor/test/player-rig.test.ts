@@ -194,7 +194,6 @@ async function loadPlayerTemplate(): Promise<THREE.Object3D> {
     return gltf.scene;
   }
 
-  // Fallback synthetic rig matching player.glb bone names + inner & Layer2 skinned head boxes
   const template = new THREE.Group();
   const bone = (name: string, x: number, y: number, z: number) => {
     const b = new THREE.Bone();
@@ -375,7 +374,6 @@ describe("mc-actor player rig primitives", () => {
     expect(wristR.rotation.y).toBeCloseTo(0.25, 6);
     expect(p.handR.position.toArray()).toEqual(handRPosBefore);
 
-    // Re-mounting propR into handL prunes the now-empty wristR group cleanly
     const wristMoved = p.holdProp("L", propR);
     expect(wristMoved.parent).toBe(p.handL);
     expect(propR.parent).toBe(wristMoved);
@@ -392,11 +390,9 @@ describe("mc-actor player rig primitives", () => {
     const p = await makePlayer(template, baseSkin, { face: "skin" });
     const { inner, outer } = getSkinMaterials(p);
 
-    // Dirty external canvas state must not corrupt redrawSkin base compositing OR overlayFn defaults
     p.skin.globalAlpha = 0.1;
     p.skin.globalCompositeOperation = "multiply";
 
-    // Frame A: paint red mark at (10, 10)
     const ver0 = inner.map!.version;
     p.paintSkinOverlay((ctx: PixelContext) => {
       expect(ctx.globalAlpha).toBe(1);
@@ -409,7 +405,6 @@ describe("mc-actor player rig primitives", () => {
     expect(outer.map).toBe(inner.map);
     expect(readPixel(p.skin, 10, 10)[0]).toBeGreaterThan(220);
 
-    // Frame B (scrub backward): mark at (10, 10) is gone and overlayFn still starts clean despite dirty p.skin
     const ver1 = inner.map!.version;
     p.paintSkinOverlay((ctx: PixelContext) => {
       expect(ctx.globalAlpha).toBe(1);
@@ -421,11 +416,9 @@ describe("mc-actor player rig primitives", () => {
     expect(readPixel(p.skin, 10, 10)).toEqual([200, 160, 120, 255]);
     expect(readPixel(p.skin, 12, 12)).toEqual([0, 0, 255, 255]);
 
-    // Passing null restores clean base skin completely
     p.paintSkinOverlay(null);
     expect(readPixel(p.skin, 12, 12)).toEqual([200, 160, 120, 255]);
 
-    // Same-size setSkin reuses existing CanvasTexture without disposal and updates pixels for both inner & outer
     const sameMapBefore = inner.map;
     let sameSizeDisposed = false;
     const origDisposeSame = sameMapBefore!.dispose.bind(sameMapBefore);
@@ -440,7 +433,6 @@ describe("mc-actor player rig primitives", () => {
     expect(outer.map).toBe(sameMapBefore);
     expect(readPixel(p.skin, 12, 12)).toEqual([110, 140, 170, 255]);
 
-    // Works with setFace("noeyes"): base -> eye patch -> overlay
     p.setFace("noeyes");
     p.paintSkinOverlay((ctx: PixelContext) => {
       expect(ctx.globalAlpha).toBe(1);
@@ -451,7 +443,6 @@ describe("mc-actor player rig primitives", () => {
     expect(readPixel(p.skin, 20, 20)).toEqual([0, 255, 0, 255]);
     expect(readPixel(p.skin, 9, 12)[0]).toBe((110 * 0.95) | 0);
 
-    // Resize setSkin (64 -> 128) reallocates CanvasTexture, disposes old one, and syncs BOTH inner and Layer2 outer
     const oldMap = inner.map;
     let disposed = false;
     const origDispose = oldMap!.dispose.bind(oldMap);
@@ -471,7 +462,6 @@ describe("mc-actor player rig primitives", () => {
     expect(p.skin.canvas.width).toBe(128);
     expect(readPixel(p.skin, 100, 100)).toEqual([80, 90, 100, 255]);
 
-    // Subsequent overlay + clear uses the new 128x128 base skin
     p.paintSkinOverlay((ctx: PixelContext, w: number, h: number) => {
       expect(w).toBe(128);
       expect(h).toBe(128);
@@ -490,7 +480,6 @@ describe("mc-actor player rig primitives", () => {
     installPixelDocument();
     const template = await loadPlayerTemplate();
 
-    // Paint distinct pixel colors for cheek(1,5), iris(2,4), hair/brow(3,0), lip/mouth(3,6)
     const paintFaceSamples = (
       canvas: PixelCanvas,
       scale: number,
@@ -601,7 +590,7 @@ describe("mc-actor player rig primitives", () => {
     const skinBald = makeDistinctSkin({
       cheek: [210, 160, 120],
       iris: [40, 110, 210],
-      brow: [210, 160, 120], // bald forehead: skin-colored (3,0) pixel
+      brow: [210, 160, 120],
       mouth: [180, 90, 80],
     });
     const skinNext = makeDistinctSkin({
@@ -611,7 +600,6 @@ describe("mc-actor player rig primitives", () => {
       mouth: [120, 40, 40],
     });
 
-    // Lazy creation: start in "skin" face, switch to "game" later (and prove caller mutations don't leak)
     const irisCol = new THREE.Color("#2288ee");
     const lazyFaceColors = { brow: "#3a2518", iris: irisCol };
     const p = await makePlayer(rig, skinBald, {
@@ -644,20 +632,17 @@ describe("mc-actor player rig primitives", () => {
     };
 
     const lazy = pickMats(p);
-    // Overridden channels keep exact requested hex; omitted channels auto-sample skin
     expectMat(lazy.browMat, new THREE.Color("#3a2518").getHexString());
     expectMat(lazy.irisMat, new THREE.Color("#2288ee").getHexString());
     expectMat(lazy.lidMat, new THREE.Color("rgb(210,160,120)").multiplyScalar(0.9).getHexString());
     expectMat(lazy.mouthMat, new THREE.Color("rgb(180,90,80)").multiplyScalar(0.35).getHexString());
 
-    // After setSkin, overridden brow/iris remain locked while lid/mouth re-sample skinNext
     p.setSkin(skinNext);
     expectMat(lazy.browMat, new THREE.Color("#3a2518").getHexString());
     expectMat(lazy.irisMat, new THREE.Color("#2288ee").getHexString());
     expectMat(lazy.lidMat, new THREE.Color("rgb(140,100,80)").multiplyScalar(0.9).getHexString());
     expectMat(lazy.mouthMat, new THREE.Color("rgb(120,40,40)").multiplyScalar(0.35).getHexString());
 
-    // Default eager face: "game" with lid & numeric 0x000000 mouth overrides
     const eagerPlayer = await makePlayer(rig, skinBald, {
       faceColors: { lid: "#aabbcc", mouth: 0x000000 },
     });
@@ -680,11 +665,9 @@ describe("mc-actor player rig primitives", () => {
     );
   });
 
-  // a close-up of a hand needed a second, scaled chef with all his skin but one arm wiped by hand, and a red face needed
-  // a raw pixel rect painted over the head: both are the player's own now
   const plainSkin = () => {
     const c = makePixelCanvas(64, 64, [200, 160, 120, 255]);
-    c.getContext().clearRect(32, 0, 32, 16); // the hat layer empty, as most skins have it
+    c.getContext().clearRect(32, 0, 32, 16);
     return c;
   };
 
@@ -716,9 +699,9 @@ describe("mc-actor player rig primitives", () => {
     installPixelDocument();
     const p = await makePlayer(await loadPlayerTemplate(), plainSkin());
     p.tintParts({ head: "#ff8000" });
-    expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]); // head front
-    expect(readPixel(p.skin, 44, 12)).toEqual([0, 0, 0, 0]); // hat front stays see-through
-    expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]); // body front
+    expect(readPixel(p.skin, 12, 12)).toEqual([200, 80, 0, 255]);
+    expect(readPixel(p.skin, 44, 12)).toEqual([0, 0, 0, 0]);
+    expect(readPixel(p.skin, 24, 24)).toEqual([200, 160, 120, 255]);
     const lid = getHeadFaceMaterials(p).find((m) => m.polygonOffsetFactor === -4)!;
     expect(lid.color.getHexString()).toBe(
       new THREE.Color("rgb(200,80,0)").multiplyScalar(0.9).getHexString(),
@@ -736,14 +719,14 @@ describe("mc-actor player rig primitives", () => {
     const faceMats = getHeadFaceMaterials(p);
     const { inner } = getSkinMaterials(p);
     p.showParts(["armR"]);
-    expect(readPixel(p.skin, 44, 24)).toEqual([200, 160, 120, 255]); // right arm front
-    expect(readPixel(p.skin, 44, 40)).toEqual([200, 160, 120, 255]); // its sleeve
+    expect(readPixel(p.skin, 44, 24)).toEqual([200, 160, 120, 255]);
+    expect(readPixel(p.skin, 44, 40)).toEqual([200, 160, 120, 255]);
     for (const [x, y] of [
-      [12, 12], // head
-      [24, 24], // body
-      [36, 52], // left arm
-      [4, 24], // right leg
-      [24, 40], // jacket
+      [12, 12],
+      [24, 24],
+      [36, 52],
+      [4, 24],
+      [24, 40],
     ] as const)
       expect(readPixel(p.skin, x, y)[3]).toBe(0);
     expect(inner.alphaTest).toBe(0.5);

@@ -4,7 +4,6 @@ import {
   extractAudioTags,
   stripDialogueSpeakerBrackets,
 } from "../../src/voice-playground-text.mjs";
-// Audio tags are natural-language directions, not a fixed API enum.
 import type { PlaygroundModelInfo } from "../../src/voice-playground.mjs";
 
 export { AUDIO_TAG_RE, stripDialogueSpeakerBrackets };

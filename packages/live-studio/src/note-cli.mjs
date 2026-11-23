@@ -1,8 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 
-// A note fixed, from the AI's side (note.mjs done): filed through the running studio, which owns notes.jsonl while it runs (two
-// writers would lose a note), or straight into the file when no studio is running
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
 import { filmVersion } from "./film-version.mjs";
@@ -98,7 +96,6 @@ export const parseFixTime = (raw) => {
 
 const version = (project) => filmVersion(project);
 
-// A note named by its id or by the #N bun run notes shows (notes.mjs findNote)
 export const resolveNote = (project, key) => {
   const hit = findNote(project, key);
   if (hit?.gone) throw new Error(deletedSaid(hit));
@@ -109,7 +106,6 @@ export const resolveNote = (project, key) => {
   return hit.id;
 };
 
-// One change from note-state.mjs ({fix}, {learned}); throws note-state's reason when it may not happen now
 export const sendChange = async (project, id, change) => {
   const notes = createNotes(project);
   if (!change.restore && !notes.read().some((n) => n.id === id))
@@ -125,13 +121,11 @@ export const sendChange = async (project, id, change) => {
         signal: AbortSignal.timeout(3000),
       });
     } catch (e) {
-      // a studio that took the change and is slow to answer (a build, a render on the same machine) may still write it: the
-      // file written too would be two writers, a fix twice or a creator's note lost
       if (e?.name === "TimeoutError")
         throw new Error(
           "the studio did not answer in 3 s (busy building or rendering?) and may still take it: see whether it did (bun run notes ID) before you send it again",
         );
-    } // else stopped since it wrote studio.json: nobody else is writing the file
+    }
     if (r && !r.ok) throw new Error(`the studio refused it: ${await r.text()}`);
     if (r) return "studio";
   }
@@ -225,14 +219,12 @@ const openNotes = (project) =>
         .filter((n) => wholeNote(n) && noteState(n) === "open")
     : [];
 
-// open notes no bun run notes has listed or shown yet
 export const unreadNotes = (project, open = openNotes(project)) => {
   const reads = readNoteReads(project);
   const known = new Set(reads.lastList?.knownIds ?? []);
   return open.filter((n) => !known.has(n.id) && !reads.byId?.[n.id]);
 };
 
-// The studio cannot tell a running AI that the creator wrote a note, so the commands it runs between fixes end on it
 export const noteNudge = (project) => {
   const open = openNotes(project);
   if (!open.length) return "";

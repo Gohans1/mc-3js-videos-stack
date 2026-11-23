@@ -86,7 +86,6 @@ export function ConfirmDeleteButton({
   );
 }
 
-/** Deletes a lesson file and offers a toast Undo action (respecting 409 AI conflict detection). */
 export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => void) {
   const { scope, path } = parseLessonKey(key);
   const res = await deleteLesson(key, onBeforeRemove);

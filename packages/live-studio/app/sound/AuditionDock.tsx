@@ -308,7 +308,6 @@ function NativeVoiceFavorite({ voice }: { voice: PlaygroundVoiceOption }) {
   );
 }
 
-/** Shared bottom preview bar keeping active playback visible across all Audio tabs. */
 export function AuditionDock({
   libraryItems,
   voices,
@@ -533,7 +532,6 @@ export function AuditionDock({
     );
   }
 
-  // 1.5 GenVoice Playground clip preview (`pg:<id>`)
   if (isPlaygroundTarget) {
     const item = pgItem;
     if (!item) return null;
@@ -595,7 +593,6 @@ export function AuditionDock({
     );
   }
 
-  // 1.6 GenVoice Cloud 24h preview (`pg-remote:<id>`)
   if (isRemotePgTarget) {
     const r = pgRemoteEntry;
     if (!r) return null;
@@ -661,7 +658,6 @@ export function AuditionDock({
     );
   }
 
-  // 2. Narration / script take preview (`voice:takes:...` or `voice:try:...`)
   if (activeTarget.startsWith("voice:")) {
     let takeEntry: {
       take: VoiceTakeItem;
@@ -809,7 +805,6 @@ export function AuditionDock({
     );
   }
 
-  // 3. Sound / Music / Minecraft item or expanded variation family
   let group: LibraryGroup | null = null;
   if (activeTarget) {
     if (expandedGroup?.variants.some((v) => v.name === activeTarget)) {

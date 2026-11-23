@@ -1,7 +1,3 @@
-// What a stroke drawn with the right mouse button reads as, the way Excalidraw's draw-to-shape (PR #9313) and Procreate's
-// QuickShape guess it: Ramer-Douglas-Peucker cuts the stroke down to its corners at 8% of its size. Open with no corner left and
-// never running past its own ends is an arrow; closed with four corners and filling its bounding box (a circle fills 79%, a
-// diamond half) is a box; anything else stays the pen stroke it was drawn as, since a wrong guess costs the drawing. Pixels in
 type P = [number, number];
 const gap = (p: P, a: P, b: P) => {
   const dx = b[0] - a[0],
@@ -44,7 +40,6 @@ export const shapeOf = (pts: P[]): "arrow" | "box" | "pen" => {
       ? "arrow"
       : "pen";
   }
-  // The loop's corners: its end dropped for its start, then any corner lying on the line between its two neighbours
   const loop = rdp(pts, eps).slice(0, -1);
   for (let i = 0; loop.length > 3 && i < loop.length;) {
     if (gap(loop[i], loop.at(i - 1)!, loop[(i + 1) % loop.length]) <= eps) {

@@ -34,7 +34,6 @@ const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const MARK = ".pack.json";
 const isMacMeta = (name) => name.split("/").some((p) => p === "__MACOSX" || p.startsWith("._"));
 
-// Unpacks into a sibling folder first, so a failed pack never leaves half its files behind
 function unpack(zip, dir) {
   const files = unzipSync(zip, { filter: (f) => !isMacMeta(f.name) && !f.name.endsWith("/") });
   const part = `${dir}.${process.pid}.part`;
@@ -55,7 +54,6 @@ function unpack(zip, dir) {
   return Object.keys(files).length;
 }
 
-// A browser may save "kenney_impact-sounds (1).zip": any file starting with the expected name, same extension, counts
 const findByHand = (dirs, name) => {
   const ext = name.match(/\.[a-z0-9]+$/i)?.[0].toLowerCase() ?? "";
   const stem = name.slice(0, name.length - ext.length).toLowerCase();
@@ -78,7 +76,6 @@ const ARIA2 = [
 ];
 const aria2 = (input, log) =>
   new Promise((done) => {
-    // Its live progress line redraws every second: into a log file, only the 60 s summary
     const readout = process.stdout.isTTY ? [] : ["--show-console-readout=false"];
     const child = spawn("aria2c", [`--input-file=${input}`, ...ARIA2, ...readout], {
       stdio: "inherit",
@@ -101,7 +98,6 @@ export async function fetchSoundRaw({
   downloads = join(homedir(), "Downloads"),
   log = console.log,
   torrentClient = aria2,
-  // setup:vault leaves torrent packs (hours each) to their own run of this command
   torrents = true,
 } = {}) {
   const { sources } = JSON.parse(readFileSync(join(root, "scripts/sound-raw.json"), "utf8"));
@@ -180,9 +176,6 @@ const pinnedIn = (mark) => {
   return m.btih ?? m.sha256;
 };
 
-// One aria2 run per torrent pack, two at a time, each file written to its planned name (index-out); a pack is marked
-// the moment its run ends, so setup:sound files it while the rest download. A pack is done when every file has its
-// full length and aria2 left no control file (.aria2) for it, which it keeps until the last piece checks
 const AT_ONCE = 2;
 async function fetchTorrents(torrents, { log, torrentClient, result }) {
   log(

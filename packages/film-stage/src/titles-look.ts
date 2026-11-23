@@ -1,6 +1,3 @@
-// How a title looks at a moment of its In and Out: lookOf folds the item's two voices (titles-catalog.ts, or a film's own with a
-// step) into one Look (alpha, offsets in heights of the text, scale, rotation, blur, clip, per-word or per-letter phase, tint) that
-// titles.ts draws. Pure: the same item and phase give the same Look.
 import { easeOf, EASES, expOut, lmix } from "./camera";
 import { DEFAULT_TINT, isShapeKind, type TitleVoice } from "./titles-catalog";
 import { clamp01, cubicOut, inOutLengths, type Phase, type Timed } from "./titles-text";
@@ -14,7 +11,6 @@ export interface TitleFx {
   ease?: string | number[] | Curve;
   stagger?: number;
   tint?: string;
-  // 2 or 3: the voice moves on twos or threes of the 30 fps film clock (Cinetic's held frames)
   hold?: number;
   [k: string]: unknown;
 }
@@ -64,9 +60,7 @@ export interface TitleExtra {
 
 const BURST_TYPE = expOut(3.2);
 
-// `hold` counts frames of live-studio's 30 fps film clock (Cinetic on-twos / on-threes)
 const FILM_FPS = 30;
-// len: the seconds the In or Out really runs, after phaseOf shrinks both to fit a short item
 const heldPhase = (rawP: number, cfg: TitleFx, len: number) => {
   const p = clamp01(rawP);
   const hold = Math.round(Number(cfg.hold) || 1);
@@ -104,8 +98,8 @@ const easedSlot = (p: number, cfg: TitleFx, side: Side, autoFn: Curve, extraEase
 
 export const popCurve = (e: number) => {
   if (e >= 1) return 1;
-  if (e < 0.68) return 0.88 + (0.15 * e) / 0.68; // 0.88 -> 1.03 crisp overshoot
-  return 1.03 - (0.03 * (e - 0.68)) / 0.32; // settles onto 1.00
+  if (e < 0.68) return 0.88 + (0.15 * e) / 0.68;
+  return 1.03 - (0.03 * (e - 0.68)) / 0.32;
 };
 
 export const lookOf = (it: TitleItem, ph: Phase, extra?: TitleExtra): Look => {
@@ -366,7 +360,6 @@ export const lookOf = (it: TitleItem, ph: Phase, extra?: TitleExtra): Look => {
       const e = slot(p, cfg, side, up ? FLIP_TO_FLAT : EASES.launchIn);
       const c = Math.max(0.02, Math.cos(((up ? 70 : 52) * (1 - e) * Math.PI) / 180));
       st.scaleY *= c;
-      // Hinged at the baseline: shrinking about the centre would lift the foot, so drop it back down
       st.dy += (1 - c) * 0.6;
       if (up) {
         st.dy += (1 - e) * 0.55;
@@ -386,7 +379,6 @@ export const lookOf = (it: TitleItem, ph: Phase, extra?: TitleExtra): Look => {
         bounce = 0.4;
       const u = (t - hit) / (1 - hit);
       st.dy += t < hit ? -fall * (1 - (t / hit) ** 2) : -fall * bounce * bounce * 4 * u * (1 - u);
-      // Squash only on the contact frames, volume kept
       const sq = Math.max(0, 1 - Math.abs(t - hit) / 0.06) * 0.12;
       st.scaleY *= 1 - sq;
       st.scaleX /= 1 - sq;
@@ -403,7 +395,6 @@ export const lookOf = (it: TitleItem, ph: Phase, extra?: TitleExtra): Look => {
       const deg = -55 * Math.exp(-3.2 * t) * Math.cos(2 * Math.PI * 1.75 * t) * (1 - t);
       const r = (deg * Math.PI) / 180;
       st.rot += deg;
-      // Swing about the top edge, not the centre the canvas rotates around
       st.dx -= Math.sin(r) * 0.6;
       st.dy += (Math.cos(r) - 1) * 0.6;
       const s = 1 + 0.08 * (1 - cubicOut(t));

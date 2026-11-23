@@ -19,19 +19,13 @@ def keys(env, file):
     return list(dict.fromkeys(k.strip() for k in raw if k.strip()))
 
 
-# Jev routes, tried in order: OpenCode Zen's free one (a daily quota per network, not per key: every key from one egress
-# IP shares it, back at 00:00 UTC; 429 FreeUsageLimitError), then OpenRouter's paid one ($0.042 per million input tokens:
-# a whole-catalogue search ~$0.002, ~$0.01 with --timeline). Keys live in ~/.secrets/<file> or the env var, never in the
-# repo; a route's next key only stands in for one it refuses. Inputs may be kept by the provider: scene words only.
 ROUTES = [("OpenCode Zen free", "https://opencode.ai/zen/v1/systemone", "jev-1.13-free", "OPENCODE_API_KEY", "opencode_zen.env"),
           ("OpenRouter (paid)", "https://openrouter.ai/api/v1/systemone", "typesafe/jev-1.14", "OPENROUTER_API_KEY", "openrouter.env")]
-SPEND_CAP = 0.05  # USD per run on a paid route: a run past it stops, as a runaway loop would
+SPEND_CAP = 0.05
 NO_REQUEST_EXIT = 78
 CHARGE_THRESHOLD_EXIT = 79
 
 
-# Each call is its own process (jev.ts spawns one per question), so when a route's quota is back is kept on disk:
-# {route name: back at, epoch s}. Later runs try that route only after every other.
 def spent_file():
     return Path.home() / ".cache" / "mc-films" / "jev-quota.json"
 
@@ -93,7 +87,6 @@ class Jev:
             # Cloudflare in front of Zen refuses Python's default User-Agent (error 1010)
             req = urllib.request.Request(url, data=json.dumps({"model": model, "state": state, "questions": questions}).encode(),
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json", "User-Agent": "mc-films-jev/1"})
-            # 429 with a short Retry-After is a burst limit: wait it out; with hours (the quota spent): the next route
             for wait in [5, 10, 20, 40, 80, 160, 0]:
                 try:
                     res = json.load(urllib.request.urlopen(req, timeout=120))
@@ -119,7 +112,6 @@ class Jev:
                                                           "or your terminal.")
                                 self.routes.pop(0)
                         break
-                    # a server fault (5xx) passes like a burst: one lost answer would throw away every heat paid before it
                     if (e.code != 429 and e.code < 500) or not wait:
                         if e.code == 429:
                             sys.exit(f"{name} is limiting requests. Wait a few minutes and try again.")
@@ -142,7 +134,6 @@ class Jev:
                     if (e.code != 429 and e.code < 500) or not wait:
                         raise
                     time.sleep(after)
-                # a connection dropped mid-answer or malformed 200 payload is retried cleanly
                 except (urllib.error.URLError, TimeoutError, ConnectionError, http.client.HTTPException, ValueError, KeyError):
                     if not wait:
                         sys.exit(f"Could not reach {name}. Check your connection and try again.")
@@ -150,7 +141,6 @@ class Jev:
 
 
 if __name__ == "__main__":
-    # A pipe for tools in other languages (scripts/find.ts): {"state": ..., "questions": {...}} on stdin, the answers on stdout
     req = json.load(sys.stdin)
     jev = Jev(req.get("options"))
     answers = jev.ask(req["state"], req["questions"])

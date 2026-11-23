@@ -1,4 +1,3 @@
-// What lies under a point of the picture, in words a note can carry ("character, left hand", "chair"), and where it is
 import * as THREE from "three";
 
 import { S } from "../core/state";

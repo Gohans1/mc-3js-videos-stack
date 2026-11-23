@@ -1,14 +1,9 @@
-// Where in a transition sound its moment is, read from the sound itself, so Sound at the cut (sweeten.ts) can put that moment on
-// the cut rather than the file's start: a riser ends there (it stops dead on the cut), a whoosh is loudest there, an impact
-// and a downlifter start there. Editors line these up by eye on the waveform; this does the same on 10 ms of loudness at a time.
-// No browser or store imports: test/hit.test.mjs runs this under node
 export type Role = "riser" | "whoosh" | "impact" | "downlifter";
 export const ROLES: readonly Role[] = ["riser", "whoosh", "impact", "downlifter"];
 
 const STEP = 0.01,
-  RANGE = 20; // a moment counts from 20 dB under the loudest 10 ms on
+  RANGE = 20;
 
-// Each channel's samples (mono or stereo); returns seconds into the file, and the loudest 10 ms in dB (for the level)
 export const hitOf = (role: Role, channels: readonly Float32Array[], rate: number) => {
   const h = Math.max(1, Math.round(STEP * rate)),
     n = Math.floor(channels[0].length / h),
@@ -23,7 +18,6 @@ export const hitOf = (role: Role, channels: readonly Float32Array[], rate: numbe
   const floor = db[top] - RANGE;
   let at: number;
   if (role === "whoosh") {
-    // Loudest over 50 ms, not one 10 ms window: a noise sweep's peak is broad and ragged
     let best = 0,
       bestAt = top;
     for (let w = 2; w < n - 2; w++) {

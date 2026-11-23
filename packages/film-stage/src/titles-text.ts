@@ -1,5 +1,3 @@
-// What a title shows at a moment: where t sits in its In and Out, and the text the typing, decode and counter voices print.
-// Pure functions of their arguments, so a frame drawn twice is drawn the same.
 export const clamp01 = (x: number) => (!Number.isFinite(x) || x <= 0 ? 0 : x >= 1 ? 1 : x);
 export const cubicOut = (p: number) => 1 - (1 - clamp01(p)) ** 3;
 
@@ -19,7 +17,6 @@ export interface Phase {
   in: number;
   out: number;
 }
-// The In runs over its first len seconds and the Out over its last; both shrink in proportion when the item is shorter
 export const inOutLengths = (it: Timed) => {
   const span = it.to - it.from,
     a = it.in?.fx ? (it.in.len ?? 0.5) : 0,
@@ -36,7 +33,6 @@ export const phaseOf = (it: Timed, t: number): Phase | null => {
   };
 };
 
-// What a reader counts as one letter: an emoji or a letter with combining accents (Vietnamese typed in NFD) stays whole
 const SEGMENTER = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 export const graphemes = (text: string) => Array.from(SEGMENTER.segment(text), (g) => g.segment);
 
@@ -47,7 +43,6 @@ export const typed = (text: string, p: number) => {
 
 const GLYPHS_UPPER = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789/#%&*+=-";
 const GLYPHS_LOWER = "abcdefghijklmnopqrstuvwxyz0123456789/#%&*+=-";
-// Seeded deterministic glyph decode/erode, quantized in discrete steps so motion-blur subframes never ghost half-letters.
 export const scrambled = (text: string, p: number, seed = 0) => {
   const u = clamp01(p);
   if (u >= 1) return text;
@@ -66,7 +61,6 @@ export const scrambled = (text: string, p: number, seed = 0) => {
     .join("");
 };
 
-// Cinetic counter-cut: every number counts up from zero on whole cut values (never rolling digits), keeping its decimals and commas.
 export const counted = (text: string, p: number) => {
   const u = clamp01(p);
   if (u >= 1) return text;

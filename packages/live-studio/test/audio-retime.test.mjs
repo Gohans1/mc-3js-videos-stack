@@ -92,8 +92,6 @@ test("trimming or splitting reversed audio retains exactly the samples that were
 });
 
 test("looping source trims wrap by the loop period in source seconds after speed is applied", () => {
-  // 3 + 2 s at speed 2 is stream second 7; a 5 s file crossfades over 1.25 s, so the stream repeats every 3.75 s past
-  // its first fade and second 7 sounds as second 3.25
   const c = { start: 3, rate: 2, gain: 0 };
   trimSource(c, 2, 10, 10, 5, true);
   assert.equal(c.start, 3.25);

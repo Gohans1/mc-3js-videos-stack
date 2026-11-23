@@ -1,7 +1,3 @@
-// The sound lanes' tracks, CapCut style: audio.json "tracks" lists them top to bottom, each bed and one-shot names its own with
-// "track", and two clips never overlap on one track. A film written before tracks (or an agent's entry without one) gets them
-// here, packed in time order onto the first track of its kind with room. Muted tracks are left out of the mix by mix.py too.
-// No browser or store imports: test/tracks.test.mjs runs this under node.
 export interface Track {
   id: string;
   name: string;
@@ -54,7 +50,7 @@ export function missingSoundNames(
 }
 
 const KIND_NAME: Record<List, string> = { beds: "Bed", sfx: "SFX" };
-const TOUCH = 0.02; // clips this close still count as end to end, not overlapping
+const TOUCH = 0.02;
 
 export const refs = (l: Tracked): Ref[] =>
   (["beds", "sfx"] as const).flatMap((list) => l[list].map((_, i) => ({ list, i })));
@@ -64,7 +60,6 @@ export const trackOf = (l: Tracked, r: Ref) => l.tracks?.find((t) => t.id === en
 
 const newId = (l: Tracked) =>
   `t${1 + Math.max(0, ...(l.tracks ?? []).map((t) => Number(t.id.slice(1)) || 0))}`;
-// A new track at row `at` (end when left out), named after its kind with the first number not taken ("SFX", "SFX 2", ...)
 export const addTrack = (l: Tracked, kind: List, at?: number): Track => {
   l.tracks ??= [];
   const taken = new Set(l.tracks.map((t) => t.name)),
@@ -76,7 +71,6 @@ export const addTrack = (l: Tracked, kind: List, at?: number): Track => {
   return t;
 };
 
-// Whether [s, e] fits on track id beside every clip already there, leaving out the ones in skip
 export const fits = (
   l: Tracked,
   id: string,
@@ -90,7 +84,6 @@ export const fits = (
     return e <= a + TOUCH || s >= b - TOUCH;
   });
 
-// Collision intervals are displacements of the entire selection, so clips never drift apart.
 export const placeShift = (
   l: Tracked,
   moved: Ref[],
@@ -125,8 +118,6 @@ export const placeShift = (
   );
 };
 
-// Where a pasted clip goes: the track it came from while that has room, else the nearest free one of its kind (below, then
-// above), so a paste fills a track that is there before it adds one (the dev's call); a new one just below only when none is
 export const freeTrack = (
   l: Tracked,
   kind: List,
@@ -149,15 +140,12 @@ export const freeTrack = (
   return t ? t.id : addTrack(l, kind, at < 0 ? undefined : at + 1).id;
 };
 
-// Every clip on a track that exists; returns whether anything was given one
 export const normalize = (l: Tracked, spanOf: SpanOf) => {
   l.tracks ??= [];
   const known = new Set(l.tracks.map((t) => t.id));
-  // Beds before one-shots, each in time order, so a film's beds land on the tracks above its one-shots
   const homeless = refs(l)
     .filter((r) => !known.has(entry(l, r).track as string))
     .sort((a, b) => a.list.localeCompare(b.list) || spanOf(a)[0] - spanOf(b)[0]);
-  // Each kind's own tracks first, so beds and one-shots stay apart as the film had them
   const own = new Map<string, List>();
   for (const r of refs(l))
     if (known.has(entry(l, r).track as string)) own.set(entry(l, r).track as string, r.list);
@@ -191,7 +179,6 @@ export const shiftRoom = (l: Tracked, moved: Ref[], spanOf: SpanOf): [number, nu
   return [lo, hi];
 };
 
-// Tracks left with no clips go, as in CapCut
 export const tidy = (l: Tracked) => {
   const used = new Set(refs(l).map((r) => entry(l, r).track));
   l.tracks = (l.tracks ?? []).filter((t) => used.has(t.id));

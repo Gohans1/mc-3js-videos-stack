@@ -1,13 +1,4 @@
 // @ts-nocheck
-// --check seen:<target>,<from>,<to> (heard seconds), built in for every film: can the audience see the target through the film's
-// own camera, every frame? Measured the way engines test visibility (an ID buffer): a second
-// renderer draws every mesh in one flat colour per draw.tools.objects label, the target in its own, then the target alone,
-// through the film's camera with its view widened 3x, so what falls outside the real frame is counted too (beyond 3x: not). Counting
-// colours gives how much of the frame it fills, how much of it is behind something (and behind what), how much is cut off
-// by the frame edge; the film's real frame gives how bright it is. Textures keep their cut-outs (leaves, bars, glass),
-// see-through materials (opacity under 0.5) never hide anything. Prints the numbers and faults (checks/seen.mjs), writes
-//   seen_<target>_<from>-<to>.jpg  the chart: frame share, hidden, cut off, brightness over time
-//   seen_<target>_<from>-<to>_worst.jpg  the worst frame of each fault: green outline = seen, red = hidden, with what it is
 import { blurPx } from "film-stage/dof";
 import * as THREE from "three";
 
@@ -29,7 +20,7 @@ export const seenCheck = (render, cfg) => {
     FW = W2 / WIDE,
     FH = H2 / WIDE,
     X0 = (W2 - FW) / 2,
-    Y0 = (H2 - FH) / 2; // the real frame: FW x FH at X0, Y0
+    Y0 = (H2 - FH) / 2;
   let gl2, rt, buf, small;
   const idMats = new Map(),
     hide = new THREE.MeshBasicMaterial({ visible: false });
@@ -53,7 +44,6 @@ export const seenCheck = (render, cfg) => {
         toneMapped: false,
         fog: false,
       });
-      // the texture and vertex colours only for their alpha: every pixel of a mesh is exactly its ID
       m.onBeforeCompile = (s) => {
         s.fragmentShader = s.fragmentShader.replace(
           "#include <color_fragment>",
@@ -66,7 +56,6 @@ export const seenCheck = (render, cfg) => {
     return idMats.get(key);
   };
 
-  // two ID passes through the widened camera: everything (target = TARGET), then the target alone
   const passes = (tools, obj) => {
     const { scene, camera, objects } = tools;
     if (!gl2) {
@@ -74,7 +63,6 @@ export const seenCheck = (render, cfg) => {
       rt = new THREE.WebGLRenderTarget(W2, H2, { depthBuffer: true });
       buf = [new Uint8Array(W2 * H2 * 4), new Uint8Array(W2 * H2 * 4)];
     }
-    // a parentless copy placed where the film camera is in the world (the renderer recomputes a parentless camera's matrix)
     const wide = new THREE.PerspectiveCamera().copy(camera, false);
     camera.matrixWorld.decompose(wide.position, wide.quaternion, wide.scale);
     wide.fov = (2 * Math.atan(WIDE * Math.tan((camera.fov * Math.PI) / 360)) * 180) / Math.PI;
@@ -120,7 +108,6 @@ export const seenCheck = (render, cfg) => {
     return { all: buf[0], alone: buf[1], names };
   };
 
-  // one frame: render(t) poses the film and draws its real frame, then the ID passes measure the target
   const measureAt = async (t, obj) => {
     if (render.renderFrame) await render.renderFrame(t);
     else render(t);
@@ -245,7 +232,6 @@ export const seenCheck = (render, cfg) => {
     worst.forEach((w, i) => mark(c, w.t, "#9aa0a6", w.kind, i % 3, [3, 3]));
     lines.push({ still: `${tag}.jpg`, canvas: c.canvas });
 
-    // the worst frames, 2 across: the film's frame, the target outlined green where seen, tinted red where hidden
     if (worst.length) {
       const shown = worst.slice(0, 6),
         TW = gl.width / 2,

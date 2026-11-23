@@ -10,7 +10,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { inflateSync, strFromU8, unzipSync } from "fflate";
+import { inflateSync, strFromU8 } from "fflate";
 
 export interface ZipCdEntry {
   name: string;
@@ -29,7 +29,6 @@ export interface MobClipInfo {
 
 export interface McAssetItem {
   kind: "block" | "item" | "mob";
-  /** Placed ID or canonical item ID: block:<ns>:<id>, item:<ns>:<id>, mob:<id> */
   id: string;
   namespace: string;
   name: string;
@@ -118,6 +117,11 @@ const SCHEMA_REVISION = 6;
 const u16 = (b: Uint8Array, o: number) => b[o]! | (b[o + 1]! << 8);
 const u32 = (b: Uint8Array, o: number) =>
   (b[o]! | (b[o + 1]! << 8) | (b[o + 2]! << 16) | (b[o + 3]! << 24)) >>> 0;
+const u64 = (b: Uint8Array, o: number) => {
+  const val = u32(b, o + 4) * 4294967296 + u32(b, o);
+  if (!Number.isSafeInteger(val)) throw new Error("ZIP64 field exceeds safe integer range");
+  return val;
+};
 
 function readFileBytes(filePath: string): Uint8Array {
   const b = readFileSync(filePath);
@@ -134,7 +138,6 @@ function collectJsonRelPaths(dir: string, prefix = ""): string[] {
   return out;
 }
 
-/** Reads ZIP Central Directory offsets and sizes without inflating file payloads. */
 export function readZipCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
   const len = buf.length;
   const minOff = Math.max(0, len - 65558);
@@ -151,25 +154,34 @@ export function readZipCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
   if (eocd < 0) throw new Error("Invalid ZIP archive: EOCD not found");
 
   const totalEntries = u16(buf, eocd + 10);
-  const cdSize = u32(buf, eocd + 12);
-  const cdOffset = u32(buf, eocd + 16);
+  let cdSize = u32(buf, eocd + 12);
+  let cdOffset = u32(buf, eocd + 16);
   const map = new Map<string, ZipCdEntry>();
+  const archiveZip64 = totalEntries === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff;
 
-  if (totalEntries === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
-    // ZIP64 fallback handled lazily via full unzip when any entry needs reading.
-    const full = unzipSync(buf);
-    for (const [name, data] of Object.entries(full)) {
-      if (name.endsWith("/")) continue;
-      map.set(name, {
-        name,
-        method: -1,
-        compSize: data.length,
-        uncompSize: data.length,
-        localOffset: 0,
-        zip64: true,
-      });
+  if (archiveZip64) {
+    const loc = eocd - 20;
+    if (
+      loc < 0 ||
+      buf[loc] !== 0x50 ||
+      buf[loc + 1] !== 0x4b ||
+      buf[loc + 2] !== 0x06 ||
+      buf[loc + 3] !== 0x07
+    ) {
+      throw new Error("Invalid ZIP64 archive: EOCD64 locator not found");
     }
-    return map;
+    const z64Off = u64(buf, loc + 8);
+    if (
+      z64Off + 56 > len ||
+      buf[z64Off] !== 0x50 ||
+      buf[z64Off + 1] !== 0x4b ||
+      buf[z64Off + 2] !== 0x06 ||
+      buf[z64Off + 3] !== 0x06
+    ) {
+      throw new Error("Invalid ZIP64 archive: EOCD64 record not found");
+    }
+    cdSize = u64(buf, z64Off + 40);
+    cdOffset = u64(buf, z64Off + 48);
   }
 
   let off = cdOffset;
@@ -183,18 +195,65 @@ export function readZipCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
     )
       break;
     const method = u16(buf, off + 10);
-    const compSize = u32(buf, off + 20);
-    const uncompSize = u32(buf, off + 24);
+    const rawCompSize = u32(buf, off + 20);
+    const rawUncompSize = u32(buf, off + 24);
     const nameLen = u16(buf, off + 28);
     const extraLen = u16(buf, off + 30);
     const commentLen = u16(buf, off + 32);
-    const localOffset = u32(buf, off + 42);
-    const name = strFromU8(buf.subarray(off + 46, off + 46 + nameLen));
-    off += 46 + nameLen + extraLen + commentLen;
+    const rawLocalOffset = u32(buf, off + 42);
+    const nameStart = off + 46;
+    const extraStart = nameStart + nameLen;
+    const extraEnd = Math.min(end, extraStart + extraLen);
+    const name = strFromU8(buf.subarray(nameStart, extraStart));
+    off = extraStart + extraLen + commentLen;
     if (name.endsWith("/")) continue;
-    const zip64 =
-      compSize === 0xffffffff || uncompSize === 0xffffffff || localOffset === 0xffffffff;
-    map.set(name, { name, method, compSize, uncompSize, localOffset, zip64 });
+
+    let compSize = rawCompSize;
+    let uncompSize = rawUncompSize;
+    let localOffset = rawLocalOffset;
+    const entryZip64 =
+      rawCompSize === 0xffffffff || rawUncompSize === 0xffffffff || rawLocalOffset === 0xffffffff;
+    if (entryZip64) {
+      let ex = extraStart;
+      let foundZ64 = false;
+      while (ex + 4 <= extraEnd) {
+        const headerId = u16(buf, ex);
+        const dataLen = u16(buf, ex + 2);
+        const dataEnd = Math.min(extraEnd, ex + 4 + dataLen);
+        if (headerId === 0x0001) {
+          let p = ex + 4;
+          if (rawUncompSize === 0xffffffff) {
+            if (p + 8 > dataEnd) throw new Error(`Invalid ZIP64 extra field for entry ${name}`);
+            uncompSize = u64(buf, p);
+            p += 8;
+          }
+          if (rawCompSize === 0xffffffff) {
+            if (p + 8 > dataEnd) throw new Error(`Invalid ZIP64 extra field for entry ${name}`);
+            compSize = u64(buf, p);
+            p += 8;
+          }
+          if (rawLocalOffset === 0xffffffff) {
+            if (p + 8 > dataEnd) throw new Error(`Invalid ZIP64 extra field for entry ${name}`);
+            localOffset = u64(buf, p);
+            p += 8;
+          }
+          foundZ64 = true;
+          break;
+        }
+        ex += 4 + dataLen;
+      }
+      if (!foundZ64) {
+        throw new Error(`Invalid ZIP64 extra field for entry ${name}`);
+      }
+    }
+    map.set(name, {
+      name,
+      method,
+      compSize,
+      uncompSize,
+      localOffset,
+      zip64: archiveZip64 || entryZip64,
+    });
   }
   return map;
 }
@@ -213,44 +272,54 @@ export function readPackCatalog(buf: Uint8Array): Map<string, ZipCdEntry> {
   );
 }
 
-/** Decompresses only the requested archive paths using Central Directory byte ranges. */
+export interface ReadZipMembersOptions {
+  onError?: (name: string, error: Error) => void;
+}
+
 export function readZipMembers(
   buf: Uint8Array,
   catalog: Map<string, ZipCdEntry>,
   wanted: Iterable<string>,
+  options?: ReadZipMembersOptions,
 ): Map<string, Uint8Array> {
   const result = new Map<string, Uint8Array>();
-  let zip64Fallback: Record<string, Uint8Array> | null = null;
+  const report = (name: string, err: unknown) => {
+    options?.onError?.(name, err instanceof Error ? err : new Error(String(err)));
+  };
 
   for (const name of wanted) {
     const entry = catalog.get(name);
     if (!entry) continue;
-    if (entry.zip64) {
-      zip64Fallback ??= unzipSync(buf);
-      if (zip64Fallback[entry.name]) result.set(name, zip64Fallback[entry.name]);
-      continue;
-    }
     const lh = entry.localOffset;
     if (
+      lh < 0 ||
       lh + 30 > buf.length ||
       buf[lh] !== 0x50 ||
       buf[lh + 1] !== 0x4b ||
       buf[lh + 2] !== 0x03 ||
       buf[lh + 3] !== 0x04
-    )
+    ) {
+      report(name, new Error(`Invalid ZIP local file header for ${name}`));
       continue;
+    }
     const fnameLen = u16(buf, lh + 26);
     const extraLen = u16(buf, lh + 28);
     const start = lh + 30 + fnameLen + extraLen;
+    if (start + entry.compSize > buf.length) {
+      report(name, new Error(`Truncated ZIP member data for ${name}`));
+      continue;
+    }
     const slice = buf.subarray(start, start + entry.compSize);
     if (entry.method === 0) {
       result.set(name, slice);
     } else if (entry.method === 8) {
       try {
         result.set(name, inflateSync(slice));
-      } catch {
-        // Ignore corrupt compressed member so one broken model does not crash pack indexing.
+      } catch (err) {
+        report(name, err);
       }
+    } else {
+      report(name, new Error(`Unsupported ZIP compression method ${entry.method} for ${name}`));
     }
   }
   return result;
@@ -345,7 +414,6 @@ export function collectBlockstateModels(stateJson: any): string[] {
 
 const vanillaBlockstatePath = (block: string) => `assets/minecraft/blockstates/${block}.json`;
 
-/** Traces a vanilla blockstate through both layers, returning only model/texture files from the overlay. */
 export function collectVanillaBlockOverrides(
   block: string,
   vanilla: (path: string) => any,
@@ -443,9 +511,13 @@ function readJsonMembers(
   buf: Uint8Array,
   catalog: Map<string, ZipCdEntry>,
   paths: string[],
-): Map<string, { data?: any; invalidJson?: boolean }> {
-  const raw = readZipMembers(buf, catalog, paths);
-  const parsed = new Map<string, { data?: any; invalidJson?: boolean }>();
+): Map<string, { data?: any; invalidJson?: boolean; corruptZip?: string }> {
+  const parsed = new Map<string, { data?: any; invalidJson?: boolean; corruptZip?: string }>();
+  const raw = readZipMembers(buf, catalog, paths, {
+    onError: (name, err) => {
+      parsed.set(name, { corruptZip: err.message });
+    },
+  });
   for (const [p, bytes] of raw) {
     try {
       parsed.set(p, { data: JSON.parse(strFromU8(bytes)) });
@@ -461,14 +533,14 @@ interface InspectEnv {
   catalog: Map<string, ZipCdEntry>;
   vanillaFiles?: Set<string>;
   isVanilla: boolean;
-  jsonCache: Map<string, { data?: any; invalidJson?: boolean }>;
+  jsonCache: Map<string, { data?: any; invalidJson?: boolean; corruptZip?: string }>;
   geoOrObjByNs: Map<string, boolean>;
 }
 
 function loadModelJson(
   env: InspectEnv,
   path: string,
-): { data?: any; invalidJson?: boolean } | null {
+): { data?: any; invalidJson?: boolean; corruptZip?: string } | null {
   if (!env.catalog.has(path)) return null;
   if (!env.jsonCache.has(path)) {
     const loaded = readJsonMembers(env.buf, env.catalog, [path]);
@@ -505,6 +577,9 @@ function checkModelChain(
   }
 
   const loaded = loadModelJson(env, mPath);
+  if (loaded?.corruptZip) {
+    return `corrupt ZIP entry ${mPath}: ${loaded.corruptZip}`;
+  }
   if (!loaded || loaded.invalidJson || !loaded.data || typeof loaded.data !== "object") {
     return `invalid model JSON ${mPath}`;
   }
@@ -575,7 +650,6 @@ function indexArchive(
     }
   }
 
-  // Batch read top-level JSON metadata + all model JSONs once to avoid per-file unzip loops.
   const modelJsonPaths = files.filter((f) => /^assets\/[^/]+\/models\/.+\.json$/.test(f));
   const jsonCache = readJsonMembers(buf, catalog, [
     ...blockstates.map((b) => b.path),
@@ -603,7 +677,9 @@ function indexArchive(
     const state = jsonCache.get(b.path);
     let brokenReason: string | undefined;
     let props: Record<string, string[]> | undefined;
-    if (!state || state.invalidJson || !state.data || typeof state.data !== "object") {
+    if (state?.corruptZip) {
+      brokenReason = `corrupt ZIP entry ${b.path}: ${state.corruptZip}`;
+    } else if (!state || state.invalidJson || !state.data || typeof state.data !== "object") {
       brokenReason = `invalid blockstate JSON ${b.path}`;
     } else {
       props = extractBlockstateProps(state.data);
@@ -680,19 +756,19 @@ function indexArchive(
     }
   }
 
-  // 1.21.4+ items/<id>.json definitions first, then fallback models/item/<id>.json
   for (const it of itemDefs) {
     if (it.id.startsWith("_")) continue;
     const key = `${it.ns}:${it.id}`;
     seenItems.add(key);
     const def = jsonCache.get(it.path);
     let brokenReason: string | undefined;
-    if (!def || def.invalidJson || !def.data || typeof def.data !== "object") {
+    if (def?.corruptZip) {
+      brokenReason = `corrupt ZIP entry ${it.path}: ${def.corruptZip}`;
+    } else if (!def || def.invalidJson || !def.data || typeof def.data !== "object") {
       brokenReason = `invalid item JSON ${it.path}`;
     } else {
       const refs = [...new Set(collectItemDefModels(def.data))];
       if (!refs.length) {
-        // Fallback: check matching models/item/<id>.json if special item renderer omits model string
         if (catalog.has(`assets/${it.ns}/models/item/${it.id}.json`)) {
           brokenReason = checkModelChain(env, `${it.ns}:item/${it.id}`, it.ns) ?? undefined;
         } else {
@@ -945,7 +1021,6 @@ export function loadWarmMcCache(vaultRoot: string): McCacheData | null {
   return null;
 }
 
-/** Loads built-in gohans blocks plus cached/fresh vault vanilla jar, packs, and mobs. */
 export function loadMcAssetsCatalog(options?: {
   vaultRoot?: string;
   gohansPackDir?: string;
@@ -973,7 +1048,6 @@ export function loadMcAssetsCatalog(options?: {
   let cacheDirty = false;
   const reindexedPacks: string[] = [];
 
-  // 1) Vanilla jar first so pack validator knows vanilla model/texture refs.
   const jarPath = join(vaultRoot, "jar/client_assets.zip");
   const vanillaFp = existsSync(jarPath) ? statFingerprint(jarPath) : "";
   let vanillaEntries: McAssetItem[] = [];
@@ -1010,7 +1084,6 @@ export function loadMcAssetsCatalog(options?: {
     cacheDirty = true;
   }
 
-  // 2) Packs directory: per-file fingerprint + packs_index.json metadata + vanilla jar cache.
   const packsDir = join(vaultRoot, "packs");
   const packIndex = readPacksIndex(vaultRoot);
   const packMetas: McPackMeta[] = [];
@@ -1061,7 +1134,6 @@ export function loadMcAssetsCatalog(options?: {
           packMetas.push(cached.meta);
           packItems.push(...cached.entries);
         } else {
-          // Refresh pack index metadata (slug/title/license/url/downloads) without decompressing archive
           const refreshedEntries = cached.entries.map((it) => ({
             ...it,
             source: meta.slug,
@@ -1133,7 +1205,6 @@ const VARIANT_PREFIX =
 const VARIANT_SUFFIX =
   /_(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black|\d+|v\d+|mk\d+)$/;
 
-/** Normalizes wood/color/tier prefixes & suffixes so related variants fold into one line after filtering. */
 export function variantStem(name: string): string {
   let s = name.toLowerCase();
   const pm = VARIANT_PREFIX.exec(s);
@@ -1143,7 +1214,6 @@ export function variantStem(name: string): string {
   return s;
 }
 
-/** Folds matching variant rows by pack + namespace + kind + normalized stem while keeping filter matches first. */
 export function foldObjectVariants<
   T extends Pick<McAssetItem, "kind" | "id" | "pack" | "source" | "title"> & {
     namespace?: string;
@@ -1173,7 +1243,6 @@ export function foldObjectVariants<
   return out;
 }
 
-/** Quickly inspects a single blockstate in a jar or client_assets.zip without scanning all packs. */
 export function inspectBlockstateInZip(
   zipPath: string,
   blockstateRelPath: string,

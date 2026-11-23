@@ -68,7 +68,7 @@ test("the camera file is written only over the version the page saw, and only wh
   data[1].ease = [0.23, 1, 0.32, 1];
   assert.ok(cam.write(version, data).version);
   assert.ok(cam.ownWrite());
-  assert.deepEqual(JSON.parse(readFileSync(file, "utf8"))[0].wave, 0.3); // the film's own fields stay
+  assert.deepEqual(JSON.parse(readFileSync(file, "utf8"))[0].wave, 0.3);
   assert.ok(cam.write(version, data).version, "a repeated save from a known base converges");
   assert.deepEqual(cam.write("unknown", data), { conflict: true });
   writeFileSync(file, readFileSync(file, "utf8").replace("0.23", "0.3"));
@@ -87,7 +87,6 @@ test("splitShotHits partitions hits across split boundaries and mergeShotHits re
     { t: 3.5, amount: 0.8, trauma: 0.6 },
     { t: 5.0, amount: 0.3 },
   ]);
-  // Cloning guarantees mutating one half never leaks into the other or the input
   split.after[0].amount = 0.99;
   assert.equal(hits[1].amount, 0.8);
 
@@ -115,14 +114,12 @@ test("repartitionAdjacentHits migrates shot hits across moved cut boundaries cle
     { t: 2.5, amount: 0.7 },
     { t: 4.1, amount: 0.5 },
   ];
-  // Rolling cut forward past 2.5s pulls that hit into the preceding shot
   const rolledRight = repartitionAdjacentHits(prev, next, 3.0);
   assert.deepEqual(rolledRight.prev, [
     { t: 1.2, amount: 0.4 },
     { t: 2.5, amount: 0.7 },
   ]);
   assert.deepEqual(rolledRight.next, [{ t: 4.1, amount: 0.5 }]);
-  // Rolling cut back earlier restores both hits to the second shot cleanly
   const rolledBack = repartitionAdjacentHits(rolledRight.prev, rolledRight.next, 2.0);
   assert.deepEqual(rolledBack.prev, [{ t: 1.2, amount: 0.4 }]);
   assert.deepEqual(rolledBack.next, [
@@ -303,7 +300,6 @@ test("reverseCameraKeyRange keeps boundary matchSpeed in place and reverses inte
     key(4, { p: [4, 0, 0] }),
   ];
   const reversedFour = reverseCameraKeyRange(fourKeys);
-  // Boundaries [0] and [3] stay pinned; interior [1] and [2] mirror positions.
   assert.equal(reversedFour[0].matchSpeed, true);
   assert.equal("matchSpeed" in reversedFour[1], false);
   assert.equal(reversedFour[2].matchSpeed, true);
@@ -325,7 +321,6 @@ test("stripInvalidMatchSpeed removes matchSpeed from non-joinable pasted keys wh
     rows,
     rows.map((_, i) => i),
   );
-  // 0: first key, 1: valid interior, 2: shot 0 last key, 3: cut key, 4: before hold, 5: hold, 6: muted, 7: shot 1 last key
   assert.equal("matchSpeed" in rows[0], false);
   assert.equal(rows[1].matchSpeed, true);
   assert.equal("matchSpeed" in rows[2], false);
@@ -397,7 +392,6 @@ test("joinableCameraKeysInShot selects only unlocked non-hold interior keys in t
     joinableCameraKeysInShot(rows, 7).map((k) => k.id),
     ["s1-1"],
   );
-  // First/last keys in shot are never joinable interior keys
   assert.equal(joinableCameraKeysInShot(rows, 6).length, 1);
   assert.equal(
     joinableCameraKeysInShot([key(0, { id: "only0" }), key(1, { id: "only1" })], 1).length,

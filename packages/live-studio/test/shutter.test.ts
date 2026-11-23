@@ -33,7 +33,6 @@ test("a whip takes shutter samples until one sample's turn moves the picture 12 
     0,
     -Math.cos((deg * Math.PI) / 180),
   ];
-  // 20 degrees a frame through a 180 degree shutter is 10 degrees over 8 samples: 1.25 degrees, 48 px of a 50 degree, 1920 px picture
   expect(samplesForTurn(8, facing(0), facing(1.25), 50, 1920)).toBe(32);
   expect(samplesForTurn(8, facing(0), facing(0.1), 50, 1920)).toBe(8);
   expect(samplesForTurn(8, facing(0), facing(30), 50, 1920)).toBe(64);
@@ -41,7 +40,6 @@ test("a whip takes shutter samples until one sample's turn moves the picture 12 
   expect(samplesForTurn(8, facing(0), [Number.NaN, 0, 0], 50, 1920)).toBe(8);
 });
 
-// a camera key with cut: true inside a shot cuts the picture too: an open shutter at 10 s must not reach the next camera
 test("the shutter stops at a camera key's cut inside a shot, as at a shot's start", () => {
   expect(shutterBounds(10, 0, 20, [], [5, 10.01, 15])).toEqual([5, 10.01]);
   expect(shutterBounds(10.01, 0, 20, [], [5, 10.01, 15])).toEqual([10.01, 15]);

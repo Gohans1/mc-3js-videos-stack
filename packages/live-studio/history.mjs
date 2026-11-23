@@ -57,9 +57,7 @@ try {
       response = await fetch(`http://127.0.0.1:${info.port}/api/history`, {
         signal: AbortSignal.timeout(1500),
       });
-    } catch {
-      /* no live Studio */
-    }
+    } catch {}
     if (response) {
       if (!response.ok)
         throw new Error("The running Studio cannot serve history; restart it from this checkout");

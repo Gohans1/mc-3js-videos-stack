@@ -1,6 +1,5 @@
 import { X } from "lucide-react";
 
-/** Removable filter pill shared between the Sound and Voice library headers. */
 export function AudioFilterChip({ label, onClear }: { label: string; onClear: () => void }) {
   return (
     <button

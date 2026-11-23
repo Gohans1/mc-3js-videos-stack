@@ -79,7 +79,6 @@ test("buildVoiceMap computes 0.04s WAV peaks, shifts word timings to take.t, and
       ],
     }),
   );
-  // rate=1000 => 40 samples per 0.04s window; include a trailing 10-sample partial window
   const samples = [...Array(40).fill(0), ...Array(40).fill(16384), ...Array(10).fill(-8192)];
   writePcm16Wav(join(dir, "assets/public/agent/full_voice.wav"), samples, 1000);
 
@@ -104,7 +103,6 @@ test("openFilm writes renders/live/voice_map.json natively with no voice_map.py 
   cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
   mkdirSync(join(dir, "src/timeline"), { recursive: true });
   mkdirSync(join(dir, "voice/takes"), { recursive: true });
-  // Ensure NO voice_map.py exists in dir
   assert.equal(existsSync(join(dir, "voice_map.py")), false);
 
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
@@ -171,7 +169,6 @@ test("buildVoiceMap clamps start at 0 when take.t < firstWord.s, packs sequentia
   mkdirSync(join(dir, "voice/takes"), { recursive: true });
   writePcm16Wav(join(dir, "assets/public/agent/full_voice.wav"), Array(100).fill(0), 1000);
 
-  // 1. Cold-open take with t: 0 and leading breath (words[0].s = 0.194) + unsafe ID + orphan .words.json without audio
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -193,7 +190,6 @@ test("buildVoiceMap clamps start at 0 when take.t < firstWord.s, packs sequentia
       ],
     }),
   );
-  // Orphan .words.json with NO 02.mp3 / 02.wav audio file -> must NOT enter voice_map lines
   writeFileSync(
     join(dir, "voice/takes/02.mp3.words.json"),
     JSON.stringify({
@@ -210,7 +206,6 @@ test("buildVoiceMap clamps start at 0 when take.t < firstWord.s, packs sequentia
   );
   assert.equal(cold.lines[0].e, 0.9);
 
-  // 2. Radio-Edit-First omitted-t sequential packing: take 2 starts at r3(naturalEnd_1 + 0.4)
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -228,15 +223,12 @@ test("buildVoiceMap clamps start at 0 when take.t < firstWord.s, packs sequentia
       ],
     }),
   );
-  // Take 01: start=0, lastWord=0.9, dur=0.95 => naturalEnd = min(0.95, 1.1) = 0.95 => cursor = 1.35
-  // Take 03: start=1.35 => words[0].s = 1.35 + 0.08 = 1.43
   const packed = buildVoiceMap(dir);
   assert.equal(packed.lines.length, 2);
   assert.equal(packed.lines[0].s, 0.194);
   assert.equal(packed.lines[1].s, 1.43);
   assert.equal(packed.lines[1].e, 2.45);
 
-  // 3. WhisperX unaligned sentinel ({ s: -1, e: -1 }) must be filtered out instead of shifting start by +1s
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -287,7 +279,6 @@ test("openFilm attaches full_voice.wav watcher when assembled after startup and 
     'import sys, time, pathlib\ntime.sleep(0.15)\nout = pathlib.Path(sys.argv[1])\nout.write_bytes(b"RIFF")\nout.with_name("trials.json").write_text("{}")\n',
   );
 
-  // Start WITHOUT full_voice.wav (like cell-break before first assemble)
   const events = new EventEmitter(),
     heard = [];
   const film = openFilm(dir, {
@@ -314,7 +305,6 @@ test("openFilm attaches full_voice.wav watcher when assembled after startup and 
   });
   heard.length = 0;
 
-  // Simulate assemble creating voice/takes/01.wav + .words.json + full_voice.wav + updating edit.json
   writePcm16Wav(join(dir, "voice/takes/01.wav"), Array(1000).fill(12000), 1000);
   writeFileSync(
     join(dir, "voice/takes/01.wav.words.json"),
@@ -345,12 +335,10 @@ test("openFilm attaches full_voice.wav watcher when assembled after startup and 
   });
   assert.equal(existsSync(voiceMapOf(dir)), true);
 
-  // Now call useTry: "sound" MUST NOT appear before sound.py finishes ("sound-start" must precede "sound")
   heard.length = 0;
   const soundDone = new Promise((done) => events.once("sound", done));
   const res = await film.voice.useTry({ takeId: "01", tryFile: "01_alt.wav" });
   assert.equal(res.error, undefined);
-  // Immediately upon useTry resolving, sound.py (0.15s sleep) is still running, so "sound" has NOT fired prematurely!
   assert.equal(
     heard.includes("sound"),
     false,
@@ -384,7 +372,6 @@ test("openFilm started before voice/ exists detects initial voice/takes creation
     'import sys, pathlib\nout = pathlib.Path(sys.argv[1])\nout.write_bytes(b"RIFF")\nout.with_name("trials.json").write_text("{}")\n',
   );
 
-  // Confirm voice/ does NOT exist when openFilm starts!
   assert.equal(existsSync(join(dir, "voice")), false);
   const events = new EventEmitter();
   const film = openFilm(dir, { send: (e) => events.emit(e) });
@@ -402,7 +389,6 @@ test("openFilm started before voice/ exists detects initial voice/takes creation
     film.start();
   });
 
-  // Now gen.ts creates voice/takes/01.wav WITHOUT editing src/edit.json!
   const voiceHeard = new Promise((done, fail) => {
     const timer = setTimeout(
       () => fail(new Error("Expected voice event when voice/ directory is created after startup")),
@@ -525,7 +511,6 @@ test("takeAudios and planVoicePlacements enforce confinement and strict checks w
   writePcm16Wav(join(dir, "voice/takes/01.wav"), Array(800).fill(5000), 1000);
   writePcm16Wav(join(dir, "voice/takes/02.wav"), Array(800).fill(5000), 1000);
 
-  // null / invalid / stale .words.json: non-strict tolerates without crashing; takeAudios flags unaligned
   writeFileSync(join(dir, "voice/takes/01.wav.words.json"), "null");
   writeFileSync(
     join(dir, "voice/takes/02.wav.words.json"),
@@ -547,14 +532,12 @@ test("takeAudios and planVoicePlacements enforce confinement and strict checks w
     ["02", "01"],
   );
 
-  // Non-strict planVoicePlacements tolerates null words JSON and sorts chronologically
   const tolerant = planVoicePlacements(dir, { fallbackSecondsOf: () => 0.8 });
   assert.deepEqual(
     tolerant.map((p) => p.id),
     ["01", "02"],
   );
 
-  // Fix alignments and touch words newer than wav -> strict places chronologically
   const later = new Date(Date.now() + 60_000);
   writeFileSync(
     join(dir, "voice/takes/01.wav.words.json"),
@@ -571,7 +554,6 @@ test("takeAudios and planVoicePlacements enforce confinement and strict checks w
     ],
   );
 
-  // Duplicate IDs & overlapping spoken takes rejected in strict, while non-strict keeps working
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -595,7 +577,6 @@ test("takeAudios and planVoicePlacements enforce confinement and strict checks w
   );
   assert.throws(() => planVoicePlacements(dir, { strict: true }), /Duplicate take id "01"/);
 
-  // Junction escape on voice/takes makes takeAudios return [] and strict throw
   rmSync(join(dir, "voice/takes"), { recursive: true, force: true });
   let linked = false;
   try {

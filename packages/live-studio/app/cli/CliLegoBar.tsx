@@ -112,7 +112,6 @@ export function CliLegoBar({
       aria-label="Command builder chain"
       className="bg-raised-2 border-hairline flex min-w-0 flex-col gap-2 rounded-xl border p-2.5"
     >
-      {/* Cascading Lego chain */}
       <div className="flex min-w-0 flex-wrap items-center gap-1.5">
         {targetItems.length <= 1 ? (
           <Badge appearance="text" size="comfortable" variant="tag">
@@ -258,7 +257,6 @@ export function CliLegoBar({
         )}
       </div>
 
-      {/* Exact live assembled command */}
       <div className="bg-backdrop border-hairline-subtle flex min-w-0 items-start justify-between gap-1.5 rounded-lg border px-2 py-1.5">
         <code
           tabIndex={0}

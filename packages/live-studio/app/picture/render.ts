@@ -1,5 +1,3 @@
-// One frame of the film on the picture, with the studio's overlays on the frame on screen only, and the final-quality copy
-// of it on demand
 import { EDIT } from "film/edit";
 import type { Draw } from "film/scene";
 
@@ -26,7 +24,6 @@ import { readFreeView } from "./freecam";
 import { nightVision } from "./nightvision";
 import { renderWithMonitor } from "./preview-monitor";
 
-// The gizmo goes on top only of the frame on screen, not of frames drawn for a still or a look-ahead
 const baseRatios = new WeakMap<NonNullable<NonNullable<typeof S.tools>["renderer"]>, number>();
 const resizePreview = (scale: number) => {
   const tools = S.tools,
@@ -161,7 +158,6 @@ export const capturePreviewFrame = (
     const view = angle ? currentView() : null;
     try {
       if (S.finalRender && get().final && t === S.t) {
-        // Final renders with its own copy of this pose, so later live camera moves are safe.
         await drawFinalFrame(t);
         read(S.el.final, view);
       } else {
@@ -199,7 +195,6 @@ export const renderFilmFrame = (t: number, readFrame?: () => void) =>
   });
 
 export const finalCanvas = () => (get().final && S.finalRender ? S.el.final : null);
-// The final renderer is built the first time Final quality or Export still frame asks for it, once however often they ask
 let building: Promise<void> | null = null;
 export const buildFinal = () => {
   if (S.finalRender) return Promise.resolve();
@@ -218,8 +213,6 @@ export const buildFinal = () => {
   })();
   return building;
 };
-// The frame on screen at final quality, into the final canvas (hidden unless Final quality is on), seen from the free camera
-// when it is on
 const drawFinalFrame = async (t: number) => {
   const fr = S.finalRender!,
     free = S.tools!.free;

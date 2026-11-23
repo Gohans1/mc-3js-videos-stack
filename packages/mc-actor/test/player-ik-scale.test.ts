@@ -76,21 +76,20 @@ async function loadPlayerTemplate(): Promise<THREE.Object3D> {
   ulL.add(llL);
   ulR.add(llR);
 
-  // Add a simple skinned box per bone so bodyBoxes() / retargeter({ floor: true, own: true }) work on fallback rigs too
   template.updateMatrixWorld(true);
   const bones = [root, body, chest, head, uaL, laL, uaR, laR, ulL, llL, ulR, llR];
   const boxes: Array<[number, number, number, number, number, number, number]> = [
-    [1, 0, 15 * PX, 0, 8 * PX, 6 * PX, 4 * PX], // body
-    [2, 0, 21 * PX, 0, 8 * PX, 6 * PX, 4 * PX], // chest
-    [3, 0, 28 * PX, 0, 8 * PX, 8 * PX, 8 * PX], // head
-    [4, 6 * PX, 21 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // uaL
-    [5, 6 * PX, 15 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // laL
-    [6, -6 * PX, 21 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // uaR
-    [7, -6 * PX, 15 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // laR
-    [8, 2 * PX, 9 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // ulL
-    [9, 2 * PX, 3 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // llL
-    [10, -2 * PX, 9 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // ulR
-    [11, -2 * PX, 3 * PX, 0, 4 * PX, 6 * PX, 4 * PX], // llR
+    [1, 0, 15 * PX, 0, 8 * PX, 6 * PX, 4 * PX],
+    [2, 0, 21 * PX, 0, 8 * PX, 6 * PX, 4 * PX],
+    [3, 0, 28 * PX, 0, 8 * PX, 8 * PX, 8 * PX],
+    [4, 6 * PX, 21 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [5, 6 * PX, 15 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [6, -6 * PX, 21 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [7, -6 * PX, 15 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [8, 2 * PX, 9 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [9, 2 * PX, 3 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [10, -2 * PX, 9 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
+    [11, -2 * PX, 3 * PX, 0, 4 * PX, 6 * PX, 4 * PX],
   ];
   const skeleton = new THREE.Skeleton(bones);
   for (const [boneIdx, cx, cy, cz, w, h, d] of boxes) {
@@ -197,7 +196,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       const actualR = player.bones.laR.localToWorld(handEndR.clone());
       expect(actualR.distanceTo(targetR), `${c.label} armTo(R)`).toBeLessThan(0.01);
 
-      // Pole-guided arm IK must also hit exact scaled targets
       player.setPose(basePose);
       player.g.updateMatrixWorld(true);
       const shoulderL = player.bones.uaL.getWorldPosition(new THREE.Vector3());
@@ -214,7 +212,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(actualL.distanceTo(targetL), `${c.label} armTo(L, pole)`).toBeLessThan(0.01);
     }
 
-    // Scaled & rotated parent group
     const { player, handEndR } = await createRig();
     const parent = new THREE.Group();
     parent.position.set(-2, 0.5, 3);
@@ -242,7 +239,6 @@ describe("mc-actor scale-aware IK and feet", () => {
 
       const shoulder = player.bones.uaR.getWorldPosition(new THREE.Vector3());
       const dir = new THREE.Vector3(0.2, 0.3, 1).normalize();
-      // 1.15 * scaled reach: for s = 0.6 this is < unscaled reach, proving clamp uses scaled reach not unit reach
       const farTarget = shoulder.clone().addScaledVector(dir, s * baseArmReachR * 1.15);
       const arm = player.armTo("R", farTarget);
       player.setPose(arm);
@@ -254,7 +250,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(vec.normalize().dot(dir), `scale ${s} aim`).toBeGreaterThan(0.998);
     }
 
-    // Non-uniform scale clamps along each axis by that axis's scale and keeps diagonal aim true in world space
     const { player, handEndR, baseArmReachR } = await createRig();
     player.g.scale.set(1.3, 1.55, 1.3);
     player.setPose({});
@@ -300,7 +295,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       player.g.scale.set(...c.scale);
       if (c.rotX) player.g.rotation.x = c.rotX;
 
-      // Start with a bent knee so legTo preserves the forward knee plane
       const startPose = { ulR: [-25, 0, 0], llR: [50, 0, 0] };
       player.setPose(startPose);
       player.g.updateMatrixWorld(true);
@@ -322,7 +316,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(actual.distanceTo(target), `${c.label} legTo(R)`).toBeLessThan(0.01);
     }
 
-    // Out-of-reach clamping scales proportionally with g.scale
     for (const s of [0.6, 1.6]) {
       const { player, baseLegReach } = await createRig();
       player.g.scale.setScalar(s);
@@ -342,7 +335,6 @@ describe("mc-actor scale-aware IK and feet", () => {
   });
 
   test("headTo aims from the scaled and oriented head center on tall and lying actors", async () => {
-    // 1. Tall scaled actor (scale = 1.5): target level with the SCALED head center must yield ~0 pitch
     {
       const { player, headFrame } = await createRig();
       player.g.scale.setScalar(1.5);
@@ -356,7 +348,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(Math.abs(down), "scaled level target pitch").toBeLessThan(0.5);
       expect(Math.abs(yaw), "scaled level target yaw").toBeLessThan(0.5);
 
-      // Angled target verified by casting the face forward vector in world space
       const angledTarget = scaledCenter.clone().add(new THREE.Vector3(0.35, -0.22, 0.9));
       const head = player.headTo(angledTarget);
       player.setPose({ head });
@@ -368,7 +359,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(gazeDir.dot(wantDir), "scaled angled gaze alignment").toBeGreaterThan(0.999);
     }
 
-    // 2. Lying actor via g.rotation.x = -Math.PI / 2 (feet at origin, head toward -Z, face looking +Y)
     {
       const { player, headFrame } = await createRig();
       player.g.rotation.x = -Math.PI / 2;
@@ -377,13 +367,11 @@ describe("mc-actor scale-aware IK and feet", () => {
       player.g.updateMatrixWorld(true);
 
       const headCenterWorld = player.bones.head.localToWorld(headFrame.centerLocal.clone());
-      // Directly in front of the lying face (+Y above head center)
       const straightAbove = headCenterWorld.clone().add(new THREE.Vector3(0, 0.8, 0));
       const [down0, yaw0] = player.headTo(straightAbove);
       expect(Math.abs(down0), "lying straight-above pitch").toBeLessThan(0.5);
       expect(Math.abs(yaw0), "lying straight-above yaw").toBeLessThan(0.5);
 
-      // Off-axis target in front of the lying face
       const offAxis = headCenterWorld.clone().add(new THREE.Vector3(0.4, 1.0, -0.35));
       const head = player.headTo(offAxis);
       player.setPose({ head });
@@ -395,7 +383,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(gazeDir.dot(wantDir), "lying off-axis gaze alignment").toBeGreaterThan(0.999);
     }
 
-    // 3. Lying actor via pose (GESTURES.lie() tilts root rx = -90)
     {
       const { player, headFrame } = await createRig();
       const lieBody = { root: GESTURES.lie().root };
@@ -409,7 +396,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(Math.abs(yaw), "pose-lying straight-above yaw").toBeLessThan(0.5);
     }
 
-    // 4. Non-uniform scaled leaning actor ([1.3, 1.55, 1.3]): world gaze ray hits angled target accurately
     {
       const { player, headFrame } = await createRig();
       player.g.scale.set(1.3, 1.55, 1.3);
@@ -433,7 +419,6 @@ describe("mc-actor scale-aware IK and feet", () => {
   test("legReach reflects current world scale dynamically and makeFeet avoids premature strain steps on tall actors", async () => {
     const { player, baseLegReach } = await createRig();
 
-    // Dynamic getter responds to g.scale without requiring manual updateMatrixWorld first
     player.g.scale.setScalar(1.6);
     expect(player.legReach).toBeCloseTo(baseLegReach * 1.6, 5);
 
@@ -443,7 +428,6 @@ describe("mc-actor scale-aware IK and feet", () => {
     player.g.scale.setScalar(0.6);
     expect(player.legReach).toBeCloseTo(baseLegReach * 0.6, 5);
 
-    // Parent group scale is reflected too
     const parent = new THREE.Group();
     parent.scale.setScalar(1.4);
     player.g.scale.setScalar(1.0);
@@ -451,7 +435,6 @@ describe("mc-actor scale-aware IK and feet", () => {
     expect(player.legReach).toBeCloseTo(baseLegReach * 1.4, 5);
     parent.remove(player.g);
 
-    // Standing tall actor (scale = 1.6) must stay locked (mode "l1"), never triggering false strain steps ("s1")
     player.g.scale.setScalar(1.6);
     player.g.position.set(0, 0, 0);
     player.g.rotation.set(0, 0, 0);
@@ -467,7 +450,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(f.mode("R"), `tall standing R at t=${t.toFixed(2)}`).toBe("l1");
     }
 
-    // Small drift inside a tall actor's scaled comfort radius stays locked, while large slide triggers a step
     const slideBody = (_m: unknown, t: number) => ({
       at: [0, 0, t > 0.2 ? Math.min(1.0, (t - 0.2) * 1.5) : 0],
       yaw: 0,
@@ -487,14 +469,13 @@ describe("mc-actor scale-aware IK and feet", () => {
   });
 
   test("makeFeet scales drift and floor-height thresholds and stays synced with parent and rig transforms", async () => {
-    // 1. Tall (1.6) stays locked on 0.20m drift (< 0.16 * 1.6 = 0.256m), kid (0.6) steps on 0.12m drift (> 0.16 * 0.6 = 0.096m)
     {
       const { player } = await createRig();
       player.g.scale.setScalar(1.6);
       const tallDriftBody = (_m: unknown, t: number) => ({
         at: [0, 0, t > 0.2 ? Math.min(0.2, (t - 0.2) * 0.4) : 0],
         yaw: 0,
-        pose: { root: { y: -0.04 } }, // slight knee slack so 0.20m drift isn't leg-strained
+        pose: { root: { y: -0.04 } },
         gait: null,
       });
       const moves = [{ t: 0, at: [0, 0, 0], yaw: 0 }];
@@ -524,8 +505,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(stepped, "kid 0.6 steps on 0.12m drift").toBe(true);
     }
 
-    // 2. Scaled height threshold: sole held at world y = 0.06 via knee bend (hip stays at legReach, never strained)
-    //    is off-floor ("f0") on kid (0.6, downH=0.03) but grounded ("l1") on tall (1.6, downH=0.08)
     for (const [scale, wantMode] of [
       [0.6, "f0"],
       [1.6, "l1"],
@@ -544,7 +523,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(feet(moves, 0.2).mode("L"), `scale=${scale} sole y=0.06`).toBe(wantMode);
     }
 
-    // 3. Parent-scaled + offset (0.6 and 1.6) AND rig.scale-modified actors match soleAt and stay locked standing
     for (const s of [0.6, 1.6]) {
       const { player } = await createRig();
       const parent = new THREE.Group();
@@ -595,7 +573,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       );
     }
 
-    // 4. Parent rotation + non-zero actor at/yaw locks premultiply order (parentWorld * mG)
     {
       const { player } = await createRig();
       const parent = new THREE.Group();
@@ -623,7 +600,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       );
     }
 
-    // 5. Non-uniform [1.6, 1.0, 1.6]: xzScale (1.6) keeps 0.20m drift locked while legScale (1.0) keeps y=0.06 off-floor
     {
       const { player } = await createRig();
       player.g.scale.set(1.6, 1.0, 1.6);
@@ -656,8 +632,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       ).toBe("f0");
     }
 
-    // 6. legsSig() invalidates on parent transform or rig.scale mutations without manual updateMatrixWorld,
-    //    and stays invariant across g.position, g.rotation, and setPose
     {
       const { player } = await createRig();
       const sigBase = player.legsSig();
@@ -740,7 +714,6 @@ describe("mc-actor scale-aware IK and feet", () => {
         5,
       );
 
-      // Move source forward 0.5m along +z while keeping feet on floor
       src.setShift(0, 0, 0.5);
       const pose = rt.pose(0);
       player.setPose(pose);
@@ -766,8 +739,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       await runCase(scale, { floor: true, own: true });
     }
 
-    // Exact pose parity (including root.y on a crouched frame) with parent + g.scale + rig.scale all active,
-    // and all three transforms restored afterward
     {
       const unit = await createRig();
       const scaled = await createRig();
@@ -789,7 +760,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       const rtUnit = retargeter(srcUnit, unit.player, { floor: true, own: true });
       const rtScaled = retargeter(srcScaled, scaled.player, { floor: true, own: true });
 
-      // Crouched/lifted frame (hips shifted forward and down by 0.15m)
       srcUnit.setShift(0.1, -0.15, 0.35);
       srcScaled.setShift(0.1, -0.15, 0.35);
       const poseUnit = rtUnit.pose(0);
@@ -828,7 +798,6 @@ describe("mc-actor scale-aware IK and feet", () => {
   test("IK handles degenerate scales, mirrored scale, coincident targets, dirty matrices, and elbow pole direction", async () => {
     const allFinite = (vals: number[]) => vals.every((n) => Number.isFinite(n));
 
-    // 1. Zero-scale guards ([0,0,0] and [1,0,1]) must never produce NaN or Infinity
     for (const scale of [
       [0, 0, 0],
       [1, 0, 1],
@@ -846,7 +815,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(allFinite(head), `zero scale ${scale} headTo`).toBe(true);
     }
 
-    // 2. Negative/mirrored scale ([-1, 1, 1]): armTo and legTo still reach exact world targets without NaN
     {
       const { player, handEndR } = await createRig();
       player.g.scale.set(-1, 1, 1);
@@ -877,7 +845,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(allFinite(head)).toBe(true);
     }
 
-    // 3. Coincident targets (target === shoulder / hip / headCenter) return finite numbers
     {
       const { player, headFrame } = await createRig();
       player.setPose({});
@@ -895,7 +862,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(allFinite(h0)).toBe(true);
     }
 
-    // 4. Dirty transforms without manual updateMatrixWorld(true) before calling armTo, legTo, and headTo
     {
       const { player, handEndR, headFrame } = await createRig();
       player.g.position.set(1.5, 0, -2.0);
@@ -904,7 +870,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       const prevHip = player.bones.ulR.getWorldPosition(new THREE.Vector3()).clone();
       const prevHeadCenter = player.bones.head.localToWorld(headFrame.centerLocal.clone());
 
-      // Mutate position WITHOUT calling updateMatrixWorld(true)
       const shift = new THREE.Vector3(1.0, 0.25, 0.5);
       player.g.position.add(shift);
 
@@ -945,7 +910,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       ).toBeGreaterThan(0.998);
     }
 
-    // 5. Elbow pole direction and legTo knee pole direction under scale
     {
       const { player, handEndL } = await createRig();
       player.g.scale.setScalar(1.5);
@@ -973,7 +937,6 @@ describe("mc-actor scale-aware IK and feet", () => {
         sh.x + 0.1,
       );
 
-      // legTo preserves a turned-out knee plane under scale
       player.setPose({ ulL: [-30, 50, 0], llL: [60, 0, 0] });
       player.g.updateMatrixWorld(true);
       const hip = player.bones.ulL.getWorldPosition(new THREE.Vector3());
@@ -986,7 +949,6 @@ describe("mc-actor scale-aware IK and feet", () => {
       expect(kneeWorld.x, "turned-out left knee bends outward (+x)").toBeGreaterThan(hip.x + 0.15);
     }
 
-    // 6. armTo, legTo, and headTo work accurately when rig.scale !== 1 (non-uniform)
     {
       const { player, handEndR, headFrame } = await createRig();
       player.rig.scale.set(1.2, 1.5, 1.2);

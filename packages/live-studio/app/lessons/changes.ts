@@ -1,5 +1,3 @@
-// What changed in a lesson file since the creator last read it (md-phone's review, changes.js): line blocks from jsdiff, the
-// changed words marked inside a line that was edited rather than replaced, two unchanged lines around each place
 import { diffArrays, diffWordsWithSpace } from "diff";
 
 export interface ChangePart {
@@ -12,12 +10,11 @@ export interface ChangeRow {
   parts?: ChangePart[];
 }
 export interface ChangeHunk {
-  line: number; // the file's line (now) where the hunk starts
+  line: number;
   rows: ChangeRow[];
 }
 
 const CONTEXT = 2,
-  // a line sharing less than this with the one it replaced reads better as replaced whole
   SHARED = 0.4,
   TIMEOUT_MS = 1000;
 

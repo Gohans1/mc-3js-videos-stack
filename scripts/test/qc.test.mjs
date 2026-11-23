@@ -86,7 +86,6 @@ test("qc box computes exact RGB, sRGB & linear Rec.709 luma, and contrast on syn
   const dir = mkdtempSync(join(tmpdir(), "qc-box-"));
   try {
     const imgPath = join(dir, "patch.png");
-    // Left half black (0,0,0), right half mid-grey (128,128,128) in top; bottom-right white (255,255,255)
     makePng(
       imgPath,
       [
@@ -107,7 +106,6 @@ test("qc box computes exact RGB, sRGB & linear Rec.709 luma, and contrast on syn
     );
     expect(gray.srgbLuma.std).toBe(0);
 
-    // Normalized box covering whole right half (50% 128, 50% 255)
     const normRes = runQc(["box", imgPath, "0.5,0,0.5,1", "--norm", "--json"]);
     expect(normRes.status).toBe(0);
     const norm = JSON.parse(normRes.stdout);
@@ -133,7 +131,6 @@ test("qc compare reports exact changed-pixel percentage, deltas, and writes labe
       [
         "img = Image.new('RGB', (100, 100), (20, 40, 60))",
         "d = ImageDraw.Draw(img)",
-        // Change exactly 25x100 = 2500 of 10000 pixels (25.0%) by +100 on all 3 channels
         "d.rectangle([0, 0, 24, 99], fill=(120, 140, 160))",
       ].join("\n"),
     );
@@ -166,8 +163,6 @@ test("qc compare reports exact changed-pixel percentage, deltas, and writes labe
   }
 });
 
-// a reference whose frame n is grey n*8, so the frame read back says which one it was; ffmpeg's -ss with fps= picked a
-// neighbour (food-eat-more's refstrip.sh was a frame off)
 const greyReference = (dir, draw = "") => {
   const frames = spawnSync(
     "python",
@@ -207,7 +202,6 @@ test("qc vs reads the reference frame at the exact index of the second and sets 
   try {
     const video = greyReference(dir);
     const ours = join(dir, "still_0.5s.jpg");
-    // a draft still: 160 lines of picture over a 20-line strip that is not the film's
     makePng(
       ours,
       "img = Image.new('RGB', (90, 180), (100, 100, 100))\nImageDraw.Draw(img).rectangle([0, 160, 89, 179], fill=(255, 0, 0))",
@@ -268,7 +262,6 @@ test("qc vs measures sharpness on both at the same size, over the whole frame an
   }
 }, 30_000);
 
-// a set lit or painted off the reference's: the same part of both, in numbers rather than by eye
 test("qc vs --region gives that part's mean colour and brightness beside the reference's", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
   try {
@@ -336,7 +329,6 @@ test("qc motion detects turn/FOV spikes with exact second and key row index with
     expect(report.fovPeak.span).toEqual([2, 3]);
     expect(report.faults.length).toBeGreaterThan(0);
 
-    // Unified qc --checks cam-motion works even without a rendered MP4!
     const unified = runQc(["--checks", "cam-motion", "--json"], {
       cwd: dir,
       env: { LIVE_PROJECT: dir },
@@ -437,7 +429,6 @@ test("qc full run auto-detects video, runs probe/cam-motion, and cleanly skips m
         { t: 2, p: [0.5, 1, 5], l: [0, 1, 0], fov: 60 },
       ]),
     );
-    // Create a valid 2s BT.709 H.264 MP4 with stereo 48kHz AAC
     media(join(dir, "renders/draft.mp4"), [
       "-f",
       "lavfi",
@@ -497,7 +488,6 @@ test("qc full run auto-detects video, runs probe/cam-motion, and cleanly skips m
 test("qc --strict fails on warnings, bad video fails exit 1, and all-skipped exits 2", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-gates-"));
   try {
-    // 1. All-skipped outside a film with no video -> exit 2 ("nothing done")
     const emptyRes = runQc(["--checks", "forensics,cam-motion", "--json"], {
       cwd: dir,
       env: { LIVE_PROJECT: "" },
@@ -507,7 +497,6 @@ test("qc --strict fails on warnings, bad video fails exit 1, and all-skipped exi
     expect(emptyJson.ok).toBe(false);
     expect(emptyJson.checks.every((c) => c.status === "skip")).toBe(true);
 
-    // 2. --strict treats cam-motion warning as exit 1 (ok: false)
     mkdirSync(join(dir, "src/timeline"), { recursive: true });
     writeFileSync(join(dir, "src/scene.ts"), "export const DURATION = 10;");
     writeFileSync(
@@ -531,7 +520,6 @@ test("qc --strict fails on warnings, bad video fails exit 1, and all-skipped exi
     expect(strictJson.ok).toBe(false);
     expect(strictJson.checks[0].status).toBe("warn");
 
-    // 3. Probe failure on untagged BT.601 / silent MP4 -> exit 1
     const badMp4 = join(dir, "bad.mp4");
     media(badMp4, [
       "-f",
@@ -587,7 +575,6 @@ test("countWarnings, summarizeFailure, findAutoVideo priority, and picture-only 
     writeFileSync(join(dir, "renders/final.mp4"), "x");
     expect(findAutoVideo(dir)).toMatch(/final\.mp4$/);
 
-    // Picture-only draft_video.mp4 uses --audio any for probe and skips audio/sync cleanly
     rmSync(join(dir, "renders/draft.mp4"));
     rmSync(join(dir, "renders/final.mp4"));
     rmSync(join(dir, "renders/final_video.mp4"));
@@ -700,7 +687,6 @@ test("qc fails cleanly on malformed cam.json and resolves owning film on cross-f
     mkdirSync(join(filmB, "src/timeline"), { recursive: true });
     mkdirSync(join(filmB, "renders"), { recursive: true });
 
-    // filmA has malformed cam.json
     writeFileSync(join(filmA, "package.json"), JSON.stringify({ "live-studio": {} }));
     writeFileSync(join(filmA, "src/timeline/cam.json"), "{ not valid json");
 
@@ -717,7 +703,6 @@ test("qc fails cleanly on malformed cam.json and resolves owning film on cross-f
     expect(badJson.checks[0].status).toBe("fail");
     expect(badJson.checks[0].summary).toMatch(/invalid JSON/);
 
-    // Invalid key row types ([null, {}] and non-numeric t) also fail cleanly without crashing
     for (const payload of [[null, {}], [{ t: "bad", p: [0, 0, 0] }]]) {
       writeFileSync(join(filmA, "src/timeline/cam.json"), JSON.stringify(payload));
       const badRowCmd = runQc(["motion"], { cwd: filmA, env: { LIVE_PROJECT: filmA } });
@@ -730,7 +715,6 @@ test("qc fails cleanly on malformed cam.json and resolves owning film on cross-f
       expect(JSON.parse(badRowQc.stdout).checks[0].status).toBe("fail");
     }
 
-    // filmB has valid cam.json and draft.mp4; passing explicit filmB paths overrides LIVE_PROJECT=filmA
     writeFileSync(join(filmB, "package.json"), JSON.stringify({ "live-studio": {} }));
     writeFileSync(
       join(filmB, "src/timeline/cam.json"),

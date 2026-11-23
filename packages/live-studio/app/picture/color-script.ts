@@ -113,10 +113,6 @@ function rgbDistSq(a: Centroid, b: Centroid): number {
   return dr * dr + dg * dg + db * db;
 }
 
-/**
- * Deterministic pure-TS median-cut palette quantization + Rec.709 luminance summary.
- * Over-splits slightly then merges perceptually close buckets so small bright accents stay represented.
- */
 export function extractColorScriptPalette(
   rgba: Uint8ClampedArray | Uint8Array,
   width: number,
@@ -210,7 +206,6 @@ export function extractColorScriptPalette(
     return { rSum, gSum, bSum, count: box.pixels.length };
   });
 
-  // Merge perceptually near-identical buckets (< 26 RGB distance), then cap down to maxColors
   const mergeSqThreshold = 26 * 26;
   while (centroids.length > 1) {
     let minD = Infinity;
@@ -284,7 +279,6 @@ function resolveVisibleSampleAt(
     const overlap = ovEnd - ovStart;
     if (overlap <= 1e-6) continue;
     const ovMid = ovStart + overlap * 0.5;
-    // Prefer wide visible spans near the shot midpoint
     const score = overlap - Math.abs(ovMid - desired) * 0.1;
     if (score > bestScore) {
       bestScore = score;
@@ -368,7 +362,6 @@ export function analyzeShotPacing(shots: readonly ColorScriptShot[]): PacingSumm
     }
   }
 
-  // Flag local monotonous runs (>= 4 consecutive shots within +/-15% of local mean) even if sequence isn't uniform overall
   if (!isSequenceUniform && shots.length >= 4) {
     let runStart = 0;
     while (runStart <= shots.length - 4) {

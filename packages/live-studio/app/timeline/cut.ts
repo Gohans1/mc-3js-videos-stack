@@ -1,6 +1,4 @@
 import { removeCamKeys, removeKey, splitShot } from "../camera/cam";
-// The cut (Ctrl+B and the timeline toolbar's scissors), as CapCut's: the picked sound clips if there are any, otherwise the
-// shot at the playhead (cam.ts splitShot, for a film that keeps its shots as data). Ctrl+Shift+B cuts every track there
 import { layerItems, removeLayers, splitLayers, trimLayers } from "../camera/layers";
 import { setTransition, transitionOf } from "../camera/transitions";
 import { together } from "../core/doc";
@@ -37,7 +35,6 @@ export const splitHere = () => {
   else if (get().cam && get().shots) splitShot();
   else say("Pick a sound clip to split it at the playhead");
 };
-// Every unlocked sound clip the playhead is inside, and the shot, in one undo step
 export const splitAll = () => {
   const hit = allClips().filter((c) => {
     const [a, b] = span(c);
@@ -55,7 +52,6 @@ export const splitAll = () => {
     if (shot) splitShot();
   });
 };
-// CapCut's [ and ]: every sound clip left of the playhead (starting before it) or right of it (ending after it), locked ones aside
 export const selectSide = (d: -1 | 1) => {
   const cs = allClips().filter((c) => {
     const [a, b] = span(c);
@@ -69,8 +65,6 @@ export const selectSide = (d: -1 | 1) => {
   );
 };
 
-// Delete and the toolbar's bin: whatever is picked, every kind of it in one undo step (text, sound clips, camera keyframes, keys;
-// a pick may hold them all, timeline/across.ts), or else the dropped-in object picked
 export const canDelete = () => {
   const s = get();
   return (

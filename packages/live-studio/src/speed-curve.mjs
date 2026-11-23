@@ -28,7 +28,6 @@ const controls = (value, i) => {
   return [a, ...(value.handles?.[i] ?? [lerp(a, b, 1 / 3), lerp(a, b, 2 / 3)]), b];
 };
 
-// Steffen (1990) monotone cubic Hermite slopes, matching d3-shape curveMonotoneX without pulling d3-shape into boot chunks
 const sign = (x) => (x < 0 ? -1 : 1);
 const slope3 = (x0, y0, x1, y1, x2, y2) => {
   const h0 = x1 - x0,
@@ -214,7 +213,6 @@ export const remapSpeedCutsOnRemove = (cuts = {}, removedIndex, nextLength) => {
   return normalizeSpeedCuts(nextLength, out);
 };
 
-/** Toggles an interior vertex between joined and split-half states without disturbing non-adjacent runs. */
 export const toggleSpeedCut = (value, index, joinSide = "right") => {
   if (index <= 0 || index >= value.curve.length - 1) return value;
   const cuts = normalizeSpeedCuts(value.curve.length, value.cuts);
@@ -249,7 +247,6 @@ export const toggleSpeedCut = (value, index, joinSide = "right") => {
   return { curve: nextCurve, handles, cuts: nextCuts };
 };
 
-/** Moves either a whole vertex ("both") or just its disconnected "left"/"right" half inside its isolated run. */
 export const moveSpeedPoint = (prev, index, point, side = "both") => {
   const curve = prev.curve.map((p, idx) =>
     idx === index ? [point[0], side === "both" ? clampRate(point[1]) : p[1]] : [...p],
@@ -296,8 +293,6 @@ export const moveSpeedPoint = (prev, index, point, side = "both") => {
   return { curve: rebuilt.curve, handles, ...(Object.keys(cuts).length ? { cuts } : {}) };
 };
 
-// D3 supplies the monotone tangents. The Bézier convex hull bounds the linear rate error to 1 ppm;
-// the same flattened rates drive preview, export and Rubber Band, so their clocks cannot diverge.
 export const flattenSpeedCurve = (value) => {
   if (!value.handles && !hasSpeedCuts(value)) return value.curve;
   const out = [[value.curve[0][0], pointOutRate(value, 0)]];

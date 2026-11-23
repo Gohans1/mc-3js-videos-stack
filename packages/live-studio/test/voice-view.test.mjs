@@ -110,7 +110,6 @@ describe("parseTakeScript & voiceActorTitle", () => {
       tags: [],
       spoken: "Plain narration without delivery tags.",
     });
-    // Long (>80 char) ElevenLabs acting directions from cell-break (pa_clara) must not leak raw brackets into spoken text
     assert.deepEqual(
       parseTakeScript(
         "[cold, flat automated public-address announcement echoing through a stone fortress] Warning. Reboot forbidden.",
@@ -176,7 +175,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
   });
 
   test("labels split sub-phrase bricks with the exact sliced words and preserves timing source mapping", () => {
-    // Blade split after "steel desk." at 15.6s
     const rightHalf = {
       at: 21.6,
       start: 21.6,
@@ -190,7 +188,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       },
     };
     assert.equal(voiceClipLabel(rightHalf, 30, VOICE_BASE, TAKES), "03 · One chair.");
-    // Slices with fewer than 4 words omit WPM to match timeline.ts paceOf house convention
     const subSummary = voiceClipSummary(rightHalf, 30, VOICE_BASE, TAKES);
     assert.equal(subSummary.wordCount, 2);
     assert.equal(subSummary.wpm, null);
@@ -224,7 +221,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       "Voiceover (3 takes) · He opens his eyes.",
     );
 
-    // VOICE_BASE has 4.045s + 2.135s silent gaps between takes; WPM must measure spoken articulation (~173 WPM), never <130 WPM
     const fullSummary = voiceClipSummary(full, 30, VOICE_BASE, TAKES);
     assert.equal(fullSummary.wordCount, 18);
     assert.ok(
@@ -235,7 +231,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     const silentTail = { at: 20, start: 20, length: 5, name: "narration", gain: 0 };
     assert.equal(voiceClipLabel(silentTail, 30, VOICE_BASE, TAKES), "Voiceover (silence)");
 
-    // Tight adjacent lines must never produce overlapping phrase brick windows
     const tightLines = [
       { s: 4.3, e: 5.15 },
       { s: 5.25, e: 7.0 },
@@ -288,7 +283,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       },
     ];
 
-    // Reproduce sealed-room's exact 4.23x speed + 3s freeze right at 24.375s (198ms after Take 04 ends)
     const clock = compileTiming(
       { speeds: [{ from: 6.5, to: 27, rate: 4.23 }], freezes: [{ at: 24.375, duration: 3 }] },
       30,
@@ -298,7 +292,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       beds: [],
       sfx: [
         { at: 0, name: "narration", gain: -1.5, track: "voice" },
-        // Sibling duplicate narration brick on another track must NOT pollute slicing of sfx[0]
         { at: 26, start: 4.3, length: 1.0, name: "narration", gain: 0, track: "t2" },
       ],
       tracks: [
@@ -329,14 +322,10 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     );
     assert.equal(bricks.length, 3);
 
-    // Delete Take 01 brick and move Take 03 brick BEFORE Take 02 brick on the timeline
     const editedDoc = {
       narration: "narration",
       beds: [],
-      sfx: [
-        { ...bricks[2], at: 2.0 }, // Take 03 moved to 2.0s
-        bricks[1], // Take 02 stays around 9.12s
-      ],
+      sfx: [{ ...bricks[2], at: 2.0 }, bricks[1]],
       tracks: [{ id: "voice", name: "Voice" }],
     };
 
@@ -362,7 +351,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
   test("resizeNarrationBrickForSwap extends a single-take phrase brick, clamps to neighbor on same track, and ignores monolithic stems", () => {
     const swap = { takeId: "01", prevStart: 4.2, prevEnd: 5.32, nextStart: 4.2, nextEnd: 6.4 };
 
-    // 1. Phrase brick with plenty of room before Take 02 at 9.12s expands cleanly to fit 6.4s
     const roomy = {
       narration: "narration",
       beds: [],
@@ -393,7 +381,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     assert.equal(roomy.sfx[0].length, 2.18);
     assert.equal(roomy.sfx[1].at, 9.12);
 
-    // 2. Phrase brick with neighbor pulled up to 5.8s on same track clamps at 5.795s so clips never overlap
     const tight = {
       narration: "narration",
       beds: [],
@@ -422,7 +409,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     assert.equal(resizeNarrationBrickForSwap(tight, swap, VOICE_BASE), true);
     assert.equal(tight.sfx[0].length, 1.575);
 
-    // 3. Monolithic multi-take stem clip is untouched
     const stem = {
       narration: "narration",
       beds: [],
@@ -432,7 +418,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     assert.equal(resizeNarrationBrickForSwap(stem, swap, VOICE_BASE), false);
     assert.equal(stem.sfx[0].length, undefined);
 
-    // 4. Radio-Edit-First multi-span shift: pristine Brick 2 ripples forward in both at & start; hand-dragged Brick 3 keeps at & updates start
     const radioBase = [
       { s: 0.05, e: 0.72, text: "He wakes.", words: [] },
       { s: 1.25, e: 2.0, text: "Bare stone.", words: [] },
@@ -473,7 +458,7 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
           gain: 0,
           dialogue: true,
           track: "voice",
-        }, // hand-dragged to 6.5s!
+        },
       ],
       tracks: [{ id: "voice", name: "Voice" }],
     };
@@ -487,8 +472,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       ],
     );
 
-    // 5. Same-track non-overlap when Take 1 was hand-moved (at=0.8) and shrinks while pristine Brick 2 tries to shift backward,
-    // AND when a downstream SFX clip sits closer than origLength!
     const shrinkSpans = [
       { takeId: "01", prevStart: 0, prevEnd: 2.0, nextStart: 0, nextEnd: 1.0 },
       { takeId: "02", prevStart: 3.0, prevEnd: 4.5, nextStart: 1.2, nextEnd: 2.7 },
@@ -505,7 +488,7 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
           gain: 0,
           dialogue: true,
           track: "voice",
-        }, // hand-moved to 0.8s!
+        },
         {
           at: 3.0,
           start: 3.0,
@@ -514,8 +497,8 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
           gain: 0,
           dialogue: true,
           track: "voice",
-        }, // pristine at 3.0s
-        { at: 3.1, length: 0.4, name: "door_thud", gain: 0, track: "voice" }, // downstream SFX clamps Brick 2
+        },
+        { at: 3.1, length: 0.4, name: "door_thud", gain: 0, track: "voice" },
       ],
       tracks: [{ id: "voice", name: "Voice" }],
     };
@@ -531,7 +514,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
       `Brick 2 ending at ${shrinkDoc.sfx[1].at + shrinkDoc.sfx[1].length} must clamp before door_thud at ${shrinkDoc.sfx[2].at}`,
     );
 
-    // 6. UI-split Phrase Brick with >0.38s leading breath matches via prevSpokenStart/prevSpokenEnd
     const breathSpan = {
       takeId: "01",
       prevStart: 0,
@@ -566,7 +548,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     assert.equal(voiceActorTitle("ev2kMR9ZJZZsemuogS5u"), "Jake");
     assert.equal(voiceActorTitle("tZssYepgGaQmegsMEXjK"), "True");
 
-    // Radio-Edit-First: 00_hook was just generated (aligned: true, omitted t) before assemble.ts rebuilt voiceBase!
     const radioTakes = [
       {
         id: "00_hook",
@@ -639,7 +620,6 @@ describe("voiceClipSummary, voiceClipLabel & phraseBrickWindows", () => {
     assert.equal(notifications, 1);
     assert.ok(voiceNamesSnapshot() > startRev);
 
-    // Duplicate registration of the same mapping is a silent no-op
     const revAfterFirst = voiceNamesSnapshot();
     registerVoiceNames([{ id, name: "Aria Showcase" }]);
     assert.equal(notifications, 1);

@@ -1,5 +1,3 @@
-/* The layers over the picture, drawn by the engine (app/picture/player.ts) straight into these elements every frame. They sit on
-   a moving film, so each carries its own dark backing, and none takes a click meant for the picture */
 @layer components {
   .stage-clock {
     position: absolute;
@@ -16,7 +14,7 @@
   }
   .stage-clock[data-peek] {
     color: var(--peek);
-  } /* the preview axis's second, not the playhead's (timeline/peek.ts) */
+  }
   .stage-hud {
     max-width: calc(100% - 11.5rem);
     padding: 2px 8px;
@@ -70,8 +68,6 @@
     height: 12px;
     margin: -8px 0 0 -8px;
   }
-  /* A pin's words, one line under it (over it near the bottom edge), cut with an ellipsis; the note list has the whole text.
-     notes.ts drawPins slides it sideways to stay inside the picture */
   .pin i {
     position: absolute;
     left: 50%;
@@ -91,7 +87,6 @@
     top: auto;
     bottom: calc(100% + 6px);
   }
-  /* Stacked whole-frame open notes shown briefly over the player during playback and fading out together without occluding one another */
   .pin-stack {
     position: absolute;
     left: 10px;
@@ -139,7 +134,6 @@
     border-radius: 9999px;
     background: var(--ink-saved);
   }
-  /* A sound carried from the library to a lane (sound/lanes.ts) */
   .carry {
     position: fixed;
     left: 0;
@@ -161,9 +155,6 @@
     outline-color: var(--primary);
   }
 
-  /* An Animation tile's little scene (camera/AnimPanel.tsx). At rest it shows the effect's far state (--fx: where an In starts,
-     where an Out or a Combo ends), so tiles differ at a glance; pointed at, it plays the move. The backdrop and the house take
-     their own --fx and --fx-near, so a push, a slide or a dolly zoom shows its parallax */
   .fx-ground {
     fill: var(--raised-4);
   }
@@ -351,7 +342,6 @@
     }
   }
 
-  /* A phone: a short picture, smaller overlays */
   @media (max-width: 820px) and (min-height: 521px),
     (max-width: 559px),
     (max-height: 520px) and (min-width: 560px) {

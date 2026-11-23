@@ -1,8 +1,4 @@
 import * as cam from "../camera/cam";
-// One pick across the timeline's rows, as CapCut's box over all its tracks (the dev's call): text items, camera keys, keys on the
-// key rows and sound clips picked together by the box (rowbox.ts, which each row starts on its empty space), then moved together by a drag on
-// any of them (each row's drag takes alongWith for the other kinds), deleted and copied together (cut.ts, clipboard.ts), each
-// as one undo step (core/doc.ts together). A pick of one kind goes through that kind's own setter, which also opens its tab
 import * as layers from "../camera/layers";
 import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
@@ -80,7 +76,6 @@ export const pickAcross = (p: Across) => {
   S.dirty = true;
 };
 
-// What each row's things the box covers, in the page's coordinates: set by the rows as they attach (camrow, keyrows, lanes)
 export const inBox: { [K in keyof Across]: (r: ClientRect) => Across[K] } = {
   layers: () => [],
   text: () => [],
@@ -123,7 +118,6 @@ export const attachAcross = () => {
   };
 };
 
-// ---------- Moving the other kinds' picks with a drag on one kind's: how far each may go, drawn while dragging, kept on release
 interface Mover {
   room: [number, number];
   snap: unknown;
@@ -194,7 +188,6 @@ export type Along = {
   restore: () => void;
   commit: (d: number) => void;
 };
-// The picks of the kinds other than this one, when the thing pressed is picked along with them; null when nothing else is
 export const alongWith = (kind: Kind): Along | null => {
   const raw = picked(),
     p = {

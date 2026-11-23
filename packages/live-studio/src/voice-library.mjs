@@ -1,6 +1,3 @@
-// Server-side cache and GenVoice / ElevenLabs shared-voices catalog sync.
-// Filters to English voices only, records ElevenLabs v4 model support from verified_languages,
-// persists atomically in the vault, and serves memoized JSON for /api/voice/library.
 import {
   existsSync,
   mkdirSync,
@@ -430,7 +427,7 @@ export const openVoiceLibrary = (opts = {}) => {
   const env = opts.env ?? process.env;
   const cacheFile = resolve(opts.cacheFile ?? defaultVoiceCacheFile(opts.project));
   const autoSync = opts.autoSync ?? true;
-  let diskCache = null; // { mtimeMs, size, catalog }
+  let diskCache = null;
   let activeSync = null;
   let status = "idle";
   let pagesLoaded = 0;
@@ -439,7 +436,7 @@ export const openVoiceLibrary = (opts = {}) => {
   let liveEnglishV4 = 0;
   let lastError = null;
   let warmAttempted = false;
-  let payloadMemo = null; // { key, json }
+  let payloadMemo = null;
 
   const hasKey = () => Boolean(resolveProviderConfig(opts, env).apiKey);
 
@@ -577,9 +574,7 @@ export const openVoiceLibrary = (opts = {}) => {
     if (disk) return false;
     if (!autoSync || activeSync || warmAttempted || status === "error" || !hasKey()) return false;
     warmAttempted = true;
-    sync().catch(() => {
-      // Background warm-up surfaces failures through state()/SSE error field
-    });
+    sync().catch(() => {});
     return true;
   };
 

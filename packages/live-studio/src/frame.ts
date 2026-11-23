@@ -1,13 +1,8 @@
-// A film's frame shape: package.json "live-studio": { "ratio": "9:16" } for Shorts, 16:9 (YouTube) without it. The studio's
-// page, its renders and its checks all draw at sizeOf(ratio, long side), so a film builds from the W and H it is given and
-// never assumes a shape
 export type Ratio = "16:9" | "9:16";
 export const RATIOS: readonly Ratio[] = ["16:9", "9:16"];
 export const ratioOf = (pkg: any): Ratio => pkg?.["live-studio"]?.ratio ?? "16:9";
 export const frameCountOf = (duration: number, fps: number) =>
   Math.max(1, Math.floor(duration * fps + 1e-6));
-// The [first, last] frame each render chunk draws: frame f shows second f/fps, and only frames before the end are drawn, so a
-// film a hair past a chunk's end (30.01 s) has no chunk of zero frames
 export const chunksOf = (duration: number, chunk: number, fps: number): [number, number][] => {
   const frames = frameCountOf(duration, fps),
     per = chunk * fps;
@@ -16,9 +11,6 @@ export const chunksOf = (duration: number, chunk: number, fps: number): [number,
     Math.min(frames, (i + 1) * per) - 1,
   ]);
 };
-// A --span <from>,<to> run's frames, and its file named at the seconds its first frame and its end show, so framecheck and
-// sheet read the video's start from its name exactly (--span 10.01 starts on frame 300, 10 s: span_10-...). It ends on the
-// film's last frame at the latest, as the page draws it
 export const spanOf = ([from, to]: [number, number], fps: number, lastFrame = Infinity) => {
   const first = Math.round(from * fps),
     last = Math.max(first, Math.min(lastFrame, Math.round(to * fps) - 1));

@@ -15,7 +15,6 @@ export interface OpticsReadout {
 
 const trimNum = (n: number) => (Number.isInteger(n) ? String(n) : String(Number(n.toFixed(1))));
 
-/** Formats live camera optics, focus, shake, look, and hit telemetry into one viewfinder strip line. */
 export function formatOpticsHud(o?: OpticsReadout): string {
   if (!o) return "";
   const parts = [`Shot ${o.shot}`];
@@ -38,7 +37,6 @@ export function formatOpticsHud(o?: OpticsReadout): string {
   return parts.join(" · ");
 }
 
-// Focus limits use a one-pixel circle of confusion at the delivery width.
 export function focusLimits(mm: number, fstop: number, focus: number, width = 1920) {
   const s = focus * 1000;
   if (mm <= 0 || fstop <= 0 || width <= 0 || s <= mm) return null;

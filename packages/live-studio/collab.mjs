@@ -110,7 +110,6 @@ const resolveDoc = (rawName, keyFiles) => {
 const readInputText = (input) =>
   input === "-" ? readFileSync(0, "utf8") : readFileSync(resolve(input), "utf8");
 
-// read's own output, its data edited, is a write: its version is the base
 const asWrite = (text) => {
   let body;
   try {

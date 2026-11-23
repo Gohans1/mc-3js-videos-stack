@@ -15,10 +15,6 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-// The Animation tab, laid out as CapCut's: In | Out | Combo, a search box, category chips, a grid of effects (None first) each with
-// its star, and the length (or a Combo's strength) at the bottom. Pointing at an effect plays the shot with it, silently, and
-// puts everything back on leaving; a click keeps it (camera/anim.ts). The shot is the block picked on the camera row, else the
-// one at the playhead.
 import { CurveEditor } from "../components/EasePicker";
 import { FavoriteStar } from "../components/FavoriteStar";
 import { ChipGroup, EmptyCard, Segmented, SliderRow } from "../components/inspector";
@@ -65,8 +61,6 @@ const ALL = "All",
   SEAM = "Seam",
   NO_ANIMS: AnimFx[] = [];
 
-// The little scene on each tile, moved the way the effect moves the picture (studio.css .fx-*): --fx for the backdrop, --fx-near
-// for the house when the two move apart (parallax). s is the far state: where an In starts, where an Out or a Combo ends
 type Far = (s: number) => [string, string?];
 const FAR: Record<string, Far> = {
   zoom: (s) => [`scale(${1 + 0.32 * s})`],
@@ -210,7 +204,6 @@ function Amount({ shot, slot }: { shot: number; slot: Slot }) {
   const a = animOf(shot)[slot];
   if (!a) return null;
   const fx = fxOf(slot, a.fx);
-  // Changing the curve or mirroring the move alters how the motion plays across time/space, so replay the span once
   const replay = () => {
     const [from, to] = spanOf(shot, slot);
     playSpan(from, to);
@@ -430,7 +423,6 @@ export function AnimPanel() {
                 : x.cat === activeCat)),
     );
   }, [list, q, activeCat, favs, slot]);
-  // Trying an effect on: its preview, then the shot plays it until the pointer leaves
   const trial = useRef<{ id: string | null; snap: string; timer: number } | null>(null);
   const leave = useCallback(() => {
     if (!trial.current) return;
@@ -453,8 +445,6 @@ export function AnimPanel() {
       }, 140),
     };
   };
-  // A tile taken out of the list under a resting pointer (a search, a category, a star taken off in Favorites) never gets its
-  // pointerleave: its trial ends here
   const none = activeCat === ALL && !q.trim();
   useEffect(() => {
     const id = trial.current?.id;

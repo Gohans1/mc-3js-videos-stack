@@ -1,6 +1,4 @@
-// What a first visit from a phone or over Tailscale downloads, as that page measured it once it was ready (POST /api/weight;
-// this PC loads the full files and waits for nothing). The terminal says so when it is too much, naming the files to slim first
-export const BUDGET = 10e6; // about 4 s at 20 Mbit/s, a phone over Tailscale
+export const BUDGET = 10e6;
 const NAMED = 1e6;
 
 const mb = (bytes) => `${(bytes / 1e6).toFixed(1)} MB`;
@@ -14,7 +12,6 @@ export const weighFirstVisit = (files) => {
     .filter(([, b]) => b >= NAMED)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6);
-  // names: what makes it heavy, so a reload or a code change that only moves the total says nothing new
   return {
     names: big.map(([p]) => p).join(" "),
     text:

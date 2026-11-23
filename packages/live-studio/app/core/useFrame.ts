@@ -1,5 +1,3 @@
-// The playhead's frame, for a panel that shows what is on the playhead (a key there, its ◁◇▷). The store never carries the time,
-// which changes every frame, so this reads it a few times a second and re-renders only when the frame changes
 import { useEffect, useState } from "react";
 
 import { S } from "./state";

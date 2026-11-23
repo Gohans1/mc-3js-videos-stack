@@ -13,9 +13,9 @@ import {
   formatAuditionTime,
   formatSoundDuration,
   groupLibraryFamilies,
+  indexTimelineSounds,
   INITIAL_NAV,
   INITIAL_OPEN_GROUPS,
-  indexTimelineSounds,
   itemVariantTitle,
   originOf,
   originOptions,
@@ -165,14 +165,33 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ],
       narration: "narration",
     };
-    const picks = new Map([["original", "alternate"], ["disabled", null], ["narration choice", "narration"]]);
-    const chosen = (clip) => picks.has(clip.name) ? picks.get(clip.name) : clip.name;
-    const used = indexTimelineSounds(lanes, chosen);
-    assert.deepEqual([...used], [
-      ["music", { kind: "bgm", clips: [{ list: "beds", i: 0 }] }],
-      ["alternate", { kind: "sfx", clips: [{ list: "sfx", i: 0 }, { list: "sfx", i: 1 }] }],
+    const picks = new Map([
+      ["original", "alternate"],
+      ["disabled", null],
+      ["narration choice", "narration"],
     ]);
-    const items = ["music", "alternate", "original", "narration"].map((name) => ({ name, seconds: 1 }));
+    const chosen = (clip) => (picks.has(clip.name) ? picks.get(clip.name) : clip.name);
+    const used = indexTimelineSounds(lanes, chosen);
+    assert.deepEqual(
+      [...used],
+      [
+        ["music", { kind: "bgm", clips: [{ list: "beds", i: 0 }] }],
+        [
+          "alternate",
+          {
+            kind: "sfx",
+            clips: [
+              { list: "sfx", i: 0 },
+              { list: "sfx", i: 1 },
+            ],
+          },
+        ],
+      ],
+    );
+    const items = ["music", "alternate", "original", "narration"].map((name) => ({
+      name,
+      seconds: 1,
+    }));
     const query = "alt";
     const catalog = filterAndSortLibrary({
       items,
@@ -190,7 +209,10 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       query,
       true,
     );
-    assert.deepEqual(result.shown.map((item) => item.name), ["alternate"]);
+    assert.deepEqual(
+      result.shown.map((item) => item.name),
+      ["alternate"],
+    );
     assert.equal(result.tree[0].leaves.find((leaf) => leaf.id === "timeline").count, 1);
     assert.equal(catalog.activeSource, ALL);
     assert.equal(catalog.activeOrigin, ALL);
@@ -290,7 +312,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       voices: false,
     });
 
-    // Clicking Music while on SFX opens Music, closes SFX, and selects Music > All immediately
     const toMusic = stepNavHeader(INITIAL_NAV, INITIAL_OPEN_GROUPS, "bgm", tree);
     assert.deepEqual(toMusic.nav, { group: "bgm", leaf: "all" });
     assert.deepEqual(toMusic.open, {
@@ -301,12 +322,10 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       voices: false,
     });
 
-    // Clicking Music again while already in Music collapses its accordion without losing selection
     const collapsed = stepNavHeader(toMusic.nav, toMusic.open, "bgm", tree);
     assert.deepEqual(collapsed.nav, { group: "bgm", leaf: "all" });
     assert.equal(collapsed.open.bgm, false);
 
-    // Clicking Yours opens Yours and picks Favorites when non-empty, else Voiceover when non-empty, else This film
     const toYours = stepNavHeader(collapsed.nav, collapsed.open, "yours", tree);
     assert.deepEqual(toYours.nav, { group: "yours", leaf: "fav" });
     assert.deepEqual(toYours.open, {
@@ -340,7 +359,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ["paper_grab", "mixkit-168", "mixkit-1107", "ear-click-double"],
     );
 
-    // Favorites preserves newest-starred-first order
     const favView = filterAndSortLibrary({
       items: SAMPLE,
       favs: ["ear-click-double", "mixkit-168"],
@@ -354,7 +372,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ["mixkit-168", "ear-click-double"],
     );
 
-    // Source options include Free Music Archive on Music
     const bgmSrcs = sourceOptions(SAMPLE.filter((x) => x.kind === "bgm"));
     assert.deepEqual(
       bgmSrcs.map((s) => [s.id, s.title, s.count]),
@@ -387,7 +404,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.equal(originTitle("real"), "Real / Studio");
     assert.equal(originTitle("synth"), "Code-gen");
 
-    // Electronic music produced by humans is Real / Studio, while Earshot / syn_* / explicit origin="synth" is Code-gen
     assert.equal(originOf(SAMPLE[4]), "real");
     assert.equal(originOf(SAMPLE[2]), "real");
     assert.equal(originOf(SAMPLE[3]), "real");
@@ -399,7 +415,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.match(soundCardDetail(SAMPLE[0]), /Code-gen/);
     assert.match(soundCardDetail(SAMPLE[2]), /Real \/ Studio/);
 
-    // Music > All reports 2 Real / Studio and 0 Code-gen so the user immediately sees 0 code-gen tracks
     assert.deepEqual(
       originOptions(SAMPLE.filter((x) => x.kind === "bgm")).map((o) => [o.id, o.title, o.count]),
       [
@@ -421,7 +436,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       },
     ];
 
-    // Sort order: film real -> film synth -> vault real -> vault synth
     const allSfx = filterAndSortLibrary({
       items: mixed,
       favs: [],
@@ -436,7 +450,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ["paper_grab", "syn_tick", "mixkit-168", "mixkit-1107", "ear-click-double"],
     );
 
-    // Filtering by Real / Studio keeps film + Mixkit real recordings, drops all synth items, and scopes sources to real sources only
     const realOnly = filterAndSortLibrary({
       items: mixed,
       favs: [],
@@ -461,7 +474,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ],
     );
 
-    // Selecting a specific Source stays strict on single-source searches and 0-match categories (never leaks other sources)
     const fmaInElectronic = filterAndSortLibrary({
       items: mixed,
       favs: [],
@@ -491,7 +503,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.deepEqual(scottInFoley.shown, []);
     assert.ok(scottInFoley.sources.some((s) => s.id === "scott-buckley" && s.count === 0));
 
-    // Selecting Code-gen on a category with 0 synth items stays strict (never silently leaks real recordings)
     const synthInFoley = filterAndSortLibrary({
       items: mixed,
       favs: [],
@@ -513,7 +524,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
     assert.equal(formatAuditionTime(0.05, 0.28, "sfx", true), "0.05s / 0.28s");
     assert.equal(formatAuditionTime(0, 0.01, "sfx", false), "00:00 / --:--");
 
-    // Star paper_grab (a film sound): Yours total count must not double-count paper_grab across Favorites + This film
     const navWithStarredFilm = buildNavTree(SAMPLE, ["paper_grab"], (x) => x.kind ?? "sfx", 2);
     const yours = navWithStarredFilm.find((s) => s.id === "yours");
     assert.equal(yours.leaves.find((l) => l.id === "fav").count, 1);
@@ -617,7 +627,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       kindOf: (x) => x.kind ?? "sfx",
     });
     assert.equal(allMc.shown.length, 7);
-    // Nav tree, Edition filter, and Source filter all count collapsed sound families (4), matching rendered cards 1:1!
     const mcNav = allMc.tree.find((t) => t.id === "mc");
     assert.equal(mcNav.count, 4);
     assert.deepEqual(
@@ -647,7 +656,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ],
     );
 
-    // SoundSwapPicker default browse collapses multi-variant families to 1 item while preserving the active variant if selected
     assert.deepEqual(
       collapseSwapFamilies(allMc.shown, "mc-step-stone-10").map((x) => x.name),
       [
@@ -658,8 +666,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ],
     );
 
-    // Grouping collapses 3 stone steps + 2 bluntwood steps + 2 singletons -> 4 family cards,
-    // with Vanilla 26.3 prioritized ahead of modded packs, and variants sorted 1 -> 2 -> 10 inside Stone
     const groups = groupLibraryFamilies(allMc.shown);
     assert.equal(groups.length, 4);
     assert.deepEqual(
@@ -707,7 +713,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       "Chest · Open",
     );
 
-    // siblingsOf returns all sorted variants for Inspector quick-switching
     assert.deepEqual(
       siblingsOf(
         mcSample,
@@ -723,7 +728,6 @@ describe("buildNavTree, stepNavHeader & filtering/sorting", () => {
       ["mc-block-chest-open"],
     );
 
-    // Modded edition filter keeps only modded packs and scopes sources to modded packs sorted by count
     const moddedFootsteps = filterAndSortLibrary({
       items: mcSample,
       favs: [],

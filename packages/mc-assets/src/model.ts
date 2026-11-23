@@ -47,15 +47,10 @@ export interface ModelRendererApi {
 }
 
 export interface ModelLoadOptions {
-  /** Enable castShadow & receiveShadow on built meshes. Default: true. */
   shadows?: boolean;
-  /** block-model-renderer lighting mode. Default: "scene". */
   lighting?: LightingOption;
-  /** Attach automatic texture animation loops. Default: false (deterministic draw(t)). */
   animate?: boolean;
-  /** Display transform override. Default: {} (unrotated model space, no GUI tilt). */
   display?: DisplayOption;
-  /** Optional block-model-renderer API override (for testing without WebGL/native gl). */
   renderer?: ModelRendererApi;
 }
 
@@ -109,11 +104,6 @@ function isMissingSentinel(parts: ModelReference[]): boolean {
   return model === "block-model-renderer:missing" || model === "block-model-renderer:missing.json";
 }
 
-/**
- * Loads a standalone Minecraft block (all blockstate parts) as a Three.js Group.
- * Scaled by 1/16 inside a unit-scale holder (1 block = 1 m centered on origin)
- * so caller transforms never fight the 1/16 pixel scale.
- */
 export async function blockModel(
   sources: AssetsInput,
   id: string,
@@ -144,11 +134,6 @@ export async function blockModel(
   return holder;
 }
 
-/**
- * Loads a standalone Minecraft item (1.21.4+ item definitions, composite/special items,
- * legacy mod models, and extruded 3D builtin/generated sprites) scaled by (1/16) * size
- * inside a unit-scale holder Group.
- */
 export async function itemModel(
   sources: AssetsInput,
   id: string,
@@ -191,11 +176,6 @@ export async function itemModel(
   return holder;
 }
 
-/**
- * A texture by name through the asset stack (resource packs first, then the jar), e.g. "block/iron_block",
- * "item/sugar" or "mymod:block/x": pixel-sharp, sRGB, repeating, the first frame of an animated one.
- * A new THREE.Texture each call, so its repeat/offset are the caller's own.
- */
 export async function texture(
   sources: AssetsInput,
   name: string,

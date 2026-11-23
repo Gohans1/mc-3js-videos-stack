@@ -1,7 +1,3 @@
-// The film contract: everything the studio reads from a film, as zod schemas. The server checks the film's JSON files when the
-// studio starts and whenever one changes; the page checks the film's module and its draw() once built. Problems are printed in
-// the studio's terminal, where the AI working on the film reads them, and shown in the page. bun run skills get core --ref contract explains
-// each part. What a schema doesn't name is the film's own (its camera keys, audio, props): loose objects let it through.
 import { LIGHT_PRESET_IDS } from "film-stage/lights-meta";
 import * as z from "zod";
 
@@ -154,7 +150,6 @@ export const TimingTimeline = TimingPlan.extend({
 });
 export const TIMING_KEYS = Object.keys(TimingTimeline.shape);
 
-// ---------- src/scene.ts
 const Shot = z.looseObject({ t: time });
 export const SceneModule = z
   .looseObject({
@@ -173,7 +168,6 @@ export const SceneModule = z
     { error: "shots must start in order of time", path: ["SHOTS_OUT"] },
   );
 
-// ---------- What buildScene() resolves to: draw(t), with these attached
 const TargetRow = z.object({ edit: z.string().min(1), path: z.array(z.string()) });
 const Axes = z
   .tuple([z.boolean(), z.boolean(), z.boolean()])
@@ -259,7 +253,6 @@ export const Tools = z.looseObject({
   moveCameraAnchor: fn.optional(),
   resolveCameraAnchor: fn.optional(),
   cameraAnchors: z.array(z.object({ target: z.string(), label: z.string() })).optional(),
-  // mc-assets/placed.ts makePlaced: what the creator drops into the scene from the Objects library, in one of the film's keyFiles
   placed: z
     .looseObject({
       key: z.string().min(1),
@@ -300,7 +293,7 @@ export const Draw = z
       .array(Variant)
       .refine((v) => unique(v.map((x) => x.id)), "variant ids must differ")
       .optional(),
-    eases: z.record(z.string(), fn).optional(), // the camera keys' named eases (film-stage EASES), drawn in the studio's ease picker
+    eases: z.record(z.string(), fn).optional(),
     keyEases: z
       .array(
         z.object({
@@ -310,7 +303,6 @@ export const Draw = z
         }),
       )
       .optional(),
-    // film-stage ANIMS: the In, Out and Combo effects the film draws from a shot's "anim", listed in the studio's Animation tab
     anims: z
       .object(
         Object.fromEntries(
@@ -358,7 +350,6 @@ export const Draw = z
     { error: "each key easing must have a draw.eases evaluator", path: ["keyEases"] },
   );
 
-// ---------- src/edit.json: the studio reads the voice, the script takes, the beats and their sounds. Everything else in it is the film's
 const Take = z.looseObject({
   id: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/, "take id may only use letters, digits, _ and -"),
   text: z.string().optional(),
@@ -370,8 +361,6 @@ const Take = z.looseObject({
   speed: z.number().positive().optional(),
   stability: z.number().min(0).max(1).optional(),
   guide: z.string().optional(),
-  // the character who says it on screen: bun run voice:lips gives that character's mouth its shapes (src/timeline/mouth.json,
-  // read by live-studio/lips mouthCues). None: a narrator off screen
   by: z.string().min(1).optional(),
 });
 const Beat = z.looseObject({
@@ -392,12 +381,10 @@ export const Edit = z.looseObject({
     .refine((ts) => unique(ts.map((t) => t.id)), "take ids must differ")
     .optional(),
   beats: z.record(z.string(), Beat),
-  // the film's end (narration seconds): mix.py and every check after the end read it as a number
   end: time.refine((s) => s > 0, "the film's end: seconds after 0").optional(),
 });
 export const EDIT_KEYS = Object.keys(Edit.shape);
 
-// ---------- renders/live/trials.json (written by the film's sound.py) and choices.json (written by the studio)
 const Option = z.looseObject({
   id: z.string().min(1),
   title: z.string(),
@@ -427,9 +414,7 @@ export const Choices = z.record(
   z.looseObject({ set: z.string(), gain: z.number().positive().optional() }),
 );
 
-// ---------- package.json "live-studio": the paths in it are checked where they are opened (film.mjs); here what has a shape
 const filePath = z.string().min(1).optional();
-// every key the studio, its CLIs and the render read; any other is the film's own (bun run check names a near miss)
 export const StudioConfig = z.looseObject({
   preload: z.array(z.string().min(1)).optional(),
   ratio: z.enum(RATIOS as unknown as [string, ...string[]]).optional(),
@@ -445,7 +430,6 @@ export const StudioConfig = z.looseObject({
   timingTimeline: filePath,
   keyFiles: z.record(z.string(), z.string()).optional(),
   sfx: filePath,
-  // what sound.py reads: a change to any of them remixes
   sound: z.array(z.string()).optional(),
   soundVault: z.union([z.string().min(1), z.literal(false)]).optional(),
   liveLanes: z.boolean().optional(),
@@ -453,8 +437,6 @@ export const StudioConfig = z.looseObject({
 });
 export const CONFIG_KEYS = Object.keys(StudioConfig.shape);
 
-// ---------- The sound lanes (package.json "live-studio".soundTimeline), which the studio also writes: beds loop from..to, a
-// one-shot plays from at for length seconds or to its end. Gains in dB. Anything else on an entry (filters, try) is the film's
 const name = z.string().regex(/^\w[\w.-]*$/, "an audio source name, without .wav");
 const MAX_FILM_SECONDS = 3600;
 const MAX_PROCESS_SECONDS = 900;
@@ -589,7 +571,6 @@ const Bed = z
     fadeOut: z.number().nonnegative(),
     start: z.number().nonnegative().optional(),
     duck: z.number().nonnegative().optional(),
-    // scratch audio (a reference's voice to time against): studio and drafts play it, mix.py refuses a final with it
     guide: z.boolean().optional(),
     pan: z.number().min(-1).max(1).optional(),
     try: z.array(name).optional(),
@@ -618,8 +599,6 @@ const Shot1 = z.looseObject({
   reverb: ReverbSpec.optional(),
   spatial: SpatialSpec.optional(),
 });
-// tracks (top to bottom) and each entry's track: app/sound/tracks.ts. Optional, the page adds them; mute leaves a track out of the mix,
-// filters (the clip EQ's ffmpeg entries) and gain (dB) shape every clip on it after its own chain, as real-sound's buses do
 const Track = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
@@ -656,14 +635,6 @@ export const SoundTimeline = z
       });
   });
 
-// The keys the mix and the studio read on each part of the sound timeline: a key a letter off one of these (or two letters
-// swapped) is a typo the loose schemas let through (bun run check names it)
-// (SOUND_KEYS exported from ./contract-keys.ts)
-
-// ---------- The camera keys (package.json "live-studio".camTimeline), which the studio also writes: one entry per key, in time
-// order, t in the seconds draw(t) is given. p and l are a point [x, y, z] or the film's own anchor ({"eye": [...]}); ease is a
-// named ease of the film or a CSS cubic-bezier [x1, y1, x2, y2]; fov, wave and roll are numbers every film's camera reads.
-// Any other key on a key is the film's own
 const point = z.union([z.tuple([z.number(), z.number(), z.number()]), z.looseObject({})], {
   error: 'a point [x, y, z], or the film\'s anchor like {"eye": [x, y, z]}',
 });
@@ -906,9 +877,6 @@ export const PickEntrySchema = z
   );
 export const PicksFile = z.array(PickEntrySchema);
 
-// ---------- The shots (package.json "live-studio".shotsTimeline): SHOTS as data, so the studio can move a cut. Each shot starts at t
-// (the voice's source seconds, like SHOTS) and may carry a name the timeline shows; the film reads them from EDIT.shots in applyEdit
-// anim: the shot's In, Out and Combo ({fx, len?, k?, curve?, flip?, optics?}, fx an id from the film's draw.anims), drawn by film-stage/animate.ts
 const AnimFx = z.looseObject({
   fx: z.string().min(1),
   len: z.number().positive().optional(),
@@ -998,7 +966,6 @@ const Wheels = z.looseObject({
 export const Grade = z.looseObject({
   enabled: z.boolean().optional(),
   look: z.string().min(1).optional(),
-  // film-stage's ADJUSTMENTS (grade-color.ts), listed here so the server's contract loads no three.js; test/contract.test.mjs keeps them equal
   basic: z
     .looseObject({
       ...Object.fromEntries(
@@ -1155,17 +1122,12 @@ export const ShotsTimeline = z
   )
   .refine(distinctRowIds, "shot ids must differ");
 
-// ---------- Words and shapes over the picture (package.json "live-studio".textTimeline), which the studio also writes: CapCut's
-// Text and Shapes, drawn by film-stage/titles.ts. Each item is on screen from `from` to `to` (the seconds draw(t) gets) on a text
-// track (0 is the one just over the camera row); x, y its anchor in the frame (0 to 1); `at` a world point it follows instead.
-// Anything else on an item (size, font, colour, stroke, background, in, out, custom shapes) is the drawer's
 const TextFx = z.looseObject({
   fx: z.string().min(1),
   len: z.number().positive().optional(),
   ease: Ease.optional(),
   stagger: unit.optional(),
   tint: z.string().min(1).optional(),
-  // Steps the voice every N film frames (Cinetic on-twos / on-threes)
   hold: z.number().int().min(1).max(12).optional(),
 });
 const TextItem = z
@@ -1181,11 +1143,9 @@ const TextItem = z
     at: z.tuple([z.number(), z.number(), z.number()]).optional(),
     in: TextFx.optional(),
     out: TextFx.optional(),
-    // false: decor not meant to be read (a sign in the world, a glitch); bun run check and --check text leave it alone
     read: z.boolean().optional(),
   })
   .refine((it: any) => it.to > it.from, "to must come after from");
-// TEXT_KEYS, TEXT_SLOT_KEYS exported from ./contract-keys.ts
 export const TextTimeline = z.looseObject({
   items: z.array(TextItem),
   tracks: z
@@ -1242,13 +1202,6 @@ export const OpenFilmTimeline = z
   .object({ items: z.array(OpenFilmLayer) })
   .refine((v) => new Set(v.items.map((x) => x.id)).size === v.items.length, "ids must differ");
 
-// ---------- Key files (package.json "live-studio".keyFiles: { file: the EDIT key the film reads it from }): every list of
-// {t, ...} or single timed {t, ...} event object in the file, at any depth through objects, is a row of keys the studio shows
-// and retimes (Steve's moves, a drawer's opening, a single desk drop); each list row stays in time order
-// isTimedKey, keyRows, rowAt exported from ./contract-keys.ts
-// a key whose "t" is no number ("5") or is missing makes keyRows drop its whole list, so the studio stops showing the row:
-// in a list where any row has a "t", every row without a number there is named. Like keyRows it never looks inside a
-// list of other things: what is there is no row the studio shows
 const hasT = (k: any) => !!k && typeof k === "object" && !Array.isArray(k) && "t" in k;
 const badTimes = (v: any, path: (string | number)[] = []): (string | number)[][] =>
   Array.isArray(v)
@@ -1298,13 +1251,11 @@ export const keyFileSchema = (requiredRows: string[][] = []) =>
     }
   });
 
-// One block of text per part that's wrong, naming the file to fix
 export const problems = (schema: z.ZodType<any>, value: unknown, where: string): string[] => {
   const r = schema.safeParse(value);
   return r.success ? [] : [`${where}\n${z.prettifyError(r.error)}`];
 };
 
-// files: { name: [schema, text or undefined] }, a missing file is no problem
 export const checkFiles = (files: Record<string, [z.ZodType<any>, string | undefined]>): string[] =>
   Object.entries(files).flatMap(([name, [schema, text]]) => {
     if (text === undefined) return [];

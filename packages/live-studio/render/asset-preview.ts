@@ -1,7 +1,4 @@
 // @ts-nocheck
-// Standalone headless WebGL preview sheet for Minecraft blocks & items:
-// renders Front + 3/4 views beside a 1.875m Steve scale figure in ONE Chrome boot.
-// Invoked by `bun run asset preview [id...] --film films/<name>` via render.mjs --entry.
 import {
   configure,
   parseBlockstate,
@@ -67,7 +64,7 @@ function makeFallbackSteve(): THREE.Group {
     roughness: 0.8,
     metalness: 0.05,
   });
-  const px = STEVE_HEIGHT_M / 32; // 1.875 m / 32 MC pixels
+  const px = STEVE_HEIGHT_M / 32;
   const addPart = (
     w: number,
     h: number,
@@ -217,7 +214,6 @@ function fitCameraToBox(
   const dz = Math.cos(azimuthRad) * Math.cos(elevationRad);
   const dir = new THREE.Vector3(dx, dy, dz).normalize();
 
-  // Compute exact projected half-extents perpendicular to view direction
   const up = new THREE.Vector3(0, 1, 0);
   const right = new THREE.Vector3().crossVectors(up, dir).normalize();
   const camUp = new THREE.Vector3().crossVectors(dir, right).normalize();
@@ -366,9 +362,7 @@ function disposeObject(root: THREE.Object3D): void {
           hasPickedZip = true;
         }
       }
-    } catch {
-      // picked.zip is optional when previewing vanilla/shared blocks
-    }
+    } catch {}
   }
   packList.push(jarBytes);
   let sources;
@@ -406,7 +400,6 @@ function disposeObject(root: THREE.Object3D): void {
 
   const camera = new THREE.PerspectiveCamera(FOV_DEG, VIEW_W / VIEW_H, 0.02, 100);
 
-  // Neutral balanced 3-point studio lighting so both light and dark models read crisply
   const hemi = new THREE.HemisphereLight(0xf2f6ff, 0x3b414c, 1.15);
   const key = new THREE.DirectionalLight(0xfff4e4, 1.85);
   key.position.set(4.5, 7.5, 5.5);
@@ -425,7 +418,6 @@ function disposeObject(root: THREE.Object3D): void {
   rim.position.set(-2, 4, -5);
   scene.add(hemi, key, fill, rim);
 
-  // Ground plane + 1 m scale grid
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 24),
     new THREE.MeshStandardMaterial({ color: 0x252b35, roughness: 0.94, metalness: 0.0 }),
@@ -462,7 +454,6 @@ function disposeObject(root: THREE.Object3D): void {
   ctx.fillStyle = "#11151c";
   ctx.fillRect(0, 0, sheet.width, sheet.height);
 
-  // Top sheet title bar
   ctx.fillStyle = "#171c26";
   ctx.fillRect(0, 0, sheet.width, TITLE_H);
   ctx.fillStyle = "#e6edf7";
@@ -547,28 +538,23 @@ function disposeObject(root: THREE.Object3D): void {
       frameBox.set(new THREE.Vector3(-0.5, 0, -0.5), new THREE.Vector3(0.5, 1, 0.5));
     }
 
-    // Tile background & border
     ctx.fillStyle = "#1b2029";
     ctx.fillRect(tileX, tileY, TILE_W, TILE_H);
     ctx.strokeStyle = "#2e3748";
     ctx.lineWidth = 1;
     ctx.strokeRect(tileX + 0.5, tileY + 0.5, TILE_W - 1, TILE_H - 1);
 
-    // Render Front (azimuth 0 deg, slight +8 deg elevation)
     fitCameraToBox(camera, frameBox, 0, THREE.MathUtils.degToRad(8));
     renderer.render(scene, camera);
     ctx.drawImage(gl, tileX, tileY + HEADER_H, VIEW_W, VIEW_H);
 
-    // Render 3/4 (azimuth 36 deg, elevation 24 deg)
     fitCameraToBox(camera, frameBox, THREE.MathUtils.degToRad(36), THREE.MathUtils.degToRad(24));
     renderer.render(scene, camera);
     ctx.drawImage(gl, tileX + VIEW_W, tileY + HEADER_H, VIEW_W, VIEW_H);
 
-    // Center divider between Front and 3/4
     ctx.fillStyle = "#2e3748";
     ctx.fillRect(tileX + VIEW_W, tileY + HEADER_H, 1, VIEW_H);
 
-    // Header bar
     ctx.fillStyle = "#141821";
     ctx.fillRect(tileX, tileY, TILE_W, HEADER_H);
     ctx.font = "600 13px Consolas, monospace";
@@ -595,7 +581,6 @@ function disposeObject(root: THREE.Object3D): void {
       );
     }
 
-    // View angle badges
     const drawBadge = (bx: number, by: number, text: string) => {
       ctx.font = '600 11px "Segoe UI", sans-serif';
       const w = ctx.measureText(text).width + 12;

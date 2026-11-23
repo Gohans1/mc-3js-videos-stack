@@ -1,4 +1,3 @@
-// Syncs all English voices from GenVoice / ElevenLabs Shared Voice Library into vault/voices/shared-en.json.
 import { accessSync, constants, existsSync, lstatSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

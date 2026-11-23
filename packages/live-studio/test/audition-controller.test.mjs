@@ -122,13 +122,11 @@ describe("createAuditionController", () => {
     audio.nextPlayPromise = Promise.reject(err);
 
     ctrl.listenUrl("gv:v1", "https://example.com/bad.mp3");
-    // Browser may emit play before failing, starting the 80ms tick
     audio.emit("play");
     expect(ctrl.listening()).toBe("gv:v1");
     expect(intervalsStarted).toHaveLength(1);
 
     await flushMicrotasks();
-    // Subsequent media "error" event for the same failed attempt must not duplicate the toast
     audio.emit("error");
 
     expect(ctrl.listening()).toBe("");
@@ -157,7 +155,6 @@ describe("createAuditionController", () => {
     audio.nextPlayPromise = firstPromise;
     ctrl.listenUrl("gv:v1", "https://example.com/1.mp3");
 
-    // User quickly clicks second voice; first play rejects with AbortError or stale error
     ctrl.listenUrl("gv:v2", "https://example.com/2.mp3");
     audio.emit("play");
 
@@ -231,12 +228,10 @@ describe("createAuditionController", () => {
     ctrl.seekAudition("gv:v1", -5, 5);
     expect(audio.currentTime).toBe(0);
 
-    // Repeat call pauses active clip without triggering play error
     ctrl.listenUrl("gv:v1", "https://example.com/ok.mp3");
     expect(ctrl.listening()).toBe("");
     expect(audio.paused).toBe(true);
 
-    // Re-play and naturally end
     ctrl.listenUrl("gv:v1", "https://example.com/ok.mp3");
     audio.emit("play");
     audio.emit("ended");
@@ -260,13 +255,11 @@ describe("createAuditionController", () => {
       onPlayError: () => {},
     });
 
-    // Unowned browser/media-key play event while auditioning === "" must not leak a timer
     audio.paused = false;
     audio.emit("play");
     expect(intervalsStarted).toHaveLength(0);
     expect(ctrl.listening()).toBe("");
 
-    // Unknown duration + fallbackSeconds=0 must report known=false and avoid 100% slider peg or seek-to-zero
     ctrl.listenUrl("gv:v1", "https://example.com/stream.mp3");
     audio.emit("play");
     audio.currentTime = 0.25;
@@ -275,7 +268,6 @@ describe("createAuditionController", () => {
     ctrl.seekAudition("gv:v1", 0.5, 0);
     expect(audio.currentTime).toBe(0.25);
 
-    // Once metadata loads, real progress and seeking resume cleanly
     audio.duration = 12;
     expect(ctrl.auditionProgress(0)).toEqual({ at: 0.25, duration: 12, known: true });
     ctrl.seekAudition("gv:v1", 4, 0);
@@ -297,7 +289,6 @@ describe("createAuditionController", () => {
     expect(ctrl.auditionTarget()).toBe("sfx_pop");
     expect(ctrl.listening()).toBe("sfx_pop");
 
-    // Pause keeps target selected for scrubber/resume without reassigning src
     ctrl.listenUrl("sfx_pop", "/api/sfx/sfx_pop.wav");
     expect(ctrl.listening()).toBe("");
     expect(ctrl.auditionTarget()).toBe("sfx_pop");
@@ -307,7 +298,6 @@ describe("createAuditionController", () => {
     audio.emit("play");
     expect(audio.src).toBe("sentinel");
 
-    // Natural completion rewinds to 0 and keeps target docked until stopAudition
     audio.currentTime = 4;
     audio.emit("ended");
     expect(audio.currentTime).toBe(0);
@@ -318,7 +308,6 @@ describe("createAuditionController", () => {
     expect(ctrl.auditionTarget()).toBe("");
     expect(audio.paused).toBe(true);
 
-    // Playback failure clears target too so no broken dock lingers
     audio.nextPlayPromise = Promise.reject(
       Object.assign(new Error("boom"), { name: "MediaError" }),
     );

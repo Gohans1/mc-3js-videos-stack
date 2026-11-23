@@ -1,19 +1,9 @@
 // @ts-nocheck
 import { AssetLoader, BasicAssetKey, Entities, EntityObject } from "minerender";
-// Any of the game's 209 mobs (cow, zombie, silverfish, ...) from MineRender: the game's own model and its sampled vanilla
-// clips, lit like the rest of the film, walked along a path of keys. Never build a mob box by box: if one is missing or
-// wrong here, fix it here. Data: the vault's mcasset/1.21.11 (bun packages/mc-assets/mobs.ts fills it), served at /mcasset.
-//   const cow = await loadMob("cow");  scene.add(cow.g);  each frame: cow.draw(keys, t)
-//   keys {scale?, path: [{t, at: [x, y, z], hop?}], clip?, rate?}  hidden before the first key and after the last; between
-//   keys it slides, hop lifts it in an arc of that height, it faces where it is going.
-//   clip: one of mob.clips (default the first). A "walk..." clip turns with the distance walked, as the game turns its limb
-//   swing (4 per block, the clips sampled at 1 per tick) and swings as far as the game would at that speed; any other
-//   clip (silverfish "idle") runs on film time, times rate.
 import * as THREE from "three";
 
 import { centroidUv } from "./player";
 
-// options: { root, texture: "minecraft:textures/entity/cat/tabby.png", when: ["tamed"], tints: { collar_color: 0xff0000 } }
 export async function loadMob(
   name,
   { root = `${location.origin}/mcasset/1.21.11`, texture, when, tints } = {},
@@ -74,7 +64,6 @@ export async function loadMob(
     p.y += (b.hop ?? 0) * 4 * x * (1 - x);
     return p;
   };
-  // ground distance walked from the first key to t, in steps of a game tick
   const walked = (path, t) => {
     let d = 0;
     for (let s = path[0].t; s < t; s += 0.05) {
@@ -108,7 +97,6 @@ export async function loadMob(
       mob.setAnimationTime((walked(path, t) * 4) / 20);
     } else mob.setAnimationTime(t * (S.rate ?? 1));
   };
-  // One clip at a given time in seconds, where nothing walks it along a path (mc-assets/placed.ts: mobs dropped in from the studio)
   const animate = (name, time, weight = 1) => {
     const clip = clipsByName[name];
     if (!clip) return;

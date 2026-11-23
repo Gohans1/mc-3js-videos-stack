@@ -1,7 +1,3 @@
-// The studio's keys (listed in Settings, "Shortcuts"): CapCut desktop's default keys wherever the studio does what CapCut does,
-// since those are the keys the dev's hands know; the studio's own (notes, drawing, the free camera) sit on keys CapCut leaves
-// free. Ctrl + and Ctrl - stay the browser's page zoom (CapCut zooms its timeline with them; here = and - do). Letters match
-// the key's place, not its letter, so they work on any keyboard layout; typing in the note box never reaches them
 import { type UseHotkeyDefinition, useHotkeys } from "@tanstack/react-hotkeys";
 
 import { easeCameraPicks, nudgeCameraPicks, saveView, stepCameraKey } from "../camera/cam";
@@ -46,8 +42,6 @@ import { toggleMagnet, zoomSpan, zoomToFit } from "../timeline/timeline";
 import { toggleMainMagnet } from "../timeline/timing";
 import { toggleFullscreen } from "./fullscreen";
 
-// The keyboard walking a list (the ones marked data-arrow-scroll: notes, settings) scrolls it with Up and Down; everywhere else
-// they jump from cut to cut, as in CapCut
 const walkingList = (e: KeyboardEvent) =>
   e.target instanceof Element &&
   e.target.matches(":focus-visible") &&
@@ -66,18 +60,15 @@ const noteKey = (d: -1 | 1) => () => {
   if (t === undefined) say(`No open note ${d > 0 ? "after" : "before"} the playhead`);
   else seek(t);
 };
-// Ctrl+C, X and V take the timeline's picks unless the page has text selected or a box has focus: then they are the browser's
 const clip = (f: () => void) => (e: KeyboardEvent) => {
   if (getSelection()?.toString()) return;
   e.preventDefault();
   f();
 };
 const clipKey = { preventDefault: false, ignoreInputs: true } as const;
-// An on/off key acts on a fresh press only so holding a key never flickers Draw or Final quality on repeat
 const fresh = (f: () => void) => (e: KeyboardEvent) => {
   if (!e.repeat) f();
 };
-// = and - zoom the timeline; in the free camera they change its lens instead
 const zoomKey = (d: -1 | 1) => () => {
   if (get().free) engine.setFov(-2 * d);
   else zoomSpan(d > 0 ? 1 / 1.5 : 1.5);
@@ -143,7 +134,6 @@ export function useStudioHotkeys() {
     camPicks > 0 ||
     keyPicks > 0 ||
     textPicks > 0;
-  // A popup open on top (Settings, Blind Audio curtain, focus eyedropper, an open note/pin, or empty Draw mode) takes Esc before timeline tools
   const escPopups: UseHotkeyDefinition[] = [
     {
       hotkey: "Escape",
@@ -172,8 +162,6 @@ export function useStudioHotkeys() {
     },
   ];
   const keys: UseHotkeyDefinition[] = [
-    // ---- CapCut's own
-    // In the free camera Space flies up (picture/flight.ts), so Q toggles Play/Pause and E steps back 5 s there
     { hotkey: "Space", callback: togglePlay, options: { enabled: !free } },
     { hotkey: "Q", callback: togglePlay, options: { enabled: free } },
     { hotkey: "E", callback: () => seek(S.t - 5), options: { enabled: free } },
@@ -195,7 +183,6 @@ export function useStudioHotkeys() {
       callback: () => splitAll(),
       options: { enabled: sound || (cam && shots) },
     },
-    // Split mode: B as in CapCut, C as the razor of Premiere (the dev's habit); A is the select pointer again. A flies left in the free camera
     { hotkey: "B", callback: () => setBlade(true) },
     { hotkey: "C", callback: () => setBlade(true) },
     { hotkey: "A", callback: () => setBlade(false), options: { enabled: blade && !free } },
@@ -232,7 +219,6 @@ export function useStudioHotkeys() {
       callback: () => setClips(allClips().filter((c) => !locked(c))),
       options: { enabled: sound },
     },
-    // While drawing, undo takes back strokes; otherwise the last edit to the sound lanes, the camera keys or the key rows (core/doc.ts)
     { hotkey: "Mod+C", callback: clip(copy), options: { ...clipKey, enabled: anyPick } },
     { hotkey: "Mod+X", callback: clip(cut), options: { ...clipKey, enabled: anyPick } },
     {
@@ -242,7 +228,6 @@ export function useStudioHotkeys() {
       },
       options: clipKey,
     },
-    // CapCut's Copy attributes and Paste attributes: one pick's settings onto other picks of its kind (timeline/attributes.ts)
     { hotkey: "Mod+Alt+C", callback: clip(copyAttrs), options: clipKey },
     { hotkey: "Mod+Alt+V", callback: clip(askPaste), options: clipKey },
     {
@@ -250,7 +235,7 @@ export function useStudioHotkeys() {
       callback: () => {
         if (!((get().ink || get().inkSaid) && undoInk())) undo();
       },
-    }, // a note's strokes first
+    },
     { hotkey: "Mod+Shift+Z", callback: redo },
     {
       hotkey: "Mod+L",
@@ -259,7 +244,6 @@ export function useStudioHotkeys() {
     },
     { hotkey: "Shift+Backspace", callback: toggleMainMagnet, options: { enabled: timing } },
     { hotkey: "Mod+Y", callback: redo },
-    // Every kind picked at once (a box across the rows picks clips, camera keys and keys together; timeline/across.ts)
     {
       hotkey: "Delete",
       callback: deleteSelected,
@@ -274,11 +258,9 @@ export function useStudioHotkeys() {
     { hotkey: "O", callback: setOut },
     { hotkey: "Shift+X", callback: inOutByClip },
     { hotkey: "Alt+X", callback: clearInOut },
-    // CapCut 9.7's own keys (its tooltips): S auto snapping, Shift+P the preview axis. In the free camera S flies back
     { hotkey: "S", callback: fresh(toggleMagnet), options: { enabled: !free } },
     { hotkey: "Shift+P", callback: fresh(togglePreviewAxis) },
     { hotkey: "Shift+S", callback: fresh(togglePreviewAudio), options: { enabled: !free } },
-    // CapCut's marker is the studio's note: one at the playhead, and the next or previous one
     {
       hotkey: "M",
       callback: () => {
@@ -295,7 +277,6 @@ export function useStudioHotkeys() {
         void openNote(null, true, undefined, visible ? { x: 0.5, y: 0.88 } : undefined);
       },
     },
-    // the Review room (notes/ReviewRoom.tsx) in place of the timeline and the panels, and back
     { hotkey: "N", callback: () => setReview(!get().review) },
     { hotkey: "Shift+M", callback: noteKey(1) },
     { hotkey: "Alt+Shift+M", callback: noteKey(-1) },
@@ -331,7 +312,6 @@ export function useStudioHotkeys() {
       callback: fresh(() => set({ colorScript: !get().colorScript })),
     },
     { hotkey: "Mod+Shift+F", callback: fresh(toggleFullscreen) },
-    // ---- The studio's own
     {
       hotkey: "G",
       callback: fresh(() => setInk(get().ink ? null : "pen")),
@@ -374,7 +354,6 @@ export function useStudioHotkeys() {
     },
     { hotkey: "Mod+ArrowUp", callback: () => nudgeVolume(true) },
     { hotkey: "Mod+ArrowDown", callback: () => nudgeVolume(false) },
-    // Unreal's gizmo keys; in the free camera W and E walk instead
     {
       hotkey: "W",
       callback: () => engine.setGizmo("translate"),
@@ -409,7 +388,6 @@ export function useStudioHotkeys() {
           !settingsOpen && !ink && !blindAudio && !pickFocus && !composeOpen && !blade && hasPick,
       },
     },
-    // 1 to 4 pick a drawing tool while the tools are on screen, else every digit picks an alternative
     ...Array.from(
       { length: 10 },
       (_, i) =>
@@ -419,7 +397,6 @@ export function useStudioHotkeys() {
             i >= 1 && i <= 4 && toolsOpen(get()) ? setInk(INK_KEYS[i - 1]) : chooseInGroup(i),
         }) as UseHotkeyDefinition,
     ),
-    // W A S D, Space, and Shift fly the free camera while held: app/picture/flight.ts, listened to in picture/pointer.ts
   ];
   const reviewOnlyKeys: UseHotkeyDefinition[] = [
     ...escPopups,
@@ -432,9 +409,7 @@ export function useStudioHotkeys() {
     { hotkey: "ArrowDown", callback: () => void stepReview(1) },
     { hotkey: "A", callback: () => void approveReviewCurrent() },
   ];
-  // Any modal dialog open over the page takes the keys: Delete or Space must not reach the timeline under it
   const modal = useStudio((s) => s.modal !== null);
-  // In the Review room the timeline is out of sight: only keys that watch, move the playhead, walk notes, approve, or write
   const review = useStudio((s) => s.review);
   useHotkeys(
     modal

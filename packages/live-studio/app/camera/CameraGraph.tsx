@@ -135,8 +135,6 @@ export function CameraGraph({ index }: { index: number }) {
   const shown = focused ? fitIndices : indices;
   const start = keys[shown[0]]?.t ?? 0;
   const stop = keys[shown.at(-1) ?? -1]?.t ?? start;
-  // the graph re-renders every frame while the film plays (the playhead's key changes), and a plot samples the camera
-  // thousands of times: plot again only when the keys, shots or clocks it reads change
   const data = useMemo(() => {
     void revision;
     void shotsRev;

@@ -1,7 +1,3 @@
-// The creator's favorites, CapCut's star: sounds by file name and effects by id ("transition:dissolve", "in:pop"; kinds no
-// panel stars, like mocap, as "<kind>:<id>" from bun run find --star). They belong to the person, not to a film, so they
-// live in the repo's favorites/ folder, one list per file: default.json is what the studio stars and find --fav reads,
-// any other <name>.json is a list the creator keeps for one kind of film (find --fav <name>, find --star <id> --fav <name>)
 import {
   existsSync,
   mkdirSync,
@@ -18,7 +14,6 @@ import * as z from "zod";
 
 export const FAVORITES_DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../../../favorites");
 export const FAVORITES = join(FAVORITES_DIR, "default.json");
-// where stars were kept before they moved into the repo: read until the first new star writes default.json
 const LEGACY = join(
   process.env.APPDATA ?? process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"),
   "live-studio",
@@ -37,14 +32,12 @@ export const FavoriteChange = z.object({
 
 export const openFavorites = (file = FAVORITES) => {
   const legacy = resolve(file) === FAVORITES ? LEGACY : undefined;
-  // A file that doesn't parse throws instead of reading as empty: the next star would otherwise write over every other one
   const read = () => {
     const from = [file, legacy].find((f) => f && existsSync(f));
     return from
       ? Favorites.parse(JSON.parse(readFileSync(from, "utf8")))
       : { sounds: [], effects: [] };
   };
-  // Read again on every change, since the studio of another film may have starred something meanwhile. Newest last
   const set = ({ kind, id, on }) => {
     const all = read(),
       rest = all[kind].filter((x) => x !== id);
@@ -55,7 +48,6 @@ export const openFavorites = (file = FAVORITES) => {
     renameSync(fresh, file);
     return all;
   };
-  // What the page shows: a file that doesn't parse shows no stars and says so here, instead of failing the page's load
   const shown = () => {
     try {
       return read();
@@ -69,7 +61,6 @@ export const openFavorites = (file = FAVORITES) => {
   return { file, read, shown, set };
 };
 
-// Every list in the folder, default first, each with how many stars it holds
 export const favoriteLists = (dir = FAVORITES_DIR) => {
   const open = (name = "default") => openFavorites(join(dir, `${name}.json`));
   const lists = () => {

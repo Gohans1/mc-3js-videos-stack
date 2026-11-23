@@ -1,5 +1,3 @@
-// The title fonts as a film loads them (titles.ts imports their CSS); test/fonts.test.ts calls window.missingFonts() for the
-// FONTS whose family has no face the browser can load at a weight titles draw in.
 import { FONTS, preloadTitleFonts } from "../../src/titles";
 
 Object.assign(window, {

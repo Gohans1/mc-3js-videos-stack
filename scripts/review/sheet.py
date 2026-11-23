@@ -61,7 +61,7 @@ from studio_tell import tell  # noqa: E402
 sys.stdout.reconfigure(encoding="utf8")
 sys.stderr.reconfigure(encoding="utf8")
 
-R = Path.cwd() / "renders"  # run from the film folder
+R = Path.cwd() / "renders"
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
 args = sys.argv[1:]
 if args[:1] == ["help"] or "-h" in args or "--help" in args:
@@ -382,11 +382,9 @@ if args:
     if mode == "shots":
         ends = cuts_of(context)
         edges = [picture_from, *[c for c in ends if picture_from < c < picture_to], picture_to]
-        # a shot under 0.05 s has no frame of its own to show; a video that short shows its one frame
         shots = [(a, b) for a, b in zip(edges, edges[1:]) if b - a > 0.05] or [(edges[0], edges[-1])]
         secs = [min((a + b) / 2, end) for a, b in shots]
         short = len(edges) - 1 - len(shots)
-        # the render's cuts count camera keys with cut: true too: these shots are no shots.json rows to number
         header = (f"{len(shots)} shots between the render's cuts: a frame from the middle of each, in order"
                   f"{f' ({short} under 0.05 s left out)' if short > 0 else ''}")
     elif mode == "cut":
@@ -400,7 +398,6 @@ if args:
         if not picture_from <= c < picture_to:
             usage(f"cut {n} is at {c:.2f} s, outside {video} (film seconds {start:g}-{seconds(picture_to)})")
         secs = [min(max(c + d, picture_from), end) for d in (-0.25, -0.15, -0.05, 0.05, 0.15, 0.35)]
-        # cut n opens shots-timeline row n+1 when the rows are the video's shots (one more row than cuts)
         try:
             conf = json.loads(Path("package.json").read_text(encoding="utf8")).get("live-studio", {}) if Path("package.json").exists() else {}
             rows_file = conf.get("shotsTimeline") if isinstance(conf, dict) else None
@@ -438,10 +435,8 @@ if args:
     elif "error" in context:
         print(context["error"], file=sys.stderr)
     what = "every shot" if mode == "shots" else f"cut {args[2]}" if mode else ", ".join(f"{s:g}" for s in secs[:8]) + " s"
-    # a cut's frames are one stretch, lit on the studio's ruler; seconds far apart are named in the line only
     lit = {"at": secs[0], "to": secs[-1]} if mode == "cut" else {"at": secs[0]} if len(secs) == 1 else {}
     tell(Path.cwd(), f"Looking at frames of {Path(video).as_posix()}: {what}", **(lit if linked else {}))
-    # the video's frames go to a folder of their own, never over the film's rendered stills
     tmp = Path(tempfile.mkdtemp(prefix="sheet-"))
     try:
         timestamps = presentation_times(video, origin)
@@ -459,7 +454,6 @@ else:
     src, name = R, "sheet_"
     tell(Path.cwd(), "Looking at the rendered stills")
 try:
-    # a still a render names by its second (still_12.5s.jpg); any other still_*.jpg is no frame of the film
     at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
     files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))
     if not files:
@@ -468,7 +462,6 @@ try:
     for old in R.glob(f"{name}*.jpg"):
         if re.fullmatch(re.escape(name) + r"\d+\.jpg", old.name):
             old.unlink()
-    # tiles 640 wide at the stills' own shape (a draft still is the picture with its time strip under it)
     w, h = image_dimensions(files[0])
     TH = max(2, round(640 * h / w / 2) * 2)
     fit = compact_filter(640, TH, pad=True)
@@ -477,7 +470,7 @@ try:
         inp, filt = [], ""
         for k, f in enumerate(grp):
             inp += ["-i", str(f)]
-            filt += f"[{k}:v]{fit}[v{k}];"  # the draft's own time strip names each picture
+            filt += f"[{k}:v]{fit}[v{k}];"
         n = len(grp)
         while n % 3:
             inp += ["-f", "lavfi", "-i", f"color=black:s=640x{TH}"]

@@ -3,8 +3,6 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const both = (pkg) => ({ win32: pkg, darwin: pkg, linux: pkg });
-// The programs the repo runs from PATH, what each is for and its package per OS (none: INSTALL.md says how).
-// needed: setup:vault cannot finish without it; the rest are named so a human installs them before they are needed
 const TOOLS = [
   { name: "curl", why: "downloads", needed: true, pkg: both("curl") },
   { name: "ffmpeg", why: "sound conversion and takes", needed: true, pkg: both("ffmpeg") },
@@ -23,7 +21,6 @@ const TOOLS = [
     pkg: { ...both("rubberband"), linux: "rubberband-cli" },
   },
 ];
-// scripts/sound/process.py finds Rubber Band by RUBBERBAND, PATH, then this folder
 const RUBBERBAND_HOME = join(
   homedir(),
   ".local/share/live-studio/tools/rubberband-4.0.0/rubberband.exe",
@@ -42,7 +39,6 @@ export const toolCheck = (which = Bun.which, platform = process.platform) => {
     const how = pkg[platform] ? `${MANAGER[platform]} ${pkg[platform]}` : "see INSTALL.md";
     (needed ? stop : later).push(`${name} (${why}): ${how}`);
   }
-  // a new Windows has no scoop, and every hint above uses it
   if (platform === "win32" && (stop.length || later.length) && !which("scoop"))
     (stop.length ? stop : later).unshift("scoop (installs the rest): see https://scoop.sh");
   return { stop, later };

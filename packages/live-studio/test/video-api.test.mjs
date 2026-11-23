@@ -79,7 +79,6 @@ describe("/api/video.mp4 & smallVideo 540p transcoding", { timeout: 60000 }, () 
       assert.equal((await app.request("/api/video.mp4")).status, 404);
       assert.ok(events.includes("video-failed"));
 
-      // 1. Unmixed 720p landscape fallback
       const draftVideo = join(dir, "renders/draft_video.mp4");
       makeVideoFile(draftVideo, { size: "1280x720", withAudio: false });
       const t0 = new Date(Date.now() - 20_000);
@@ -109,7 +108,6 @@ describe("/api/video.mp4 & smallVideo 540p transcoding", { timeout: 60000 }, () 
       assert.equal(v1Video.height, 540);
       assert.equal(v1Video.pix_fmt, "yuv420p");
 
-      // 2. Second request serves cached copy with byte ranges without re-encoding or emitting duplicate video-ready
       const eventsBeforeRange = events.length;
       const ranged = await app.request("/api/video.mp4", { headers: { range: "bytes=0-99" } });
       assert.equal(ranged.status, 206);
@@ -118,12 +116,10 @@ describe("/api/video.mp4 & smallVideo 540p transcoding", { timeout: 60000 }, () 
       assert.equal(statSync(cachedPath).mtimeMs, cachedMtime);
       assert.equal(events.slice(eventsBeforeRange).includes("video-ready"), false);
 
-      // 3. Mixed 9:16 portrait draft.mp4 overrides draft_video.mp4 and re-transcodes cleanly
       const draftMixed = join(dir, "renders/draft.mp4");
       makeVideoFile(draftMixed, { size: "1080x1920", withAudio: true });
       const t1 = new Date(Date.now() - 10_000);
       utimesSync(draftMixed, t1, t1);
-      // Force source newer than cached copy (simulating a fresh render after prior download)
       const tCachedPast = new Date(Date.now() - 15_000);
       utimesSync(cachedPath, tCachedPast, tCachedPast);
       assert.equal(film.videoSource(), draftMixed);
@@ -138,7 +134,6 @@ describe("/api/video.mp4 & smallVideo 540p transcoding", { timeout: 60000 }, () 
       assert.equal(v2Video.height, 960);
       assert.equal(v2Audio?.codec_name, "aac");
 
-      // 4. Newest mixed render wins between draft.mp4 and final.mp4
       const finalMixed = join(dir, "renders/final.mp4");
       makeVideoFile(finalMixed, { size: "1280x720", withAudio: true });
       const t2 = new Date(Date.now() - 5_000);

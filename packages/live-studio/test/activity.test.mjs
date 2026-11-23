@@ -1,5 +1,3 @@
-// What the AI is doing, shown live in the creator's studio: the film's commands tell the running studio (src/tell.mjs), the
-// studio passes each line to its open pages (src/activity.mjs), and a command never waits on a studio that isn't there
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
@@ -51,7 +49,6 @@ test("no studio running, or one gone since, and the command goes on at once", as
 });
 
 test("a studio busy rebuilding the code still takes the line; one that never answers holds a command up two seconds at most", async () => {
-  // as long as a rebuild was measured to hold the studio
   const server = createServer((_, res) => setTimeout(() => res.end("ok"), 1400));
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   try {
@@ -122,7 +119,6 @@ test("a line says something, in a few words, about notes, lessons and seconds of
   assert.equal(Activity.safeParse({ say: "x", at: -1 }).success, false);
 });
 
-// a studio that takes a line as api.mjs does (Activity) or refuses it: got holds what it took, false for a refused one
 const studio = async () => {
   const got = [];
   const server = createServer((req, res) => {
@@ -163,7 +159,6 @@ test("what a check found is lit at its seconds: too many findings, or too wordy,
     );
     assert.equal(s.got[0].marks.length, 20);
     assert.ok(s.got[0].marks.every((m) => m.say.length <= 80));
-    // a read over many notes, a pick of many lessons, a second a hair before 0 from arithmetic
     const notes = Array.from({ length: 60 }, (_, i) => `n${i}`),
       lessons = Array.from({ length: 25 }, (_, i) => `l${i}.md`);
     assert.equal(

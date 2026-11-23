@@ -82,7 +82,6 @@ def rubberband():
 
 
 def stretch_with(executable, *args):
-    # rubberband prints its ratios even with -q, one line per clip into bun run mix; only a failure's words matter
     done = subprocess.run([executable, *args], capture_output=True, text=True, timeout=120)
     if done.returncode:
         raise RuntimeError(f"rubberband failed: {(done.stderr or done.stdout).strip()}")
@@ -189,7 +188,6 @@ def retime_timeline(source, output, timeline, folder):
 
 
 def render(source, output, settings):
-    # FFmpeg's rubberband filter uses realtime R2 without offline alignment; use the upstream R3 CLI for exact clip duration.
     raw_rate, raw_pitch = settings.get("rate"), settings.get("pitch")
     rate = 1 if raw_rate is None else float(raw_rate)
     pitch = 0 if raw_pitch is None else float(raw_pitch)

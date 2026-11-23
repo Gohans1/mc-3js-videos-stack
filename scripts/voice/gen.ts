@@ -1,6 +1,4 @@
 import { spawnSync } from "node:child_process";
-// Generates narration takes in src/edit.json sequentially per voice so adjacent lines share prosody context
-// (previous_text / next_text + request-id stitching), with --try [--takes N] casting and Voice Changer (--guide / take.guide).
 import {
   existsSync,
   lstatSync,
@@ -48,7 +46,7 @@ is set). Run inside the film. Credits are spent only with --yes; without it ever
 Takes of one voice go in story order so neighbours share prosody (previous/next text, request ids).
 Next: bun run voice:assemble lays the takes onto the film, then bun run voice:cues gives their heard seconds.`;
 
-export const DEFAULT_NARRATOR = "ZaZosYpkIGmSqOwAlfnk"; // Seff Echo - Cinematic Storyteller
+export const DEFAULT_NARRATOR = "ZaZosYpkIGmSqOwAlfnk";
 const TAKE_ID = /^[A-Za-z0-9_-]{1,80}$/;
 const STITCH_TTL_MS = 110 * 60_000; // < 2h ElevenLabs request_id expiry so expired IDs never suppress previous_text/next_text
 
@@ -113,7 +111,7 @@ export interface GenRunOptions {
   cwd?: string;
   args?: string[];
   env?: Record<string, string | undefined>;
-  onTake?: (take: TakeSpec) => unknown; // as each take starts, in the order they are made
+  onTake?: (take: TakeSpec) => unknown;
 }
 
 const ensureRegularOrAbsent = (file: string, label: string) => {
@@ -159,8 +157,6 @@ const staleTakeArtifacts = (filmDir: string, takesDir: string, id: string) =>
     (name) => assertInsideDir(filmDir, join(takesDir, name), "Voice take artifact"),
   );
 
-// Takes whose kept words (whisperX's, in <take>.words.json) read otherwise than src/edit.json, for the takes voice:gen made
-// before it kept what it sent (voice/takes/.texts.json). Named only: a misheard word reads otherwise too, so nothing is spent
 export const unheardWords = (filmDir: string) => {
   const takesDir = assertInsideDir(filmDir, "voice/takes", "Voice takes directory");
   const plain = (text: string) =>
@@ -206,7 +202,6 @@ const previewTryOuts = (tryDir: string, id: string, count: number) => {
   return outs;
 };
 
-// asked wrong (exit 2), as against a take or a request that failed (exit 1)
 const usage = (message: string) => Object.assign(new Error(message), { usage: true });
 
 export const runGen = async (opts: GenRunOptions = {}) => {
@@ -250,7 +245,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       "--takes N makes N new tries of a take: add --try (bun run voice:gen --try ID --takes 3)",
     );
   }
-  // tries spend credits on takes that already have audio: only ever for takes named (a bare --try once tried them all)
   if (trying && !names.length) {
     throw usage(
       "--try needs the takes to try, by id: bun run voice:gen --try 01 03 (previews; --yes sends)",
@@ -334,8 +328,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   ensureDirOrAbsent(takesDir, "Voice takes directory");
   if (trying) ensureDirOrAbsent(tryDir, "Voice try directory");
 
-  // the words each take's audio was made from: a take whose words changed since is due again (a take made before this
-  // file existed is not known, so not offered)
   const textsFile = assertInsideDir(filmDir, join(takesDir, ".texts.json"), "Take texts file");
   ensureRegularOrAbsent(textsFile, "Take texts file");
   const spoken = readTextMap(textsFile, filmDir, "voice/takes/.texts.json");
@@ -349,7 +341,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
   const wantSet = new Set(want);
   const guideFor = (t: TakeSpec) => (names.length === 1 && cliGuide ? cliGuide : t.guide);
 
-  // checked before a dry run returns, so the dry run says what the real one would fail on
   for (const t of ordered) {
     if (!wantSet.has(t.id)) continue;
     const guideRel = guideFor(t);
@@ -395,7 +386,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
       }
     }
   }
-  // spending needs --yes (no one is at a prompt to ask); without it, or with --dry-run, the run only says what it would do
   if (dryRun || !confirmed) {
     const rel = (p: string) => relative(filmDir, p).replaceAll("\\", "/");
     return ordered
@@ -460,7 +450,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
     if (trying) mkdirSync(tryDir, { recursive: true });
   }
 
-  // Walk in narrative order so sequential takes feed request IDs and prosody into neighbors of the same voice
   const results: { id: string; out: string; info: unknown }[] = [];
   for (let idx = 0; idx < ordered.length; idx++) {
     const t = ordered[idx];
@@ -470,7 +459,6 @@ export const runGen = async (opts: GenRunOptions = {}) => {
     const model = t.model ?? "eleven_v4";
     const now = Date.now();
 
-    // Neighbor takes spoken by the same voice
     const sameVoiceBefore = ordered
       .slice(0, idx)
       .filter((x) => (x.voice ?? DEFAULT_NARRATOR) === voiceId);
@@ -591,7 +579,6 @@ if (isMain) {
   const hasExplicitIds = cliRest.some((a) => !a.startsWith("-"));
   const redact = (msg: string) =>
     sanitizeErrorText(msg, process.env.ELEVENLABS_API_KEY, process.env.GENVOICE_API_KEY);
-  // the creator's studio shows each take as it is voiced (src/tell.mjs); a preview spends nothing and says nothing
   let ended: Awaited<ReturnType<typeof startJob>> | undefined;
   const finishJob = async (payload: { say: string; level: "ok" | "warn" | "fail" }) => {
     const end = ended;
@@ -642,7 +629,6 @@ if (isMain) {
         `nothing sent.\nnext: bun run voice:gen ${real.join(" ")} sends ${what} (${billing})`,
       );
     }
-    // a take said on screen gets its mouth shapes now (Rhubarb, local): a failure here leaves the audio and names voice:lips
     let lipsFailed = false;
     if (sent && !trying) {
       const madeIds = new Set(results.map((r) => r.id));
@@ -670,7 +656,6 @@ if (isMain) {
         writeMouthMap(film);
       }
     }
-    // voice:assemble needs every take's word timings and a genvoice.pro take comes without them: whisperX writes them now
     const unaligned =
       sent && !trying
         ? results.map((r) => r.out).filter((out) => !existsSync(`${out}.words.json`))
@@ -680,7 +665,6 @@ if (isMain) {
       console.log(
         `aligning the words of ${unaligned.length === 1 ? "this take" : `these ${unaligned.length} takes`} with whisperX (a few minutes on a CPU)...`,
       );
-      // its stderr is library warnings on every run: shown only when it fails
       const resolvedPy = resolveExecutable(py);
       const run = resolvedPy
         ? spawnSync(resolvedPy, args, { encoding: "utf8", timeout: 20 * 60_000 })

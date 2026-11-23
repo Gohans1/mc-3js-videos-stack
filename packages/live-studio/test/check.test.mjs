@@ -73,7 +73,6 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   const good = check();
   assert.equal(good.status, 0, good.stdout + good.stderr);
   assert.match(good.stdout, /^ok/);
-  // the last line is next:, as every film command's (skill-data/core/references/cli.md)
   assert.match(
     good.stdout.trim().split("\n").at(-1),
     /^next: look at it: bun run render stills --at <seconds>/,
@@ -83,7 +82,6 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
     /^next: fix each ✖ as it says, then bun run check/,
   );
 
-  // the keys every film's camera reads, typed and spelt (a probe's fov "wide" and "fvo" passed, a 2-number p said only "Invalid input")
   writeFileSync(
     join(dir, "src/timeline/cam.json"),
     JSON.stringify([
@@ -97,7 +95,6 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.match(cam.stderr, /\[x, y, z\][^\n]*\n\s*→ at \[1\]\.p/);
   assert.match(cam.stderr, /\[1\] "fvo": no key the camera reads; did you mean "fov"\?/);
 
-  // a misspelt key named even while the row it belongs to is missing the right one
   writeFileSync(
     join(dir, "src/timeline/cam.json"),
     JSON.stringify([{ t: 0, p: [0, 1, 5], l: [0, 1, 0] }]),
@@ -111,7 +108,6 @@ test("check finds what the studio would refuse, offline: a broken timeline file 
   assert.match(gian.stderr, /sfx\.0\.gain|sfx\[0\]\.gain/);
   assert.match(gian.stderr, /sfx\[0\] "gian": no key the mix reads; did you mean "gain"\?/);
 
-  // a field of the film's own two letters off a mix key ("room", "from") is the film's, as on a camera key
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -142,7 +138,6 @@ test("a key one letter or a case off a camera key is a warning that names it; fo
   const own = cam({ fog: 0.4, cute: 1 });
   assert.equal(own.status, 0, own.stdout + own.stderr);
   assert.doesNotMatch(own.stdout, /"fog"|"cute"/);
-  // a guess, never a fault: a key of the film's own that looks like a typo (waves) must not fail the film
   const typo = cam({ rlol: 5, Fov: 40, waves: 2 });
   assert.equal(typo.status, 0, typo.stdout + typo.stderr);
   assert.match(
@@ -170,7 +165,6 @@ test("a timing file of the wrong shape is named as a fault, not a crash", (t) =>
   );
   writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({ speeds: "bad" }));
   writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: [] }));
-  // a film whose length is in its data: check then reads timing.json for the heard seconds
   const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 10 }));
   const r = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
@@ -215,9 +209,6 @@ test("a misspelt package.json live-studio key is named as a warning: its file wo
   assert.doesNotMatch(r.stdout, /"myOwn"/);
 });
 
-// a film made before a command joined the template has no script for it: bun run says only "Script not found"
-// a script runs a file next to the film (node_modules/live-studio, ../../scripts in films/<name>): one whose file a
-// project outside the repo lacks is not offered
 test("commands the template film has and this film's scripts lack are named on one line with what to add", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -390,8 +381,6 @@ test("a misspelt key at the top of edit.json or timing.json (taeks, speed) is na
   assert.doesNotMatch(r.stdout, /"zoomRate"/);
 });
 
-// a film with the demo's scene, a 10 s reference study of these hits (none when hits is null) and these sound effects
-// ("line" is its narration); refs(dir) adds files under references/
 const coverageFilm = (t, hits, sfx, refs) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -448,7 +437,6 @@ const coverageFilm = (t, hits, sfx, refs) => {
   return JSON.parse(r.stdout);
 };
 
-// coverage counts a reference's sound hits that have a sound effect: the narration starting at 0 is no effect
 test("check --json gives the reference coverage, matching sound hits with effects only, and warns of a guide sound", (t) => {
   const { coverage, warnings } = coverageFilm(
     t,
@@ -466,7 +454,6 @@ test("check --json gives the reference coverage, matching sound hits with effect
   assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
 });
 
-// a remake scratches with the reference's own narration: check names it until its rows are guides
 test("check warns of an unstudied reference and of a sound that is a reference's file, until its rows are guides", (t) => {
   const film = (guide) =>
     coverageFilm(
@@ -497,7 +484,6 @@ test("check warns of an unstudied reference and of a sound that is a reference's
   assert.ok(!film(true).some((w) => /byte for byte/.test(w)));
 });
 
-// a study hears every onset, the voice's syllables too: only its strong accents are the cues a remake must hit
 test("coverage asks for the reference's strong hits only, met by an effect starting up to half a second early", (t) => {
   const { coverage } = coverageFilm(
     t,
@@ -513,11 +499,9 @@ test("coverage asks for the reference's strong hits only, met by an effect start
       { name: "door_slam", at: 7.2, gain: 0 },
     ],
   );
-  // a whoosh starts before the beat its peak lands on (1.6 for 2); 7.2 is too early for 8
   assert.deepEqual(coverage.sounds, { matched: 1, of: 3 });
 });
 
-// the build throws on an unknown tone map; check is where an AI looks after editing edit.json
 test("a tone map name the film-stage does not have is a fault in edit.json, with the near name", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -551,7 +535,6 @@ test("check names a transition or anim one letter off a built-in, and leaves a f
     ]),
   );
   const r = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
-  // a typo plays a hard cut and no anim, silently: only a warning, since a film may name its own
   assert.equal(r.status, 0, r.stdout + r.stderr);
   assert.match(
     r.stdout,
@@ -611,7 +594,6 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.equal(loud.status, 0, loud.stdout + loud.stderr);
   assert.match(loud.stdout, /⚠ beds\[0\] "door_slam" gain \+20 dB/);
 
-  // a muted track is left out of every mix (mix.py MUTED), as a hidden track's text is never drawn: neither is judged
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -624,7 +606,6 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.equal(muted.status, 0, muted.stdout + muted.stderr);
   assert.doesNotMatch(muted.stdout, /gain \+20/);
 
-  // a misspelt key is read by nothing: the AI believes it changed the sound and nothing did; a warning, as a key of the film's own looks the same
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -640,7 +621,6 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.match(typo.stdout, /⚠ lufs -3/);
   assert.match(typo.stdout, /⚠ drive \+99 dB/);
 
-  // one fault must not hide the others: an AI fixes what it is shown, runs check again and meets the next only then
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -670,9 +650,6 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   assert.match(named.stdout + named.stderr, /⚠ sfx\[0\] "door_slamm" gain \+99 dB/);
 });
 
-// on-screen words have to be read before they go, and a line too small is mush on a phone: both warnings, never refusals
-// captions cut per spoken phrase, as a Short's are, run faster than a subtitle: one line for them all, not one each,
-// so the warnings under them still get read
 test("check says many captions too brief to read in one line, naming the first three; --json lists each", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "studio-check-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -712,9 +689,7 @@ test("check says many captions too brief to read in one line, naming the first t
     /^⚠ src\/timeline\/text\.json 5 items show for less than a reader needs .*: items\[0\] "word 1" at 1\.00 heard, 0\.40 s of 0\.83; items\[1\] "word 2" at 2\.00 heard, 0\.40 s of 0\.83; items\[2\] "word 3" at 3\.00 heard, 0\.40 s of 0\.83; and 2 more/,
   );
   assert.match(many.text.stdout, /items\[5\] "tiny" .*size 24/);
-  // a reader of --json fixes each one: every item keeps its own line there
   assert.equal(many.listed.length, 5);
-  // three are said one by one
   assert.equal(brief(3).said.length, 3);
 });
 
@@ -754,7 +729,6 @@ test("check warns of text shown too briefly to read and text too small for a pho
     r.stdout,
     /⚠ src\/timeline\/text\.json items\[0\] "THE VAULT WAS NEVER[^"]*" at 2\.00-3\.50 heard \("from": 2\): readable about 1\.00 s for 39 characters; a reader needs 1\.95 s/,
   );
-  // --json warnings are the warnings, without the advice printed under them
   const asJson = JSON.parse(
     spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 }).stdout,
   );
@@ -1094,7 +1068,6 @@ test("text placed after the film ends is named, as a sound there is: never on sc
     /✖ items\[1\] "THE END" at 20: after the film ends \(10\.00 s heard\), so never on screen/,
   );
   assert.doesNotMatch(r.stderr, /items\[0\]/);
-  // a hidden track's item is off screen anyway: no fault, as a hidden item
   writeFileSync(
     join(dir, "src/timeline/text.json"),
     JSON.stringify({
@@ -1110,10 +1083,8 @@ test("text the film's end cuts off is read only until the end, its Out as far as
   const it = { kind: "text", text: "HELLO THERE", size: 56, from: 9.6, to: 13 };
   assert.deepEqual(readFaults(it, { from: 9.6, to: 13 }), []);
   assert.match(readFaults(it, { from: 9.6, to: 13 }, "16:9", 10)[0], /readable about 0\.40 s/);
-  // an Out takes half of what of it plays: 0.1 s of it before an end at 10.5 leaves 0.85 s read, enough for 11 letters
   const fading = { ...it, to: 11.4, out: { fx: "fade", len: 1 } };
   assert.deepEqual(readFaults(fading, { from: 9.6, to: 11.4 }, "16:9", 10.5), []);
-  // an In cut short by the film's end counts only the portion before the end, never negative readable time
   const cutIn = {
     kind: "text",
     text: "HELLO THERE",
@@ -1168,7 +1139,6 @@ test('a film that shuts the vault out ("soundVault": false) is told so, not to m
   assert.equal(r.status, 1, r.stdout + r.stderr);
   assert.match(r.stderr, /"soundVault": false in package\.json shuts the vault out/);
   assert.doesNotMatch(r.stderr, /Keep films in the repo's films/);
-  // five names, all missing: one block that names all five, and says so once
   const five = ["a1", "b2", "c3", "d4", "e5"].map((name, i) => ({ name, at: i, gain: 0 }));
   writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ beds: [], sfx: five }));
   const all = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
@@ -1365,11 +1335,9 @@ test("Round 15: handheld matches normHandheld trim/precedence; mix.py defaults m
   const chk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(chk.status, 0, chk.stdout + chk.stderr);
 
-  // mix.py with lufs omitted should default to -14 LUFS and succeed (no KeyError: 'lufs')
   const mixOk = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(mixOk.status, 0, mixOk.stdout + mixOk.stderr);
 
-  // mix.py without edit.end should exit cleanly with an actionable message, never KeyError traceback
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify(baseEdit));
   const mixNoEnd = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(mixNoEnd.status, 1, mixNoEnd.stdout + mixNoEnd.stderr);
@@ -1410,7 +1378,6 @@ test("Round 16: choices.json precedence & validation, mix.py sound_choices fallb
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ freezes: [{ at: 0.5, duration: 5.0 }] }),
   );
-  // Freeze holding the middle of a 1.0s clip for 5.0s: true In/Out are 0.4s each (5.60s readable >= 4.00s for 80 chars); uniform k=6 falsely stretched In/Out to 2.4s (3.60s -> warning!)
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...editBase, end: 1.0 }));
   writeFileSync(
     join(dir, "src/timeline/text.json"),
@@ -1431,7 +1398,6 @@ test("Round 16: choices.json precedence & validation, mix.py sound_choices fallb
   assert.equal(freezeChk.status, 0, freezeChk.stdout + freezeChk.stderr);
   assert.doesNotMatch(freezeChk.stdout + freezeChk.stderr, /readable about/);
 
-  // Slow edges (0.25x for In/Out -> 1.0s each) + fast middle (5x -> 0.25s) on 30 chars (needs 1.50s, true readable 1.25s): must warn!
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...editBase, end: 4 }));
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
@@ -1462,7 +1428,6 @@ test("Round 16: choices.json precedence & validation, mix.py sound_choices fallb
   assert.equal(rampChk.status, 0, rampChk.stdout + rampChk.stderr);
   assert.match(rampChk.stdout, /readable about 1\.25 s for 30 characters/);
 
-  // Valid sound_choices.json must NOT hide a corrupt choices.json from check, and mix.py falls back to sound_choices.json
   writeFileSync(join(dir, "sound_choices.json"), JSON.stringify({ beep: { set: "off" } }));
   writeFileSync(join(dir, "choices.json"), "{ broken");
   const badChoices = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
@@ -1506,7 +1471,6 @@ test("Round 17: textCheckSample skips zero-span cuts and clamps inside [from, to
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ speeds: [{ from: 0, to: 5, rate: 1 }] }),
   );
-  // Missing sfx[0].name must fail via unfit(), not KeyError traceback inside prepare_timing()
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({ beds: [], sfx: [{ at: 1, gain: 0 }] }),
@@ -1516,7 +1480,6 @@ test("Round 17: textCheckSample skips zero-span cuts and clamps inside [from, to
   assert.match(badSfx.stderr, /sfx\[0\] has no name/);
   assert.doesNotMatch(badSfx.stderr, /Traceback|KeyError|TypeError|AttributeError/);
 
-  // Missing beds list must also fail via unfit(), not KeyError on module import
   writeFileSync(join(dir, "src/timeline/audio.json"), JSON.stringify({ sfx: [] }));
   const noBeds = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(noBeds.status, 1, noBeds.stdout + noBeds.stderr);
@@ -1525,7 +1488,6 @@ test("Round 17: textCheckSample skips zero-span cuts and clamps inside [from, to
 });
 
 test("Round 18: text checks respect unlinked textClock.duration, blank freeze gaps, fallbackTimingDuration, and non-finite sourceAt", (t) => {
-  // 1) Unlinked textClock shorter than ends.layers rejects text after textClock.duration
   const root = mkdtempSync(join(tmpdir(), "studio-text-clock-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const dir = join(root, "film");
@@ -1559,7 +1521,6 @@ test("Round 18: text checks respect unlinked textClock.duration, blank freeze ga
   assert.equal(shortTextCheck.status, 1, shortTextCheck.stdout + shortTextCheck.stderr);
   assert.match(shortTextCheck.stderr, /after the film ends \(6\.00 s heard\)/);
 
-  // 2) blank:true freeze does not count toward readable duration and textCheckSample avoids blank intervals
   const timingBlank = { freezes: [{ at: 2, duration: 2, blank: true }] };
   const blankClock = compileLayerTiming(timingBlank, 6, "text");
   const blankAt25 = textCheckSample(
@@ -1598,7 +1559,6 @@ test("Round 18: text checks respect unlinked textClock.duration, blank freeze ga
   assert.equal(blankCheck.status, 0, blankCheck.stdout + blankCheck.stderr);
   assert.match(blankCheck.stdout, /readable about 1\.00 s/);
 
-  // 3) fallbackTimingDuration covers timing.gaps/layers/layerKinds/items when edit.end is omitted, and sourceAt guards non-finite t
   const fbDur = fallbackTimingDuration([{ from: 0, to: 4 }], {
     gaps: [{ from: 1, to: 3 }],
     freezes: [],
@@ -1641,7 +1601,6 @@ test("Round 19: check handles tail cuts without false fails, catches post-cut so
       },
     }),
   );
-  // 1) Tail cut removing text & sound whole must pass check (matches mix.py & render.mjs)
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ freezes: [{ at: 2, duration: 2 }], cuts: [{ from: 8, to: 10 }] }),
@@ -1668,11 +1627,9 @@ test("Round 19: check handles tail cuts without false fails, catches post-cut so
   const tailOk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(tailOk.status, 0, tailOk.stdout + tailOk.stderr);
 
-  // mix.py also honors custom soundTimeline and renders sound/mix.wav
   const mixCustom = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(mixCustom.status, 0, mixCustom.stdout + mixCustom.stderr);
 
-  // 2) Tail cut on sound + unlinked long textClock catches sound placed at 11..13 (after soundEnd=6, below ends.layers=14)
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({
@@ -1690,7 +1647,6 @@ test("Round 19: check handles tail cuts without false fails, catches post-cut so
   const soundLate = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(soundLate.status, 1, soundLate.stdout + soundLate.stderr);
 
-  // 3) Corrupt .wav referenced in soundTimeline fails check
   writeFileSync(join(dir, "sound/sfx/badwav.wav"), "not a wav");
   writeFileSync(
     join(dir, "src/timeline/custom_audio.json"),
@@ -1702,7 +1658,6 @@ test("Round 19: check handles tail cuts without false fails, catches post-cut so
   const badWavCheck = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(badWavCheck.status, 1, badWavCheck.stdout + badWavCheck.stderr);
 
-  // 4) Negative shot.t rejected, shot past edit.end warned without inverted bounds, late adjustment rejected
   writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
   writeFileSync(join(dir, "src/timeline/custom_audio.json"), JSON.stringify({ beds: [], sfx: [] }));
   writeFileSync(
@@ -1723,7 +1678,6 @@ test("Round 19: check handles tail cuts without false fails, catches post-cut so
   assert.equal(boundsCheck.status, 1, boundsCheck.stdout + boundsCheck.stderr);
   assert.doesNotMatch(boundsCheck.stdout, /15s\.\.10s/);
 
-  // 5) Escaping sfx path caught even without soundTimeline
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({
@@ -1771,7 +1725,6 @@ test("Round 20: check uses per-clip clocks for beds vs sfx, rejects escaping sou
     }),
   );
 
-  // 1a) sfx cut at 6..10 while audio bed track stays 10s: valid bed 7..9 must pass
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ layerKinds: { sfx: { base: { cuts: [{ from: 6, to: 10 }] }, changes: [] } } }),
@@ -1787,7 +1740,6 @@ test("Round 20: check uses per-clip clocks for beds vs sfx, rejects escaping sou
   const bedPass = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(bedPass.status, 0, bedPass.stdout + bedPass.stderr);
 
-  // 1b) sfx freeze extends layerDuration to 14s while audio bed track stays 10s: bed 11..13 is past audio end (10s) and must fail
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({
@@ -1805,13 +1757,11 @@ test("Round 20: check uses per-clip clocks for beds vs sfx, rejects escaping sou
   const bedLate = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(bedLate.status, 1, bedLate.stdout + bedLate.stderr);
 
-  // 2) Configured timingTimeline missing on disk must fail
   rmSync(join(dir, "src/timeline/timing.json"));
   const missingTiming = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(missingTiming.status, 1, missingTiming.stdout + missingTiming.stderr);
   assert.match(missingTiming.stderr, /timing\.json/);
 
-  // 3) Escaping soundVault caught even without soundTimeline or sfx
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({
@@ -1823,7 +1773,6 @@ test("Round 20: check uses per-clip clocks for beds vs sfx, rejects escaping sou
   assert.equal(escVault.status, 1, escVault.stdout + escVault.stderr);
   assert.match(escVault.stderr, /soundVault/);
 
-  // 4) Regular file for sfx rejected in pathFaults
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ name: "r20-file-sfx", "live-studio": { sfx: "package.json" } }),
@@ -1862,7 +1811,6 @@ test("Round 21: check catches sfx start >= file length, missing edit.json with s
     }),
   );
 
-  // 1) sfx[].start >= fileDur with length omitted must fail check (and mix.py must not crash)
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -1875,7 +1823,6 @@ test("Round 21: check catches sfx start >= file length, missing edit.json with s
   assert.equal(badStartChk.status, 1, badStartChk.stdout + badStartChk.stderr);
   assert.match(badStartChk.stderr, /start/);
 
-  // 2) mix.py handles omitted voice without full_voice.wav AND skips sfx start >= fileDur (even under timing) without crashing
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ speeds: [{ from: 0, to: 5, rate: 1 }] }),
@@ -1890,7 +1837,6 @@ test("Round 21: check catches sfx start >= file length, missing edit.json with s
   const mixSafe = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(mixSafe.status, 0, mixSafe.stdout + mixSafe.stderr);
 
-  // 3) Explicit voice:true without narration and missing full_voice.wav must fail check
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({ voice: true, beds: [], sfx: [] }),
@@ -1899,7 +1845,6 @@ test("Round 21: check catches sfx start >= file length, missing edit.json with s
   assert.equal(voiceTrueChk.status, 1, voiceTrueChk.stdout + voiceTrueChk.stderr);
   assert.match(voiceTrueChk.stderr, /full_voice\.wav/);
 
-  // 4) Missing src/edit.json when soundTimeline is configured fails check and mix.py reports unfit cleanly (no Traceback)
   rmSync(join(dir, "src/edit.json"));
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
@@ -1912,7 +1857,6 @@ test("Round 21: check catches sfx start >= file length, missing edit.json with s
   assert.equal(noEditMix.status, 1, noEditMix.stdout + noEditMix.stderr);
   assert.doesNotMatch(noEditMix.stderr, /Traceback/);
 
-  // 5) Directory passed to soundSources rejected in pathFaults
   writeFileSync(
     join(dir, "package.json"),
     JSON.stringify({ name: "r21-src-dir", "live-studio": { soundSources: { ok: "sound" } } }),
@@ -1946,14 +1890,12 @@ test("Round 22: mix.py creates missing sound/ folder on custom-sfx film, and che
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({ voice: false, beds: [], sfx: [{ name: "beep", at: 0, gain: 0 }] }),
   );
-  // 1) Custom sfx folder without sound/ dir passes check and mix.py creates sound/ without FileNotFoundError
   const okChk = spawnSync("bun", [CHECK], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(okChk.status, 0, okChk.stdout + okChk.stderr);
   const mixOut = spawnSync("python", [MIX], { cwd: dir, encoding: "utf8", timeout: 60000 });
   assert.equal(mixOut.status, 0, mixOut.stdout + mixOut.stderr);
   assert.doesNotMatch(mixOut.stderr, /Traceback|FileNotFoundError/);
 
-  // 2) sfx[].start >= fileDur with explicit length set must fail check
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({
@@ -2122,4 +2064,43 @@ test("check probes the default narration whenever the mixer will play it", (t) =
         /full_voice\.wav.*corrupt|corrupt.*full_voice\.wav/,
       );
   }
+});
+
+test("check warns on near-miss built-in shape kind typos in text.json while allowing custom AI kinds", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "check-shape-kind-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        textTimeline: "src/timeline/text.json",
+        soundVault: false,
+      },
+    }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 5 }));
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        { kind: "bxo", from: 0, to: 2, w: 200, h: 100 },
+        { kind: "circl", from: 0, to: 2, w: 200, h: 100 },
+        { kind: "customCallout", from: 0, to: 2, w: 200, h: 100 },
+      ],
+    }),
+  );
+  const checked = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 10000,
+  });
+  assert.equal(checked.status, 0, checked.stdout + checked.stderr);
+  const report = JSON.parse(checked.stdout);
+  const warns = (report.warnings ?? []).join("\n");
+  assert.match(warns, /items\[0\]\.kind "bxo".*did you mean "box"/);
+  assert.match(warns, /items\[1\]\.kind "circl".*did you mean "circle"/);
+  assert.equal(warns.includes("customCallout"), false);
 });

@@ -674,7 +674,6 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
       res.libOverlayRect && res.libGhostRect,
       "Expected exiting sheet ghost on Library 800->400",
     );
-    // Unclipped on frame 0 (full 800px pane latched) and contained within left pane (0px over Stage)
     assert.ok(res.libOverlayRect.width >= 780);
     assert.ok(res.libGhostRect.left >= res.libOverlayRect.left - 1);
     assert.ok(res.libOverlayRect.right <= res.libPaneFrame0Right + 0.5);
@@ -683,13 +682,11 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     assert.equal(res.libSettledW, 400);
     assert.equal(res.libSettledL0W, 400);
 
-    // Sibling folder switching without open file animates both outgoing subfolder columns and incoming column
     assert.equal(res.sibGhostCount, 2);
     assert.equal(res.sibSoundPresent, true);
     assert.ok(res.sibAnims >= 3);
     assert.equal(res.sibOverlayGone, true);
 
-    // Right-docked Side 600->360 keeps exiting sheet & FLIP L0 unclipped on frame 0 and away from Stage
     assert.equal(res.sideBeforeW, 600);
     assert.ok(
       res.sideOverlayRect && res.sideGhostRect,

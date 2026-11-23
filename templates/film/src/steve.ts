@@ -1,11 +1,7 @@
 // @ts-nocheck
 import { makePerformance } from "mc-actor/perform";
-// Steve's acting vocabulary for this film: the body poses steve.json's moves name and the faces its face keys name beyond
-// player.ts MOODS. What the keys mean and how they play: mc-actor/perform.ts. Most acting comes from mocap clips instead
-// (a move key's clip: "<lib>/<clip>"; find one with python ../../packages/clip-catalog/catalog.py --jev "<the scene>").
 import { addPose, arm, GESTURES } from "mc-actor/player";
 
-// Body poses by name, at local time s since the key. Arms here are where they hang when no hand target is set
 export const POSES = {
   stand: (s) =>
     addPose(
@@ -16,7 +12,6 @@ export const POSES = {
   lie: () => GESTURES.sleep(),
 };
 
-// Faces the moods table lacks: {y, tilt, open, squint, pupil, smile}
 export const FACES = {};
 
 export const { bodyAt, targetAt, moodAt, readLook, blinkAt } = makePerformance({

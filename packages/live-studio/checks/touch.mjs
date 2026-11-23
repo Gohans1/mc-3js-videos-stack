@@ -1,17 +1,8 @@
-// Contact between one thing and everything else, frame by frame, from what render/touch.ts measures: the three faults
-// generated-motion benchmarks count (penetrate, float, skate; PhysDiff, ReinDiffuse, NVIDIA Kimodo), for any part on any
-// surface. Frames: { t, d: signed gap in m to the nearest surface (under 0: inside it; Infinity: nothing within reach),
-// part: which part of the target, surface: what it nears, speed: the target's m/s, inFrame: whether the film camera
-// shows that point (behind something still counts as shown) }
-// summarize(name, frames) gives the lines to print and the worst frame of every fault, to be shown.
-
-// m inside a surface: one game pixel (1/16 block), the smallest step the blocky style draws; shallower clips are everywhere
-// in the game's own animations (and mc-actor sinks a touching hand 2 cm on purpose)
 export const SINK = 1 / 16;
-export const TOUCH = 0.01; // m: closer than this is touching
-export const HOVER = 0.05; // m: a still part this close without touching looks like a missed contact
-export const STILL = 0.1; // m/s
-export const LONG = 0.3; // s a hover must last to be seen
+export const TOUCH = 0.01;
+export const HOVER = 0.05;
+export const STILL = 0.1;
+export const LONG = 0.3;
 
 const cm = (d) => `${(Math.abs(d) * 100).toFixed(1)} cm`;
 const f = (x) => x.toFixed(2);
@@ -61,7 +52,7 @@ export function summarize(name, frames) {
       if (r.every((x) => x.inFrame === false)) {
         unseen++;
         continue;
-      } // the audience never sees it: counted, not listed
+      }
       lines.push(`  ${kind} ${f(r[0].t)}-${f(r[r.length - 1].t)}: worst at ${f(w.t)}, ${say(w)}`);
       worst.push({ kind, t: w.t, say: say(w), p: w.p });
     }

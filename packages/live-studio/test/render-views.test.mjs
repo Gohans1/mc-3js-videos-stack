@@ -1,4 +1,3 @@
-// Multi-angle batch --views rendering: pure parser unit tests, CLI validation, and real headless Chrome WebGL verification
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -324,7 +323,6 @@ test(
     writeFileSync(join(dir, "renders/still_1s.jpg"), "keep-still");
     writeFileSync(join(dir, "renders/view_prior_1s.jpg"), "keep-prior-view");
 
-    // 1. Inline --views across 2 camera angles x 2 timestamps in ONE Vite build + ONE Chrome boot
     const batch = render(
       ["stills"],
       ["--at", "0.5,1", "--views", "east-red:0,0,0,6,0,0,50;west.blue_1:0,0,0,-6,0,0,50"],
@@ -359,7 +357,6 @@ test(
     assert.equal(readFileSync(join(dir, "renders/still_1s.jpg"), "utf8"), "keep-still");
     assert.equal(readFileSync(join(dir, "renders/view_prior_1s.jpg"), "utf8"), "keep-prior-view");
 
-    // 2. --views @json (object format) + --list + --compare preserves .prev/ and emits diff
     writeFileSync(sceneFile, makeScene("0x11dddd"));
     writeFileSync(
       join(dir, "views_obj.json"),
@@ -382,7 +379,6 @@ test(
       `expected green wall for south_green, got ${greenPx.rgb}`,
     );
 
-    // 3. --views @json (array format) + --crop zooms into top-left yellow quad on -Z wall
     writeFileSync(
       join(dir, "views_arr.json"),
       JSON.stringify([{ name: "north_quad", cam: [0, 0, 0, 0, 0, -6, 60] }]),
@@ -398,7 +394,6 @@ test(
       `expected yellow quad via --crop+--views, got ${yellowPx.rgb}`,
     );
 
-    // 4. Poster mode + --res 1080 + --views writes full-size lossless PNG without strip
     const posterRun = render(
       ["poster"],
       ["--at", "1", "--res", "1080", "--samples", "1", "--views", "west_hi:0,0,0,-6,0,0,50"],
@@ -410,7 +405,6 @@ test(
     assert.equal(posterInfo.h, 1080);
     assert.ok(posterInfo.rgb[2] > 180 && posterInfo.rgb[0] < 60);
 
-    // 5. A single --inspect camera still renders
     const inspectRun = render(["stills"], ["--at", "1", "--inspect", "0,0,0,-6,0,0,50"]);
     assert.equal(inspectRun.status, 0, inspectRun.stdout + inspectRun.stderr);
     const inspPx = sampleRgb(join(dir, "renders/still_1s.jpg"));

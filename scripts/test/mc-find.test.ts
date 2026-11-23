@@ -39,12 +39,10 @@ function makeFindEnv() {
   writeFileSync(join(film, "src/scene.ts"), "");
   writeFileSync(join(film, "package.json"), JSON.stringify({ name: "find-demo" }));
 
-  // Global & film props
   writeFileSync(join(vault, "props/signs/neon_sign.ts"), "export function makeNeon() {}");
   writeFileSync(join(vault, "props/signs/neon_sign.glb"), new Uint8Array([103, 108, 84, 70]));
   writeFileSync(join(film, "src/props/cafe_table.ts"), "export function makeCafeTable() {}");
 
-  // Vanilla jar
   writeFileSync(
     join(vault, "jar/client_assets.zip"),
     zipSync({
@@ -88,7 +86,6 @@ function makeFindEnv() {
     }),
   );
 
-  // Modded pack with chair variants + item + broken loader
   writeFileSync(
     join(vault, "packs/decor-mod.jar"),
     zipSync({
@@ -314,21 +311,18 @@ test("semantic index plan can select 3D Minecraft blocks without embedding them"
 test("find --kind object/block/item/mob/prop searches, folds variants, and filters broken/edition/license/source", () => {
   const { film, runCli } = makeFindEnv();
 
-  // Variant folding + broken hiding on chair
   const chairs = runCli(["chair", "--kind", "block"]);
   expect(chairs.status, chairs.stderr).toBe(0);
   expect(chairs.stdout).toContain("chair");
   expect(chairs.stdout).toContain("+2 variants");
   expect(chairs.stdout).toContain("--variants");
 
-  // Unfold variants
   const unfolded = runCli(["chair", "--kind", "block", "--variants"]);
   expect(unfolded.status, unfolded.stderr).toBe(0);
   expect(unfolded.stdout).toContain("oak_chair");
   expect(unfolded.stdout).toContain("birch_chair");
   expect(unfolded.stdout).toContain("spruce_chair");
 
-  // Broken hidden by default, shown with --broken
   const tankHidden = runCli(["tank", "--kind", "block"]);
   expect(tankHidden.stdout).toContain("non-renderable");
   expect(tankHidden.stdout).toContain("--broken");
@@ -336,7 +330,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(tankShown.status, tankShown.stderr).toBe(0);
   expect(tankShown.stdout).toContain("custom_loader_tank");
 
-  // Umbrella --kind 3d alias searches across blocks, items, mobs, props
   const allObj = runCli(["--kind", "3d", "-n", "50"]);
   expect(allObj.status, allObj.stderr).toBe(0);
   expect(allObj.stdout).toContain("block");
@@ -344,7 +337,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(allObj.stdout).toContain("mob:armadillo");
   expect(allObj.stdout).toContain("prop:global:signs/neon_sign");
 
-  // Edition + License + Source filters
   const vanillaOnly = runCli(["--kind", "block", "--edition", "vanilla"]);
   expect(vanillaOnly.status, vanillaOnly.stderr).toBe(0);
   expect(vanillaOnly.stdout).toContain("barrel");
@@ -355,7 +347,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(mitOnly.stdout).toContain("oak_chair");
   expect(mitOnly.stdout).not.toContain("barrel");
 
-  // Rich --show outputs (including variants for head + sibling + 2-arg resolveModelData)
   const showBlock = runCli(["--show", "block:minecraft:barrel"]);
   expect(showBlock.status, showBlock.stderr).toBe(0);
   expect(showBlock.stdout).toContain("facing");
@@ -379,7 +370,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(showItem.stdout).toContain("resolveModelData(assets,");
   expect(showItem.stdout).toContain("loadModel(");
 
-  // --license minecraft / free sorting excludes LicenseRef-All-Rights-Reserved from free
   const licenseVanilla = runCli(["--kind", "block", "--license", "minecraft"]);
   expect(licenseVanilla.status, licenseVanilla.stderr).toBe(0);
   expect(licenseVanilla.stdout).toContain("barrel");
@@ -391,7 +381,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(licenseFree.stdout).not.toContain("secret_crate");
   expect(licenseFree.stdout).not.toContain("barrel");
 
-  // Empty --kind prop returns clear recovery message rather than Unknown --kind prop
   const emptyPropVault = join(mkTmp("mc-empty-prop-"), "vault");
   const emptyPropFilm = mkTmp("mc-empty-prop-film-");
   mkdirSync(emptyPropVault, { recursive: true });
@@ -416,7 +405,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(showProp.stdout).toContain("model: signs/neon_sign.glb");
   expect(showProp.stdout).toContain("asset use prop:global:signs/neon_sign");
 
-  // GLB-only film prop omits fake TypeScript import snippet
   mkdirSync(join(film, "src/props"), { recursive: true });
   writeFileSync(join(film, "src/props/crate_mesh.glb"), new Uint8Array([103, 108, 84, 70]));
   const showGlbProp = runCli(["--show", "prop:film:crate_mesh"]);
@@ -425,7 +413,6 @@ test("find --kind object/block/item/mob/prop searches, folds variants, and filte
   expect(showGlbProp.stdout).toContain("via GLTFLoader");
   expect(showGlbProp.stdout).not.toContain('import from "./props/crate_mesh"');
 
-  // Now cache is warm -> unscoped `bun run find chair` mentions --kind object hint
   const unscopedWarm = runCli(["chair"]);
   expect(unscopedWarm.status, unscopedWarm.stderr).toBe(0);
   expect(unscopedWarm.stdout).toContain("--kind object");
@@ -437,7 +424,6 @@ test("find supports --star/--unstar on 3D object IDs and mixed --show without fa
   const favs = favoriteLists(join(film, "favorites"));
   process.env.MC_VAULT_ROOT = vault;
   try {
-    // Mixed native preset + 3D object in --show
     const mixed = await findRun(
       ["--show", "dissolve,mob:armadillo"],
       undefined,
@@ -448,7 +434,6 @@ test("find supports --star/--unstar on 3D object IDs and mixed --show without fa
     expect(mixed).toContain("transition/dissolve");
     expect(mixed).toContain("mob:armadillo");
 
-    // Bare name present as both block and item -> names both ambiguous matches rather than "no entry"
     await expect(
       findRun(["--show", "barrel"], undefined, undefined, undefined, favs),
     ).rejects.toThrow(/matches 2 entries.*block:minecraft:barrel.*item:minecraft:barrel/s);
@@ -472,12 +457,10 @@ test("find supports --star/--unstar on 3D object IDs and mixed --show without fa
     expect(listed).toContain("mob:armadillo");
     expect(listed).toContain("block:decor:oak_chair");
 
-    // --fav without --kind loads starred 3D objects automatically
     const favOnly = await findRun(["--fav", "props"], undefined, undefined, undefined, favs);
     expect(favOnly).toContain("mob:armadillo");
     expect(favOnly).toContain("block:decor:oak_chair");
 
-    // Bare --kind / --source mention opt-in 3D kinds and pack sources
     await expect(findRun(["--kind"], undefined, undefined, undefined, favs)).rejects.toThrow(
       /3D objects.*block, item, mob, prop/,
     );
@@ -485,7 +468,6 @@ test("find supports --star/--unstar on 3D object IDs and mixed --show without fa
       /3D objects.*decor-mod/,
     );
 
-    // Same block ID in two packs keeps distinct variants per pack and prints --source tip
     const dupVault = mkTmp("mc-find-dup-");
     mkdirSync(join(dupVault, "packs"), { recursive: true });
     mkdirSync(join(dupVault, "jar"), { recursive: true });

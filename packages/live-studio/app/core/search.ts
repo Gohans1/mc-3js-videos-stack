@@ -1,6 +1,3 @@
-// The search boxes (sounds, objects, notes): every word typed must begin a word of the item, so "hum" finds room_hum and
-// "Humming" but not "thump". Words split at spaces, punctuation, "_" and camelCase; case and accents don't count, Vietnamese
-// đ included (NFD leaves it whole), so "dap" finds "đập"
 export const words = (s: string) =>
   s
     .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
@@ -20,7 +17,6 @@ export const matcher = (q: string) => {
   };
 };
 
-// Incrementally runs indexed work during browser idle slices so large catalogs warm without frame drops
 export const scheduleIdleBatch = (
   total: number,
   stepSlice: (startIndex: number, batchSize: number) => number,

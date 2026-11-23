@@ -2,8 +2,6 @@ import { useEffect, useLayoutEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-// The picture and what sits on it. The engine draws the frame, the clock, the caption and the pins straight
-// into these elements every frame; React only draws what changes rarely (badges, option chips, loading, errors)
 import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
@@ -112,8 +110,6 @@ function PreviewStartup({ status }: { status: string }) {
   );
 }
 
-// phone: PhoneApp's picture, sized by its layout, and for notes only: the editing overlays stay bound (the frame loop writes
-// to them) but never show
 export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) {
   const loading = useStudio((s) => s.loading),
     ready = useStudio((s) => s.ready),
@@ -131,8 +127,6 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
   const valueCheck = useStudio((s) => s.valueCheck);
   const blindAudio = useStudio((s) => s.blindAudio);
   return (
-    // The player: the picture (view, which pointer.ts fit sizes the stage into at the film's shape, frame.ts; full screen shows
-    // it alone), then CapCut's Color oscilloscope under it when on
     <div
       className={
         phone
@@ -181,7 +175,6 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
         ref={bind("view")}
         className="@container relative flex min-h-0 w-full flex-1 items-center justify-center"
       >
-        {/* The frame itself and what is pinned or drawn on it */}
         <div
           data-preview-pane
           className={cn(
@@ -262,8 +255,6 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
               className="viewport-horizon data-level:bg-primary pointer-events-none absolute top-1/2 left-1/2 z-6 h-0.5 w-1/4 bg-white shadow-sm"
               aria-label="Horizon level"
             />
-            {/* Above the chips: a passed note shows for 3 s only, and it lets taps through to them */}
-            {/* The picked text items' outlines, where the film draws them (text/onpicture.ts) */}
             <div
               ref={bind("textsel")}
               data-studio-overlay
@@ -284,7 +275,6 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
             >
               <polygon fill="none" stroke="var(--picture)" strokeWidth="1.5" />
             </svg>
-            {/* Strokes (notes/ink.ts): drawn on while a tool is in hand, and otherwise lets every tap through */}
             <canvas
               ref={bind("ink")}
               data-studio-overlay
@@ -298,13 +288,11 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
             </div>
           </div>
         </div>
-        {/* Note composer anchored directly beside the pin/stroke on the player stage */}
         {!phone && <StageNoteComposer />}
         {!phone && !clean && <InkBar />}
         {!phone && !clean && <AngleGrid />}
         {!phone && !clean && <ShotList />}
         {!phone && !clean && <ExposureLegend />}
-        {/* The player's own read-outs, over the whole player, not the frame: a 9:16 frame is too narrow to carry them */}
         <div ref={bind("clock")} hidden={phone || clean} className="stage-clock">
           00:00.000
         </div>
@@ -312,7 +300,6 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           <div ref={bind("hud")} hidden={phone || clean} className="stage-hud" />
           {!phone && !clean && <Badges />}
         </div>
-        {/* the option chips (A/B/C/D) and the free camera's corner: Tailwind's [hidden] wins over contents */}
         <div hidden={phone} className="contents">
           <div hidden={clean} className="contents">
             <OptionChips ref={bind("chips")} />

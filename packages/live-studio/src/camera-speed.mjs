@@ -133,7 +133,6 @@ function sampleTimelinePoints(keys, { from, to, aspect, defaultFov, sampleRate, 
   const maxT = to ?? keys[keys.length - 1].t;
   const samples = [];
 
-  // Build continuous shot slices split at cut:true keys so evaluators like cameraAt never bleed across equal-t cuts.
   const spanSegs = [];
   let segStart = 0;
   for (let i = 0; i < keys.length; i++) {
@@ -159,7 +158,6 @@ function sampleTimelinePoints(keys, { from, to, aspect, defaultFov, sampleRate, 
     const f1 = resolveKeyFov(keys, i + 1, aspect, defaultFov);
     const steps = Math.max(2, Math.ceil((s1 - s0) * sampleRate));
     for (let j = 0; j <= steps; j++) {
-      // Avoid duplicating exact boundary samples on the second half unless a cut separates them.
       if (
         j === 0 &&
         samples.length &&
@@ -405,7 +403,6 @@ export function analyzeCameraTimeline(keys, opts = {}) {
     }
   }
 
-  // Collapse per-sample alerts into one representative peak per offending key span so reports stay crisp.
   const dedupeSpan = (items, score) => {
     const bySpan = new Map();
     for (const item of items) {

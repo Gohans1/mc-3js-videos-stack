@@ -1,4 +1,3 @@
-// Playback speed, in Settings: the segmented control CapCut uses for a few fixed choices
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 import { useStudio } from "../core/store";

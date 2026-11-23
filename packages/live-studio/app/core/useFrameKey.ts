@@ -4,7 +4,6 @@ import { onWake, S } from "./state";
 
 const MIN_INTERVAL_MS = 120;
 
-/** Re-renders the caller only when `readKey()` changes across engine ticks (~8Hz cap while playing). */
 export function useFrameKey(readKey: () => string | number): void {
   const [, setTick] = useState(0);
   const readRef = useRef(readKey);

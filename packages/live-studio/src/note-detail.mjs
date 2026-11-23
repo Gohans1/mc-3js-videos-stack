@@ -74,9 +74,7 @@ export const noteDetailFormat = ({
         out.before = before >= 0 ? lines[before].text : null;
         out.next = nxt < lines.length ? lines[nxt].text : null;
       }
-    } catch {
-      /* optional file */
-    }
+    } catch {}
     try {
       const beats = JSON.parse(readFileSync(join(ROOT, "src/edit.json"), "utf8")).beats;
       if (beats && typeof beats === "object") {
@@ -90,9 +88,7 @@ export const noteDetailFormat = ({
             sounds: b.sounds ?? null,
           }));
       }
-    } catch {
-      /* optional file */
-    }
+    } catch {}
     return out;
   };
 
@@ -196,7 +192,6 @@ export const noteDetailFormat = ({
       v = c.voice ?? {};
     } else v = workedOut(n);
     const suffix = c ? "" : " (today's edit)";
-    // notes written before the studio kept only a near word may name one across a silence
     if (v.word && (v.wordAt == null || Math.abs(v.wordAt - n.t) <= WORD_NEAR))
       lines.push(
         `word: "${v.word}" at ${v.wordAt ?? "?"}s in "...${v.around ?? ""}..." (heard second when written; now: bun run voice:cues)`,
@@ -230,7 +225,6 @@ export const noteDetailFormat = ({
     if (n.staleBuild === true) {
       lines.push("⚠ captured on an older Studio build before reload");
     }
-    // the thread after the note itself, oldest first: what was tried or asked, what the creator said back or reworded
     for (const m of thread.slice(1)) {
       lines.push(
         m.reworded

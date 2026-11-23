@@ -8,7 +8,6 @@ import argparse, re, sys
 from catalog import ROOT, FIGHT
 from batch import read_rows
 
-# name word -> postures of which one must show up in the clip (None: a check of its own below)
 RULES = [
     ({"kneel", "kneeling"}, {"kneel"}),
     ({"sitting", "seated", "sit"}, {"sitSeat", "sitFloor"}),

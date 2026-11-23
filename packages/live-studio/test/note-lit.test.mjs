@@ -18,7 +18,6 @@ describe("AI note highlight duration and multi-key lookup", () => {
     assert.equal(anyKeyLit(start, ["note:n2"], 1000), false);
     assert.equal(anyKeyLit(start, [], 1000), false);
 
-    // Partial expiration leaves valid keys and extends renewed keys without losing newer ones
     const renewed = mergeLitKeys(start, ["note:n2"], 1000 + LIT_MS - 10);
     assert.equal(renewed["note:n1"], 1000 + LIT_MS);
     assert.equal(renewed["note:n2"], 1000 + 2 * LIT_MS - 10);

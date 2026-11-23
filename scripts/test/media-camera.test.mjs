@@ -10,7 +10,6 @@ import { cameraAt, FPS, markerFrames, markerVideo, tableShot, testVideo } from "
 
 const worker = fileURLToPath(new URL("../media/camera.py", import.meta.url));
 
-// a reference-shot matchmove took a film ~800 lines of OpenCV and a 25-minute silent background job; it is a tool now
 test.skipIf(!existsSync(mediaPython("camera")))(
   "camera solve recovers a known camera path and lens from surveyed points, with reprojection error",
   () => {
@@ -34,7 +33,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
       const report = JSON.parse(readFileSync(join(out, "solve.json"), "utf8"));
       expect(report.fov).toBeCloseTo(40, 0);
       expect(report.summary.solved).toBe(13);
-      // the keyed frames project exactly; between them the uv are straight lines, so a little error
       expect(report.frames.find((r) => r.frame === 6).err).toBeLessThan(0.5);
       const key = report.keys.find((k) => k.t === +(6 / FPS).toFixed(4));
       expect(key.p[0]).toBeCloseTo(cameraAt(6).c[0], 1);
@@ -62,7 +60,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
         timeout: 20000,
       });
       expect(made.status, made.stderr).toBe(0);
-      // keyed at frames 0 and 12 only; the camera bobs ~12 px between them
       writeFileSync(
         join(dir, "shot.json"),
         JSON.stringify(tableShot({ frames: [0, 12], track: true, shake: 0.08 })),
@@ -76,7 +73,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
       expect(run.status, run.stdout + run.stderr).toBe(0);
       const report = JSON.parse(readFileSync(join(out, "solve.json"), "utf8"));
       expect(report.summary.solved).toBe(13);
-      // followed: within a millimetre of the true path; straight lines between the keys put it ~14 cm off
       const off = report.keys.map((k, frame) =>
         Math.hypot(...k.p.map((v, i) => v - cameraAt(frame, 0.08).c[i])),
       );

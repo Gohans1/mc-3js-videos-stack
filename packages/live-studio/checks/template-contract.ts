@@ -106,7 +106,6 @@ EDIT.shots.pop();
 applyEdit();
 check(SHOTS_OUT.length === 1, "Removed shot remained in SHOTS_OUT");
 
-// Master black fade must stay pure #000000 even when additive camera optics (exposureBloom) and velocity flash fire together
 const prevAnim = EDIT.shots[0].anim;
 EDIT.shots[0].anim = { in: { fx: "fade", len: 1 }, combo: { fx: "exposureBloom" } };
 applyEdit();

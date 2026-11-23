@@ -1,5 +1,3 @@
-// Pure pointer/touch/sketch state machine for the 3D viewport (picture/pointer.ts):
-// desktop mouse left-click selects elements, left-drag moves the camera (Shift+left-drag orbits), right-click pins notes, right-drag sketches.
 export type ViewportGesture<E = unknown> =
   | { kind: "idle" }
   | { kind: "tap_press"; id: number; x: number; y: number; moved: boolean }

@@ -10,9 +10,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-// The Key tab: the keys picked on the key rows (keys/keyrows.ts). One key: its time and every field it carries, each with the
-// control its value calls for (a number, a word the row already uses, on/off, a short list of numbers); a film needs no setup
-// for this. Several: move or delete them together. Each change is one undo step (Ctrl+Z), shared with the sound and camera
 import { cn } from "@/lib/utils";
 
 import { CurveEditor, EaseTiles } from "../components/EasePicker";
@@ -44,11 +41,8 @@ import {
 import { type KeyRef } from "./slice";
 
 const label = "text-ui text-muted-foreground";
-// A name the row repeats (a pose, a mood: no spaces) is picked from the ones it uses, since a new one needs the film's code; a
-// sentence is typed
 const MAX_CHOICES = 80;
 
-// Saved when left or on Enter, so typing is one undo step; keyed on the value so an undo or a drag resets it
 function Typed({
   value,
   number,
@@ -157,7 +151,6 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
       </div>
     );
   } else if (v === null && row.some((x) => x[field] != null)) {
-    // Off on this key (a hand let go, no gaze target): turned on with the value the nearest key before had
     const was =
       row.slice(0, r.i).findLast((x) => x[field] != null)?.[field] ??
       row.find((x) => x[field] != null)![field];
@@ -237,7 +230,6 @@ function One({ r }: { r: KeyRef }) {
   );
   const editable = (f: string) => f !== "t" && f !== "__timing" && !(easing && f === "ease");
   const fields = Object.keys(k).filter(editable);
-  // Fields only some keys of the row carry can be taken off, or put on from the key before that has them
   const everyone = (f: string) => ks.every((x) => f in x);
   const missing = [...new Set(ks.flatMap((x) => Object.keys(x)))].filter(
     (f) => editable(f) && !(f in k),
@@ -384,7 +376,6 @@ function KeyEase({ r, names, value }: { r: KeyRef; names: string[]; value: Ease 
   );
 }
 
-// One frame earlier or later, by button: dragging is never the only way to move a key
 function Nudge({ refs }: { refs: KeyRef[] }) {
   const by = (d: number) => {
     if (!shift(refs, d)) say("Can't move: a keyframe would pass its neighbour");
@@ -444,7 +435,6 @@ function Many({ refs }: { refs: KeyRef[] }) {
   );
 }
 
-// A row picked from a list, for what the playhead is on: its nearest key (the keyboard's way onto the rows), or a new key there
 function AtPlayhead({ add }: { add?: boolean }) {
   useStudio((s) => s.keysRev);
   const run = (id: string) => {

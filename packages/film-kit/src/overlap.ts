@@ -1,13 +1,3 @@
-// Overlapping action and follow-through with no keys: each upper-body joint chases the pose's own angle on a damped
-// spring, so the chest trails the hips by a frame, the head and upper arms by two, the forearms by three, and a part that
-// stops swings a little past and settles. The delays are Prokamo's cascade (2-3 frames reads as weight, past 6 as loose);
-// a spring rather than a plain delay is Houdini's Secondary Motion (lag plus overshoot). Joints not listed (legs, hips)
-// are left alone so planted feet stay planted; hand and head IK go on top of the result, so a hand on a prop stays on it.
-// No state between frames: the pose function is run through once (60 samples a second, 4 spring steps each) and the
-// result reads the offset (spring minus pose) at any t.
-//   const lagOf = overlap((t) => bodyPose(t), filmEnd);   pose = addPose(bodyPose(t), lagOf(t))   (src/pose.ts)
-// lag: frames of delay at 30 fps per joint (MCprep player joint names by default); damping 0.6 swings ~10% past a sudden
-// stop and less past an eased one; amount scales the whole effect (0 = off).
 import { canonical, type Pose, unwrap } from "./pose";
 
 const HZ = 60,
@@ -32,7 +22,6 @@ export function overlap(
   }
   const dt = 1 / HZ / SUB;
   const off = joints.map((j, k) => {
-    // a damped spring lags a moving target by 2 * damping / omega
     const w = (2 * damping) / (lag[j] / 30),
       x = raw[k],
       o = new Float32Array(n * 3);

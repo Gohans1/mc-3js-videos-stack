@@ -1,7 +1,3 @@
-// The phone's one row under the picture: play, one wide scrub track with the open notes on it, and where the playhead is.
-// The track is the ARIA slider pattern (arrows a second, Page keys ten), and a press anywhere on it jumps there, so a drag is
-// never the only way (WCAG 2.5.7). Its compact band (extended vertically for touch) is the target, the drawn line 4 px. The playhead is written straight
-// to the element each frame it moves, as the clock on the picture is, never through React
 import { Download, Loader2, Pause, Play } from "lucide-react";
 import { type PointerEvent, useEffect, useRef, useState } from "react";
 
@@ -40,7 +36,7 @@ const spoken = (t: number) => {
 const clampRatio = (t: number, d: number) => (d > 0 ? Math.min(Math.max(t / d, 0), 1) : 0);
 
 function Scrub() {
-  useStudio((s) => s.notes); // the ticks follow the notes
+  useStudio((s) => s.notes);
   const metaRev = useStudio((s) => s.metaRev);
   const track = useRef<HTMLDivElement>(null),
     time = useRef<HTMLSpanElement>(null);
@@ -116,7 +112,6 @@ function Scrub() {
         <div className="bg-scrubber-track absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full">
           <div className="bg-primary h-full w-[calc(var(--at,0)*100%)]" />
         </div>
-        {/* what still needs the creator: to fix (primary), AI asks (ai) and to check (warn); the done ones stay folded, as in the list */}
         {DURATION > 0 &&
           noteMarks().flatMap((m, i) =>
             m.done

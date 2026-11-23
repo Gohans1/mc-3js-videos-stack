@@ -56,9 +56,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TooltipProvider } from "@/components/ui/tooltip";
-// The sound tab: the clip picked on the lanes (its level, fades, length, which file), then every sound in the film and vault,
-// organized as CapCut 9.7's Audio library (Yours, Music, Sound effects, Minecraft). A library card is dragged onto a lane, or + puts it at
-// the playhead; the cover button auditions it with the bottom bar; pointing lights its clips, clicking selects them.
 import { cn } from "@/lib/utils";
 
 import type { SharedVoiceEntry } from "../../src/voice-library.mjs";
@@ -135,9 +132,9 @@ import {
   itemOf,
   kindOf,
   type Lanes,
-  type LibraryItem,
   lanes,
   library,
+  type LibraryItem,
   lightSounds,
   listen,
   listening,
@@ -208,8 +205,6 @@ const soundDoc = { snapshot, restore };
 const PAGE = 96;
 const EMPTY_FAVS: readonly string[] = [];
 
-// real-sound's per-sound EQ: cuts (rumble, hiss) with Butterworth slopes, shelves at Q 0.7071 and peaking bands, written as the
-// ffmpeg entries mix.py renders and the mixer previews exactly (eq.ts)
 const SLOPES = ["6", "12", "24", "36"] as const;
 const MAX_BANDS = 6;
 type Filters = string[] | undefined;
@@ -221,7 +216,6 @@ const setFilters = (x: { filters?: string[] } | undefined, change: (f: Filters) 
 };
 const writeFilters = (l: Lanes, clip: ClipRef, change: (f: Filters) => Filters) =>
   setFilters(l[clip.list][clip.i] as { filters?: string[] }, change);
-// a track's EQ: every clip on it, after the clip's own (mix.py track_chain)
 const writeTrackFilters = (l: Lanes, id: string, change: (f: Filters) => Filters) =>
   setFilters(
     l.tracks?.find((t) => t.id === id),
@@ -405,7 +399,6 @@ function EqSection({
   );
 }
 
-// Lands the chosen point of the part the clip plays (real-sound's align, sync.ts) on the playhead
 const SYNC: { id: SyncMode; label: string; tip: string }[] = [
   { id: "start", label: "Start", tip: "its start" },
   { id: "attack", label: "Attack", tip: "where it hits (impacts, clicks, keys)" },
@@ -432,8 +425,6 @@ const syncToPlayhead = async (clip: ClipRef, mode: SyncMode) => {
   moveTo(clip, S.t - at);
 };
 
-// The picked clip as CapCut's Audio tab: its Basic section (volume, pan, fades, and here ducking or length), then what the app adds
-// (which file, which track, where it runs). A drag previews and saves once, when let go: one undo step
 function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "speed" }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.timingRev);
@@ -467,7 +458,6 @@ function Inspector({ clip, tab }: { clip: ClipRef; tab: "basic" | "voice" | "spe
       if (key === "length") cutAfter(l.sfx[clip.i], "sfx", from + v);
       else ((bed ? l.beds : l.sfx)[clip.i] as Record<string, unknown>)[key] = v / scale;
     });
-  // scale: what the slider shows per stored unit (pan is stored -1..1, shown -100..100)
   const row = (
     label: string,
     key: "gain" | "fadeIn" | "fadeOut" | "duck" | "length" | "pan",
@@ -934,7 +924,6 @@ function AudioCategoryChips({
   );
 }
 
-// CapCut 9.7's collapsible left category accordion tree (Yours v, Music ^, Sound effects v)
 function CategoryTree({
   tree,
   activeNav,
@@ -971,13 +960,16 @@ function CategoryTree({
         >
           <Music aria-hidden />
           <span className="min-w-0 flex-1 wrap-anywhere">{timeline.title}</span>
-          <span className="text-muted-foreground tabular-nums">{timeline.count.toLocaleString()}</span>
+          <span className="text-muted-foreground tabular-nums">
+            {timeline.count.toLocaleString()}
+          </span>
         </Button>
       )}
       {tree.map((sec) => {
         const isGroupActive = activeNav.group === sec.id;
         const isOpen = open[sec.id];
-        const leaves = sec.id === "yours" ? sec.leaves.filter((leaf) => leaf.id !== "timeline") : sec.leaves;
+        const leaves =
+          sec.id === "yours" ? sec.leaves.filter((leaf) => leaf.id !== "timeline") : sec.leaves;
         return (
           <div key={sec.id} className="flex flex-col gap-0.5">
             <button
@@ -1060,7 +1052,6 @@ const singleSoundCard = (item: LibraryItem): LibraryGroup => ({
   variants: [item],
 });
 
-// side: wide desktop left-column Audio library (CapCut's two-pane layout); !side: compact single-column mode
 function Library({ side }: { side: boolean }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.groups);
@@ -1868,7 +1859,7 @@ function Library({ side }: { side: boolean }) {
                                       ? "Add music or a sound effect to the timeline to see it here."
                                       : activeNav.group === "yours" && activeNav.leaf === "film"
                                         ? "Add audio files to this film to find them here."
-                                      : `No ${activeSection.one}s in this category.`}
+                                        : `No ${activeSection.one}s in this category.`}
                   </span>
                 </EmptyDescription>
               </EmptyHeader>
@@ -1985,7 +1976,9 @@ function Library({ side }: { side: boolean }) {
               return (
                 <li
                   key={g.key}
-                  onPointerDown={unavailable ? undefined : press(x.name, selectUses, advanceRoundRobin)}
+                  onPointerDown={
+                    unavailable ? undefined : press(x.name, selectUses, advanceRoundRobin)
+                  }
                   onDragStart={(e) => e.preventDefault()}
                   onPointerEnter={() => lightSounds(highlightedNames)}
                   onPointerLeave={() => lightSounds(null)}
@@ -2002,7 +1995,15 @@ function Library({ side }: { side: boolean }) {
                   )}
                 >
                   <div className="flex min-h-11 flex-1 items-start gap-2">
-                    <Tip label={unavailable ? "File unavailable" : isPlaying ? "Pause preview" : "Preview audio"}>
+                    <Tip
+                      label={
+                        unavailable
+                          ? "File unavailable"
+                          : isPlaying
+                            ? "Pause preview"
+                            : "Preview audio"
+                      }
+                    >
                       <Button
                         variant="cover"
                         size="cover"
@@ -2016,8 +2017,18 @@ function Library({ side }: { side: boolean }) {
                         }}
                       >
                         <span aria-hidden className="grid place-items-center">
-                          <Play className={cn("col-start-1 row-start-1 translate-x-[0.5px] fill-current transition-opacity duration-150 motion-reduce:transition-none", isPlaying && "opacity-0")} />
-                          <Pause className={cn("col-start-1 row-start-1 fill-current transition-opacity duration-150 motion-reduce:transition-none", !isPlaying && "opacity-0")} />
+                          <Play
+                            className={cn(
+                              "col-start-1 row-start-1 translate-x-[0.5px] fill-current transition-opacity duration-150 motion-reduce:transition-none",
+                              isPlaying && "opacity-0",
+                            )}
+                          />
+                          <Pause
+                            className={cn(
+                              "col-start-1 row-start-1 fill-current transition-opacity duration-150 motion-reduce:transition-none",
+                              !isPlaying && "opacity-0",
+                            )}
+                          />
                         </span>
                       </Button>
                     </Tip>
@@ -2030,7 +2041,9 @@ function Library({ side }: { side: boolean }) {
                           {title}
                         </span>
                         <span className="ms-auto flex flex-none items-center gap-1">
-                          {!unavailable && <FavoriteStar kind="sounds" id={starId} name={title} onCard />}
+                          {!unavailable && (
+                            <FavoriteStar kind="sounds" id={starId} name={title} onCard />
+                          )}
                           <Tip
                             label={
                               hasVariants
@@ -2055,7 +2068,7 @@ function Library({ side }: { side: boolean }) {
                         </span>
                       </div>
                       <div className="mt-auto flex min-h-6 flex-wrap items-center justify-between gap-1.5">
-                        <span className="text-muted-foreground text-xs flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 leading-snug">
+                        <span className="text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-snug">
                           {(isSynth || x.contentId || subtitle) && (
                             <span className="flex min-w-0 flex-wrap items-center gap-1">
                               {isSynth && <Badge variant="synth">Code</Badge>}
@@ -2064,7 +2077,9 @@ function Library({ side }: { side: boolean }) {
                                   Content ID
                                 </Badge>
                               )}
-                              {subtitle && <span className="min-w-0 wrap-anywhere">{subtitle}</span>}
+                              {subtitle && (
+                                <span className="min-w-0 wrap-anywhere">{subtitle}</span>
+                              )}
                             </span>
                           )}
                           <span className="tabular-nums">
@@ -2199,7 +2214,6 @@ function Library({ side }: { side: boolean }) {
   );
 }
 
-// part: the whole tab (one column), or on a wide screen the clip in the right column and the library in the left one
 export function SoundPanel({
   part = "all",
   tab = "basic",

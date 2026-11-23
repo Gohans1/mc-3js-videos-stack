@@ -7,7 +7,6 @@ const asHitList = (v: unknown): ShotHit[] =>
       )
     : [];
 
-/** Split shot trauma `hits` across `splitSource` time without sharing array references. */
 export function splitShotHits(
   hits: unknown,
   splitSource: number,
@@ -22,7 +21,6 @@ export function splitShotHits(
   };
 }
 
-/** Combine `next` hits back into `prev` sorted by time when merging adjacent shots. */
 export function mergeShotHits(prev: unknown, next: unknown): ShotHit[] | undefined {
   const nextList = asHitList(next);
   if (!nextList.length) {
@@ -35,7 +33,6 @@ export function mergeShotHits(prev: unknown, next: unknown): ShotHit[] | undefin
   return merged.length ? merged : undefined;
 }
 
-/** Partition hits across a moved cut boundary so `prev` holds `< cutSource` and `next` holds `>= cutSource`. */
 export function repartitionAdjacentHits(
   prevHits: unknown,
   nextHits: unknown,

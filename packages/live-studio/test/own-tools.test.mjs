@@ -1,4 +1,3 @@
-// bun run check: a film's own scripts are commands the repo lacked, and bun run gap is how the next AI learns of them
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

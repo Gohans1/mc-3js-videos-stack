@@ -1,11 +1,6 @@
-// The box dragged over the timeline's rows (CapCut's marquee over its tracks): it may start on the empty space of any row and
-// cross all of them, so it is one element over the rows (TimelinePanel's rowbox) instead of a drawing on one canvas. What it picks
-// is timeline/across.ts's to say (attachAcross fills boxPick), so this file needs nothing from the rows.
 import { S } from "../core/state";
 
 export type ClientRect = { x0: number; x1: number; y0: number; y1: number };
-// pick: what the box covers, joined to base; picked: what is picked now (the base when Shift/Ctrl adds); none: an empty base;
-// done: the box let go; clear: nothing picked on any row; seek: the playhead to the second at a page x
 export const boxPick = {
   pick: (_r: ClientRect, _base: unknown) => {},
   picked: (): unknown => null,
@@ -15,11 +10,9 @@ export const boxPick = {
   seek: (_x: number) => {},
 };
 
-// From the press, in the rows' scrolled content, so the box keeps its start while the rows scroll under it
 let box: { x: number; y: number; base: unknown; moved: boolean; add: boolean } | null = null;
 const scroller = () => S.el.rowbox.parentElement!;
 
-// add (Shift/Ctrl held): what the box picks joins what was picked before
 export const boxStart = (e: PointerEvent, add: boolean) => {
   const s = scroller(),
     r = s.getBoundingClientRect();
@@ -33,7 +26,6 @@ export const boxStart = (e: PointerEvent, add: boolean) => {
 };
 export const boxOn = () => box !== null;
 
-// Returns false until the pointer has moved far enough to be a drag rather than a click
 export const boxMove = (e: PointerEvent) => {
   if (!box) return false;
   const s = scroller(),
@@ -60,8 +52,6 @@ export const boxMove = (e: PointerEvent) => {
   return true;
 };
 
-// Ends the box; true when one was dragged (so the release is not a click). Given the release, a click on a row's empty space is
-// CapCut's: the playhead goes there and, unless Shift or Ctrl add, nothing stays picked
 export const boxEnd = (e?: PointerEvent) => {
   const b = box;
   box = null;

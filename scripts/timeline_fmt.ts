@@ -1,6 +1,3 @@
-// Formats src/timeline/*.json (or named stems/paths) with the studio's 140-column compact JSON layout:
-//   bun ../../scripts/timeline_fmt.ts [stem|path ...]
-//   import { dump, load, save } from ".../scripts/timeline_fmt.ts"
 import { existsSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
 
@@ -25,7 +22,6 @@ const isStudioProtected = (cwd: string, rel: string): boolean => {
     try {
       if (openEditProtection(cwd, candidate).report().protected.length > 0) return true;
     } catch {
-      // Fail closed on corrupt collaboration JSON so human edits are never overwritten
       return true;
     }
   }

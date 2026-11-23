@@ -1,9 +1,5 @@
-// Which point of a sound lands on its cue, as real-sound's mix.py env_index: attack = the first 1 ms within 20 dB of the
-// loudest one (impacts, clicks, keys), peak = the middle of the loudest 5 ms (whooshes), end = the last sample above -50 dB
-// (risers into a hit). Seconds into the samples given, which are the part of the file the clip plays.
 export type SyncMode = "start" | "attack" | "peak" | "end";
 
-// The samples [s0, s1) a clip plays, back to front when it is reversed (process.py trims, then applies areverse)
 export const playedPart = (
   channels: readonly Float32Array[],
   s0: number,

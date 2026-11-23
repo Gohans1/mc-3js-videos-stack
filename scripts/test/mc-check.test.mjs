@@ -135,7 +135,6 @@ test("check catches placed.json, gohans, picks.json, and mob faults as X errors"
 test("check reports key typos, unpicked mod block, invalid blockstate props, and stale picked.zip as warnings (exit 0)", () => {
   const { film, runCheck } = makeCheckEnv({ withVault: true });
 
-  // Valid schemas + valid armadillo "none" clip, plus near-miss typo "scle", unpicked block, invalid facing property
   writeFileSync(
     join(film, "src/timeline/placed.json"),
     JSON.stringify({
@@ -149,7 +148,6 @@ test("check reports key typos, unpicked mod block, invalid blockstate props, and
     }),
   );
 
-  // Pick another valid item without generating picked.zip (stale/missing zip warning)
   const picksFile = join(film, "pack/picks.json");
   writeFileSync(
     picksFile,

@@ -8,7 +8,6 @@ import { stored } from "./core/storage";
 import { warmBootRequests } from "./core/warmup";
 
 const root = document.getElementById("root")!;
-// What stopped the page, with the way back: a fixed save, or the studio coming back with other code, reloads it
 const showFailure = (why: string, error: unknown) => {
   document.getElementById("studio-boot")?.remove();
   const box = document.createElement("pre");
@@ -25,13 +24,11 @@ const showFailure = (why: string, error: unknown) => {
 try {
   warmBootRequests();
   await afterPaint();
-  // A phone gets the review-only layout, and never downloads the editor's panels
   const [{ App }] = await Promise.all([
     PHONE ? import("./PhoneApp") : import("./App"),
     import("./index.css"),
   ]);
   stored.remove("pageTries", sessionStorage);
-  // A component that throws takes React's whole tree down with it: show why instead of an empty page
   createRoot(root, {
     onUncaughtError: (e) =>
       showFailure(

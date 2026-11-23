@@ -23,7 +23,6 @@ export type ShotAnim = { in?: AnimFx; out?: AnimFx; combo?: AnimFx };
 
 export const ANIM_CATEGORIES = ["Move", "Zoom", "Turn", "Lens & Light", "Shake"] as const;
 
-// The studio's curve picker: auto (the effect's own tuned curve) plus time warps that keep the effect's shape and landing
 export const ANIM_CURVES = [
   {
     id: "linear",
@@ -87,9 +86,6 @@ export const EMPTY_OPTICS: CameraOptics = {
   smearY: 0,
 };
 
-// What the studio shows: id (stored as fx), title, cat (the tab's category chips), tip, len (seconds, the In/Out default),
-// plus `pair` for cross-cut seam animations that automatically link Out on shot i with In on shot i + 1, `flip` for moves that
-// change side or roll when mirrored, and `optics` for those that write the lens state (blur, exposure, fringe, bulge, sweep).
 const IN = [
   {
     id: "push",
@@ -1117,7 +1113,6 @@ const OUT = [
   },
 ];
 
-// k (strength, 1 by default) scales a Combo
 const COMBO = [
   {
     id: "push",

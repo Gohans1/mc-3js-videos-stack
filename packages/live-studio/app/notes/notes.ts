@@ -13,8 +13,6 @@ import { PHONE } from "../core/device";
 import { onDocMutated } from "../core/doc";
 import { engine, type FreeView } from "../core/engine";
 import { shotEnd, shotIndex } from "../core/film";
-// Notes: what's wrong where, said while watching. Nothing typed is lost: every keystroke is kept on the device, a note waits on
-// the device until the server has it, × only moves a note aside with an undo, and the server writes the file atomically.
 import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { getFile, postJson, wait } from "../core/net";
 import { matcher } from "../core/search";
@@ -72,15 +70,12 @@ export const noteAt = (n: Note) =>
     n,
     fromSource,
     timingClock,
-    // SHOTS_OUT starts are heard seconds (film/edit's fromSource runs through Speed); noteScene wants scene seconds
     SHOTS.map((s, i) => ({ t: frameAt(timingClock, s.t), name: S.comments[i] })),
   );
 const whereText = (n: Note) =>
   `${stamp(n.t)} | shot ${n.shot} (${n.shotName ?? ""})${n.pin ? ` | ${n.pin.what}` : ""}${(n.marks as Mark[] | undefined)?.length ? ` | drawn: ${inkWords(n.marks as Mark[])}` : ""}`;
 const lastFixAt = (n: Note) => n.fixes?.at(-1)?.at ?? n.at;
 
-// ---------- The notes as every frame asks for them (pins, strokes, the timeline's markers, the list following the playhead),
-// worked out once each time the notes or the heard seconds change (S.timesRev): a film can gather thousands of notes
 export interface Placed {
   n: Note;
   t: number;
@@ -91,7 +86,7 @@ interface Index {
   notes: Note[];
   rev: number;
   open: Placed[];
-  check: Placed[]; // answered by the AI, waiting for the creator
+  check: Placed[];
   done: Placed[];
   drawn: Placed[];
   marks: { t: number; to?: number; done: boolean; check: boolean; asking: boolean }[];
@@ -143,14 +138,11 @@ const indexed = () => {
 export const openNotes = () => indexed().open.map((p) => p.n);
 export const noteMarks = () => indexed().marks;
 export const drawnNotes = () => indexed().drawn;
-// CapCut's Shift+M and Alt+Shift+M (next, previous marker): the playhead to the next or previous open note
 export const nextNoteTime = (t: number, d: -1 | 1) => {
   const ts = indexed().open.map((p) => p.t);
   return d > 0 ? ts.find((x) => x > t + 0.02) : ts.findLast((x) => x < t - 0.02);
 };
 
-// What the list shows (search, scope, shot, facets, sort): open notes to fix, check notes awaiting decision, and fixed notes folded under them.
-// byTime stays in film order for the list to follow the playhead through.
 let shown: {
   ix: Index;
   key: string;
@@ -197,13 +189,10 @@ export const shownNotes = () => {
 export const clearNoteFilters = () =>
   set({ noteSearch: "", noteStatus: "all", noteScope: "all", noteShot: null, noteFacets: [] });
 
-// ---------- Pictures that go with a note: the frame with the pin, the area under it unmarked, and the seconds around it
-// (a press during playback lands after what was being reacted to, and a note about a cut is about those seconds)
 const spread = <T>(xs: T[], n: number) =>
   xs.length <= n
     ? xs
     : Array.from({ length: n }, (_, i) => xs[Math.round((i * (xs.length - 1)) / (n - 1))]);
-// Everything around the moment, as the film stood when the note was written
 const noteContext = (c: ComposeCreate) => {
   const { voiceOut } = S,
     audio = S.el.audio;
@@ -229,7 +218,7 @@ const noteContext = (c: ComposeCreate) => {
     }))
     .filter((b) => near(b.at, b.at + (b.dur ?? 0), 1.5));
   return {
-    playing: !!c.wasPlaying, // pressed during playback: what it's about may be a moment earlier
+    playing: !!c.wasPlaying,
     rate: audio.playbackRate,
     muted: audio.muted || undefined,
     volume: audio.volume !== 1 ? audio.volume : undefined,
@@ -262,7 +251,6 @@ const noteContext = (c: ComposeCreate) => {
   };
 };
 
-// ---------- Kept on the device until the server has it: a bad line delays a note, it never eats one
 interface Outgoing {
   note: Note;
   img?: string | null;
@@ -271,11 +259,9 @@ interface Outgoing {
   frames?: { t: number; img: string }[];
   refs?: string[];
 }
-// What the page asks of a note, in the order asked: every one is sent, so an Approve and a Remember a moment apart both arrive
 type Op = NoteChange | { remove: true } | { restore: true; text?: string };
 let heldNotes: Outgoing[] | null = null,
   heldOps: Record<string, Op[]> | null = null;
-// A queue spoilt on the device (cut short by a full disk, edited by hand) must not stop every later note from sending
 const readQueue = <T>(key: string, empty: T): T => {
   try {
     return JSON.parse(stored.get(key) ?? "null") ?? empty;
@@ -286,8 +272,6 @@ const readQueue = <T>(key: string, empty: T): T => {
 const unsent = (): Outgoing[] => heldNotes ?? readQueue("unsentNotes", []);
 export const noteMedia = (n: Note) => resolveNoteMedia(n, unsent());
 const keepUnsent = (list: Outgoing[]) => {
-  // Storage full: the words matter more than the pictures, the creator's own pictures more than the film's, the main picture
-  // more than the extras. No storage at all: they wait in this page
   for (const slim of [
     (x: Outgoing) => x,
     (x: Outgoing) => ({ note: x.note, refs: x.refs, img: x.img, frames: x.frames }),
@@ -302,7 +286,6 @@ const keepUnsent = (list: Outgoing[]) => {
   }
   heldNotes = list;
 };
-// A page from before kept one change per note, not a list
 const unsentOps = (): Record<string, Op[]> =>
   heldOps ??
   Object.fromEntries(
@@ -318,7 +301,6 @@ const queueOp = (id: string, op: Op) => {
   const all = unsentOps(),
     list = all[id] ?? [],
     last = list.at(-1);
-  // new words for a note replace words not sent yet
   keepOps({
     ...all,
     [id]: last && "text" in last && "text" in op ? [...list.slice(0, -1), op] : [...list, op],
@@ -367,7 +349,6 @@ export const flushNotes = async () => {
       } else {
         const [id, [op]] = ops[0];
         const r = await postJson(`/api/notes/${id}`, op);
-        // 409: the note moved on meanwhile (the AI answered it, it was deleted): sending it again would never land
         if (r.status === 409) {
           dropOp(id, op);
           const words = "again" in op ? op.again : "text" in op ? op.text : undefined;
@@ -403,7 +384,6 @@ const changed = (notes: Note[]) => {
   set({ notes });
   S.dirty = true;
 };
-// The note with a change applied, as the server will have it (note-state.mjs), or the reason it can't happen now
 const applied = (n: Note, op: NoteChange) => {
   const x = structuredClone(n),
     r = applyChange(x, op);
@@ -515,12 +495,10 @@ export const loadNotes = async ({ notify = false } = {}) => {
       }, n),
     );
   changed(notes);
-  // Compare against the visible notes so the server's echo of a local action stays quiet.
   if (notify) announceNoteChanges(mine, notes);
   if (flushing) set({ saved: "busy" });
 };
 
-// One change to a note from the page: shown now, sent in order. Says why not when the note can't take it now
 export const changeNote = (id: string, op: NoteChange, said?: string) => {
   const was = get().notes.find((x) => x.id === id);
   if (!was) return false;
@@ -561,18 +539,15 @@ const editNote = (id: string, words: string) => {
   editSend = window.setTimeout(flushNotes, 400);
 };
 
-// ---------- Writing a note
-// What's being typed is on the device from the first letter: a reload or a killed tab brings it back
 export const setDraft = (words: string) => {
   set({ draft: words });
-  drawPins(); // the words show on the picture as they are typed
+  drawPins();
   drawInk(drawnNotes);
   const { compose } = get();
   if (isComposeDirty(compose, words, more()))
     stored.set("noteDraft", JSON.stringify({ compose, words }));
   else stored.remove("noteDraft");
 };
-// What a note holds besides its words: strokes on the film, pictures pasted in
 const more = () => inkMarks.length > 0 || get().refs.length > 0;
 export {
   type ComposeOrigin,
@@ -615,7 +590,6 @@ const restoreComposeFocus = () => {
   else run();
 };
 
-// focus false: opened by a stroke, so a phone's keyboard stays down until the creator taps the box to say something
 const openBox = (compose: Compose, words = "", focus = true, origin?: ComposeOrigin) => {
   if (origin) setComposeOrigin(compose, origin);
   if (!get().compose && typeof document !== "undefined") {
@@ -651,9 +625,8 @@ export const openNote = async (
   if (compose?.kind === "edit") {
     ui.focusNote();
     return;
-  } // an old note's box stays on that note until Save or Cancel
+  }
   const wasPlaying = compose ? compose.wasPlaying : S.playing;
-  // Words already written belong to the note they were written for: a new place starts a new note. On the same frame a click just moves the pin
   if (compose && draft.trim() && Math.abs(S.t - compose.t) > 0.01 && !inkMarks.length) {
     set({ compose: { ...compose, resume: false } });
     await saveNote();
@@ -705,7 +678,6 @@ export const openVoiceNote = (voiceName: string, voiceId: string, origin?: Compo
   const next = mergeVoiceNoteDraft(get().draft, voiceName, voiceId);
   if (next !== get().draft) setDraft(next);
 };
-// A drawing tool's first stroke opens the note it belongs to; later strokes, at any second, join it
 export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
   if (!get().compose) openNote(null, false, origin, anchor);
 };
@@ -740,7 +712,6 @@ export const restoreDraft = () => {
   seek(compose.t);
   openBox(compose, words);
 };
-// An old note opens in the same box, with its words. Nothing is overwritten until Xong
 export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
   if (savingNote) await savingNote;
   const { compose, draft } = get();
@@ -795,7 +766,6 @@ export const closeNote = (
   restoreComposeFocus();
   if (resume) setPlaying(true);
 };
-// Cancel asks nothing: the words stay one press away in case it was a slip
 export const cancelNote = () => {
   if (get().noteSaving) return;
   const { compose: was, draft: words } = get();
@@ -827,12 +797,12 @@ const saveNoteNow = async () => {
     if (!body || body === before.trim()) {
       closeNote();
       return;
-    } // emptied gets its words back: × is what removes a note
+    }
     if (was) editNote(id, body);
     else {
       queueOp(id, { restore: true, text: body });
       flushNotes();
-    } // removed elsewhere meanwhile: these words still count
+    }
     closeNote("save");
     showUndo(`Note at ${at} updated`, () => editNote(id, before));
     return;
@@ -871,7 +841,6 @@ const saveNoteNow = async () => {
     marks: strokes.length ? strokes : undefined,
     range: strokes.length ? (sp && sp[1] - sp[0] > 1 / FPS ? sp : undefined) : inOutAt(compose.t),
   };
-  // The note's own frame in its picture, even if the film has moved on since. No picture is no reason to lose the words
   let img: string | null = null,
     crop: string | null = null,
     strip: string | null = null,
@@ -879,8 +848,6 @@ const saveNoteNow = async () => {
   try {
     strip = await momentStrip(compose.t);
   } catch {}
-  // A drawing over several seconds: one picture per second it was drawn at, with what was drawn there and the rest faint. Past
-  // 8 of them: the first, the last and 6 evenly between, so a long path still shows where it starts and ends
   if (strokes.length)
     try {
       for (const t of spread(inkTimes(strokes), 8)) {
@@ -940,10 +907,8 @@ export const removeNote = (n: Note) => {
     flushNotes();
   });
 };
-// History is a record: the way back is "Reopen"
 export const reopenNote = (n: Note) =>
   changeNote(n.id, { done: false }, `Note at ${stamp(noteAt(n))} moved back to To fix`);
-// The creator's side of the AI's answer (note-state.mjs): approve a fix, or send words back and the note is the AI's again
 export const approveNote = (n: Note) =>
   changeNote(n.id, { approve: true }, `Approved: note at ${stamp(noteAt(n))}`);
 export const setReplyDraft = (id: string, words: string) => {
@@ -1049,13 +1014,10 @@ export const returnFromNote = () => {
   seek(noteReturnTime(position));
   setReview(false);
 };
-// From two seconds before the note, playing, to see the moment come and go
 export const playNote = (n: Note) => {
   seek(Math.max(0, noteAt(n) - 2));
   setPlaying(true);
 };
-// The film as it is now at a note's moment and saved camera view, drawn as the note's own picture was (its pin, its strokes):
-// what the creator compares against that picture. Serialized so switching notes never races FreeCam state.
 let nowPicturesRev = -1;
 const nowPictures = new Map<string, { key: string; url: string }>();
 let nowPictureQueue: Promise<unknown> = Promise.resolve();
@@ -1148,7 +1110,6 @@ export const nowPicture = (n: Note): Promise<string | null> => {
   return run;
 };
 
-// ---------- The Review room (ReviewRoom.tsx): the notes alone beside the picture
 export const focusReviewRow = (id: string | null) => {
   if (!id || typeof document === "undefined") return;
   const tryFocus = (retries: number) => {
@@ -1262,7 +1223,7 @@ export const setReview = (on: boolean, opener?: Element | null, noteId?: string)
         : null);
   }
   invalidatePictures();
-  if (get().compose) cancelNote(); // its words stay one press away, as any cancel
+  if (get().compose) cancelNote();
   const { reviewPick, reviewTab } = get();
   const readyCheck = reviewList("check"),
     asking = reviewList("asking"),
@@ -1282,10 +1243,9 @@ export const setReview = (on: boolean, opener?: Element | null, noteId?: string)
   const pickId = keep ? reviewPick : (targetList[0]?.n.id ?? null);
   set({ review: true, reviewTab: tab, reviewPick: pickId });
   const first = pickId ? get().notes.find((x) => x.id === pickId) : undefined;
-  if (first) goToNote(first, opening); // the picture opens on the note the room opens on
+  if (first) goToNote(first, opening);
   if (pickId) focusReviewRow(pickId);
 };
-// The Review room opened on one note, in its own tab
 export const reviewNote = (n: Note, opener?: Element | null) => {
   const st = noteState(n);
   set({
@@ -1350,7 +1310,6 @@ export const copyAll = () => {
   );
   say("Copied");
 };
-// The first of these notes (in film order) at or after second t
 const firstFrom = (list: Placed[], t: number) => {
   let lo = 0,
     hi = list.length;
@@ -1361,7 +1320,6 @@ const firstFrom = (list: Placed[], t: number) => {
   }
   return lo;
 };
-// The note nearest the playhead among those the list shows, for it to keep in view
 export const followNotes = () => {
   const list = shownNotes().byTime,
     i = firstFrom(list, S.t),
@@ -1370,7 +1328,6 @@ export const followNotes = () => {
   const near = (!b || (a && S.t - a.t <= b.t - S.t) ? a : b)?.n.id ?? null;
   if (near !== get().nearNote) set({ nearNote: near });
 };
-// The pinned and whole-frame notes on the picture now: those from the last few seconds (pinfade.ts), fading
 const EMPTY_STAGE_NOTES = {
   pins: [] as ActivePinNote[],
   frame: [] as { id: string; text: string; fade: number }[],
@@ -1387,13 +1344,11 @@ document.addEventListener("visibilitychange", () => {
   if (!document.hidden) flushNotes();
 });
 
-// ---------- The pins on the picture: saved notes on their frame, fading as the film plays on, and the one being written. Each
-// keeps its element from frame to frame, only its fade changing; the one being written stays on top
 const pinEls = new Map<string, HTMLDivElement>();
 const frameEls = new Map<string, HTMLDivElement>();
 let frameStackEl: HTMLDivElement | null = null;
 let lastPinLayoutSig = "";
-export const pinWordsUp = (y: number) => y > 0.88; // PinTools keeps clear of them
+export const pinWordsUp = (y: number) => y > 0.88;
 export const drawPins = () => {
   const box = S.el?.pins;
   if (!box) return;
@@ -1416,7 +1371,6 @@ export const drawPins = () => {
     return;
   }
 
-  // Whole-frame notes (no pin and no drawn ink) render in a vertical stack so simultaneous notes never occlude one another
   if (frameNotes.length) {
     if (!frameStackEl || frameStackEl.parentElement !== box) {
       frameStackEl = document.createElement("div");
@@ -1477,7 +1431,6 @@ export const drawPins = () => {
     const key = `${p.id}|${px}|${py}|${p.text}`;
     now.add(key);
     let d = pinEls.get(key);
-    // A note shows its words, the one being written what was tapped until words come; each stays inside the picture's edges
     if (!d) {
       d = document.createElement("div");
       d.className = p.saved ? "pin saved" : "pin";

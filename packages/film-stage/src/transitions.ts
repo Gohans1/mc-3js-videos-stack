@@ -3,9 +3,17 @@ import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 import { EASES } from "./camera-meta";
-import { extendedTransitions, transitionExtension, type TransitionRenderer } from "./transition-extension";
-
-import { type ShotTransition, type TransitionDef, type TransitionEase, TRANSITIONS } from "./transitions-meta";
+import {
+  extendedTransitions,
+  transitionExtension,
+  type TransitionRenderer,
+} from "./transition-extension";
+import {
+  type ShotTransition,
+  type TransitionDef,
+  type TransitionEase,
+  TRANSITIONS,
+} from "./transitions-meta";
 export * from "./transitions-meta";
 
 type Shot = { t: number; transition?: ShotTransition };
@@ -37,9 +45,13 @@ export function transitionProgress(rawProgress: number, ease?: TransitionEase) {
 const normalizeFeather = (feather?: number) =>
   typeof feather === "number" && Number.isFinite(feather) ? Math.max(0, Math.min(1, feather)) : 0.5;
 
-// a film's own transition with a built-in's id replaces it, as its own titles and sounds do
 function findTransition(fx: string, extra?: readonly TransitionDef[]): TransitionDef | null {
-  return extra?.find((x) => x.id === fx) ?? TRANSITIONS.find((x) => x.id === fx) ?? transitionExtension(fx)?.definition ?? null;
+  return (
+    extra?.find((x) => x.id === fx) ??
+    TRANSITIONS.find((x) => x.id === fx) ??
+    transitionExtension(fx)?.definition ??
+    null
+  );
 }
 
 export function transitionLength(
@@ -85,7 +97,6 @@ export function transitionAt(
   return null;
 }
 
-// Camera handles hold their boundary pose; actors, lights and sound still use the unchanged film time.
 export const viewTime = (shots: Shot[], end: number, i: number, t: number) =>
   Math.max(shots[i].t, Math.min(t, (shots[i + 1]?.t ?? end) - 1e-6));
 
@@ -105,7 +116,10 @@ export function makeTransitions(
   a.wrapS = a.wrapT = b.wrapS = b.wrapT = THREE.ClampToEdgeWrapping;
 
   const additions = [...extendedTransitions(), ...(extra ?? [])];
-  const catalogue: readonly TransitionDef[] = [...TRANSITIONS.filter((b0) => !additions.some((x) => x.id === b0.id)), ...additions];
+  const catalogue: readonly TransitionDef[] = [
+    ...TRANSITIONS.filter((b0) => !additions.some((x) => x.id === b0.id)),
+    ...additions,
+  ];
   const external = new Map<string, TransitionRenderer>();
   const prepared = new Map<string, number>();
   const extensionFor = (id: string) => {
@@ -115,7 +129,6 @@ export function makeTransitions(
     return external.get(id)!;
   };
 
-  // Lazy-compiled display-referred shaders so startup compiles zero unused WebGL programs.
   const materials = new Map<string, THREE.ShaderMaterial>();
   const materialFor = (def: TransitionDef) => {
     let mat = materials.get(def.id);
@@ -153,7 +166,8 @@ export function makeTransitions(
   };
 
   const quad = new FullScreenQuad();
-  const active = (t: number) => free.on && !free.previewEffects ? null : transitionAt(shots(), end(), t, catalogue);
+  const active = (t: number) =>
+    free.on && !free.previewEffects ? null : transitionAt(shots(), end(), t, catalogue);
   const draw = (t: number) => {
     const tr = active(t);
     const def = tr ? findTransition(tr.fx, catalogue) : null;
@@ -183,7 +197,6 @@ export function makeTransitions(
       renderer.setRenderTarget(null);
       renderer.copyFramebufferToTexture(texture);
     };
-    // Leave the scene posed from the active shot so picking and studio overlays match the playhead.
     if (t < shots()[tr.shot].t) {
       capture(tr.shot, b);
       capture(tr.shot - 1, a);
@@ -222,10 +235,14 @@ export function makeTransitions(
     const extension = extensionFor(tr.fx);
     if (!extension) return;
     try {
-      await extension.prepare(tr.progress, (incoming) => {
-        frame(t, tr.shot - (incoming ? 0 : 1));
-        return renderer.domElement;
-      }, shots()[tr.shot].transition?.props);
+      await extension.prepare(
+        tr.progress,
+        (incoming) => {
+          frame(t, tr.shot - (incoming ? 0 : 1));
+          return renderer.domElement;
+        },
+        shots()[tr.shot].transition?.props,
+      );
       prepared.set(tr.fx, t);
     } catch (error) {
       prepared.delete(tr.fx);

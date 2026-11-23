@@ -60,7 +60,6 @@ def select_times(start, end, budget, pins, anchors=()):
         t = round(start + (end - start) * (i + 0.5) / coverage, 9)
         if start <= t < end:
             selected.setdefault(t, []).append("coverage")
-    # Cuts supplement coverage; they never replace a quiet tail of the source.
     anchor_times = list(dict.fromkeys(round(t, 9) for t in anchors))
     for t in anchor_times:
         if t in selected:
@@ -82,7 +81,6 @@ def select_times(start, end, budget, pins, anchors=()):
 
 def scene_times(source, start, end, origin, sequential, displayed):
     index = bisect.bisect_left(displayed, start - 0.000001)
-    # The score uses the current and previous frame differences.
     previous = max(0, displayed[max(0, index - 2)] - 0.000002)
     seek = [] if sequential else ["-ss", seconds(previous)]
     scan = (end if sequential else end - previous) + 0.25

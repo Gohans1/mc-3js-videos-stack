@@ -1,12 +1,3 @@
-// The Cartoon Animation Filter (Wang, Drucker, Agrawala & Cohen, SIGGRAPH 2006): x*(t) = x(t) - A * x''(t) smoothed by a
-// Gaussian, i.e. the motion convolved with an inverted Laplacian of Gaussian. Its negative lobes wind each move up the
-// other way first (anticipation) and carry it past where it stops (follow-through, exaggeration). One strength knob.
-// The authors call it a first cut for non-experts, not a replacement for keyed animation: keep amount low on a realistic
-// film. Differences from the paper: sigma is fixed (they adapt it per moment from the dominant frequency of the motion),
-// and only the listed joints are filtered (the paper skips only the root's ground-plane translation; legs here are left
-// to planted-foot IK).
-//   const toon = cartoon((t) => bodyPose(t), filmEnd, { amount: 0.25 });   pose = addPose(bodyPose(t), toon(t))
-// amount: A in units of sigma squared (0.25 winds a 0.3 s smoothstep move about 5% back first and carries it ~5% past).
 import { canonical, type Pose, unwrap } from "./pose";
 
 const HZ = 60;
@@ -27,7 +18,6 @@ export function cartoon(
         raw[k][i * 3 + c] = i ? unwrap(a[c] ?? 0, raw[k][(i - 1) * 3 + c]) : (a[c] ?? 0);
     });
   }
-  // the second derivative of a unit-area Gaussian, sampled; convolving with it is the smoothed acceleration
   const s = sigma * HZ,
     R = Math.ceil(4 * s),
     K = new Float64Array(2 * R + 1);
@@ -40,7 +30,7 @@ export function cartoon(
   let mean = 0;
   for (const v of K) mean += v;
   mean /= K.length;
-  for (let k = 0; k < K.length; k++) K[k] -= mean; // sums to zero, so a held pose gets no offset
+  for (let k = 0; k < K.length; k++) K[k] -= mean;
   const A = amount * sigma * sigma;
   const off = raw.map((x) => {
     const o = new Float32Array(n * 3);

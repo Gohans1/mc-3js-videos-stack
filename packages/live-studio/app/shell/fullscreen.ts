@@ -1,5 +1,3 @@
-// CapCut's full screen preview (Ctrl+Shift+F, Esc leaves): the picture alone fills the screen, with its pins, drawings and
-// captions; every key still works there
 import { useSyncExternalStore } from "react";
 
 import { S } from "../core/state";

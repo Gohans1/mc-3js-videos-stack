@@ -1,4 +1,3 @@
-// Inline drawing-tool row inside the stage-anchored composer so strokes start right where the pin landed.
 import { useRef } from "react";
 
 import { Button } from "@/components/ui/button";

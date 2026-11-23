@@ -1,4 +1,3 @@
-// Pure folder-column model and responsive deck layout rules for Lessons, ported from md-phone desktop Miller columns.
 import type { LessonFile } from "./lessons";
 
 export const LESSON_DESKTOP_DECK_MIN_W = 420;
@@ -147,7 +146,6 @@ const clampFolderParts = (files: readonly LessonFile[], requested: readonly stri
   return resolved;
 };
 
-/** Builds the ancestor-to-leaf Miller column chain for Lessons navigation. */
 export function buildLessonTrail({
   files,
   folder,
@@ -206,7 +204,6 @@ export function buildLessonTrail({
   };
 }
 
-/** Chooses desktop Miller stack vs compact layout; desktop panels never hide ancestor columns. */
 export function layoutLessonDeck({
   columnCount,
   hasContent,
@@ -251,7 +248,6 @@ export function layoutLessonDeck({
   };
 }
 
-/** Computes sticky horizontal overlap and vertical step offsets per column depth. */
 export function lessonCardOffsets(depth: number, layout: LessonDeckLayout) {
   return {
     stickyLeftPx: Math.min(Math.max(0, depth), layout.maxStickySteps) * layout.stickyStepPx,
@@ -259,7 +255,6 @@ export function lessonCardOffsets(depth: number, layout: LessonDeckLayout) {
   };
 }
 
-/** Tapping an already-active subfolder with no open file collapses deeper columns; otherwise opens it. */
 export function resolveDirClick(
   trail: LessonTrail,
   colDepth: number,
@@ -272,7 +267,6 @@ export function resolveDirClick(
   return [...dirParts];
 }
 
-/** Resolves the folder to fold back to when clicking empty space inside a column, or null if already leaf. */
 export function emptyAreaFoldTarget(
   trail: LessonTrail,
   colDepth: number,
@@ -291,7 +285,6 @@ export interface LessonTrailTransition {
   closingContent: boolean;
 }
 
-/** Classifies Miller trail changes so transitions animate fold-out vs fold-in coherently. */
 export function classifyLessonTrailTransition(
   prev: LessonTrail,
   next: LessonTrail,

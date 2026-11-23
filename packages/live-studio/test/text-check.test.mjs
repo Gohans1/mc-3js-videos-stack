@@ -1,5 +1,3 @@
-// checks/text.mjs: where a line of on-screen text sits and how it reads over the picture, from two frames the page renders
-// (with the line and without it); here the frames are drawn by hand
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -15,7 +13,6 @@ const frame = (rgb) => {
 const paint = (f, x0, y0, x1, y1, rgb) => {
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) f.set([...rgb, 255], (y * W + x) * 4);
 };
-// a line of "letters": white bars 2 px wide every 8 px, with an optional ring of another colour around each (a stroke)
 const line = (bg, x0, ring) => {
   const without = frame(bg),
     withText = frame(bg);
@@ -57,7 +54,6 @@ test("text past the 5% graphics-safe margin is OUTSIDE, naming the edge; text th
   assert.deepEqual(v.faults, ["OUTSIDE"]);
   assert.match(v.lines.join("\n"), /OUTSIDE items\[1\] "EDGE"[^\n]*2\.0% from the left edge/);
 
-  // 8% from the right edge: inside a 16:9 film's margin, under the like and share buttons of a Short
   const right = measure(...line([0, 0, 0], 110), W, H, WHITE, 20);
   assert.deepEqual(verdict({ i: 4, text: "BUTTONS", at: 1, px: 56 }, right).faults, []);
   const short = verdict({ i: 4, text: "BUTTONS", at: 1, px: 56 }, right, "9:16");
@@ -67,7 +63,6 @@ test("text past the 5% graphics-safe margin is OUTSIDE, naming the edge; text th
     /OUTSIDE items\[4\] "BUTTONS"[^\n]*8\.0% from the right edge[^\n]*Short[^\n]*10\.0% from the right/,
   );
 
-  // wider than the safe area: no move of x or y fits it, so the fix is a line break or a smaller size
   const wide = verdict(
     { i: 5, text: "A VERY LONG LINE", at: 3, px: 56 },
     { box: [0.004, 0.4, 0.994, 0.6], contrast: 10 },

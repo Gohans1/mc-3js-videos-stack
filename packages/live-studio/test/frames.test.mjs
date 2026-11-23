@@ -5,7 +5,6 @@ import { meter } from "../checks/frames.mjs";
 
 const W = 16,
   H = 9;
-// frame(i): a grey picture, with a gradient that slides one pixel per frame so frames always differ a little
 const frame = (level, i, at = () => null) => {
   const f = new Uint8Array(W * H * 3);
   for (let p = 0; p < W * H; p++) {

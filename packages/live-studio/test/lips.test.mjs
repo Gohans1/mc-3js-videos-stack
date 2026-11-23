@@ -49,13 +49,11 @@ test("the cues follow the audio file and narration clip, while narrative warp le
       tracks: [{ id: "v" }],
     },
   });
-  // That warp places narrative anchors; these audio samples play at 3, 3.5, 4.
   assert.deepEqual(mouthCues(moved, "steve"), [
     [3, "X"],
     [3.5, "D"],
     [4, "X"],
   ]);
-  // the studio puts a fresh list in EDIT on every change, never edits one in place
   moved.audio = { ...moved.audio, tracks: [{ id: "v", mute: true }] };
   assert.deepEqual(mouthCues(moved, "steve"), []);
 });

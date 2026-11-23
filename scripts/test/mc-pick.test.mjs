@@ -31,7 +31,6 @@ function makePickEnv() {
   writeFileSync(join(film, "src/scene.ts"), "");
   writeFileSync(join(film, "package.json"), JSON.stringify({ name: "pick-demo" }));
 
-  // Vanilla client_assets.zip (provides oak_leaves blockstate & cube_all)
   writeFileSync(
     join(vault, "jar/client_assets.zip"),
     zipSync({
@@ -46,7 +45,6 @@ function makePickEnv() {
     }),
   );
 
-  // Mod jar with both a block and an item (including 1.21.4 items/<id>.json + .mcmeta animation)
   writeFileSync(
     join(vault, "packs/decor-mod.jar"),
     zipSync({
@@ -71,7 +69,6 @@ function makePickEnv() {
     }),
   );
 
-  // Pure resource pack overriding vanilla oak_leaves (model-only) with secondary namespace & vanilla fallback
   writeFileSync(
     join(vault, "packs/better-leaves.zip"),
     zipSync({
@@ -88,7 +85,6 @@ function makePickEnv() {
     }),
   );
 
-  // Second RP overriding the exact same minecraft:models/block/oak_leaves.json to trigger collision warn
   writeFileSync(
     join(vault, "packs/alt-leaves.zip"),
     zipSync({
@@ -141,11 +137,9 @@ test("pick.mjs honors MC_VAULT_ROOT, picks items & blocks, and supports minecraf
   expect(picked["assets/decor/textures/block/chair.png.mcmeta"]).toBeDefined();
   expect(picked["assets/decor/items/rifle.json"]).toBeDefined();
   expect(picked["assets/decor/textures/item/rifle.png"]).toBeDefined();
-  // Pure resource-pack override included!
   expect(picked["assets/minecraft/models/block/oak_leaves.json"]).toBeDefined();
   expect(picked["assets/betterleaves/models/block/leaves_base.json"]).toBeDefined();
   expect(picked["assets/minecraft/textures/block/leaves_tip.png"]).toBeDefined();
-  // Vanilla blockstate was NOT copied unnecessarily from client_assets.zip
   expect(picked["assets/minecraft/blockstates/oak_leaves.json"]).toBeUndefined();
 });
 
@@ -267,7 +261,6 @@ test("pick.mjs distinguishes missing cached optional models and keeps picks.json
   const { vault, film } = makePickEnv();
   const { updatePicks, pickBlocks } = await import(PICK_MJS);
 
-  // RP overrides stone model with absent vanilla parent barrel, then also asks to pick absent barrel
   writeFileSync(
     join(vault, "packs/rp-partial.zip"),
     zipSync({
@@ -307,7 +300,6 @@ test("pick.mjs distinguishes missing cached optional models and keeps picks.json
     }),
   ).toThrow(/no blockstate assets\/minecraft\/blockstates\/barrel\.json/);
 
-  // Atomic updatePicks rollback: invalid texture prevents writing picks.json
   writeFileSync(join(film, "pack/picks.json"), "[]");
   expect(() =>
     updatePicks(film, {
@@ -363,4 +355,47 @@ test("updatePicksBatch skips shadowed override entries in later packs when earli
   );
   expect(res.added).toContain("block:minecraft:oak_leaves");
   expect(existsSync(join(film, "assets/public/picked.zip"))).toBe(true);
+});
+
+test("updatePicksBatch surfaces corrupt ZIP deflate failures instead of reporting missing assets", async () => {
+  const { vault, film } = makePickEnv();
+  const { updatePicksBatch } = await import(PICK_MJS);
+
+  const rawZip = Buffer.from(
+    zipSync(
+      {
+        "assets/decor/blockstates/corrupt_chair.json": strToU8(
+          JSON.stringify({
+            variants: {
+              "": {
+                model:
+                  "decor:block/oak_chair_with_enough_padding_to_trigger_deflate_compression_0000000000000000",
+              },
+            },
+          }),
+        ),
+      },
+      { level: 9 },
+    ),
+  );
+  const nameLen = rawZip.readUInt16LE(26);
+  const extraLen = rawZip.readUInt16LE(28);
+  const dataOffset = 30 + nameLen + extraLen;
+  rawZip[dataOffset] = 0xff;
+  rawZip[dataOffset + 1] = 0x00;
+  rawZip[dataOffset + 2] = 0xde;
+  rawZip[dataOffset + 3] = 0xad;
+  writeFileSync(join(vault, "packs/corrupt-deflate.jar"), rawZip);
+
+  expect(() =>
+    updatePicksBatch(
+      film,
+      [{ jar: "corrupt-deflate.jar", namespace: "decor", blocks: ["corrupt_chair"] }],
+      {
+        vaultDir: join(vault, "packs"),
+        vanillaJar: join(vault, "jar/client_assets.zip"),
+        quiet: true,
+      },
+    ),
+  ).toThrow(/failed to extract assets\/decor\/blockstates\/corrupt_chair\.json/);
 });

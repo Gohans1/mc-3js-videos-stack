@@ -159,7 +159,6 @@ export function SpeedCurve({
     };
   };
 
-  // Break polyline at every split vertex whose incoming/outgoing rates differ or stays visibly gapped
   const cutBoundaries = value
     .map((_, i) => i)
     .filter((i) => i > 0 && i < value.length - 1 && !!normCuts[String(i)]);

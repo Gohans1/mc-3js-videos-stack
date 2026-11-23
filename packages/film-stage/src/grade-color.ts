@@ -59,7 +59,6 @@ export function colorGrade(basic: BasicGrade, secondary: SecondaryGrade = {}) {
       h = MathUtils.smoothstep(y, 0.55, 1),
       m = 1 - s - h;
     c.multiplyScalar(s * shadow + m * mid + h * highlight);
-    // Lift/gain keep the opposite endpoint fixed; contrast pivots on display mid-grey.
     const tone = (x: number) =>
       ((x * (gain - lift) + lift - 0.5) * contrast + 0.5) * (1 - 0.25 * fade) + 0.12 * fade;
     c.setRGB(tone(c.r), tone(c.g), tone(c.b));

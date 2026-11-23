@@ -1,10 +1,10 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
+import test from "node:test";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const SCRIPT = path.join(REPO, "scripts/sound/get_sfx.py");
@@ -105,10 +105,13 @@ function readWavInfo(wavPath) {
 async function startMockFreesound(t, handler) {
   const server = http.createServer(handler);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
-  t.after(() => new Promise((resolve) => {
-    server.closeAllConnections?.();
-    server.close(resolve);
-  }));
+  t.after(
+    () =>
+      new Promise((resolve) => {
+        server.closeAllConnections?.();
+        server.close(resolve);
+      }),
+  );
   const addr = server.address();
   return `http://127.0.0.1:${addr.port}`;
 }
@@ -148,7 +151,10 @@ test("cached SFX are reprocessed when trim or channel settings change, reusing t
   const legacy = JSON.parse(fs.readFileSync(sourcesPath, "utf8"));
   delete legacy.tap.processing;
   fs.writeFileSync(sourcesPath, JSON.stringify(legacy));
-  fs.writeFileSync(path.join(dir, "sound/sfx_list.json"), JSON.stringify({ tap: { id: 123, for: "full source" } }));
+  fs.writeFileSync(
+    path.join(dir, "sound/sfx_list.json"),
+    JSON.stringify({ tap: { id: 123, for: "full source" } }),
+  );
   const rebuilt = await runCliAsync([], { cwd: dir, env: { FREESOUND_BASE: base } });
   assert.equal(rebuilt.status, 0, rebuilt.stderr);
   const full = readWavInfo(path.join(dir, "sound/sfx/tap.wav"));
@@ -203,7 +209,11 @@ test("invalid flags, bad arguments, and non-film directory exit 2 cleanly withou
 
   for (const [args, cwd, pattern] of cases) {
     const r = runCli(args, { cwd });
-    assert.equal(r.status, 2, `expected exit 2 for ${args.join(" ")}, got ${r.status}: ${r.stderr}`);
+    assert.equal(
+      r.status,
+      2,
+      `expected exit 2 for ${args.join(" ")}, got ${r.status}: ${r.stderr}`,
+    );
     assert.match(r.stderr, pattern);
     assert.doesNotMatch(r.stderr, /Traceback|JSONDecodeError/);
   }
@@ -257,7 +267,11 @@ test("symlink or junction escape for sound/sfx is blocked before writing", async
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-outside-"));
   t.after(() => fs.rmSync(outside, { recursive: true, force: true }));
   fs.mkdirSync(path.join(dir, "sound"), { recursive: true });
-  fs.symlinkSync(outside, path.join(dir, "sound", "sfx"), process.platform === "win32" ? "junction" : "dir");
+  fs.symlinkSync(
+    outside,
+    path.join(dir, "sound", "sfx"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
 
   const r = await runCliAsync([], { cwd: dir, env: { FREESOUND_BASE: base } });
   assert.equal(r.status, 1, r.stderr);
@@ -306,7 +320,10 @@ test("fetch verifies true CC0 license, preserves existing valid files on failure
   const fixDir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-fix-"));
   t.after(() => fs.rmSync(fixDir, { recursive: true, force: true }));
   const toneMp3 = makeMp3Buffer(fixDir, "tone.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2",
   ]);
 
   let baseUrl = "";
@@ -323,7 +340,6 @@ test("fetch verifies true CC0 license, preserves existing valid files on failure
       return;
     }
     if (req.url === "/s/202/") {
-      // CC-BY page whose comment text mentions "Creative Commons 0" must still be rejected!
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(`
         <html><head><meta property="og:audio:artist" content="Bob"></head>
@@ -356,23 +372,28 @@ test("fetch verifies true CC0 license, preserves existing valid files on failure
   assert.match(res.stderr, /not CC0/i);
   assert.doesNotMatch(res.stderr, /Traceback/);
 
-  // First sound must be atomically committed; second sound must leave no leftover wav or tmp files
   const wav101 = path.join(dir, "sound", "sfx", "good_hit.wav");
   assert.equal(fs.existsSync(wav101), true);
   assert.equal(fs.existsSync(path.join(dir, "sound", "sfx", "bad_ccby.wav")), false);
-  const leftovers = fs.readdirSync(path.join(dir, "sound", "sfx")).filter((f) => f.includes(".tmp"));
+  const leftovers = fs
+    .readdirSync(path.join(dir, "sound", "sfx"))
+    .filter((f) => f.includes(".tmp"));
   assert.deepEqual(leftovers, []);
 
-  // Verify keep trim applied fade-out BEFORE ending (last 1 ms should stay near silence, not jump to full tone)
   const info = readWavInfo(wav101);
   assert.equal(info.sampleRate, 48000);
   assert.equal(info.channels, 1);
-  assert.ok(Math.abs(info.frames - 0.6 * 48000) < 2500, `expected ~0.6s frames, got ${info.frames}`);
+  assert.ok(
+    Math.abs(info.frames - 0.6 * 48000) < 2500,
+    `expected ~0.6s frames, got ${info.frames}`,
+  );
   const tail = info.samples.subarray(Math.max(0, info.samples.length - 48));
   const peakTail = Math.max(...Array.from(tail, (v) => Math.abs(v)));
   assert.ok(peakTail < 2000, `expected fade-out tail near zero, got peak ${peakTail}`);
 
-  const sources = JSON.parse(fs.readFileSync(path.join(dir, "sound", "sfx", "SOURCES.json"), "utf8"));
+  const sources = JSON.parse(
+    fs.readFileSync(path.join(dir, "sound", "sfx", "SOURCES.json"), "utf8"),
+  );
   assert.deepEqual(sources.good_hit, {
     id: 101,
     title: "Clean Hit — 01",
@@ -388,12 +409,21 @@ test("fetch verifies true CC0 license, preserves existing valid files on failure
 test("quiet one-shot below -45dB falls back from silenceremove instead of writing 0-frame wav, and music sets stereo + kind bgm", async (t) => {
   const fixDir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-quiet-"));
   t.after(() => fs.rmSync(fixDir, { recursive: true, force: true }));
-  // Generate -55dB quiet one-shot tone (~0.0018 amplitude) and stereo music loop
   const quietMp3 = makeMp3Buffer(fixDir, "quiet.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=0.8", "-af", "volume=0.0018",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=0.8",
+    "-af",
+    "volume=0.0018",
   ]);
   const musicMp3 = makeMp3Buffer(fixDir, "music.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=330:duration=1.2", "-ac", "2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=330:duration=1.2",
+    "-ac",
+    "2",
   ]);
 
   let baseUrl = "";
@@ -440,12 +470,17 @@ test("quiet one-shot below -45dB falls back from silenceremove instead of writin
   assert.match(res.stdout.trim().split(/\r?\n/).at(-1), /^next: bun run check$/);
 
   const quietInfo = readWavInfo(path.join(dir, "sound", "sfx", "quiet_tap.wav"));
-  assert.ok(quietInfo.frames > 1000, `expected non-empty wav for quiet sound, got ${quietInfo.frames}`);
+  assert.ok(
+    quietInfo.frames > 1000,
+    `expected non-empty wav for quiet sound, got ${quietInfo.frames}`,
+  );
 
   const musicInfo = readWavInfo(path.join(dir, "sound", "sfx", "theme_bgm.wav"));
   assert.equal(musicInfo.channels, 2);
 
-  const sources = JSON.parse(fs.readFileSync(path.join(dir, "sound", "sfx", "SOURCES.json"), "utf8"));
+  const sources = JSON.parse(
+    fs.readFileSync(path.join(dir, "sound", "sfx", "SOURCES.json"), "utf8"),
+  );
   assert.equal(sources.theme_bgm.kind, "bgm");
 });
 
@@ -453,7 +488,10 @@ test("sweeteners writes role and kind sfx metadata, skips valid existing wavs, a
   const fixDir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-sweet-"));
   t.after(() => fs.rmSync(fixDir, { recursive: true, force: true }));
   const hitMp3 = makeMp3Buffer(fixDir, "sweet.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=520:duration=0.5",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=520:duration=0.5",
   ]);
 
   let hitsFetched = 0;
@@ -481,36 +519,53 @@ test("sweeteners writes role and kind sfx metadata, skips valid existing wavs, a
     res.end();
   });
 
-  // Pre-seed one valid wav (sweet_riser id 685256) with missing role/kind in SOURCES.json (with BOM)
   const dir = makeTempFilm(t);
   const sfxDir = path.join(dir, "sound", "sfx");
   fs.mkdirSync(sfxDir, { recursive: true });
   const preWav = path.join(sfxDir, "sweet_riser.wav");
   const wavGen = spawnSync(
     "ffmpeg",
-    ["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4", "-ar", "48000", "-ac", "1", preWav],
+    [
+      "-v",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=0.4",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      preWav,
+    ],
     { encoding: "utf8" },
   );
   assert.equal(wavGen.status, 0, wavGen.stderr);
   fs.writeFileSync(
     path.join(sfxDir, "SOURCES.json"),
-    "\uFEFF" + JSON.stringify({
-      sweet_riser: {
-        id: 685256,
-        title: "Existing Riser",
-        by: "SweetMaker",
-        url: "https://freesound.org/s/685256/",
-        license: "CC0 1.0",
-        processing: { keep: null, bed: false, music: false },
-        for: "existing",
-      },
-    }),
+    "\uFEFF" +
+      JSON.stringify({
+        sweet_riser: {
+          id: 685256,
+          title: "Existing Riser",
+          by: "SweetMaker",
+          url: "https://freesound.org/s/685256/",
+          license: "CC0 1.0",
+          processing: { keep: null, bed: false, music: false },
+          for: "existing",
+        },
+      }),
     "utf8",
   );
 
   const res = await runCliAsync(["sweeteners"], { cwd: dir, env: { FREESOUND_BASE: baseUrl } });
   assert.equal(res.status, 0, res.stderr);
-  assert.equal(hitsFetched, 6, "should skip existing valid sweet_riser and fetch the remaining 6 sweeteners");
+  assert.equal(
+    hitsFetched,
+    6,
+    "should skip existing valid sweet_riser and fetch the remaining 6 sweeteners",
+  );
   assert.match(res.stdout.trim().split(/\r?\n/).at(-1), /^next: /);
 
   const sources = JSON.parse(fs.readFileSync(path.join(sfxDir, "SOURCES.json"), "utf8"));
@@ -526,7 +581,10 @@ test("re-fetches corrupt 0-frame wav, handles malformed SOURCES.json, and respec
   const fixDir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-recover-"));
   t.after(() => fs.rmSync(fixDir, { recursive: true, force: true }));
   const toneMp3 = makeMp3Buffer(fixDir, "tone.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=0.5",
   ]);
 
   let baseUrl = "";
@@ -551,7 +609,6 @@ test("re-fetches corrupt 0-frame wav, handles malformed SOURCES.json, and respec
     res.end();
   });
 
-  // Malformed SOURCES.json fails cleanly without traceback
   const badSourcesDir = makeTempFilm(t, {
     "sound/sfx_list.json": JSON.stringify({ tap: { id: 505, for: "tap" } }),
     "sound/sfx/SOURCES.json": "{broken",
@@ -561,7 +618,6 @@ test("re-fetches corrupt 0-frame wav, handles malformed SOURCES.json, and respec
   assert.match(badRes.stderr, /not valid JSON/);
   assert.doesNotMatch(badRes.stderr, /Traceback/);
 
-  // live-studio.sfx escape is blocked
   const escapeDir = makeTempFilm(t, {
     "package.json": JSON.stringify({ "live-studio": { sfx: "../outside" } }),
     "sound/sfx_list.json": JSON.stringify({ tap: { id: 505, for: "tap" } }),
@@ -570,13 +626,20 @@ test("re-fetches corrupt 0-frame wav, handles malformed SOURCES.json, and respec
   assert.equal(escRes.status, 1);
   assert.match(escRes.stderr, /escapes film root/i);
 
-  // Custom live-studio.sfx path + corrupt 0-frame wav on disk gets healed
   const customDir = makeTempFilm(t, {
     "package.json": JSON.stringify({ "live-studio": { sfx: "audio/sfx" } }),
     "sound/sfx_list.json": JSON.stringify({ tap: { id: 505, for: "tap" } }),
-    "audio/sfx/SOURCES.json": JSON.stringify({ tap: { id: 505, title: "Old", by: "Tester", url: "https://freesound.org/s/505/", license: "CC0 1.0", for: "tap" } }),
+    "audio/sfx/SOURCES.json": JSON.stringify({
+      tap: {
+        id: 505,
+        title: "Old",
+        by: "Tester",
+        url: "https://freesound.org/s/505/",
+        license: "CC0 1.0",
+        for: "tap",
+      },
+    }),
   });
-  // Write a valid 44-byte empty PCM WAV header with 0 audio frames
   const emptyWav = Buffer.alloc(44);
   emptyWav.write("RIFF", 0);
   emptyWav.writeUInt32LE(36, 4);
@@ -595,14 +658,20 @@ test("re-fetches corrupt 0-frame wav, handles malformed SOURCES.json, and respec
   const healRes = await runCliAsync([], { cwd: customDir, env: { FREESOUND_BASE: baseUrl } });
   assert.equal(healRes.status, 0, healRes.stderr);
   const healedInfo = readWavInfo(path.join(customDir, "audio", "sfx", "tap.wav"));
-  assert.ok(healedInfo.frames > 1000, `expected corrupt 0-frame wav to be re-fetched, got ${healedInfo.frames}`);
+  assert.ok(
+    healedInfo.frames > 1000,
+    `expected corrupt 0-frame wav to be re-fetched, got ${healedInfo.frames}`,
+  );
 });
 
 test("rejects root-relative/dot live-studio.sfx, file-vs-dir collisions, and boolean SOURCES id true", async (t) => {
   const fixDir = fs.mkdtempSync(path.join(os.tmpdir(), "cli-sfx-edge-"));
   t.after(() => fs.rmSync(fixDir, { recursive: true, force: true }));
   const toneMp3 = makeMp3Buffer(fixDir, "tone.mp3", [
-    "-f", "lavfi", "-i", "sine=frequency=440:duration=0.4",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=0.4",
   ]);
 
   let hits = 0;
@@ -629,7 +698,6 @@ test("rejects root-relative/dot live-studio.sfx, file-vs-dir collisions, and boo
     res.end();
   });
 
-  // Root-relative, drive-relative, and dot/parent paths for live-studio.sfx must fail cleanly
   for (const [badSfx, msgPattern] of [
     ["/outside", /must be relative|escapes/i],
     ["\\outside", /must be relative|escapes/i],
@@ -649,7 +717,6 @@ test("rejects root-relative/dot live-studio.sfx, file-vs-dir collisions, and boo
     assert.equal(fs.existsSync(path.join(dir, "SOURCES.json")), false);
   }
 
-  // Regular file occupying sound/sfx or sound/sfx/raw fails cleanly without HTTP calls
   const fileAtSfx = makeTempFilm(t, {
     "sound/sfx_list.json": JSON.stringify({ tap: { id: 1, for: "tap" } }),
     "sound/sfx": "not a dir",
@@ -669,20 +736,43 @@ test("rejects root-relative/dot live-studio.sfx, file-vs-dir collisions, and boo
   assert.doesNotMatch(rawFileRes.stderr, /Traceback|FileExistsError/);
   assert.equal(hits, 0, "directory slot errors must fail before network requests");
 
-  // Boolean id: true in SOURCES.json must not match numeric sid: 1
   const boolIdDir = makeTempFilm(t, {
     "sound/sfx_list.json": JSON.stringify({ tap: { id: 1, for: "tap" } }),
-    "sound/sfx/SOURCES.json": JSON.stringify({ tap: { id: true, title: "Bool", by: "X", url: "https://freesound.org/s/1/", license: "CC0 1.0", for: "tap" } }),
+    "sound/sfx/SOURCES.json": JSON.stringify({
+      tap: {
+        id: true,
+        title: "Bool",
+        by: "X",
+        url: "https://freesound.org/s/1/",
+        license: "CC0 1.0",
+        for: "tap",
+      },
+    }),
   });
   const wavGen = spawnSync(
     "ffmpeg",
-    ["-v", "error", "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.3", "-ar", "48000", "-ac", "1", path.join(boolIdDir, "sound", "sfx", "tap.wav")],
+    [
+      "-v",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=0.3",
+      "-ar",
+      "48000",
+      "-ac",
+      "1",
+      path.join(boolIdDir, "sound", "sfx", "tap.wav"),
+    ],
     { encoding: "utf8" },
   );
   assert.equal(wavGen.status, 0, wavGen.stderr);
   const boolRes = await runCliAsync([], { cwd: boolIdDir, env: { FREESOUND_BASE: baseUrl } });
   assert.equal(boolRes.status, 0, boolRes.stderr);
   assert.ok(hits > 0, "boolean id: true should trigger fresh fetch for id: 1");
-  const updatedSources = JSON.parse(fs.readFileSync(path.join(boolIdDir, "sound", "sfx", "SOURCES.json"), "utf8"));
+  const updatedSources = JSON.parse(
+    fs.readFileSync(path.join(boolIdDir, "sound", "sfx", "SOURCES.json"), "utf8"),
+  );
   assert.strictEqual(updatedSources.tap.id, 1);
 });

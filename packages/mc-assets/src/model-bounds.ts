@@ -37,11 +37,8 @@ export type ModelJsonResolver = (
 ) => ModelJsonLike | null | undefined | Promise<ModelJsonLike | null | undefined>;
 
 export interface ModelBoundsOptions {
-  /** Blockstate X rotation in degrees (applied around block center [8, 8, 8]). */
   x?: number;
-  /** Blockstate Y rotation in degrees (applied around block center [8, 8, 8]). */
   y?: number;
-  /** Blockstate Z rotation in degrees (applied around block center [8, 8, 8]). */
   z?: number;
 }
 
@@ -239,11 +236,6 @@ function computeElementsBounds(
   return { min, max, size };
 }
 
-/**
- * Follows Minecraft model JSON `parent` inheritance (with cycle guard) to find `elements`
- * and computes their AABB in block units (1/16 of 0..16 pixel space).
- * Sync when `resolveJson` returns synchronously; returns a Promise when `resolveJson` is async.
- */
 export function modelBounds(
   resolveJson: ModelJsonResolverSync,
   modelRef: string,

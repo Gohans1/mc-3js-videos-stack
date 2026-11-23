@@ -17,7 +17,6 @@ test("poseAt interpolates position, rotation, scale and visibility while support
   expect(mid.at.x).toBeCloseTo(5, 6);
   expect(mid.scale).toBeCloseTo(1.5, 6);
   expect(mid.visible).toBe(false);
-  // Default calls return independent Vector3/Quaternion instances (safe for pathOf arrays)
   expect(mid.at).not.toBe(before.at);
   expect(mid.q).not.toBe(before.q);
 

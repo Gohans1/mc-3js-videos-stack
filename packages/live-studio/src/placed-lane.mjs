@@ -95,9 +95,7 @@ async function readPlacedDoc(project, conf = {}) {
           };
         }
       }
-    } catch {
-      // Fall back to direct file collaboration when Studio is not listening.
-    }
+    } catch {}
   }
   const lane = openTimelineFile(project, rel, PlacedTimeline);
   const current = lane.read() ?? { version: "missing", data: {} };
@@ -487,7 +485,6 @@ function copyGlobalProp(project, rawId, vaultRoot, force = false) {
     }
   }
 
-  // Pre-validate every source, leaf symlink & destination collision before mutating film files or folders.
   const plan = filesToCopy.map((d) => {
     const srcFile = assertInsideReal(realRoot, join(srcDir, d.name), "Global prop file");
     const destFile = join(destDir, d.name);

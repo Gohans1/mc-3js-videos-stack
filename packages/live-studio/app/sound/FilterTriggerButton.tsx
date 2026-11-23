@@ -3,7 +3,6 @@ import type { ComponentProps } from "react";
 
 import { cn } from "@/lib/utils";
 
-/** Shared filter menu trigger avoiding `aria-pressed` + `aria-expanded` dual-role ARIA conflict. */
 export function FilterTriggerButton({
   active,
   open,

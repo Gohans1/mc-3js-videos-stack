@@ -50,8 +50,8 @@ import {
   duplicateEntryToComposer,
   fetchPlaygroundSrt,
   getPlaygroundItemByAuditionId,
-  loadRecordingArchivePolicy,
   loadMoreSharedVoices,
+  loadRecordingArchivePolicy,
   openFilmRecordingEditor,
   openRecordingEditor,
   patchPlaygroundItem,
@@ -84,6 +84,7 @@ import { parsePromptSegments } from "./voice-tags";
 import { type VoiceTakeItem } from "./voice-view";
 import type { PickedVoice } from "./VoiceCastingRow";
 import { VoiceGenerationPrice } from "./VoiceGenerationPrice";
+import { VoicePlaybackIcon } from "./VoicePlaybackIcon";
 import { VoiceDubbingMedia } from "./VoicePlaygroundResults";
 import { VoicePlaygroundRights } from "./VoicePlaygroundRights";
 import { SttTranscriptDetails } from "./VoicePlaygroundSecondaryModes";
@@ -93,7 +94,6 @@ import { VoicePlaygroundVoicePicker } from "./VoicePlaygroundVoicePicker";
 import { VoiceRecordingCaptions } from "./VoiceRecordingCaptions";
 import { VoiceRecordingEdits } from "./VoiceRecordingEdits";
 import { VoiceRecordingMetadata } from "./VoiceRecordingMetadata";
-import { VoicePlaybackIcon } from "./VoicePlaybackIcon";
 
 function SwapVoicePopover({
   entry,
@@ -345,9 +345,6 @@ function SwapVoicePopover({
   );
 }
 
-/**
- * Parameter inspector, audio scrubber, remix/template/promote controls, and SRT viewer for a voice clip.
- */
 function ArchiveRetentionNotice({
   id,
   scope,
@@ -754,7 +751,6 @@ export function VoicePlaygroundInspector({
           generation settings recorded with the original take are available.
         </p>
       )}
-      {/* Header: Editable Title + Favorite */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           {isPlayground ? (
@@ -791,7 +787,10 @@ export function VoicePlaygroundInspector({
               />
             </div>
           ) : (
-            <h4 dir="auto" className="text-foreground text-base leading-tight font-semibold wrap-anywhere">
+            <h4
+              dir="auto"
+              className="text-foreground text-base leading-tight font-semibold wrap-anywhere"
+            >
               {entry.title}
             </h4>
           )}
@@ -826,8 +825,9 @@ export function VoicePlaygroundInspector({
         </Tip>
       </div>
 
-      {/* Inline Audio Player & Scrubber */}
-      {entry.kind === "dubbing" && <VoiceDubbingMedia key={entry.uid} entry={entry} compactDownloads />}
+      {entry.kind === "dubbing" && (
+        <VoiceDubbingMedia key={entry.uid} entry={entry} compactDownloads />
+      )}
       {entry.audioUrl && entry.kind !== "dubbing" && (
         <div className="border-hairline bg-surface-subtle flex items-center gap-2 rounded-lg border px-2.5 py-2">
           <Button
@@ -952,16 +952,17 @@ export function VoicePlaygroundInspector({
               Saved cast unavailable for retry.
             </span>
           )}
-          {pgItem?.retry?.parentId && pg.items.some((item) => item.id === pgItem.retry?.parentId) && (
-            <Button
-              type="button"
-              variant="secondary"
-              size="sm"
-              onClick={() => selectPlaygroundUid(`pg:${pgItem.retry?.parentId}`)}
-            >
-              Previous take
-            </Button>
-          )}
+          {pgItem?.retry?.parentId &&
+            pg.items.some((item) => item.id === pgItem.retry?.parentId) && (
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => selectPlaygroundUid(`pg:${pgItem.retry?.parentId}`)}
+              >
+                Previous take
+              </Button>
+            )}
 
           {!entry.template &&
             entry.kind !== "dubbing" &&
@@ -1137,13 +1138,13 @@ export function VoicePlaygroundInspector({
               id={`${uid}-archive-policy`}
               className="text-muted-foreground max-w-[35ch] text-right text-xs text-pretty"
             >
-                Studio may delete this recording after 30 days in Archive if it has no protected links.
+              Studio may delete this recording after 30 days in Archive if it has no protected
+              links.
             </p>
           )}
         </div>
       )}
 
-      {/* Template Name Editor when flagged as reusable preset */}
       {isPlayground && pgItem?.isTemplate && (
         <div className="border-hairline bg-surface-subtle flex items-center gap-2 rounded-lg border px-2.5 py-1.5">
           <label
@@ -1179,7 +1180,6 @@ export function VoicePlaygroundInspector({
       )}
 
       {pgItem && <VoicePlaygroundRights key={entry.uid} item={pgItem} />}
-      {/* Prompt / Script with Styled Audio Tags */}
       <div className={cn("flex flex-col gap-1.5 rounded-lg border p-3", presentation.panel)}>
         <div className="flex items-center justify-between gap-2">
           <span className={cn("text-sm font-semibold", presentation.text)}>
@@ -1224,7 +1224,6 @@ export function VoicePlaygroundInspector({
         </p>
       </div>
 
-      {/* Complete Recorded Parameters Grid */}
       <div className="border-hairline bg-card flex flex-col gap-1.5 rounded-lg border p-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="text-foreground text-sm font-semibold">All Recorded Parameters</span>
@@ -1327,7 +1326,6 @@ export function VoicePlaygroundInspector({
         )}
       </div>
 
-      {/* Transcript / .srt Viewer */}
       {(entry.srtFile || entry.srtText || pgItem?.sttResult) && (
         <div className="border-hairline bg-surface-subtle flex flex-col gap-1.5 rounded-lg border p-2.5">
           <div className="flex items-center justify-between gap-2">
@@ -1382,7 +1380,6 @@ export function VoicePlaygroundInspector({
         </div>
       )}
 
-      {/* Notes */}
       {isPlayground && (
         <div className="flex flex-col gap-1">
           <label className="text-muted-foreground text-xs font-medium" htmlFor={notesInputId}>

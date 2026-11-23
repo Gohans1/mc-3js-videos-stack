@@ -3,7 +3,6 @@ import { expect, test } from "bun:test";
 import { SKIN_UV } from "../src/player";
 import { BOX, paint, torso } from "../src/skin-paint";
 
-// films each carried a copy of this painter; it now lives beside the player whose UVs it paints
 const recorder = (k: number) => {
   const cells = new Map<string, string>();
   const g = {

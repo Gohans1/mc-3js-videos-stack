@@ -303,7 +303,6 @@ describe("voice-library-view", () => {
     expect(warm).toEqual(cold);
     expect(warm).toEqual(["v_clara"]);
 
-    // Subsequent filtered pass reuses cached sort order cleanly without mutating or reordering
     const nameSortedAll = filterAndSortVoices(
       freshVoices,
       ALL,
@@ -586,7 +585,6 @@ describe("voice-library-view", () => {
         VOICE_GRID_MIN_CARD_PX * 1.15,
       ),
     ).toBe(2);
-    // Invalid minCardPx falls back safely to VOICE_GRID_MIN_CARD_PX
     expect(voiceGridCols(twoColMin, 0)).toBe(2);
     expect(voiceGridCols(twoColMin - 1, -50)).toBe(1);
     expect(voiceGridCols(twoColMin, Number.NaN)).toBe(2);
@@ -600,14 +598,11 @@ describe("voice-library-view", () => {
   });
 
   test("captureVoiceRowAnchor & resolveVoiceRowOffset keep tall scrolled rows visible on shrink", () => {
-    // Partially scrolled past a tall 343px row (-318px above viewport top, 25px still visible)
     const anchor = captureVoiceRowAnchor(5, 4, -318, 343);
     expect(anchor.voiceIndex).toBe(20);
-    // When widened columns reduce that row height to 205px, resolved offset stays inside row (>= -181px)
     const resolved = resolveVoiceRowOffset(anchor, 205);
     expect(resolved).toBeGreaterThanOrEqual(-181);
     expect(resolved).toBeLessThan(0);
-    // Positive offsets remain unchanged
     expect(resolveVoiceRowOffset(captureVoiceRowAnchor(2, 3, 12, 64), 64)).toBe(12);
   });
 

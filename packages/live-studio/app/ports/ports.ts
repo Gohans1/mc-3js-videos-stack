@@ -1,5 +1,3 @@
-// Pure client types, URL safety, formatting, and snapshot fetching for the read-only Ports tab.
-
 export interface TailscaleEndpoint {
   url: string;
   host: string;
@@ -75,11 +73,9 @@ export type WorktreeDescription =
     }
   | { kind: "unknown" };
 
-// ASCII control characters (including newlines/null bytes) must never enter hrefs.
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001F\u007F]/;
 
-/** Validates that a link is an absolute http:// or https:// URL with a host. */
 export function safeHttpUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
@@ -95,7 +91,6 @@ export function safeHttpUrl(raw: unknown): string | null {
   }
 }
 
-/** Formats how long ago `scannedAt` occurred for the panel header. */
 export function formatRelativeScanAge(scannedAt: number, now = Date.now()): string {
   if (!Number.isFinite(scannedAt)) return "";
   const diffMs = Math.max(0, now - scannedAt);
@@ -110,13 +105,11 @@ export function formatRelativeScanAge(scannedAt: number, now = Date.now()): stri
   return `Updated ${day}d ago`;
 }
 
-/** Formats an exact local clock string for tooltip context. */
 export function formatScanClock(scannedAt: number): string {
   if (!Number.isFinite(scannedAt)) return "";
   return new Date(scannedAt).toLocaleTimeString();
 }
 
-/** Sorts studios with the current studio first, then ascending port and pid. */
 export function sortStudios(studios: readonly StudioPort[]): StudioPort[] {
   return [...studios].toSorted((a, b) => {
     if (a.current !== b.current) return a.current ? -1 : 1;
@@ -125,7 +118,6 @@ export function sortStudios(studios: readonly StudioPort[]): StudioPort[] {
   });
 }
 
-/** Extracts display state for a studio's worktree attribution without inventing certainty. */
 export function describeWorktree(studio: StudioPort): WorktreeDescription {
   if (
     studio.worktree &&
@@ -163,7 +155,6 @@ export function setCachedPortsSnapshot(snapshot: PortsSnapshot | null): void {
   cachedPortsSnapshot = snapshot;
 }
 
-/** Returns true when a focus/visibility event should avoid interrupting an active or hidden scan. */
 export function shouldSkipBackgroundRefresh({
   visibilityState,
   inFlight,
@@ -175,7 +166,6 @@ export function shouldSkipBackgroundRefresh({
   return inFlight !== null;
 }
 
-/** Summarizes active studio and worktree counts for the panel header. */
 export function summarizeSnapshot(snapshot: PortsSnapshot): {
   studioCount: number;
   worktreeCount: number;
@@ -192,7 +182,6 @@ export function summarizeSnapshot(snapshot: PortsSnapshot): {
   };
 }
 
-/** Fetches the read-only port/worktree snapshot from `/api/ports`. */
 export async function fetchPortsSnapshot({
   refresh = false,
   signal,
@@ -209,9 +198,7 @@ export async function fetchPortsSnapshot({
     try {
       const body = (await res.json()) as { error?: unknown };
       if (typeof body?.error === "string" && body.error.trim()) message = body.error;
-    } catch {
-      // Non-JSON error body; keep status fallback.
-    }
+    } catch {}
     throw new Error(message);
   }
   const data = (await res.json()) as Partial<PortsSnapshot> | null;

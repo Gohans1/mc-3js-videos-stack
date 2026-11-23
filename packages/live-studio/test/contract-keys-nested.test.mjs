@@ -17,7 +17,6 @@ describe("nestedTimedArrayPaths", () => {
       ],
     };
     expect(nestedTimedArrayPaths(doc)).toEqual([["thugs"]]);
-    // keyRows behavior stays strictly unchanged
     expect(keyRows(doc)).toEqual([]);
 
     const withTimedObj = {
@@ -33,13 +32,11 @@ describe("nestedTimedArrayPaths", () => {
     };
     expect(nestedTimedArrayPaths(deeplyNested)).toEqual([["cast", "extras"], ["doors"]]);
 
-    // Mixed timed + non-timed array whose non-timed object holds nested timed keys
     const mixed = {
       entries: [{ t: 0 }, { id: "boss", moves: [{ t: 1 }] }],
     };
     expect(nestedTimedArrayPaths(mixed)).toEqual([["entries"]]);
 
-    // Root-level array of actor objects
     const rootList = [{ id: "boss", moves: [{ t: 0 }] }];
     expect(nestedTimedArrayPaths(rootList)).toEqual([[]]);
   });
@@ -78,7 +75,6 @@ describe("nestedTimedArrayPaths", () => {
     root.items.push({ id: "back", parent: root });
     expect(nestedTimedArrayPaths(root)).toEqual([]);
 
-    // Cycle back to a timed root ancestor must not falsely report the array as holding nested timed data
     const timedRoot = { t: 0, items: [] };
     timedRoot.items.push({ id: "back", parent: timedRoot });
     expect(nestedTimedArrayPaths(timedRoot)).toEqual([]);

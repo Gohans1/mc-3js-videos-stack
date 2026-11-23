@@ -34,8 +34,8 @@ test("its In runs over the first len seconds and its Out over the last", () => {
 
 test("an In and an Out longer than the item share it in their own proportions", () => {
   const it = { from: 0, to: 1, in: { fx: "fade", len: 1.5 }, out: { fx: "fade", len: 0.5 } };
-  expect(phaseOf(it, 0.75)!.in).toBe(1); // the In takes 0.75 s of the 1
-  expect(phaseOf(it, 0.875)!.out).toBeCloseTo(0.5, 9); // the Out the last 0.25 s
+  expect(phaseOf(it, 0.75)!.in).toBe(1);
+  expect(phaseOf(it, 0.875)!.out).toBeCloseTo(0.5, 9);
 });
 
 test("a typewriter shows whole letters, never half an emoji or a letter without its combining accent", () => {
@@ -114,14 +114,12 @@ test("makeTitles caches line width measurement across animated frames and invali
     for (let f = 0; f < 60; f++) draw([it], f / 30);
     expect(measureCalls).toBe(2);
 
-    // Mutating color in place redraws with the new fillStyle without needing a fresh measureText
     filled.length = 0;
     it.color = "#ff5500";
     draw([it], 2.1);
     expect(filled.some((x) => x.startsWith("#ff5500:"))).toBe(true);
     expect(measureCalls).toBe(2);
 
-    // Changing text or font load invalidates cached widths
     it.text = "Chapter 2";
     draw([it], 2.2);
     expect(measureCalls).toBe(3);
@@ -285,7 +283,6 @@ test("inactive slot at p=1 never clobbers active slot or resting state, and over
   expect(duringIn.clip).toBeNull();
   expect(duringIn.dy).toBeGreaterThan(0.05);
 
-  // Settled resting hold on inkIn and hueSweepIn leaves zero active word/tint/sweep/clip flags
   const restInk = lookOf(
     { kind: "text", in: { fx: "inkIn", len: 0.5 }, out: { fx: "clipDrop", len: 0.4 } },
     { in: 1, out: 1 },
@@ -297,7 +294,6 @@ test("inactive slot at p=1 never clobbers active slot or resting state, and over
   expect(restSweep.sweepAt).toBe(-1);
   expect(restSweep.clip).toBeNull();
 
-  // Canvas draw & boxes preserve per-word drawing and non-zero ty during wordRise even when out is clipDrop, AND when overlapping
   const prevDoc = (globalThis as { document?: unknown }).document;
   const wordsDrawn: string[] = [];
   let clips = 0;
@@ -348,14 +344,12 @@ test("inactive slot at p=1 never clobbers active slot or resting state, and over
   };
   try {
     const draw = makeTitles({ autoClear: true, render() {} }, 1920, 1080);
-    draw([dual], 0.18); // ph.in = 0.3, ph.out = 1
+    draw([dual], 0.18);
     expect(wordsDrawn).toContain("Every");
     const boxIn = draw.boxes([dual], 0.18)[0]!;
     const boxRest = draw.boxes([dual], 1.5)[0]!;
     expect(boxIn.box[1]).toBeGreaterThan(boxRest.box[1]);
 
-    // Proportional fit on a 0.5s item hands off cleanly from wordRise (t=0.15) into clipDrop line-masking (t=0.4),
-    // and direct overlapping phases preserve both wordMode and line clip together.
     const both = lookOf(dual, { in: 0.4, out: 0.4 });
     expect(both.wordMode).toBe("wordRise");
     expect(both.clip).toEqual({ kind: "line" });
@@ -385,18 +379,15 @@ test("every Cinetic voice settles cleanly at p=1 and responds to ease, stagger, 
     expect(settled.show).toBeCloseTo(1, 5);
   }
 
-  // wordRise starts already legible on frame 1 (Cinetic firstInk >= 0.5) and settles from below
   const wrEarly = lookOf({ kind: "text", in: { fx: "wordRise", len: 0.5 } }, { in: 0.08, out: 1 });
   expect(wrEarly.alpha).toBeGreaterThan(0.5);
   expect(wrEarly.dy).toBeGreaterThan(0.15);
 
-  // oversize lands from > 1.2x in log space (never from 0) and clears blur by p = 0.65
   const ovStart = lookOf({ kind: "text", in: { fx: "oversize", len: 0.5 } }, { in: 0.05, out: 1 });
   const ovLate = lookOf({ kind: "text", in: { fx: "oversize", len: 0.5 } }, { in: 0.65, out: 1 });
   expect(ovStart.scaleX).toBeGreaterThan(1.2);
   expect(ovLate.blur).toBeCloseTo(0, 4);
 
-  // collapseOut shrinks toward ~0.86 on launchIn, never collapsing to zero
   const colEnd = lookOf(
     { kind: "text", out: { fx: "collapseOut", len: 0.35 } },
     { in: 1, out: 0.05 },
@@ -404,7 +395,6 @@ test("every Cinetic voice settles cleanly at p=1 and responds to ease, stagger, 
   expect(colEnd.scaleX).toBeGreaterThan(0.8);
   expect(colEnd.scaleX).toBeLessThan(0.95);
 
-  // Explicit ease override changes progression vs linear
   const linMid = lookOf(
     { kind: "text", in: { fx: "up", len: 0.5, ease: "linear" } },
     { in: 0.25, out: 1 },
@@ -415,7 +405,6 @@ test("every Cinetic voice settles cleanly at p=1 and responds to ease, stagger, 
   );
   expect(snapMid.dy).toBeLessThan(linMid.dy);
 
-  // Unknown custom fx never throws, and custom extra voice step runs when supplied
   expect(() =>
     lookOf({ kind: "text", in: { fx: "aiCustomQuantumTitle" } }, { in: 0.4, out: 1 }),
   ).not.toThrow();
@@ -511,7 +500,6 @@ test("makeTitles draws Cinetic word-staggered inkIn, new annotation shapes, and 
     expect(strokes).toBeGreaterThanOrEqual(3);
     expect(draw.boxes(items, 0.25).length).toBe(4);
 
-    // Changing tint at the exact same timestamp must invalidate visualKey and redraw with the new tint
     const before = filled.slice();
     filled.length = 0;
     (items[0].in as Record<string, unknown>).tint = "#22d3ee";
@@ -624,7 +612,6 @@ test("custom AI annotation shape kinds use extra.shape voices, extra.eases, full
     expect(boxes[0].box[3] - boxes[0].box[1]).toBeCloseTo(216 / 1080, 4);
     expect(boxes[1].box[2] - boxes[1].box[0]).toBeCloseTo(240 / 1920, 4);
 
-    // Editing a custom AI field on TextItem or TitleFx while parked invalidates the 2D canvas cache
     draw(items, 0.5);
     expect(customCalls).toBe(1);
     (items[0] as Record<string, unknown>).badge = "UPDATED";
@@ -685,7 +672,6 @@ const NEW_TEXT_IN = [
 ];
 const NEW_TEXT_OUT = ["letterHide", "shatter", "flipAway", "gravityFall", "lensFlyOut", "echoOut"];
 
-// The studio shows the Stagger slider from the catalogue's flag alone, so the flag must say which voices read it
 test("a voice is marked stagger exactly when its stagger changes how it looks", () => {
   const sides = [
     ["in", TEXT_IN],
@@ -764,7 +750,6 @@ test("hold steps a voice on twos or threes of the 30 fps clock", () => {
   expect(at(0.2, 2)).toBeCloseTo(at(2 / 15), 6);
   expect(at(0.2, 3)).toBeCloseTo(at(0.2 - (0.2 % (3 / 15))), 6);
   expect(at(0.2)).toBeGreaterThan(at(0.2, 2));
-  // An item too short for its In plays it faster, so its frames are counted on the In it really gets
   const short = { kind: "text", from: 0, to: 0.5, in: { fx: "fade", len: 1, hold: 2 } };
   expect(lookOf(short, { in: 0.1, out: 1 }).alpha).toBe(0);
   expect(lookOf(short, { in: 0.14, out: 1 }).alpha).toBeGreaterThan(0);

@@ -1,9 +1,6 @@
-// Runs a test page in headless Chrome (Bun.WebView over CDP; Edge or Chrome, software WebGL via SwiftShader) so a test drives
-// the real shaders instead of a JavaScript copy of them. The entry is bundled for the browser and served on a free port.
 export async function openPage(entry: string, extra?: (req: Request) => Response | undefined) {
   const built = await Bun.build({ entrypoints: [entry], target: "browser" });
   if (!built.success) throw new AggregateError(built.logs, `could not bundle ${entry}`);
-  // CSS the page imports (fonts arrive inlined as data URLs) comes out as its own asset
   const files = new Map(built.outputs.map((o) => [o.path.replace(/^\.\//, "/"), o]));
   const entryJs = built.outputs.find((o) => o.kind === "entry-point")!.path.replace(/^\.\//, "/");
   const links = [...files.keys()]

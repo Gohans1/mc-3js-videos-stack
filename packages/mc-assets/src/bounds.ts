@@ -60,11 +60,6 @@ const unionBounds = (list: ModelBounds[]): ModelBounds | null => {
   };
 };
 
-/**
- * Resolves a block or item's static geometry AABB in Minecraft block units (1 block = 1 m) on demand
- * from the gohans pack, mod/RP zip, and vanilla client_assets.zip. Returns null for flat 2D sprites
- * (builtin/generated), special renderers, unsafe pack paths, or unreadable/missing models.
- */
 export function resolveMcAssetBounds(
   item: Pick<McAssetItem, "kind" | "namespace" | "name" | "pack">,
   options?: { vaultRoot?: string; gohansPackDir?: string },
@@ -169,7 +164,6 @@ export function resolveMcAssetBounds(
     return unionBounds(boxes);
   }
 
-  // item: 1.21.4+ items/<name>.json definition first; fall back to legacy models/item/<name>.json only when no static refs exist
   const def = readJson(`assets/${item.namespace}/items/${item.name}.json`);
   const candidates = [...new Set(collectItemDefModels(def))];
   if (!candidates.length) candidates.push(`${item.namespace}:item/${item.name}`);

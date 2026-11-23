@@ -1,6 +1,3 @@
-// The Lessons tab: project lessons/<path>.md plus global lessons/<path>.md, rendered as an md-phone desktop Miller deck
-// with ancestor folder columns alongside the reader when they fit, a GFM Read view, painted
-// line-synced editor, Contents flyTo, diacritic-insensitive search, and AI-first updates with optional word diffs.
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -56,11 +53,9 @@ import {
   type LessonTrail,
 } from "./tree";
 
-// Arrow navigation keys that stay trapped inside the Miller deck so horizontal seek hotkeys do not steal focus.
 export const isDeckBoundaryKey = (key: string): boolean =>
   key === "ArrowLeft" || key === "ArrowRight";
 
-// The AI may write a lesson any moment (bun run note learned): coming back to the page reads them again
 const useFresh = () =>
   useEffect(() => {
     void loadLessons();
@@ -360,7 +355,6 @@ function LessonDeckPanel({
     });
   }, [active, containerWidth, hasPaneWidth, isLockedWidth, isSearching, layout.mode, trail]);
 
-  // Auto-scroll horizontal Miller deck cleanly when trail changes without an active FLIP/WAAPI transition
   useEffect(() => {
     if (didAnimatedAlignRef.current) {
       didAnimatedAlignRef.current = false;

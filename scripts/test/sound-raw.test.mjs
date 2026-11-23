@@ -14,7 +14,6 @@ import { readTorrent, torrentPaths } from "../torrent.mjs";
 
 const sha256 = (b) => createHash("sha256").update(b).digest("hex");
 
-// bencode, enough to write a test torrent
 const benc = (v) =>
   typeof v === "number"
     ? Buffer.from(`i${v}e`)
@@ -309,7 +308,6 @@ test("with torrents off, as setup:vault runs it, a torrent pack is named with it
   assert.match(r.waiting[0], /GDC 2016: .*bun run fetch:sound-raw/);
 });
 
-// An .ogg tone at the given peak level (dBFS), made with ffmpeg
 const lavfi = (file, expr, seconds) => {
   mkdirSync(join(file, ".."), { recursive: true });
   const r = spawnSync(
@@ -334,7 +332,6 @@ const secondsOf = (file) =>
       { encoding: "utf8" },
     ).stdout,
   );
-// shots of `long` seconds every 0.9 s
 const shots = (file, long, seconds) =>
   lavfi(file, `0.3*sin(2*PI*440*t)*lt(mod(t\\,0.9)\\,${long})`, seconds);
 
@@ -364,7 +361,6 @@ async function packFixture(t, sort) {
       }),
     );
   write(sort);
-  // takes of one sound (one quiet), a lone sound, one the rules leave out, and the pack's preview
   tone(join(pack, "Audio/click_001.ogg"), -3);
   tone(join(pack, "Audio/click_002.ogg"), -30, 880);
   tone(join(pack, "Audio/error_001.ogg"), -3, 220);
@@ -499,7 +495,6 @@ test("a title reads as words: its source's noise words, a mono mark and bare com
 
 test("a long file of takes is cut at its silences into one sound per take, faded and each at -1 dBFS", async (t) => {
   const f = await packFixture(t, RULES);
-  // three 0.3 s shots, 0.6 s apart, then a 40 dB quieter blip that is no take: 2.9 s in all, over the 1 s limit
   lavfi(
     join(f.pack, "Lib/shots_01.ogg"),
     "sin(2*PI*440*t)*(0.3*lt(mod(t\\,0.9)\\,0.3)*lt(t\\,2.1)+0.003*between(t\\,2.6\\,2.7))",

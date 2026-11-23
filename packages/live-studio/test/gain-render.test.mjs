@@ -346,7 +346,6 @@ test("the normalization command measures an unsaved clip snapshot without clippi
     );
     data.beds[0].gain += -14 - before.loudness;
     const after = JSON.parse(run("python", command, JSON.stringify(data)));
-    // FFmpeg ebur128.c uses 0.1 LU histogram bins; two measurements can differ by one bin.
     assert.ok(Math.abs(after.loudness + 14) <= 0.1, JSON.stringify(after));
     assert.equal(readFileSync(join(dir, "src/timeline/audio.json"), "utf8"), original);
   } finally {

@@ -483,7 +483,7 @@ describe("Voice Playground SSR UI components", () => {
       }),
     );
     expect(connectedHtml).toContain("18,400 cr");
-    expect(connectedHtml).not.toContain("gv_***1234"); // key masked/hidden inside popover trigger
+    expect(connectedHtml).not.toContain("gv_***1234");
 
     const missingHtml = renderUi(
       createElement(keyPopoverMod.VoicePlaygroundKeyPopover, {
@@ -521,7 +521,6 @@ describe("Voice Playground SSR UI components", () => {
   test("VoicePlaygroundComposer adapts controls across eleven_v4, eleven_v3, multilingual_v2, dialogue, voice_changer, and stt", () => {
     const entries = viewMod.buildUnifiedEntries([samplePgItem()], [sampleFilmTake()], new Set());
 
-    // 1. Default eleven_v4: inline [audio tags] toolbar + Generate button
     const v4Html = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({
@@ -540,11 +539,9 @@ describe("Voice Playground SSR UI components", () => {
     expect(v4Html).toContain("Similarity Boost");
     expect(v4Html).toContain("Request SRT subtitles");
     expect(v4Html).not.toContain(">Speed<");
-    // Base UI Select items resolve human-readable labels instead of raw values
     expect(v4Html).toContain("Eleven v4");
     expect(v4Html).toContain("Auto Detect");
 
-    // 2. eleven_v3: renders discrete stability preset buttons (Creative 0.0 / Natural 0.5 / Robust 1.0) and Speed (0.7–1.2)
     const v3Html = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({ mode: "tts", modelId: "eleven_v3", stability: 0.5 }),
@@ -557,7 +554,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(v3Html).toContain("Robust (1.0)");
     expect(v3Html).toContain("Speed");
 
-    // 3. eleven_multilingual_v2 with [laughs] tag -> warns tag incompatibility + renders Style/Speaker Boost
     const v2Html = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({
@@ -573,7 +569,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(v2Html).toContain("Style Exaggeration");
     expect(v2Html).toContain("Speaker Boost");
 
-    // 4. Dialogue mode: hides unapplied global TTS sliders, renders per-speaker cast + pause_between_turns, warns on <2 turns
     const dialogueHtml = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({ mode: "dialogue", text: "Single line without colon" }),
@@ -591,7 +586,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(dialogueHtml).toContain('disabled=""');
     expect(dialogueHtml).not.toContain("Similarity Boost");
 
-    // 5. Voice Changer mode: source selector + remove_background_noise
     const vcHtml = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState({ mode: "voice_changer" }),
@@ -620,7 +614,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(convertButton).toBeDefined();
     expect(convertButton).not.toMatch(/\s(?:aria-disabled="true"|disabled(?:=|\s|>))/);
 
-    // 6. STT mode (scribe_v2): renders result box and diarize/timestamps
     const sttHtml = renderUi(
       createElement(composerMod.VoicePlaygroundComposer, {
         pg: makePgState(
@@ -820,7 +813,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(libHtml).toContain("[excited]");
     expect(libHtml).toContain(".srt");
     expect(libHtml).toContain("Template");
-    // Library Select filters render human-readable items labels instead of raw filter codes
     expect(libHtml).toContain("Newest first");
     expect(libHtml).toContain("All modes");
     expect(libHtml).toContain("All voices");
@@ -829,7 +821,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(libHtml).not.toContain(">all<");
     expect(libHtml).not.toContain(">newest<");
 
-    // Inspector for Playground clip with full setting archive + context/seed/format
     const detailedEntry = viewMod.buildUnifiedEntries(
       [
         samplePgItem({
@@ -863,7 +854,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(inspectorHtml).toContain("Watch what happens right behind that wall!");
     expect(inspectorHtml).toContain("Notes &amp; Acting Direction");
 
-    // Inspector for Film Take clip
     const takeEntry = entries.find((e) => e.origin === "film_take");
     const takeInspectorHtml = renderUi(
       createElement(inspectorMod.VoicePlaygroundInspector, {
@@ -876,7 +866,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(takeInspectorHtml).toContain("Duplicate to Editor");
     expect(takeInspectorHtml).not.toContain("Confirm Delete");
 
-    // Dialogue Inspector hides single-voice sliders and shows Cast + Pause rows
     const dialogueEntry = viewMod.buildUnifiedEntries(
       [
         samplePgItem({
@@ -909,7 +898,6 @@ describe("Voice Playground SSR UI components", () => {
     expect(dlgInspectorHtml).toContain("0.75s");
     expect(dlgInspectorHtml).not.toContain("Speaker Boost");
 
-    // Empty inspector state
     const emptyInspectorHtml = renderUi(
       createElement(inspectorMod.VoicePlaygroundInspector, {
         entry: null,
@@ -1549,7 +1537,6 @@ describe("Voice Playground SSR UI components", () => {
 
     try {
       await clientMod.loadPlaygroundAll();
-      // Dirty draft before reset
       clientMod.setComposerDraft({
         mode: "voice_changer",
         title: "Stale title",
@@ -1568,7 +1555,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(afterReset.draft.text).toBe("Fresh line");
       expect(afterReset.activeSubTab).toBe("create");
 
-      // SSE job + HTTP 202 response for same job id must coalesce into 1 job
       clientMod.handleVoicePlaygroundEvent(
         JSON.stringify({
           type: "job",
@@ -1601,14 +1587,12 @@ describe("Voice Playground SSR UI components", () => {
       expect(clientMod.getPlaygroundSnapshot().libraryScope).toBe("all");
       expect(clientMod.getPlaygroundSnapshot().selectedUid).toBe("pg:reveal_project");
 
-      // Shared voice pagination uses pageSize=40 and increments page on loadMoreSharedVoices
       await clientMod.searchLiveSharedVoices({ search: "warm", pageSize: 40 });
       await clientMod.loadMoreSharedVoices();
       expect(seenUrls.some((u) => u.includes("pageSize=40") && u.includes("page=0"))).toBe(true);
       expect(seenUrls.some((u) => u.includes("pageSize=40") && u.includes("page=1"))).toBe(true);
       expect(clientMod.getPlaygroundSnapshot().sharedSearch.voices.length).toBe(2);
 
-      // STT errors resolve to null + human-readable error instead of throwing unhandled rejections
       globalThis.fetch = async (url) => {
         const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
         if (u.endsWith("/api/voice/playground/stt")) {
@@ -1688,7 +1672,6 @@ describe("Voice Playground SSR UI components", () => {
         });
       };
 
-      // Explicit STT "auto" rejects client-side before upload
       const sttAutoNull = await clientMod.runPlaygroundStt({
         itemId: "pg_missing",
         languageCode: "auto",
@@ -1699,7 +1682,6 @@ describe("Voice Playground SSR UI components", () => {
         message: expect.stringContaining("not supported"),
       });
 
-      // Valid ISO languageCode forwards to HTTP and surfaces server errors cleanly
       const sttNull = await clientMod.runPlaygroundStt({
         itemId: "pg_missing",
         languageCode: "en",
@@ -2061,7 +2043,6 @@ describe("Voice Playground SSR UI components", () => {
       });
       expect(host.childNodes[0].textContent).toBe(`v:${initialVersion}|First Clip`);
 
-      // Parameterized closure change (`targetId` a -> b) must recompute without store change
       await act(async () => {
         root.render(createElement(Probe, { targetId: "id-b" }));
       });
@@ -2072,7 +2053,6 @@ describe("Voice Playground SSR UI components", () => {
       });
       expect(host.childNodes[0].textContent).toBe(`v:${initialVersion + 1}|Second Clip`);
 
-      // Auto ?live=1 check updates status.error instead of staying silently active
       liveStatusMode = true;
       await act(async () => {
         await clientMod.loadPlaygroundAll({ refresh: true });
@@ -2080,14 +2060,12 @@ describe("Voice Playground SSR UI components", () => {
       });
       expect(clientMod.getPlaygroundSnapshot().status.error).toBe("Invalid GenVoice API key");
 
-      // Unrelated SSE item import does not hijack existing selection
       clientMod.selectPlaygroundUid("pg:id-a");
       clientMod.handleVoicePlaygroundEvent(
         JSON.stringify({ type: "item", item: { id: "id-remote-new", title: "Remote Synced" } }),
       );
       expect(clientMod.getPlaygroundSnapshot().selectedUid).toBe("pg:id-a");
 
-      // runPlaygroundStt with explicit additionalFormats: [] sends "[]" (disables SRT default) + Scribe v2 options
       const audioBlob = new File([new Uint8Array([1, 2, 3])], "sample.mp3", {
         type: "audio/mpeg",
       });
@@ -2110,7 +2088,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(postedSttBody.getAll("entityRedaction")).toEqual(["pii"]);
       expect(postedSttBody.get("entityRedactionMode")).toBe("redacted");
 
-      // Monotonic SSE job ordering: stale processing event cannot downgrade completed job
       clientMod.handleVoicePlaygroundEvent(
         JSON.stringify({
           type: "job",
@@ -2137,7 +2114,6 @@ describe("Voice Playground SSR UI components", () => {
         "completed",
       );
 
-      // Archive keeps the item and its Cloud reference until a permanent deletion.
       await clientMod.loadRemoteHistory(0);
       expect(clientMod.getPlaygroundSnapshot().remoteHistory.items[0]?.importedItemId).toBe("id-a");
       await clientMod.deletePlaygroundItem("id-a");
@@ -2578,7 +2554,6 @@ describe("Voice Playground SSR UI components", () => {
     try {
       root = createRoot(host);
 
-      // 1. Mounted Inspector transitions null -> dialogueEntry -> null without hooks mismatch
       await act(async () => {
         root.render(
           createElement(tooltipMod.TooltipProvider, { delay: 0 }, [
@@ -2621,7 +2596,6 @@ describe("Voice Playground SSR UI components", () => {
       });
       expect(collectText(host)).toContain("No voice clip selected");
 
-      // 2. Delete button disabled + feedback while deleting
       const deletingHtml = renderUi(
         createElement(inspectorMod.VoicePlaygroundInspector, {
           entry: dialogueEntry,
@@ -2632,7 +2606,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(deletingHtml).toContain("Moving to Archive…");
       expect(deletingHtml).toContain('disabled=""');
 
-      // 3. setComposerDraft switching back to tts after STS normalizes modelId away from eleven_multilingual_sts_v2
       clientMod.setComposerDraft({ mode: "voice_changer", modelId: "eleven_multilingual_sts_v2" });
       clientMod.setComposerDraft({ mode: "stt" });
       clientMod.setComposerDraft({ mode: "tts", text: "Back from STT" });
@@ -2640,7 +2613,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(postSttDraft.mode).toBe("tts");
       expect(postSttDraft.modelId).toBe("eleven_v4");
 
-      // 4. Deleting playing pg:<id> stops active audition + AuditionDock handles pg-remote:<id>
       globalThis.fetch = async (url) => {
         const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
         if (u.includes("/items/pg_play_1")) {
@@ -2798,7 +2770,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(pendingDockHtml).toContain('disabled=""');
       soundMod.stopAudition();
 
-      // 5. Parallel failed variation remains visible + dismissible and seed error uses aria-describedby
       const failedComposerHtml = renderUi(
         createElement(composerMod.VoicePlaygroundComposer, {
           pg: makePgState(
@@ -2839,7 +2810,6 @@ describe("Voice Playground SSR UI components", () => {
       expect(failedComposerHtml.match(/Upstream timeout/g)).toHaveLength(1);
       expect(failedComposerHtml).toContain("aria-describedby=");
 
-      // 6. Scribe v2 SttTranscriptDetails renders probability, speaker turns, and extra formats
       const sttDetailsHtml = renderUi(
         createElement(secondaryMod.SttTranscriptDetails, {
           result: {

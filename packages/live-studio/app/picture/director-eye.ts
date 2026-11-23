@@ -98,10 +98,6 @@ function shotAtTime(shots: readonly ShotBoundaryLike[], t: number): number {
   return lo;
 }
 
-/**
- * Computes the outgoing frame timestamp of the shot immediately preceding the current shot,
- * respecting timing clocks (gaps/freezes) and handling Shot 0 / single-shot / removed-shot cases.
- */
 export function cutBoundaryGhostTime({
   shots,
   t,

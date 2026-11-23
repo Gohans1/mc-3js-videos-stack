@@ -2808,7 +2808,6 @@ describe("GenVoice Voice Playground API", () => {
       }),
     ).toBe(true);
 
-    // Dialogue retry swaps only targeted speakerKey, strips [Name]: brackets, and omits undocumented name
     await api.request("/api/voice/playground/dialogue", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -2895,7 +2894,6 @@ describe("GenVoice Voice Playground API", () => {
     const vcItem = voicePlayground.listItems()[0];
     expect(vcItem.voiceChanger.sourceFile).toBeTruthy();
 
-    // Retry succeeds using archived sourceFile
     const retryRes = await api.request(`/api/voice/playground/items/${vcItem.id}/retry`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -2904,14 +2902,12 @@ describe("GenVoice Voice Playground API", () => {
     expect(retryRes.status).toBe(202);
     await voicePlayground.waitForAllJobs();
 
-    // Deleting first item keeps shared archived source file because retry item still references it
     await api.request(`/api/voice/playground/items/${vcItem.id}`, { method: "DELETE" });
     const retriedVc = voicePlayground.listItems()[0];
     expect(retriedVc.voiceChanger.sourceFile).toBe(vcItem.voiceChanger.sourceFile);
     const { existsSync } = await import("node:fs");
     expect(existsSync(join(playgroundDir, "sources", vcItem.voiceChanger.sourceFile))).toBe(true);
 
-    // Retry fails cleanly (400) if legacy VC item has no recorded source reference
     const itemsFile = join(playgroundDir, "items.json");
     const legacy = {
       ...retriedVc,
@@ -3076,7 +3072,6 @@ describe("GenVoice Voice Playground API", () => {
     const hist = await (await api.request("/api/voice/playground/remote-history")).json();
     expect(hist.items.some((x) => x.id === "remote_hist_1")).toBe(true);
 
-    // Concurrent imports of the same remote taskId coalesce cleanly to 1 stored item
     const [r1, r2] = await Promise.all([
       api.request("/api/voice/playground/remote-history/import", {
         method: "POST",
@@ -3138,7 +3133,6 @@ describe("GenVoice Voice Playground API", () => {
           });
         }
         if (u.endsWith("/task_pcm_1.bin")) {
-          // Raw signed 16-bit PCM mono samples without RIFF header
           return new Response(new Uint8Array(320), {
             status: 200,
             headers: { "content-type": "application/octet-stream" },
@@ -3193,7 +3187,6 @@ describe("GenVoice Voice Playground API", () => {
       },
     });
 
-    // 1. Validation 400 & unknown item 404 always return { error: string }
     const badTts = await api.request("/api/voice/playground/tts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3210,7 +3203,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(missingPatch.status).toBe(404);
     expect((await missingPatch.json()).error).toBe("Playground item not found");
 
-    // 2. Reject invalid ASCII control chars in API key
     const badKeyRes = await api.request("/api/voice/playground/config", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3218,7 +3210,6 @@ describe("GenVoice Voice Playground API", () => {
     });
     expect(badKeyRes.status).toBe(400);
 
-    // 3. Catalog does not cache failed live sync and preserves builtin eleven_v3 flags on recovery
     const firstCatalog = await (await api.request("/api/voice/playground/catalog")).json();
     expect(firstCatalog.error).toBeTruthy();
     modelFail = false;
@@ -3230,7 +3221,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(v3.supports_similarity).toBe(false);
     expect(v3.stability_values).toEqual([0, 0.5, 1]);
 
-    // 4. >20 MB Voice Changer upload bypasses global 20MB limit, and cleans up orphaned source file on failure
     const bigVcForm = new FormData();
     bigVcForm.set(
       "audio",
@@ -3278,7 +3268,6 @@ describe("GenVoice Voice Playground API", () => {
     ).toBe(true);
     sttFormSeen.length = 0;
 
-    // Non-VC/STT routes still enforce the default 20 MB limit with JSON 413 error
     const bigTtsRes = await api.request("/api/voice/playground/tts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3287,7 +3276,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(bigTtsRes.status).toBe(413);
     expect((await bigTtsRes.json()).error).toContain("20 MB");
 
-    // 5. PCM outputFormat wraps raw PCM16 into playable WAV
     await api.request("/api/voice/playground/tts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3298,7 +3286,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(pcmItem.audioFile).toMatch(/\.wav$/);
     expect(pcmItem.mimeType).toBe("audio/wav");
 
-    // 6. STT rejects "auto" (400), accepts explicit languageCode, and suppresses diarization_threshold when numSpeakers is set
     const autoSttForm = new FormData();
     autoSttForm.set("file", new File([mp3], "clip.mp3", { type: "audio/mpeg" }));
     autoSttForm.set("languageCode", "auto");
@@ -3323,7 +3310,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(sttFormSeen[0].get("num_speakers")).toBe("2");
     expect(sttFormSeen[0].get("diarization_threshold")).toBeNull();
 
-    // 7. Remote history propagates vc hasMore & voiceChanger metadata
     const rh = await (await api.request("/api/voice/playground/remote-history")).json();
     expect(rh.hasMore).toBe(true);
     const impVc = await api.request("/api/voice/playground/remote-history/import", {
@@ -3335,7 +3321,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(impItem.voiceChanger?.sourceLabel).toBe("mic.wav");
     expect(impItem.voiceChanger?.remove_background_noise).toBe(true);
 
-    // 8. Dialogue ignores __proto__ key safely
     await expect(
       voicePlayground.startDialogue({
         text: "[__proto__]: Hack",
@@ -3343,7 +3328,6 @@ describe("GenVoice Voice Playground API", () => {
       }),
     ).rejects.toThrow(/speaker/i);
 
-    // 9. Corrupt .ogg archive cannot be promoted blindly as .mp3
     writeFileSync(join(playgroundDir, "audio", "pg_bad_ogg.ogg"), Buffer.from("not-valid-ogg"));
     const curStore = JSON.parse(await Bun.file(join(playgroundDir, "items.json")).text());
     curStore.items.unshift({
@@ -3556,7 +3540,6 @@ describe("GenVoice Voice Playground API", () => {
       },
     });
 
-    // 1. Config SSRF & custom-base key exfiltration guards
     const privateBase = await api.request("/api/voice/playground/config", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3599,7 +3582,6 @@ describe("GenVoice Voice Playground API", () => {
       body: JSON.stringify({ clearOverride: true }),
     });
 
-    // 2. Upstream /v1/default-voices flat fields + /v1/shared-voices required_languages + sort
     const catRes = await api.request("/api/voice/playground/catalog");
     expect(catRes.status).toBe(200);
     const cat = await catRes.json();
@@ -3617,7 +3599,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(seenSharedUrls[0]).toContain("sort=cloned_by_count");
     expect(seenSharedUrls[0]).not.toMatch(/[?&]language=/);
 
-    // 3. STT multipart repeated keyterms & additionalFormats, explicit "[]", omitted default, bad JSON
     const sttRepeated = new FormData();
     sttRepeated.set("file", new File([mp3], "clip.mp3", { type: "audio/mpeg" }));
     sttRepeated.set("languageCode", "en");
@@ -3663,7 +3644,6 @@ describe("GenVoice Voice Playground API", () => {
     });
     expect(sttBadRes.status).toBe(400);
 
-    // 4. Voice Changer remote history remove_noise + Dialogue speaker key trimming
     const rhRes = await api.request("/api/voice/playground/remote-history");
     expect(rhRes.status).toBe(200);
     const rhBody = await rhRes.json();
@@ -3826,7 +3806,6 @@ describe("GenVoice Voice Playground API", () => {
       },
     });
 
-    // 1. Output format pcm_44100 does not corrupt MP3 response, still wraps genuine raw PCM in RIFF WAV
     await api.request("/api/voice/playground/tts", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3859,7 +3838,6 @@ describe("GenVoice Voice Playground API", () => {
     );
     expect(Buffer.from(wavBytes.subarray(0, 4)).toString("ascii")).toBe("RIFF");
 
-    // 2. importRemoteTask strips malformed/prototype-polluted speaker entries and non-object voice_settings
     const badImportRes = await api.request("/api/voice/playground/remote-history/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -3871,7 +3849,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(safeImported.dialogue).toBeUndefined();
     expect(safeImported.voiceSettings).toEqual({});
 
-    // 3. Voice Changer excludes speed even on supports_speed catalog entry and retries 422 without seed
     const vcForm = new FormData();
     vcForm.set("audio", new File([mp3], "raw.mp3", { type: "audio/mpeg" }));
     vcForm.set("voiceId", "v1");
@@ -3894,7 +3871,6 @@ describe("GenVoice Voice Playground API", () => {
     expect(vcFallbackItem?.seed).toBeUndefined();
     expect(vcFallbackItem?.fallbackNote).toContain("seed");
 
-    // 4. Scribe v2 rejects seed > 2147483647, diarize + useMultiChannel conflict, invalid redaction subset, and forwards new params
     const badSeedForm = new FormData();
     badSeedForm.set("file", new File([mp3], "a.mp3", { type: "audio/mpeg" }));
     badSeedForm.set("languageCode", "en");
@@ -4050,7 +4026,6 @@ describe("GenVoice Voice Playground API", () => {
       },
     });
 
-    // 1. Path-segment ID traversal checks
     for (const badId of ["..", ".", "foo/bar", "v1?evil=1"]) {
       const badTts = await api.request("/api/voice/playground/tts", {
         method: "POST",
@@ -4067,7 +4042,6 @@ describe("GenVoice Voice Playground API", () => {
       expect(badImp.status).toBe(400);
     }
 
-    // 2. /v1/dialogue 422 fallback omitting export_transcript
     const dlgRes = await api.request("/api/voice/playground/dialogue", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -4098,7 +4072,6 @@ describe("GenVoice Voice Playground API", () => {
       dialogueBodies[1].speakers.Alice.voice_settings,
     );
 
-    // 3. Remote import with metadata.output_format=pcm_24000 wraps WAV and reads metadata.voice_id
     const pcmRes = await api.request("/api/voice/playground/remote-history/import", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -4111,7 +4084,6 @@ describe("GenVoice Voice Playground API", () => {
     const wavHeader = readFileSync(join(playgroundDir, "audio", pcmItem.audioFile)).subarray(0, 4);
     expect(wavHeader.toString("ascii")).toBe("RIFF");
 
-    // 4. Async VC retry vs deleteItem preserves shared source file until retry finishes
     const vcForm = new FormData();
     vcForm.set("audio", new File([mp3], "source.mp3", { type: "audio/mpeg" }));
     vcForm.set("voiceId", "v1");

@@ -1,5 +1,3 @@
-// The mark on a picker's tile whose effect the film's code made rather than the studio: the word, never a colour alone.
-// Screen readers get the same through FILM_MADE in the tile's own name
 import { cn } from "@/lib/utils";
 
 export const FILM_MADE = "made by this film's code";

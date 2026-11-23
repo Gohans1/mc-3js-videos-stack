@@ -1,12 +1,3 @@
-// bun run pace: how long each shot runs and how long the picture holds still, with the narration over each hold; HELP below.
-// A new picture is a cut, or a third of the frame looking different (by over CHANGED of 255) from the last new picture,
-// so a slow pan adds up to one. The numbers to read them against: popular films since 2000 average about 4 s a shot,
-// open on longer shots and shorten into the climax (Cutting, "The evolution of pace in popular movies", 2016); YouTube
-// judges an intro by who still watches at 30 s (YouTube Help, key moments for audience retention). A Short (9:16) is read
-// against Shorts instead: popular ones average about 2.5 s a shot (100 Shorts of 2024, in "Visual Storytelling Without
-// Dialogue", 2025) and viral ones a median 4.7 s with the first cut by about 2 s (Viibeo, 54 Shorts, 2026, counting cuts
-// only); YouTube's Shorts analytics count who stays past the first seconds. Measures, never verdicts: a hold can be the
-// film's best moment, so a measured film always exits 0 (2 only when there is nothing to measure)
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -40,7 +31,6 @@ const FPS = 10;
 
 type Word = { w: string; s: number; e: number };
 
-// seconds where a new picture starts: the first frame, every cut, and every frame a third different from the last new one
 export const newPictures = (frames: Uint8Array[], fps: number, cuts: number[]) => {
   const out: number[] = [];
   let anchor: Uint8Array | null = null,
@@ -74,7 +64,6 @@ const said = (words: Word[], a: number, b: number) => {
   return text ? `"${text.length > 70 ? `${text.slice(0, 69)}…` : text}"` : "no narration";
 };
 
-// each stretch from one new picture to the next
 export const stills = (news: number[], length: number) =>
   news.map((a, i) => ({ a, b: news[i + 1] ?? length, len: (news[i + 1] ?? length) - a }));
 
@@ -117,7 +106,6 @@ export const paceReport = ({
   const firstCut = cuts.find((c) => c > 0);
   const worst = holds.toSorted((p, q) => q.len - p.len)[0] ?? near[0];
   const spoken = holds.filter((g) => said(words, g.a, g.b) !== "no narration");
-  // a Short that keeps one picture past 2 s loses the swipe there first: look at its opening before any later hold
   const slowOpen = short && (news[1] ?? length) > 2;
   const mid = worst ? +((worst.a + worst.b) / 2).toFixed(2) : 0;
   return [
@@ -154,12 +142,10 @@ export const paceReport = ({
   ];
 };
 
-// ---------- The command
 if (import.meta.main) {
   const argv = cliArgs(HELP, ["--hold S"], 1);
   envTypos(["LIVE_PROJECT"]);
   const PROJECT = needFilm(process.env.LIVE_PROJECT);
-  // a broken film file is a fault in the film: named, exit 1
   const readJson = (file: string) => {
     try {
       return jsonFile(file, PROJECT);
@@ -180,7 +166,6 @@ if (import.meta.main) {
     console.error(`no video ${shown}: bun run render clip makes renders/draft_video.mp4`);
     process.exit(2);
   }
-  // shot lengths, the first seconds and the narration over a hold are the whole film's, from its second 0
   const render = filmVideo(PROJECT, video);
   const part = render?.kind;
   if (part) {
@@ -219,11 +204,9 @@ if (import.meta.main) {
   }
   const cuts = [...new Set(cutInfo.times)].toSorted((a, b) => a - b);
   const ended = await startJob(PROJECT, "pace", { say: `Measuring the pace of ${shown}` });
-  // the picture only: a draft has a strip under it, so the top of the frame at the film's own shape
   const tall = short ? "16/9" : "9/16";
   const w = 64,
     h = short ? 114 : 36;
-  // 64 pixels wide, 10 a second: a 20-minute film is about 27 MB
   const ff = spawnSync(
     "ffmpeg",
     [
@@ -269,7 +252,6 @@ if (import.meta.main) {
         "Words are planned narration from voice:cues. Check the encoded audio separately.",
       );
   } catch (e) {
-    // a film with no narration yet has none to read; the holds are said without words either way
     console.log(
       `narration not read (${(e as Error).message.split("\n")[0]}): the holds are said without it; bun run voice:cues says why`,
     );

@@ -1,12 +1,9 @@
-// The column beside the key rows (keys/keyrows.ts draws them): each key file's heading, which folds its rows away, then the
-// rows' names, line for line as keys/keys.ts lines() lays them out. The row of the object selected on the picture is lit and
-// scrolled into sight, as CapCut lights the clip of what is picked; a click on an object's row selects it back
-import { useActivity } from "../activity/activity";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useRef } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { useActivity } from "../activity/activity";
 import { engine } from "../core/engine";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
@@ -24,7 +21,6 @@ import {
   rowsOf,
 } from "./keys";
 
-// "typing › tries": the owner dim, and in a narrow column the first to give way, so the row's own name stays readable
 function RowName({ row }: { row: Row }) {
   const [a, b] = labelSteps(row);
   if (b === undefined) return <span className="truncate">{a}</span>;
@@ -52,7 +48,7 @@ export function KeyHeads() {
     if (placedFolded) {
       fold(placedFile, false);
       return;
-    } // drawn unfolded next time, then scrolled to
+    }
     list.current?.querySelector('[data-lit="true"]')?.scrollIntoView({ block: "nearest" });
   }, [object, lit, placedFile, placedFolded]);
   return (
@@ -63,7 +59,12 @@ export function KeyHeads() {
     >
       {lines().map((l) =>
         l.kind === "file" ? (
-          <li key={`f${l.f}`} data-ai-lit={(`keys-file:${l.f}` in activity) || undefined} style={{ "--row-h": `${HEAD_H}px` }} className="bg-card h-(--row-h)">
+          <li
+            key={`f${l.f}`}
+            data-ai-lit={`keys-file:${l.f}` in activity || undefined}
+            style={{ "--row-h": `${HEAD_H}px` }}
+            className="bg-card h-(--row-h)"
+          >
             <button
               type="button"
               aria-expanded={!isFolded(l.f)}
@@ -88,7 +89,7 @@ export function KeyHeads() {
         ) : l.row.f === placedFile && l.row.path.at(-1) === "keys" ? (
           <li
             key={l.row.id}
-            data-ai-lit={(`keys-row:${l.row.id}` in activity) || undefined}
+            data-ai-lit={`keys-row:${l.row.id}` in activity || undefined}
             data-lit={l.row.id === lit}
             style={{ "--row-h": `${ROW_H}px` }}
             className="group data-[lit=true]:bg-tint h-(--row-h)"
@@ -105,7 +106,7 @@ export function KeyHeads() {
         ) : (
           <li
             key={l.row.id}
-            data-ai-lit={(`keys-row:${l.row.id}` in activity) || undefined}
+            data-ai-lit={`keys-row:${l.row.id}` in activity || undefined}
             style={{ "--row-h": `${ROW_H}px` }}
             title={l.row.label}
             className="text-label flex h-(--row-h) items-center ps-5.5 pe-2 text-xs"

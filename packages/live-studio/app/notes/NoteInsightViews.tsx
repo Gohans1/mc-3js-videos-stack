@@ -25,7 +25,6 @@ import { noteThread } from "../../src/note-state.mjs";
 import { useLit, useLitAny } from "../activity/activity";
 import { VirtualList } from "../components/VirtualList";
 import { useCoarsePointer } from "../core/device";
-// Notion-style Temporal, Stream & Analytics views: Timeline (Gantt), Calendar, Feed, and Chart.
 import { DURATION } from "../core/filmMeta";
 import { set, useStudio } from "../core/store";
 import { stamp } from "../core/time";
@@ -688,7 +687,6 @@ export function NoteCalendarView({ items }: { items: readonly PlacedWithState[] 
     [cells],
   );
 
-  // Auto-select latest day with notes inside visible month when none selected
   const activeKey = useMemo(() => {
     if (selectedDay && visibleCells.some((c) => c.key === selectedDay)) return selectedDay;
     const withNotes = visibleCells.filter((c) => c.inMonth && c.items.length > 0);

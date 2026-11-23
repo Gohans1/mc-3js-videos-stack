@@ -11,7 +11,6 @@ export const afterPaint = () =>
       });
     });
     let second = 0;
-    // An opening tab can go into the background before its next frame.
     const fallback = setTimeout(() => {
       cancelAnimationFrame(first);
       cancelAnimationFrame(second);

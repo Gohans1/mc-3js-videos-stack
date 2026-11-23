@@ -83,7 +83,6 @@ test("zero-arg mode skips Studio-protected files and formats remaining unprotect
     writeFileSync(propsFile, MESSY_PROPS);
     writeFileSync(castFile, MESSY_CAST);
 
-    // 1. Field-level human guard on cam.json
     const camGuard = openEditProtection(dir, "src/timeline/cam.json");
     const camBase = [{ t: 0, p: [0, 2, 4], l: [0, 1, 0] }];
     const camHuman = JSON.parse(MESSY_CAM);
@@ -91,18 +90,15 @@ test("zero-arg mode skips Studio-protected files and formats remaining unprotect
     camGuard.protect(camBase, camHuman, "person");
     camGuard.remember("v2", camHuman);
 
-    // 2. Whole-file guard on shots.json (e.g. after Studio history restore)
     const shotsGuard = openEditProtection(dir, "src/timeline/shots.json");
     shotsGuard.reset("v1", JSON.parse(messyShots));
 
-    // 3. Previously guarded props.json whose guard was cleared by AI collab write (guards: [])
     const propsGuard = openEditProtection(dir, "src/timeline/props.json");
     const propsBefore = { crate: [{ t: 0, at: [1, 0, 0] }] };
     const propsAfter = JSON.parse(MESSY_PROPS);
     propsGuard.remember("v1", propsBefore);
     propsGuard.protect(propsBefore, propsAfter, "person");
     propsGuard.protect(propsAfter, propsAfter, "ai");
-    // Overwrite same path as ai to clear the guard completely
     propsGuard.protect(propsBefore, propsAfter, "ai");
     expect(propsGuard.report().protected).toEqual([]);
 
@@ -113,11 +109,9 @@ test("zero-arg mode skips Studio-protected files and formats remaining unprotect
     expect(res.stdout).not.toContain("skipped (Studio-protected): props.json");
     expect(res.stdout).not.toContain("skipped (Studio-protected): cast.json");
 
-    // Protected files untouched byte-for-byte
     expect(readFileSync(camFile, "utf8")).toBe(MESSY_CAM);
     expect(readFileSync(shotsFile, "utf8")).toBe(messyShots);
 
-    // Unprotected files formatted
     expect(readFileSync(propsFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_PROPS))}\n`);
     expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
   });
@@ -212,13 +206,11 @@ test("corrupt collaboration state fails closed, duplicate args deduplicate, and 
     writeFileSync(bareJson, "[ 1,  2 ]");
     mkdirSync(dirJson);
 
-    // Corrupt .studio/collaboration/<sha256>.json for cam.json must fail closed (skipped in zero-arg, warned in explicit)
     const collabDir = join(dir, ".studio/collaboration");
     mkdirSync(collabDir, { recursive: true });
     const camKey = createHash("sha256").update("src/timeline/cam.json").digest("hex");
     writeFileSync(join(collabDir, `${camKey}.json`), "{corrupt json");
 
-    // Zero-arg mode skips corrupt-state cam.json, skips bare .json and dir.json/, and formats cast.json
     const zeroRes = runFmt([], dir);
     expect(zeroRes.status, zeroRes.stderr).toBe(0);
     expect(zeroRes.stdout).toContain("skipped (Studio-protected): cam.json");
@@ -226,20 +218,17 @@ test("corrupt collaboration state fails closed, duplicate args deduplicate, and 
     expect(readFileSync(bareJson, "utf8")).toBe("[ 1,  2 ]");
     expect(readFileSync(castFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAST))}\n`);
 
-    // Explicit corrupt-state cam still warns on stderr and formats when explicitly requested
     const expCam = runFmt(["cam"], dir);
     expect(expCam.status, expCam.stderr).toBe(0);
     expect(expCam.stderr).toMatch(/warning:.*cam\.json.*Studio-protected/i);
     expect(readFileSync(camFile, "utf8")).toBe(`${dump(JSON.parse(MESSY_CAM))}\n`);
 
-    // Duplicate args ("cast" + "src/timeline/cast.json") format and log cast.json only once
     writeFileSync(castFile, MESSY_CAST);
     const dupRes = runFmt(["cast", "src/timeline/cast.json"], dir);
     expect(dupRes.status, dupRes.stderr).toBe(0);
     const castLines = dupRes.stdout.split("\n").filter((l) => l.startsWith("cast.json "));
     expect(castLines).toHaveLength(1);
 
-    // Explicitly naming dir.json or bare .json exits 2
     expect(runFmt(["src/timeline/dir.json"], dir).status).toBe(2);
     expect(runFmt(["src/timeline/.json"], dir).status).toBe(2);
   });
@@ -254,14 +243,12 @@ test("symlink/junction targets inside or replacing src/timeline exit 2 without w
       const castFile = join(dir, "src/timeline/cast.json");
       writeFileSync(castFile, MESSY_CAST);
 
-      // Directory junction inside src/timeline/ pointing outside works on Windows without admin privileges
       const linkDir = join(dir, "src/timeline/linkdir.json");
       let linkedFile = false;
       try {
         symlinkSync(outsideFile, join(dir, "src/timeline/link.json"), "file");
         linkedFile = true;
       } catch {
-        // On Windows without Developer Mode, a .json-suffixed directory junction exercises both explicit & zero-arg guards
         symlinkSync(outerDir, linkDir, "junction");
       }
 
@@ -286,7 +273,6 @@ test("symlink/junction targets inside or replacing src/timeline exit 2 without w
         expect(readFileSync(outsideFile, "utf8")).toBe('{   "outside": true  }');
       }
 
-      // Symlinked/junctioned src/timeline directory itself in zero-arg mode exits 2 before readdir
       const dir2 = mkdtempSync(join(tmpdir(), "timeline-fmt-linkdir-"));
       try {
         mkdirSync(join(dir2, "src"), { recursive: true });
@@ -316,7 +302,6 @@ test("Windows case-mismatch between on-disk filename and lowercase Studio guard 
     writeFileSync(camMixed, MESSY_CAM);
     writeFileSync(castFile, MESSY_CAST);
 
-    // Studio guard registered under lowercase "src/timeline/cam.json" while disk holds "Cam.json"
     const camGuard = openEditProtection(dir, "src/timeline/cam.json");
     camGuard.reset("v1", JSON.parse(MESSY_CAM));
 

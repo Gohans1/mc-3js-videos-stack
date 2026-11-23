@@ -34,7 +34,6 @@ const step = (what, argv) => {
 };
 step("bun install", ["install"]);
 step("bun run setup:vault", ["scripts/setup_vault.mjs", ...args]);
-// mc-sound is built (bun run setup:mc-sound) or restored from an archive; motion and packs come from --vault-zip or the old machine
 const missing = (config.requiredDirectories ?? []).filter((name) => !existsSync(join(LOCAL, name)));
 if (missing.length) {
   const copy = missing.filter((name) => name !== "mc-sound");

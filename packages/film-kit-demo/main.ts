@@ -43,27 +43,6 @@ import {
   PX,
   walkPose,
 } from "mc-actor/player";
-// Two Steves side by side. In the film scenes (dig, standing, walk, reach) the left one is driven the way the film drives
-// him now (smoothstep between keys, breathing written into each pose, eyes fixed) and the right one through film-kit's
-// layers, each switchable. In the mocap scene both get the layers: the left acts the moments with hand-made keys, the
-// right plays Mixamo clips, and every layer that a clip already has (overlap, breath, sway, drift, the head's steadying)
-// fades out over each clip (pose.ts mask; switch "mask" off to see them doubled).
-// Layer order on the body pose: through keys, + overlap, + cartoon, + idle, + lean, + mood posture, + attention (chest and
-// waist join the look), then foot pin, head IK, + steady head, + drift, hand IK (on arcs); face: gaze, blinks, lids.
-// The layered Steve's poses are read at their first instant, so their written-in breathing is gone and breath replaces it.
-// Also on him: a startle at each bang (not faded over clips: a clip can't know about the bang), the breath held through
-// it, eyes gliding after the silverfish (pursuit), looking away while thinking, the head on the path ahead while walking
-// (steer), and hips that counter where the upper body's mass goes (balance, measured on the rig by Winter's masses).
-// Round 3: blinks that follow what he is doing (fewer while his eyes are busy, at the breaks after), eyes on what his
-// hand goes for before it moves (handeye: found in the hand's own path, keys or clip; over a clip the eyes only),
-// freezing in fear after a bang, and a glance at something that moves at the edge of his view (notice).
-// Round 5: quick wide looks around after a scene or event starts (explore), sleepy eyes while he wakes (drowsy: wake
-// scene), and a face that changes at each emotion's own pace (express).
-// Round 7 (any Minecraft film): yawns and sighs in the breath, posture that follows the face's emotion, his own face
-// touches when a hand is free (life scene), Minecraft's own motion for hits, jumps, deaths and things (mc scene), steps
-// from where the soles land (walk and mc), and the same yawn, sigh and thinking as Mixamo clips (lifeMocap).
-// URL: ?scene=dig|idle|walk|reach|scare|wake|mocap|life|mc|lifeMocap  ?t=<seconds> stops there  ?view=both|side|face|faceOld  ?off=<layer>,...
-//      ?mood=tense|tired (Laban Effort on the layered Steve)
 import * as THREE from "three";
 
 import { blinkAt, DIG, FACES, IDLE, moodAt, POSES } from "./film/dig";
@@ -146,7 +125,6 @@ const mixPose = (a, b, k) => {
   return out;
 };
 
-// ---- stage ----
 const W = innerWidth,
   H = innerHeight;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
@@ -171,9 +149,8 @@ grid.position.y = 0.001;
 scene.add(grid);
 
 const rig = await loadRig("vendor/player.glb");
-const probe = await makePlayer(rig, "vendor/steve.png"); // never shown: measures the rig for the bakes
+const probe = await makePlayer(rig, "vendor/steve.png");
 
-// ---- scene ----
 const NAME =
   q.get("scene") === "mocap" || q.get("scene") === "lifeMocap" || SCENES[q.get("scene")]
     ? q.get("scene")
@@ -193,14 +170,12 @@ const { from: FROM, to: TO } = SC,
 const STANDING = new Set(["stand", "readUp", "desk", "fling", "pant", "gasp"]);
 const AT0 = SC.moves[0].at;
 
-// where the character stands and faces at t (a walk path, or the scene's spot), with this Steve's sideways offset
 const placeOf = (t) => {
   const P = SC.path?.(t);
   return P
     ? { x: P.x, z: P.z, yaw: P.yaw, dist: P.dist, speed: P.speed }
     : { x: AT0[0], z: AT0[2], yaw: -90, dist: 0, speed: 0 };
 };
-// a walk spreads the two along his path (one 2 m behind the other) so a side camera sees both
 const offsetOf = (dz) =>
   SC.path ? new THREE.Vector3(1.25 * dz, 0, 0) : new THREE.Vector3(0, 0, dz);
 const placeAt = (s, dz, t) => {
@@ -213,10 +188,8 @@ const place = (s, pose) => {
   s.g.updateMatrixWorld(true);
 };
 
-// One performance: its keys (moves, look), whether film-kit's layers drive it, and every layer baked from its body pose
 function actor({ moves, look, layered, dz, masked, part = SC }) {
   const M = layered && FX.hold > 0 ? phrase(moves, FX.hold) : moves;
-  // a hesitant reach inside a clip: the clip (and every key after it) plays on a stretched clock (hesitate.ts stretch)
   const clock = masked && on.hesitate && SC.stretch ? SC.stretch.time : (t) => t;
   const poseOf = (key, s) => {
     if (key.clip) {
@@ -237,7 +210,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     else {
       const B = poseOf(b, 0),
         k = (t - a.t) / (b.t - a.t);
-      // a clip's turns are measured, not keyed angle by angle: blend them as turns (the film's slerpPose)
       if (a.clip || b.clip) pose = slerpPose(A, B, smooth(k));
       else if (!(layered && on.through)) pose = mixPose(A, B, smooth(k));
       else {
@@ -255,7 +227,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
       }
     }
     const P = placeOf(tf);
-    // layers add their offsets to this pose, so it is spelled the way they read it
     return canonical(P.speed > 0 ? addRigPose(pose, walkPose(P.dist, P.speed)) : pose);
   };
   const standingAt = (tf) => {
@@ -267,7 +238,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     const s = (STANDING.has(a.pose) ? 1 - k : 0) + (STANDING.has(b.pose) ? k : 0);
     return s * (1 - Math.min(1, placeOf(tf).speed / 1.2));
   };
-  // the head's look point and weight (null keys: the pose's own head), smoothstep or through the keys
   const keyLook = (t) => {
     if (!look.length || t < look[0].t) return null;
     const i = keyAt(look, t),
@@ -298,7 +268,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
   };
   const ahead = layered && on.steer && SC.path && !look.length ? steer(placeOf) : null;
   const glance = notice(layered && on.notice ? (SC.sights ?? []) : []);
-  // set once the layers are baked: keys found from the hand's path (handeye), and how much of a look the head takes
   let handLook = () => null,
     headShare = () => 1;
   const under = (t) => {
@@ -306,13 +275,11 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     if (T && T.w > 0) return { p: new THREE.Vector3(...T.at), w: T.w };
     const A = ahead?.(t);
     if (A) return { p: new THREE.Vector3(...A.head), eye: new THREE.Vector3(...A.at), w: A.w };
-    // the reach scene's right Steve has no look keys: all of his comes from his hand
     const K = SC.handLooks && layered && on.handeye ? null : keyLook(t);
     if (K) return K;
     const H = handLook(t);
     return H && { ...H, hw: H.w * headShare(t) };
   };
-  // a glance blends over whatever else he looks at
   const lookAt = (t) => {
     const U = under(t),
       N = glance(t);
@@ -330,15 +297,10 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
   const A = { bodyAt, standingAt, lookAt, layered, dz, look };
   if (!layered) return A;
 
-  // the game's own motion for this Steve (mc scene): where it is, airborne, alive. Dead, every layer that makes him alive
-  // stops (breath, sway, eyes, blinks, touches): the mask goes to 0 when he starts to tip over
   const MCB = SC.mc && on.mc ? mcBody(AT0, SC.mc.events, { ground: 0, end: END }) : null;
   const alive = (t) => (MCB ? (MCB(t).roll > 0 ? 0 : 1) : 1);
   const w0 = masked && on.mask && SC.clips ? mask(SC.clips) : () => 1;
   const w = (t) => w0(t) * alive(t);
-  // the eyes go for what the hand goes for, found in the hand's own path (IK keys or a clip): over a clip the actor's
-  // head already does it, so there the keys move the eyes only. The path: the end of each hand in his own axes, posed by
-  // the body and the right hand's IK target
   const handPath = (t, sd) => {
     placeAt(probe, 0, t);
     const p = bodyAt(t);
@@ -384,13 +346,11 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
   };
   headShare = w;
   const still = freeze(on.freeze ? (SC.freeze ?? []) : []);
-  // fear's level for the tremor: the same rise and let-go as a freeze, over the scene's `tremble` spans
   const fear = freeze(on.tremor ? (SC.tremble ?? []) : []);
   const shake = tremor(fear);
   const lagOf = overlap(bodyAt, END, FX.overlap);
   const toon = cartoon(bodyAt, END, FX.cartoon);
   const bangs = SC.bangs ?? [];
-  // yawns (dropped whole where a fright's gasp would overlap one), sighs keyed and by themselves, the breath around them
   const Y = on.yawn ? yawns(part.yawns ?? [], { gasps: on.gasp ? bangs : [] }) : null;
   const clipAt = (t) => (SC.clips ?? []).some(([a, b]) => t >= a - 0.6 && t <= b + 0.6) && masked;
   const sighs = on.sigh
@@ -411,7 +371,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     yawns: Y,
     freeze: still,
   });
-  // the body takes the face's emotion at its pace (faded over clips: a clip acts its own)
   const body = posture(part.face ?? SC.face ?? [], { kind: KIND });
   const tilt = lean((t) => placeOf(t), END);
   const jolt = startle(on.startle ? bangs : []);
@@ -419,7 +378,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     const k = w(t),
       amp = on.posture ? body.amp(t) : 1;
     let p = bodyAt(t);
-    // the emotion's movement size scales what trails and settles after a move (sad smaller, angry bigger)
     if (on.overlap) p = addRigPose(p, scalePose(lagOf(t), k * amp));
     if (on.cartoon) p = addRigPose(p, scalePose(toon(t), k * amp));
     p = addRigPose(p, scalePose(life(t), k));
@@ -428,8 +386,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     if (on.posture) p = addRigPose(p, scalePose(body(t), k));
     return addRigPose(p, jolt(t).pose);
   };
-  // where the joints put his centre of mass, hips held still (sway and sink are meant to move it), the reaching hand on
-  // its target, against the rest pose's
   const comAt = (t) => {
     placeAt(probe, dz, t);
     const p = unbalanced(t);
@@ -449,7 +405,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
   };
   const bal = on.balance ? balance(comAt, END, { standing: standingAt }) : () => ({ root: {} });
   const prePose = (t) => addRigPose(unbalanced(t), scalePose(bal(t), w(t)));
-  // the turn the head would need from the trunk as it is, measured on the rig, for the trunk to take its share of
   const chain = attention((t) => {
     const L = lookAt(t);
     if (!L) return null;
@@ -469,11 +424,9 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
   const handShifts = HK.slice(0, -1)
     .filter((k, i) => JSON.stringify(k.at) !== JSON.stringify(HK[i + 1].at))
     .map((k) => k.t);
-  // a glance at something sudden wins over looking away to think
   const glancing = (t) => glance.events.some((g) => g.looks && t >= g.t && t <= g.off + 0.45);
   const thinking = (t) =>
     on.think && !glancing(t) && (part.think ?? []).some(([a, b]) => t >= a && t <= b) ? 1 : 0;
-  // blinks: few while his eyes are busy (the silverfish, a reach, frozen on a threat), more at the breaks after
   const pursuit = on.pursuit ? (SC.pursuit ?? []) : [];
   const busy = (t) =>
     pursuit.some(([a, b]) => t >= a && t <= b) ||
@@ -488,7 +441,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     ...R.map((r) => r.arrive),
     ...glance.events.filter((g) => g.looks).map((g) => g.off),
   ];
-  // sleepy blinks and lids while he wakes; quick wide looks around just after a scene or event starts
   const sleepy = drowsiness(on.drowsy ? (SC.drowsy ?? []) : []);
   const lids = blinks(END, {
     rate: (t) => (busy(t) ? BLINKS.rate.focus : BLINKS.rate.rest),
@@ -497,8 +449,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
     asleep: on.drowsy ? (SC.asleep ?? []) : [],
     quiet: Y?.spans ?? [],
   });
-  // his own face touches: only with that hand free (no clip, reach, walk, startle, fright's breath, yawn, freeze, death);
-  // more while thinking; the film's keyed ones (a hand over a yawn) go where they are put
   const handBusy = (t, sd) =>
     (sd === "R" && !!SC.hands && !!handLocal(t, false)) ||
     R.some((r) => r.side === sd && t >= r.start - 0.3 && t <= r.arrive + 0.5);
@@ -534,7 +484,6 @@ function actor({ moves, look, layered, dz, masked, part = SC }) {
       .map((k) => k.t)
       .filter((k) => k > x)
       .sort((a, b) => a - b)[0];
-  // the face changes at each emotion's own pace (surprise fast, sadness slow, leaving slower than coming)
   const faceAt = on.express ? express(SC.face, { ...MOODS, ...FACES }) : (t) => moodAt(SC.face, t);
   return Object.assign(A, {
     w,
@@ -574,18 +523,14 @@ const Q = new THREE.Quaternion(),
   E = new THREE.Vector3(),
   V = new THREE.Vector3(),
   M4 = new THREE.Matrix4();
-// right hand targets in his own axes; "rest" is where the end of the hand hangs (armTo puts that end on the target:
-// 12 px up from the feet, under the elbow); the arc pivots on his right shoulder as it is posed at that moment
 place(probe, {});
 probe.g.position.set(0, 0, 0);
 probe.g.rotation.y = 0;
 probe.g.updateMatrixWorld(true);
 const elbow0 = probe.bones.laR.getWorldPosition(new THREE.Vector3());
 const REST_HAND = [elbow0.x, 12 * PX - 0.02, elbow0.z];
-const handEnd = probe.bones.laR.worldToLocal(new THREE.Vector3(...REST_HAND)); // in the forearm's own frame
+const handEnd = probe.bones.laR.worldToLocal(new THREE.Vector3(...REST_HAND));
 let SHOULDER_R = probe.bones.uaR.getWorldPosition(new THREE.Vector3()).toArray();
-// human: film-kit's reach timing (a bell at the hand's own pace, a small corrective move) and, on a key with `doubt`,
-// hesitation; otherwise the film's smoothstep across the whole gap
 const handLocal = (t, arcs, human = false) => {
   const HK = SC.hands ?? [];
   if (!HK.length || t < HK[0].t) return null;
@@ -615,7 +560,6 @@ const handLocal = (t, arcs, human = false) => {
   };
 };
 
-// the body's centre of mass on a posed rig, in its own axes: Winter's segment masses at each segment's middle
 const P1 = new THREE.Vector3(),
   P2 = new THREE.Vector3(),
   C = new THREE.Vector3();
@@ -658,7 +602,6 @@ place(probe, {});
 probe.g.position.set(0, 0, 0);
 probe.g.rotation.y = 0;
 probe.g.updateMatrixWorld(true);
-// the end of each hand at rest (12 px up from the feet, under the elbow), in its forearm's frame
 const HAND_END = Object.fromEntries(
   ["L", "R"].map((sd) => {
     const e = probe.bones[`la${sd}`].getWorldPosition(new THREE.Vector3());
@@ -666,7 +609,6 @@ const HAND_END = Object.fromEntries(
   }),
 );
 const COM0 = comOf(probe);
-// where each hand's end hangs at rest, in his own axes (a reach ends away from here)
 const REST_END = Object.fromEntries(
   ["L", "R"].map((sd) => [
     sd,
@@ -674,8 +616,6 @@ const REST_END = Object.fromEntries(
   ]),
 );
 
-// ---- Minecraft motion (mc scene) ----
-// the left Steve: the same beats keyed the usual way (smoothstep slides and hops, a smoothstep tip-over)
 const keyedMc = (t) => {
   let x = 0,
     y = 0,
@@ -721,7 +661,6 @@ const placeThings = (t) => {
     const p = th.path(t).p,
       size = th.kind === "block" ? 0.5 : th.kind === "item" ? 0.125 : 0;
     th.m.position.set(p[0], p[1] + size, p[2]);
-    // an item turns slowly as it flies (the game spins dropped items); an arrow points where it flies
     if (th.kind === "item") th.m.rotation.y = (t - th.t0) * 2;
     if (th.kind === "arrow") {
       const a = th.path(t - 0.05).p;
@@ -730,7 +669,6 @@ const placeThings = (t) => {
     }
   }
 };
-// the death puff: the game spawns 20 poof particles; here 20 small white cubes drift out and fade over 0.6 s
 const PUFF = new THREE.InstancedMesh(
   new THREE.BoxGeometry(0.12, 0.12, 0.12),
   new THREE.MeshBasicMaterial({ color: 0xf2f2f2, transparent: true }),
@@ -738,7 +676,6 @@ const PUFF = new THREE.InstancedMesh(
 );
 scene.add(PUFF);
 
-// ---- cast ----
 const SIDE = 0.8;
 const MOCAP = NAME === "mocap" || NAME === "lifeMocap";
 const cast = [];
@@ -785,7 +722,6 @@ for (const [name, dz] of [
   scene.add(sight);
   cast.push({ name, s, dz, restHead, dot, trail, bug, sight, act: actor({ ...spec, dz }) });
 }
-// steps where the right Steve's soles land (walk and mc scenes), from his body pose over time; every floor here is stone
 const soleOf = (c, sd, t) => {
   placeAt(probe, c.dz, t);
   const m = c.act.MCB?.(t);
@@ -818,7 +754,6 @@ const marks = STEPS.map(() => {
 });
 let audio = null,
   heard = -1;
-// a short noise burst per step while playing at 1x (only to hear the timing; a film plays its CC0 step recordings)
 const click = (s) => {
   if (!audio) return;
   const n = audio.sampleRate * 0.08,
@@ -843,13 +778,11 @@ document.getElementById("new").textContent = MOCAP
   ? `Right: Mixamo clips (layers ${on.mask ? "fade out over each clip" : "NOT faded: doubled"})`
   : `After: film-kit layers${MOODNAME === "calm" ? "" : `, mood ${MOODNAME}`}`;
 
-// a world point from his eyes, in the posed head's own axes
 const gazeTo = (c, p) => {
   c.s.bones.head.getWorldQuaternion(Q).multiply(c.restHead);
   c.s.bones.head.getWorldPosition(E).add(V.set(0, 4 * PX, 4 * PX).applyQuaternion(Q));
   return anglesOf(V.copy(p).sub(E).applyQuaternion(Q.invert()).toArray());
 };
-// the same from his body's front at time f, head straight, eyes at standing height: steady while the head turns
 const EYE_Y = 1.62;
 const bodyTo = (c, p, f) => {
   const P = placeOf(f),
@@ -866,7 +799,6 @@ const soles = { L: new THREE.Vector3(), R: new THREE.Vector3() };
 const perform = (c, t) => {
   const A = c.act;
   placeAt(c.s, c.dz, t);
-  // the game's motion moves the whole body: knocked back, jumping, tipping over (about his feet, onto his left side)
   const mcb = SC.mc ? (A.MCB ? A.MCB(t) : keyedMc(t)) : null;
   c.mcb = mcb;
   if (mcb) {
@@ -887,7 +819,6 @@ const perform = (c, t) => {
   }
   let pose = A.layered ? A.trunkPose(t) : A.bodyAt(t);
   place(c.s, pose);
-  // planted soles stay where the pose put them while the hips sway and sink over them
   if (stand > 0) {
     for (const sd of ["L", "R"]) pose = blendPose(pose, c.s.legTo(sd, soles[sd]), stand);
     place(c.s, pose);
@@ -895,7 +826,6 @@ const perform = (c, t) => {
   const shift = offsetOf(c.dz);
   const look = A.lookAt(t);
   if (look) {
-    // a look given to the eyes only (a clip's own head) still turns the head by what the eyes can't cover
     let hw = look.hw ?? look.w;
     if (hw < look.w) {
       const a = gazeTo(c, (look.eye ?? look.p).clone().add(shift));
@@ -931,12 +861,9 @@ const perform = (c, t) => {
           k * (1 - FREEZE.drift * A.still(t)) * (on.posture ? A.body.amp(t) : 1),
         ),
       );
-    // a yawn tips the head back after the look's aim (a look holds the head on its target otherwise); faded over a clip
-    // that is itself a yawn
     if (A.Y) pose = addRigPose(pose, scalePose(yawnPose(A.Y(t)), k));
     place(c.s, pose);
   }
-  // a hand to his own face: the spot rides the head as it is posed now
   c.touchNow = A.layered ? A.touch(t) : null;
   if (c.touchNow && c.touchNow.w > 0) {
     c.s.bones.head.getWorldQuaternion(Q).multiply(c.restHead);
@@ -945,10 +872,7 @@ const perform = (c, t) => {
         .multiplyScalar(PX)
         .applyQuaternion(Q),
     );
-    // the elbow hangs down, a little out and forward, as a hand comes up to the face
     const arm = c.s.armTo(c.touchNow.side, target, [c.touchNow.side === "L" ? 0.5 : -0.5, -1, 0.3]);
-    // turned the short way (the arm's big twist, lerped as angles, swings the hand far out in front on its way up), the
-    // elbow folding ahead of the shoulder so the hand comes up close to the chest
     const w = c.touchNow.w,
       sd = c.touchNow.side,
       ua = `ua${sd}`,
@@ -962,7 +886,6 @@ const perform = (c, t) => {
     pose = { ...pose, [ua]: up, [la]: fold };
     place(c.s, pose);
   }
-  // the right hand on its target, straight or on its arc; the target's path over the last 1.5 s as dots
   const arcs = A.layered && on.arcs;
   SHOULDER_R = c.s.g.worldToLocal(c.s.bones.uaR.getWorldPosition(V)).toArray();
   const hand = handLocal(t, arcs, A.layered && on.reach);
@@ -974,7 +897,6 @@ const perform = (c, t) => {
     c.handErr =
       c.s.bones.laR.localToWorld(V.copy(handEnd)).distanceTo(target) * (hand.w > 0.99 ? 1 : 0);
   }
-  // fear's tremor last, on top of keyed arms, IK hands and clips alike
   if (A.layered && on.tremor && A.fear(t) > 0) {
     pose = addRigPose(pose, A.shake(t));
     place(c.s, pose);
@@ -989,13 +911,11 @@ const perform = (c, t) => {
       c.trail.setMatrixAt(i, M4.makeTranslation(p.x, p.y, p.z));
     }
   c.trail.instanceMatrix.needsUpdate = true;
-  // face: eyes on fixations that lead the head, blinks, lids that follow the eyes
   let eyes = [0, -0.15],
     extra = 0,
     lid = 0;
   const dead = A.layered && (A.alive?.(t) ?? 1) === 0;
   if (A.layered && on.gaze && !dead) {
-    // a pursuit reads the silverfish where it is at f; a thinking look-away is added in full, wander near a target a third
     const g = A.eyesAt(t, (f, o, mode, body) => {
       const L =
         mode === "pursue" && SC.bug
@@ -1013,7 +933,6 @@ const perform = (c, t) => {
     c.thinking = g.thinking;
   }
   if (A.layered && !dead) extra = Math.max(extra, A.jolt(t).blink, on.blinks ? A.lids(t) : 0);
-  // what he may notice: a small block that pops up for a moment where each sight is
   c.sight.visible = !!(SC.sights ?? []).find((g) => t >= g.t && t < g.t + 0.5);
   if (c.sight.visible)
     c.sight.position
@@ -1031,7 +950,6 @@ const perform = (c, t) => {
     y?.lids ?? 0,
   );
   const mood = A.layered ? A.faceAt(t) : moodAt(SC.face, t);
-  // a yawn: brows up at the acme, the mouth gaping, a smile or frown let go while it does
   let mouth = mouthAt([], 0);
   if (y) {
     mood.y += (0.75 - mood.y) * y.brow;
@@ -1047,18 +965,15 @@ const perform = (c, t) => {
   Object.assign(c, { eyes, blink, lid, look, stand, k });
 };
 
-// ---- camera ----
 const view = () => q.get("view") ?? (NAME === "walk" || NAME === "reach" ? "side" : "both");
 const H0 = new THREE.Vector3();
 const frame = (t) => {
   const v = view();
   camera.up.set(0, 1, 0);
-  // a body the game has removed (gone after dying) stays hidden in every view
   for (const o of cast) o.s.g.visible = !o.mcb?.gone;
   const P = placeOf(t),
     x0 = P.x,
     z0 = P.z;
-  // Minecraft motion: far enough back to hold a 1.25-block jump and the knockback slides
   if (v === "both" && NAME === "mc") {
     camera.fov = 30;
     camera.position.set(x0 - 12.5, 2.4, z0 + 3.6);
@@ -1082,7 +997,6 @@ const frame = (t) => {
     }
   }
   if (v === "face" || v === "faceOld") {
-    // in front of the face, wherever it points: rest axes (z forward, y up) turned by the head
     const c = cast[v === "face" ? 1 : 0];
     c.s.bones.head.getWorldQuaternion(Q).multiply(c.restHead);
     c.s.bones.head.getWorldPosition(H0).add(V.set(0, 4 * PX, 2 * PX).applyQuaternion(Q));
@@ -1093,20 +1007,17 @@ const frame = (t) => {
     for (const o of cast) o.s.g.visible = o === c && !o.mcb?.gone;
   }
   if (v === "bust") {
-    // head and hands of the right Steve, a little off his front, following him
     cast[1].s.bones.head.getWorldPosition(H0);
     const y = cast[1].s.g.rotation.y,
       fx = Math.sin(y),
       fz = Math.cos(y);
     camera.fov = 30;
     camera.position.set(H0.x + 4.6 * fx + 1.2 * fz, H0.y - 0.2, H0.z + 4.6 * fz - 1.2 * fx);
-    // aimed past him and low, so his head and hands sit left of the status box and above the controls
     camera.lookAt(H0.x + 0.7 * fz, H0.y - 0.4, H0.z - 0.7 * fx);
   }
   camera.updateProjectionMatrix();
 };
 
-// what the right Steve's automatic layers are doing now (in the mocap scene: both)
 const info = document.getElementById("info");
 const status = (t) => {
   const lines = [];
@@ -1292,7 +1203,6 @@ const draw = (tt) => {
   t = tt;
   for (const c of cast) perform(c, t);
   placeThings(t);
-  // the puff where the right Steve was when he went
   const pc = cast.find((c) => c.mcb && c.mcb.gone);
   PUFF.visible = !!pc;
   if (pc) {

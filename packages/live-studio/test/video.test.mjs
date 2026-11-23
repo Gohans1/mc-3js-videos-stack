@@ -1,4 +1,3 @@
-// src/video.mjs: where a render's video starts on the film's clock, read from its name in either slash (videoStart), and what ffprobe reads of it (probeVideo)
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -60,7 +59,6 @@ test("probeVideo reads a video's size and rate, and says a picture is none", (t)
   assert.equal(probeVideo(join(dir, "none.mp4")), null);
 });
 
-// a draft is the picture with a strip under it (render/page.ts): comparing it with a reference takes the picture alone
 test("a film draft's picture is its top at the film's ratio; a final or a video outside renders/ has no strip", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "video-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -89,7 +87,6 @@ test("a film draft's picture is its top at the film's ratio; a final or a video 
   assert.equal(filmPicture(dir, "draft_video.mp4"), null);
 });
 
-// a --chunks run joins chunks drawn at different times: each brings the cuts it was drawn with over its own 30 s
 test("a joined draft's cuts are each chunk's own over its seconds, or none when a chunk recorded none", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "joined-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));

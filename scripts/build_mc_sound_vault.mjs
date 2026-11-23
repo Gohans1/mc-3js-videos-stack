@@ -92,7 +92,6 @@ function isOggBuffer(buf) {
   );
 }
 
-// Content, not size: a rebuild that renumbers takes must not keep an old take of the same length under the new name
 function holdsSameOgg(path, { bytes, sha1, size }) {
   if (!existsSync(path) || statSync(path).size !== size) return false;
   const have = readFileSync(path);
@@ -183,7 +182,6 @@ export function formatMcTitle(relBase, { stripSingleDigit = false } = {}) {
       ? rawParts.slice(1)
       : rawParts.slice();
 
-  // Strip redundant parent prefix or trailing parent noun on child segment (e.g. bluntwood/bluntwood_walk, cave_book/book_close)
   for (let i = 1; i < parts.length; i++) {
     const prev = parts[i - 1].toLowerCase();
     const cur = parts[i];
@@ -315,9 +313,6 @@ export function classifyMcSound(source, relNoExt) {
   return "blocks";
 }
 
-// Minecraft's own captions for its sounds ("Creeper hisses", "Rain falls"), the words a player reads and an editor searches
-// by: sounds.json maps each event to its files and a subtitle key, lang/en_us.json the key to words. A file in several
-// events gets each caption; events that point at other events carry none of their own. Keys: "<ns>:<path>" lowercase
 export function captionsOf(soundsJson, lang, ns, into = new Map()) {
   for (const ev of Object.values(soundsJson ?? {})) {
     const text = ev?.subtitle && lang[ev.subtitle];
@@ -355,7 +350,6 @@ export async function buildMcSoundVault({
   mcAssetsDir = defaultMcAssetsDir(),
   resourcesBaseUrl = "https://resources.download.minecraft.net",
   skipPeaks = false,
-  // the game's en_us.json lives in its client jar (vault/jar, bun run setup:vault); without it sounds keep no captions
   clientJar = join(LOCAL, "jar/client.jar"),
 } = {}) {
   const outDir = join(vault, "mc-sound");
@@ -366,7 +360,6 @@ export async function buildMcSoundVault({
   const mcMetaUrl = vaultAssets.minecraft.metadata;
   const mcVersion = vaultAssets.minecraft.version ?? "26.3";
 
-  // 1. Load Mojang version manifest + assetIndex (reuse local .minecraft/assets/indexes/<id>.json or .cache)
   const verCache = join(cacheDir, `version-${mcVersion}.json`);
   let verJson;
   if (existsSync(verCache)) {
@@ -391,7 +384,6 @@ export async function buildMcSoundVault({
 
   const rawItems = [];
 
-  // 1b. Vanilla captions: sounds.json is an asset object (local cache, else Mojang's CDN), en_us.json is in the client jar
   const vanillaLang = existsSync(clientJar)
     ? (parseJson(
         unzipSync(readFileSync(clientJar), {
@@ -419,7 +411,6 @@ export async function buildMcSoundVault({
   }
   const captions = captionsOf(vanillaSounds, vanillaLang, "minecraft");
 
-  // 2. Collect Vanilla sound candidates (excluding music/ and records/)
   for (const [objKey, meta] of Object.entries(assetIndex.objects ?? {})) {
     if (!objKey.startsWith("minecraft/sounds/") || !objKey.toLowerCase().endsWith(".ogg")) continue;
     const relNoExt = objKey.slice("minecraft/sounds/".length, -4);
@@ -438,7 +429,6 @@ export async function buildMcSoundVault({
     });
   }
 
-  // 3. Collect vetted Modrinth pack sounds (from scripts/mc-sound-packs.json, auto-fetching missing archives with SHA1 check)
   const packsDir = join(vault, "packs");
   const packsManifestPath = join(root, "scripts/mc-sound-packs.json");
   const packSpecs = [];
@@ -503,7 +493,6 @@ export async function buildMcSoundVault({
           (f.name.toLowerCase().endsWith(".ogg") &&
             !f.name.startsWith("assets/presencefootstepsmono/"))),
     });
-    // the pack's own captions; its subtitle keys may be vanilla's, so its words go over the game's
     for (const name of Object.keys(entries)) {
       const s = name.match(/^assets\/([^/]+)\/sounds\.json$/i);
       if (!s) continue;
@@ -535,7 +524,6 @@ export async function buildMcSoundVault({
     }
   }
 
-  // 4. Group multi-variation families within (kind, source, ns, dir, base)
   const familyBuckets = new Map();
   for (const item of rawItems) {
     const parsed = splitTrailingIndex(item.relNoExt);
@@ -550,7 +538,6 @@ export async function buildMcSoundVault({
       arr.push(item);
     }
   }
-  // Minecraft names takes cricket.ogg, cricket2.ogg, cricket3.ogg: the unnumbered file is take #1 of that family
   for (const item of rawItems) {
     const { dir, stem, num } = item.parsed;
     if (item.kind !== "mc" || num !== null) continue;
@@ -578,7 +565,6 @@ export async function buildMcSoundVault({
   const allocName = (candidate) => allocUnique(usedNames, candidate);
 
   for (const bucket of familyBuckets.values()) {
-    // Only treat as a variation family when 2+ distinct numbered siblings exist
     const distinctNums = new Set(bucket.map((x) => x.parsed.num));
     if (bucket.length < 2 || distinctNums.size < 2) continue;
     bucket.sort((a, b) => a.parsed.num - b.parsed.num || a.relNoExt.localeCompare(b.relNoExt));
@@ -602,7 +588,6 @@ export async function buildMcSoundVault({
     });
   }
 
-  // 5. Finalize target paths & SOURCES.json metadata
   const sources = {};
   const vanillaFetchQueue = [];
   const expectedFiles = new Set();
@@ -668,7 +653,6 @@ export async function buildMcSoundVault({
     };
   }
 
-  // 6. Materialize Vanilla .ogg files from local .minecraft cache or Mojang CDN
   let vanillaCached = 0;
   let vanillaFetched = 0;
   await mapPool(vanillaFetchQueue, 16, async ({ item, target }) => {
@@ -691,7 +675,6 @@ export async function buildMcSoundVault({
     vanillaFetched++;
   });
 
-  // 6b. Prune stale audio files from earlier runs
   const pruneDir = (dir) => {
     if (!existsSync(dir)) return;
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -704,7 +687,6 @@ export async function buildMcSoundVault({
   pruneDir(join(outDir, "mc"));
   pruneDir(join(outDir, "bgm"));
 
-  // 7. Write sorted SOURCES.json atomically
   const sortedSources = Object.fromEntries(
     Object.keys(sources)
       .sort((a, b) => a.localeCompare(b))
@@ -715,7 +697,6 @@ export async function buildMcSoundVault({
     Buffer.from(JSON.stringify(sortedSources, null, 2) + "\n"),
   );
 
-  // 8. Build PEAKS.json via multi-threaded compute_mc_peaks.py (prefer uv run --no-project python)
   if (!skipPeaks) {
     const scriptPath = existsSync(join(root, "scripts/compute_mc_peaks.py"))
       ? join(root, "scripts/compute_mc_peaks.py")

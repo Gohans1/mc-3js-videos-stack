@@ -143,11 +143,8 @@ function ColorScriptBody() {
               );
               setPaintTick((n) => n + 1);
             }
-          } catch {
-            // Skip a failed capture so the remaining storyboard strip keeps populating.
-          }
+          } catch {}
           if (signal.aborted) return;
-          // Yield to keep the UI thread responsive between captures.
           await new Promise<void>((r) => setTimeout(r, 16));
         }
       } finally {
@@ -214,7 +211,6 @@ function ColorScriptBody() {
         </div>
       </div>
 
-      {/* True proportional color & pacing ribbon across the entire timeline */}
       {shots.length > 0 && (
         <div
           aria-label="Proportional shot pacing ribbon"
@@ -247,7 +243,6 @@ function ColorScriptBody() {
         </div>
       )}
 
-      {/* Horizontal scrollable storyboard strip */}
       <div className="flex min-h-0 flex-1 gap-2 overflow-x-auto overscroll-x-contain p-2">
         {shots.map((shot) => {
           const cached = shotCache.get(cacheKeyFor(shot.index, shot.sampleAt, ratio));
@@ -298,7 +293,6 @@ function ColorScriptBody() {
                 </span>
               </div>
 
-              {/* Dominant 4-color quantized swatch bar */}
               <div
                 aria-label={`Shot ${shot.index} dominant colors`}
                 className="bg-stage flex h-2.5 w-full overflow-hidden"
@@ -322,7 +316,6 @@ function ColorScriptBody() {
                 )}
               </div>
 
-              {/* Overall luminance bar (Rec.709) */}
               <div
                 title={cached ? `Average luminance: ${lumaPct}%` : "Luminance pending"}
                 className="bg-backdrop h-1 w-full overflow-hidden"

@@ -1,8 +1,3 @@
-// The studio on a phone (core/device.ts PHONE; main.tsx loads this instead of App.tsx): review only, three jobs. Scrub the
-// film, add a note (a tap on the picture pins one there, the Note button notes the whole frame), read and answer the notes.
-// Frame.io's mobile review is the model: the player on top, the comments under it, a tap on one jumps to its frame. Upright:
-// picture, bar, notes, Note at the bottom under the thumb. On its side: the picture and its bar left, the notes column right.
-// No timeline, panels, option chips or free camera here, so none of their code is downloaded either
 import { Pencil } from "lucide-react";
 import { useRef } from "react";
 
@@ -25,7 +20,6 @@ export function App() {
   };
   useBoot(el);
   return (
-    // toasts stack above the compact Note CTA, never over it
     <Toaster limit={2} viewportClassName="phone-toast-bottom">
       <TooltipProvider delay={500}>
         <div className="bg-background safe-sides phone-h flex flex-col text-sm landscape:grid landscape:grid-cols-[minmax(0,1fr)_min(42%,22rem)]">
@@ -37,8 +31,6 @@ export function App() {
             aria-label="Notes"
             className="landscape:phone-h border-border/80 flex min-h-0 flex-1 flex-col overflow-hidden landscape:border-l"
           >
-            {/* The list adds nothing to the column's least height (contain-size), so when the keyboard leaves too little
-                room the picture above shrinks and the note box keeps its Save button in view */}
             <div className="flex min-h-0 flex-1 flex-col contain-size">
               <NoteList />
             </div>

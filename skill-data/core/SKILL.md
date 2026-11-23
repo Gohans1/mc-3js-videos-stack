@@ -38,7 +38,7 @@ Load one topic on demand with `bun run skills get core --ref <topic>` (repeat `-
 
 Separate repo skills and docs (open directly; `skills get` does not serve them):
 
-- `bun run skills path earshot` or `bun run skills path real-sound` — open `SKILL.md` in the returned directory.
+- `bun run skills path earshot`, `bun run skills path real-sound` or `bun run skills path delete-comment` — open `SKILL.md` in the returned directory.
 - `.claude/skills/gohans-3js-videos-skills/SKILL.md` — creator taste and filmmaking rules.
 - `INSTALL.md` — machine setup, vault, tools and licenses; `docs/research/media-tools.md` — media tool research and verification notes.
 

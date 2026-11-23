@@ -65,9 +65,6 @@ export const analyzeBeats = (source, settings, python) =>
       }),
   );
 
-// small: Opus 96k in WebM (as film.mjs smallSfx), for a page away from this machine; a minute of float WAV is ~46 MB, of this ~0.7.
-// kept: a folder where results stay, by source file (its size and time), settings, the processing script's own time and the
-// encode: a 54 s narration lane took 12 s to process on every page load. The newest stay, up to KEEP_BYTES in all
 const KEEP_BYTES = 1024 ** 3;
 const OPUS = ["-c:a", "libopus", "-b:a", "96k"];
 const keptPath = async (kept, source, settings, small) => {
@@ -82,7 +79,7 @@ const keptPath = async (kept, source, settings, small) => {
 const prune = async (kept) => {
   const files = await Promise.all(
     (await readdir(kept))
-      .filter((n) => /\.(webm|wav)(\.new)?$/.test(n)) // a .new a crash left behind goes too
+      .filter((n) => /\.(webm|wav)(\.new)?$/.test(n))
       .map(async (n) => {
         const { size, mtimeMs } = await stat(join(kept, n));
         return { n, size, mtimeMs };
@@ -100,7 +97,7 @@ export const renderAudio = (source, settings, python, { small = false, kept = nu
     if (keep && existsSync(keep))
       try {
         return await readFile(keep);
-      } catch {} // pruned between the two calls: processed again below
+      } catch {}
     const dir = await mkdtemp(join(tmpdir(), "studio-processed-")),
       out = join(dir, "clip.wav");
     try {
@@ -135,7 +132,6 @@ export const renderAudio = (source, settings, python, { small = false, kept = nu
         await mkdir(kept, { recursive: true });
         await writeFile(`${keep}.new`, bytes);
         await rename(`${keep}.new`, keep);
-        // the other job's .new can vanish between readdir and stat: tidying never fails a sound already made
         await prune(kept).catch(() => {});
       }
       return bytes;

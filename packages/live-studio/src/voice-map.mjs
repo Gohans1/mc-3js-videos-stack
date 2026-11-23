@@ -1,5 +1,3 @@
-// Builds renders/live/voice_map.json natively in JS: 0.04s waveform peaks from full_voice.wav and per-take whisperX word
-// times shifted onto where voice/assemble placed each take in full_voice.wav.
 import {
   existsSync,
   lstatSync,
@@ -19,8 +17,6 @@ import { wavInfo, wavPeaks } from "./sound.mjs";
 export const VOICE_STEP = 0.04;
 export const TAKE_ID = /^[A-Za-z0-9_-]{1,80}$/;
 
-// The command that writes FILE.words.json for each take with whisperX: WHISPERX_PYTHON names a python that has it
-// (INSTALL.md), else the lab venv (THREEJS_LAB moves the lab). voice:gen and voice:align run it
 export const wordsCommand = (takes) => {
   const lab = process.env.THREEJS_LAB || "E:/threejs_lab";
   return [
@@ -153,17 +149,13 @@ export const voiceFileOf = (projectDir) => {
             narration = audioDoc.narration;
           }
         }
-      } catch {
-        /* ignore out-of-root or broken audio timeline and keep default narration key */
-      }
+      } catch {}
       const rel = narration && conf.soundSources?.[narration];
       // return resolved path (even outside root) so callers' containment checks reject escaping soundSources instead of masking them
       if (typeof rel === "string" && rel) {
         return resolve(root, rel);
       }
-    } catch {
-      /* fall back to default path */
-    }
+    } catch {}
   }
   return fallback;
 };
@@ -204,7 +196,6 @@ const isValidWordsFile = (wf, realTakes, audioMtimeMs = null) => {
   }
 };
 
-// The takes of src/edit.json with audio in voice/takes: [{ id, audio, aligned }], aligned when <audio>.words.json is fresh, valid, and beside it
 export const takeAudios = (projectDir) => {
   const root = resolve(projectDir);
   if (!existsSync(root)) return [];
@@ -333,7 +324,6 @@ export const planVoicePlacements = (projectDir, { fallbackSecondsOf, strict = fa
         throw new Error(`Unsafe word alignment path "${wf}"`);
       }
     }
-    // all of them at once: one take named per run sends an AI round the loop once per take
     const unaligned = unalignedTakes(root);
     if (unaligned.length)
       throw new Error(
@@ -521,9 +511,7 @@ export const writeVoiceMap = (projectDir, outFile, precomputedPlacements) => {
     try {
       const previous = JSON.parse(readFileSync(safeOut, "utf8"));
       if (Array.isArray(previous.placements)) map.placements = previous.placements;
-    } catch {
-      // A derived map can be rebuilt; its last assembly layout is only available when the old JSON is readable.
-    }
+    } catch {}
   }
   writeAtomicSync(safeOut, JSON.stringify(map));
   return { ...map, words: map.lines.reduce((n, l) => n + l.words.length, 0) };

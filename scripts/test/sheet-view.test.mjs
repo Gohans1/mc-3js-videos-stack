@@ -648,7 +648,6 @@ test("--vs pairs the reference's frame at the same heard second beside ours, bla
   assert.ok(rgb(after.vs, refHalf).every((c) => c < 30));
   assert.ok(rgb(after.vs, ourHalf)[2] > 220);
   assert.match(r.stdout, /reference \| ours/);
-  // each side is named on the picture itself, in a dark box at its top left
   assert.ok(rgb(inside.vs, "crop=24:8:12:10,scale=1:1")[1] < 160);
   assert.ok(rgb(inside.vs, "crop=24:8:332:10,scale=1:1")[0] < 160);
 
@@ -674,7 +673,6 @@ test("--grid rules each native frame in the video's own pixels, and --crop keeps
   const [whole] = data.entries;
   assert.deepEqual(dimensions(whole.frame), [320, 180]);
   assert.deepEqual(whole.grid, { step: 50, crop: [0, 0, 320, 180] });
-  // a ruled line lightens the red picture where it runs
   const onLine = rgb(whole.frame, "crop=4:40:98:100,scale=1:1:flags=area");
   const between = rgb(whole.frame, "crop=4:40:122:100,scale=1:1:flags=area");
   assert.ok(onLine[1] > between[1] + 40, `${onLine} vs ${between}`);
@@ -689,7 +687,6 @@ test("--grid rules each native frame in the video's own pixels, and --crop keeps
     "--crop",
     "100,40,300,180",
   ]);
-  // the line at the video's 150 px falls 50 px into the crop
   assert.ok(
     rgb(cropped.frame, "crop=4:40:48:80,scale=1:1:flags=area")[1] >
       rgb(cropped.frame, "crop=4:40:72:80,scale=1:1:flags=area")[1] + 40,

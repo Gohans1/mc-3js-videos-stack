@@ -1,7 +1,4 @@
-﻿// One film opened in the studio: where its files are, and the jobs that keep the studio's copies of them fresh (the sound mix,
-// the voice's word times, the phone copies, the film contract). Everything under `project` is the film's,
-// everything beside this file is the studio's.
-import { execFile, spawn } from "node:child_process";
+﻿import { execFile, spawn } from "node:child_process";
 import {
   createReadStream,
   existsSync,
@@ -53,12 +50,8 @@ export const STUDIO = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // One copy of three: the film's and the studio's would each otherwise bring their own, and objects from one fail instanceof in the other
 export const threeFromOf = (project) =>
   existsSync(join(project, "node_modules/three")) ? project : STUDIO;
-// The voice's lines and words in the voice's own seconds, which the studio writes on opening a film (voice-map.mjs)
 export const voiceMapOf = (project) => join(project, "renders/live/voice_map.json");
 
-// The film's length in heard seconds from its data alone, as the studio plays it (src/edit.json end through the voice edit and
-// Speed/Freeze), so a CLI can refuse a second past the end before building anything. film: what the scene's DURATION is;
-// layers: with the longest sound or overlay layer. null for a film whose end lives only in its code (no edit.json end)
 export const heardLength = (project, conf) => {
   const read = (rel) => {
     try {
@@ -66,13 +59,12 @@ export const heardLength = (project, conf) => {
         ? JSON.parse(readFileSync(join(project, rel), "utf8"))
         : null;
     } catch {
-      return null; // a broken file is bun run check's to say
+      return null;
     }
   };
   const edit = read("src/edit.json");
   if (typeof edit?.end !== "number") return null;
   const fromSource = (s) => warp(edit.voice?.warp ?? [], s, 0, 1);
-  // a shot on the output clock moves its camera through Speed and Freeze (scripts/at.ts builds the same shots)
   const shots = read(conf.shotsTimeline);
   setTiming(
     read(conf.timingTimeline) ?? {},
@@ -89,22 +81,17 @@ export const heardLength = (project, conf) => {
   return { film: timingClock.duration, layers: Math.max(timingClock.duration, layerDuration()) };
 };
 
-// The files the film contract (contract.ts) covers, by the name the studio says them: [schema, text] (text undefined: absent).
-// What the studio checks on every change, and bun run check (check.mjs) without a studio
 export const contractFiles = (project) => {
   const pkgFile = join(project, "package.json"),
     conf =
       (existsSync(pkgFile) ? JSON.parse(readFileSync(pkgFile, "utf8")) : {})["live-studio"] ?? {};
-  // a folder named in place of a file reads as absent here; bun run check names it
   const textOf = (rel) => {
     const f = join(project, rel);
     return statSync(f, { throwIfNoEntry: false })?.isFile() ? readFileSync(f, "utf8") : undefined;
   };
-  // older films named it sound_choices.json; validate every present choices file so a legacy one never hides a broken choices.json
   const choiceFiles = ["choices.json", "sound_choices.json"].filter((f) =>
     existsSync(join(project, f)),
   );
-  // a value of the wrong shape is opened by nothing here: the "live-studio" entry's own schema names it
   const own = (key, schema) =>
     typeof conf[key] === "string" && conf[key] ? [[conf[key], [schema, textOf(conf[key])]]] : [];
   const rowsOf = (edit) => {
@@ -148,7 +135,6 @@ const debounce = (f, ms) => {
   };
 };
 
-// activity: src/activity.mjs's, told of each edit made outside the studio (the AI's)
 export const openFilm = (projectDir, { send, activity }) => {
   const PROJECT = resolve(projectDir);
   const SRC = join(PROJECT, "src");
@@ -165,21 +151,18 @@ export const openFilm = (projectDir, { send, activity }) => {
       : "python3";
   const PUBLIC = join(PROJECT, "assets/public");
   const WORK = join(PROJECT, "renders/live");
-  const MIX = join(WORK, "mix_dry.wav"); // without the sounds being tried: the page plays those itself
-  const MIX_SMALL = join(WORK, "mix_small.webm"); // the same mix for anything but this machine: a fifteenth of the size, and Opus stays on the clock where mp3 ran up to 30ms off
+  const MIX = join(WORK, "mix_dry.wav");
+  const MIX_SMALL = join(WORK, "mix_small.webm");
   const RENDERS = join(PROJECT, "renders");
-  const VIDEO_SMALL = join(WORK, "video_small.mp4"); // 540p H.264/AAC faststart copy so a phone downloads a draft at a fraction of the size
-  const LITE = join(WORK, "lite"); // small copies of the assets, see make_lite.py
+  const VIDEO_SMALL = join(WORK, "video_small.mp4");
+  const LITE = join(WORK, "lite");
   const TRIALS = join(WORK, "trials.json");
   const EDIT = join(SRC, "edit.json");
   const VOICE_MAP = voiceMapOf(PROJECT);
   const VOICE = voiceFileOf(PROJECT);
-  // What was picked in the studio ("Use"), {group: {set, gain}}, read by the film's own renders; older films named it sound_choices.json
   const CHOICES =
     [join(PROJECT, "choices.json"), join(PROJECT, "sound_choices.json")].find(existsSync) ??
     join(PROJECT, "choices.json");
-  // A machine's private name (Tailscale) has no place in the studio's public repo: the film lists the names it is reached by.
-  // Re-read .live_hosts whenever it appears, changes, or disappears, plus any host local tailscale serve proxies to this port.
   const HOSTS_FILE = join(PROJECT, ".live_hosts");
   const normHost = (name) =>
     String(name ?? "")
@@ -220,12 +203,10 @@ export const openFilm = (projectDir, { send, activity }) => {
     return clean;
   };
   const threeFrom = threeFromOf(PROJECT);
-  // What sound.py reads, so a change to any of it remixes: package.json "live-studio": { "sound": [paths] }, files or folders.
-  // Never list a folder the mix writes into, or every remix starts the next. Without the key: what films made before it mixed from
   const PKG = join(PROJECT, "package.json");
   const readPkg = () => (existsSync(PKG) ? JSON.parse(readFileSync(PKG, "utf8")) : {});
   const pkg = readPkg();
-  const NAME = pkg.name ?? basename(PROJECT); // the page's title and a still frame's file name
+  const NAME = pkg.name ?? basename(PROJECT);
   const SOUND_INPUTS = [
     ...new Set([
       ...(pkg["live-studio"]?.sound ?? [
@@ -237,8 +218,8 @@ export const openFilm = (projectDir, { send, activity }) => {
       ...Object.values(pkg["live-studio"]?.soundSources ?? {}),
     ]),
   ].map((f) => join(PROJECT, f));
-  const has = (script) => existsSync(join(PROJECT, script)); // make_lite.py is optional
-  const sound = openSound(PROJECT, pkg["live-studio"]); // null: the film has no sound lanes for the studio to edit
+  const has = (script) => existsSync(join(PROJECT, script));
+  const sound = openSound(PROJECT, pkg["live-studio"]);
   const readers = new Set();
   let syncVoiceAssemble = () => {};
   let syncNotes = () => {};
@@ -248,22 +229,18 @@ export const openFilm = (projectDir, { send, activity }) => {
     },
     onAssemble: () => syncVoiceAssemble(),
   });
-  // "live-studio": { camTimeline: file }: the camera keys, which the film also puts in EDIT.cam (the page previews edits there)
   const camRel = pkg["live-studio"]?.camTimeline,
     cam = camRel ? openTimelineFile(PROJECT, camRel, CamTimeline) : null;
   const lightsRel = pkg["live-studio"]?.lightsTimeline,
     lights = lightsRel ? openTimelineFile(PROJECT, lightsRel, LightsTimeline) : null;
-  // "live-studio": { keyFiles: { file: EDIT key } }: Steve's moves, the props' keys... as rows the studio retimes (contract.ts keyRows)
   const keyFiles = Object.entries(pkg["live-studio"]?.keyFiles ?? {}).map(([rel, edit]) => {
     const requiredRows = pkg["live-studio"]?.requiredKeyRows?.[edit] ?? [],
       base = keyFileSchema(requiredRows),
       schema = edit === "placed" ? base.and(PlacedTimeline) : base;
     return { rel, edit, requiredRows, schema, ...openTimelineFile(PROJECT, rel, schema) };
   });
-  // "live-studio": { shotsTimeline: file }: SHOTS as data (the film reads them from EDIT.shots), so a cut can be moved by hand
   const shotsRel = pkg["live-studio"]?.shotsTimeline,
     shots = shotsRel ? openTimelineFile(PROJECT, shotsRel, ShotsTimeline) : null;
-  // "live-studio": { textTimeline: file }: titles, arrows and circles over the picture (EDIT.text, drawn by film-stage/titles.ts)
   const textRel = pkg["live-studio"]?.textTimeline,
     text = textRel ? openTimelineFile(PROJECT, textRel, TextTimeline) : null;
   const adjustmentRel = pkg["live-studio"]?.adjustmentTimeline,
@@ -287,7 +264,7 @@ export const openFilm = (projectDir, { send, activity }) => {
   const ownWrites = () => [
     ...editable.filter((f) => f.ownWrite()).map((f) => f.FILE),
     ...(voice.ownEditWrite() ? [EDIT] : []),
-  ]; // files whose last change was the studio's own save
+  ];
   const handEdited = editable.map((f) => f.FILE);
   const history = openFilmHistory(PROJECT, {
     beforeCapture: () => {
@@ -305,15 +282,12 @@ export const openFilm = (projectDir, { send, activity }) => {
     },
     changed: () => send("history"),
   });
-  // "live-studio": { liveLanes: true }: the page plays the lanes itself and the film's sound.py, given --live-lanes, leaves them
-  // out of the mix, so a lane edit is heard at once. A mix made before the switch still holds them: the marker says it was remade
   const LIVE = !!(sound && pkg["live-studio"]?.liveLanes);
   const LIVE_MARK = join(WORK, "mix_dry.live");
   const mixIsLive = () =>
     existsSync(LIVE_MARK) &&
     existsSync(MIX) &&
     statSync(LIVE_MARK).mtimeMs >= statSync(MIX).mtimeMs;
-  // Without the lanes, everything else in the timeline file is still the mix's (voiceGain, voice)
   const offLanes = (file) => {
     try {
       const {
@@ -341,9 +315,8 @@ export const openFilm = (projectDir, { send, activity }) => {
   const textOf = (f) => (existsSync(f) ? readFileSync(f, "utf8") : undefined);
   const readChoices = () => (existsSync(CHOICES) ? JSON.parse(readFileSync(CHOICES, "utf8")) : {});
 
-  // ---------- The film contract (contract.ts): said once when it changes, in this terminal and to the pages
   let fileProblems = null,
-    pageProblems = null; // null: the first check says "ok" too
+    pageProblems = null;
   const sayContract = (what, list) =>
     console.log(
       list.length
@@ -386,7 +359,7 @@ export const openFilm = (projectDir, { send, activity }) => {
       } catch {
         return [];
       }
-    } // half-written by an agent: no names this time
+    }
     const s = readFileSync(join(SRC, "scene.ts"), "utf8").replace(/\r/g, "");
     return s
       .slice(s.indexOf("export const SHOTS = ["), s.indexOf("];\nexport let DURATION"))
@@ -395,10 +368,8 @@ export const openFilm = (projectDir, { send, activity }) => {
       .filter((l) => l.trim())
       .map((l) => l.match(/\/\/ (.*)$/)?.[1] ?? "");
   };
-  // Which version of the film a note was said about (git describe when tracked, local-<8hex> otherwise)
   const stamp = async () => ({ version: await filmVersionAsync(PROJECT) });
 
-  // ---------- Files that are swapped in whole while a page may be reading them
   // Windows won't replace a file someone is still reading. A mix swaps in by cutting its readers off: the page fetches the new one right after
   const openRead = (file, range) => {
     const s = createReadStream(file, range),
@@ -512,7 +483,6 @@ export const openFilm = (projectDir, { send, activity }) => {
       smallBuildSeq = mixSeq;
       return Promise.resolve();
     }
-    // Made beside it and swapped in whole: a phone may be halfway through downloading the old one
     const fresh = MIX_SMALL + ".new.webm";
     const builtForSeq = mixSeq;
     return (smallMixing ??= new Promise((done) =>
@@ -540,7 +510,6 @@ export const openFilm = (projectDir, { send, activity }) => {
     ));
   };
 
-  // ---------- The sound mix: written beside the old one and swapped in whole, so a page playing it never reads a half-written file
   let mixing = false,
     again = false;
   const remix = () => {
@@ -586,7 +555,6 @@ export const openFilm = (projectDir, { send, activity }) => {
     }
   };
 
-  // ---------- Watching the film's files. Code is Vite's to watch (src/vite_film.mjs); these are the files code doesn't import
   const watchers = [];
   const watch = (...a) => watchers.push(fsWatch(...a));
   const timelineContent = (file) => {
@@ -788,9 +756,8 @@ export const openFilm = (projectDir, { send, activity }) => {
     if (!existsSync(LITE) && has("make_lite.py"))
       spawn(PYTHON, ["make_lite.py"], { cwd: PROJECT, stdio: "inherit" });
     const notesWatcher = watchNotesFile(notes.file, () => send("notes"), { debounceMs: 80 });
-    watchers.push(notesWatcher); // external edits or atomic rewrites show up without dropping events
+    watchers.push(notesWatcher);
     syncNotes = () => notesWatcher.sync();
-    // Voice edits and takes live in edit.json: keep the mix and word map following them
     const voiceEdits = () => {
       try {
         return JSON.stringify(JSON.parse(readFileSync(EDIT, "utf8")).voice.edits);
@@ -839,11 +806,8 @@ export const openFilm = (projectDir, { send, activity }) => {
     checkContract();
   };
 
-  // A sound file for anything but this machine: Opus, about a tenth of the WAV, made once per version of the file
   const SFX_SMALL = join(WORK, "sfx_small"),
     makingSmall = new Map();
-  // "live-studio": { ratio }: the frame's shape (frame.ts), set from the studio's Settings. Read from the file each time, so the
-  // page, the renders and a hand edit agree; the pages reload to draw at it
   const ratio = () => ratioOf(readPkg());
   const preloads = () => {
     const parsed = StudioConfig.shape.preload.safeParse(readPkg()["live-studio"]?.preload);

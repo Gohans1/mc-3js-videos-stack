@@ -58,7 +58,6 @@ const makeWavBuffer = (seconds = 0.5, rate = 16000) => {
   return Buffer.concat([h, data]);
 };
 
-// Fake torch + whisperx on PYTHONPATH so real words.py executes in <150ms without GPU/PyTorch models
 const makeFakePythonEnv = (mode = "normal") => {
   const pyDir = makeTemp("whisperx-stub-");
   const traceFile = join(pyDir, "trace.jsonl");
@@ -333,7 +332,6 @@ describe("voice:align CLI contract & preflight", () => {
     expect(dirRes.status).toBe(1);
     expect(dirRes.stderr).toMatch(/symlink|junction|escapes/i);
 
-    // Real voice/takes, but .words.json replaced by a junction/symlink
     const film2 = makeFilm([{ id: "01", text: "hi" }]);
     writeFileSync(join(film2, "voice/takes/01.wav"), makeWavBuffer());
     symlinkSync(outside, join(film2, "voice/takes/01.wav.words.json"), "junction");
@@ -400,7 +398,6 @@ describe("voice:align staleness, env, partial fail, and studio telemetry", () =>
     const a3 = join(film, "voice/takes/03.wav");
     for (const a of [a1, a2, a3]) writeFileSync(a, makeWavBuffer());
 
-    // 01: stale (audio newer than words.json)
     writeFileSync(
       `${a1}.words.json`,
       JSON.stringify({ text: "old", dur: 0.5, words: [{ w: "old", s: 0.1, e: 0.2 }] }),
@@ -412,10 +409,8 @@ describe("voice:align staleness, env, partial fail, and studio telemetry", () =>
     );
     utimesSync(a1, new Date("2025-06-01T00:00:00Z"), new Date("2025-06-01T00:00:00Z"));
 
-    // 02: corrupt JSON
     writeFileSync(`${a2}.words.json`, "{ broken json", "utf8");
 
-    // 03: valid JSON but 0 valid words
     writeFileSync(`${a3}.words.json`, JSON.stringify({ text: "", dur: 0.5, words: [] }), "utf8");
 
     const stub = makeFakePythonEnv();
@@ -482,7 +477,6 @@ describe("voice:align staleness, env, partial fail, and studio telemetry", () =>
     const a2 = join(film, "voice/takes/02.wav");
     writeFileSync(a1, makeWavBuffer());
     writeFileSync(a2, makeWavBuffer());
-    // Pre-existing stale .words.json on 02 must NOT be counted as aligned when 02 fails
     writeFileSync(
       `${a2}.words.json`,
       JSON.stringify({ text: "stale", dur: 0.5, words: [{ w: "stale", s: 0.1, e: 0.2 }] }),
@@ -501,7 +495,6 @@ describe("voice:align staleness, env, partial fail, and studio telemetry", () =>
     expect(res1.stderr).toContain("still without timings: 02");
     expect(existsSync(`${a1}.words.json`)).toBe(true);
 
-    // Resume bare run only runs 02
     const okStub = makeFakePythonEnv("normal");
     const res2 = runAlignCli(film, [], okStub.env);
     expect(res2.status).toBe(0);
@@ -555,7 +548,6 @@ describe("voice:align staleness, env, partial fail, and studio telemetry", () =>
       expect(events[1].job).toEqual({ key: "voice:align", end: true });
       expect(events[1].level).toBe("fail");
 
-      // Also verify ok activity reporting
       events.length = 0;
       const okStub = makeFakePythonEnv("normal");
       const okRes = await runAlignCliAsync([], okStub.env);

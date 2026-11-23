@@ -1,7 +1,3 @@
-// The master meter at the right of the timeline, as editors show one (CapCut, Premiere's Audio Meters): each channel's peak with
-// its hold, the short-term loudness against the film's target, and a clip light per channel. Every number is the final render's,
-// the loudness pass's gain added (meter.ts), so what goes red here goes red in mix.wav. Settings, View, Audio meter hides it;
-// a phone never runs it
 import { TriangleAlert } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -25,9 +21,9 @@ export const meterKeepRunning = (
 ) => playing || hasSounding() || hasPreviewSounding() || now < activeUntil || shortTerm > FLOOR;
 const SCALE = [0, -6, -12, -18, -24, -36, -48, -60];
 const HOLD = 1.5,
-  FALL = 20 / 1.7; // IEC TR 60268-18's digital peak meter: back 20 dB in 1.7 s; the hold mark waits 1.5 s first
+  FALL = 20 / 1.7;
 const YELLOW = -12,
-  RED = -1; // red from -1 dBTP, where the upload's AAC encode can clip
+  RED = -1;
 const fixed = (v: number) =>
   Number.isFinite(v) ? (v > -0.05 && v < 0.05 ? "0.0" : v.toFixed(1)) : "−∞";
 const signed = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`;
@@ -40,7 +36,7 @@ export function AudioMeter() {
   const canvas = useRef<HTMLCanvasElement>(null),
     short = useRef<HTMLSpanElement>(null),
     whole = useRef<HTMLSpanElement>(null);
-  const clipped = useRef<[number | null, number | null]>([null, null]); // film second each channel first went over 0 dBFS
+  const clipped = useRef<[number | null, number | null]>([null, null]);
   const pokeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -239,7 +235,6 @@ export function AudioMeter() {
         const yFloor = y(FLOOR),
           yYellow = y(YELLOW),
           yRed = y(RED);
-        // The two peaks, coloured by the zone they reach
         for (let c = 0; c < 2; c++) {
           const x = c === 0 ? x0 : x1,
             v = shown[c];
@@ -265,7 +260,6 @@ export function AudioMeter() {
           g.fillStyle = (c === 0 ? clip0 : clip1) ? C.red : C.track;
           g.fillRect(x, 0, bar, led);
         }
-        // The short-term loudness beside them, with the film's target across it
         if (r.shortTerm > FLOOR) {
           const ySt = y(r.shortTerm);
           g.fillStyle = C.loud;
@@ -310,7 +304,6 @@ export function AudioMeter() {
   }, [loudness]);
 
   if (!on) return null;
-  // more than YouTube's 1 LU short: the same line bun run mix prints, so the creator and the AI see one lever
   const under = loudness && loudness.held > 1;
   const about = loudness
     ? `The final render moves the whole film by ${signed(loudness.gain)} dB, from ${loudness.before.toFixed(1)} to ${(loudness.before + loudness.gain).toFixed(1)} LUFS, and these numbers already include that. ${under ? `That is ${loudness.held.toFixed(1)} dB short of ${loudness.target}: more would push its loudest peak over −1.5 dBTP. Louder: raise "drive" in audio.json (bun run mix names the value); its limiter takes the peaks and each dB buys a third to a half of one, and past +12 the hits flatten.` : `Its loudest peak is then ${signed(loudness.truePeak)} dBTP.`}`

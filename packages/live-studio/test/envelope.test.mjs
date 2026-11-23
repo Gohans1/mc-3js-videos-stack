@@ -1,5 +1,3 @@
-// A lane clip's fades as the page plays them (app/sound/envelope.ts) must match the film's mix (scripts/sound/mix.py, ffmpeg
-// afade). The expected values were read off ffmpeg itself: a constant signal through the same atrim/afade chain, 1000 samples/s
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

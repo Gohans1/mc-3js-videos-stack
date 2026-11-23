@@ -1,11 +1,4 @@
 import { EDIT, fromSource } from "film/edit";
-// Options to choose between, in one list: looks of a prop (the film's draw.variants) and sounds (trials.json from the film's
-// sound.py). A look is swapped in the scene; a sound is played from here and left out of the live mix. Either way a switch
-// shows or sounds at once, and "Use" writes the pick to the film's choices file, which its renders read.
-// Every sound group, and every look whose variant says off: true, also gets OFF: no sound, or the prop hidden.
-// A sound group is either cues (one hit per cue) or kind "stem": one recording per option covering from..to on the mix's clock.
-// The page also plays every beat sound in edit.json itself (the live mix leaves them out), so moving one is heard at once.
-// With live lanes (app/sound/mixer.ts) a lane sound's options are kind "lane": the mixer plays the pick, nothing is pre-mixed.
 import type { Variant } from "film/scene";
 
 import { SMALL_SOUND } from "../core/device";
@@ -55,7 +48,7 @@ interface Group {
   options: SoundOption[];
   chosen: { set: string; gain?: number } | null;
   spans?: [number, number][];
-  audition?: () => void; // kind "lane": where it sounds, and a taste of the pick when paused
+  audition?: () => void;
 }
 export interface LaneGroup {
   title: string;
@@ -69,7 +62,6 @@ interface Pick {
 }
 
 const OFF: SoundOption = { id: "off", title: "Off", off: true };
-// A chip's face: A, B, C… or Off
 const letter = (i: number) => String.fromCharCode(65 + i);
 export const optionLabel = (o: { off?: boolean }, i: number) => (o.off ? OFF.title : letter(i));
 
@@ -85,12 +77,10 @@ const pickOf = (name: string): Pick =>
     set: trials[name].chosen?.set ?? trials[name].options[0].id,
     gain: trials[name].chosen?.gain ?? 1,
   };
-// The pick for a lane sound's group, or null while the mixer hasn't made that group yet
 export const lanePick = (name: string): Pick | null => (trials[name] ? pickOf(name) : null);
 const optionOf = (name: string) =>
   trials[name].options.find((o) => o.id === pickOf(name).set) ?? trials[name].options[0];
 const chosenOf = (name: string) => trials[name].chosen?.set ?? trials[name].options[0].id;
-// Film seconds where a group is on screen or heard
 export const rangesOf = (name: string): [number, number][] => {
   const g = trials[name];
   if (g.kind === "picture") return g.variant!.ranges;
@@ -102,7 +92,6 @@ export const rangesOf = (name: string): [number, number][] => {
   });
 };
 
-// Only the sound in use comes down: the others wait until someone picks them. A look has nothing to load
 const loadOption = (o: SoundOption) =>
   o.files
     ? (o.loading ??= Promise.all(
@@ -140,7 +129,6 @@ const playHit = (name: string, cue: Cue, when: number, speed: number) => {
     ),
   };
 };
-// A stem is mixed at the film's level already; offset is seconds into it. With a length it is a preview, faded out so it doesn't click
 const playStem = (name: string, when: number, offset: number, speed: number, length?: number) => {
   const o = optionOf(name),
     buf = o.buffers?.[0];
@@ -230,7 +218,6 @@ addPlayer({
   },
 });
 
-// ---------- What the controls show
 const publish = () => {
   const groups: GroupView[] = Object.keys(trials).map((name) => {
     const g = trials[name],
@@ -254,7 +241,6 @@ const publish = () => {
   chipKey = "";
   S.dirty = true;
 };
-// On the picture: the groups seen or heard around the playhead, so a choice turns up when its moment does
 const SOON = 2,
   LATE = 0.5;
 let chipKey = "";
@@ -304,7 +290,6 @@ export const choose = (name: string, i: number) => {
     if (!S.playing) g.audition?.();
     return;
   }
-  // Paused: still say what it sounds like
   loadOption(o).then(() => {
     if (S.playing) return;
     const ctx = getAudioCtx();
@@ -338,7 +323,6 @@ export const pinPick = async (name: string) => {
   publish();
   say(`${trials[name].title}: using ${optionOf(name).title} from the next render`);
 };
-// The next place a group is seen or heard, a little before it
 export const whereNext = (name: string) => {
   const r = rangesOf(name);
   if (!r.length) return null;
@@ -384,7 +368,6 @@ export const loadTrials = async (initial = false) => {
   for (const name in looks) looks[name].variant!.set(pickOf(name).set);
   if (S.playing || hasAudio()) await warmTrialAudio();
 };
-// The live mixer's groups, whenever the lanes change: a pick already made stays, a group whose sound left the lanes goes
 export const setLaneGroups = (groups: Record<string, LaneGroup>) => {
   if (JSON.stringify(groups) === JSON.stringify(lanes)) {
     lanes = groups;

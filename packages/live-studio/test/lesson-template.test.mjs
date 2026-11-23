@@ -1,5 +1,3 @@
-// src/lesson-template.ts: a new lesson file starts in the shape Jev finds files by (lessons.mjs: its path, its "when:"
-// frontmatter line and its headings), with the rule's heading picked so the creator's first words replace it
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

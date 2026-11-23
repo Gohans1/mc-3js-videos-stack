@@ -1,16 +1,6 @@
 import { onClipActivity, paintActivityMark } from "../activity/timeline-activity";
 import { BLADE_CURSOR } from "../components/cursor";
 import { together } from "../core/doc";
-// The sound tracks under the timeline, CapCut style, on the same seconds as the stretch drawn above them (timeline.ts): one row
-// per track of audio.json (sound/tracks.ts), its name, mute and lock in the column beside it (sound/TrackHeads.tsx).
-// A clip is dragged to move (up or down onto another track, or below the last one for a new track), by an edge to trim, and
-// snaps to the playhead, cuts, words and other clips' edges (Shift: no snap), CapCut's line showing where (timeline/snapline.ts). The inset handle below each end of the label under the
-// pointer or picked drags its fade in or out, as in CapCut and Premiere. A box dragged over empty space picks every clip
-// it touches (Shift/Ctrl add to the pick), and the keys of the other rows it crosses (timeline/rowbox.ts, across.ts); dragging
-// one picked clip moves all of it, and with Alt held copies of the clips alone (CapCut's drag to duplicate). A click on empty space
-// drops the pick and moves the playhead there (rowbox.ts boxEnd); a touch dragged over empty space scrubs instead.
-// A sound from the library is dragged in from the side panel (startCarry) or added at the playhead with its + button.
-// In split mode (blade.ts) a click on a clip cuts it there instead.
 import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
@@ -52,22 +42,18 @@ import {
 import { addTrack, placeShift, same } from "./tracks";
 import { cachedVoiceClipLabel } from "./voice-client";
 
-// sound/TrackHeads.tsx lays its rows out on these
 export const TRACK_H = 52,
   TOP = 2,
   ADD_H = 24;
 const CLIP_H = 48,
   LABEL_H = 16;
-// CapCut 9.7's audio clip, measured off the dev's screenshot (index.css --clip-audio and the rest): a navy clip, its level in
-// 1 px cyan bars from the bottom, the name on a lighter tag. A bar within 1 dB of full scale gets an orange cap and one past it a
-// red tip, Final Cut Pro's documented warning, which CapCut's look follows
 const NEAR = 10 ** (-1 / 20);
 const EDGE = 6,
-  KNOB = 7; // KNOB: how near a fade handle the pointer must be, in px
+  KNOB = 7;
 
 type Box = { ref: ClipRef; x0: number; x1: number; y0: number; y1: number };
 let boxes: Box[] = [];
-let drop: { row: number; at: number } | null = null; // row = tracks.length: below the last track, a new one
+let drop: { row: number; at: number } | null = null;
 let hover: ClipRef | null = null;
 let floating: { refs: ClipRef[]; grabbed: ClipRef; clientY: number; grabOffsetY: number } | null =
   null;
@@ -87,7 +73,6 @@ const rowY = (k: number) =>
     .reduce((h, t) => h + trackHeight(t.id), 0);
 const clipY = (k: number) =>
   rowY(k) + trackHeight(tracks()[k].id) - TRACK_H + (TRACK_H - CLIP_H) / 2;
-// The row under y; tracks.length is the strip below the last track, where a new one starts
 const rowAt = (y: number) => {
   const k = tracks().findIndex((_, i) => y < rowY(i + 1));
   return k < 0 ? tracks().length : k;
@@ -112,7 +97,6 @@ const drawClip = (
   g.beginPath();
   g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 4);
   g.fill();
-  // The file's level, scaled by the clip's gain so a quiet clip looks quiet: each bar the loudest peak of the 2 px it stands for
   const [from, to] = span(ref),
     altered = needsProcessing(c),
     p = altered
@@ -130,7 +114,7 @@ const drawClip = (
         (ref.list === "beds" && !altered ? ((s % (n * p.step)) + n * p.step) % (n * p.step) : s) /
           p.step,
       );
-    }; // a bed loops its file
+    };
     for (let x = Math.max(Math.ceil(cx0) + 1, 1); x < cx1 - 1; x += 2) {
       const i0 = at(x),
         i1 = Math.max(i0, at(x + 2) - 1);
@@ -151,7 +135,6 @@ const drawClip = (
       }
     }
   }
-  // Fades as a darkened corner, with their handles on the clip the pointer is over or that is picked
   const fi = c.fadeIn ?? 0,
     fo = c.fadeOut ?? 0;
   g.fillStyle = tone("fade-shade");
@@ -275,7 +258,6 @@ const drawClip = (
   g.restore();
   const id = audioItemId(ref.list, c);
   if (id) paintActivityMark(g, "sound", id, cx0, y + CLIP_H - 2, cx1 - cx0);
-  // Outside the clip, on the dark track, so the clip's own edge and fade handles stay seen
   if (on) {
     g.strokeStyle = tone("pick");
     g.lineWidth = 2;
@@ -302,26 +284,23 @@ export const drawLanes = () => {
   const c = S.el?.lanes;
   if (!c || !lanes || !isElementShown(c)) return;
   const height = lanesHeight();
-  if (c.style.height !== `${height}px`) c.style.height = `${height}px`; // the resize observer draws it at that size
+  if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(),
     X = (s: number) => ((s - a) / v) * w,
     ts = tracks();
-  // Each track's row a step lighter than the empty space under the last, as CapCut's
   g.fillStyle = tone("background");
   g.fillRect(0, 0, w, h);
   g.fillStyle = tone("track");
   g.fillRect(0, 0, w, rowY(ts.length));
   g.fillStyle = tone("background");
   for (let i = 1; i <= ts.length; i++) g.fillRect(0, rowY(i) - 1, w, 1);
-  // Cuts, faint, so a sound can be put on one by eye
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
   g.font = `12px ${UI_FONT}`;
   g.textBaseline = "middle";
   boxes = [];
-  // A library sound under the pointer: its clips stay bright and ringed, the rest step back
   const lit = get().soundLit,
     litSet = lit ? new Set(lit) : null,
     solo = get().solo,
@@ -362,7 +341,6 @@ export const drawLanes = () => {
   if (floating) {
     const grabbed = boxes.find((b) => same(b.ref, floating!.grabbed));
     if (grabbed) {
-      // The timed document replaces the track view after preview; anchor to the pointer using the current drawn row and scroll position.
       const dy =
         floating.clientY - c.getBoundingClientRect().top - floating.grabOffsetY - grabbed.y0;
       for (const b of boxes)
@@ -370,8 +348,6 @@ export const drawLanes = () => {
           drawClip(g, b.ref, b.x0, b.x1, b.y0 + dy, w, cuts);
     }
   }
-  // The strip under the last track takes a dropped clip as a new track. As in CapCut it stays blank and lights only under a drag;
-  // words show only while there is no track at all, as CapCut's empty timeline asks for its first clip
   if (!ts.length) {
     g.fillStyle = tone("muted-foreground");
     g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2);
@@ -396,7 +372,6 @@ export const drawLanes = () => {
   }
 };
 
-// ---------- Snapping: the playhead, cuts, word starts and the edges of every clip not being moved
 const snapPoints = (skip: ClipRef[]) => {
   const out = [S.t, ...SHOTS.map((s) => s.t), ...beatTimes(skip)];
   for (const l of S.voiceOut) for (const word of l.words) out.push(word.s);
@@ -413,12 +388,10 @@ const hit = (x: number, y: number, touch: boolean) => {
     ) ?? null
   );
 };
-// The clip under a right-click (ClipMenu.tsx), null on empty space
 export const clipAtPointer = (e: { clientX: number; clientY: number }) => {
   const r = S.el.lanes.getBoundingClientRect();
   return hit(e.clientX - r.left, e.clientY - r.top, false)?.ref ?? null;
 };
-// The fade handle under the pointer: the clip's top strip, near where its fade in ends or its fade out starts
 const knobAt = (b: Box, x: number, y: number, touch: boolean): "fadeIn" | "fadeOut" | null => {
   const c = clipOf(b.ref)!,
     [from, to] = span(b.ref),
@@ -457,10 +430,10 @@ type Drag = {
   x0: number;
   x1: number;
   y0: number;
-  copy: boolean; // CapCut's drag to duplicate (Alt held as the drag starts): copies move, the clips stay
-  moving: ClipRef[]; // the clips the drag moves: the pick, or its copies
+  copy: boolean;
+  moving: ClipRef[];
   along: Along | null;
-  shift: number; // the other rows' picks moving with the clips (timeline/across.ts), and by how much
+  shift: number;
   magnet: ReturnType<typeof makeSnapper>;
 };
 
@@ -496,7 +469,6 @@ export const attachLanes = () => {
       ) ?? -1;
     return i >= 0 ? i : null;
   };
-  // The playhead line over a clip's body is the playhead's; its trim edges and fade knobs stay the clip's
   const playheadGrab = (b: Box | null, x: number, y: number, w: number, touch: boolean) =>
     onPlayhead(x, w, touch) &&
     (!b ||
@@ -505,7 +477,6 @@ export const attachLanes = () => {
         gainKeyAt(b, x, y, touch) === null &&
         !knobAt(b, x, y, touch) &&
         !onGain(b, x, y)));
-  // Where a click cuts the clip under it: snapped to the playhead, cuts, words and other clips' edges, never to its own ends
   const bladeTime = (ref: ClipRef, x: number, w: number, off: boolean) =>
     snapTo(timeAt(x, w), snapPoints([ref]), view().v / w, off, true);
 
@@ -615,7 +586,6 @@ export const attachLanes = () => {
     };
   });
 
-  // A drag near the top or bottom of the tracks' box scrolls it, so a clip can be taken to a track out of sight
   const edgeScroll = (e: PointerEvent) => {
     const box = c.closest<HTMLElement>("[data-tracks-scroll]"),
       r = box?.getBoundingClientRect();
@@ -749,7 +719,6 @@ export const attachLanes = () => {
       valid = true;
     preview((l) => {
       if (drag!.mode === "move") {
-        // Copies of the pick go at the ends of their lists, the same each time the drag is redrawn from its snapshot
         const moving = (drag!.moving = drag!.copy
           ? group.map((r): ClipRef => {
               const list = l[r.list] as unknown[];
@@ -757,12 +726,10 @@ export const attachLanes = () => {
               return { list: r.list, i: list.length - 1 };
             })
           : group);
-        // The clip under the pointer snaps, by whichever end lands nearer a snap point; the rest of the pick moves as far
         const snapped = drag!.magnet(from + d, [0, to - from], pts, perPx, off);
         target = snapped.target;
         const starts = moving.map((r) => span(r)[0]);
         const room = drag!.along?.room ?? [-Infinity, Infinity];
-        // Up or down by as many rows as the pointer went, the whole pick together, none past the strip for a new track
         const rows = moving.map(rowOf),
           n = l.tracks.length;
         const dk = Math.max(
@@ -876,7 +843,6 @@ export const attachLanes = () => {
       if (alone && e.type === "pointerup") setClips([ref]);
       return;
     }
-    // Snapshots use source time; edit() accepts the projected view, including its original-time metadata.
     const after = snapshot(),
       projected = structuredClone(lanes!);
     restore(snap);
@@ -893,7 +859,7 @@ export const attachLanes = () => {
       });
       along?.commit(Math.round(shift * 1000) / 1000);
     });
-    if (copy) setClips(moving); // as in CapCut, the copies are what is picked after
+    if (copy) setClips(moving);
   };
   c.addEventListener("pointerup", up);
   c.addEventListener("dblclick", (e) => {
@@ -939,7 +905,6 @@ export const attachLanes = () => {
   onShownResize(c, drawLanes);
 };
 
-// ---------- A sound carried from the library: a label follows the pointer, and letting go over a track puts it there
 const overLanes = (e: PointerEvent) => {
   const c = S.el.lanes,
     r = c.getBoundingClientRect();

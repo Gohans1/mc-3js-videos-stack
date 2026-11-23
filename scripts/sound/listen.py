@@ -30,7 +30,7 @@ from seconds import heard_second, meant  # noqa: E402
 from studio_tell import job  # noqa: E402
 from review.stale import render_context  # noqa: E402
 
-GOOD, LOST = 15.0, 8.0  # LU of voice over the rest: target margin / high masking risk
+GOOD, LOST = 15.0, 8.0
 FLOOR = -120.0
 
 
@@ -42,7 +42,6 @@ def momentary(wav, duration=None):
                        capture_output=True, text=True, timeout=600)
     if r.returncode != 0:
         raise RuntimeError(f"ffmpeg ebur128 failed on {wav}: {r.stderr.strip()[-300:] or f'exit {r.returncode}'}")
-    # silence reads -inf or nan: the floor
     pairs = re.findall(r"pts_time:(\S+)\s+lavfi\.r128\.M=(\S+)", r.stdout)
     result = []
     for stamp, value in pairs:
@@ -61,7 +60,7 @@ def power_mean(values):
     return 10 * math.log10(sum(10 ** (v / 10) for v in values) / len(values)) if values else FLOOR
 
 
-YOUTUBE = -14.0  # LUFS YouTube plays every video at: louder ones are turned down, quieter ones are left as they are
+YOUTUBE = -14.0
 
 
 def loudness(media, audio="0:a:0"):
@@ -93,8 +92,6 @@ def measured_loudness(integrated, peak):
     return f"{level}, peak {peak:+.1f} dBTP"
 
 
-# The mix's true-peak ceiling before the AAC encode: AES TD1008 asks -1 dBTP at a lossy codec's input, and AAC overshoots
-# more at lower rates (a 192 kbps draft rose 1.4 dB)
 CEILING = -1.5
 
 
@@ -114,7 +111,6 @@ def fit_encoded(raw, out, target, encode, limit=-1.0):
     `limit` (the upload spec), level again with the ceiling lowered by the overshoot and encode again, so the file that
     goes out is measured, not the wav before it (AES TD1004: lossy codecs overshoot). Returns held gain, codec correction, and the last encode's loudness and peak."""
     held, ceiling, taken = level(raw, out, target), CEILING, 0.0
-    # the overshoot scales with the gain, near enough; a second try mops up what the first misjudged
     for tries in range(4):
         measured, _, tp = loudness(encode(out))
         if not math.isfinite(tp) or tp <= limit or tries == 3:
@@ -126,7 +122,7 @@ def fit_encoded(raw, out, target, encode, limit=-1.0):
     return held, taken, measured, tp
 
 
-DRIVE_MAX = 12  # live-studio check.mjs warns past it: every hit flattened into the bed
+DRIVE_MAX = 12
 
 
 def loudness_report(wav, target, held=0.0, drive=0.0, *, describe_upload=True):
@@ -138,9 +134,7 @@ def loudness_report(wav, target, held=0.0, drive=0.0, *, describe_upload=True):
     out = [f"{wav}: {i:.1f} LUFS integrated, true peak {tp:.1f} dBTP, loudness range {lra:.1f} LU"]
     short = held > 1
     if short:
-        # on sealed-room each dB of drive bought 0.3-0.5 LU (9->13 +1.6, 13->16 +1.0, 9->10 +0.5): about a third, rounded up
         want = min(DRIVE_MAX, drive + math.ceil(3 * held))
-        # sealed-room at +12: the narration 3 dB up bought 0.2 LU (its own limiter holds it); only drive closes the peak gap
         level_scope = (f"the upload plays {held:.1f} dB under audio.json lufs, nothing else wrong" if describe_upload
                        else f"the mix is {held:.1f} dB under audio.json lufs")
         lever = (f"drive is at +{drive:g}, the most before bun run check warns the hits flatten. Either leave it ({level_scope}) "
@@ -179,7 +173,7 @@ def spoken(voice, ref):
     return [(max(0.0, a - 0.4), b) for a, b in out if b - a >= 0.3]
 
 
-BURIED = 6.0  # dB a sound effect must lift the bed it lands on to be heard as a hit
+BURIED = 6.0
 
 
 def levels_around(curve, at, last=None, reach=2.0, step=0.5, duration=None):
@@ -223,9 +217,6 @@ def analyse(voice_wav, rest_wav, cuts=(), hits=(), duration=None):
     full = [(t, 10 * math.log10(10 ** (v / 10) + 10 ** (r / 10))) for (t, v), (_, r) in zip(voice, rest)]
     loud = [m for _, m in full if m > -70]
     whole = power_mean(loud) if loud else FLOOR
-    # the rest over the voice's own level: a hit or a swell the viewer reaches for the volume over
-    # over the voice as it speaks, or over nothing said, kept apart: the first wants the rest lowered under the words, the
-    # second only lowered, never the voice raised
     over = []
     if talk:
         said = dict(voice)
@@ -257,7 +248,7 @@ def analyse(voice_wav, rest_wav, cuts=(), hits=(), duration=None):
     tail = [m for t, m in full if t >= full[-1][0] - 0.3] if full else []
     abrupt = bool(loud) and bool(tail) and power_mean(tail) > -70 and power_mean(tail) > whole - 15
     buried, together = [], {}
-    for at, length, name in sorted(hits):  # sounds placed on the same moment are heard, and judged, as one hit
+    for at, length, name in sorted(hits):
         key = next((k for k in together if abs(k - at) < 0.05), at)
         was = together.get(key)
         together[key] = (max(was[0], length or 1.0), f"{was[1]} + {name}") if was else (length or 1.0, name)
@@ -272,7 +263,7 @@ def analyse(voice_wav, rest_wav, cuts=(), hits=(), duration=None):
             "curve": [(t, round(v, 1), round(r, 1)) for (t, v), (_, r) in zip(voice, rest)]}
 
 
-MONO_LOST = {"voice": 1.5, "rest": 6.0}  # dB a stem may lose folded to one speaker: wide but unrelated sides lose 3 dB, fine
+MONO_LOST = {"voice": 1.5, "rest": 6.0}
 
 
 def mono(voice_wav, rest_wav, duration=None):
@@ -366,12 +357,11 @@ def stems(folder, source_bindings=None):
     sound_dir = str(Path(__file__).resolve().parent)
     if sound_dir not in sys.path:
         sys.path.insert(0, sound_dir)
-    import mix  # reads the film in the current folder, as mix.py does
+    import mix
     narr = mix.A.get("narration")
     beds = [c for b in mix.A["beds"] if (c := mix.chosen(b))]
     sfx = [c for s in mix.A["sfx"] if (c := mix.chosen(s))]
     voice, rest = folder / "voice.wav", folder / "rest.wav"
-    # the time-stretcher prints a line per clip at the C level: kept in a file, shown only if the build fails
     with (folder / "build.log").open("w+", encoding="utf8", errors="replace") as log:
         sys.stdout.flush(), sys.stderr.flush()
         saved = os.dup(1), os.dup(2)
@@ -599,7 +589,6 @@ def focus(got, at, last, cuts, sound_rel="src/timeline/audio.json", sheet=None, 
                     row_cache[k] = res
     rows = at_rows(at, row_cache)
     print(f"timeline rows at {row_time(at)}: {', '.join(rows) if rows else f'nothing from {sound_rel}'}")
-    # a hit a few frames on is not playing yet but is in the row that starts here: named, as the row's level is partly its
     soon = list(dict.fromkeys(r for k in range(1, 6) for r in at_rows(at + k / 10, row_cache) if r not in rows))
     if soon:
         print(f"  starting by {at + 0.5:.2f}: {', '.join(soon)}")
@@ -619,7 +608,6 @@ def focus(got, at, last, cuts, sound_rel="src/timeline/audio.json", sheet=None, 
     if sheet:
         print(f"sheet: {sheet} (pre-master stems; open it to inspect the window)")
     print(f"next: change a row there (bun run at {at:g} names each file and row), then bun run listen --at {at:g} shows it next to this run")
-    # levels only: what each sound there is, and whether the hits land on the cuts, takes ears
     if not shutil.which("earshot"):
         print("      earshot is not on PATH: INSTALL.md sets it up, earshot doctor checks it")
     else:
@@ -679,13 +667,13 @@ def main(args):
     except (OSError, ValueError) as e:
         print(e, file=sys.stderr)
         return 1
-    ended = None  # the studio's busy line, once the stems start
+    ended = None
     try:
         with tempfile.TemporaryDirectory(prefix="listen-") as tmp:
             sound_dir = str(Path(__file__).resolve().parent)
             if sound_dir not in sys.path:
                 sys.path.insert(0, sound_dir)
-            import mix  # the film's heard length, so a wrong --at is refused before the stems are rendered
+            import mix
             if why := mix.unfit():
                 print(why, file=sys.stderr)
                 return 1
@@ -730,7 +718,6 @@ def main(args):
                     if r.returncode:
                         print(f"earshot sheet failed: {r.stderr.strip()[-300:]}", file=sys.stderr)
                         sheet = None
-        # each run keeps its curve, so the next --at shows what a gain change did
         curve_file = root / "renders/listen_curve.json"
         last = _load_curve(curve_file, root)
         curve_file.parent.mkdir(exist_ok=True)
@@ -777,13 +764,12 @@ def main(args):
         if len(got["over"]) > 5:
             print(f"  and {len(got['over']) - 5} {more}")
         for b in got["buried"][:8]:
-            rows = at_rows(b["at"] + 0.05, row_cache)  # inside the hit, not on its rounded edge
+            rows = at_rows(b["at"] + 0.05, row_cache)
             print(f"BURIED {b['name']} at {b['at']:.2f}: only {b['rise']:+.1f} dB over the second before it (a hit needs about +{BURIED:g})"
                   f"{' (playing: ' + ', '.join(rows) + ')' if rows else ''}")
         if len(got["buried"]) > 8:
             print(f"  and {len(got['buried']) - 8} {more}")
         if got["jumps"]:
-            # one line: a film cut hard on sound jumps at most cuts, and a line each buried the faults above under them
             jumps = got["jumps"]
             shown = ", ".join(f"{j['at']:.2f} {j['change']:+.1f}" for j in jumps[:6])
             rest_msg = f" and {len(jumps) - 6} {more}" if len(jumps) > 6 else ""
@@ -809,8 +795,6 @@ def main(args):
         if sheet_rel:
             print(f"sheet: {sheet_rel} (open it to look; its LUFS and peaks are the stems before the master "
                   "limiter and the loudness pass, so they run hotter than the upload: bun run mix prints the upload's)")
-        # the studio lights the first 20 on its ruler, the worst first: words lost, then hits lost (level jumps at cuts stay
-        # out: often the story's)
         marks = ([{"at": x["from"], "to": x["to"], "say": f"{x['verdict'].upper()} voice {x['margin']:+.1f} LU"} for x in bad]
                  + [{"at": x["from"], "to": x["to"], "say": "LOUDER than the voice"} for x in got["over"] if x["speaking"]]
                  + [{"at": b["at"], "say": f"BURIED {b['name']}"} for b in got["buried"]]

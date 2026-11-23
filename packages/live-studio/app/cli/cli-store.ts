@@ -178,8 +178,14 @@ function attachRunStream(run: CliRunSnapshot) {
         };
       });
     },
-    onError: () => {
-      // EventSource may reconnect automatically or server may have finished; refresh snapshot cleanly
+    onError: (terminal) => {
+      if (terminal && streamingRunId === run.runId) {
+        if (closeStream) {
+          closeStream();
+          closeStream = null;
+        }
+        streamingRunId = null;
+      }
       void syncCliRuns();
     },
   });
@@ -240,9 +246,7 @@ export async function syncCliRuns(): Promise<void> {
     } else if (!active) {
       stopStream();
     }
-  } catch {
-    // Ignore transient network failures
-  }
+  } catch {}
 }
 
 export function syncCatalogForTarget(targetFilm: string) {
@@ -327,7 +331,6 @@ export function setActiveCommandSubcommand(level: number, subId: string) {
   const nextPath = subId ? [...basePath, subId] : basePath;
 
   const chain = resolveSubcommandChain(cmd, nextPath);
-  // Reset dependent fields cleanly for new subcommand and seed its defaults
   const args: Record<string, CliArgValue> = {};
   const flags: Record<string, CliArgValue> = {};
   for (const a of chain.argsDef) {
@@ -337,7 +340,6 @@ export function setActiveCommandSubcommand(level: number, subId: string) {
     if (f.default !== undefined) flags[f.key] = f.default;
   }
 
-  // If moving into a nested node whose first child is required, auto-pick first leaf
   const leaf = chain.subcommands.at(-1);
   if (leaf?.subcommandRequired && leaf.subcommands?.length && nextPath.length === level + 1) {
     nextPath.push(leaf.subcommands[0]!.id);

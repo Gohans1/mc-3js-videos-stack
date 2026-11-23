@@ -18,7 +18,6 @@ const there = (existsSync(join(ROOT, "films")) ? readdirSync(join(ROOT, "films")
   (f) => existsSync(join(ROOT, "films", f, "package.json")),
 );
 const films = args.length ? args : there;
-// every name is checked before anything is linked or built
 const wrong = films.filter((f) => !there.includes(f));
 if (wrong.length) {
   console.error(

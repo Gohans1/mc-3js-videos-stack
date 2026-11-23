@@ -1,7 +1,4 @@
 // @ts-nocheck
-// A keyed camera (a film's src/timeline/cam.json): keys {t, p, l, fov?, roll?, wave?, bob?, cut?, ease?}: position, look
-// point, lens and how much the head sways. A key with cut: true starts a new path. On top ride a slow wave (the "breathing" float the
-// dev asked for) and Minecraft's own view bob while walking, scaled down so it reads as a step, not a shake.
 import { handheld as makeHandheld, type ShakeName, SHAKES } from "film-kit/handheld";
 import { clampFov, fovOf, mmOf, nearestPrime, PRIME_LENSES, PRIMES } from "film-kit/lens";
 export { dofParams, dollyZoom } from "film-kit/lens";
@@ -174,7 +171,6 @@ export const cameraMotionSpans = (
   });
 };
 
-// Key times are not evenly spread along the curve: map film time to the curve parameter piecewise, eased inside each span
 const spanIndex = (ks, t) => {
   const n = ks.length - 1;
   if (n <= 0 || t > ks[n].t) return -1;
@@ -200,8 +196,6 @@ const progressAt = (ks, t, i, path, channel) => {
   if (b.motion === "hold") return Number(b.reversePath ? t > a.t : t >= b.t);
   return t >= b.t ? 1 : path.progress(i, channel, (t - a.t) / (b.t - a.t));
 };
-// Camera shake for impacts only: [{t, d, amp}] (amp in metres, roll in radians x 0.1). Decorrelated x/y/roll noise that
-// starts at full and decays to nothing over d; keep d <= ~0.6 s and match amp to the hit (a door kick 0.02, a blast 0.06)
 export const shakeAt = (events, t) => {
   const out = { x: 0, y: 0, roll: 0 };
   for (const e of events ?? []) {
@@ -541,7 +535,6 @@ export interface CameraFeelInput {
   handheld?: unknown;
 }
 
-/** Applies breathing wave, walking view bob, and Camera Shakify handheld motion in-place for both keyed and free cameras. */
 export function applyCameraFeel({
   p,
   l,
@@ -558,7 +551,6 @@ export function applyCameraFeel({
   const lift = Math.abs(Math.cos(walked * Math.PI));
   const amt = bob * Math.min(speed / 4.3, 1.4) * 0.05;
   if (Math.abs(amt) > 1e-12 || Math.abs(wave) > 1e-12) {
-    // sideways and down with each step, like the game's bobView, plus a slow figure-eight float
     const right = tmp2.copy(l).sub(p).cross(UP);
     if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
     else right.normalize();
@@ -616,7 +608,6 @@ const dollyPointsKnown = (
     (ks[i].matchSpeed && canMatchCameraSpeed(ks, i)) ||
     (ks[i + 1].matchSpeed && canMatchCameraSpeed(ks, i + 1));
   if (interior(position) || interior(aim)) {
-    // Match speed uses adjacent spans, whose curves can use another key on each side.
     if (joined) return pointsAround(2).every((key) => (rail || known(key.p)) && known(key.l));
     if (!rail && mode === "orbit")
       return pointsAround(0).every((key) => known(key.p) && known(key.l));
@@ -852,23 +843,118 @@ const isSingleFocus = (f: FocusValue) =>
   typeof f === "number" || typeof f === "string" || "target" in f || "point" in f;
 
 const pt = new THREE.Vector3();
-// Frustum.intersectsBox is conservative (a box past a frame corner still passes), so a point of a 3x3x3 grid over the
-// box must be in view
-export const inView = (frustum, b) => {
-  for (let x = 0; x <= 2; x++)
-    for (let y = 0; y <= 2; y++)
-      for (let z = 0; z <= 2; z++) {
-        pt.set(
-          b.min.x + ((b.max.x - b.min.x) * x) / 2,
-          b.min.y + ((b.max.y - b.min.y) * y) / 2,
-          b.min.z + ((b.max.z - b.min.z) * z) / 2,
-        );
+const cross0 = new THREE.Vector3();
+const cross1 = new THREE.Vector3();
+const cross2 = new THREE.Vector3();
+const cornerPt = new THREE.Vector3();
+
+const CLIP_EPS = 1e-6;
+
+const clipFaceAgainstFrustum = (face: [number, number, number][], planes: THREE.Plane[]) => {
+  let poly = face;
+  for (const plane of planes) {
+    if (poly.length === 0) return false;
+    const { x: nx, y: ny, z: nz } = plane.normal;
+    const c = plane.constant;
+    const next: [number, number, number][] = [];
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i]!;
+      const b = poly[(i + 1) % poly.length]!;
+      const da = nx * a[0] + ny * a[1] + nz * a[2] + c;
+      const db = nx * b[0] + ny * b[1] + nz * b[2] + c;
+      const aIn = da >= -CLIP_EPS;
+      const bIn = db >= -CLIP_EPS;
+      if (aIn && bIn) {
+        next.push(b);
+      } else if (aIn && !bIn) {
+        const denom = da - db;
+        const t = Math.abs(denom) > 1e-18 ? Math.min(1, Math.max(0, (da + CLIP_EPS) / denom)) : 0.5;
+        next.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+      } else if (!aIn && bIn) {
+        const denom = da - db;
+        const t = Math.abs(denom) > 1e-18 ? Math.min(1, Math.max(0, (da + CLIP_EPS) / denom)) : 0.5;
+        next.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+        next.push(b);
+      }
+    }
+    poly = next;
+  }
+  return poly.length > 0;
+};
+
+export const inView = (frustum: THREE.Frustum, b: THREE.Box3) => {
+  if (b.isEmpty() || !frustum.intersectsBox(b)) return false;
+  const { x: x0, y: y0, z: z0 } = b.min;
+  const { x: x1, y: y1, z: z1 } = b.max;
+  for (let ix = 0; ix < 2; ix++)
+    for (let iy = 0; iy < 2; iy++)
+      for (let iz = 0; iz < 2; iz++) {
+        pt.set(ix ? x1 : x0, iy ? y1 : y0, iz ? z1 : z0);
         if (frustum.containsPoint(pt)) return true;
       }
+
+  const faces: [number, number, number][][] = [
+    [
+      [x0, y0, z0],
+      [x1, y0, z0],
+      [x1, y1, z0],
+      [x0, y1, z0],
+    ],
+    [
+      [x0, y0, z1],
+      [x1, y0, z1],
+      [x1, y1, z1],
+      [x0, y1, z1],
+    ],
+    [
+      [x0, y0, z0],
+      [x1, y0, z0],
+      [x1, y0, z1],
+      [x0, y0, z1],
+    ],
+    [
+      [x0, y1, z0],
+      [x1, y1, z0],
+      [x1, y1, z1],
+      [x0, y1, z1],
+    ],
+    [
+      [x0, y0, z0],
+      [x0, y1, z0],
+      [x0, y1, z1],
+      [x0, y0, z1],
+    ],
+    [
+      [x1, y0, z0],
+      [x1, y1, z0],
+      [x1, y1, z1],
+      [x1, y0, z1],
+    ],
+  ];
+  for (const face of faces) {
+    if (clipFaceAgainstFrustum(face, frustum.planes)) return true;
+  }
+
+  const p0 = frustum.planes[0]!;
+  const p1 = frustum.planes[2]!;
+  const p2 = frustum.planes[4]!;
+  cross0.crossVectors(p1.normal, p2.normal);
+  const det = p0.normal.dot(cross0);
+  if (Math.abs(det) > 1e-12) {
+    cross1.crossVectors(p2.normal, p0.normal);
+    cross2.crossVectors(p0.normal, p1.normal);
+    cornerPt
+      .set(0, 0, 0)
+      .addScaledVector(cross0, -p0.constant)
+      .addScaledVector(cross1, -p1.constant)
+      .addScaledVector(cross2, -p2.constant)
+      .divideScalar(det);
+    if (b.containsPoint(cornerPt)) return true;
+  }
+
   return false;
 };
 
-// [[from, to], ...] film seconds when the box is on screen, the film's camera sampled every 0.1 s (the same way draw sets it)
 export function onScreenRanges(b, keys, end, aspect) {
   const cam = new THREE.PerspectiveCamera(60, aspect, 0.02, 100),
     frustum = new THREE.Frustum(),

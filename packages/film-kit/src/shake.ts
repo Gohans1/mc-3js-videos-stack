@@ -1,7 +1,3 @@
-// Camera shake from hits (a slam, a fall, a blast), after S. Eiserloh, "Juicing Your Cameras With Math" (GDC 2016): each
-// hit adds trauma (0..1, capped), trauma falls linearly, the shake is trauma^power times smooth noise, and in 3D it only
-// turns the camera (yaw, pitch, roll), never moves it. Noise is pmndrs/math simplex, seeded, so it is pure in t.
-//   const shk = shake([{ t: 57.2, amount: 0.6 }], { max: [1.5, 1.5, 2] });  const [yaw, pitch, roll] = shk(t)  (degrees)
 import { simplex2d } from "math/noise";
 
 export type Hit = { t: number; amount: number };
@@ -19,7 +15,6 @@ export function shake(
 ) {
   const hits = [...input].sort((a, b) => a.t - b.t);
   const noise = simplex2d.create(seed);
-  // trauma right after each hit
   const after: number[] = [];
   hits.forEach((h, i) => {
     const prev = i ? Math.max(0, after[i - 1] - decay * (h.t - hits[i - 1].t)) : 0;

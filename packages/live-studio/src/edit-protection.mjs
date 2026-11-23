@@ -180,7 +180,6 @@ export const openEditProtection = (
       }));
       const ancestors = versions.map((v) => v.data).filter((data) => !equalJson(data, guarded));
       const before = ancestors[0];
-      // Legacy snapshots have no authors. Only a single distinct predecessor can explain the guard.
       if (
         !guard.whole &&
         versions.length < 32 &&

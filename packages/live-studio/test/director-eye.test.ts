@@ -97,7 +97,6 @@ describe("color-script quantization & luminance", () => {
   });
 
   test("extractColorScriptPalette preserves minority accent color alongside noisy dominant background", () => {
-    // 85% slightly varied dark slate sky, 15% bright amber lantern
     const rgba = makeBlockRgba(40, 40, (x, y) => {
       const idx = y * 40 + x;
       if (idx >= 1360) return [245, 165, 25];
@@ -172,7 +171,6 @@ describe("color-script shots & pacing analysis", () => {
       30,
       clock,
     );
-    // Zero-length shot 1 is skipped while shot indices stay aligned for comments/tags
     assert.deepEqual(
       shots.map((s) => [s.index, s.name]),
       [
@@ -180,17 +178,14 @@ describe("color-script shots & pacing analysis", () => {
         [2, "Reveal"],
       ],
     );
-    // Shot 2 spans 2..8 (midpoint 5), Shot 0 spans 0..2 (midpoint 1 is visible, before blank gap at 1.5..4)
     assert.equal(shots[0].sampleAt, 1);
     const pacing = analyzeShotPacing(shots);
     assert.equal(pacing.byShot.length, 3);
     assert.deepEqual(pacing.byShot[1], []);
 
-    // If midpoint itself lands inside a blank gap (1.5..4 in shot 1..4), choose visible frame before 1.5
     const gapAtMid = buildColorScriptShots([{ t: 1, name: "GapMid" }], 4, [], 30, clock);
     assert.ok(gapAtMid[0].sampleAt < 1.5 && gapAtMid[0].sampleAt >= 1);
 
-    // Long 30s+ shot with blank tail (negative distance-penalized score < -1) must still select the visible head
     const longClock = {
       segments: [
         { from: 0, to: 1, blank: false },
@@ -270,7 +265,6 @@ describe("cut-boundary ghost time math", () => {
   });
 
   test("respects timing clocks with gaps and freezes before a cut", () => {
-    // Source 10s; gap at [2.5..3] before cut at output time; freeze at source 5 for 1s
     const clock = compileTiming(
       {
         gaps: [{ from: 2.5, to: 3 }],
@@ -278,15 +272,14 @@ describe("cut-boundary ghost time math", () => {
       },
       10,
     );
-    const cut1 = clock.outputAt(3, "before"); // 3.0 (where [2.5, 3) is blank)
-    const cut2 = clock.outputAt(6, "before"); // includes 1s freeze at 5
+    const cut1 = clock.outputAt(3, "before");
+    const cut2 = clock.outputAt(6, "before");
     const shots = [
       { t: 0, name: "A" },
       { t: cut1, name: "B" },
       { t: cut2, name: "C" },
     ];
 
-    // Cut 1: [2.5, 3) is a blank gap, so ghost must sample last non-blank frame <= 2.5
     const g1 = cutBoundaryGhostTime({ shots, t: cut1 + 0.1, fps: 30, timingClock: clock });
     assert.equal(g1.available, true);
     if (g1.available) {
@@ -297,7 +290,6 @@ describe("cut-boundary ghost time math", () => {
       assert.ok(g1.captureAt >= 2.5 - 1 / 30 - 1e-6);
     }
 
-    // Cut 2: visible before cut2, captures outgoing frame in Shot B
     const g2 = cutBoundaryGhostTime({ shots, t: cut2 + 0.2, fps: 30, timingClock: clock });
     assert.equal(g2.available, true);
     if (g2.available) {
@@ -389,12 +381,9 @@ describe("composition guides geometry", () => {
       assert.equal(geom.diagonalsReciprocal.length, 4);
 
       const [baroque, sinister] = geom.diagonalsMain;
-      // Baroque: bottom-left (0, H) -> top-right (W, 0)
       assert.deepEqual(baroque, { x1: 0, y1: h, x2: w, y2: 0 });
-      // Sinister: top-left (0, 0) -> bottom-right (W, H)
       assert.deepEqual(sinister, { x1: 0, y1: 0, x2: w, y2: h });
 
-      // Every reciprocal must be strictly inside [0..W, 0..H] and perpendicular (dot = 0) to one main diagonal
       const bVec = [baroque.x2 - baroque.x1, baroque.y2 - baroque.y1];
       const sVec = [sinister.x2 - sinister.x1, sinister.y2 - sinister.y1];
       for (const r of geom.diagonalsReciprocal) {

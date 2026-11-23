@@ -1,6 +1,3 @@
-// The camera as a line: what makes this exact frame, to paste into a film's code or a note. A film whose camera lives in SHOTS
-// (tools.zoomOf and tools.smoother) gets a SHOTS line with the shot's slow zoom and its head offset taken out; any other the
-// camera in world terms
 import { shotEnd, shotIndex } from "../core/film";
 import { SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";

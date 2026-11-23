@@ -10,7 +10,6 @@ import {
   fitAnimationLengths,
 } from "../src/animate";
 
-// A camera 10 m back from what it looks at, down -z
 const cam = () => ({
   p: new THREE.Vector3(0, 1, 10),
   l: new THREE.Vector3(0, 1, 0),
@@ -75,19 +74,19 @@ test("Fade in opens from black and is clear after its length; Fade out ends on b
 
 test("an In starts back along its way and lands on the keyed camera; an Out goes on along it", () => {
   const anim = { in: { fx: "push", len: 1 }, out: { fx: "push", len: 1 } };
-  expect(run(anim, 2).p.z).toBeCloseTo(11.5, 6); // 15% of the 10 m behind
+  expect(run(anim, 2).p.z).toBeCloseTo(11.5, 6);
   expect(run(anim, 3).p.z).toBeCloseTo(10, 6);
   expect(run(anim, 4.5).p.z).toBeCloseTo(10, 6);
   expect(run(anim, 6 - 1e-9).p.z).toBeCloseTo(8.5, 4);
-  expect(run({ in: { fx: "zoomIn", len: 1 } }, 2).fov).toBeCloseTo(60, 6); // tighter into the frame: starts 20% wider
-  expect(run({ in: { fx: "push", len: 1, k: 2 } }, 2).p.z).toBeCloseTo(13, 6); // k scales In
-  expect(run({ out: { fx: "push", len: 1, k: 0.5 } }, 6 - 1e-9).p.z).toBeCloseTo(9.25, 4); // k scales Out
-  expect(run({ in: { fx: "fade", len: 1, k: 0.5 } }, 2).black).toBeCloseTo(0.5, 6); // k scales Fade too
+  expect(run({ in: { fx: "zoomIn", len: 1 } }, 2).fov).toBeCloseTo(60, 6);
+  expect(run({ in: { fx: "push", len: 1, k: 2 } }, 2).p.z).toBeCloseTo(13, 6);
+  expect(run({ out: { fx: "push", len: 1, k: 0.5 } }, 6 - 1e-9).p.z).toBeCloseTo(9.25, 4);
+  expect(run({ in: { fx: "fade", len: 1, k: 0.5 } }, 2).black).toBeCloseTo(0.5, 6);
 });
 
 test("an In and an Out longer than the shot share it", () => {
-  const anim = { in: { fx: "fade", len: 3 }, out: { fx: "fade", len: 3 } }; // both cut to 2 s of the 4 s shot
-  expect(run(anim, 4).black).toBe(0); // the In ends at 4 just as the Out begins
+  const anim = { in: { fx: "fade", len: 3 }, out: { fx: "fade", len: 3 } };
+  expect(run(anim, 4).black).toBe(0);
   expect(run(anim, 3).black).toBeCloseTo(0.5, 6);
   expect(run(anim, 5).black).toBeCloseTo(0.5, 6);
 });
@@ -120,34 +119,30 @@ test("the dolly zoom keeps what it looks at the same size: distance x tan(fov/2)
 test("Cinetic coordinate animations: Reversal pulls back for anticipation before launching forward", () => {
   const early = run({ out: { fx: "reversal", len: 1 } }, 5.35);
   const end = run({ out: { fx: "reversal", len: 1 } }, 6 - 1e-6);
-  expect(early.p.z).toBeGreaterThan(10); // pulled back during anticipation
+  expect(early.p.z).toBeGreaterThan(10);
   expect(early.fov).toBeGreaterThan(50);
-  expect(end.p.z).toBeLessThan(10); // launched forward into the cut
+  expect(end.p.z).toBeLessThan(10);
   expect(end.fov).toBeLessThan(50);
 });
 
 test("Cinetic coordinate animations: WhipDip, ZoomHop, Swing3D, IsoToFlat, and TwoBeatInspect follow their curves", () => {
-  // WhipDip widens FOV at mid-whip and returns roll to 0 at landing
   const whipMid = run({ in: { fx: "whipDipL", len: 1 } }, 2.5);
   const whipEnd = run({ in: { fx: "whipDipL", len: 1 } }, 3.0);
   expect(whipMid.fov).toBeGreaterThan(50);
   expect(whipEnd.fov).toBeCloseTo(50, 5);
   expect(whipEnd.roll).toBeCloseTo(0, 5);
 
-  // ZoomHop widens FOV mid-shot and lands back on target FOV at end of shot
   const hopMid = run({ combo: { fx: "zoomHopL" } }, 4.0);
   const hopEnd = run({ combo: { fx: "zoomHopL" } }, 6 - 1e-6);
   expect(hopMid.fov).toBeGreaterThan(55);
   expect(hopEnd.fov).toBeCloseTo(50, 3);
   expect(hopEnd.p.x).toBeLessThan(0);
 
-  // Swing3D covers 94% of the move by 80% duration and drifts the remaining 6%
   const swing80 = run({ combo: { fx: "swing3D" } }, 2 + 4 * 0.8);
   const swing100 = run({ combo: { fx: "swing3D" } }, 6 - 1e-6);
   expect(swing80.p.z).toBeLessThan(10);
   expect(Math.abs(swing100.p.z - swing80.p.z)).toBeLessThan(0.25);
 
-  // TwoBeatInspect zooms in at mid-shot and returns to keyed camera at end of shot
   const inspectMid = run({ combo: { fx: "twoBeatInspect" } }, 4.0);
   const inspectEnd = run({ combo: { fx: "twoBeatInspect" } }, 6 - 1e-6);
   expect(inspectMid.fov).toBeLessThan(35);
@@ -185,16 +180,14 @@ test("a chosen motion curve re-times both base and Cinetic moves, with Linear at
   const entrance = (curve: string | undefined, t: number) =>
     run({ in: { fx: "push", len: 1, curve } }, t).p.z;
   for (const curve of ["linear", "smooth", "snap", "bounce"] as const) {
-    expect(entrance(curve, 2)).toBeCloseTo(11.5, 6); // still starts where the In starts
-    expect(entrance(curve, 3)).toBeCloseTo(10, 6); // and lands exactly on the keyed frame
+    expect(entrance(curve, 2)).toBeCloseTo(11.5, 6);
+    expect(entrance(curve, 3)).toBeCloseTo(10, 6);
   }
-  // Snap arrives sooner than Linear; Smooth holds back longer; Auto keeps the effect's own curve
   expect(entrance("snap", 2.5)).toBeLessThan(entrance("linear", 2.5));
   expect(entrance("smooth", 2.25)).toBeGreaterThan(entrance("linear", 2.25));
   expect(entrance(undefined, 2.5)).toBeLessThan(entrance("linear", 2.5));
   expect(entrance("snap", 2.5)).toBeLessThan(entrance(undefined, 2.5));
 
-  // Linear on Cinetic presets moves at constant rate across quarters (not duplicating Auto's ease)
   const logFov = (curve: string | undefined, t: number) =>
     Math.log(run({ in: { fx: "logZoomIn", len: 1, curve } }, t).fov);
   const d1 = logFov("linear", 2.25) - logFov("linear", 2.0);
@@ -212,17 +205,15 @@ test("a chosen motion curve re-times both base and Cinetic moves, with Linear at
   );
   expect(craneCombo("linear", 3)).not.toBeCloseTo(craneCombo(undefined, 3), 3);
 
-  // On Out (t 5..6), Snap holds near the resting frame first and accelerates into the cut; Bounce winds up from rest into the cut
   const exit = (curve: string, t: number) => run({ out: { fx: "push", len: 1, curve } }, t).p.z;
   expect(exit("snap", 5)).toBeCloseTo(10, 6);
   expect(exit("snap", 6 - 1e-9)).toBeCloseTo(8.5, 4);
-  expect(10 - exit("snap", 5.5)).toBeLessThan(10 - exit("linear", 5.5)); // slower pickup in first half
+  expect(10 - exit("snap", 5.5)).toBeLessThan(10 - exit("linear", 5.5));
   expect(exit("snap", 5.5) - exit("snap", 6 - 1e-9)).toBeGreaterThan(
     exit("linear", 5.5) - exit("linear", 6 - 1e-9),
-  ); // harder snap into cut
+  );
   expect(exit("bounce", 5)).toBeCloseTo(10, 6);
   expect(exit("bounce", 6 - 1e-9)).toBeCloseTo(8.5, 4);
-  // Smooth ease-in from rest at t = 5 (no sudden jump at 5.02)
   expect(10 - exit("bounce", 5.02)).toBeLessThan(0.05);
 });
 
@@ -237,7 +228,6 @@ test("a veil never runs backwards, while 3D dive/whip moves with a veil still re
       expect(exit.every((b, i) => i === 0 || b >= exit[i - 1] - 1e-9)).toBe(true);
     }
   }
-  // Camera movement on blackDip and occluderDive responds to curve while their veil stays monotonic
   expect(run({ in: { fx: "blackDip", len: 1, curve: "snap" } }, 2.3).l.x).not.toBeCloseTo(
     run({ in: { fx: "blackDip", len: 1, curve: "linear" } }, 2.3).l.x,
     3,
@@ -274,7 +264,6 @@ test("flip mirrors lateral moves, yawed/rolled base cameras, stacked slots and l
     entranceFlip = run({ in: { fx: "slideR", len: 1, flip: true } }, 2.25);
   expect(entranceFlip.p.x).toBeCloseTo(-entrance.p.x, 6);
 
-  // A Cinetic move that pans, slides and rolls at once mirrors all of it, while its FOV dip stays
   const whip = run({ in: { fx: "whipDipL", len: 1 } }, 2.4),
     whipFlip = run({ in: { fx: "whipDipL", len: 1, flip: true } }, 2.4);
   expect(whip.l.x).toBeGreaterThan(0);
@@ -282,7 +271,6 @@ test("flip mirrors lateral moves, yawed/rolled base cameras, stacked slots and l
   expect(whipFlip.roll).toBeCloseTo(-whip.roll, 6);
   expect(whipFlip.fov).toBeCloseTo(whip.fov, 6);
 
-  // Off-axis yawed + rolled base camera: lateral delta along base right negates, forward/up delta and base roll stay intact
   const angledBase = () => ({
     p: new THREE.Vector3(4, 2, 8),
     l: new THREE.Vector3(-1, 1.5, 0),
@@ -307,13 +295,11 @@ test("flip mirrors lateral moves, yawed/rolled base cameras, stacked slots and l
   );
   expect(a2.roll - a0.roll).toBeCloseTo(-(a1.roll - a0.roll), 6);
 
-  // Stacked Combo + In on one shot: flipping only In mirrors only In's contribution on top of Combo
   const comboOnly = run({ combo: { fx: "slideR" } }, 2.3);
   const stacked = run({ combo: { fx: "slideR" }, in: { fx: "panL", len: 1 } }, 2.3);
   const stackedFlip = run({ combo: { fx: "slideR" }, in: { fx: "panL", len: 1, flip: true } }, 2.3);
   expect(stackedFlip.l.x - comboOnly.l.x).toBeCloseTo(-(stacked.l.x - comboOnly.l.x), 5);
 
-  // Light sweep reverses its diagonal sweep direction across the frame when mirrored
   const sweepA = run({ combo: { fx: "lightSweep" } }, 3);
   const sweepB = run({ combo: { fx: "lightSweep", flip: true } }, 3);
   expect(sweepB.optics!.sweepPos).toBeCloseTo(1 - sweepA.optics!.sweepPos, 6);
@@ -342,7 +328,7 @@ test("optics scales only the optical part of an effect, not its move, its black 
 
   const sweep = run({ combo: { fx: "lightSweep", optics: 0.25 } }, 4);
   expect(sweep.optics!.sweep).toBeGreaterThan(0.1);
-  expect(sweep.optics!.sweepPos).toBeCloseTo(0.5, 6); // where the band is is not brightness
+  expect(sweep.optics!.sweepPos).toBeCloseTo(0.5, 6);
 });
 
 test("every paired seam animation in Out has a matching partner in In and vice versa", () => {
@@ -419,7 +405,6 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
     for (const fx of list)
       expect(ANIM_CATEGORIES).toContain(fx.cat as (typeof ANIM_CATEGORIES)[number]);
   }
-  // No orphaned 1-item categories in In or Out
   for (const slot of ["in", "out"] as const) {
     for (const cat of ANIM_CATEGORIES) {
       expect(
@@ -429,7 +414,6 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
     }
   }
 
-  // SnapZoom In & Out: 30% build, steep snap jump across u=0.38..0.46 with micro-defocus pulse, 12% glide tail
   const snapInStart = run({ in: { fx: "snapZoomOut", len: 1 } }, 2.0);
   const snapInJump = run({ in: { fx: "snapZoomOut", len: 1 } }, 2.42);
   const snapInEnd = run({ in: { fx: "snapZoomOut", len: 1 } }, 3.0);
@@ -441,41 +425,34 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
   const snapOutPre = run({ out: { fx: "snapZoomIn", len: 1 } }, 5.35);
   const snapOutPost = run({ out: { fx: "snapZoomIn", len: 1 } }, 5.5);
   const snapOutEnd = run({ out: { fx: "snapZoomIn", len: 1 } }, 6 - 1e-6);
-  // Steep jump covers much more FOV change over 0.15s than the 0.35s build before it
   expect(snapOutPre.fov - snapOutPost.fov).toBeGreaterThan((50 - snapOutPre.fov) * 1.3);
   expect(snapOutEnd.fov).toBeLessThan(35);
 
-  // CraneDown descends on Combo/Out and opens from above on In
   expect(run({ combo: { fx: "craneDown" } }, 6 - 1e-6).p.y).toBeLessThan(1);
   expect(run({ in: { fx: "craneDown", len: 1 } }, 2.0).p.y).toBeGreaterThan(1);
   expect(run({ out: { fx: "craneDown", len: 1 } }, 6 - 1e-6).p.y).toBeLessThan(1);
 
-  // ScaleBreathFlip: symmetric flip across cut (Out pushes tighter, In opens tighter and breathes out to 50)
   expect(run({ out: { fx: "scaleBreathFlip", len: 1 } }, 6 - 1e-6).fov).toBeLessThan(50);
   expect(run({ in: { fx: "scaleBreathFlip", len: 1 } }, 2.0).fov).toBeLessThan(50);
   expect(run({ in: { fx: "scaleBreath", len: 1 } }, 2.0).fov).toBeGreaterThan(50);
 
-  // MacroDive: 4.2x 3D log dive with defocus tail and NO forced black veil
   const macroOut = run({ out: { fx: "macroDive", len: 1 } }, 5.98);
   expect(macroOut.black).toBe(0);
   expect(macroOut.fov).toBeLessThan(20);
   expect(macroOut.optics!.blur).toBeGreaterThan(0.4);
 
-  // Living hold creepIn / creepOut: monotonic one-way drift across the shot
   const creepMid = run({ combo: { fx: "creepIn" } }, 4.0);
   const creepEnd = run({ combo: { fx: "creepIn" } }, 6 - 1e-6);
   expect(creepMid.fov).toBeLessThan(50);
   expect(creepEnd.fov).toBeLessThan(creepMid.fov);
   expect(run({ combo: { fx: "creepOut" } }, 6 - 1e-6).fov).toBeGreaterThan(50);
 
-  // FigureEight seamless loop: smooth X+Y figure-8 drift returning to origin on full cycle
   const fig0 = run({ combo: { fx: "figureEight" } }, 2.0);
   const figMid = run({ combo: { fx: "figureEight" } }, 3.2);
   expect(fig0.p.distanceTo(cam().p)).toBeLessThan(1e-5);
   expect(Math.abs(figMid.p.x)).toBeGreaterThan(0.02);
   expect(Math.abs(figMid.p.y - 1)).toBeGreaterThan(0.01);
 
-  // OversizeLand in IN: starts oversized + soft defocus and lands cleanly on keyed frame
   const over0 = run({ in: { fx: "oversizeLand", len: 1 } }, 2.05);
   const over1 = run({ in: { fx: "oversizeLand", len: 1 } }, 3.0);
   expect(over0.fov).toBeLessThan(42);
@@ -483,7 +460,6 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
   expect(over1.fov).toBeCloseTo(50, 5);
   expect(over1.optics!.blur).toBe(0);
 
-  // LightSweep In/Out, ExposureBloom In/Combo default ease vs linear, InsidePullout Out, ImpactKick Out
   expect(run({ in: { fx: "lightSweep", len: 1 } }, 2.4).optics!.sweep).toBeGreaterThan(0.3);
   expect(run({ out: { fx: "lightSweep", len: 1 } }, 5.6).optics!.sweep).toBeGreaterThan(0.3);
   expect(run({ combo: { fx: "exposureBloom" } }, 4.0).optics!.exposure).toBeGreaterThan(0.35);
@@ -495,7 +471,6 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
     0.15,
   );
 
-  // Directional shutter smear on fast lateral whips, scaled by optics and negated by flip
   const whip = run({ in: { fx: "whipDipL", len: 1 } }, 2.5);
   const whipHalf = run({ in: { fx: "whipDipL", len: 1, optics: 0.5 } }, 2.5);
   const whipFlip = run({ in: { fx: "whipDipL", len: 1, flip: true } }, 2.5);
@@ -503,7 +478,6 @@ test("Cinetic complete vocabulary: SnapZoom In/Out, CraneDown, ScaleBreathFlip, 
   expect(whipHalf.optics!.smearX).toBeCloseTo(whip.optics!.smearX * 0.5, 6);
   expect(whipFlip.optics!.smearX).toBeCloseTo(-whip.optics!.smearX, 6);
 
-  // Custom cubic-bezier tuple, Cinetic curves (glide, whip, launch), EASES name, and custom film catalogue on animate()
   const customCurve = run({ in: { fx: "push", len: 1, curve: [0.137, 0.758, 0.128, 0.926] } }, 2.3);
   expect(customCurve.p.z).toBeLessThan(
     run({ in: { fx: "push", len: 1, curve: "linear" } }, 2.3).p.z,
@@ -588,7 +562,6 @@ test("Shot.hits adds Eiserloh trauma shake purely rotationally even without anim
   expect(after.roll).toBe(0);
   expect(after.optics!.impulse).toBeUndefined();
 
-  // Custom decay/max/freq controls duration cleanly
   const slow = cam();
   const fast = cam();
   animate(slow, 2.9, [{ t: 2, hits: [{ t: 2.5, amount: 0.6, decay: 0.5, seed: 3 }] }], 9);
@@ -596,7 +569,6 @@ test("Shot.hits adds Eiserloh trauma shake purely rotationally even without anim
   expect(slow.optics!.impulse).toBe("hit");
   expect(fast.optics!.impulse).toBeUndefined();
 
-  // Scalar max normalizes to [m, m, m] cleanly
   const scalarMax = cam();
   animate(scalarMax, 2.55, [{ t: 2, hits: [{ t: 2.5, amount: 0.8, max: 4, seed: 2 }] }], 9);
   expect(scalarMax.optics!.impulse).toBe("hit");
@@ -620,7 +592,6 @@ test("Cinetic whip, snap, and impact moves populate c.optics.impulse while activ
   expect(run({ out: { fx: "blackDip", len: 1 } }, 5.9).optics!.impulse).toBe("whip");
   expect(run({ in: { fx: "blackDip", len: 1 } }, 3.0).optics!.impulse).toBeUndefined();
 
-  // Combo whipDip/snapZoom only tags the high-velocity middle core so render --check motion keeps auditing entry & settle.
   expect(run({ combo: { fx: "whipDipL" } }, 2.4).optics!.impulse).toBeUndefined();
   expect(run({ combo: { fx: "whipDipL" } }, 4.0).optics!.impulse).toBe("whip");
   expect(run({ combo: { fx: "whipDipL" } }, 5.6).optics!.impulse).toBeUndefined();

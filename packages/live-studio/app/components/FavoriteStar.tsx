@@ -1,8 +1,6 @@
 import { Star } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-// The star beside a sound or an effect (CapCut's): filled when it is a favorite. Its own button, so it never also plays,
-// applies or drags the thing it sits on. reveal: shown on hover or focus only, until it is a favorite; onTile: over a picture
 import { cn } from "@/lib/utils";
 
 import { type FavoriteKind, toggleFavorite } from "../core/favorites";

@@ -1,8 +1,4 @@
 // @ts-nocheck
-// Mocap clips as Steve's poses over time, by name "<lib>/<clip>": mixamo/<FBX file stem in motion/mixamo>, ual1/<clip>,
-// ual2/<clip> (the Quaternius glTF libraries in motion/). Each is loaded once, retargeted (mocap.ts) and baked in played
-// order, so a clip's at(s) gives the same pose for the same s in any order, as draw(t) needs. Film-free: imports nothing
-// from the film, so it carries over to the next one with mocap.ts and player.ts.
 import * as THREE from "three";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -28,13 +24,11 @@ const gltfOf = (lib) => {
   return gltfs.get(lib);
 };
 
-// Every clip name a library holds (Mixamo: the stems listed in motion/mixamo/_tools/clips.json)
 export async function clipNames(lib) {
   if (lib === "mixamo") return (await fetch("motion/mixamo/_tools/clips.json")).json();
   return (await gltfOf(lib)).animations.map((a) => a.name);
 }
 
-// The clip's skeleton at its rest (as retargeter() needs it: before any mixer has moved it) and the clip itself
 export async function loadSource(ref, files = clipFiles(ref)) {
   const [lib, name] = ref.split(/\/(.*)/s);
   if (lib === "mixamo") return fbxSource(ref, fbxOf(fbxUrl(name), (await files)[0]));
@@ -57,8 +51,6 @@ const fbxSource = (ref, root) => {
   return { root, names: MIXAMO, clip: root.animations[0] };
 };
 
-// A clip's files, fetched once for both its key (kept below) and its source, through three's loading manager as its loader
-// would fetch them (the studio counts and names files by it): an FBX, or a glTF library's .glb, or its .gltf and buffers
 const CLIP_KEY = Symbol.for("mc-actor.clipKey");
 const HASHED_SCRIPT = /\/[^/]+-[A-Za-z0-9_-]{6,}\.[cm]?js(?:$|\?)/;
 const cleanUrl = (u) => {
@@ -128,7 +120,7 @@ const libFileSets = new Map();
 const libUrls = new Map();
 const libFiles = (lib) => {
   const entry = GLTF_LIBS[lib];
-  if (!entry) return Promise.resolve([]); // loadSource names the libraries there are
+  if (!entry) return Promise.resolve([]);
   if (!libFileSets.has(lib)) libFileSets.set(lib, gltfFiles(lib, entry.file, entry.buffers));
   return libFileSets.get(lib);
 };
@@ -193,8 +185,6 @@ export function prefetchClips(refs) {
     }
   })();
 }
-// The loaders' own parse of those bytes, failing to the loading manager as their load() does. A .gltf's buffers are
-// handed over as blob URLs, the way three's editor opens a dropped .gltf (its own manager, so they count once)
 const fbxOf = (url, bytes) => {
   try {
     return new FBXLoader().parse(bytes, THREE.LoaderUtils.extractUrlBase(url));
@@ -222,12 +212,9 @@ const parseGltf = async (file, [main, ...buffers]) => {
   }
 };
 
-// { duration, end, fps, frames, at(s) } for one clip; player: makePlayer's result (only its rest is read)
 export async function loadClip(ref, player, fps = 60) {
   return clipOf(bakeKept(await loadSource(ref), player, fps));
 }
-// The clip and the pose the bake leaves him in (its last frame before the shift below), so a bake kept from an earlier
-// load can leave him the same
 function bakeKept({ root, names, clip }, player, fps) {
   const rt = retargeter(skeletonSource(root, names), player);
   const mixer = new THREE.AnimationMixer(root);
@@ -236,14 +223,12 @@ function bakeKept({ root, names, clip }, player, fps) {
   mixer.stopAllAction();
   mixer.uncacheRoot(root);
   const last = structuredClone(bake.frames.at(-1));
-  leaveAsBaked(player, last); // pose() updates his bones alone
-  // the clip starts where its key puts him: its hips' first ground position is the key's `at`
+  leaveAsBaked(player, last);
   const { x: x0, z: z0 } = bake.frames[0].root;
   for (const f of bake.frames) {
     f.root.x -= x0;
     f.root.z -= z0;
   }
-  // where it leaves him, in his own frame (x his left, z his front, ry degrees to his left): the next key's place
   const { x, z, ry } = bake.frames.at(-1).root;
   return { duration: clip.duration, end: { x, z, ry }, frames: bake.frames, fps, last };
 }
@@ -259,10 +244,6 @@ const clipOf = ({ duration, end, frames, fps }, clipKey = null) => {
   return out;
 };
 
-// Every clip the refs name, once each: { ref: loadClip's result }
-// Every file is asked for at once, so the downloads overlap the bakes; the bakes still run one at a time in the refs' order,
-// as they pose the one player. A clip that fails to load throws at its turn, as it would alone. A bake an earlier load of
-// this page kept (kept below) is read back instead, and leaves him posed as the bake would have
 const playerStores = new WeakMap();
 const playerClipPromises = new WeakMap();
 
@@ -333,11 +314,6 @@ export async function loadClips(refs, player, fps = 60) {
   return Object.fromEntries(entries);
 }
 
-// ---------- Bakes kept in the browser between loads (IndexedDB)
-// A bake is a pure function of the clip's files, the rig (makePlayer's) and the code that bakes it, so it is kept under all
-// three: the files' bytes, the rig at rest, and the bytes of the script this module was built into (live-studio's
-// src/page.mjs builds mc-actor into a chunk of its own, so a film's edit leaves it) with three's revision.
-// Without IndexedDB or crypto.subtle (plain http to a LAN address), or on any error, it bakes as before
 const DB = "mc-actor-bakes";
 let dbPromise = null;
 let dbHost = null;
@@ -359,7 +335,6 @@ const openBakesDb = () => {
   }
   return dbPromise;
 };
-// a hash of each part's hash, so no part is copied into one big buffer first
 const sha = async (parts) => {
   const each = await Promise.all(parts.map((p) => crypto.subtle.digest("SHA-256", p)));
   const all = new Uint8Array(32 * each.length);
@@ -372,7 +347,6 @@ const bytesOf = async (url) => {
   if (!r.ok) throw new Error(`${url}: ${r.status}`);
   return r.arrayBuffer();
 };
-// his bones at rest and the skinned meshes the retargeter measures his body from (mocap.ts bodyBoxes)
 const rigOf = (player) => {
   player.setPose({});
   const nums = [player.restLegReach ?? player.legReach],
@@ -394,7 +368,6 @@ const request = (r) =>
     r.onsuccess = () => done(r.result);
     r.onerror = () => fail(r.error);
   });
-// { get(ref, fetchFiles): Promise of { key, data } or null, put(ref, kept) after a get }, or null where nothing can be kept
 export async function keptBakes(player, fps) {
   try {
     const dbP = openBakesDb();
@@ -568,7 +541,6 @@ export async function keptBakes(player, fps) {
     return null;
   }
 }
-// The player as the bake leaves him: posed at its last frame at the origin, matrices updated there (mocap.ts atOrigin)
 function leaveAsBaked(player, last) {
   const { g } = player,
     p0 = g.position.clone(),

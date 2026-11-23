@@ -1,11 +1,6 @@
-// What a render spends drawing, per stretch between the render's cuts (heard seconds), in ms a camera sample so a whip's
-// extra shutter samples weigh no more. Each stretch is judged by its median frame (a set's first frame compiles its
-// shaders, a cold run starts slow) and only with FRAMES frames or more: one at over twice the median of the others, and
-// past a 30 fps frame's FRAME_MS, is a set to look into before the studio stutters on it
 const FRAMES = 10,
   FRAME_MS = 33;
 
-// the lower middle: of two stretches, the lighter is the typical one
 const median = (values) => values.toSorted((a, b) => a - b)[Math.floor((values.length - 1) / 2)];
 
 export const renderCost = (cuts) => {

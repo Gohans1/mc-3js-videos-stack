@@ -1,11 +1,5 @@
 // @ts-nocheck
 import { addPose, arm, leg, MOODS, PX } from "mc-actor/player";
-// A copy of one stretch of "The Sealed Room" (Desktop/minecraft-openai-huggingface-incident-gohans, 1:21.3-1:34.1:
-// the pages flung off the desk, then the dig through the drawer), so the motion layers can be watched on a real scene.
-// Keys and poses are copied from that film's src/timeline/steve.json and src/steve.ts (not linked: the film is never
-// touched from here). Left out: the walk at 1:23.35 (no planted feet here, so he kneels where he stands), hand targets
-// (the arms keep the pose's own) and props (each anchor is a fixed point where that prop is). IDLE below is made from
-// the film's poses but is not a scene of it.
 import * as THREE from "three";
 
 export const POSES = {
@@ -137,9 +131,6 @@ export const DIG = {
   blinksFrom: 27,
 };
 
-// Not in the film: the film's own poses arranged so the standing life shows. He stands idle (breath, weight shifts),
-// starts at something up to his right (gasp: arms up, leaning back), recovers, then a burst of flinging (effort), pants
-// and stands idle again. Look keys: null is the pose's own head.
 const ST = (t, pose) => ({ t, pose, at: AT, yaw: -90 });
 export const IDLE = {
   name: "idle",

@@ -1,6 +1,3 @@
-// The note being written. Every keystroke is kept on the device (notes/notes.ts setDraft), so a reload never loses it.
-// On an upright phone it sits right under the picture, so the keyboard can't cover it and a tap still lands on the picture;
-// in PhoneApp (inline) it is the top of the notes column, which the keyboard shrinks (device.ts resizes-content) instead of covering
 import { Crosshair, GripHorizontal, ImagePlus, PenLine, TriangleAlert, X } from "lucide-react";
 import {
   type CSSProperties,
@@ -114,7 +111,7 @@ export function Compose({
 
   const [openRef, setOpenRef] = useState<string | null>(null),
     picker = useRef<HTMLInputElement>(null);
-  useStudio((s) => s.inOut); // inOutAt below reads it
+  useStudio((s) => s.inOut);
   const text = useRef<HTMLTextAreaElement>(null),
     wrapRef = useRef<HTMLDivElement>(null),
     cardRef = useRef<HTMLDivElement>(null),
@@ -125,7 +122,6 @@ export function Compose({
     idleHeightRef = useRef(0),
     [panelHeight, setPanelHeight] = useState(0),
     hintId = useId();
-  // Every visible mounted Compose registers directly so focus works synchronously for mobile keyboards and cleans up non-LIFO unmounts
   useLayoutEffect(
     () =>
       noteFocus.register({
@@ -169,7 +165,6 @@ export function Compose({
     }
   }, [shownCompose, idleFooter]);
 
-  // Float docked desktop compose over short panels instead of crushing the editor inside tight NoteList headers
   useLayoutEffect(() => {
     if (!dock || inline || !hasCompose) return;
     const parent = wrapRef.current?.parentElement;
@@ -189,7 +184,6 @@ export function Compose({
     return () => onCrampedOverlayChange?.(false);
   }, [crampedOverlay, onCrampedOverlayChange]);
 
-  // Consume only an explicit ui.focusNote() request that ran before Compose mounted; focus=false opens stay unfocused
   useEffect(() => {
     if (!open) {
       noteFocus.clearPending();
@@ -203,8 +197,6 @@ export function Compose({
     }
   }, [open, composeKey]);
 
-  // Origin-aware entrance: when triggered by a pointer click (card, Note button, pin or stroke), emerge from that trigger's
-  // direction while smoothly opening vertical space from 0 (or interrupted height); keyboard shortcuts (M) stay instant
   useLayoutEffect(() => {
     const outer = wrapRef.current,
       card = cardRef.current,
@@ -291,7 +283,6 @@ export function Compose({
     };
   }, [compose, composeKey, dock, inline, stage, hasIdle, cramped, animateCompose]);
 
-  // Asymmetric exit (/emil-design-eng: faster than enter, interruptible, masks swap cleanly & collapses height so list glides up)
   useLayoutEffect(() => {
     if (!exiting || !shownCompose) return;
     const outer = wrapRef.current,
@@ -390,12 +381,10 @@ export function Compose({
     if (!shownCompose && !compose) onIdle?.();
   }, [shownCompose, compose, onIdle]);
 
-  // A pin just placed gives the box the keys and shows the drawing tools: until a word is typed or the box is clicked, 1 to 4
-  // pick a tool here as they do anywhere else. Click the box first to start a note with a digit
   const [clickedFor, setClickedFor] = useState<unknown>(null),
     pin = shownCompose?.pin;
   const drawKeys =
-    !PHONE && shownCompose?.kind === "create" && !!pin && clickedFor !== shownCompose; // a phone has no drawing tools
+    !PHONE && shownCompose?.kind === "create" && !!pin && clickedFor !== shownCompose;
   // A phone keyboard doesn't report which key it pressed: its Enter only shows up as a line break arriving. Listened to on the
   // element itself: React's onBeforeInput is its own event, built from keypress and textInput, and never says insertLineBreak
   useEffect(() => {
@@ -537,7 +526,6 @@ export function Compose({
           e.stopPropagation();
           cancelNote();
         }}
-        // a file dropped anywhere on the box is taken here, never opened by the browser in place of the studio
         onDragOver={(e) => {
           if (e.dataTransfer.types.includes("Files")) e.preventDefault();
         }}
@@ -880,7 +868,6 @@ export function Compose({
   );
 }
 
-/** Floating desktop Stage composer positioned beside its pin/stroke anchor, keeping left Notes panel uninterrupted. */
 export function StageNoteComposer() {
   const rawCompose = useStudio((s) => s.compose);
   const inkDrawing = useStudio((s) => s.inkDrawing);

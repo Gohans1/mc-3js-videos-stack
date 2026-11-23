@@ -1,9 +1,3 @@
-// CapCut's Copy attributes and Paste attributes (Ctrl+Alt+C, Ctrl+Alt+V, or a clip's right-click menu): the settings of ONE
-// picked thing, not the thing, put onto the picked things of its kind once the "Paste attributes?" box (PasteAttributes.tsx)
-// says which: a sound clip's volume, pan, fades and ducking (sound.ts pasteClipAttrs), a shot's Animation and Combo animation
-// (anim.ts pasteAnims), a camera keyframe's lens and speed (cam.ts pasteKeyAttrs). One undo step each. The words follow CapCut
-// 9.7's own (its Resources/po/en.po, pc_copy_*): one source only, same kind only, and fades or animations too long for a clip
-// shortened to fit it
 import type { Grade } from "film-stage/grade";
 
 import {
@@ -61,7 +55,6 @@ const NOUN: Record<Kind, string> = {
 };
 let copied: Copied | null = null;
 
-// What is picked now, as a paste would take it
 const target = (): Target | null => {
   const s = get();
   if (s.layerPicks.length) return { kind: "layer", is: s.layerPicks };
@@ -108,7 +101,6 @@ export const copyAttrs = () => {
   say(`Attributes copied. Pick ${NOUN[t.kind]}s and press Ctrl+Alt+V to paste them`);
 };
 
-// Opens the box when what is picked can take what was copied, else says why not
 export const askPaste = () => {
   const t = target();
   if (!copied) {
@@ -144,7 +136,6 @@ const animWords = (slot: Slot, a: AnimSet | undefined, len = true) =>
     ? `${fxOf(slot, a.fx)?.title ?? a.fx}${len && a.len !== undefined ? ` ${a.len} s` : ""}`
     : "None";
 
-// The box's lines: what the copy holds, each one a tick, with a warning where a paste will shorten it
 export const choices = (): Choice[] => {
   const t = target();
   if (!copied || !t || t.kind !== copied.kind) return [];
@@ -219,7 +210,6 @@ export const choices = (): Choice[] => {
   }
   return [];
 };
-// Who the box pastes onto, in its own words
 export const onto = () => {
   const t = target();
   if (!t) return "";

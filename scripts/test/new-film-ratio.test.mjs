@@ -230,7 +230,6 @@ describe("new_film CLI --ratio and .live_hosts seeding", () => {
         "gohans-box.tailabc.ts.net",
       );
 
-      // A second film prefers copying .live_hosts from existing films over Tailscale
       writeFileSync(join(root, "films/short-vid/.live_hosts"), "custom.tail.ts.net\n");
       const r2 = runNewFilm(root, ["--ratio", "16:9", "wide-vid", "47926"], {
         PATH: `${fakeBin}${delimiter}${process.env.PATH ?? ""}`,

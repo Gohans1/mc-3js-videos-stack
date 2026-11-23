@@ -1,10 +1,5 @@
 // @ts-nocheck
-// Painting a 64 x 64 Minecraft player skin in code: the boxes of the skin layout, a painter that walks every face of a
-// box, and the clothes every character shares (shirt, sleeves, trousers or shorts, a jacket over them, a tie, a belt).
-// The canvas goes to makePlayer (player.ts); a film's own people (hair, faces, outfits) are painted on top in the film.
-// ctx: { g: the canvas's 2D context, k: skin pixels per 64-layout pixel (1, or 2 for a 128 x 128 skin), tone? }.
 
-// [x, y, width, height, depth] of each box in the skin; the second layer floats just off the first (alpha cut)
 export const BOX = {
   head: [0, 0, 8, 8, 8],
   hat: [32, 0, 8, 8, 8],
@@ -39,9 +34,6 @@ export const shade = (c, k) =>
     )
     .join("");
 
-// sk: { g: the canvas's 2D context, k: skin pixels per 64-layout pixel (1, or 2 for the 128 x 128 HD skin) }.
-// fn(side, x, y, w, h, fx) gives a colour or null (left transparent). fx: columns from the front edge on a side face, so
-// both sides of a box read the same way. Cloth and hair get a faint fixed grain so flat colour doesn't read as plastic
 export const paint = (sk, part, fn, grain = 0.015) => {
   for (const [side, [ox, oy, w, h]] of Object.entries(facesOf(BOX[part])))
     for (let y = 0; y < h; y++)
@@ -55,11 +47,8 @@ export const paint = (sk, part, fn, grain = 0.015) => {
       }
 };
 
-// ---- clothes ----
-// The torso's first layer: one colour, then front(x, y) may draw over the front (a print, a tie, a shirt's buttons)
 export const torso = (ctx, color, front = () => null) =>
   paint(ctx, "body", (side, x, y) => (side === "front" ? (front(x, y) ?? color) : color));
-// Bare arms with sleeves down to row len (12 = to the wrist, 10 leaves the hands)
 export const arms = (ctx, sleeve, len, eraSkin) => {
   const skin = ctx.tone?.skin ?? eraSkin;
   for (const part of ["armR", "armL"])
@@ -69,7 +58,6 @@ export const arms = (ctx, sleeve, len, eraSkin) => {
       return y < len ? (y === len - 1 && len < 10 ? shade(sleeve, 0.85) : sleeve) : skin;
     });
 };
-// Legs: trousers (or shorts to row `shorts`, then bare knees, socks), shoes on the last two rows, the sole underneath
 export const legs = (ctx, o) => {
   for (const part of ["legR", "legL"])
     paint(ctx, part, (side, x, y) => {
@@ -81,8 +69,6 @@ export const legs = (ctx, o) => {
       return y === 9 ? shade(o.pants, 0.85) : o.pants;
     });
 };
-// Second layer over the torso and arms. open: a jacket hanging open over what is under it; suit: buttoned with a V at the
-// neck; hood: a hood bunched on the back
 export const jacket = (ctx, o) => {
   const lapel = o.lapel ?? shade(o.color, 1.25);
   paint(
@@ -98,7 +84,6 @@ export const jacket = (ctx, o) => {
         if (x === 1 || x === 6) return y <= 4 ? lapel : (o.edge ?? o.color);
         return x === 0 || x === 7 ? o.color : null;
       }
-      // suit: V opening, wide at the collar and closed by row 5; a button at row 7
       const open = (y <= 1 && x >= 2 && x <= 5) || (y <= 4 && x >= 3 && x <= 4);
       if (open) return null;
       if ((x === 2 || x === 5) && y <= 4) return lapel;

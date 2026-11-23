@@ -20,8 +20,6 @@ export const LOOK_IDS = [
 
 export type LookId = (typeof LOOK_IDS)[number];
 
-// Curated starting looks tuned so pure black holds (log-mode wheels except clean overrides) and without baking a second
-// vignette over scene.ts's pre-AgX vignette (except stylized noir-slate).
 export const LOOKS: Record<string, LookSpec> = {
   "docu-clean": {
     title: "Docu Clean",
@@ -164,7 +162,6 @@ const lookPreset = (grade: Grade) => (grade.look ? LOOKS[grade.look]?.grade : un
 const flatCurve = (): CurvePoint[] => NEUTRAL_CURVE.map(([x, y]) => [x, y]);
 const CURVE_KEYS: readonly CurveKey[] = ["luma", "red", "green", "blue"];
 
-/** Clears HSL overrides while neutralizing hue bands supplied by the active look preset. */
 export function resetLookHsl(grade: Grade) {
   const preset = lookPreset(grade)?.hsl;
   const masked = preset ? HUES.filter(({ id }) => preset[id]) : [];
@@ -177,14 +174,12 @@ export function resetLookHsl(grade: Grade) {
   grade.hsl = next;
 }
 
-/** Clears one curve channel while holding it flat when supplied by the active look preset. */
 export function resetLookCurveChannel(grade: Grade, id: CurveKey) {
   const preset = lookPreset(grade)?.curves;
   if (preset?.[id]) grade.curves = { ...grade.curves, [id]: flatCurve() };
   else if (grade.curves) delete grade.curves[id];
 }
 
-/** Clears all curve overrides while neutralizing channels supplied by the active look preset. */
 export function resetLookCurves(grade: Grade) {
   const preset = lookPreset(grade)?.curves;
   const masked = preset ? CURVE_KEYS.filter((k) => preset[k]) : [];
@@ -197,14 +192,12 @@ export function resetLookCurves(grade: Grade) {
   grade.curves = next;
 }
 
-/** Clears one color wheel while neutralizing it when supplied by the active look preset. */
 export function resetLookWheel(grade: Grade, id: WheelKey) {
   const preset = lookPreset(grade)?.wheels;
   if (preset?.[id]) grade.wheels = { ...grade.wheels, [id]: { rgb: [0, 0, 0], saturation: 100 } };
   else if (grade.wheels) delete grade.wheels[id];
 }
 
-/** Clears all color wheels while neutralizing any wheels supplied by the active look preset. */
 export function resetLookWheels(grade: Grade) {
   const preset = lookPreset(grade)?.wheels;
   const masked = preset ? WHEEL_KEYS.filter((k) => preset[k]) : [];

@@ -214,7 +214,6 @@ export function App() {
             </Suspense>
           )}
           <PasteAttributes />
-          {/* Full-height Library on the left in wide mode; timeline pushed right beside it */}
           <div className="upright:hidden sideways:hidden pointer-events-none relative col-[1/-1] row-start-3 in-data-cli-expanded:hidden in-data-cli-side:col-[1] in-data-edit-folded:-top-[5px] in-data-lessons-focused:hidden in-data-review:hidden in-data-wide:col-[2/-1]">
             <Splitter
               label="Timeline height"
@@ -232,10 +231,10 @@ export function App() {
                   tracksTop: list.getBoundingClientRect().top,
                   fallback: EDIT_MIN,
                 });
-              }} // the head that stays put and two rows
+              }}
               max={() => bounds.editMax}
               set={setEditH}
-              className="pointer-events-auto -top-px" // the middle of the gap over the timeline
+              className="pointer-events-auto -top-px"
             />
           </div>
           {showLibrary && (

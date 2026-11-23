@@ -1,13 +1,8 @@
-// The film's titles, arrows and circles (package.json "live-studio".textTimeline, {items: [...]}), drawn over the picture by the
-// film's film-stage/titles.ts and edited here like the sound lanes (core/doc.ts: undo, saving, an agent's edit wins). The film
-// draws from EDIT.text, so every change puts a fresh copy there and the picture follows at once.
-// Tracks are CapCut's text tracks: 0 sits just over the camera row and each one above is drawn over it; two items never overlap
-// on one track, so an item dropped or moved onto another goes up to the first track with room
 import { EDIT } from "film/edit";
 
+import { lightItems } from "../activity/timeline-activity";
 import { DURATION } from "../core/filmMeta";
 import { transitionSelection } from "../core/selection";
-import { lightItems } from "../activity/timeline-activity";
 import { S } from "../core/state";
 import { get, say, set } from "../core/store";
 import { FPS, r3, stamp } from "../core/time";
@@ -73,13 +68,24 @@ const changed = () => {
 const doc = createTimedDoc<TextFile>("text", {
   label: "text",
   changed,
-  received: (before, after) => lightItems("text", before.items, after.items,
-    (item) => typeof item.id === "string" ? item.id : `position:${item.track ?? 0}:${item.from}:${item.to}`,
-    (i) => {
-      const it = items[i];
-      return { key: typeof it.id === "string" ? it.id : undefined, track: it.track ?? 0, range: [it.from, it.to] };
-    },
-  ),
+  received: (before, after) =>
+    lightItems(
+      "text",
+      before.items,
+      after.items,
+      (item) =>
+        typeof item.id === "string"
+          ? item.id
+          : `position:${item.track ?? 0}:${item.from}:${item.to}`,
+      (i) => {
+        const it = items[i];
+        return {
+          key: typeof it.id === "string" ? it.id : undefined,
+          track: it.track ?? 0,
+          range: [it.from, it.to],
+        };
+      },
+    ),
   saved: (textSaved) => set({ textSaved }),
   replaced: (was) => {
     if (was?.items.length !== items.length && get().textPicks.length) pickText([]);
@@ -102,14 +108,12 @@ export const setTrack = (track: number, change: Partial<TextTrack>) =>
     f.tracks[track] = { ...f.tracks[track], ...change };
   });
 
-// The pick, which also opens the Text tab and drops every other kind's pick, as each row's own setter does
 export const pickText = (is: number[]) => {
   const ok = [...new Set(is)].filter((i) => items[i]).sort((a, b) => a - b);
   set(transitionSelection({ kind: "text", indices: ok }, get().side));
   S.dirty = true;
 };
 
-// ---------- Tracks: whether [s, e] is free on track k, and the first track from k up that is
 const TOUCH = 0.02;
 const fits = (list: TextItem[], k: number, s: number, e: number, skip: Set<number>) =>
   !trackState(k).lock &&
@@ -127,7 +131,6 @@ export const freeTrack = (
   while (!fits(list, k, s, e, skip)) k++;
   return k;
 };
-// After items were moved or added: each that lands on one it wasn't moved with goes up to the first track with room
 export const settle = (list: TextItem[], moved: number[]) => {
   const placed = new Set(list.map((_, i) => i).filter((i) => !moved.includes(i)));
   for (const i of [...moved].sort((a, b) => list[a].from - list[b].from)) {
@@ -142,7 +145,6 @@ export const settle = (list: TextItem[], moved: number[]) => {
     placed.add(i);
   }
 };
-// Shifts items in time by d seconds (clamped by the caller to their room), then settles them on free tracks
 export const shiftItems = (is: number[], d: number) => (f: TextFile) => {
   const moving = is.filter((i) => !locked(i));
   for (const i of moving) {
@@ -152,13 +154,11 @@ export const shiftItems = (is: number[], d: number) => (f: TextFile) => {
   }
   settle(f.items, moving);
 };
-// How far a group may move in time: none before the film's start or past its end
 export const room = (is: number[]): [number, number] => [
   -Math.min(...is.map((i) => items[i].from)),
   DURATION - Math.max(...is.map((i) => items[i].to)),
 ];
 
-// ---------- CapCut's Text library: Default text, a documentary's place-and-time line, a chapter card, and the two shapes
 export interface Preset {
   id: string;
   title: string;
@@ -380,7 +380,6 @@ export const SHAPES: Preset[] = [
   },
 ];
 
-// A preset at the playhead (CapCut's + on a library tile), on the first track with room, picked
 export const addPreset = (p: Preset) => {
   const from = r3(Math.min(S.t, Math.max(0, DURATION - p.len))),
     to = r3(Math.min(DURATION, from + p.len));
@@ -405,7 +404,6 @@ export const removeTexts = (is: number[]) => {
   });
   pickText([]);
 };
-// Copies of items d seconds later (timeline/clipboard.ts), each on the first track with room; returns their places
 export const pasteTexts = (copies: TextItem[], d: number) => {
   const got: number[] = [];
   edit((f) => {
@@ -420,7 +418,6 @@ export const pasteTexts = (copies: TextItem[], d: number) => {
   });
   return got;
 };
-// One change to every picked item, from the Text tab (CapCut styles every picked text at once)
 export const editPicked = (change: (it: TextItem) => void, live = false) => {
   const is = get().textPicks.filter((i) => !locked(i));
   (live ? preview : edit)((f) => {

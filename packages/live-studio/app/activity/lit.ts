@@ -1,4 +1,3 @@
-// Pure highlight state helpers for AI activity notifications (shared by activity.ts and tests).
 export const LIT_MS = 12_000;
 
 export type LitMap = Record<string, number>;

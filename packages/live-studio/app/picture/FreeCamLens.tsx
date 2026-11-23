@@ -1,4 +1,3 @@
-// Shared Free Camera lens controls (FOV, Roll, Sway) reused by Settings > Camera and FreeCamPanel.
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
 
 import { SliderRow } from "../components/inspector";

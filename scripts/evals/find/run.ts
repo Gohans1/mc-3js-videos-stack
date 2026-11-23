@@ -1,9 +1,3 @@
-// Search eval for `bun run find`: runs every case of a set through the CLI as an agent would, scores it against the
-// case's answer key, and keeps the numbers (HELP below). Cases: cases/<set>.tsv, one per line, tab separated:
-//   id  kind  lang(en|vi)  style(name|para|scene|use|none)  query  accept
-// accept is a regex on the entry id (the second column find prints), or NONE when nothing in that kind fits.
-// A case is right when the first hit matches accept and Jev does not call it a misfit (best fits < FIT_NO); a NONE case
-// is right when Jev doubts every hit it shows (best fits < FIT_YES), or the words find nothing.
 import { spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
@@ -28,7 +22,6 @@ if (process.argv[process.argv.indexOf("--mode") + 1] === "dual") {
 
 const HERE = dirname(fileURLToPath(import.meta.url)),
   ROOT = join(HERE, "../../..");
-// TypeSafe's starting thresholds for a Noul answer: yes above 0.7, no below 0.3 (catalog.py uses the same)
 const FIT_YES = 0.7,
   FIT_NO = 0.3;
 const KINDS = new Set(
@@ -81,7 +74,6 @@ const sets = flag("--set")
 const modes = (flag("--mode") ?? "jev") === "both" ? ["jev", "words"] : [flag("--mode") ?? "jev"];
 const onlyKind = flag("--kind");
 const fresh = args.includes("--fresh");
-// --finish scores a stopped run as it stands, the cases that failed to run left out and counted; --note labels the run
 const finish = args.includes("--finish"),
   note = flag("--note");
 const jobs = Number(flag("-j") ?? 3);
@@ -116,7 +108,6 @@ const readCases = (set: string): Case[] => {
     });
 };
 
-// find's hit lines: "[0.74  ][fits 0.93  ][3/4 words  ]<kind>/<cat>  <id>  ..." and mocap's "0.75  fits 0.96  <lib>/<clip>  ..."
 const KIND_HEAD =
   /^(transition|anim|text|shape|font|adjust|look|lens|shake|velocity|ease|sfx|bgm|mc|mocap)\b/;
 const parseHits = (out: string): Hit[] =>
@@ -157,7 +148,6 @@ const score = (c: Case, mode: string, hits: Hit[]) => {
   }
   const re = new RegExp(c.accept);
   const rank = hits.findIndex((h) => re.test(h.id));
-  // the first hit is the answer an agent takes; Jev saying it does not fit makes the agent drop it
   const ok = rank === 0 && !(mode === "jev" && top !== null && top < FIT_NO);
   return { verdict, rank, ok };
 };
@@ -198,8 +188,6 @@ const once = async (c: Case, mode: string): Promise<Row> => {
       parseError = `Cannot read keyword JSON: ${error instanceof Error ? error.message : String(error)}`;
     }
   }
-  // Jev unreachable (quota, key, network): find falls back to word matches, which must not score as Jev's answer. With
-  // --kind Jev always votes, so a Jev run with no voted hit is a failed run, not an empty answer
   const jevDown = mode === "jev" && (!hits.length || hits.every((h) => h.share === null));
   return {
     ...c,
@@ -245,7 +233,6 @@ for (const set of sets) {
             })
         : [],
     );
-    // a case whose query or key changed since it ran runs again
     const todo = cases.filter((c) => {
       const r = done.get(c.id);
       if (finish) return false;

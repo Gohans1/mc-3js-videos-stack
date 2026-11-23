@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-// A .torrent's own bencode: integers, lists, dictionaries and byte strings (kept as bytes: names may not be UTF-8)
 function bdecode(buf) {
   let i = 0;
   let infoAt = null;
@@ -40,7 +39,6 @@ function bdecode(buf) {
   return { root, info: infoAt && buf.subarray(...infoAt) };
 }
 
-/** A .torrent's info hash (BitTorrent v1) and its files in the order clients number them (from 1). */
 export function readTorrent(bytes) {
   const { root, info } = bdecode(Buffer.from(bytes));
   if (!root?.info || !info) throw new Error("not a .torrent file");
@@ -79,11 +77,6 @@ const cut = (name, max) => {
   return name.slice(0, Math.max(1, max - ext.length)).replace(/[. ]+$/, "") + ext;
 };
 
-/**
- * Where each file of a torrent is written, relative to its pack folder: the torrent's top folder dropped, every name
- * made one Windows accepts, the whole path at most `budget` characters, and names that would collide (Windows ignores
- * case) numbered. For aria2's index-out, which takes the file's index from 1.
- */
 export function torrentPaths(torrent, budget) {
   const taken = new Set();
   return torrent.files.map((f, k) => {

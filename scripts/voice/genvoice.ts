@@ -1,5 +1,3 @@
-// ElevenLabs v4 & GenVoice client in Bun/TypeScript: zero external script path dependency, bounded async polling,
-// prosody context stitching (previous_text / next_text + request-id chaining), character-to-word alignment, and Voice Changer (STS).
 import { lookup as dnsLookup } from "node:dns/promises";
 import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { isIP } from "node:net";
@@ -386,7 +384,6 @@ export const tts = async (opts: TtsOptions): Promise<TtsResult> => {
     return { provider: "elevenlabs", requestId, wordsFile };
   }
 
-  // GenVoice async job flow with automatic fallback if proxy rejects optional stitching fields
   const postJob = (body: Record<string, unknown>) =>
     fetchSafe(
       `${apiBase}/text-to-speech/${encodeURIComponent(opts.voiceId)}`,

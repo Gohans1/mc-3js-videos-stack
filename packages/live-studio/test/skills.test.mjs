@@ -146,7 +146,6 @@ test("skills get prints a guide, one reference by its name, and names the refere
   assert.equal(wrong.status, 2);
   assert.match(wrong.stderr, new RegExp(`references/${stem}\\.md`));
 
-  // a repo doc the guide routes to is a file to open, not a reference
   const doc = run(["get", "core", "--ref", "install"]);
   assert.equal(doc.status, 2);
   assert.match(doc.stderr, /a repo file, not a reference: open INSTALL\.md/);
@@ -155,7 +154,6 @@ test("skills get prints a guide, one reference by its name, and names the refere
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /core/);
 
-  // an agent skill of its own (earshot, cinetic) is a file to open, named from where the agent stands
   const own = run(["get", "cinetic"], join(ROOT, "templates/film"));
   assert.equal(own.status, 2);
   assert.match(own.stderr, /open \.\.\/\.\.\/\.claude\/skills\/cinetic\/SKILL\.md/);

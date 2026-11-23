@@ -2,7 +2,6 @@ import type { Virtualizer } from "@tanstack/react-virtual";
 
 export const INITIAL_VIRTUAL_RECT = { width: 320, height: 600 };
 
-/** Defers rect reads to ResizeObserver so mounting never forces sync layout inside commit. */
 export function observeVirtualRect<T extends Element>(
   instance: { scrollElement: T | null },
   cb: (rect: { width: number; height: number }) => void,
@@ -20,7 +19,6 @@ export function observeVirtualRect<T extends Element>(
   return () => ro.disconnect();
 }
 
-/** Skips sync offsetHeight reflow when ref attaches without a ResizeObserver entry; RO measures asynchronously right after layout. */
 export function measureVirtualElement<TScrollElement extends Element, TItemElement extends Element>(
   element: TItemElement,
   entry: ResizeObserverEntry | undefined,
@@ -46,7 +44,6 @@ export function measureVirtualElement<TScrollElement extends Element, TItemEleme
 
 const scrolledContainers = new WeakSet<Element>();
 
-/** Skips no-op scrollTo({ top: 0 }) on initial mount commit when offset is already 0. */
 export function scrollVirtualElement<TScrollElement extends Element, TItemElement extends Element>(
   offset: number,
   canScroll: { adjustments?: number; behavior?: ScrollBehavior },
@@ -89,7 +86,6 @@ export function tableSpacers(
   return { top, bottom };
 }
 
-/** Returns missing vertical height between two non-contiguous virtualized table rows. */
 export function tableGapBetween(
   prev: { index: number; end: number } | undefined,
   curr: { index: number; start: number },

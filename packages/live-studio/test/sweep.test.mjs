@@ -1,4 +1,3 @@
-// sweep.mjs: one ranked list of what to fix in a whole draft, weighed against the film's reference
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -56,7 +55,6 @@ test("a stretch blurrier than the reference and one brighter than it are named w
     out.stdout,
     /\nnext: bun run sheet renders\/draft_video\.mp4 frames [\d.]+-[\d.]+\/6 --vs references\/ref\.mp4/,
   );
-  // the light fixed, the blur kept: the next sweep names what went and keeps the rest unmarked
   media(join(dir, "renders/draft_video.mp4"), [
     "-f",
     "lavfi",

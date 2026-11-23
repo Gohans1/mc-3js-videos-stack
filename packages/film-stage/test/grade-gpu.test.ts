@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import { openPage } from "./gpu";
 
-// The finishing sliders through the real shaders (makeAdjustments in headless Chrome), on the pictures test/gpu/grade-page.ts paints
 let page: Awaited<ReturnType<typeof openPage>>;
 beforeAll(async () => {
   page = await openPage(join(import.meta.dir, "gpu/grade-page.ts"));
@@ -110,7 +109,6 @@ test("Named looks activate in both makeAdjustments and makeLayerAdjustments even
   const adjusted = await shot("glow", {}, true, { look: "teal-amber" });
   const layered = await shot("glow", {}, true, { look: "teal-amber", layer: true });
 
-  // Shadow corners cool down (blue > red), highlight centre warms up (red > blue)
   const [br, , bb] = base.at(60, 60);
   const [ar, , ab] = adjusted.at(60, 60);
   const [lr, , lb] = layered.at(60, 60);

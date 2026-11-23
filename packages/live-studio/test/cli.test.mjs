@@ -1,11 +1,9 @@
-// What every command does with its words before any work (src/cli.mjs): a probe's stray word once ran whole jobs
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const cli = pathToFileURL(join(import.meta.dir, "../src/cli.mjs")).href;
-// a command that takes one word and --shot N, and says "worked" only when its words passed
 const run = (args) =>
   spawnSync(
     process.execPath,
@@ -68,7 +66,6 @@ test("a number that is no number stops with what it takes", () => {
   expect(r.stderr).toContain('--at item 1 takes a number from 0, got "abc"');
 });
 
-// notes, a draft's strip and bun run at print mm:ss.mmm; a probe typed --at 1:05 and was refused
 test("a heard second is read as notes print it, mm:ss, or with an s after it, and a minute past 59 s is refused", async () => {
   const { secondArg } = await import(cli);
   expect([

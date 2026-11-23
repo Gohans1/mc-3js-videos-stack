@@ -1,4 +1,3 @@
-// bun run help: every command of the package.json here (the repo root's or a film's), one line each, grouped by the job
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -124,7 +123,8 @@ const GROUPS = [
       doctor:
         "React Doctor source diagnostics (advisory, 120s budget); --json for structured results",
       verify: "lint and typecheck together",
-      lint: "oxlint",
+      lint: "oxlint and comment ratchet check",
+      comments: "list, measure, safely strip and ratchet code comments (bun run comments --help)",
       typecheck: "bun check",
       fmt: "format (bun fmt --no-script <files> for a few)",
       "fmt:check": "is everything formatted?",
@@ -238,10 +238,8 @@ const describe = (command) => {
       : invocation?.displayCommand;
   return `${command.id}: ${command.summary}\n  run in ${directory}: ${helpCommand ?? "no standalone help; read this command's schema with bun run help " + command.id + " --json"}`;
 };
-// "bun run help find" is how one asks about one command
 if (asked) {
   if (Object.hasOwn(scripts, asked)) {
-    // a command of the other place: point there at once, not at a stub that only redirects
     const elsewhere = String(scripts[asked]).includes("wrong-place.mjs");
     const inFilm = existsSync(join(process.cwd(), "src/scene.ts"));
     console.log(
@@ -270,7 +268,6 @@ if (asked) {
   console.error(`no command ${asked} here: bun run help lists them`);
   process.exit(2);
 }
-// postinstall runs by itself after bun install; a command of the other place (wrong-place.mjs) only says where it runs
 const stubs = Object.keys(scripts).filter((k) => String(scripts[k]).includes("wrong-place.mjs"));
 const said = new Set(["help", "postinstall", ...stubs]);
 const out = [];
@@ -281,7 +278,6 @@ for (const [title, cmds] of GROUPS) {
       said.add(k);
       return `  ${k.padEnd(18)}${about}`;
     });
-  // earshot is a CLI of its own, not a script here: named so an AI knows it can hear what a sound is, not only its level
   if (title === "Sound")
     lines.push(
       `  ${"earshot".padEnd(18)}ears, its own CLI (earshot <command> -h): which sound fits, what plays when, hits on the cuts${Bun.which("earshot") ? "" : " (not on PATH: INSTALL.md)"}; which call for what: bun run skills get core --ref sound`,
@@ -296,12 +292,11 @@ out.push(
   "  bun run help direct — paths, working directory and workflow: bun run skills get core --ref film",
   "  bun run help --json — all command IDs; bun run help <id> --json — arguments, flags, cost and effects",
 );
-// Where a film keeps what: its own package.json "live-studio" names the timeline files, so the map is this film's
 if (film) {
   let conf = {};
   try {
     conf = JSON.parse(readFileSync(pkgFile, "utf8"))["live-studio"] ?? {};
-  } catch {} // bun run check names a broken package.json
+  } catch {}
   const what = {
     soundTimeline: "sound: beds, sfx, narration, room reverb and 3D anchors",
     camTimeline: "camera keys and cuts",

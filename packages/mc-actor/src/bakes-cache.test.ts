@@ -221,7 +221,6 @@ test("feet.warm hashes rest rig + g.scale regardless of active pose and closes I
     };
     const moves = [{ t: 0, at: [0, 0, 0], yaw: 0, pose: "stand" }];
 
-    // 1. Warm at rest
     player.setPose({});
     const feetA = makeFeet(player, () => 0.5, bodyAt, {});
     await feetA.warm(moves, "https://studio/app-AbCdEf12.js");
@@ -230,17 +229,15 @@ test("feet.warm hashes rest rig + g.scale regardless of active pose and closes I
     expect(keysAfterRest.length).toBe(1);
     expect(idb.stats().unclosedCount).toBe(0);
 
-    // 2. Pose the actor dynamically before calling warm() on a fresh instance -> must hit same cache key without mutating pose
     player.setPose({ root: { y: 0.35, rx: 22 }, ulL: [55, 0, 0], llL: [-70, 0, 0] });
     const poseQBefore = player.bones.ulL.quaternion.toArray();
     const feetB = makeFeet(player, () => 0.5, bodyAt, {});
     await feetB.warm(moves, "https://studio/app-AbCdEf12.js");
-    expect(bakes).toBe(1); // IndexedDB hit, no rebake!
+    expect(bakes).toBe(1);
     expect([...idb.map().keys()]).toEqual(keysAfterRest);
     expect(player.bones.ulL.quaternion.toArray()).toEqual(poseQBefore);
     expect(idb.stats().unclosedCount).toBe(0);
 
-    // 3. Scaling player.g changes kinematics in legsAt -> must produce a distinct slot key
     player.g.scale.set(1.5, 1.5, 1.5);
     const feetScaled = makeFeet(player, () => 0.5, bodyAt, {});
     await feetScaled.warm(moves, "https://studio/app-AbCdEf12.js");
@@ -270,7 +267,6 @@ test("clips.keptBakes preserves valid sibling rig/FPS scopes within the same bui
     const bytesB = new TextEncoder().encode("clip-bytes-b");
     const fakeBake = { fps: 30, last: {} };
 
-    // Rig A bakes and flushes at 30fps
     const storeA = await keptBakes(rigA, 30);
     expect(storeA).not.toBeNull();
     expect(await storeA.get("ual1/Walk", async () => [bytesA])).toBeNull();
@@ -279,7 +275,6 @@ test("clips.keptBakes preserves valid sibling rig/FPS scopes within the same bui
     const rigAKey = [...idb.map().keys()].find((k) => String(k).includes("ual1/Walk")) as string;
     expect(rigAKey).toBeTruthy();
 
-    // Rig B in the same build MUST NOT evict Rig A's payload bake!
     const storeB = await keptBakes(rigB, 60);
     expect(storeB).not.toBeNull();
     expect(await storeB.get("ual1/Walk", async () => [bytesB])).toBeNull();
@@ -287,7 +282,6 @@ test("clips.keptBakes preserves valid sibling rig/FPS scopes within the same bui
     await storeB.flush();
     expect(idb.map().has(rigAKey)).toBe(true);
 
-    // A later old-build startup DOES evict previous build's scopes and awaits deletion before returning
     const oldMetaKey = `meta:clips:${"a".repeat(64)}`;
     const oldDataKey = `${"a".repeat(64)} ual1/Run ${"b".repeat(64)}`;
     const oldFeetKey = `meta:feet:${"c".repeat(64)}`;

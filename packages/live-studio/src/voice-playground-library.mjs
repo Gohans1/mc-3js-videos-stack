@@ -294,9 +294,7 @@ export function createPlaygroundLibrary({
           maxBytes: MAX_AUDIO_BYTES,
           allowOtherScope: false,
         });
-      } catch {
-        // The recorded result can still be copied if its legacy source is gone.
-      }
+      } catch {}
       if (source) files.push(["sourceFile", "sources", source.bytes, source.name]);
     }
     return files;

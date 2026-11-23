@@ -63,7 +63,6 @@ export const resizeNarrationBrickForSwap = (
       return false;
     });
     if (!matched) continue;
-    // Never touch a clip that spans multiple aligned voiceover takes
     const otherLines = voiceBase.filter(
       (l) =>
         l.e > cStart + 0.02 &&

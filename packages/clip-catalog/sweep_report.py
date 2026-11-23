@@ -12,7 +12,6 @@ import argparse, sys
 from catalog import FIGHT, ROOT
 from batch import read_rows
 
-# check (start of its name) -> limit past which a clip is listed
 LIMITS = {
     "not a number": 0, "spin": 20, "jump": 4, "inside hand": 6, "inside elbow": 6, "inside knee": 6, "inside foot": 6,
     "inside head in legs": 4, "sink": 4, "arm below the floor": 4, "head below the floor": 4, "float": 6,

@@ -1,12 +1,8 @@
 import type { VariantProps } from "class-variance-authority";
 import { useEffect, useRef, useState } from "react";
 
-// A number box as CapCut's and OpenCut's: type a value or a sum (2*3, 90/4, 1.5+0.25), or drag sideways across it to change
-// the value live (Shift: 10 times finer). Enter or leaving the box saves, Escape puts the old value back; empty clears the field
-// when the caller allows it. While dragging the caller hears every step (live) and saves once on release (onSave)
 import { Input, type inputVariants } from "@/components/ui/input";
 
-// + - * / ( ) and decimals only, so nothing but arithmetic is ever evaluated
 export const evalSum = (s: string): number | null => {
   const t = s.trim().replace(/,/g, ".");
   if (!t || !/^[-+*/().\d\s]+$/.test(t)) return null;
@@ -18,7 +14,7 @@ export const evalSum = (s: string): number | null => {
   }
 };
 
-const DRAG_PX = 3; // a press that moves less than this is a click into the box
+const DRAG_PX = 3;
 
 export type NumberFieldMode =
   | { kind: "idle" }
@@ -292,7 +288,7 @@ export function NumberField({
           disabled,
         });
         if (next.mode === mode.current) return;
-        e.preventDefault(); // focus waits for the release: a drag never puts a caret in the box
+        e.preventDefault();
         if (
           document.activeElement instanceof HTMLElement &&
           document.activeElement !== e.currentTarget
@@ -352,8 +348,7 @@ export function NumberField({
           e.currentTarget.select();
           return;
         }
-        if (res.release.kind === "commit")
-          onSave(res.release.value); // not value: a live preview may have brought it here already
+        if (res.release.kind === "commit") onSave(res.release.value);
         else if (res.release.kind === "cancel") onCancel?.();
         if (res.clearDraft) setText(null);
       }}

@@ -110,13 +110,12 @@ test("attributeCamKeySpan locates the exact key row span while respecting hard c
 });
 
 test("analyzeCameraTimeline detects fast 50 deg/s pan and fast FOV snap with offending key rows", () => {
-  // Stationary tripod position [0, 1, 0], 50 deg pan in 1s (row 1->2), and fast 40 deg FOV jump in 0.2s (row 3->4)
   const keys = [
     { t: 0, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
     { t: 10, p: [0, 1, 0], l: [0, 1, -5], fov: 60 },
-    { t: 11, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 }, // ~55 deg pan in 1s
+    { t: 11, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 },
     { t: 12, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 60 },
-    { t: 12.1, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 25 }, // 35 deg FOV snap in 0.1s = 350 deg/s
+    { t: 12.1, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 25 },
     { t: 14, p: [0, 1, 0], l: [5.958767, 1, -4.195498], fov: 25 },
   ];
   const res = analyzeCameraTimeline(keys);
@@ -135,7 +134,7 @@ test("analyzeKeyFileMotion attributes speed peaks in key files to exact path and
     moves: [
       { t: 0, at: [0, 0, 0], yaw: 0 },
       { t: 2, at: [0, 0, 0], yaw: 0 },
-      { t: 2.5, at: [5, 0, 0], yaw: 180 }, // 10 m/s, 360 deg/s
+      { t: 2.5, at: [5, 0, 0], yaw: 180 },
     ],
   };
   const out = analyzeKeyFileMotion(steve, "src/timeline/steve.json");
@@ -156,7 +155,6 @@ test("analyzeCameraTimeline isolates equal-timestamp cut boundaries from evaluat
   ];
   const res = analyzeCameraTimeline(keys, {
     evaluator: (t, _a, segKeys) => {
-      // Simulate cameraAt's >= t0 segment lookup across equal-t cuts if unisolated
       const slice = segKeys ?? keys;
       let active = slice[0];
       for (const k of slice) if (k.t <= t) active = k;
@@ -243,7 +241,6 @@ test("analyzeCameraTimeline measures short <1/30s substeps accurately and keyFil
   );
   assert.equal(stringAtTrack.tracks.length, 0);
 
-  // FOV-only keys without p/l never throw in lerpVec3/sampleTimelinePoints
   const fovOnly = analyzeCameraTimeline([
     { t: 0, fov: 60 },
     { t: 1, fov: 30 },

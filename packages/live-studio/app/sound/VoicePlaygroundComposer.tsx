@@ -105,9 +105,9 @@ import { SttTranscriptionPanel, VoiceChangerPanel } from "./VoicePlaygroundSecon
 import { VoicePlaygroundVoicePicker } from "./VoicePlaygroundVoicePicker";
 import { SliderSettingRow } from "./VoiceSettingSlider";
 import {
+  voiceBillingNotice,
   VoicePaidActionConfirmation,
   VoiceSpeechConfirmation,
-  voiceBillingNotice,
 } from "./VoiceSpeechConfirmation";
 
 const MODE_OPTIONS = [
@@ -550,7 +550,6 @@ export function VoicePlaygroundComposer({
             "@[80rem]/voice-workbench:grid-cols-[minmax(0,32rem)_minmax(0,1fr)] @[80rem]/voice-workbench:[&>:not([data-composer-column])]:col-span-full",
         )}
       >
-        {/* Mode Switcher + Template Quick Loader */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           {showModeSwitcher && (
             <div
@@ -807,7 +806,6 @@ export function VoicePlaygroundComposer({
           </div>
         )}
 
-        {/* TTS & Voice Changer Voice + Model + Language Row */}
         {(draft.mode === "tts" || draft.mode === "voice_changer") && (
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 @[56rem]/voice-workbench:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,0.7fr)]">
             <div className="flex flex-col gap-1">
@@ -936,7 +934,6 @@ export function VoicePlaygroundComposer({
           </div>
         )}
 
-        {/* Dialogue Speakers Mapping */}
         {draft.mode === "dialogue" && (
           <DialogueSpeakersPanel
             draft={draft}
@@ -945,7 +942,6 @@ export function VoicePlaygroundComposer({
           />
         )}
 
-        {/* Voice Changer Source Input */}
         {draft.mode === "voice_changer" && (
           <VoiceChangerPanel
             pg={pg}
@@ -965,7 +961,6 @@ export function VoicePlaygroundComposer({
           />
         )}
 
-        {/* Script / Prompt Box + Eleven v4/v3 Audio Tags Toolbar */}
         {(draft.mode === "tts" || draft.mode === "dialogue") && (
           <div data-composer-column="" className="flex min-w-0 flex-col gap-1.5">
             <div
@@ -1098,7 +1093,6 @@ export function VoicePlaygroundComposer({
               </div>
             )}
 
-            {/* Eleven v4 / v3 Interactive Audio Tags Palette */}
             {!google && tagCapabilities.showPalette && (
               <Card size="sm" tone="ai">
                 <Collapsible open={tagPaletteOpen} onOpenChange={setTagPaletteOpen}>
@@ -1116,12 +1110,7 @@ export function VoicePlaygroundComposer({
                       <Tag className="text-ai-text size-3.5" />
                       Audio tags & emotions
                     </span>
-                    <ChevronDown
-                      className={cn(
-                        "size-3.5",
-                        tagPaletteOpen && "rotate-180",
-                      )}
-                    />
+                    <ChevronDown className={cn("size-3.5", tagPaletteOpen && "rotate-180")} />
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <div className="flex flex-col gap-1.5 p-2">
@@ -1215,7 +1204,6 @@ export function VoicePlaygroundComposer({
           </div>
         )}
 
-        {/* Dynamic Voice Settings & Advanced Options */}
         {draft.mode !== "stt" && (
           <div
             data-composer-column=""
@@ -1672,7 +1660,6 @@ export function VoicePlaygroundComposer({
           </div>
         )}
 
-        {/* Speech-to-Text (Scribe v2) Full Panel */}
         {draft.mode === "stt" && (
           <SttTranscriptionPanel
             pg={pg}

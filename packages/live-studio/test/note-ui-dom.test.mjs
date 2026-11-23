@@ -13,7 +13,6 @@ import { filmPlugin } from "../src/vite_film.mjs";
 
 const STUDIO_DIR = join(import.meta.dirname, "..");
 
-// Valid 1x1 PNG for RefSketch base image load inside real Chromium
 const PIXEL_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
@@ -269,7 +268,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "export const EDIT = {}; export const fromSource = (t) => t; export const toSource = (t) => t;",
     );
 
-    // Virtual module id anchored inside app/ so Vite resolves workspace react/react-dom deps without writing into the repo
     const harnessPath = join(STUDIO_DIR, "app", "__dom_harness_virtual__.tsx").replaceAll(
       "\\",
       "/",
@@ -309,7 +307,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     httpServer = createHttpServer((req, res) => {
       const url = new URL(req.url, "http://127.0.0.1");
       if (url.pathname === "/@vite/client") {
-        // Stub Vite's client in middlewareMode (no HMR WebSocket) while keeping CSS injection functional.
         res.writeHead(200, { "content-type": "application/javascript; charset=utf-8" });
         res.end(
           [
@@ -501,7 +498,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Sort",
     );
 
-    // Table omits redundant disabled Sort button and restores More trigger focus on Escape
     await webview.evaluate(
       `document.querySelector('button[aria-label="More note views"]').click()`,
     );
@@ -525,7 +521,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Table More",
     );
 
-    // ReviewRoom Remember menu restores trigger focus on Escape
     await webview.evaluate(
       `window.__DOM_TEST__.set({ review: true, reviewTab: "check", reviewPick: "n-check" })`,
     );
@@ -577,7 +572,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
   });
 
   test("preserves Edit parity across check/done states and cancels clean Compose via Escape", async () => {
-    // Check note Edit -> opens Compose in edit mode -> Escape closes cleanly
     await waitUntil(
       `document.querySelector('button[aria-label="Edit note #1 at 00:04.000"]')`,
       "Check Edit",
@@ -591,7 +585,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     await webview.press("Escape");
     await waitUntil(`window.__DOM_TEST__.get().compose === null`, "Compose Escape close");
 
-    // Expand folded Done group -> Edit button present on done card and opens edit mode
     await webview.evaluate(
       `[...document.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.includes('Done'))?.click()`,
     );
@@ -609,7 +602,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
   }, 20000);
 
   test("Board keyboard Move transitions state and Calendar formats human day aria-labels", async () => {
-    // Board keyboard Move menu moves #1 from To check -> Done
     await webview.evaluate(`document.querySelector('[data-note-view-tab="board"]').click()`);
     await waitUntil(
       `document.querySelector('button[aria-label="Move note #1 to column"]')`,
@@ -626,7 +618,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Board Move Approve applied",
     );
 
-    // Calendar cell aria-labels speak formatted human dates, never raw ISO YYYY-MM-DD
     await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "calendar" })`);
     await waitUntil(
       `document.querySelectorAll('button[aria-label*=" 2026: "]').length === 42`,
@@ -719,7 +710,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Table Home -> first row",
     );
 
-    // RefSketchBoard roving radiogroup ArrowRight + pointer stroke + undo
     await webview.evaluate(`(() => {
       const c = document.createElement('canvas');
       c.width = 200;
@@ -1021,7 +1011,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
         "Escape closes upright Compose",
       );
 
-      // Cramped upright container stacks Compose over selected CalendarDayCell and marks siblings inert
       await webview.evaluate(
         `document.querySelector('[aria-label="Notes"]').parentElement.style.height = "380px"`,
       );
@@ -1145,7 +1134,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       );
     }
 
-    // Calendar & Chart drilldown h3 > card/row body
     await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "calendar" })`);
     await waitUntil(
       `document.querySelectorAll('[aria-label="Notes"] h3').length >= 2 && document.querySelector('[aria-label="Notes"] [data-note]')`,
@@ -2282,7 +2270,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       assert.equal(await webview.evaluate(isSwitchChecked("#note-notify")), true);
       assert.equal(await webview.evaluate(isSwitchChecked("#activity-chime")), true);
 
-      // Toggle noteNotify OFF and verify resolve alert stays lit on Notes tab without popping a toast
       await webview.evaluate(clickSwitch("#note-notify"));
       await waitUntil(`!(${isSwitchChecked("#note-notify")})`, "noteNotify unchecked");
       assert.equal(await webview.evaluate(`localStorage.getItem('noteNotify')`), "off");
@@ -2330,7 +2317,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
         "noteNotify=false suppresses resolve toast",
       );
 
-      // Re-enable noteNotify and toggle activityChime off/on
       await webview.evaluate(`document.querySelector('button[aria-label="Settings"]').click()`);
       await waitUntil(`document.querySelector('#note-notify')`, "Settings reopened");
       await webview.evaluate(clickSwitch("#note-notify"));
@@ -2517,7 +2503,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
   }, 20000);
 
   test("Stage-anchored compose hides sidebar dock while Approve and Delete play inert non-duplicate exit transitions", async () => {
-    // 1. Pinned/anchored create compose yields sidebar NoteList dock completely
     await webview.evaluate(`window.__DOM_TEST__.set({
       compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: { x: 0.4, y: 0.5, what: "wall" }, anchor: { x: 0.4, y: 0.5 }, resume: false },
       draft: "",
@@ -2531,7 +2516,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Desktop pinned compose never renders inside sidebar Notes dock",
     );
 
-    // Unpinned + New note still opens inside sidebar Notes dock
     await webview.evaluate(`window.__DOM_TEST__.set({
       compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: null, resume: false },
       draft: "",
@@ -2542,7 +2526,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     );
     await webview.evaluate(`window.__DOM_TEST__.set({ compose: null, draft: "" })`);
 
-    // 2. Approve on Cards "To check" swaps live [data-note="n-check"] cleanly into [data-exiting-note="n-check"] inert ghost, then settles
     await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "cards", noteStatus: "check" })`);
     await waitUntil(
       `document.querySelector('button[aria-label="Approve note #1 at 00:04.000"]')`,
@@ -2577,7 +2560,6 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Approve exit slot unmounts after WAAPI exit completes",
     );
 
-    // 3. Delete in Cards "To fix" plays inert exit transition before removing slot
     await webview.evaluate(`window.__DOM_TEST__.set({ noteStatus: "open" })`);
     await waitUntil(
       `document.querySelector('[data-note="n-open"] button[aria-label^="Delete note"]')`,

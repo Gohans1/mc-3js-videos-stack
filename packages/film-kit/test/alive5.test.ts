@@ -19,13 +19,11 @@ test("reach: Fitts time grows with distance and shrinks with size; one main bell
   const peak = v.indexOf(Math.max(...v)) / v.length;
   expect(peak).toBeGreaterThan(0.35);
   expect(peak).toBeLessThan(0.5);
-  // speed falls after the main bell, rises again for the correction, then stops: two local maxima
   const maxima = v.filter(
     (x, i) => i > 0 && i < v.length - 1 && x > v[i - 1] && x >= v[i + 1] && x > 0.01,
   );
   expect(maxima.length).toBe(2);
-  expect(Math.min(...v)).toBeGreaterThanOrEqual(-1e-9); // never goes back
-  // with the keys 2 s apart a 40 cm reach waits, then arrives on the second key
+  expect(Math.min(...v)).toBeGreaterThanOrEqual(-1e-9);
   expect(reachK(0.5, 0, 2, { dist: 0.4 })).toBe(0);
   expect(reachK(2 - fitts(0.4) / 2, 0, 2, { dist: 0.4 })).toBeGreaterThan(0.3);
   expect(reachK(2, 0, 2, { dist: 0.4 })).toBeCloseTo(1, 9);
@@ -44,12 +42,11 @@ test("hesitation: starts late, stops part way, draws back when very unsure, then
       break;
     }
   }
-  expect(p(first + 0.25)).toBeLessThan(0.4 + 1e-9); // stopped part way, not on to the end
+  expect(p(first + 0.25)).toBeLessThan(0.4 + 1e-9);
   for (let s = first; s < first + 0.6; s += 0.01) low = Math.min(low, p(s));
-  expect(low).toBeLessThan(0.3); // drawn back
+  expect(low).toBeLessThan(0.3);
   expect(p(2)).toBeCloseTo(1, 9);
   expect(hesitation(2, 0.3)(1)).toBeGreaterThan(0.3);
-  // no doubt: a plain bell
   expect(hesitation(1, 0)(0.5)).toBeCloseTo(0.5, 6);
   const s = stretch(10, 0.6, 1);
   expect(s.extra).toBeGreaterThan(1);
@@ -57,7 +54,6 @@ test("hesitation: starts late, stops part way, draws back when very unsure, then
   expect(s.time(10 + 0.6 + s.extra)).toBeCloseTo(10.6, 6);
   expect(s.time(20)).toBeCloseTo(20 - s.extra, 6);
   expect(stretch(10, 0.6, 0).time(10.3)).toBe(10.3);
-  // the clip never plays faster than it was made, and runs on without a jump
   let fastest = 0;
   for (let t = 9; t < 13; t += 0.001)
     fastest = Math.max(fastest, (s.time(t + 0.001) - s.time(t)) / 0.001);
@@ -77,7 +73,6 @@ test("tremor: nothing without fear, grows with it, mostly 6-12 Hz, the two hands
   };
   expect(amp(1)).toBeGreaterThan(2 * amp(0.4));
   expect(amp(1)).toBeLessThan(2.5 * TREMOR.forearm);
-  // zero crossings a second, about twice the main frequency
   const s = tremor(() => 1);
   let z = 0,
     prev = s(0).laR![0],

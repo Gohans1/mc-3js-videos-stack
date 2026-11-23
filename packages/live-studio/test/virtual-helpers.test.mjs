@@ -47,7 +47,6 @@ describe("virtual list & table helpers", () => {
     const origRO = globalThis.ResizeObserver;
     const el = { clientWidth: 320, clientHeight: 240 };
     try {
-      // Simulate environments without ResizeObserver
       globalThis.ResizeObserver = undefined;
       const stopNoRo = observeVirtualRect({ scrollElement: el }, (r) => calls.push(r));
       assert.equal(stopNoRo, undefined);

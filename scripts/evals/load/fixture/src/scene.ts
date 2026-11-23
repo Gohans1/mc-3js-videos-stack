@@ -1,6 +1,4 @@
 // @ts-nocheck
-// Demo scene. This file is the one to replace with your film: the studio needs these exports, and draw.tools at the end.
-// Everything is a function of t, so any moment can be drawn straight away. All times come from edit.json.
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";
@@ -8,31 +6,30 @@ import { EDIT, fromSource } from "./edit";
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const END = 16;
 export const SHOTS = [
-  { t: 0.0, zoom: 0.1, p: [V(0, 1.5, 5), V(0, 1.5, 5)], l: [V(0, 0.8, 0), V(0, 0.8, 0)], fov: 45 }, // the whole room
+  { t: 0.0, zoom: 0.1, p: [V(0, 1.5, 5), V(0, 1.5, 5)], l: [V(0, 0.8, 0), V(0, 0.8, 0)], fov: 45 },
   {
     t: 4.0,
     zoom: 0.12,
     p: [V(2.2, 1.2, 2.2), V(2.2, 1.2, 2.2)],
     l: [V(-0.8, 0.6, 0), V(-0.8, 0.6, 0)],
     fov: 35,
-  }, // close on the cube
+  },
   {
     t: 8.0,
     zoom: 0.1,
     p: [V(-2.4, 1.0, 2.4), V(-2.4, 1.0, 2.4)],
     l: [V(1, 1, 0), V(1, 1, 0)],
     fov: 35,
-  }, // close on the ball
+  },
   {
     t: 12.0,
     zoom: -0.1,
     p: [V(0, 3.2, 4.2), V(0, 3.2, 4.2)],
     l: [V(0, 0.5, 0), V(0, 0.5, 0)],
     fov: 50,
-  }, // from above
+  },
 ];
 export let DURATION = 0;
-// The same shots in the seconds you hear, after any voice edit and moved cuts
 export const SHOTS_OUT = [];
 export const applyEdit = () => {
   SHOTS.forEach((s, i) => {
@@ -72,7 +69,7 @@ export async function buildScene(canvas, W, H, _draft = false) {
   cube.position.set(-1, 0.5, 0);
   const ball = mesh(new THREE.SphereGeometry(0.55, 32, 24), 0x4aa3c8);
   ball.position.set(1.1, 0.55, 0);
-  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 40 }; // the studio's free camera
+  const free = { on: false, p: V(0, 0, 0), l: V(0, 0, 0), fov: 40 };
   const look = V(0, 0, 0),
     head = V(0, 0, 0);
 
@@ -99,7 +96,6 @@ export async function buildScene(canvas, W, H, _draft = false) {
     camera.lookAt(look);
     renderer.render(scene, camera);
   };
-  // What the studio needs to say where a click landed and to give a free camera back in a shot's own terms
   draw.tools = {
     scene,
     camera,

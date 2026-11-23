@@ -5,7 +5,6 @@ export type Ease = string | Bezier;
 
 export const DEFAULT_CUSTOM_CURVE: Bezier = [0.42, 0, 0.58, 1];
 
-// Exact cubic-bezier definitions for named film-stage presets (packages/film-stage/src/camera-meta.ts).
 export const KNOWN_BEZIERS: Record<string, Bezier> = {
   linear: [0, 0, 1, 1],
   snapOut: [0.137, 0.758, 0.128, 0.926],
@@ -35,7 +34,6 @@ export const bezierEaseFn = (curve: Bezier): ((x: number) => number) => {
   return bezierCache.get(k)!;
 };
 
-// Approximate any non-bezier easing function with the closest CSS cubic-bezier using endpoint slopes + coordinate search.
 export const fitBezier = (f: (x: number) => number): Bezier => {
   const N = 24;
   const target = Array.from({ length: N - 1 }, (_, i) => f((i + 1) / N));

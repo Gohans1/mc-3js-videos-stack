@@ -1,15 +1,4 @@
 // @ts-nocheck
-// --check touch:<target>,<from>,<to> (heard seconds), built in for every film: does the target sink into things, or hang just off
-// them, every frame? Every vertex and triangle middle of the target's meshes, posed (a target with no
-// mesh, like mc-actor's handR grip: its own position), is measured against every other visible mesh within 15 cm with
-// three-mesh-bvh: the closest point on the surface; inside when it lies behind the face there and the mesh closes around it
-// (a ray going on meets the same mesh again from the back; a flat card like a cobweb or paper has no inside). Never
-// measured against: the actor the target belongs to (its draw.tools.objects entry, so no self-contact), see-through
-// materials (opacity under 0.5), skinned meshes as surfaces, double-sided faces as "inside".
-// Real geometry, not a verdict: over a whole film it lists every limb clip a blocky walk makes (6-10 cm, the game's own do
-// too), so run it on the shot or move in question. Prints the numbers and faults (checks/touch.mjs), writes
-//   touch_<target>_<from>-<to>.jpg  the gap to the nearest surface over time in cm (under 0: inside it)
-//   touch_<target>_<from>-<to>_worst.jpg  the worst frame of each fault, the point circled
 import * as THREE from "three";
 
 import { gap, surface } from "../checks/contact.mjs";
@@ -38,7 +27,6 @@ export const touchCheck = (render) => {
       if (!g.boundingBox) g.computeBoundingBox();
       let lab = labelOf(objects, o);
       if (lab === o.type) {
-        // no label and no name: a parent's name, else where it is, so it can be found
         for (let p = o.parent; p && lab === o.type; p = p.parent) if (p.name) lab = p.name;
         if (lab === o.type)
           lab = `an unnamed mesh at (${g.boundingBox
@@ -60,7 +48,6 @@ export const touchCheck = (render) => {
     return out;
   };
 
-  // the target's posed vertices and triangle middles, in world space, each with the part it belongs to
   const probes = (obj, partOf) => {
     const out = [];
     obj.updateMatrixWorld(true);
@@ -69,7 +56,6 @@ export const touchCheck = (render) => {
       const pos = o.geometry.attributes.position,
         idx = o.geometry.index,
         part = partOf(o);
-      // a skinned vertex belongs to the bone that pulls it hardest
       const si = o.isSkinnedMesh && o.geometry.attributes.skinIndex,
         sw = si && o.geometry.attributes.skinWeight;
       const partAt = (i) => {
@@ -91,7 +77,7 @@ export const touchCheck = (render) => {
         out.push([a.add(b).add(c).divideScalar(3), partAt(ids[0])]);
       }
     });
-    if (!out.length) out.push([obj.getWorldPosition(new THREE.Vector3()), obj.name || "point"]); // a bare point (mc-actor's handR grip)
+    if (!out.length) out.push([obj.getWorldPosition(new THREE.Vector3()), obj.name || "point"]);
     if (out.length <= MAX_PROBES) return out;
     const stride = Math.ceil(out.length / MAX_PROBES);
     return out.filter((_, i) => i % stride === 0);
@@ -106,7 +92,7 @@ export const touchCheck = (render) => {
     const { scene, camera, objects, bones } = tools;
     const obj = findTarget(tools, target);
     if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
-    let owner = obj; // the nearest draw.tools.objects entry around the target: the actor, never a surface for itself
+    let owner = obj;
     for (let p = obj; p; p = p.parent)
       if (objects?.some(([o]) => o === p)) {
         owner = p;
@@ -133,7 +119,7 @@ export const touchCheck = (render) => {
         if (g.d < best.d) best = { ...g, part, p: p.toArray() };
       }
       obj.getWorldPosition(here);
-      const q = new THREE.Vector3(...best.p).project(camera); // the film camera of this frame
+      const q = new THREE.Vector3(...best.p).project(camera);
       frames.push({
         t,
         ...best,

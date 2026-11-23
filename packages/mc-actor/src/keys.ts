@@ -1,10 +1,5 @@
 // @ts-nocheck
 import { EASES } from "film-stage/camera";
-// The actor's keys (a film's src/timeline/steve.json) checked whole, the first time perform.ts reads each list: a typo
-// anywhere in the film stops the page at once with every problem, its key, its time and the names that would be right,
-// instead of a face that quietly goes neutral, or a crash only when the play head reaches that key. Fields are strict:
-// one perform.ts doesn't read is an error (an "pos" for "at" would otherwise be ignored). A field perform.ts learns to read
-// goes in MOVE_KEYS here too.
 
 const isNum = (v): v is number => typeof v === "number" && Number.isFinite(v);
 const isNonNeg = (v): v is number => isNum(v) && v >= 0;
@@ -90,7 +85,6 @@ const validateFace = (k): string[] => {
   return errs;
 };
 
-// the closest of the right names, for a typo
 const near = (word, names) => {
   const d = (a, b) => {
     const row = Array.from({ length: b.length + 1 }, (_, j) => j);
@@ -113,7 +107,6 @@ const near = (word, names) => {
 const list = (names) =>
   names.length > 12 ? `${names.slice(0, 12).join(", ")}, ...` : names.join(", ");
 
-// problems as lines; at: where a key is, e.g. moves[12] (t 45.2)
 function check(
   keys,
   validate: (k) => string[],
@@ -143,7 +136,6 @@ const fail = (lines) => {
     throw new Error(`The actor's keys (src/timeline/steve.json) are wrong:\n${lines.join("\n")}`);
 };
 
-// moves against the film's poses, and against the loaded clips when it has them (clips: loadClips' result, or null)
 export function checkMoves(moves, poses, clips) {
   const names = Object.keys(poses),
     loaded = clips ? Object.keys(clips) : null;

@@ -1,4 +1,3 @@
-// The creator's favorites (src/favorites.mjs): one file for every film, newest last, never wiped by a file that doesn't parse
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

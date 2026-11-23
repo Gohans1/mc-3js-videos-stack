@@ -69,9 +69,6 @@ export const narrationLines = (
   return out.sort((a, b) => a.s - b.s);
 };
 
-// What of the sound timeline shows in the picture: where the narration clips put the voice, which the mouths follow
-// (lips.ts), and which tracks are muted. A video is built with this alone (render.mjs), so a gain, a bed or an effect
-// changes no frame and keeps every chunk; render keeps it in <chunks>/seen-sound.json for stale.mjs to compare
 export const seenSound = (audio: NarrationAudio | null | undefined) => ({
   beds: [],
   narration: audio?.narration,

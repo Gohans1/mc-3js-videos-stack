@@ -373,7 +373,6 @@ test("a phone gets a processed sound as Opus in WebM, a small part of the float 
   }
 });
 
-// A 2 s tone and a folder to keep processed results in, removed after
 const keptCase = async (run) => {
   const { renderAudio } = await import("../src/audio-process.mjs");
   const dir = mkdtempSync(join(tmpdir(), "studio-kept-audio-"));
@@ -401,7 +400,6 @@ const KEPT = { start: 0, duration: 2, loop: false, rate: 1 };
 test("a processed sound is kept on disk: the same source and settings come back without processing again", () =>
   keptCase(async ({ renderAudio, source, kept }) => {
     const first = await renderAudio(source, KEPT, "python", { small: true, kept });
-    // no Python at all the second time: only a kept file can answer
     assert.deepEqual(
       await renderAudio(source, KEPT, "no-such-python", { small: true, kept }),
       first,
@@ -417,7 +415,6 @@ test("a kept sound is processed again when its settings or process.py change", (
     await assert.rejects(
       renderAudio(source, { ...KEPT, duration: 1 }, "no-such-python", { small: true, kept }),
     );
-    // a DSP fix in process.py must be heard, not answered from the kept file
     const was = statSync(PROCESS);
     try {
       utimesSync(PROCESS, was.atime, new Date(was.mtimeMs + 60_000));

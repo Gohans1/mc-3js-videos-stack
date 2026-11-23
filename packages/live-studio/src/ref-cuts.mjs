@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
-// bun run reference study writes renders/reference/<video>/run-*/study.json; the newest is the reference being matched
 export const latestStudy = (project) => {
   const root = join(project, "renders/reference");
   if (!existsSync(root)) return null;
@@ -38,15 +37,12 @@ export const latestStudy = (project) => {
 
 const sec = (t) => `${+t.toFixed(2)} s`;
 
-// the study's whip around a second (within a frame and a half), if any: a cut there may be a whip transition's, or a
-// fast move the cut detector took for one
 export const whipAt = (study, t) => {
   const near = 1.5 / study.fps;
   return study.whips?.find((w) => t >= w.from - near && t <= w.to + near) ?? null;
 };
 
 const VIDEO = /\.(mp4|mov|mkv|webm|m4v)$/i;
-// the videos in references/ (bun run reference add puts them there; a -source. file is the download one came from)
 const referenceVideos = (project) => {
   const dir = join(project, "references");
   return existsSync(dir)
@@ -56,7 +52,6 @@ const referenceVideos = (project) => {
     : [];
 };
 
-// the video the film remakes: the one its newest study measured, else ref.*; a lone technique clip is no such video
 export const referenceVideo = (project) => {
   const names = referenceVideos(project);
   const studied = latestStudy(project)?.file.split(/[\\/]/).at(-3);
@@ -66,7 +61,6 @@ export const referenceVideo = (project) => {
   return name ? `references/${name}` : null;
 };
 
-// The cut check and the coverage read the newest study: a film holding a reference video but no study gets neither
 export const unstudiedWarning = (project) => {
   if (latestStudy(project)) return "";
   const name = referenceVideos(project)[0];
@@ -78,9 +72,6 @@ export const unstudiedWarning = (project) => {
 
 const whipSaid = (w) => `${w.camera} ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}`;
 
-// The draft's cuts (heard seconds, from its render evidence) against the reference study's cuts, up to the draft's end.
-// A reference whip turns either side into a look: a whip transition cuts mid-swing, and a cut detector takes a fast
-// move for a cut
 export const cutItems = (study, cuts, until) => {
   const near = Math.max(0.05, 1.5 / study.fps);
   const close = (a) => (b) => Math.abs(a - b) <= near;
@@ -132,8 +123,6 @@ export const cutItems = (study, cuts, until) => {
   return items;
 };
 
-// A remake cuts where its reference cuts. The camera's cut seconds are heard seconds; until is the last heard second the
-// camera is keyed to, so the part of the reference not built yet is not reported. camFile: the film's camTimeline
 export const refCutsWarning = (project, camFile, cameraCuts, until) => {
   const study = latestStudy(project);
   if (!study) return "";
@@ -166,8 +155,6 @@ export const refCutsWarning = (project, camFile, cameraCuts, until) => {
 };
 
 const digest = (file) => createHash("sha1").update(readFileSync(file)).digest("hex");
-// A sound row playing the reference's own audio (its voice stem copied into sound/) must say guide: true, or the mix
-// ships someone else's recording: returns that references/ file, matched by size and then by bytes
 export const referenceCopy = (project, file) => {
   const dir = join(project, "references");
   const size = statSync(file, { throwIfNoEntry: false })?.size;

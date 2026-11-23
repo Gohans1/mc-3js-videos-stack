@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-// A clip's sub-frames (motion blur) averaged by render/accum.ts in a real browser: test/accum-page.ts paints the pictures
 let view, server;
 before(async () => {
   const built = await Bun.build({
@@ -31,7 +30,6 @@ after(() => {
 const average = (pictures, mode) =>
   view.evaluate(`average(${JSON.stringify(pictures)}, ${JSON.stringify(mode)})`);
 
-// "shared": in the film's own WebGL context (draw.tools.renderer), "own": a context of its own for a film without one
 for (const mode of ["shared", "own"]) {
   test(`${mode}: black and white average to half the light (sRGB 188), as a shutter does, not half the code (128)`, async () => {
     for (const grey of await average([0, 255], mode))

@@ -1,7 +1,3 @@
-// Text and shapes on the picture, as in CapCut's player: the picked ones are outlined where the film draws them, and a press on
-// one drags it there (a mouse press on any one picks it first). The boxes come from the film's own drawer
-// (film-stage/titles.ts through draw.tools.titles), so what is outlined is what the final video shows. A drag snaps the item's
-// anchor to the frame's middle lines (Shift: no snap) and is one undo step
 import { EDIT } from "film/edit";
 
 import { overlayTime } from "../../src/layer-timing.mjs";
@@ -24,7 +20,7 @@ import {
 } from "./text";
 import { textTransform } from "./text-transform";
 
-const SNAP = 0.012; // how near the middle line, in frame fractions, the anchor sticks to it
+const SNAP = 0.012;
 const rotationHandle = (points: number[][], anchor: number[]) => {
   const x = (points[0][0] + points[1][0]) / 2,
     y = (points[0][1] + points[1][1]) / 2;
@@ -45,7 +41,6 @@ const boxesNow = () => {
   );
 };
 
-// The outline of each picked item on screen now, in percents of the frame (drawn with the frame, render.ts)
 export const drawTextSel = () => {
   const el = S.el?.textsel;
   if (!el) return;
@@ -132,7 +127,6 @@ export const drawTextSel = () => {
   });
 };
 
-// The item under a point of the frame (0 to 1 each way), the top-most; -1 for none
 const hitContext = document.createElement("canvas").getContext("2d")!;
 export const textAt = (x: number, y: number) =>
   boxesNow().findLast(({ corners, box: [x0, y0, x1, y1] }) => {
@@ -143,7 +137,6 @@ export const textAt = (x: number, y: number) =>
     return hitContext.isPointInPath(path, x, y);
   })?.i ?? -1;
 
-// A press on the picture: true when it took it (any item under the mouse; on a phone, whose tap pins a note, a picked one)
 export const startTextDrag = (
   e: PointerEvent,
   firstMove: PointerEvent,
@@ -228,7 +221,6 @@ export const startTextDrag = (
       dy = y - at[1];
     if (!moved && Math.hypot(dx * r.width, dy * r.height) < 3) return;
     moved = true;
-    // The item pressed snaps its anchor to the middle lines; the rest of the pick moves as far
     if (!noSnap(ev) && !items[i].at) {
       const [x0, y0] = start[lead];
       if (Math.abs(x0 + dx - 0.5) < SNAP) dx = 0.5 - x0;

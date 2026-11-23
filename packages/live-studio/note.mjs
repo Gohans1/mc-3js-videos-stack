@@ -1,4 +1,3 @@
-// The AI's answer on a note (fixed, a question, what it learned); HELP below
 import { cliArgs, needFilm } from "./src/cli.mjs";
 import {
   collectNewNotesAfterRead,
@@ -74,7 +73,6 @@ for (let i = 0; i < rawArgs.length; i++) {
 
 const [cmd, key, ...words] = positional;
 const what = words.join(" ").trim();
-// where the change went (note-cli.mjs sendChange): through the open studio, or straight into the file with none running
 const HOW = {
   studio: "sent through the running studio",
   file: "written to notes/notes.jsonl, no studio running",
@@ -125,7 +123,6 @@ const DO = {
   learned: async (id) =>
     `kept as learned (${HOW[await sendChange(project, id, { learned: { what } })]}); the creator sees it on the note`,
 };
-// what the studio's activity view says of it (src/tell.mjs)
 const SAID = { done: "Fixed", ask: "Asked about", learned: "Learned from" };
 const ARG = { done: "what changed", ask: "your question", learned: "the rule, where you kept it" };
 if (DO[cmd] && key && what) {
@@ -136,7 +133,6 @@ if (DO[cmd] && key && what) {
     console.error(e.message);
     process.exit(2);
   }
-  // the note as the AI will see it went: its number and words, so an answer on the wrong note shows at once
   const n = createNotes(project)
       .read()
       .find((x) => x.id === id),
@@ -160,7 +156,6 @@ if (DO[cmd] && key && what) {
       notes: [id],
     });
   } catch (e) {
-    // state refusals point back to bun run notes; missing flags/files stand on their own clear message
     const suffix = /^(this note is done|no such note|note #\d+)/.test(e.message)
       ? ". The notes yours to answer: bun run notes"
       : "";

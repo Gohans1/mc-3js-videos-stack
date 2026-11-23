@@ -1,7 +1,3 @@
-// Is a rendered video older than the film data its picture comes from? framecheck and pace import it; sheet.py and deliver.py run
-// `bun stale.mjs <video>` inside the film and print what it prints. Of the sound timeline only the narration clips change a
-// frame (the mouths follow them): a video ages when they moved since render drew it (<chunks>/seen-sound.json, seenSound).
-// draft.mp4 and final.mp4 are mix's: <name>_video.mp4's picture with the sound of when mix ran, so their sound counts too.
 import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
@@ -227,7 +223,6 @@ export const staleVideo = (root, video) => {
       : null;
   }
   if (!newest && !voiceMoved) return null;
-  // a chunk's stamp covers the whole built film (render.mjs stamp), so any change draws every chunk again
   const again = where?.final
     ? "bun run render final draws it again"
     : where?.kind === "span"

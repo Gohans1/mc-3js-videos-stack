@@ -1,5 +1,3 @@
-// Jev (jev.py) from TypeScript: which items of a list fit what is wanted, by meaning, in any language. bun run find ranks
-// the vault with it, bun run notes the lesson files a note needs
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -17,8 +15,6 @@ export class JevRunError extends Error {
   }
 }
 
-// What to ask of a list: the state Jev reads, the question that picks the best item, what makes one item fit or not, and
-// an item as Jev reads it
 export interface JevQuestion<T> {
   wanted: string;
   pick: string;
@@ -26,19 +22,14 @@ export interface JevQuestion<T> {
   no: string;
   text: (x: T) => string;
 }
-// [share of the vote, item, fit]: fit (0-1, Jev's own yes that the item is what was wanted) only on the ones it checked
 export type JevVoted<T> = [number, T, number?];
 
-// Jev Choice: one option per item, CHOICE_MAX at most; a longer list runs in shuffled heats of HEAT whose top KEEP meet
-// in a final (catalog.py rerank explains why: rounded probabilities, neighbours knocking each other out)
 const CHOICE_MAX = 255,
   HEAT = 200,
   KEEP = 8;
-// A fit at or past FIT_YES is Jev's yes, under FIT_NO its no, between them it is unsure
 export const FIT_YES = 0.7,
   FIT_NO = 0.3;
 
-// jev.py's own notes (a route's quota spent, its cost): parallel heats repeat them, so each is printed once per run
 const jevNotes = new Set<string>();
 type Answers = Record<string, { probabilities?: Record<string, number>; noul?: number }>;
 export interface JevOptions {
@@ -143,9 +134,6 @@ const choice = async <T>(
   return group.map((x, i) => [probs[`c${i}`] ?? 0, x]);
 };
 
-// A vote always picks something, even when nothing in the list is what was asked (TypeSafe: a "none of the above" option
-// often fails; ask a companion Noul instead, as catalog.py does for mocap). So each item shown gets its own yes/no, all in
-// one request: the probability that it really is what was wanted
 export const fitRequest = <T>(q: JevQuestion<T>, shown: T[], options: JevOptions = {}) => {
   const state = {
     wanted: q.wanted,
@@ -172,7 +160,6 @@ const fits = async <T>(q: JevQuestion<T>, shown: T[], options: JevOptions = {}) 
   return shown.map((_, k) => ans[`fit_${k + 1}`]?.noul ?? 0);
 };
 
-// vote: Jev's Choice, or a stand-in for tests
 export async function jevRank<T>(
   q: JevQuestion<T>,
   pool: T[],
@@ -185,7 +172,6 @@ export async function jevRank<T>(
   if (!(keep >= 1 && keep < heat && heat <= choiceMax && choiceMax <= CHOICE_MAX))
     throw new Error("Tournament requires 1 <= keep < heat <= choiceMax <= 255");
   if (!pool.length) return [];
-  // items Jev would read the same vote once, the first standing for the rest; all come back with its share
   const same = new Map<string, T[]>();
   let list: T[] = [];
   for (const x of pool) {
@@ -197,9 +183,7 @@ export async function jevRank<T>(
       list.push(x);
     }
   }
-  // the heats' winners run in heats again until they fit one final
   while (list.length > choiceMax) {
-    // Fisher-Yates on a fixed-seed Park-Miller generator: the same query ranks the same
     let seed = 7;
     const shuffled = [...list];
     for (let i = shuffled.length - 1; i > 0; i--) {
@@ -233,7 +217,6 @@ export async function jevRank<T>(
   );
 }
 
-// The vote over the pool, best first, then a fit for each of the first `show`
 export async function jevJudge<T>(
   q: JevQuestion<T>,
   pool: T[],

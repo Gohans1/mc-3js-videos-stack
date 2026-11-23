@@ -2,15 +2,10 @@ import { relative } from "node:path";
 
 import { latestStudy } from "./ref-cuts.mjs";
 
-// a study hears every onset, the narration's syllables too (strength 0-1 against its loudest): the cues a remake must hit
-// are its accents. An effect meets one starting up to EARLY before it (a whoosh peaks after it starts) or LATE after
 const STRONG = 0.5;
 const EARLY = 0.5;
 const LATE = 0.1;
 
-// How much of the newest reference study the film has matched, per track, in heard seconds: the picture keyed so far
-// (the camera's last key), the reference's cuts with a camera cut on them, its strong sound hits with an sfx starting by them,
-// and the seconds with text on screen. text: [from, to] spans. Counts, not a judgement of how well each matches.
 export const refCoverage = (project, { cameraUntil, cameraCuts, sfx, text }) => {
   const study = latestStudy(project);
   if (!study?.seconds) return null;
@@ -28,7 +23,6 @@ export const refCoverage = (project, { cameraUntil, cameraCuts, sfx, text }) => 
     reach = Math.max(reach, b);
   }
   const share = (x) => +(x / seconds).toFixed(2);
-  // a study from before strengths were measured: every hit counts
   const accents = study.hits.filter((h) => !(h.strength < STRONG)).map((h) => h.at);
   const picture = Math.min(seconds, Math.max(0, cameraUntil));
   return {

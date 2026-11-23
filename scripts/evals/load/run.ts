@@ -1,6 +1,3 @@
-// Load eval for the studio page: starts the studio for one film on a spare port, opens it in headless Chrome as the desk (this
-// PC) and as a phone over Tailscale, cold (empty cache) and warm (cache kept), and keeps the medians (HELP below).
-// Talks to Chrome over the DevTools protocol directly: the vault's chrome-headless-shell (renders use it too), no test library.
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
 import {
   appendFileSync,
@@ -111,7 +108,6 @@ const cleanup = async () => {
 };
 process.on("SIGINT", () => cleanup().then(() => process.exit(130)));
 
-// Resolves with what `pattern` matched in the process's output, or fails after `ms`
 const waitOutput = (p: ChildProcess, pattern: RegExp, ms: number, what: string) =>
   new Promise<RegExpMatchArray>((done, fail) => {
     let seen = "";
@@ -132,7 +128,6 @@ const waitOutput = (p: ChildProcess, pattern: RegExp, ms: number, what: string) 
     p.on("exit", (code) => fail(new Error(`${what} exited (${code})\n${seen}`)));
   });
 
-// ---------- The studio
 const startStudio = async () => {
   const t0 = performance.now();
   const studio = spawn(
@@ -148,7 +143,6 @@ const startStudio = async () => {
   return Math.round(performance.now() - t0);
 };
 
-// ---------- Chrome over the DevTools protocol
 type Msg = {
   id?: number;
   method?: string;
@@ -223,8 +217,6 @@ const openChrome = async () => {
 };
 type Cdp = Awaited<ReturnType<typeof openChrome>>;
 
-// Set before the page's own code runs: long tasks, LCP, and the moments the studio marks itself (start.ts sets __live on the
-// first frame it draws and __readyAt once every panel's data is in)
 const PROBE = `(() => {
   const m = (window.__loadEval = { long: [], errors: [] });
   addEventListener('error', e => { if (!e.message?.startsWith('ResizeObserver loop')) m.errors.push(e.error?.stack || e.message); });
@@ -303,8 +295,6 @@ const PROFILES: Profile[] = [
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-// Self and total time per function from a V8 CPU profile, biggest first: file:line name. The whole profile is kept beside it for
-// Chrome DevTools' Performance panel (Load profile)
 type CpuProfile = {
   nodes: {
     id: number;
@@ -348,7 +338,6 @@ const cpuTimes = (p: CpuProfile, name: string) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 30)
       .map(([k, v]) => `${v.toFixed(0).padStart(6)} ms  ${k}`);
-  // the libraries' self time (three's matrix sums, parsers...) under the page's own function that called into them
   return [
     `profile: ${file}`,
     "self:",
@@ -359,7 +348,6 @@ const cpuTimes = (p: CpuProfile, name: string) => {
     ...top(caller),
   ];
 };
-// One context per run: its own cache, cookies and storage, so the first visit is a real first visit
 const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = false) => {
   const { browserContextId } = await cdp.send("Target.createBrowserContext");
   const { targetId } = await cdp.send("Target.createTarget", {
@@ -475,7 +463,7 @@ const visit = async (cdp: Cdp, profile: Profile, profileThis = false, capture = 
     }
   };
   const cold = await load("cold", profileThis ? `${profile.name}-cold` : null);
-  await sleep(500); // the last writes of the first visit settle into the cache
+  await sleep(500);
   const warm = await load("warm", profileThis ? `${profile.name}-warm` : null);
   let settings;
   if (args.includes("--panels") && profile.name === "desk") {
@@ -652,7 +640,6 @@ const KEYS = [
 const summarize = (rows: any[]) =>
   Object.fromEntries(KEYS.map((k) => [k, Math.round(median(rows.map((r) => r[k])) ?? NaN)]));
 
-// ---------- Run
 let failed = false;
 const deadline = setTimeout(() => {
   console.error("Load eval exceeded 20 minutes; completed visits remain in the run directory");
@@ -665,7 +652,7 @@ try {
   const browser = await cdp.send("Browser.getVersion");
   const results: Record<string, any> = { server };
   for (const profile of PROFILES.filter((p) => !ONLY || p.name === ONLY)) {
-    await visit(cdp, profile); // one unmeasured visit: Chrome's own first start (GPU process, shader cache) is not the page's
+    await visit(cdp, profile);
     const cold: any[] = [],
       warm: any[] = [];
     for (let i = 0; i < RUNS; i++) {
@@ -700,7 +687,6 @@ try {
     console.log();
     results[`${profile.name}.cold`] = summarize(cold);
     results[`${profile.name}.warm`] = summarize(warm);
-    // The slowest files of the median cold and warm visit: where to look next
     for (const [kind, rows] of [
       ["cold", cold],
       ["warm", warm],
@@ -744,7 +730,6 @@ try {
   if (!failed) {
     const git = (a: string[]) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" }).stdout.trim();
     const commit = git(["rev-parse", "--short", "HEAD"]);
-    // "+": what was measured (the packages and the film) differs from that commit
     const dirty = git(["status", "--porcelain", "packages", FILM_DIR]);
     mkdirSync(join(HERE, "runs"), { recursive: true });
     appendFileSync(

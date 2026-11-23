@@ -375,7 +375,6 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(shot0Text).toContain("Shot 0 (no previous cut)");
   expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot]')`)).toBe(false);
 
-  // Seek into Shot 1 (t = 2.5s, Emerald) with FreeCam ON; outgoing frame of Shot 0 (Crimson) must capture without corrupting live canvas or FreeCam state
   await page.evaluate(`(() => {
     window.__EYE_TEST__.S.tools.free.on = true;
     window.__EYE_TEST__.set({ free: true });
@@ -412,7 +411,6 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(ghostState.opacityBefore).toBeCloseTo(0.35, 2);
   expect(ghostState.storedOpacity).toBe(0.7);
 
-  // Also test renderFilmFrame at x === S.t (2.5) suspends FreeCam during capture and restores FreeCam + live canvas cleanly
   const sameFrameCheck = await page.evaluate(`(async () => {
     let duringFree = true;
     let duringRgb = null;
@@ -433,7 +431,6 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(sameFrameCheck.afterFree).toBe(true);
   expect(sameFrameCheck.afterRgb).toEqual([255, 235, 59]);
 
-  // Rapid camRev bumps keep active Ghost image visible without flicker and coalesce refreshes via debounce
   await page.evaluate(`(() => {
     window.__EYE_TEST__.resetFilmDraws();
     for (let r = 1; r <= 5; r++) {
@@ -447,7 +444,6 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   expect(await page.evaluate(`window.__EYE_TEST__.getFilmDraws()`)).toBe(1);
   expect(await page.evaluate(`!!document.querySelector('img[data-ghost-shot="0"]')`)).toBe(true);
 
-  // Debounce refresh skips cleanly if playback starts before the 200ms timer fires
   await page.evaluate(`(() => {
     window.__EYE_TEST__.resetFilmDraws();
     window.__EYE_TEST__.set({ camRev: 6 });
@@ -462,7 +458,6 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
   })()`);
   await waitUntil(`window.__EYE_TEST__.getFilmDraws() === 1`);
 
-  // Defer uncached capture while S.dragging is active, then capture on pointerup release
   await page.evaluate(`(() => {
     window.__EYE_TEST__.resetFilmDraws();
     window.__EYE_TEST__.S.dragging = { resume: false };
@@ -541,14 +536,12 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
   expect(curtain.text).toContain("Audio is currently muted");
   expect(curtain.stillPlaying).toBe(true);
 
-  // Unmute right from curtain restores 0.65 volume
   await page.evaluate(
     `document.querySelector('[aria-label="Blind audio test"][role="region"] button')?.click()`,
   );
   await waitUntil(`window.__EYE_TEST__.get().muted === false`);
   expect(await page.evaluate(`window.__EYE_TEST__.get().volume`)).toBe(0.65);
 
-  // While paused with curtain open, bumping shotsRev must update the imperative shot label cleanly
   await page.evaluate(`(() => {
     window.__EYE_TEST__.S.playing = false;
     window.__EYE_TEST__.S.comments[1] = "Updated Emerald";
@@ -558,7 +551,6 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
     `document.querySelector('[aria-label="Blind audio test"][role="region"]')?.textContent?.includes("Shot 1 · Updated Emerald")`,
   );
 
-  // Esc exits Blind Audio cleanly
   await page.evaluate(
     `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }))`,
   );
@@ -566,7 +558,6 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
 });
 
 test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatches + pacing highlights, cleans up on unmount while playing, recovers from shot capture failures, and seeks on click", async () => {
-  // Opening while playing attaches waitUntilPaused on S.watch("playing"); closing must leak zero listeners
   const baseWatchPlaying = await page.evaluate(`window.__EYE_TEST__.watchCounts.playing`);
   await page.evaluate(`(() => {
     window.__EYE_TEST__.S.playing = true;
@@ -580,7 +571,6 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
   })()`);
   await waitUntil(`window.__EYE_TEST__.watchCounts.playing === ${baseWatchPlaying}`);
 
-  // Opening while S.dragging is active defers capture until lostpointercapture release
   await page.evaluate(`(() => {
     window.__EYE_TEST__.S.dragging = { resume: false };
     document.querySelector('button[aria-label="Color script"]').click();
@@ -600,7 +590,6 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
     `document.querySelectorAll('section[aria-label="Color script strip"] img').length === 4`,
   );
 
-  // Portrait 9:16 thumbnails use object-contain framing without heavy top/bottom crop
   await page.evaluate(`window.__EYE_TEST__.set({ ratio: "9:16" })`);
   await waitUntil(
     `document.querySelectorAll('section[aria-label="Color script strip"] img.object-contain').length === 4`,
@@ -610,7 +599,6 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
     `document.querySelectorAll('section[aria-label="Color script strip"] img.object-cover').length === 4`,
   );
 
-  // Paused cut edit (shotsRev bump) immediately updates active shot highlight in ColorScript
   await page.evaluate(`window.__EYE_TEST__.seek(2.5)`);
   await waitUntil(
     `document.querySelector('button[aria-label^="Seek to Shot 1"][aria-current="true"]')`,
@@ -637,7 +625,6 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
   expect(stripInfo.shot0Swatches.some((t) => t?.includes("#dc2828"))).toBe(true);
   expect(stripInfo.shot3Text).toContain("Hold");
 
-  // Simulate Shot 1 midpoint (t=3) throwing during Refresh: remaining 3 shots capture and spinner clears
   await page.evaluate(`(() => {
     window.__EYE_TEST__.setThrowAt(3);
     document.querySelector('button[aria-label="Refresh color script"]').click();
@@ -647,7 +634,6 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
   );
   await page.evaluate(`window.__EYE_TEST__.setThrowAt(null)`);
 
-  // Click Shot 2 card -> seeks playhead directly to Shot 2 start (t = 4)
   await page.evaluate(`document.querySelector('button[aria-label^="Seek to Shot 2"]')?.click()`);
   await waitUntil(`window.__EYE_TEST__.S.t === 4`);
 });
@@ -677,7 +663,6 @@ test("Director's Eye hotkeys never hijack text inputs, Review mode supports all 
   expect(afterInput.guideMode).toBe("thirds");
   expect(afterInput.guides).toBe(false);
 
-  // In Review mode, Esc exits Blind Audio FIRST without cancelling open Draw ink or note Compose behind the curtain
   await page.evaluate(`(() => {
     document.getElementById("text-input-guard").blur();
     window.__EYE_TEST__.set({

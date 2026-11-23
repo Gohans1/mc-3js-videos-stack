@@ -61,8 +61,6 @@ export function finishStrength(basic: BasicGrade) {
   };
 }
 
-// Barrel r(1 + k r^2) with r normalised to the half-diagonal, so the centre and corners stay put; the fringe scales red out and
-// blue in around that
 class LensEffect extends Effect {
   constructor() {
     super(
@@ -369,10 +367,8 @@ class FramebufferEffect extends TextureEffect {
   }
 }
 
-// The shared layer sits above the finished picture, including transitions and titles.
 export const hasGradeEffect = (g?: Grade | null) => !!g && hasActiveGrade(resolveGrade(g));
 
-// A GPU framebuffer copy preserves that order without reading pixels back to the CPU.
 export function makeLayerAdjustments(renderer: WebGLRenderer) {
   const size = renderer.getDrawingBufferSize(new Vector2());
   const texture = new FramebufferTexture(size.x, size.y);

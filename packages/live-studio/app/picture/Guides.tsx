@@ -1,6 +1,3 @@
-// Framing guides over the picture (Ctrl+;, as CapCut's guides): the thirds a subject's eyes sit on, the middle, and the two
-// broadcast safe areas of SMPTE ST 2046-1, action safe (93%: nothing that matters past it) and title safe (90%: text inside it).
-// A 9:16 film is watched on a phone, so instead of those it shades what the Shorts and TikTok buttons and captions cover
 import type { PointerEvent } from "react";
 
 import { useStudio } from "../core/store";

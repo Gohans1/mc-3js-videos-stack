@@ -2,30 +2,6 @@
 import { arcInto } from "film-kit/arc";
 import { reachK } from "film-kit/reach";
 import { easeOf } from "film-stage/camera";
-// An actor's performance as a function of film time, from keys (a film's src/timeline/steve.json), with the film's own
-// body poses and faces: makePerformance({ poses, faces, standing }) -> { bodyAt, targetAt, moodAt, readLook, blinkAt }.
-//   moves [{t, at, yaw, pose, walk?, via?, do}]  where he is and the body pose he holds from t on. Between two keys the
-//     pose blends and the body shifts (smoothstep) over soles that stay planted (feet.ts steps them when it drifts
-//     too far); with walk: true on the later key he walks there (gait phased from the distance walked, every footfall
-//     planted). Keep a non-walk shift small (a weight shift, half a step): anything longer is a walk. via: a pose that
-//     peaks halfway through the blend (rising from a seat).
-//     ease on the incoming key replaces that blend's curve (film-stage EASES or four Bezier handles); omitted keeps
-//     smoothstep/walkEase. It also phases gait distance, but does not retime a mocap clip's source playback.
-//     clip: "<lib>/<clip>" instead of pose plays a mocap clip (clips.ts) from the key on, its first frame's hips at
-//     `at`; from: seconds into the clip to start at, rate: its speed, loop: true repeats it (in-place clips only: each lap
-//     starts back at `at`), else it holds its last frame. It plays at full weight until `blend` seconds (default 0.4)
-//     before the next key, then crossfades into it. Its hips travel inside the pose, so the next key's at goes where the
-//     clip leaves him (at + its end offset turned by yaw: a film's lab/clip.ts prints it) or he slides back over the crossfade.
-//     add: {joint: [x, y, z]} on any key adds those degrees on top of its pose (a head tilt on a clip, say; angle by
-//     angle, so keep it small on a joint turned past 90). A walk key can't follow a clip: key a pose where it leaves him.
-//   hands [{t, R?, L?}]  a world point or a prop anchor name (the film's props) for the end of that hand, or null for the
-//     pose's own arm. Targets glide between keys; the arm IK (player.ts armTo) bends the elbow to reach them. Given the
-//     shoulder (targetAt's opts.pivot), a hand moves like a person's (film-kit): at its own Fitts pace with one speed bell
-//     and a small corrective end (reach.ts), on an arc round the shoulder instead of a straight slide (arc.ts).
-//   look [{t, at}]  where he turns his head: a point, an anchor, or null for the pose's own head.
-//   face [{t, mood}]  a MOODS name (player.ts) or one of the film's faces, blended over half a second.
-//   read [[from, to]]  eyes run along lines of text: left to right, a quick sweep back, next line.
-// Every key holds until the next. Same t, same frame: nothing here remembers a previous frame.
 import * as THREE from "three";
 
 import { clamp01, smooth, walkEase } from "./ease";
@@ -50,8 +26,6 @@ const mixMood = (a, b, k) => {
   return out;
 };
 
-// One body pose into another: a joint (or root field) one pose leaves out is at rest (0) there. blendPose in player.ts
-// is an overlay instead (it leaves joints alone that the second pose lacks), which is what hand and head aims need
 const mixPose = (a, b, k) => {
   const root = {},
     ok = 1 - k;
@@ -87,7 +61,6 @@ const keyAt = (keys, t) => {
 };
 const yawLerp = (a, b, k) => a + (((b - a + 540) % 360) - 180) * k;
 
-// Distances along the walked path at every move key, computed once per moves array
 const paths = new WeakMap();
 const pathOf = (moves) => {
   if (paths.has(moves)) return paths.get(moves);
@@ -104,12 +77,9 @@ const pathOf = (moves) => {
   return cum;
 };
 
-// poses: {name: (s) => pose}, the body poses keys name; faces: {name: mood}, faces MOODS lacks; standing: the pose names
-// he can walk between without a walk key (he shuffles round on the spot while turning)
 export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   const moodOf = (n) => faces[n] ?? MOODS[n] ?? MOODS.neutral;
   const standSet = new Set(standing);
-  // each list of keys is checked whole the first time it is read (keys.ts); the studio hands over a fresh copy on every edit
   const seen = new WeakMap();
   const once = (keys, tag, fn) => {
     const s = seen.get(keys) ?? new Set();
@@ -120,7 +90,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     }
   };
 
-  // A key's body pose s seconds after it; clips: loadClips' result
   const poseOf = (key, s, clips) => {
     let pose;
     if (key.clip) {
@@ -131,8 +100,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     } else pose = poses[key.pose](s);
     return key.add ? addPose(pose, key.add) : pose;
   };
-  // How far from key a to key b at t (0..1): a hand-made pose blends over the whole span, a clip plays on and crossfades
-  // only over the span's last `blend` seconds, as game engines crossfade clips
   const progress = (a, b, t) => {
     if (b === a || b.t <= a.t) return 0;
     const w = a.clip ? Math.min(a.blend ?? 0.4, b.t - a.t) : b.t - a.t;
@@ -141,7 +108,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
   const travel = (key, x, duration) =>
     key.ease === undefined ? (key.walk ? walkEase(x, duration) : smooth(x)) : easeOf(key.ease)(x);
 
-  // Where he is, which way he faces and the body pose at time t (no hand targets, no head aim yet)
   function bodyAt(moves, t, clips?: Record<string, any> | null) {
     once(moves, clips ? "clips" : "moves", () => checkMoves(moves, poses, clips ?? null));
     clips ??= {};
@@ -157,13 +123,10 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     const yaw = yawLerp(a.yaw, b.yaw, b.walk ? smooth(phase / 0.25) : k);
     const sa = t - a.t,
       sb = Math.max(0, t - b.t);
-    const w = b.walk ? smooth((phase - 0.8) / 0.2) : k; // a walk keeps its own body until its last fifth
+    const w = b.walk ? smooth((phase - 0.8) / 0.2) : k;
     let pose;
     if (b === a) pose = poseOf(a, sa, clips);
     else if (a.clip || b.clip) {
-      // mocap turns are measured, not authored angle by angle: they blend as turns (an Euler lerp of two can swing the long
-      // way). Each side's hips are where its own key's place and yaw put them, blended in the world: turned into the yaw
-      // between, a clip that walks and turns would swing them sideways and back over the crossfade
       const pa = poseOf(a, sa, clips),
         pb = poseOf(b, sb, clips);
       pose = slerpPose(pa, pb, w);
@@ -180,7 +143,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     } else pose = mixPose(poseOf(a, sa, clips), poseOf(b, sb, clips), w);
     if (b.via && b !== a)
       pose = addPose(pose, mixPose({}, poses[b.via](sa), Math.sin(Math.PI * phase)));
-    // steps: walking, or shuffling round on the spot while turning; the gait fades in and out with the speed
     const d = cum[i] + (cum[Math.min(i + 1, cum.length - 1)] - cum[i]) * k;
     const t2 = t + 0.05;
     const j = i + 1 >= moves.length || t2 < moves[i + 1].t ? i : keyAt(moves, t2),
@@ -214,8 +176,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     return ks;
   };
 
-  // The target of one hand or the head between keys: null blends back to the pose's own arm. opts.pivot: the shoulder in
-  // the world at t (a THREE.Vector3), for hands; without it the target glides straight on a smoothstep (a head's look)
   function targetAt(keys, field, t, anchor, { pivot = null } = {}) {
     once(keys, "targets", () => checkTargets(keys, field === "at" ? "look" : "hands"));
     const ks = filteredKeys(keys, field);
@@ -259,7 +219,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     return mixMood(prev, moodOf(a.mood), t < a.t ? 0 : smooth((t - a.t) / 0.5));
   }
 
-  // Reading: the eyes cross a line in 1.3 s with small jumps (saccades), snap back, drop a line; held still 0.25 s per jump
   function readLook(ranges, t) {
     for (const [from, to] of ranges ?? [])
       if (t >= from && t < to) {
@@ -275,7 +234,6 @@ export function makePerformance({ poses, faces = {}, standing = ["stand"] }) {
     return null;
   }
 
-  // Blinks every 2.5 to 5.5 s (seeded by the blink's own index), 0.16 s each, so any frame knows if it falls in one
   function blinkAt(t, from) {
     if (t < from) return 0;
     let at = from + 1.5,

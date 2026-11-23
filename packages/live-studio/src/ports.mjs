@@ -441,7 +441,6 @@ export const resolveStudioWorktree = (
       ? normalizePath(filmJson.project)
       : null;
 
-  // Priority 1: /api/film.json explicitly provided project path
   if (probeProject) {
     const wt = longestWorktreePrefix(probeProject, worktrees, platform);
     const film = probeName ?? (baseNameOf(probeProject) || null);
@@ -463,7 +462,6 @@ export const resolveStudioWorktree = (
     };
   }
 
-  // Priority 2: CommandLine explicitly includes a worktree root path
   const cmdWt = findWorktreeInCmdline(cmdline, worktrees, platform);
   if (cmdWt) {
     const project = probeName ? findFilmInWorktree(cmdWt, probeName, io, filmCache) : null;
@@ -476,7 +474,6 @@ export const resolveStudioWorktree = (
     };
   }
 
-  // Priority 3: Relative launch (no project in /api/film.json, no worktree in cmdline)
   const matchesFilmName = (item) =>
     !probeName || item.name === probeName || item.dirName === probeName;
   const portMatches = matchWorktreeFilms(
@@ -549,9 +546,7 @@ const defaultRunCommand = async (cmd, args, { cwd, timeoutMs = COMMAND_TIMEOUT_M
     timedOut = true;
     try {
       proc.kill();
-    } catch {
-      /* process already exited */
-    }
+    } catch {}
   }, timeoutMs);
 
   try {

@@ -1,8 +1,5 @@
 import { useLayoutEffect } from "react";
 
-// The timeline canvases share one time axis and scroll container; overlays sit above the main Camera track.
-// timeline/timeline.ts draws the ruler and the voice and action rows and handles scrubbing, picking and zoom; camera/camrow.ts the camera row (its canvas and menu in CameraTrack.tsx); keys/keyrows.ts the key rows (names in KeyHeads); sound/lanes.ts the tracks (their right-click menu in ClipMenu.tsx), whose names, mute and lock sit in the column on the left (TrackHeads). That column
-// runs the whole height so every row shares one time axis. At the right, the master meter (sound/AudioMeter.tsx)
 import { cn } from "@/lib/utils";
 
 import { useLitAny } from "../activity/activity";
@@ -27,8 +24,6 @@ const clampRowHeight = (v: number | null, min: number, max: number) => {
   return s === null ? null : Math.min(max, s);
 };
 
-// As in CapCut only the head stays put (the tools, the ruler); every row under the ruler scrolls as one list,
-// and a press on its empty space picks nothing (rowbox.ts clear)
 export function TimelinePanel({ bind }: { bind: Bind }) {
   const sound = useStudio((s) => s.sound),
     layers = useStudio((s) => s.layers),
@@ -50,7 +45,6 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
     setRowLayout({ shots, voice, action, voiceY, actionY, height });
     drawTimelines();
   }, [shots, voice, action, voiceY, actionY, height, layers, text, cam, keys, sound]);
-  // Each row's bottom edge in the name column sizes it, as a track's edge does in CapCut
   const rows = [
     ...(cam
       ? []
@@ -120,7 +114,6 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
         >
           <LayerTrack />
           <OpenFilmTrack />
-          {/* Always in the page, so the engine has their canvases from the start; shown once the film turns out to have them */}
           <div className={cn("col-span-2 mt-1 grid grid-cols-subgrid", !text && "hidden")}>
             <TextHeads />
             <canvas
@@ -192,7 +185,6 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
             <TrackHeads />
             <ClipMenu bind={bind} />
           </div>
-          {/* The box dragged over the rows (rowbox.ts), drawn as the rows' own boxes are */}
           <div
             ref={bind("rowbox")}
             aria-hidden
@@ -201,28 +193,24 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
         </div>
         <AudioMeter />
       </div>
-      {/* Continuous AI spans overlay in front of all track rows and row gaps, below playhead */}
       <div
         ref={bind("ai")}
         aria-hidden
         hidden
         className="pointer-events-none absolute left-0 z-1 overflow-hidden"
       />
-      {/* Continuous playhead down the rows, bridging row gaps and empty bottom space (timeline.ts) */}
       <div
         ref={bind("playhead")}
         aria-hidden
         hidden
         className="pointer-events-none absolute left-0 z-2 bg-(--playhead)"
       />
-      {/* CapCut's preview axis, from the ruler down the rows (peek.ts) */}
       <div
         ref={bind("peek")}
         aria-hidden
         hidden
         className="bg-peek ring-stage pointer-events-none absolute left-0 z-3 w-px -translate-x-px ring-1"
       />
-      {/* CapCut's snapping line, where a dragged edge meets a mark (snapline.ts) */}
       <div
         ref={bind("snap")}
         aria-hidden

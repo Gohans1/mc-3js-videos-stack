@@ -1,12 +1,4 @@
 // @ts-nocheck
-// --check motion:<target>,<from>,<to>, built in for every film: how one thing moves between two heard seconds, seen the way an
-// animator checks a move in a graph editor and with onion skins, with no film wiring. Writes to renders/:
-//   motion_<target>_<from>-<to>_trail.jpg  ghosts of the move from one fixed camera (--inspect's, else the film's at the middle
-//     second), its path drawn over them coloured by speed (blue slow, red fast), a dot every 0.1 s and the time every 0.5 s:
-//     dots bunched up = slow, spread out = fast; POP and STOP marks where it jumps or stops dead
-//   motion_<target>_<from>-<to>_speed.jpg  speed over time (m/s), each move's peak and how it is eased, the faults marked
-//   motion_cam_<from>-<to>_turn.jpg  for cam: how fast it turns and zooms (°/s) against the 7-second panning rule
-// and prints the numbers (checks/motion.mjs). target: see target.ts; "cam" gives the graphs only.
 import { EDIT } from "live-studio/edit";
 import * as THREE from "three";
 
@@ -35,7 +27,6 @@ export const motionCheck =
     if (!isCam && !free)
       return ["ERROR --check motion on an object requires draw.tools.free on the film"];
 
-    // one fixed camera for the whole move, so ghosts and the path line up; put back afterwards
     const saved =
       !isCam && free ? { on: free.on, p: free.p.clone(), l: free.l.clone(), fov: free.fov } : null;
     if (!isCam) {
@@ -123,7 +114,6 @@ export const motionCheck =
       onion.height = H;
       const ctx = onion.getContext("2d");
       for (let k = 0; k < GHOSTS; k++) {
-        // later ghosts drawn over earlier ones: the faintest pose is the first
         await draw(from + ((to - from) * k) / (GHOSTS - 1));
         ctx.globalAlpha = k ? 0.45 : 1;
         ctx.drawImage(gl, 0, 0);
@@ -219,7 +209,6 @@ export const motionCheck =
     out.push({ still: `${tag}_speed.jpg`, canvas: c.canvas });
 
     if (tm) {
-      // the turn rate a frame width in WIDTH_SECONDS makes, at the widest view the camera has
       const widest = samples.reduce((max, { fov, aspect }) => {
         const width = (2 * Math.atan(Math.tan((fov * Math.PI) / 360) * aspect) * 180) / Math.PI;
         return Math.max(max, width);

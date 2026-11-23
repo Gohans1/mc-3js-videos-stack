@@ -16,7 +16,6 @@ test("explore: quick wide looks right after a start, back to the usual after ~2 
   expect(a.mean(5)).toBe(1);
   expect(a(10.2)).toBeGreaterThan(0.9);
   expect(a(-1)).toBe(0);
-  // gaze takes the mean as a function: more fixations in the first 2 s than in a later 2 s
   const f = fixations([], 12, { mean: (t) => 0.75 * a.mean(t) });
   const count = (x: number, y: number) => f.filter((t) => t >= x && t < y).length;
   let early = 0,
@@ -33,7 +32,6 @@ test("explore: quick wide looks right after a start, back to the usual after ~2 
 test("drowsy: same blink count, longer blinks that reopen slowly, some long or partial, lids lower; shut while asleep", () => {
   const alert = blinks(600),
     sleepy = blinks(600, { drowsy: () => 1 });
-  // the rate barely changes (Caffier 2003)
   expect(Math.abs(sleepy.times.length - alert.times.length) / alert.times.length).toBeLessThan(
     0.25,
   );
@@ -49,11 +47,9 @@ test("drowsy: same blink count, longer blinks that reopen slowly, some long or p
   expect(alert.shapes.every((s) => s.depth === 1 && s.shut === BLINKS.shut)).toBe(true);
   expect(sleepy.droop(3)).toBeCloseTo(DROWSY.droop, 9);
   expect(alert.droop(3)).toBe(0);
-  // no blink starts before the last one is open again
   sleepy.times.forEach((t, i) => {
     if (i) expect(t - sleepy.times[i - 1]).toBeGreaterThanOrEqual(len(sleepy.shapes[i - 1]) + 0.1);
   });
-  // asleep: shut, then a slow first opening, and no blink inside the span
   const d = drowsiness([
     { t: 0, k: 1 },
     { t: 10, k: 0 },
@@ -63,7 +59,6 @@ test("drowsy: same blink count, longer blinks that reopen slowly, some long or p
   expect(w(3.1)).toBeGreaterThan(0.8);
   expect(w(3 + 0.9)).toBeLessThan(0.05);
   expect(w.times.every((t) => t >= 3)).toBe(true);
-  // dozing off again: the lids sink slowly into the span, no pop
   const z = blinks(20, {
     drowsy: () => 1,
     asleep: [
@@ -99,16 +94,14 @@ test("express: surprise comes fast, sadness slow, leaving slower than coming; fe
     M,
   );
   expect(f(0.5).y).toBe(0);
-  f(0.2).open = 0; // the caller changing what it got changes nothing else
+  f(0.2).open = 0;
   expect(f(0.5).open).toBe(0.9);
   expect(M.neutral.open).toBe(0.9);
   const mid = f(1 + 0.565 * 0.25);
-  // a quarter of the way in, the brows have moved more than the eyes
   expect((mid.y as number) / 0.7).toBeGreaterThan(((mid.open as number) - 0.9) / 0.1);
   expect(f(1 + 0.6).y).toBeCloseTo(0.7, 6);
   expect(f(4 + 1.27).smile).toBeCloseTo(0, 6);
   expect(f(4 + 0.5).smile as number).toBeLessThan(-0.5);
-  // cut short: surprised for 0.2 s, then sad; the face goes on from where it was
   const g = express(
     [
       { t: 0, mood: "neutral" },
@@ -122,7 +115,6 @@ test("express: surprise comes fast, sadness slow, leaving slower than coming; fe
     jump = Math.max(jump, Math.abs((g(t + 1 / 120).y as number) - (g(t).y as number)));
   expect(jump).toBeLessThan(0.05);
   expect(g(1.2 + 1).y).toBeCloseTo(0.2, 6);
-  // nested fields (a mood's per-brow L/R) blend too
   const h = express(
     [
       { t: 0, mood: "a" },

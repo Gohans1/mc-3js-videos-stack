@@ -290,7 +290,6 @@ const NoteCard = memo(function NoteCard({
   );
 });
 
-// A fixed note keeps what was asked, what the frame looked like and what was done. It stays calmer than active work so eyes skip past it.
 const DoneCard = memo(function DoneCard({ p: { n, t } }: { p: Placed }) {
   const shotTitle = noteShotTitle(n.shot, n.shotName);
   const timeText = stamp(t);
@@ -378,7 +377,6 @@ const DoneCard = memo(function DoneCard({ p: { n, t } }: { p: Placed }) {
   );
 });
 
-// The AI answered: a fix waiting for the creator's yes, or a question waiting for their words. Warm surface until acted on
 const CheckCard = memo(function CheckCard({ p: { n, t } }: { p: Placed }) {
   const shotTitle = noteShotTitle(n.shot, n.shotName);
   const timeText = stamp(t);
@@ -1045,7 +1043,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     shot = PHONE ? null : rawShot,
     facets = PHONE ? EMPTY_FACETS : rawFacets,
     sort: NoteSort = PHONE ? "film" : rawSort;
-  useStudio((s) => (!PHONE && s.noteScope === "shot" ? s.shot : "")); // "In current shot" follows the playhead from shot to shot
+  useStudio((s) => (!PHONE && s.noteScope === "shot" ? s.shot : ""));
   const [doneOpen, setDoneOpen] = useState(false);
   const [crampedOverlay, setCrampedOverlay] = useState(false);
   const controls = useRef<HTMLDivElement>(null);
@@ -1150,7 +1148,6 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     [displayRows],
   );
 
-  // The card holding the keyboard's focus stays built when it scrolls out of view, or the focus would drop to the page
   const rangeExtractor = useCallback(
     (range: Range) => {
       const shownNow = defaultRangeExtractor(range),
@@ -1221,7 +1218,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     v.scrollToIndex(targetIdx, {
       align,
       behavior: prefersReduced() || Math.abs(to - box.scrollTop) > 500 ? "auto" : "smooth",
-    }); // a long way is a jump, not a slide past everything
+    });
   }, [nearNote, editing, sort, rowOf, v]);
 
   const count = (shownHere: Placed[], all: Placed[]) =>
@@ -1325,7 +1322,6 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
           )}
         </Empty>
       );
-    // Folded by default in All mode so active work leads; Done tab shows them directly expanded.
     return (
       <h3 className={PHONE ? "mt-0.5" : "mt-1"}>
         <button

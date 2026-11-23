@@ -1,7 +1,3 @@
-// While the free camera (F) is on: the film camera's own picture in a corner, as Unreal's camera preview and Theatre.js's
-// reference window show it, so the shot as the video has it (post and fades included) sits beside the view being flown. It costs
-// one more draw with the free camera off, and only when something other than the free camera changed (start.ts frame): flying
-// alone never redraws it, playing or editing does. campath.ts takes the film camera's pose from the same draw
 import { dofParams } from "film-stage/camera";
 import type { Draw } from "film/scene";
 import * as THREE from "three";
@@ -26,7 +22,6 @@ export const staleFilmView = () => {
   stale = true;
 };
 
-// Called before the frame on screen is drawn: the free camera's view drawn next is what stays on the main canvas
 export const drawFilmView = async (full?: Draw) => {
   const tools = S.tools,
     corner = S.el.filmview;
@@ -35,7 +30,7 @@ export const drawFilmView = async (full?: Draw) => {
   const updatedTools = source.tools;
   const f = updatedTools.free;
   const shown = corner.clientWidth > 0;
-  if (!shown && !keys.length) return; // nobody asks: no corner picture, no camera path to pose
+  if (!shown && !keys.length) return;
   stale = false;
   const wasFree = f.on;
   f.on = false;

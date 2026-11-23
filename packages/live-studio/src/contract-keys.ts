@@ -1,4 +1,3 @@
-// Pure field-key lists and timed key-row helpers shared with app/ without pulling zod into initial browser bundles.
 export const SOUND_KEYS = {
   audio: [
     "beds",
@@ -172,10 +171,6 @@ const containsNestedTimed = (v: unknown, seen: WeakSet<object>, checkSelf = fals
   }
 };
 
-/**
- * Finds paths to arrays whose non-timed object elements contain nested timed `{t}` arrays/objects
- * (e.g. `thugs: [{ id: "boss", moves: [{ t: 0 }] }]`), which `keyRows()` otherwise silently skips.
- */
 export const nestedTimedArrayPaths = (
   v: any,
   path: string[] = [],

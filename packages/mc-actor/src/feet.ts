@@ -1,25 +1,15 @@
 // @ts-nocheck
-// Planted feet (foot locking, as in D. Holden's "Inverse Kinematics and Foot Locking", theorangeduck.com, and the stance
-// locking of game engines): a sole on the stone stays where it landed while the body above it walks, turns or blends
-// between poses, and the leg IK (player.ts legTo) bends hip and knee to keep it there. Which sole is on the floor comes
-// from the pose: in a walk its gait phase (player.ts gaitOf), otherwise the pose's sole being near the stone. A sole leaves
-// the floor when the gait or the pose lifts it, or as a step of its own (one foot at a time) when the body has drifted or
-// turned too far over it or would pull the leg straight. Every step flies in an arc to where that sole lands next, found by
-// looking ahead, so a foot never drags over (or through) the floor. Without this, every move key that shifts him (moves
-// `at`) slid the whole body over the stone and each walking step slid 25-43 cm.
-// draw(t) holds no state between frames, so the film is run through once per edit (60 samples a second, the pose's soles
-// alone, under a second for the whole film) and draw(t) reads the result: same t, same feet.
 import * as THREE from "three";
 
 const HZ = 60;
 const DOWN = 0.05,
-  UP = 0.08; // a sole the pose holds still counts as on the floor below 5 cm, off it above 8 (no flicker)
+  UP = 0.08;
 const DRIFT = 0.16,
-  TURN = 35; // a planted sole steps when the pose wants it 16 cm or 35 degrees away
+  TURN = 35;
 const MIN_STEP = 0.2,
   MAX_LOOK = 0.8,
-  SETTLE = 0.45; // seconds: shortest step; how far ahead a landing is looked for
-const SINK = 0.08; // seconds to set a sole the pose holds a little above (or in) the floor down onto it
+  SETTLE = 0.45;
+const SINK = 0.08;
 
 const DB = "mc-actor-bakes";
 const CLIP_KEY = Symbol.for("mc-actor.clipKey");
@@ -36,7 +26,6 @@ const idbRequest = (r) =>
     r.onerror = () => fail(r.error);
   });
 
-// bodyAt: the performance's (perform.ts makePerformance), so the feet follow the same body the film draws
 export function makeFeet(steve, endOf, bodyAt, clips = {}) {
   const baked = new WeakMap();
   const tmp = new THREE.Vector3(),
@@ -81,7 +70,7 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         }
       }
     }
-    steve.g.updateWorldMatrix(true, true); // all of him and his ancestors, as the last sample left him
+    steve.g.updateWorldMatrix(true, true);
     const legReach = steve.legReach;
     const mWorld = (steve.rig ?? steve.g).matrixWorld;
     const legScale = Math.max(
@@ -105,7 +94,6 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       strainMax = legReach + 0.02 * legScale,
       arcBase = 0.03 * legScale,
       arcMax = 0.1 * legScale;
-    // on the floor or not, per foot and sample: the gait's stance half while walking, else the pose's sole height
     const down = { L: new Uint8Array(n), R: new Uint8Array(n) };
     for (const sd of ["L", "R"]) {
       let was = 0;
@@ -124,19 +112,16 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
     }
     const at = (sd, j, v) => v.fromArray(want[sd], j * 3);
     const speed = (sd, j) => (j + 1 < n ? at(sd, j + 1, tmp).distanceTo(at(sd, j, V)) * HZ : 0);
-    // where a sole leaving the floor at i lands: the pose's sole when it is next on the floor (a walk's next footfall)
     const landing = (sd, i) => {
       let j = i + 1;
       while (j < Math.min(n - 1, i + MAX_LOOK * HZ) && !down[sd][j]) j++;
       return down[sd][j] ? j : -1;
     };
-    // the end of this foot's stance in the walk (or of the walk itself: the trailing foot then closes up beside the other)
     const stanceEnd = (sd, i) => {
       let j = i;
       while (j < n - 1 && down[sd][j] && !Number.isNaN(gait[j])) j++;
       return j;
     };
-    // where a planted sole stepping on its own goes: where the pose's sole comes to rest, at most SETTLE ahead
     const settle = (sd, i) => {
       let j = i + 1;
       while (j < Math.min(n - 1, i + SETTLE * HZ) && down[sd][j] && speed(sd, j) > settleSpeed) j++;
@@ -169,14 +154,11 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         if (s.mode === "lock") {
           const away = Math.hypot(s.pin.x - W.x, s.pin.z - W.z),
             turned = Math.abs(((yaw[i] - s.yaw + 540) % 360) - 180);
-          // standing straight the leg is already at full reach: pulled 2 cm (scaled) past it (the sole would lift off) is too far
           const strained = s.pin.distanceTo(H) > strainMax;
           if (!down[sd][i]) {
             const j = landing(sd, i);
-            // lifted for good (sitting down, lying back): it goes with the pose's own leg
             step(s, i, s.pin, j < 0 ? i : j, j >= 0);
           } else if (!Number.isNaN(gait[i])) {
-            // walking, the gait times every step; a leg pulled straight before it lifts goes early, to the same footfall
             if (strained) {
               const j = landing(sd, stanceEnd(sd, i));
               step(s, i, s.pin, j < 0 || j - i > 0.6 * HZ ? settle(sd, i) : j, true);
@@ -184,7 +166,6 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
           } else if (strained || (o.mode !== "step" && (away > drift || turned > TURN)))
             step(s, i, s.pin, settle(sd, i), true);
         }
-        // a sole the pose sweeps along the floor (a leg folding under him): lifted into one step to where it stops
         if (s.mode === "free" && down[sd][i] && speed(sd, i) > sweepSpeed && o.mode !== "step")
           step(s, i, W.clone().setY(Math.max(0, W.y)), settle(sd, i), true);
         if (s.mode === "step") {
@@ -206,7 +187,6 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
             lock(s, i, P);
             continue;
           }
-          // the gait lifted it as its own step ended: straight on to its next footfall
           const j = !down[sd][i] && !Number.isNaN(gait[i]) ? landing(sd, i) : -1;
           if (j >= 0) {
             step(s, i, P, j, true);
@@ -215,7 +195,6 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
         }
         if (s.mode === "free" && down[sd][i]) lock(s, i, W);
         if (s.mode === "lock") {
-          // set down onto the stone (the pose holds its sole a little off it, or in it)
           s.pin.y = s.y0 * (1 - Math.min(1, (i - s.t0) / (SINK * HZ)));
           s.pin.toArray(out[sd], i * 3);
           on[sd][i] = 1;
@@ -326,7 +305,6 @@ export function makeFeet(steve, endOf, bodyAt, clips = {}) {
       }
     } catch {}
   };
-  // where each sole goes at t, or null where the pose's own leg is left as it is (off the floor, nothing to hold)
   const feetAt = (moves, t) => {
     let data = baked.get(moves);
     if (!data) baked.set(moves, (data = bake(moves)));

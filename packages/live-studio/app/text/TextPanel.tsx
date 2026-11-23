@@ -1,6 +1,4 @@
-// CapCut's details for a picked text or shape: Text (Basic: the words, font, size, pattern, case, colour, spacing, alignment,
-// opacity; Stroke, Background and Shadow, each with its checkbox; Transform: scale, position, rotate) and Animation (In | Out and
-// how long). A change applies to every picked item at once, as CapCut styles several picked texts; a slider's drag is one undo step
+import { TEXT_ITEM_KEYS } from "film-stage/titles-catalog";
 import {
   AlignCenter,
   AlignLeft,
@@ -24,7 +22,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
 import { cn } from "@/lib/utils";
 
-import { TEXT_ITEM_KEYS } from "film-stage/titles-catalog";
 import { TEXT_KEYS, TEXT_SLOT_KEYS } from "../../src/contract-keys";
 import { playSpan, stopSpan } from "../camera/anim";
 import { FavoriteStar } from "../components/FavoriteStar";
@@ -84,7 +81,6 @@ const ALL = "All",
 const byId = (id: string | undefined) =>
   S.tools?.titles?.fonts.find((f) => f.id === id) ?? S.tools?.titles?.fonts[0];
 
-// A number on every picked item: dragged live, saved on release (and typed into its box)
 function Slide({
   label,
   get: read,
@@ -161,7 +157,6 @@ function Colors({
   );
 }
 
-// The words: typed live onto the picture, kept as one undo step when the box is left
 function Words({ it }: { it: TextItem }) {
   const snap = useRef<string | null>(null);
   return (
@@ -635,7 +630,6 @@ function VoiceBadge({ fx, shape, kind }: { fx: TitleFxMeta | null; shape: boolea
   );
 }
 
-// CapCut's Animation tab for text & shapes: In | Out, search, category chips, hover preview, favorites, and Cinetic voice controls
 function Anim({ it }: { it: TextItem }) {
   const slot = useStudio((s) => s.textSlot),
     favs = useStudio((s) => s.favorites.effects);

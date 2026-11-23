@@ -4,23 +4,10 @@ import { canvas, config, done, log, still } from "live-studio/lab";
 import { clipNames, loadSource } from "mc-actor/clips";
 import { bodyBoxes, retargeter, skeletonSource } from "mc-actor/mocap";
 import { loadRig, makePlayer, MOODS } from "mc-actor/player";
-// Lab: a human clip onto Steve (mc-actor/mocap), judged from every side and by numbers. Quaternius UAL1/UAL2 (CC0) or
-// Mixamo FBX, in the vault's motion/ (bun run link), served to the page as motion/.
-//   bun run render stills --entry ../../packages/clip-catalog/mocap.ts --lab clip=Interact
-//     renders/mocap_<clip>_NNN.jpg, 4 x 2 panels that follow the hips: top row source and Steve from the front, source and
-//     Steve from their left; bottom row Steve from behind, his right, above, the floor. Then the numbers (CHECKS below),
-//     worst frame of each
-//   --lab lib=ual2: UAL2 (motion/ual2/UAL2_Standard.glb) instead of UAL1; --lab lib=mixamo --lab clip=<file stem in
-//   motion/mixamo>: a Mixamo FBX (no skin: drawn as a stick skeleton); --lab fps=6 fewer stills; --lab numbers=1 numbers
-//   only; --lab raw=1 without the floor and own-body fixes; --lab log=1 every frame's numbers; --lab zoom=3 the panels close on
-//   the head; --lab from=, --lab to= seconds: only stills in that window
-//   --lab clips=all: numbers only, every clip of the library (Mixamo: the stems in motion/mixamo/_tools/clips.json), one
-//   "ROW {json}" line each with the worst of every check, for a sweep (--lab clips=a,b: those)
 import * as THREE from "three";
 
 const D = 180 / Math.PI;
 const PXM = 1.875 / 32;
-// Steve's bones against the source bones that turn them, for spin (a turn of his the source's own turn doesn't explain)
 const SPIN = {
   root: "hips",
   chest: "waist",
@@ -34,7 +21,6 @@ const SPIN = {
   ulR: "hipR",
   llR: "kneeR",
 };
-// points of his that must stay out of other parts of him: [name, where, radius, the boxes it must stay out of]
 const OTHER = { L: "R", R: "L" };
 const POINTS = (sd) => [
   [
@@ -130,7 +116,6 @@ const POINTS = (sd) => [
     };
   };
 
-  // panel: [figure, camera offset from the hips (x = his left, z = his front)]
   const P = [
     ["src", [0, 0.3, 5.4]],
     ["steve", [0, 0.3, 5.4]],
@@ -164,10 +149,7 @@ const POINTS = (sd) => [
       n = Math.max(1, Math.round(clip.duration * fps));
     // the mixer loops: at exactly clip.duration it shows frame 0 again
     const end = clip.duration - 1e-4;
-    // the retargeter measures both rests before the clip runs, both at the origin; both stay there (one shown per panel)
     const sk = skeletonSource(src.scene, src.names);
-    // the source as loaded is its rest: upright or not (an FBX whose rest is its first frame lying down would aim the
-    // head and place the hips from that)
     const rest = { up: sk.at("neck").y - sk.at("hips").y, hips: sk.at("hips").y };
     const rt = retargeter(sk, steve, cfg.lab.raw ? { floor: false, own: false } : {});
     mixer.clipAction(clip).play();
@@ -178,7 +160,6 @@ const POINTS = (sd) => [
         if (!(val <= stats[k]?.val)) stats[k] = { val, t };
       };
     const w = (bone) => steve.bones[bone].getWorldPosition(new THREE.Vector3());
-    // joint: [his, relative to the joint it hangs on], [the source's role, the one it hangs on]
     const JOINTS = {
       root: [() => w("root"), ["hips"]],
       head: [
@@ -215,7 +196,7 @@ const POINTS = (sd) => [
       mixer.setTime(t);
       const p = rt.pose(i > 0 ? 1 / fps : 0);
       steve.setPose(p);
-      steve.face(MOODS.neutral, [0, 0, 0, 0], 0, [0, 0]); // unset, the floating face keeps its lids shut and mouth open
+      steve.face(MOODS.neutral, [0, 0, 0, 0], 0, [0, 0]);
       scene.updateMatrixWorld(true);
       const m = rt.measure();
       if (
@@ -225,17 +206,13 @@ const POINTS = (sd) => [
       )
         worst("not a number", 1, t);
       for (const [k, e] of Object.entries(m.dir)) worst(`direction error ${k}`, e, t);
-      // bent, the source's own hinge plane against the one its upper bone's roll gives (mc-actor/mocap hinge): far apart,
-      // a limb rolls between them as it straightens
       for (const [k, g] of Object.entries(m.gap)) (gaps[k] ??= []).push(g);
       worst("float (Steve's lowest point above where it should be)", m.float * 100, t);
-      // below the floor only where the source isn't (a fall into a pool, over a cliff)
       const ground = Math.min(0, rt.k * m.srcLow);
       worst("sink (Steve's lowest point below the floor)", (ground - m.low) * 100, t);
       worst("arm below the floor", (ground - m.armLow) * 100, t);
       worst("head below the floor", (ground - m.headLow) * 100, t);
       for (const [k, d] of Object.entries(m.inside)) worst(`inside ${k}`, d * 100, t);
-      // his other points in other parts of him
       for (const sd of ["L", "R"])
         for (const [name, where, r, keys] of POINTS(sd)) {
           const at = where.startsWith("hand")
@@ -245,7 +222,6 @@ const POINTS = (sd) => [
               : steve.bones[where].getWorldPosition(new THREE.Vector3());
           worst(`inside ${name} in him`, rt.depth(at, keys, r) * 100, t);
         }
-      // his head (a ball inside its 8 px cube) in his legs: a human head fits between the knees in a deep bend, his doesn't
       const headMid = headRestMid
         .clone()
         .applyMatrix4(new THREE.Matrix4().copy(steve.bones.head.matrixWorld).multiply(headRestInv));
@@ -254,14 +230,11 @@ const POINTS = (sd) => [
         rt.depth(headMid, ["ulL", "ulR", "llL", "llR"], 3.5 * PXM) * 100,
         t,
       );
-      // the neck: his head against his chest, from their rests (past ~80 the box head reads broken)
       q.copy(steve.bones.chest.getWorldQuaternion(new THREE.Quaternion()).multiply(chestRest))
         .invert()
         .multiply(steve.bones.head.getWorldQuaternion(new THREE.Quaternion()).multiply(headRest));
       worst("neck turn (deg)", 2 * Math.acos(Math.min(1, Math.abs(q.w))) * D, t);
       for (const sd of ["L", "R"]) soles[sd].push(steve.soleAt(sd, v).clone());
-      // jumps: a joint of his moving between frames, from the joint it hangs on, further than the source's does (scaled by
-      // the two limbs' lengths: his arms are long for his legs) is a pop the retarget made; the root against the hips
       for (const [j, [mine, src]] of Object.entries(JOINTS)) {
         const a = mine(),
           s0 = sk.at(src[0]).sub(src[1] ? sk.at(src[1]) : ZERO);
@@ -274,7 +247,6 @@ const POINTS = (sd) => [
           );
         prev[j] = [a, s0];
       }
-      // spin: a bone of his turning between frames more than the source's bone turns (a twist flip moves no joint)
       for (const [key, r] of Object.entries(SPIN)) {
         const a = steve.bones[key].getWorldQuaternion(new THREE.Quaternion()),
           s0 = sk.quat(r);
@@ -311,7 +283,6 @@ const POINTS = (sd) => [
       show("both");
       await still(`mocap_${clipName}_${String(i).padStart(3, "0")}.jpg`, c);
     }
-    // A sole within 3 cm of the floor counts as planted: how far it moves frame to frame there
     for (const sd of ["L", "R"]) {
       let slide = 0;
       for (let i = 1; i < soles[sd].length; i++) {
@@ -326,7 +297,7 @@ const POINTS = (sd) => [
       stats[`hinge gap ${k} median (deg)`] = { val: g[g.length >> 1], t: 0 };
       stats[`hinge gap ${k} 90th (deg)`] = { val: g[Math.floor(g.length * 0.9)], t: 0 };
     }
-    if (fps < 30) for (const x of Object.keys(stats)) if (/^(jump|spin)/.test(x)) delete stats[x]; // only meaningful frame to frame at 30 fps
+    if (fps < 30) for (const x of Object.keys(stats)) if (/^(jump|spin)/.test(x)) delete stats[x];
     mixer.stopAllAction();
     mixer.uncacheRoot(src.scene);
     if (stills) scene.remove(...src.show);

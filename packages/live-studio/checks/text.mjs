@@ -1,17 +1,3 @@
-// Where one line of on-screen text sits and how it reads over the picture, from two frames render/text.ts draws at the same
-// second: the film with only that line (A) and with no text (B), RGBA rows top first. Whatever differs is the line (its
-// letters, stroke, shadow, background box), so a line anchored to a world point or animated by a film's own voice is
-// measured as drawn.
-//   measure(A, B, w, h, ink, glyphPx) -> { box: [x0, y0, x1, y1] in frame fractions, contrast } or null when nothing drew
-//   verdict({ i, text, at, px }, measured, ratio) -> { lines, faults }
-// The letters are the changed pixels within reach of the item's colour; the contrast is WCAG's ratio between that colour
-// and the ring just around the letters (what an edge is read against: a stroke or a shadow is in it, the sky behind is
-// too), its worst tenth. Thresholds: WCAG 1.4.3, 4.5:1 for text and 3:1 for large text, taken here as BBC's subtitle size
-// (6.25% of the frame's short side, 67.5 px at 1080) and up. The safe area: EBU R95's graphics-safe area, 5% in from
-// every edge; a Short's is what YouTube's player covers, as Google's Shorts ad guidance gives it (top 10%, bottom 25%,
-// right 10%; it names no left margin, so EBU's 5% stays). Google draws it in a template image, not in text, and
-// re-lays the Shorts player now and then: recheck those numbers when its buttons move.
-
 export const SAFE_AREA = {
   "16:9": { left: 0.05, right: 0.05, top: 0.05, bottom: 0.05 },
   "9:16": { left: 0.05, right: 0.1, top: 0.1, bottom: 0.25 },
@@ -19,8 +5,8 @@ export const SAFE_AREA = {
 export const NEED = 4.5;
 export const NEED_LARGE = 3;
 export const LARGE_PX = 67.5;
-const CHANGED = 16; // of 255, on any channel: an encode-free render differs by nothing where the text is not
-const INK = 64; // RGB distance from the item's colour still counted as its letters (antialiasing, a shadow under them)
+const CHANGED = 16;
+const INK = 64;
 
 const lin = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
 const lum = (r, g, b) => 0.2126 * lin(r / 255) + 0.7152 * lin(g / 255) + 0.0722 * lin(b / 255);
@@ -57,7 +43,6 @@ export function measure(A, B, w, h, ink, glyphPx) {
   if (x1 < 0) return null;
   const [r, g, b] = hex(ink),
     inkL = lum(r, g, b);
-  // distance (in whole pixels, a square reach) from the nearest letter pixel, up to R
   const R = Math.max(3, Math.round(glyphPx * 0.15));
   const ax = Math.max(0, x0 - R),
     bx = Math.min(w - 1, x1 + R),
@@ -92,7 +77,6 @@ export function measure(A, B, w, h, ink, glyphPx) {
             }
           }
       }
-  // the first pixel out is the letters' own antialiasing: the ring starts past it
   const ratios = [];
   for (let y = ay; y <= by; y++)
     for (let x = ax; x <= bx; x++) {

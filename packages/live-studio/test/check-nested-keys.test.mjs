@@ -72,7 +72,6 @@ test("check.mjs warns when a keyFile contains an object array hiding nested time
     JSON.stringify(parsed.warnings),
   );
 
-  // Fixing thugs to an object map keyed by actor name clears the warning completely
   writeFileSync(
     join(dir, "src/timeline/cast.json"),
     JSON.stringify(
@@ -109,7 +108,6 @@ test("check.mjs skips placed keyFile and reports root-level nested arrays cleanl
       chair: {
         what: "block:gohans:computer_beige",
         keys: [{ t: 0, at: [0, 0, 0] }],
-        // Valid looseObject custom field containing a nested timed array; must stay skipped for placed keyFile
         extra: [{ id: "part", moves: [{ t: 1 }] }],
       },
     }),

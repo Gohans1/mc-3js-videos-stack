@@ -1,6 +1,3 @@
-// Private vault archives (ZIP64 via yazl, streaming CRC32 verification via yauzl): pack pure static assets at their
-// vault-relative paths for fast new-machine setup without hours of torrents or manual downloads. Local tool installs
-// (vault/tools/ Python venvs & AI models) and regenerable caches (vault/cache/) are always excluded and rejected.
 import { spawn } from "node:child_process";
 import {
   closeSync,
@@ -52,9 +49,7 @@ const EMPTY_SET = new Set();
 // Code-point comparison keeps "." before "_" so jar/client.jar always extracts before jar/client_assets.zip/.br
 const codePointCompare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 
-// a build's own cache (dot files) and a write cut short (*.part)
 const SKIP = /(^|\/)\.|\.part(\.\w+)?$/;
-// Store already-compressed media and jar/zip archives for packing speed
 const STORED = /\.(wav|ogg|mp3|flac|m4a|mp4|png|jpe?g|webp|zip|jar|br|woff2)$/i;
 
 // A Drive share link (.../file/d/<id>/view, ...?id=<id>) as the URL of the file itself: confirm=t skips the virus-scan
@@ -78,8 +73,6 @@ const startsAsZip = (file) => {
   return head.equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
 };
 
-// Downloads a private vault/sound zip into dir with curl, resuming a download cut short. Drive serves a private file
-// (or one past its download quota) as an HTML page: that is refused with what the human does instead
 export async function fetchVaultZip(
   link,
   dir,
@@ -92,18 +85,15 @@ export async function fetchVaultZip(
   const status = await new Promise((done, fail) =>
     spawn(
       process.platform === "win32" ? "curl.exe" : "curl",
-      ["--fail", "--location", "--continue-at", "-", "--retry", "3", "--progress-bar"].concat(
-        // a stalled transfer (under 1 KB/s for 2 minutes) stops instead of hanging; a rerun resumes it
-        [
-          "--speed-limit",
-          "1024",
-          "--speed-time",
-          "120",
-          "--output",
-          partial,
-          driveDownloadUrl(link),
-        ],
-      ),
+      ["--fail", "--location", "--continue-at", "-", "--retry", "3", "--progress-bar"].concat([
+        "--speed-limit",
+        "1024",
+        "--speed-time",
+        "120",
+        "--output",
+        partial,
+        driveDownloadUrl(link),
+      ]),
       { stdio: ["ignore", "inherit", "inherit"], windowsHide: true },
     )
       .on("error", fail)
@@ -321,9 +311,7 @@ function assertRealDirectoryChain(base, entryName) {
   }
 }
 
-// A file already there with the zip's size and CRC is kept, so a stopped restore resumes where it was
 async function restoreArchive({ zip, local, allowedDirs, allowedFiles, label, hint, log }) {
-  // Validate every path in the central directory before touching disk so a bad archive writes nothing
   await validateZipEntries({ zip, allowedDirs, allowedFiles, label, hint });
 
   const base = resolve(local);

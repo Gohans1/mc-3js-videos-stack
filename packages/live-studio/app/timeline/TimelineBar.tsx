@@ -1,6 +1,3 @@
-// The bar over the timeline, as CapCut's: the pointer's mode (select, or split where clicked), undo and redo, then the cuts at the
-// playhead (split, delete left, delete right, delete), and on the right auto snapping, the preview axis and the zoom (to the whole
-// film, out, CapCut's slider, in). Each does what its key does, so a beginner can see the tools before learning them
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
@@ -77,7 +74,6 @@ function Tool({
   );
 }
 
-// CapCut's zoom slider, left the whole film, right the closest (6 s): even steps of the slider are even ratios of zoom
 function ZoomSlider() {
   useStudio((s) => s.metaRev);
   const total = DURATION || ZOOM_MIN;
@@ -137,7 +133,6 @@ function KeyframeNavigation() {
 }
 
 export function TimelineBar() {
-  // Every edit and pick changes the store: this redraws the bar then, so undo and the picks below are read fresh
   useStudio(() => `${canUndo()}${canRedo()}${canSplit()}${canDelete()}`);
   const magnet = useStudio((s) => s.magnet),
     previewAxis = useStudio((s) => s.previewAxis),
@@ -150,9 +145,6 @@ export function TimelineBar() {
     shotPicked = useStudio((s) => s.textPicks.length > 0 || (s.timing && s.shotPick !== null));
   const mainMagnet = useStudio((s) => s.mainMagnet);
   return (
-    // Too long for a phone, the bar scrolls sideways under the finger, as CapCut's phone toolbar does, and fades at an end with
-    // more beyond it (shadcn's scroll-fade-x), rather than holding the page wider than the screen. Its padding keeps the focus
-    // rings inside what the scroll clips
     <div
       role="toolbar"
       aria-label="Timeline tools"
@@ -207,7 +199,6 @@ export function TimelineBar() {
           onClick={addFreeze}
         />
       )}
-      {/* The In to Out stretch (inout.ts), named while there is one: blue as on the ruler, and the way to clear it */}
       {inOut && (
         <Tip label="In to Out (I, O): a note written inside it is about the whole stretch, and played from inside it loops. Clear it (Alt+X)">
           <Button

@@ -1,4 +1,3 @@
-// Browser probe: call while holding one audio clip; compare rendered pixels with the original pointer grab offset.
 export function checkAudioDrag(pointerY, grabOffsetY) {
   const canvas = document.querySelector('canvas[aria-label^="Audio tracks"]');
   const rect = canvas.getBoundingClientRect();

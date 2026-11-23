@@ -93,13 +93,11 @@ test("StudioConfig & LightsTimeline schema validate light docs, keys, presets, p
   assert.deepEqual(problems(LightsTimeline, validDoc), []);
   assert.deepEqual(problems(LightsTimeline, validDoc.keys), []);
 
-  // Out-of-order timestamps fail
   const badOrder = {
     keys: [{ t: 5 }, { t: 2 }],
   };
   assert.ok(problems(LightsTimeline, badOrder).length > 0);
 
-  // Bad fog mode fails
   const badFog = {
     keys: [
       { t: 0, fog: { mode: "volumetric", color: "#ffffff", near: 1, far: 10, density: 0.01 } },
@@ -107,13 +105,11 @@ test("StudioConfig & LightsTimeline schema validate light docs, keys, presets, p
   };
   assert.ok(problems(LightsTimeline, badFog).length > 0);
 
-  // Bad hex color fails
   const badHex = {
     keys: [{ t: 0, key: { color: "not-a-color" } }],
   };
   assert.ok(problems(LightsTimeline, badHex).length > 0);
 
-  // Negative intensity fails
   const badIntensity = {
     keys: [{ t: 0, key: { intensity: -1 } }],
   };
@@ -177,7 +173,6 @@ test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, 
     assert.equal(saved.status, 200);
     assert.deepEqual(film.lights.read().data, next);
 
-    // Stale base conflicts with 409
     const conflict = await app.request("/api/lights", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -188,7 +183,6 @@ test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, 
     });
     assert.equal(conflict.status, 409);
 
-    // Invalid payload fails 400
     const bad = await app.request("/api/lights", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -199,7 +193,6 @@ test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, 
     });
     assert.equal(bad.status, 400);
 
-    // Duplicate practical ids fail 400
     const dupPracticals = await app.request("/api/lights", {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -238,7 +231,6 @@ test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, 
     });
     assert.equal(dupPracticals.status, 400);
 
-    // Array-form LightKey[] persists cleanly via KeySave validator
     const arrayPayload = [
       { t: 0, preset: "noir-night" },
       { t: 2, cut: true, preset: "golden-hour" },
@@ -251,13 +243,11 @@ test("checkFiles ignores missing lightsTimeline, catches malformed lights.json, 
     assert.equal(savedArray.status, 200);
     assert.deepEqual(film.lights.read().data, arrayPayload);
 
-    // Collaboration endpoint resolves named "lights"
     const collab = await app.request("/api/collaboration/lights");
     assert.equal(collab.status, 200);
     const collabBody = await collab.json();
     assert.deepEqual(collabBody.data, arrayPayload);
 
-    // Light activity surface is valid
     assert.equal(Activity.safeParse({ surface: "light", say: "Updated lights" }).success, true);
   } finally {
     film.stop?.();
@@ -327,13 +317,11 @@ test("mapTimeline preserves cut/non-cut lights timestamps across freezes and rip
     shown.keys.some((k) => k.id === "k-hidden"),
     false,
   );
-  // Cut-end tail (t=4, !cut) stays BEFORE freeze at 3s, while cut key (t=4, cut) starts freeze hold or post-cut
   const tailShown = shown.keys.find((k) => k.id === "k-tail");
   const cutShown = shown.keys.find((k) => k.id === "k-cut");
   assert.ok(tailShown && cutShown);
   assert.ok(tailShown.t <= cutShown.t);
 
-  // Roundtrip inverse recovers original source timestamps, hidden cut-interior keys, and tiebreaker order cleanly
   const saved = mapTimeline("lights", shown, clock, true, doc);
   assert.deepEqual(
     saved.keys.map((k) => [k.id, k.t, !!k.cut]),

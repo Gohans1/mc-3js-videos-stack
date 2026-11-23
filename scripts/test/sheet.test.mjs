@@ -1,4 +1,3 @@
-// scripts/review/sheet.py: a cut up close names the shots either side, and the rows that place it
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -55,7 +54,6 @@ test("sheet cut N says which shots meet there and the transition between them; a
   assert.equal(gone.status, 2, gone.stdout + gone.stderr);
   assert.match(gone.stderr, /no renders\/nope\.mp4 \(the videos here: renders\/draft_video\.mp4\)/);
 
-  // seconds as notes print them, the clock bun run at and render --at read
   const clock = sheet("renders/draft_video.mp4", "0:01,0:02.5");
   assert.equal(clock.status, 0, clock.stdout + clock.stderr);
   const bad = sheet("renders/draft_video.mp4", "0:75");
@@ -66,7 +64,6 @@ test("sheet cut N says which shots meet there and the transition between them; a
   );
 });
 
-// a film folder with a 3 s draft (or a chunk of one) and the cuts its render wrote
 const film = (t, cuts, video = "renders/draft_video.mp4") => {
   const dir = mkdtempSync(join(tmpdir(), "sheet-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -95,7 +92,6 @@ test("sheet shots on a chunk lays out the shots of that chunk, in film seconds",
     r.stdout,
     /3 shots between the render's cuts: a frame from the middle of each, in order/,
   );
-  // a render's cuts count camera keys with cut: true too, so these are no shots.json rows to number
   assert.doesNotMatch(r.stdout, /shot \d+ first/);
   assert.match(r.stdout, /60\.5s, 61\.5s, 62\.5s/);
 });
@@ -205,7 +201,6 @@ test("a span named past what --start takes is a wrong word, not a crash", (t) =>
 });
 
 test("sheet shots counts the shots it lays out", (t) => {
-  // a 0.03 s shot between cuts at 1 and 1.03 is too short to show
   const sheet = film(t, [1, 1.03]);
   const r = sheet("renders/draft_video.mp4", "shots");
   assert.equal(r.status, 0, r.stdout + r.stderr);
@@ -221,7 +216,6 @@ test("a start between two thousandths still holds the frames cut lays out next t
     timeout: 60000,
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  // 0.25 and 0.15 s before the cut both fall before the video: its first frame, once
   assert.match(r.stdout, /10\.0144s, 10\.05s, 10\.15s, 10\.25s, 10\.45s/);
 });
 

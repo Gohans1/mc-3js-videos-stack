@@ -43,7 +43,6 @@ export const createMainItems = (timing, sourceDuration, cuts) => {
   return placed.sort((a, b) => a.at - b.at).map(({ item }) => item);
 };
 
-// OTIO ordered Clip/Gap ranges; Filmcraft moves placements without rewriting source motion.
 export const moveMainItem = (items, id, beforeId = null) => {
   const item = items.find((item) => item.id === id);
   if (!item) throw new Error("Main-track clip not found");

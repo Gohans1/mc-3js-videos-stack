@@ -1,7 +1,3 @@
-// What the AI is doing, as the studio's server hears it (src/activity.mjs): the latest lines, and what each one lights for a
-// moment, the way a collaborator's cursor shows where they are: the notes it reads or answers, the lesson files it reads or
-// writes, the seconds of the film it looks at or renders. Shown only: nothing here moves the playhead, scrolls a list, opens
-// a panel or takes the focus, so the creator watching or writing a note is never pulled away. Settings turns it off
 import { createStore, useStore } from "zustand";
 
 import { activityToast, toast } from "@/components/ui/toast";
@@ -15,13 +11,11 @@ import { anyKeyLit, LIT_MS, mergeLitKeys, pruneLitMap } from "./lit";
 
 export { anyKeyLit, LIT_MS };
 export const activityNotice = () => (PHONE || !studio().aiActivity ? toast : activityToast);
-export const IDLE_MS = 90e3; // and the AI shows as idle after this long without a word
-const JOB_MS = 3600e3; // a render the studio never said ended stops showing busy after render's own hour
-const KEEP = 40; // lines listed, as the server keeps
+export const IDLE_MS = 90e3;
+const JOB_MS = 3600e3;
+const KEEP = 40;
 
-export type Seen = ActivityEntry & { seen: number }; // seen: when this page heard it, by this device's clock
-// job: a running command's own seconds, lit until it ends; from: the command whose line lit it, so its next run clears
-// what the last one found
+export type Seen = ActivityEntry & { seen: number };
 type Span = {
   a: number;
   b: number;
@@ -32,10 +26,10 @@ type Span = {
   level?: ActivityEntry["level"];
 };
 interface ActivityState {
-  items: Seen[]; // oldest first
-  lit: Record<string, number>; // "note:<id>", "lesson:<path>", "tab:notes", "tab:lessons": until when
-  spans: Span[]; // heard seconds lit on the ruler; a running render's until it ends
-  jobs: Record<string, number>; // long commands running (render), since when
+  items: Seen[];
+  lit: Record<string, number>;
+  spans: Span[];
+  jobs: Record<string, number>;
 }
 export const activity = createStore<ActivityState>(() => ({
   items: [],
@@ -49,11 +43,9 @@ export const useActivity = <T>(pick: (s: ActivityState) => T) => useStore(activi
 export const useLit = (key: string) => useActivity((s) => key in s.lit);
 export const useLitAny = (keys: readonly string[]) => useActivity((s) => anyKeyLit(s.lit, keys, 0));
 
-// Whether the AI is at work now: a word lately, or a render still running
 export const busy = (s: ActivityState, now: number) =>
   Object.keys(s.jobs).length > 0 || now - (s.items.at(-1)?.seen ?? -Infinity) < IDLE_MS;
 
-// What has gone dark by now goes, and the next to go is waited for
 let pruneTimer = 0;
 const prune = () => {
   const now = Date.now(),
@@ -115,7 +107,7 @@ const hear = (a: ActivityEntry) => {
   const now = Date.now(),
     job = a.job;
   const s = get();
-  if (a.id <= (s.items.at(-1)?.id ?? 0)) return; // listed already by loadActivity, read as this line was on its way
+  if (a.id <= (s.items.at(-1)?.id ?? 0)) return;
   set({
     items: [...s.items, { ...a, seen: now }].slice(-KEEP),
     jobs: !job
@@ -123,8 +115,6 @@ const hear = (a: ActivityEntry) => {
       : job.end
         ? Object.fromEntries(Object.entries(s.jobs).filter(([k]) => k !== job.key))
         : { ...s.jobs, [job.key]: now },
-    // a render's seconds stay lit while it runs, and fade like the rest once it ends; a command run again clears what its
-    // last run found
     spans: !job
       ? s.spans
       : job.end
@@ -142,7 +132,7 @@ const hear = (a: ActivityEntry) => {
     ]);
     const running = job && !job.end ? job.key : undefined,
       level = a.level,
-      found = level === "warn" || level === "fail", // stays lit while the AI is at work on it
+      found = level === "warn" || level === "fail",
       lit: Span[] = (a.marks ?? []).map((m) => ({
         a: m.at,
         b: m.to ?? m.at,
@@ -168,7 +158,6 @@ const hear = (a: ActivityEntry) => {
   prune();
 };
 
-// The stretches of the film the AI is at, for the ruler (timeline/timeline.ts marks.ai)
 export const aiSpans = () => (studio().aiActivity ? get().spans : []);
 
 export const onActivitySpans = (draw: () => void) => {
@@ -183,9 +172,6 @@ export const onActivitySpans = (draw: () => void) => {
   });
 };
 
-// The lines from before this page opened, or from while its line was down: listed, nothing lit for them but a render still
-// running, which shows busy and its seconds as if heard live. The studio's list of running jobs is the truth: one that ended
-// meanwhile, or died with its studio, goes
 let boot = 0;
 export const loadActivity = async () => {
   let got: Told;
@@ -199,7 +185,7 @@ export const loadActivity = async () => {
   } catch {
     return;
   }
-  const skew = Date.now() - got.now, // the studio's clock to this device's
+  const skew = Date.now() - got.now,
     seen = (a: ActivityEntry): Seen => ({ ...a, seen: a.when + skew }),
     same = got.boot === boot,
     mine = get().items,
@@ -223,7 +209,10 @@ export const loadActivity = async () => {
       ? [...mine, ...got.lines.filter((a) => a.id > last).map(seen)].slice(-KEEP)
       : got.lines.map(seen),
     jobs,
-    spans: spans.length === previous.length && spans.every((span, i) => span === previous[i]) ? previous : spans,
+    spans:
+      spans.length === previous.length && spans.every((span, i) => span === previous[i])
+        ? previous
+        : spans,
   });
   prune();
 };

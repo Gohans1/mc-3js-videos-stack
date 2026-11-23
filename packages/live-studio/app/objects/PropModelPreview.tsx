@@ -86,7 +86,6 @@ export default function PropModelPreview({ url }: { url: string }) {
       if (!response.ok) throw new Error("Model unavailable");
       const bytes = await response.arrayBuffer();
       if (abort.signal.aborted) return;
-      // Local previews are self-contained. A dropped file must not issue requests for model dependencies.
       const manager = new LoadingManager().setURLModifier((uri) =>
         uri.startsWith("blob:") || uri.startsWith("data:") ? uri : "data:,",
       );

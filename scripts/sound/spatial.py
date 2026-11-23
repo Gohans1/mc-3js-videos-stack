@@ -533,7 +533,6 @@ def apply_spatial_audio(
         flt_l = flt_l * gains
         flt_r = flt_r * gains
 
-        # Exact Web Audio StereoPannerNode stereo-to-stereo equal-power panning law.
         left_mask = pans <= 0.0
         x = np.where(left_mask, pans + 1.0, pans)
         ang = x * (math.pi * 0.5)

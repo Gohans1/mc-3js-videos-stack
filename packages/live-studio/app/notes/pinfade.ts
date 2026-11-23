@@ -1,8 +1,5 @@
-// How long a passed note stays on the picture, in the creator's seconds: 2x speed doesn't make it shorter to read
 export const NOTE_FADE = 3;
 
-// Opacity of a note's pin and words at film second t: full on its frame (0.05 s early counts, a seek lands near it), then
-// fading to nothing over NOTE_FADE seconds of watching. Paused, it holds
 export const pinFade = (at: number, t: number, rate = 1) => {
   const d = t - at,
     span = NOTE_FADE * rate;
@@ -149,7 +146,6 @@ const findFreeDot = (
   return [clamp(baseX, minX, maxX), clamp(baseY, minY, maxY)];
 };
 
-// Separates overlapping pin dots and label pills within the stage box so simultaneous notes remain individually visible.
 export const resolvePinLayout = (
   items: ReadonlyArray<PinLayoutInput>,
   boxWidth: number,
@@ -167,7 +163,6 @@ export const resolvePinLayout = (
   const placedLabels: { left: number; top: number; right: number; bottom: number }[] = [];
   const pad = 4;
 
-  // Pass 1: resolve non-overlapping pin dot centers so pass 2 can also avoid landing labels on neighboring pin dots.
   const dots = items.map((item) => {
     const px = Number.isFinite(item.x) ? clamp(item.x, 0.02, 0.98) : 0.04;
     const py = Number.isFinite(item.y) ? clamp(item.y, 0.03, 0.97) : 0.06;
@@ -206,7 +201,6 @@ export const resolvePinLayout = (
     };
   });
 
-  // Pass 2: stack labels vertically without overlapping prior labels or any pin dot ring.
   return dots.map(({ py, dotR, lw, lh, dotDx, dotDy, renderedCx, renderedCy }, idx) => {
     if (lw <= 0 || lh <= 0) {
       return { dotDx, dotDy, labelX: 0, labelY: 0, up: py > 0.88 };

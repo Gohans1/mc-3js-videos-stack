@@ -21,7 +21,6 @@ describe("note-action-motion signal registry", () => {
     assert.equal(firstPeek?.kind, "approve");
     assert.equal(secondPeek?.at, firstPeek?.at);
 
-    // Interrupting delete with restore updates signal kind cleanly
     signalNoteAction("1", "delete");
     assert.equal(peekNoteAction("1")?.kind, "delete");
     signalNoteAction("1", "restore");

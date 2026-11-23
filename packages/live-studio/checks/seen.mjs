@@ -1,15 +1,9 @@
-// Whether the audience can see one thing, frame by frame, from what render/seen.ts measures on the film's own camera:
-//   { t, share: part of the frame it covers, hidden: part of it behind something, by: { label: part of it hidden by that },
-//     cut: part of it outside the frame, luma: its mean brightness (0-1, as encoded), frameLuma: the whole frame's }
-// summarize(name, frames) gives the lines to print and the worst frame of every fault, to be shown.
+export const HIDDEN = 0.5;
+export const CUT = 0.25;
+export const DARK = 0.05;
+export const BLUR = 2;
+export const LONG = 0.2;
 
-export const HIDDEN = 0.5; // half of it behind something
-export const CUT = 0.25; // a quarter of it outside the frame
-export const DARK = 0.05; // mean brightness under this: a silhouette at best
-export const BLUR = 2; // px circle of confusion before an aimed subject reads out of focus
-export const LONG = 0.2; // s: shorter faults go by unseen (a prop swinging past)
-
-// runs of frames where test holds, at least LONG long
 export function stretches(frames, test, long = LONG) {
   const dt = frames.length > 1 ? frames[1].t - frames[0].t : 0,
     out = [];

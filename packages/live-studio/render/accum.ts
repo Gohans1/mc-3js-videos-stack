@@ -1,8 +1,5 @@
-// A clip frame's sub-frames (motion blur) averaged as light, in 32-bit float on the GPU. Blending them on a 2D canvas kept 8
-// bits after every sample (a 1/16 share rounds away) and averaged sRGB codes, which darkens anything bright that moves.
 const VERT = `#version 300 es
 void main() { gl_Position = vec4(gl_VertexID == 1 ? 3. : -1., gl_VertexID == 2 ? 3. : -1., 0., 1.); }`;
-// the picture's sRGB codes to linear light; alpha counts the samples
 const ADD = `#version 300 es
 precision highp float;
 uniform sampler2D sum, pic;
@@ -13,7 +10,6 @@ void main() {
   vec3 c = texelFetch(pic, p, 0).rgb;
   o = texelFetch(sum, p, 0) + vec4(dec(c.r), dec(c.g), dec(c.b), 1.);
 }`;
-// back to sRGB with under half a code of noise, so a soft blur between two 8-bit steps does not band
 const RESOLVE = `#version 300 es
 precision highp float;
 uniform sampler2D sum;
@@ -26,11 +22,6 @@ void main() {
   o = vec4(vec3(enc(c.r), enc(c.g), enc(c.b)) + n * .98 / 255., 1.);
 }`;
 
-/**
- * With `gl` (the film's own context, draw.tools.renderer) each add() takes what was just drawn on its canvas and resolve()
- * draws the average back there, all on the GPU; `after` hands the context back (three's renderer.resetState). Without
- * it, a context of its own copies each picture in, a readback per sample: many times slower at 1440p.
- */
 export const makeAccumulator = (
   w: number,
   h: number,
@@ -90,7 +81,6 @@ export const makeAccumulator = (
   const sums = [target(gl.RGBA32F), target(gl.RGBA32F)];
   let cur = 0;
   after();
-  // the state these passes need, whatever the film left set
   const ready = (p: WebGLProgram, textures: [string, WebGLTexture][]) => {
     for (const cap of [gl.BLEND, gl.DEPTH_TEST, gl.STENCIL_TEST, gl.SCISSOR_TEST, gl.CULL_FACE])
       gl.disable(cap);

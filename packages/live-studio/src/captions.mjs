@@ -1,10 +1,5 @@
-// SubRip captions of the voice, cut the way Netflix's English timed-text style guide asks: at most 42 characters a line and two
-// lines a caption, each on screen 5/6 s to 7 s and two frames clear of the next, a sentence's end closing its caption. Each
-// caption keeps its words' own times (whisperX, voice_map.json) through heard(), the voice edit's map to the seconds heard
 const SENTENCE_END = /[.!?…]["')\]]*$/;
 
-// The guide's line breaks: after punctuation, before a preposition or a conjunction, and never between an article, a
-// preposition, a conjunction or a possessive and what it leads. Weighed in characters of unevenness between the two lines
 const AFTER_PUNCTUATION = /[,;:.!?…]["')\]]*$/;
 const JOINS = [
   "of",
@@ -40,7 +35,6 @@ const BEFORE = new Set(JOINS),
     "that",
   ]);
 
-// The words as one or two lines, split where the two come out nearest in length (the lower one the longer on a tie)
 const layout = (words, chars) => {
   const one = words.join(" ");
   if (one.length <= chars || words.length < 2) return one;

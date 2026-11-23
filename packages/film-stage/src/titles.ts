@@ -1,8 +1,4 @@
 // @ts-nocheck
-// Words and shapes over the picture, CapCut's Text and Shapes upgraded with Cinetic's rotating typography & annotation voices:
-// a title (a place, a year, a chapter) or an annotation shape (arrow, circle, box, bracket, underline), each on screen from
-// `from` to `to`, placed by its anchor in the frame or a 3D world point `at`, with customizable In/Out voices (len, ease,
-// stagger, tint) and open support for custom film voices.
 import "@fontsource-variable/inter";
 import "@fontsource-variable/source-serif-4";
 import "@fontsource/ibm-plex-mono/400.css";
@@ -32,6 +28,7 @@ import {
   SHAPE_OUT,
   TEXT_CATEGORIES,
   TEXT_IN,
+  TEXT_ITEM_KEYS,
   TEXT_OUT,
   TITLE_EASES,
 } from "./titles-catalog";
@@ -39,7 +36,6 @@ import { mixColor } from "./titles-color";
 import { lookOf, popCurve } from "./titles-look";
 import { clamp01, counted, cubicOut, graphemes, hashInt, phaseOf, scrambled } from "./titles-text";
 
-// The catalogue and the pure parts live in titles-*.ts (typed); this file draws them on a canvas over the picture
 export * from "./titles-catalog";
 export { mixColor } from "./titles-color";
 export { lookOf, type Look } from "./titles-look";
@@ -180,7 +176,6 @@ const ensureLetters = (g, m) => {
 
 const unit01 = (seed, idx, salt) => (hashInt(seed | 0, idx + 1, salt) % 1024) / 1023;
 
-// Per word or letter look for the staggered voices: offsets in em, rotation in degrees
 const unitLook = (lk, u, wp, seed, baseInk) => {
   const look = { ox: 0, oy: 0, rot: 0, sc: 1, alpha: 1, fill: null };
   const mode = lk.wordMode;
@@ -306,7 +301,6 @@ const drawText = (g, it, m, lk) => {
       const lineW = ws[0]?.lineW ?? 0;
       let shift = 0;
       if (lk.wordMode === "wordBuild" && align !== "left") {
-        // Cinetic word-build: the line re-centres on what has arrived so far, snapping as each word lands
         let shown = 0,
           prevEnd = 0;
         for (const u of ws) {
@@ -392,7 +386,6 @@ const drawText = (g, it, m, lk) => {
       });
       g.textAlign = align;
     } else if (hopFont) {
-      // A hopped face is squeezed to the line's own width so the layout never moves
       const own = g.measureText(s).width;
       g.font = fontCss({ ...it, font: hopFont }, px);
       const hopped = Math.max(1, g.measureText(s).width);
@@ -414,6 +407,29 @@ const fontHopped = (it, hop) => {
   );
   const next = FONTS[(own + hop) % FONTS.length];
   return next.id === FONTS[own].id ? null : next.id;
+};
+
+const drawBoxPerimeter = (g, m, lk) => {
+  const x0 = m.x0,
+    y0 = m.y0,
+    x1 = x0 + m.w,
+    y1 = y0 + m.h;
+  const segs = [
+    [x0, y0, x1, y0, m.w],
+    [x1, y0, x1, y1, m.h],
+    [x1, y1, x0, y1, m.w],
+    [x0, y1, x0, y0, m.h],
+  ];
+  let rem = (m.w * 2 + m.h * 2) * lk.show;
+  g.beginPath();
+  for (const [ax, ay, bx, by, len] of segs) {
+    if (rem <= 0) break;
+    const f = Math.min(1, rem / Math.max(1e-4, len));
+    g.moveTo(ax, ay);
+    g.lineTo(ax + (bx - ax) * f, ay + (by - ay) * f);
+    rem -= len;
+  }
+  g.stroke();
 };
 
 const drawShape = (g, it, m, lk, extra) => {
@@ -497,27 +513,7 @@ const drawShape = (g, it, m, lk, extra) => {
       g.stroke();
     }
   } else {
-    // Built-in "box" and clean perimeter fallback for any unregistered custom shape kind
-    const x0 = m.x0,
-      y0 = m.y0,
-      x1 = x0 + m.w,
-      y1 = y0 + m.h;
-    const segs = [
-      [x0, y0, x1, y0, m.w],
-      [x1, y0, x1, y1, m.h],
-      [x1, y1, x0, y1, m.w],
-      [x0, y1, x0, y0, m.h],
-    ];
-    let rem = (m.w * 2 + m.h * 2) * lk.show;
-    g.beginPath();
-    for (const [ax, ay, bx, by, len] of segs) {
-      if (rem <= 0) break;
-      const f = Math.min(1, rem / Math.max(1e-4, len));
-      g.moveTo(ax, ay);
-      g.lineTo(ax + (bx - ax) * f, ay + (by - ay) * f);
-      rem -= len;
-    }
-    g.stroke();
+    drawBoxPerimeter(g, m, lk);
   }
   g.shadowColor = "transparent";
 };
@@ -534,9 +530,6 @@ const onScreen = (g, list, t, W, H, camera, tracks, timeAt, cache, extra) => {
 };
 
 const KNOWN_SLOT_KEYS = new Set(["fx", "len", "ease", "stagger", "tint", "hold"]);
-import { TEXT_ITEM_KEYS } from "./titles-catalog";
-
-export { TEXT_ITEM_KEYS };
 const KNOWN_ITEM_KEYS = new Set(TEXT_ITEM_KEYS);
 
 const extraFieldsKey = (obj, known) => {
@@ -627,7 +620,6 @@ export function makeTitles(renderer, W, H, extra) {
         if (lk.alpha <= 0.001) continue;
         const unit = m.px ?? m.h;
         const dyPx = lk.clip?.kind === "line" ? 0 : lk.dy * unit;
-        // Echo stamps: older positions trail behind the jump, fading with age; k = 0 is the live copy
         for (let k = lk.echo; k >= 0; k--) {
           const age = k ? 0.6 * (1 - (k - 1) / lk.echo) * lk.echoFade : 1;
           if (age <= 0.001) continue;
@@ -697,7 +689,12 @@ export function makeTitles(renderer, W, H, extra) {
         const xs = corners.map((p) => p[0]),
           ys = corners.map((p) => p[1]);
         return [
-          { i, corners, anchor: [(m.cx + tx) / W, (m.cy + ty) / H], box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] },
+          {
+            i,
+            corners,
+            anchor: [(m.cx + tx) / W, (m.cy + ty) / H],
+            box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
+          },
         ];
       },
     );

@@ -1,4 +1,3 @@
-// note.mjs done: the AI files what it fixed, through the studio when it is running so the two never write notes.jsonl at once
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
@@ -111,7 +110,7 @@ test("a line with an id but not a whole note is no note to answer", () => {
 
 test("a studio too busy to answer in time is no stopped one: nothing goes into the file behind its back", async () => {
   const dir = film([note("a", "x")]);
-  const server = createServer(() => {}); // takes the request, never answers: a studio deep in a build
+  const server = createServer(() => {});
   await new Promise((r) => server.listen(0, "127.0.0.1", r));
   writeFileSync(
     join(dir, "renders/live/studio.json"),
@@ -167,7 +166,6 @@ test("a studio that has stopped since is passed over for the file", async () => 
   assert.equal(readNotes(dir)[0].state, "check");
 });
 
-// bun run note itself, as the AI reads it
 const NOTES = join(import.meta.dirname, "../notes.mjs");
 const list = (dir, ...args) => spawnSync("bun", [NOTES, ...args], { cwd: dir, encoding: "utf8" });
 
@@ -373,13 +371,11 @@ test("done enforces --after <image> or --no-after <reason>, stores custom cam/t,
   ]);
   const pic = writePng(dir, "moved.png");
 
-  // Neither --after nor --no-after -> exit 2 with actionable guidance mentioning custom camera framing
   const missing = answer(dir, "done", "1", "moved bench right");
   assert.equal(missing.status, 2);
   assert.match(missing.stderr, /--after.*--no-after/);
   assert.match(missing.stderr, /--inspect .*--cam/);
 
-  // Both --after and --no-after -> exit 2
   const both = answer(
     dir,
     "done",
@@ -393,7 +389,6 @@ test("done enforces --after <image> or --no-after <reason>, stores custom cam/t,
   assert.equal(both.status, 2);
   assert.match(both.stderr, /not both/);
 
-  // Invalid / missing file or blank --no-after -> exit 2
   const badFile = answer(dir, "done", "1", "moved bench right", "--after", "missing.png");
   assert.equal(badFile.status, 2);
   assert.match(badFile.stderr, /not found/);
@@ -410,7 +405,6 @@ test("done enforces --after <image> or --no-after <reason>, stores custom cam/t,
   );
   assert.equal(answer(dir, "ask", "1", "hold longer?", "--no-after", "unused").status, 2);
 
-  // Valid --after + custom --cam & --t succeeds without --no-after
   const okAfter = answer(
     dir,
     "done",
@@ -433,7 +427,6 @@ test("done enforces --after <image> or --no-after <reason>, stores custom cam/t,
   assert.match(detailA.stdout, /after picture: .*a_fix0\.png/);
   assert.match(detailA.stdout, /after view: at 12\.5s p=\[2\.5, 3, 8\] l=\[0\.5, 1, 0\] fov=45/);
 
-  // Valid --no-after succeeds cleanly
   const okReason = answer(
     dir,
     "done",
@@ -485,7 +478,6 @@ test("done and ask report newly created notes since reading that note, sorted cl
     done: false,
   });
 
-  // 1. No new notes between notes show and done -> silent (no extra section)
   const silentDir = film([mkNote("a", 10, "base note", "2026-11-01T10:00:00Z")]);
   const readSilent = list(silentDir, "a");
   assert.equal(readSilent.status, 0, readSilent.stderr);
@@ -493,7 +485,6 @@ test("done and ask report newly created notes since reading that note, sorted cl
   assert.equal(doneSilent.status, 0, doneSilent.stderr);
   assert.equal(doneSilent.stdout.includes("new note"), false);
 
-  // 2. Creator adds notes at t=45, t=10.5, and t=9.8 while AI works on note a (t=10) and note b (t=30)
   const dir = film([
     mkNote("a", 10, "fix hero glow", "2026-11-01T10:00:00Z"),
     mkNote("b", 30, "tune pan speed", "2026-11-01T10:01:00Z"),
@@ -523,7 +514,6 @@ test("done and ask report newly created notes since reading that note, sorted cl
   const idx45 = doneA.stdout.indexOf("far45");
   assert.ok(idx98 > 0 && idx98 < idx105 && idx105 < idx45, doneA.stdout);
 
-  // b kept its own baseline: marking ask on b sorts closest to t=30 first (far45 at 15s, near105 at 19.5s, near98 at 20.2s)
   const askB = answer(dir, "ask", "b", "should pan hold longer?");
   assert.equal(askB.status, 0, askB.stderr);
   assert.match(askB.stdout, /new notes added while you worked on #2/);
@@ -532,7 +522,6 @@ test("done and ask report newly created notes since reading that note, sorted cl
   const bIdx98 = askB.stdout.indexOf("near98");
   assert.ok(bIdx45 > 0 && bIdx45 < bIdx105 && bIdx105 < bIdx98, askB.stdout);
 
-  // Consuming via ask advances b's baseline instead of clearing it back to older lastList, so a second ask stays silent
   const repeatAskB = answer(dir, "ask", "b", "follow-up check?");
   assert.equal(repeatAskB.status, 0, repeatAskB.stderr);
   assert.equal(repeatAskB.stdout.includes("new note"), false, repeatAskB.stdout);
@@ -570,7 +559,6 @@ test("done --cam accepts 135mm prime fov (8.6) and +/-pi roll while rejecting ou
   );
 });
 
-// their last line stays a next: line, the one an AI acts on
 test("render, check and at end on the creator's open notes, and how many came since the AI last listed them", () => {
   const dir = film([note("a", "x"), note("b", "y", { state: "check", done: true })]);
   assert.equal(

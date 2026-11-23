@@ -216,7 +216,6 @@ export function VirtualList<T>({
   );
 }
 
-/** Virtualizes HTML `<TableBody>` rows using spacer heights while keeping the focused row mounted. */
 export function useVirtualTable<T>({
   items,
   getKey,

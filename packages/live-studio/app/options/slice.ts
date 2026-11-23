@@ -1,4 +1,3 @@
-// The alternatives' part of the page state (core/store.ts): each group of versions (A, B, C…) and the chips on the picture
 export interface OptionView {
   id: string;
   title: string;
@@ -24,6 +23,6 @@ export interface OptionsSlice {
   groups: GroupView[];
   groupName: string | null;
   chips: ChipView[];
-  tryOn: boolean; // chips show near a prop or sound with several versions (core/prefs.ts)
+  tryOn: boolean;
 }
 export const optionsSlice: Omit<OptionsSlice, "tryOn"> = { groups: [], groupName: null, chips: [] };

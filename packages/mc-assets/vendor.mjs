@@ -1,6 +1,3 @@
-// A film's postinstall (bun ../../packages/mc-assets/vendor.mjs, run in the film folder): block-model-renderer finds its
-// wasm next to the page bundle and its block entity pack at configure({ assetsUrl: "vendor/bmr_assets.zip" }), and a
-// bundled build loses the module URL both would otherwise resolve from, so both are copied into the film's assets/public.
 import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 

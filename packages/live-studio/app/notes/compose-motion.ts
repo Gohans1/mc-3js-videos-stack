@@ -1,4 +1,3 @@
-// Pure origin-aware WAAPI calculations and exit snapshot registry for Compose.
 import type { Compose, RefPic, StageAnchor } from "./slice";
 
 export interface ComposeOrigin {
@@ -68,7 +67,6 @@ export function shouldAnimateEnter({
   origin: ComposeOrigin | undefined;
   reduced: boolean;
 }): false | "reduced" | "spring" {
-  // Keyboard-initiated opens (e.g. M) and draft restores stay instant (/emil-design-eng).
   if (!origin) return false;
   return reduced ? "reduced" : "spring";
 }
@@ -140,7 +138,6 @@ export function computeOriginVector({
 
 export const DOCK_CRAMPED_HEIGHT = 430;
 
-/** Floats docked non-inline compose over NoteList chrome when the host panel is too short to show both filters and an editor. */
 export function isDockedSheetCramped({
   dock,
   inline,
@@ -181,7 +178,6 @@ export interface StageComposerPlacement {
   originY: number;
 }
 
-/** Places a desktop Stage composer right beside its pin/stroke anchor while clamping strictly inside the player bounds. */
 export function computeStageComposerPos({
   anchor,
   stageRect,
@@ -246,7 +242,6 @@ export function computeStageComposerPos({
   return { left: Math.round(left), top: Math.round(top), originX, originY };
 }
 
-/** Coordinates synchronous mobile keyboard focus across mounted Compose surfaces and defers only explicit focus requests until mount without leaking to focus=false opens. */
 export function createNoteFocusRegistry() {
   const targets = new Set<NoteFocusTarget>();
   let pending = false;

@@ -1,4 +1,3 @@
-// The "?" next to an option that isn't clear from its name: a tap or a click opens the explanation, so it works on a phone too
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 

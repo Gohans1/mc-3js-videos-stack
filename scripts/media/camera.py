@@ -59,7 +59,6 @@ def measure(source, start, end):
     rows = [{"frame": first, "t": round(first / fps, 4), "dx": 0.0, "dy": 0.0, "zoom": 1.0, "turn": 0.0, "inliers": 1.0}]
     for i in range(1, len(frames)):
         row = {"frame": first + i, "t": round((first + i) / fps, 4)}
-        # a float window per frame, not the whole video as floats (~0.6 GB for a minute of 9:16)
         moving = np.stack(frames[max(0, i - STILL_FRAMES):i + STILL_FRAMES]).astype(np.float32).std(axis=0) >= STILL_GREY
         if moving.mean() < 0.02:
             rows.append({**row, "dx": 0.0, "dy": 0.0, "zoom": 1.0, "turn": 0.0, "inliers": 1.0})
@@ -94,7 +93,6 @@ def speed(row):
 
 
 def whips_of(rows, fps):
-    # a lost frame is as fast as a whip only beside a fast one: smeared mid-whip, not a plain wall
     fast = [not r.get("lost") and speed(r) >= WHIP for r in rows]
     fast = [f or (rows[k].get("lost") and ((k > 0 and fast[k - 1]) or (k + 1 < len(rows) and fast[k + 1]))) for k, f in enumerate(fast)]
     spans, i = [], 0

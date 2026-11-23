@@ -1,12 +1,5 @@
 // @ts-nocheck
 import { clampFov } from "film-kit/lens";
-// Shot animations, CapCut's In / Out / Combo for a 3D camera, extended with the full Cinetic camera & optical vocabulary.
-// A shot row's `anim` {in?, out?, combo?}, each {fx, len?, k?, curve?, flip?, optics?}, moves the camera the keys give (or
-// darkens/grades the frame) without touching the keys, so None takes it off again and its length stays a number to change. In
-// plays over the shot's first `len` seconds and lands on the keyed camera, Out leaves it over the last `len`, Combo runs the
-// whole shot; all three can be on one shot. curve warps how far through it is over time, flip mirrors the move across the
-// camera's right axis, optics scales only the lens state it writes (0 keeps the picture sharp); absent keeps the tuned effect.
-// Returns how black the frame should be (0..1) and writes optical post-processing state onto `c.optics`.
 import { shake, type ShakeOpts } from "film-kit/shake";
 import * as THREE from "three";
 
@@ -21,7 +14,6 @@ const fwd = new THREE.Vector3(),
   right = new THREE.Vector3(),
   up = new THREE.Vector3(),
   v = new THREE.Vector3();
-// The camera's own axes; returns how far it stands from what it looks at
 const frame = (c) => {
   fwd.copy(c.l).sub(c.p);
   const dist = Math.max(0.1, fwd.length());
@@ -38,7 +30,6 @@ const logZoom = (c, a) => {
   c.fov = lens(c.fov * Math.exp(-a));
 };
 
-// Cubic Bezier evaluator matching Cinetic's `bz(x1, y1, x2, y2)`.
 const bz = (x1, y1, x2, y2) => (t) => {
   if (t <= 0) return 0;
   if (t >= 1) return 1;
@@ -95,7 +86,6 @@ const launchCurve = (u) => {
 const swingDriftCurve = (u) =>
   u <= 0.8 ? 0.94 * E_SNAP_OUT(u / 0.8) : 0.94 + 0.06 * ((u - 0.8) / 0.2);
 
-// Helpers for Cinetic 3D moves
 const dolly = (c, a) => {
   const d = frame(c);
   c.p.addScaledVector(fwd, a * d);
@@ -120,7 +110,6 @@ const orbit2D = (c, yawDeg, pitchDeg) => {
   c.p.copy(c.l).add(v);
 };
 
-// Original base moves at amount a: 1 is its full size at strength 1, the sign its way (+ right, up, forward, tighter)
 const MOVES = {
   push: (c, a) => {
     const d = frame(c);
@@ -164,7 +153,6 @@ const MOVES = {
   roll: (c, a) => {
     c.roll += 0.14 * a;
   },
-  // forward by s of the distance, the lens widened so what it looks at keeps its size on screen: d·tan(fov/2) stays the same
   vertigo: (c, a) => {
     const d = frame(c),
       s = THREE.MathUtils.clamp(0.35 * a, -1, 0.8);
@@ -173,9 +161,6 @@ const MOVES = {
   },
 };
 
-// Specialized Cinetic coordinate & optical evaluators keyed by `fx.id` (`u` in 0..1 across the effect window; when `curved` is
-// true, `u` has already been shaped by the studio's chosen motion curve, so single-ramp presets use `u` directly instead of
-// compounding their Auto curve on top, while `raw` stays unwarped so black veils never bounce backwards).
 const slotRamp = (u, slot, curved, inFn, outFn, comboFn = outFn) => {
   const e = curved ? u : slot === "in" ? inFn(u) : slot === "out" ? outFn(u) : comboFn(u);
   return slot === "in" ? e - 1 : e;
@@ -611,7 +596,6 @@ const CINETIC = {
   },
 };
 
-// Two or three sines at unrelated rates, so a shake never repeats visibly; the same t always gives the same offset
 const wander = (t, f, ph) =>
   Math.sin(t * f + ph) * 0.6 +
   Math.sin(t * f * 2.17 + ph * 1.7 + 1.3) * 0.3 +
@@ -638,18 +622,14 @@ const LOOPS = {
     c.fov = lens(c.fov * (1 - 0.03 * k * (0.5 - 0.5 * Math.cos(t * 0.8))));
   },
 };
-// A jolt of size e (0 to 1): the impact shake, sideways, up and a little roll
 const jolt = (c, t, e) => {
   nudge(c, t, 31, 0.035 * e, 1);
   c.roll += 0.02 * e * Math.sin(t * 43.7 + 0.3);
 };
 
-const smooth = (x) => x * x * (3 - 2 * x) * 0.6 + x * 0.4; // film-stage EASES.smooth: a Combo never stops dead at either end
+const smooth = (x) => x * x * (3 - 2 * x) * 0.6 + x * 0.4;
 const smoothstep = (x) => x * x * (3 - 2 * x);
 
-// The curve picker's four time warps: [0..1] in, [0..1] out. Linear, smooth and snap are monotonic; bounce rebounds in [0..1],
-// so a black veil keeps its own unwarped ramp (see CINETIC and the In/Out below) and never flickers. On an Out slot, snap and
-// bounce accelerate from rest into the cut instead of jerking mid-shot and braking before the cut.
 const bounceOut = (x) => {
   const n = 7.5625,
     d = 2.75;
@@ -676,8 +656,6 @@ const warp = (curve, u, slot) => {
   return u;
 };
 
-// Mirror a move across the camera's own right axis, keeping what the effect did forward, to the lens and to the frame's black
-// veil. Effects are built from a base camera each frame, so the mirror runs on the delta from that base.
 const baseP = new THREE.Vector3(),
   baseL = new THREE.Vector3(),
   baseR = new THREE.Vector3(),
@@ -708,8 +686,6 @@ const mirror = (c, base) => {
   c.roll = base.roll - (c.roll - base.roll);
 };
 
-// Optics slider: blend the optical state an effect wrote (blur, exposure, fringe, bulge, sweep) away from the state before it,
-// leaving the camera move and sweepPos alone. 1 is the tuned effect, 0 keeps the picture sharp.
 const cleanZero = (x) => (Math.abs(x) < 1e-12 ? 0 : x);
 const opticsBefore = { blur: 0, exposure: 0, fringe: 0, bulge: 0, sweep: 0, smearX: 0, smearY: 0 };
 const rememberOptics = (c) => {
@@ -732,7 +708,6 @@ const scaleOptics = (c, amount) => {
   o.smearX = cleanZero(opticsBefore.smearX + (o.smearX - opticsBefore.smearX) * s);
   o.smearY = cleanZero(opticsBefore.smearY + (o.smearY - opticsBefore.smearY) * s);
 };
-// Run one effect with its flip and optics choices; returns what it says the frame's black should be
 const effect = (c, fx, run) => {
   const base = fx.flip ? baseAt(c) : null,
     optics = fx.optics !== undefined;
@@ -750,10 +725,8 @@ const effect = (c, fx, run) => {
   return black ?? 0;
 };
 
-// How far through the shot's In (x 0 to 1) the effect still is: an arrival slows into the keyed frame, a whip snaps into it
 const leftOf = (fx, x) =>
   fx.black ? 1 - smoothstep(x) : Math.pow(1 - x, fx.move === "whip" ? 4 : 2.2);
-// and through its Out: a leaving speeds up into the cut
 const grownBy = (fx, x) => (fx.black ? smoothstep(x) : Math.pow(x, fx.move === "whip" ? 4 : 2.2));
 
 const hitCache = new Map<string, ReturnType<typeof shake>[]>();
@@ -785,9 +758,6 @@ const hitSamplers = (hits: ShotHit[]) => {
   return list;
 };
 
-// The shot (in `shots`, start times in the seconds draw(t) gets) at t changes the camera c {p, l, fov, roll} in place; returns
-// how black the frame should be (0 to 1). end: the film's length, where the last shot ends. `catalogue` lets a film pass its
-// own `draw.anims` with custom presets (`apply(c, u, t, k, slot, curved, raw)`) without touching film-stage.
 export function animate(c, t, shots, end, catalogue) {
   c.optics = { ...EMPTY_OPTICS };
   let i = -1;
@@ -825,7 +795,6 @@ export function animate(c, t, shots, end, catalogue) {
         }),
       );
     }
-    // An In and an Out longer together than the shot share it, each shortened in step
     let lenIn = fxIn ? Math.max(0.01, anim.in.len ?? fxIn.len) : 0,
       lenOut = fxOut ? Math.max(0.01, anim.out.len ?? fxOut.len) : 0;
     if (lenIn + lenOut > span) {
@@ -833,7 +802,6 @@ export function animate(c, t, shots, end, catalogue) {
       lenIn *= s;
       lenOut *= s;
     }
-    // e: how much of the effect is on (0 to 1). An In's camera starts back along its way of travel (way -1), an Out's goes on
     const at = (fx, opt, u, e, way, k, slot, curved, raw, sampleTime) => {
       black = Math.max(
         black,

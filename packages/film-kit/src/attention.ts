@@ -1,19 +1,9 @@
-// Attention through the whole upper body, with no keys: when a character looks at something the eyes get there first,
-// then the head, then the chest, then the waist, each a beat later and each taking a smaller share of the turn
-// (James Benson, "Animation Bootcamp: Tricks of the Trade", GDC 2018: split the attention into eyes, head, chest, each
-// arriving at its own time; the shares follow the usual look-at split, head most, spine least). Small looks stay in the
-// head and eyes: only the part of a turn past `dead` degrees reaches the trunk.
-//   const chain = attention((t) => aim(t), filmEnd);   pose = addPose(pose, chain(t))   before head IK
-// aim(t): the turn the head would need from the pose as it is, {down, yaw (to his left), w (0..1 how much he looks)} in
-// degrees, or null when he looks at nothing; head IK on top of the result then takes only what the trunk left. Each part
-// follows its share on a critically damped spring (no overshoot) that trails by `lag` seconds; the whole thing is baked
-// once (60 samples a second) so any t reads it.
 import type { Pose } from "./pose";
 
 const HZ = 60,
   SUB = 4;
 export const CHAIN: Record<string, { share: number; lag: number; max: [number, number] }> = {
-  chest: { share: 0.25, lag: 0.15, max: [20, 30] }, // share of the turn, seconds behind, [down, yaw] limits in degrees
+  chest: { share: 0.25, lag: 0.15, max: [20, 30] },
   body: { share: 0.1, lag: 0.3, max: [10, 15] },
 };
 export type Aim = { down: number; yaw: number; w: number } | null;

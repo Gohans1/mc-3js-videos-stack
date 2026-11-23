@@ -1,14 +1,8 @@
-// Smooth clamped cubic-out scroll animation ported from md-phone (`flyTo`).
-
 const FLY_MS = 220;
 
 const reducedMotion = () =>
   typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-/**
- * Scrolls `scroller` smoothly to `targetTop`, clamping jump distance to at most one viewport
- * so long-document jumps glide briskly without disorienting blur, and cancels on user input.
- */
 export function flyTo(scroller: HTMLElement, targetTop: number): () => void {
   const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
   const end = Math.max(0, Math.min(maxTop, targetTop));

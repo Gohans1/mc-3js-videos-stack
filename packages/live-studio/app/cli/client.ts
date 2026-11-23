@@ -87,7 +87,7 @@ export function openCliRunStream(
   handlers: {
     onChunk: (chunk: CliRunChunk) => void;
     onDone: (payload: CliRunDonePayload) => void;
-    onError: () => void;
+    onError: (terminal?: boolean) => void;
   },
 ): () => void {
   const es = new EventSource(
@@ -100,26 +100,41 @@ export function openCliRunStream(
     try {
       const data = JSON.parse((ev as MessageEvent<string>).data) as CliRunChunk;
       handlers.onChunk(data);
-    } catch {
-      // Ignore malformed chunk
-    }
+    } catch {}
   });
 
   es.addEventListener("done", (ev) => {
     if (closed) return;
-    try {
-      const data = JSON.parse((ev as MessageEvent<string>).data) as CliRunDonePayload;
-      handlers.onDone(data);
-    } catch {
-      // Ignore malformed done payload
-    }
     closed = true;
     es.close();
+    let data: CliRunDonePayload;
+    try {
+      const parsed = JSON.parse((ev as MessageEvent<string>).data) as unknown;
+      if (
+        !parsed ||
+        typeof parsed !== "object" ||
+        typeof (parsed as CliRunDonePayload).runId !== "string" ||
+        typeof (parsed as CliRunDonePayload).status !== "string"
+      ) {
+        handlers.onError(true);
+        return;
+      }
+      data = parsed as CliRunDonePayload;
+    } catch {
+      handlers.onError(true);
+      return;
+    }
+    handlers.onDone(data);
   });
 
   es.onerror = () => {
     if (closed) return;
-    handlers.onError();
+    const terminal =
+      typeof EventSource !== "undefined" &&
+      typeof EventSource.CLOSED === "number" &&
+      es.readyState === EventSource.CLOSED;
+    if (terminal) closed = true;
+    handlers.onError(terminal);
   };
 
   return () => {

@@ -1,6 +1,3 @@
-// Right side of the picture, under the clock: the options whose moment is now or about to come (options/options.ts picks
-// them). A pick shows or sounds at once; Use writes it for the renders. Only the chips take clicks; the rest of the
-// picture still pins notes
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
@@ -32,7 +29,6 @@ function Chip({ group: g, range }: { group: GroupView; range: [number, number] }
       <div className="upright:flex-wrap flex gap-1">
         <ToggleGroup
           value={[g.pick]}
-          // A tap on the pick already made comes back empty: play it again, as a tap on any other does
           onValueChange={(v: string[]) => {
             const i = g.options.findIndex((o) => o.id === (v[0] ?? g.pick));
             if (i >= 0) choose(g.name, i);
@@ -62,7 +58,6 @@ function Chip({ group: g, range }: { group: GroupView; range: [number, number] }
           <Button
             size="chip"
             onClick={(e) => {
-              // This button goes once the pick is saved: from the keyboard, focus moves to the pick that stays instead of the page
               if (!e.detail)
                 e.currentTarget
                   .closest("[role=group]")

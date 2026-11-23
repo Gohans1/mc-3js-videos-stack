@@ -1,6 +1,3 @@
-// The film's sound lanes as the studio edits them: package.json "live-studio": { "soundTimeline": file, "sfx": folder } names
-// the timeline (beds that run from..to, one-shots at a time) and the folder of WAV/OGG files it plays, with SOURCES.json beside them for
-// titles and licences (and kind: "bgm", "sfx" or "mc"). The page drags, trims and levels clips; timeline_file.mjs writes the file, and the film's sound watcher remixes.
 import { spawn, spawnSync } from "node:child_process";
 import {
   closeSync,
@@ -37,7 +34,6 @@ export const pickSoundClip = (clip, choice) => {
   return clip;
 };
 
-// ---------- WAV & Ogg Vorbis: length from headers, and a coarse level curve for the lanes
 const chunks = (fd, size) => {
   if (size < 44) return null;
   const head = Buffer.alloc(12);
@@ -134,7 +130,6 @@ export const audioInfo = (file) =>
   file.toLowerCase().endsWith(".ogg") ? oggInfo(file) : wavInfo(file);
 
 const probedAudio = new Map();
-// Header parser handles .wav/.ogg at zero cost; ffprobe runs once per mtime/size for compressed formats (e.g. .mp3).
 export const probeAudio = (file) => {
   const header = audioInfo(file);
   if (header) return header;
@@ -449,7 +444,6 @@ export const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()
       walkAudio(full, vaultDir, realBound, [...parts, d.name], out);
     } else if (/\.(?:wav|ogg)$/i.test(d.name)) {
       if (!d.isSymbolicLink() && d.isFile()) {
-        // Regular file inside an already-confined directory: zero extra stat/realpath syscalls
       } else if (!vaultDir) {
         continue;
       } else {
@@ -466,7 +460,6 @@ export const walkAudio = (root, vaultDir, realBound, parts = [], out = new Map()
       const name = d.name.slice(0, -ext.length);
       if (!NAME.test(name)) continue;
       const previous = out.get(name);
-      // Later vaults override earlier ones; WAV wins within each root.
       if (
         ext.toLowerCase() === ".ogg" &&
         previous?.vaultDir === vaultDir &&
@@ -494,7 +487,7 @@ export const openSound = (project, conf = {}) => {
   if (typeof conf.soundVault === "string") validateStringVault(project, conf.soundVault);
   const currentVaults = () => findVaults(project, conf);
   const timeline = openTimelineFile(project, conf.soundTimeline, SoundTimeline);
-  const ROLES = ["riser", "whoosh", "impact", "downlifter"]; // a cut sweetener's part (get_sfx.py sweeteners; app/sound/hit.ts)
+  const ROLES = ["riser", "whoosh", "impact", "downlifter"];
   const ORIGINS = ["real", "synth", "unknown"];
   const KINDS = ["bgm", "sfx", "mc"];
 

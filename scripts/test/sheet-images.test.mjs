@@ -1,4 +1,3 @@
-// scripts/review/sheet.py: arbitrary image-list contact sheets + --out validation
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -93,7 +92,6 @@ test(
       info.br[0] > 180 && info.br[1] > 180 && info.br[2] < 70,
       `expected yellow tile BR, got ${info.br}`,
     );
-    // Strict caption-bar crop (below row 0 tiles) proves neutral bright glyph text on dark bar
     assert.ok(
       info.bright_neutral > 20,
       `expected >20 bright neutral caption glyph pixels, got ${info.bright_neutral}`,
@@ -175,7 +173,6 @@ test(
     }
     assert.ok(!existsSync(escapePath), "traversal target must never be written");
 
-    // Existing file used as parent directory should exit cleanly with no Python traceback
     const badParent = spawnSync(
       "python",
       [SHEET, "renders/view_solo_1s.png", "--out", "renders/view_solo_1s.png/sub.jpg"],
@@ -259,7 +256,6 @@ test(
     assert.equal(corrupt.status, 2);
     assert.doesNotMatch(corrupt.stderr, /Traceback/);
 
-    // Existing zero-arg stills mode remains completely intact
     const stills = spawnSync("python", [SHEET], { cwd: dir, encoding: "utf8", timeout: 25000 });
     assert.equal(stills.status, 0, stills.stdout + stills.stderr);
     assert.match(stills.stdout, /renders\/sheet_0\.jpg {2}1s/);

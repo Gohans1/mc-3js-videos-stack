@@ -1,9 +1,7 @@
-// A known camera for matchmove tests: where survey points of a set land in a W x H frame, so a solve can be checked
 export const W = 640,
   H = 360,
   FPS = 30;
 
-// a pinhole camera at c looking at l, no roll, vertical fov in degrees: OpenCV's axes (x right, y down, z ahead)
 export const project = (c, l, fov, X) => {
   const sub = (a, b) => a.map((v, i) => v - b[i]);
   const unit = (a) => a.map((v) => v / Math.hypot(...a));
@@ -22,7 +20,6 @@ export const project = (c, l, fov, X) => {
   return [W / 2 + (focal * x) / z, H / 2 + (focal * y) / z];
 };
 
-// survey points of a set: a table's corners and things on it, not all in one plane
 export const POINTS = [
   [0, 0.8, 0],
   [1.2, 0.8, 0],
@@ -32,13 +29,11 @@ export const POINTS = [
   [0.9, 1.25, 0.4],
   [0.6, 0, 0.3],
 ];
-// a 40-degree camera dollying right; shake bobs it up and down (metres), a path no straight line between keys follows
 export const cameraAt = (frame, shake = 0) => ({
   c: [0.6 + 0.02 * frame, 1.6 + shake * Math.sin(frame * 0.9), -2.5],
   l: [0.6, 0.9, 0.3],
 });
 
-// a shot file over frames 0..12 with every point keyed at the given frames
 export const tableShot = ({ frames = [0, 3, 6, 9, 12], track = false, shake = 0 } = {}) => ({
   name: "table",
   from: 0,
@@ -58,7 +53,6 @@ export const tableShot = ({ frames = [0, 3, 6, 9, 12], track = false, shake = 0 
   })),
 });
 
-// one second of grey frames with a soft white dot on each point as the camera sees it: ffmpeg rawvideo input
 export const markerFrames = (shake) => {
   const frames = Buffer.alloc(W * H * FPS);
   for (let f = 0; f < FPS; f++) {

@@ -283,7 +283,6 @@ function listFilmChoices(filmDir: string | null): {
     return { notes: [], shots: [], takes: [], renders: [], labs: [] };
   }
 
-  // Notes as `#N` so `notes`, `note`, and `at` all resolve cleanly (bare numbers mean seconds in `at`).
   let notes: string[] = [];
   try {
     const nums = noteNumbers(filmDir);
@@ -300,7 +299,6 @@ function listFilmChoices(filmDir: string | null): {
   const pkg = safeReadJson(join(filmDir, "package.json"));
   const conf = (pkg?.["live-studio"] as Record<string, unknown> | undefined) ?? {};
 
-  // Shots
   let shots: string[] = [];
   try {
     const shotsRel =
@@ -316,7 +314,6 @@ function listFilmChoices(filmDir: string | null): {
     shots = [];
   }
 
-  // Takes from edit.json + voice/takes files
   const takeSet = new Set<string>();
   const edit = safeReadJson(join(filmDir, "src/edit.json"));
   if (edit?.takes && typeof edit.takes === "object" && !Array.isArray(edit.takes)) {
@@ -329,12 +326,9 @@ function listFilmChoices(filmDir: string | null): {
         const m = /^([^.].+)\.(mp3|wav)$/i.exec(f);
         if (m) takeSet.add(m[1]!);
       }
-    } catch {
-      /* optional */
-    }
+    } catch {}
   }
 
-  // Renders (.mp4) — skip dot-prefixed internal directories (.chrome-cache, .prev)
   let renders: string[] = [];
   const rendersDir = join(filmDir, "renders");
   if (existsSync(rendersDir)) {
@@ -358,7 +352,6 @@ function listFilmChoices(filmDir: string | null): {
     renders = renders.toSorted().slice(0, 60);
   }
 
-  // Labs (lab/*.ts|tsx)
   let labs: string[] = [];
   const labDir = join(filmDir, "lab");
   if (existsSync(labDir)) {
@@ -408,7 +401,6 @@ export async function scanCliContext(
     );
   }
 
-  // Detect running studios cleanly
   const probePort = opts.probeStudioPort ?? defaultProbeStudioPort;
   const runningFilms: string[] = activeFilm ? [activeFilm] : [];
   await Promise.all(
@@ -689,7 +681,6 @@ export function createCliRunner(
       throw new CliRunHttpError(404, "UNKNOWN_COMMAND", `Unknown CLI command: ${req.commandId}`);
     }
 
-    // Boundary safety checks on incoming user values
     for (const [k, v] of Object.entries(req.args ?? {})) assertSafeValue(v, `arg:${k}`, false);
     for (const [k, v] of Object.entries(req.flags ?? {}))
       assertSafeValue(v, `flag:${k}`, k === "--prompt");
@@ -779,7 +770,6 @@ export function createCliRunner(
     };
     delete childEnv.LIVE_PROJECT;
 
-    // Resolve authoritative cwd inside repoRoot
     let resolvedCwd = repoRoot;
     let resolvedFilmName: string | null = null;
     if (spec.cwdMode === "film") {
@@ -835,7 +825,6 @@ export function createCliRunner(
       } else if (token === "--views" && value !== undefined) assertViewsFlag(value);
     });
 
-    // Build exact exe + argv cleanly from allowlisted catalog entry
     const resolveRepoScript = (target: string): string => {
       const scriptFile = join(repoRoot, target);
       if (!isInsideDirReal(repoRoot, scriptFile) || !existsSync(scriptFile)) {
@@ -911,7 +900,6 @@ export function createCliRunner(
     activeRun = entry;
     lastRun = entry;
     runsById.set(runId, entry);
-    // Keep only recent 20 snapshots in memory
     if (runsById.size > 20) {
       const oldest = runsById.keys().next().value;
       if (oldest && oldest !== runId) runsById.delete(oldest);

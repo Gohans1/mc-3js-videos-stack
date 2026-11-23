@@ -1,6 +1,3 @@
-// PostToolUse (.claude/settings.json): the creator writes notes in the studio while the AI works, and the next: line that
-// names them (render, check) is often read cut. After a shell command in or naming a film, the open notes no bun run
-// notes has listed are said beside its result, once for each new set of them.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative, resolve } from "node:path";
@@ -13,7 +10,6 @@ type Note = { id: string; t: number; text: string };
 const SHOWN = 5;
 const clip = (s: string) => (s.length > 120 ? `${s.slice(0, 119)}…` : s);
 
-// said: the unread ids already named for each film, so the same set is not named again
 export function nudge(root: string, cwd: string, command: string, said: Said) {
   const filmsDir = join(root, "films");
   const names = existsSync(filmsDir)
@@ -68,7 +64,5 @@ if (import.meta.main) {
         }),
       );
     }
-  } catch {
-    // a hook that cannot read its event says nothing: the notes stay for bun run notes
-  }
+  } catch {}
 }

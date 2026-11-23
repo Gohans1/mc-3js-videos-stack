@@ -24,7 +24,6 @@ import {
 } from "../find";
 import { ROOT } from "../vault.mjs";
 
-// the creator's real stars (favorites/) never reach a test: an empty folder unless a test gives its own
 const noStars = favoriteLists(join(tmpdir(), "find-test-no-favorites"));
 const run = (...[argv, given, judge, clips, favs]: Parameters<typeof findRun>) =>
   findRun(argv, given, judge, clips, favs ?? noStars);
@@ -129,7 +128,6 @@ const vault: Entry[] = [
     src: "film-stage/transitions.ts",
   },
 ];
-// as jev.py exits without a key (its own words name the key file)
 const noJev = () =>
   Promise.reject(new Error("Jev: no key: OPENCODE_API_KEY in ~/.secrets/opencode_zen.env"));
 
@@ -184,7 +182,6 @@ test("--show gives one entry in full with a line to paste, and close ids for a w
   const out = await run(["--show", "dissolve"], vault, noJev);
   expect(out).toMatch(/"transition": \{"fx": "dissolve", "len": 0\.5\}/);
   expect(out).toMatch(/see it:/);
-  // an id nothing has is a wrong word and nothing was shown: exit 2 on stderr, with the near ids
   const miss = run(["--show", "disolve"], vault, noJev);
   await expect(miss).rejects.toMatchObject({
     code: 2,
@@ -279,7 +276,6 @@ test("a word in a kind the --kind left out is pointed to, by its category", asyn
   );
 });
 
-// The studio's groups: a category by its slug, a word of it, or a word of the Sound panel's heading for it
 const shutter = { ...e("snap-1", "Snap", "", "sfx", "shutter"), src: "mixkit" };
 const wipe = {
   ...e("wipe", "Wipe Right", "", "transition", "Wipe & Split"),
@@ -401,7 +397,6 @@ test("Jev failing says why and still answers with the word match", async () => {
     /Jev: no key: OPENCODE_API_KEY in ~\/\.secrets\/opencode_zen\.env\. Word matches below/,
   );
   expect(out).toContain("ear-door-knock");
-  // one that never reached jev.py says what it needs instead
   const noPython = () => Promise.reject(new Error("spawn python ENOENT"));
   expect(await run(["--jev", "--kind", "sfx", "door"], vault, noPython)).toMatch(
     /Jev did not run: spawn python ENOENT\. Word matches below\. Jev needs python on PATH/,
@@ -548,7 +543,6 @@ test("a mocap category beside body filters is the postures it starts and ends in
   const clips = (args: string[]) => ((got = args), Promise.resolve("catalogue rows"));
   await run(["--kind", "mocap/stand-sit-floor", "--still"], [...vault, sitDown], noJev, clips);
   expect(got).toEqual(expect.arrayContaining(["--from", "stand", "--to", "sitFloor", "--still"]));
-  // by meaning in a category: the catalogue's own Jev, which reads what was checked by eye
   await run(
     ["--jev", "he sits", "--kind", "mocap/stand-sit-floor"],
     [...vault, sitDown],
@@ -710,7 +704,6 @@ test("--show of a kind name or a bare clip name points to the right thing", asyn
   );
 });
 
-// an AI cannot hear the shortlist: find hands it the one earshot call that ranks those files by the words it searched
 test("a list of sounds ends with the earshot rank that hears them, paths ready", async () => {
   const sound = (id: string, file: string): Entry => ({
     ...e(id, "Door · slam", "", "sfx", "foley"),
@@ -903,9 +896,7 @@ test("--license sorts sounds by what an upload must do: credit for CC BY, claim 
   expect(await ids("claim")).toEqual(["rain-pixabay"]);
   expect(await ids("minecraft")).toEqual(["rain-vanilla"]);
   expect(await ids("mod")).toEqual(["rain-lgpl"]);
-  // a licence by its own name, and "gpl" is not the end of "lgpl"
   expect(await ids("lgpl")).toEqual(["rain-lgpl"]);
-  // a whole word: "cc" is CC BY's first word, not the start of CC0
   expect(await ids("cc")).toEqual(["rain-ccby"]);
   await expect(run(["rain", "--license", "gpl"], pool, noJev)).rejects.toThrow(
     /--license is free, credit, claim, minecraft, mod .*free 1 .*mod 1 .*LGPL-3\.0-only 1/,
@@ -919,7 +910,6 @@ test("a filter named without a value lists its values with counts", async () => 
   await expect(run(["door", "--source"], vault, noJev)).rejects.toThrow(
     /--source needs a value[\s\S]*mc: minecraft 1/,
   );
-  // counted inside the --kind asked for, as the search would filter
   const pool = [
     { ...e("mixamo/Wave", "Wave", "", "mocap", "stand"), secs: 3 },
     { ...e("door-slam", "Door slam", "", "sfx", "foley"), secs: 0.5 },
@@ -1098,9 +1088,7 @@ test("an option quoted into the words is refused, not searched as a word", async
   await expect(run(["door --kind sfx"], vault, noJev)).rejects.toThrow(
     /--kind sits inside the quotes \("door --kind sfx"\).*\(bun run find door --kind sfx\)/,
   );
-  // another name for an option, with its value after =, is an option too
   await expect(run(["door --type=sfx"], vault, noJev)).rejects.toThrow(/--type=sfx sits inside/);
-  // a description with a dash in it is still words
   await expect(run(["--jev", "a slow fade - then silence"], vault, noJev)).resolves.toBeDefined();
 });
 
@@ -1262,7 +1250,6 @@ test("an entry is starred by the id the studio's star gives it, and any take sta
   ]);
 });
 
-// A favourites folder of the test's own, with these lists written into it
 const withFavorites = async (
   lists: Record<string, { sounds?: string[]; effects?: string[] }>,
   body: (favs: ReturnType<typeof favoriteLists>) => Promise<void>,
@@ -1520,7 +1507,6 @@ test("when Jev rejects every hit it checked, the ones it never checked are not s
   const pool = Array.from({ length: 4 }, (_, i) =>
     e(`door-${i}`, `Door ${i}`, "a door", "sfx", "foley"),
   );
-  // two checked and rejected; the two under them got a vote but no check
   const jev = (_: string, xs: Entry[]) =>
     Promise.resolve(
       xs.map((x, i): [number, Entry, number?] => [0.4 - i * 0.1, x, i < 2 ? 0.05 : undefined]),
@@ -1651,7 +1637,6 @@ test("a clip whose retarget breaks on Steve says so, as the catalogue's own sear
 
 test("a clip's postures start and end where --from and --to read them, unless checked by eye", async () => {
   const dir = mkdtempSync(join(tmpdir(), "find-mocap-"));
-  // measured: standing in its first 0.2 s, a run too short to make the sequence
   const row = (ref: string) => ({
     ref,
     dur: 2.5,
@@ -1747,7 +1732,6 @@ test("a film's own sounds have their length, and its bgm folder holds music", ()
     join(film, "package.json"),
     JSON.stringify({ "live-studio": { sfx: "sound/sfx" } }),
   );
-  // one second of 8 kHz 8-bit mono silence
   const wav = (path: string) => {
     const head = Buffer.alloc(44);
     head.write("RIFF", 0);
@@ -1836,7 +1820,6 @@ test("an id said whole comes first, before the kind a word of it names", async (
   ];
   const out = await run(["bgm_drone"], pool, noJev);
   expect(out.split("\n")[0]).toMatch(/bgm_drone/);
-  // the word naming the kind asked is dropped from the search, never from the id said whole
   const music = [
     ...Array.from({ length: 5 }, (_, i) => e(`drone-${i}`, "Drone", "drone drone", "bgm", "drone")),
     e("bgm_drone", "Bgm Drone", "", "bgm", "dark"),
@@ -1854,7 +1837,6 @@ test("words beside body filters reach catalog.py without the words that name not
   const clips = async (args: string[]) => (seen.push(args), "1 matches");
   await run(["sitting", "in", "a", "chair", "--from", "stand"], [clip], noJev, clips);
   expect(seen[0]?.slice(0, 2)).toEqual(["sitting", "chair"]);
-  // words that all name nothing, or are not English, would reach it as no words: every clip the filters pass
   await expect(run(["like", "this", "--from", "stand"], [clip], noJev, clips)).rejects.toThrow(
     /names no move/,
   );
@@ -1985,7 +1967,6 @@ test("--kind keeps query words that name real entries in that kind, and stray fi
   const noFakeBokeh = await run(["bokeh", "--kind", "lens"], presets, noJev);
   expect(noFakeBokeh).not.toMatch(/lens\/Primes\s+14mm\b/);
 
-  // Stray non-directory file under sfx/ should not throw ENOTDIR when --dir isn't overriding soundEntries
   const dir = mkdtempSync(join(tmpdir(), "find-stray-"));
   mkdirSync(join(dir, "sfx/hits"), { recursive: true });
   writeFileSync(join(dir, "sfx/.DS_Store"), "x");
@@ -2299,7 +2280,6 @@ test("Round 22: velocity frequency docs match runtime, empty mocap gives clear m
     /no mocap clips|catalogue/i,
   );
 
-  // soundVault: false, custom soundVault, custom soundSources (except narration), SOURCES.json override
   const film = mkdtempSync(join(tmpdir(), "find-r22-film-"));
   const customVault = join(film, "my-vault");
   const wavBytes = (() => {
@@ -2335,7 +2315,6 @@ test("Round 22: velocity frequency docs match runtime, empty mocap gives clear m
       JSON.stringify({ vault_clap: { title: "Film Custom Clap", for: "trailer punch" } }),
     );
 
-    // a) soundVault: false + soundSources (custom_src included, narration excluded)
     writeFileSync(
       join(film, "package.json"),
       JSON.stringify({
@@ -2355,10 +2334,8 @@ test("Round 22: velocity frequency docs match runtime, empty mocap gives clear m
     expect(noVaultSounds.some((x) => x.id === "local_beep")).toBe(true);
     expect(noVaultSounds.some((x) => x.id === "custom_src")).toBe(true);
     expect(noVaultSounds.some((x) => x.id === "narration")).toBe(false);
-    // All remaining sfx/bgm/mc come ONLY from this film (no repo vault leak)
     expect(noVaultSounds.every((x) => x.src === "this-film")).toBe(true);
 
-    // b) custom string soundVault + SOURCES.json override onto vault sound
     writeFileSync(
       join(film, "package.json"),
       JSON.stringify({

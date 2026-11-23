@@ -1,17 +1,3 @@
-// The body takes on the emotion the face shows: a held change of posture, and bigger or smaller movement. Measured on
-// motion-captured walks (Roether, Omlor, Christensen & Giese 2009; Crane & Gross 2009 / Gross et al. 2012):
-//   sadness: the head hangs, the strongest single cue of any emotion in the body (Roether: head inclination about 19
-//     degrees more than neutral; Crane: the neck alone ~10 degrees more flexed); small, slow movements.
-//   joy: head up (Roether ~6 degrees; Crane ~2), big fast movements.
-//   anger: elbows bent more (Roether), head a little down (Crane ~3), big fast movements.
-//   fear: elbows bent more, upper arms drawn back, knees bent (Roether: "widespread postural tension"), small movements.
-// Directions are measured; for the head under sadness and joy the sizes are too. The elbow, arm and knee sizes here are
-// chosen to read on screen in the measured direction (the papers report them in plots, not numbers).
-// Walking speed per emotion is measured (Roether, m/s): anger 1.82, joy 1.31, fear 0.83, sadness 0.68.
-//   const body = posture(faceKeys, { kind: KIND });   pose = addPose(pose, scalePose(body(t), clipMask(t)))
-//   body.amp(t): how big the movement is, x neutral (scale overlap, cartoon, micro's drift); POSTURE.speed for a walk's pace
-// The same keys as the face (express.ts), changing at each emotion's own pace, so face and body move together. A held
-// offset like this sits on keyed poses; a mocap clip performs its own emotion, so fade it out over clip spans.
 import { changeTime, KIND } from "./express";
 import type { Pose } from "./pose";
 
@@ -25,8 +11,6 @@ type Shape = {
   laR?: number[];
   root?: Record<string, number>;
 };
-// joints in the character's axes: +x on body/chest/head bends forward and down; +x on the upper arms takes them back;
-// -x on the forearms bends the elbows; root.y sinks the hips (planted-foot leg IK turns that into bent knees)
 export const POSTURE: {
   shape: Record<string, Shape>;
   amp: Record<string, number>;
@@ -54,14 +38,12 @@ const minJerk = (u: number) => {
 };
 const JOINTS = ["head", "chest", "body", "uaL", "uaR", "laL", "laR"] as const;
 
-// keys: [{ t, mood }] as the face's; kind maps a mood name to an emotion (express.ts KIND); k scales every shape
 export function posture(
   keys: { t: number; mood: string }[],
   { kind = KIND, k = 1, tempo = 1 } = {},
 ) {
   const shapeOf = (m: string) => POSTURE.shape[kind[m] ?? ""] ?? {};
   const ampOf = (m: string) => POSTURE.amp[kind[m] ?? ""] ?? 1;
-  // each change starts from wherever the last one had got to (a change cut short goes on from there)
   type S = { v: number[][]; y: number; a: number };
   const target = (m: string): S => {
     const s = shapeOf(m);

@@ -1,8 +1,5 @@
 import { makeAccumulator } from "../render/accum";
 
-// Pictures 64x4 averaged by render/accum.ts as a clip's sub-frames are: each one a grey level, or "ramp" (column x is grey
-// 4x); test/accum.test.mjs reads back the grey of every column. "own": in a context of its own, the picture a canvas;
-// "shared": in the film's own context, the picture what it just drew there
 const W = 64,
   H = 4;
 const picture = document.createElement("canvas");

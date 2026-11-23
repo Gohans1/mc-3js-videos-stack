@@ -1,9 +1,3 @@
-// Springs as pure functions of film time. pmndrs/math's spring.update is the exact solution of a damped spring over any
-// step (one 0.7 s step lands where 700 steps of 1 ms do), so the state at a key carries to the next key in one step, and
-// any t is one more step from the last key before it: no frame-by-frame state, any frame renders on its own.
-//   springTrack: a value that springs to each new target and can be kicked (an impact adds velocity).
-//   follow: a value that chases a moving target (a prop that lags a hand, a camera that trails a head), baked once.
-// smooth is about the time to settle (pmndrs smoothTime); ratio 1 = no overshoot, < 1 bouncy, > 1 sluggish.
 import { spring } from "math/time";
 
 export type SpringKey = { t: number; to?: number; kick?: number };
@@ -23,7 +17,6 @@ export function springTrack(
   const keys = [...input].sort((a, b) => a.t - b.t);
   if (!keys.length) throw new Error("springTrack: no keys");
   const start = from ?? keys.find((k) => k.to !== undefined)?.to ?? 0;
-  // state and target right after each key
   const at: { t: number; s: State; target: number }[] = [];
   let s: State = { value: start, velocity: 0 },
     target = start,
@@ -49,8 +42,6 @@ export function springTrack(
   return Object.assign((t: number) => state(t).value, { vel: (t: number) => state(t).velocity });
 }
 
-// target(t) is sampled at hz from `from` to `to` (seconds) and the spring stepped through it once; later calls read the
-// baked samples. Before `from` the value is the target's own.
 export function follow(
   target: (t: number) => number,
   {
@@ -87,7 +78,6 @@ export function follow(
 
 export type Vec3 = readonly [number, number, number];
 
-/** Pure-t 3D spring follower with optional world offset and velocity lookahead lead (seconds). */
 export function followTarget(
   target: (t: number) => Vec3,
   {

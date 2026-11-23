@@ -70,8 +70,8 @@ import {
   type UnifiedPlaygroundEntry,
 } from "./voice-playground-view";
 import { recordedCastSummary } from "./voice-setting-details";
-import { VoicePlaygroundCompare } from "./VoicePlaygroundCompare";
 import { VoicePlaybackIcon } from "./VoicePlaybackIcon";
+import { VoicePlaygroundCompare } from "./VoicePlaygroundCompare";
 
 const SOURCE_TABS: Array<{ id: PlaygroundSourceFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -107,9 +107,6 @@ const KIND_ITEMS: Array<{ value: PlaygroundKindFilter; label: string }> = [
   { value: "dubbing", label: "Dubbing" },
 ];
 
-/**
- * Filterable, sortable archive of Playground generations, AI film takes, Templates, Starred clips, and 24h Cloud history.
- */
 function CloudScriptPreview({ text, title }: { text: string; title?: string }) {
   const preview = useRef<HTMLParagraphElement>(null);
   const [clipped, setClipped] = useState(false);
@@ -146,7 +143,11 @@ function CloudScriptPreview({ text, title }: { text: string; title?: string }) {
           >
             Show full script
           </PopoverTrigger>
-          <PopoverContent align="start" motion="none" className="w-[30rem] max-w-(--available-width)">
+          <PopoverContent
+            align="start"
+            motion="none"
+            className="w-[30rem] max-w-(--available-width)"
+          >
             <PopoverTitle>{title || "Full script"}</PopoverTitle>
             <p
               tabIndex={0}
@@ -757,7 +758,6 @@ export function VoicePlaygroundLibrary({
             <VoicePlaygroundCompare entries={unifiedEntries} uids={pg.compareUids ?? []} />
           </div>
         )}
-        {/* Source Tabs + Optional Cloud 24h Switch */}
         <div className="flex flex-wrap items-center justify-between gap-1.5">
           {!sidebarNavigation && (
             <div
@@ -829,7 +829,6 @@ export function VoicePlaygroundLibrary({
           </span>
         </div>
 
-        {/* Cloud 24h GenVoice Remote History View */}
         {cloudMode ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2 text-sm">
@@ -919,7 +918,7 @@ export function VoicePlaygroundLibrary({
                           : "Unknown fee"}
                       </span>
                     </div>
-                    <div className="flex items-center justify-self-end gap-1">
+                    <div className="flex items-center gap-1 justify-self-end">
                       {safePreviewUrl && (
                         <Button
                           type="button"
@@ -1020,7 +1019,7 @@ export function VoicePlaygroundLibrary({
                 <p
                   role="alert"
                   dir="auto"
-                  className="min-w-0 max-w-[58ch] leading-relaxed wrap-anywhere text-pretty"
+                  className="max-w-[58ch] min-w-0 leading-relaxed text-pretty wrap-anywhere"
                 >
                   {pg.error}
                 </p>
@@ -1037,7 +1036,6 @@ export function VoicePlaygroundLibrary({
 
             {!sidebarNavigation && recordingFilters}
 
-            {/* Unified Entry List */}
             <div className="flex flex-col gap-1.5">
               {visible.map((entry) => {
                 const excerpt = entry.spoken || entry.text;

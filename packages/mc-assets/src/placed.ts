@@ -1,20 +1,6 @@
 // @ts-nocheck
 import { createScene, listDirectory, renderBlock } from "block-model-renderer";
 import { loadMob } from "mc-actor/mob";
-// What the creator drops into the scene from the studio's Objects library, as Unreal drops an asset from the Content Browser
-// into the level: game blocks, the shared props (pack.ts), the mod picks and the game's 209 mobs (mc-actor/mob.ts), each with
-// its own key row. The film names the file in package.json ("live-studio".keyFiles {"src/timeline/placed.json": "placed"}):
-//   { "<name>": { "what": "block:minecraft:barrel" | "mob:zombie", "properties"?: {facing: "west"}, "clip"?: "walk", "rate"?: 1,
-//                 "keys": [{ "t": 3.2, "at": [x, y, z], "rot": [x, y, z], "scale": 1, "visible"?: false, "ease"?: "out",
-//                            "clip"?: "open", "rate"?: 1 }] } }
-// at is metres (a block's origin is the middle of its bottom face, a mob's its feet), rot degrees in YXZ order (yaw first).
-// Between keys it moves as the later key's ease spends the span (film-stage/camera.ts: a named ease or a cubic-bezier [x1, y1,
-// x2, y2]; none is a smoothstep, within about 1% of film-stage's "inout") and turns the short way; it holds the first
-// key before it and the last after; visible holds from its key on. A mob's clip is keyed like the rest: a key naming one
-// starts it there, times rate ("none" stands it still; a one-shot clip such as a chest's "open" holds its last frame); before
-// the first such key the object's own clip (default its idle, if any) runs from its first key. A "walk..." clip turns with the
-// distance travelled, 4 swings a block as the game does.
-//   const placed = await makePlaced(scene, sources, EDIT, "placed");  each frame placed.draw(t);  draw.tools.placed = placed
 import * as THREE from "three";
 
 import { clipAt, poseAt, travelled } from "./placed-math";
@@ -26,7 +12,7 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
   const root = new THREE.Group();
   root.name = "placed";
   scene.add(root);
-  const built = new Map(); // name -> { what, holder, mob? }
+  const built = new Map();
   const data = () => EDIT[key] ?? {};
 
   const buildBlock = async (id, properties) => {
@@ -57,7 +43,6 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
     return { what: o.what, props: JSON.stringify(o.properties ?? null), holder, mob };
   };
 
-  // Builds what is new or changed in the file and drops what left it; the studio awaits it after each edit, then redraws
   let running = Promise.resolve(),
     seen = null;
   const sync = () => {
@@ -92,7 +77,7 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
   const placed = {
     key,
     root,
-    hold: null, // the name the studio's gizmo is dragging: drawn by the gizmo, not by its keys
+    hold: null,
     sync,
     draw(t) {
       if (data() !== seen) sync();
@@ -132,8 +117,6 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
     },
     clipsOf: (name) => built.get(name)?.mob?.clips ?? [],
     clipAt: (name, t) => (data()[name]?.keys?.length ? clipAt(data()[name], t) : null),
-    // Where the object goes from its first key to its last, in world space: a point per frame and one per key, for the studio's
-    // motion path
     pathOf(name, fps = 30) {
       const keys = data()[name]?.keys;
       if (!keys?.length) return { frames: [], keys: [] };
@@ -143,8 +126,6 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
         frames.push(root.localToWorld(poseAt(keys, keys[0].t + f / fps).at));
       return { frames, keys: keys.map((k) => root.localToWorld(new THREE.Vector3(...k.at))) };
     },
-    // Everything that can be dropped in: [{what, kind, title}]; kind "block" and "mob" are the game's own, "custom" every
-    // other namespace (the shared gohans:* props, the mod picks)
     async catalog() {
       const out = [];
       const spaces = (await listDirectory("assets", sources)).filter((ns) => !ns.includes("."));
@@ -179,7 +160,6 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
             });
       return out;
     },
-    // A small picture of a block for the library row (game-style item view), null for a mob
     async icon(what, size = 64) {
       const [kind, ...rest] = what.split(":");
       if (kind !== "block") return null;

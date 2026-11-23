@@ -1,8 +1,3 @@
-// Mirrors MineRender's mob dataset into the vault (vault.json "root" + /mcasset/<version>): every entity model, its
-// sampled vanilla clips and every entity texture, walked through the _list.json each folder of assets.mcasset.cloud has.
-// mc-actor/mob.ts reads them from there, so renders never wait on the network. Mojang files: the vault only, never git.
-// Re-runnable: files already there are skipped, so a cut run picks up where it stopped.
-// bun packages/mc-assets/mobs.ts [version]   (default 1.21.11, the dataset MineRender 2.1 ships against)
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 

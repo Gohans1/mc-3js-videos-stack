@@ -1,6 +1,3 @@
-// jev.py's routes and keys: Zen counts its free quota per network (egress IP), not per key, so a spent quota skips the
-// route's other keys, and later runs try that route last until it is back; a refused key hands over to the route's next
-// key. A stand-in Jev server answers by key; the real routes are swapped for it, so no test reaches the net
 import { afterAll, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -8,15 +5,12 @@ import { join } from "node:path";
 
 const JEV_DIR = join(import.meta.dir, "../../packages/clip-catalog");
 
-// key -> how the stand-in answers it: "ok", "spent" (429, back in an hour), "refused" (403, a key that cannot call), or
-// a fault on the key's first call only, then ok: "busy" (429 with the Retry-After in `burst`), "down" (503), "badjson" (200 HTML)
 let answers: Record<string, "ok" | "spent" | "refused" | "busy" | "down" | "badjson"> = {};
 let burst = "1";
 const asked: string[] = [];
 const ok = () => Response.json({ answers: { q: { noul: 0.9 } }, usage: { cost: 0 } });
 const server = Bun.serve({
   port: 0,
-  // the body read before answering: on Windows a socket closed with it unread resets, and python sees an abort
   async fetch(req) {
     await req.text();
     const key = req.headers.get("authorization")?.replace("Bearer ", "") ?? "";
@@ -38,8 +32,6 @@ const server = Bun.serve({
               });
   },
 });
-// a server that hangs up on its first call before any answer (python raises RemoteDisconnected, not a URLError), then
-// stands in front of the one above
 let hungUp = 0;
 const flaky = Bun.listen({
   hostname: "127.0.0.1",
@@ -62,7 +54,6 @@ afterAll(() => {
   for (const d of temps) rmSync(d, { recursive: true, force: true });
 });
 
-// a home with ~/.secrets/zen.env and paid.env holding these key lines
 const home = (zen: string, paid = "") => {
   const dir = mkdtempSync(join(tmpdir(), "jev-home-"));
   temps.push(dir);
@@ -71,8 +62,6 @@ const home = (zen: string, paid = "") => {
   if (paid) writeFileSync(join(dir, ".secrets/paid.env"), paid);
   return dir;
 };
-// each run of jev.py is a fresh process, as jev.ts spawns it (async: the stand-in answers from this same process)
-// a wait is cut to 10 ms so a retry costs no test time; one time.sleep refuses (below 0, NaN) still raises
 const ask = async (dir: string, url = server.url.href) => {
   const py = `import sys, json; sys.path.insert(0, ${JSON.stringify(JEV_DIR)}); import jev
 nap = jev.time.sleep

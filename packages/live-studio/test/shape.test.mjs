@@ -1,11 +1,8 @@
-// What a stroke drawn with the right mouse button becomes (app/notes/shape.ts): a straight one an arrow, a closed four-cornered
-// one a box, anything else stays the pen stroke it was drawn as
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { shapeOf } from "../app/notes/shape.ts";
 
-// A hand's stroke along the corners given, one point every 4 px, with a seeded wobble of up to `shake` px
 const stroke = (corners, shake = 0, seed = 1) => {
   let s = seed;
   const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647 - 0.5) * 2 * shake;

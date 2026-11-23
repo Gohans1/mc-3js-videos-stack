@@ -1,5 +1,3 @@
-// makeTransitions as a film runs it, between a red shot and a blue one; test/transitions-gpu.test.ts calls
-// window.frameAt(fx, t) for the mean colour at t (the transition runs 0.75 to 1.25) and whether its shader compiled.
 import * as THREE from "three";
 
 import { makeTransitions } from "../../src/transitions";

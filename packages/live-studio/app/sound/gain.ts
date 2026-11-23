@@ -54,7 +54,6 @@ export const toggleGainKey = (c: GainClip, t: number) => {
   }
 };
 
-// Keys use clip-local seconds, never the looping source offset. Retain keys outside a trim so extending it restores the curve.
 export const shiftGainTime = (c: GainClip, delta: number) => {
   if (c.gainKeys)
     c.gainKeys = c.gainKeys.map((k) => ({ ...k, t: Math.round((k.t + delta) * 1000) / 1000 }));
@@ -83,7 +82,7 @@ export const normalizationDelta = (
     ? Math.min(target - measured, ceiling - peak)
     : null;
 
-export const MIX_CEILING = -1.5; // listen.py CEILING: the true peak the whole film's loudness pass stops at
+export const MIX_CEILING = -1.5;
 
 export const offsetGain = (c: GainClip, delta: number) => {
   c.gain = Math.round((c.gain + delta) * 1000) / 1000;

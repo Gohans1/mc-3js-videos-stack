@@ -213,7 +213,6 @@ function ToastList({ compact, motion }: { compact: boolean; motion: ToastMotion 
   ));
 }
 
-// viewportClassName: where the toasts stack, when the page's own bottom is taken (the phone's Note button, PhoneApp)
 function Toaster({
   children,
   toastManager = toast,

@@ -643,7 +643,6 @@ test('a key list with one row missing its "t", or one "t" as text beside rows wi
   assert.deepEqual(paths({ moves: [{ t: 0, x: 0 }, { x: 1 }] }), ["moves.1.t"]);
   assert.deepEqual(paths({ moves: [{ t: "0", x: 0 }, { x: 1 }] }), ["moves.0.t", "moves.1.t"]);
   assert.deepEqual(paths({ props: [{ id: "cup" }, { id: "lamp" }] }), []);
-  // keyRows stops at a list of other things: rows inside one are the film's own data, never a row the studio shows
   assert.deepEqual(paths({ groups: [{ moves: [{ t: 0 }, { t: "bad" }] }] }), []);
 });
 

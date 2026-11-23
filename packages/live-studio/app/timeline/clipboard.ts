@@ -1,7 +1,3 @@
-// Ctrl+C, Ctrl+X and Ctrl+V on the timeline, as CapCut's for clips and After Effects' for keyframes: what is picked (text, sound
-// clips, camera keys, keys on the key rows, or all of them from a box across the rows) is copied with its times kept apart as they were,
-// and pasted with the earliest at the playhead, back onto the tracks and rows it came from (sound.ts pasteClips, cam.ts
-// pasteCamKeys, keys.ts pasteKeys, text.ts pasteTexts), one undo step. The copy lives in this page only, as CapCut's does in its project.
 import type { AdjustmentLayer } from "film-stage/grade-layers";
 
 import { type CamKey, keys as camKeys, movable, pasteCamKeys } from "../camera/cam";
@@ -96,7 +92,6 @@ export const cut = () => {
   if (cam.length !== selection.cam.length) pickAcross({ ...selection, cam });
   deleteSelected();
 };
-// Each kind's paste picks what it pasted and drops the rest of the pick: what they each picked is gathered and picked together
 export const paste = () => {
   if (!copied) {
     say("Nothing copied yet: pick clips or keyframes and press Ctrl+C");

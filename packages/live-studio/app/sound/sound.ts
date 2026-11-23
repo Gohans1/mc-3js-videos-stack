@@ -3,9 +3,6 @@ import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { lightEdit } from "../activity/activity";
 import { changedRows, itemKey } from "../activity/timeline-activity";
-// The film's sound lanes (src/sound.mjs on the server), edited by hand like the camera keys (doc.ts: undo, saving, an agent's
-// edit wins): beds that loop from..to and one-shots at a time, both from the film's sfx folder. The film's own sound watcher
-// remixes on a save, or, with live lanes (mixer.ts), the page plays the change itself and nothing is remixed.
 import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { getFile } from "../core/net";
 import { scheduleIdleBatch } from "../core/search";
@@ -163,7 +160,6 @@ export const familyItemsOf = (name: string): readonly LibraryItem[] => {
   return libraryByFamily.get(it.family) ?? [it];
 };
 
-// A soloed track that went (emptied, undone) lets go of its solo, or the page would stay silent with no button to undo it
 const changed = () => {
   lanes = doc.data;
   rebuildClipUseCounts();
@@ -189,7 +185,7 @@ const doc = createTimedDoc<Lanes>(
       lanes = l;
       normalize(l, span);
       tidy(l);
-    }, // a film without tracks gets them here, and in the file with its next edit
+    },
     received: (before, after) => {
       if (!get().aiActivity) return;
       const tracks = changedRows(before.tracks, after.tracks, (track) => track.id).map(
@@ -233,13 +229,10 @@ export const clockOf = (c: Bed | OneShot) =>
     c.name === lanes?.narration ? "voice" : typeof c.from === "number" ? "audio" : "sfx",
   );
 export const seconds = (name: string) => itemOf(name)?.seconds ?? 1;
-// Which library tab a sound sits in (CapCut's Music and Sound effects) and which lane + puts it on: what SOURCES.json says,
-// else its length, since music and room tone run long and a hit is short
 const LONG = 10;
 export const kindOf = (x: LibraryItem): "bgm" | "sfx" | "mc" =>
   x.name === lanes?.narration ? "sfx" : (x.kind ?? (x.seconds >= LONG ? "bgm" : "sfx"));
 
-// Where a clip sounds, in film seconds. A one-shot without a length rings to the end of its file
 export const span = (c: ClipRef): [number, number] => {
   if (!lanes) return [0, 0];
   if (c.list === "beds") {
@@ -289,7 +282,6 @@ const anyItemChanged = (prev: readonly LibraryItem[], next: readonly LibraryItem
   });
 };
 
-// ---------- Loading: on start, after any remix and when an agent edits the file (the "lanes" event)
 export const ensureSoundLibrary = (): Promise<void> => {
   wantTokenWarm = true;
   if (fullLibraryLoaded) {
@@ -377,7 +369,6 @@ export const loadSound = async (opts?: {
   doc.refresh();
 };
 
-// Every edit goes through here: one undo step, drawn now, saved shortly (a slider dragged saves once, when let go)
 export const edit = doc.edit,
   editSource = doc.editSource,
   sourceLanes = () => doc.source,
@@ -385,13 +376,11 @@ export const edit = doc.edit,
   snapshot = doc.snapshot,
   restore = doc.restore;
 
-// ---------- What the lanes and the panel ask for
 export const setClips = (cs: ClipRef[]) => {
   set(transitionSelection({ kind: "clips", clips: cs }, get().side));
   S.dirty = true;
 };
 export const setClip = (c: ClipRef | null) => setClips(c ? [c] : []);
-// Solo, as in Premiere and Resolve: only the soloed tracks sound, heard at once; this page only, never saved or rendered
 export const setSolo = (id: string, on: boolean) => {
   const solo = get().solo.filter((t) => t !== id);
   set({ solo: on ? [...solo, id] : solo });
@@ -414,7 +403,6 @@ export const beatTimes = (skip: ClipRef[] = []) =>
   allClips().flatMap((r) =>
     skip.some((s) => same(s, r)) ? [] : clipBeats(r).map((t) => span(r)[0] + t),
   );
-// Every clip that plays this file (or any variant in a family): what the library row counts, lights and picks (Resolve's clip usage)
 export const useCountOfNames = (names: readonly string[]): number => {
   let n = 0;
   for (const name of names) n += clipUseCounts.get(name) ?? 0;
@@ -453,7 +441,6 @@ export const pickNamesUses = (names: readonly string[], label = names[0] ?? "") 
   );
 };
 export const pickUses = (name: string) => pickNamesUses([name], name);
-// The keyboard's way onto the lanes: each press picks the next clip sounding at t, or the nearest one when none is
 export const pickAt = (t: number) => {
   if (!lanes) return;
   const all = (["beds", "sfx"] as const).flatMap((list) =>
@@ -474,8 +461,6 @@ export const pickAt = (t: number) => {
     here.length ? here[(k + 1) % here.length] : all.reduce((p, q) => (dist(q) < dist(p) ? q : p)),
   );
 };
-// The track a new clip goes on: the one it was dropped on if it has room there, else the first of the film's tracks for that kind
-// with room, else a new one (below the one dropped on)
 const onto = (l: Lanes, kind: "beds" | "sfx", s: number, e: number, want?: string) => {
   if (want === "new") return addTrack(l, kind).id;
   if (want && l.tracks.some((t) => t.id === want && !t.lock) && fits(l, want, [s, e], span))
@@ -508,7 +493,6 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
       });
       ref = { list: "beds", i: l.beds.length - 1 };
     } else {
-      // In time order, as a film's own list is written, so the file reads top to bottom
       const i = l.sfx.findIndex((s) => s.at > at);
       const at3 = r3(at);
       l.sfx.splice(i < 0 ? l.sfx.length : i, 0, {
@@ -523,8 +507,6 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
   setClip(ref);
   say(`${name} added at ${stamp(at)}`);
 };
-// Several one-shots at once (sweeten.ts), each on the first sound-effects track with room as addClip puts one; one undo step,
-// all picked after
 export interface NewShot {
   name: string;
   at: number;
@@ -557,8 +539,6 @@ export const addShots = (shots: NewShot[]) => {
     made.map((x) => ({ list: "sfx" as const, i: lanes!.sfx.indexOf(x) })).filter((r) => r.i >= 0),
   );
 };
-// Copies of clips (timeline/clipboard.ts), d seconds later: each on the track it came from while that has room, else the
-// nearest free track of its kind (freeTrack), the copies picked after; one undo step
 export type CopiedClip = { list: ClipRef["list"]; x: Bed | OneShot };
 export const pasteClips = (items: CopiedClip[], d: number) => {
   const made: { list: ClipRef["list"]; x: Bed | OneShot }[] = [];
@@ -577,7 +557,6 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
           len = clipLength(o);
         o.at = r3(Math.max(0, o.at + d));
         o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "");
-        // In time order, as addClip keeps the list
         const i = l.sfx.findIndex((s) => s.at > o.at);
         l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
       }
@@ -601,7 +580,6 @@ export const removeClips = (cs: ClipRef[]) => {
     return;
   }
   const first = clipOf(gone[0])!.name;
-  // From the back of each list, so the places still to remove don't move
   edit((l) => {
     for (const c of [...gone].sort((a, b) => b.i - a.i))
       (c.list === "beds" ? l.beds : l.sfx).splice(c.i, 1);
@@ -642,9 +620,6 @@ export const moveTo = (c: ClipRef, at: number) => {
   });
 };
 
-// ---------- CapCut's cuts on the picked clips at the playhead: Ctrl+B splits each one it crosses, Q drops what lies before it,
-// W what lies after. The part kept on the right goes on playing the file from where the left part stopped (start: seconds
-// into the file, which a bed loops), and only the outer ends keep their fades
 const MIN = 0.05;
 const crossing = (cs: ClipRef[], t: number, what: string) => {
   const hit = cs.filter((c) => {
@@ -659,7 +634,6 @@ const crossing = (cs: ClipRef[], t: number, what: string) => {
     );
   return hit;
 };
-// Moves a clip's left edge to t, its sound staying where it was in the film (lanes.ts trims a bed's head with it too)
 export const cutBefore = (x: Bed | OneShot, list: ClipRef["list"], t: number) => {
   const from = list === "beds" ? (x as Bed).from : (x as OneShot).at,
     length = clipLength(x),
@@ -847,7 +821,6 @@ export const setClipSpatial = (c: ClipRef, spatial: SpatialSpec | undefined) =>
     if (spatial) x.spatial = structuredClone(spatial);
     else delete x.spatial;
   });
-// pan: -1 all left, 1 all right (mixer.ts, mix.py pan_filter); the centre is left out of the file
 export const setField = (
   c: ClipRef,
   key: "gain" | "fadeIn" | "fadeOut" | "length" | "to" | "duck" | "pan",
@@ -863,7 +836,6 @@ export const setField = (
     if (key === "pan" && Math.abs(v) < 0.005) delete x.pan;
     else x[key] = r3(v);
   });
-// CapCut's ↺ on the Basic section: level back to 0 dB, centred, no fades
 export const resetBasic = (c: ClipRef) =>
   edit((l) => {
     const x = (c.list === "beds" ? l.beds[c.i] : l.sfx[c.i]) as Record<string, unknown>;
@@ -878,9 +850,6 @@ export const resetBasic = (c: ClipRef) =>
       delete x.fadeOut;
     }
   });
-// Paste attributes (timeline/attributes.ts): what of the clip `from` the creator ticked, onto the clips `to`, one undo step.
-// Fades longer than a clip are shortened to fit it, as CapCut does; ducking only goes from a bed onto beds. Locked tracks are
-// left out. Returns how many clips took them
 export type ClipAttr = "volume" | "pan" | "fades" | "duck";
 export const fadesFit = (from: Bed | OneShot, c: ClipRef) => {
   const [a, b] = span(c),
@@ -928,12 +897,11 @@ export const swapSound = (c: ClipRef, name: string) =>
     delete x.bpm;
     delete x.beatSource;
     if (c.list === "sfx") {
-      delete (x as OneShot).start; // a start offset belongs to the old file
+      delete (x as OneShot).start;
       if (name !== lanes?.narration) delete (x as OneShot).dialogue;
     }
   });
 
-// Level curves come once per file and stay
 const peaks = new Map<string, Peaks | null>();
 export const invalidateSoundCaches = () => {
   forgetSounds();
@@ -956,7 +924,6 @@ export const peaksOf = (name: string) => {
   return peaks.get(name) ?? null;
 };
 
-// One sound heard on its own, from the library: a second press stops it
 const auditionCtrl = createAuditionController({
   audio: new Audio(),
   onSoundBump: () => set({ soundRev: get().soundRev + 1 }),

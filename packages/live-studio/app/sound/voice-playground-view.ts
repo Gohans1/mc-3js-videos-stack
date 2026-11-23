@@ -12,7 +12,6 @@ import {
   parseDialogueTurnNames,
   stripDialogueSpeakerBrackets,
 } from "../../src/voice-playground-text.mjs";
-// Pure view-model normalization, filtering, sorting, and template/swap-voice cloning for Voice Playground.
 import type {
   PlaygroundConnection,
   PlaygroundJob,
@@ -949,7 +948,6 @@ export const filterAndSortEntries = (
         );
       case "newest":
       default:
-        // Keep created Playground items sorted newest-first, followed cleanly by film takes in ID order
         if (a.origin !== b.origin) return a.origin === "playground" ? -1 : 1;
         if (a.origin === "playground") return (b.createdAt || "").localeCompare(a.createdAt || "");
         return COLLATOR.compare(a.id, b.id);
@@ -1185,7 +1183,6 @@ export const entryToComposerDraft = (
       sttNoVerbatim: settings?.noVerbatim ?? false,
       sttTemperature: settings?.temperature ?? 0,
       sttSeedText: settings?.seed?.toString() || "",
-      // Archived raw PCM is wrapped as WAV; replay uses a container format.
       sttFileFormat: "other",
       sttUseMultiChannel: settings?.useMultiChannel ?? false,
       sttKeytermsText: settings?.keyterms?.join(", ") || "",

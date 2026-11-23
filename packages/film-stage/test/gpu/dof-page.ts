@@ -46,9 +46,9 @@ const tex = checkerTex(36);
 const nearMat = new THREE.MeshBasicMaterial({ map: tex });
 const farMat = new THREE.MeshBasicMaterial({ map: tex });
 const nearPlane = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 2.6), nearMat);
-nearPlane.position.set(-1.4, 0, 6); // 4m from camera
+nearPlane.position.set(-1.4, 0, 6);
 const farPlane = new THREE.Mesh(new THREE.PlaneGeometry(6.6, 7.8), farMat);
-farPlane.position.set(4.2, 0, -2); // 12m from camera
+farPlane.position.set(4.2, 0, -2);
 const hotSpot = new THREE.Mesh(
   new THREE.PlaneGeometry(0.6, 0.6),
   new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 4, 4), toneMapped: false }),
@@ -84,7 +84,6 @@ Object.assign(window, {
     t?: number;
     clip?: [number, number];
   }) {
-    // a film's camera rig sets near and far every frame, after the effect was built (camera-rig.ts projectCamera)
     if (opts.clip) [camera.near, camera.far] = opts.clip;
     camera.updateProjectionMatrix();
     dof.update({

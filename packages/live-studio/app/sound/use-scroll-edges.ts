@@ -8,7 +8,6 @@ export interface HorizontalScrollEdges {
 
 const EDGE_THRESHOLD_PX = 2;
 
-/** Tracks whether a horizontally scrollable rail has off-screen content to the left or right. */
 export function useHorizontalScrollEdges(
   ref: RefObject<HTMLElement | null>,
   depsKey: string | number,
@@ -43,7 +42,6 @@ export function useHorizontalScrollEdges(
   return edges;
 }
 
-/** Returns CSS data-attributes so flush first/last items stay sharp until scrolled past. */
 export function scrollEdgeMaskProps(edges: HorizontalScrollEdges): {
   "data-edge-left"?: "true";
   "data-edge-right"?: "true";
@@ -54,7 +52,6 @@ export function scrollEdgeMaskProps(edges: HorizontalScrollEdges): {
   };
 }
 
-/** Scrolls a horizontal overflow rail by a proportional step, honoring reduced motion. */
 export function scrollHorizontalRail(el: HTMLElement | null, direction: -1 | 1): void {
   if (!el) return;
   const step = Math.max(120, Math.round(el.clientWidth * 0.65));

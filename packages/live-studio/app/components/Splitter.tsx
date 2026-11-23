@@ -1,8 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 
-// The edges the creator drags to share the screen between the picture, the timeline and the right column (CapCut's panel
-// edges), as the WAI-ARIA window splitter: arrows move it, Enter folds the pane away and back, a double click puts it back to
-// its own size. The pane it sizes sits after it (below, or to the right) unless before is set, and this browser remembers the size
 import { cn } from "@/lib/utils";
 
 import {
@@ -25,24 +22,22 @@ export const useStoredSize = (key: string) => {
     try {
       if (n === null) localStorage.removeItem(key);
       else localStorage.setItem(key, String(n));
-    } catch {
-      /* private window: this visit only */
-    }
+    } catch {}
   };
   return [v, put] as const;
 };
 
 interface Props {
   label: string;
-  across: boolean; // a bar across the screen (sizes a pane below it) rather than up and down it
-  size: number | null; // null: the pane's own size
-  measure: () => number; // the pane's size now, in px
-  min: () => number; // below half of it the pane folds away
+  across: boolean;
+  size: number | null;
+  measure: () => number;
+  min: () => number;
   max: () => number;
   set: (n: number | null) => void;
-  before?: boolean; // the pane sits before the bar (above it): dragging down grows it
-  fold?: boolean; // false: the pane stops at min instead of folding away
-  step?: number; // px per arrow press, 4x with Shift
+  before?: boolean;
+  fold?: boolean;
+  step?: number;
   resizeOnRelease?: boolean;
   className?: string;
   lineClassName?: string;
@@ -65,7 +60,7 @@ export function Splitter({
 }: Props) {
   const barRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef(measure);
-  const [last, setLast] = useState(0); // the size before it was folded away, for Enter to bring back
+  const [last, setLast] = useState(0);
   const [measured, setMeasured] = useState<number | null>(null);
   useEffect(() => {
     measureRef.current = measure;
@@ -113,8 +108,6 @@ export function Splitter({
         bar.setPointerCapture(e.pointerId);
         bar.dataset.dragging = "";
         let previewSize: number | null = null;
-        // The drag ends however the press does: let go, cancelled, the capture lost, or a move with the button already up (a
-        // let-go the bar never heard used to leave it following the pointer on a mere hover)
         const ends = ["pointerup", "pointercancel", "lostpointercapture"] as const;
         const end = (event: PointerEvent) => {
           bar.removeEventListener("pointermove", move);
@@ -130,7 +123,10 @@ export function Splitter({
             end(m);
             return;
           }
-          const size = fit(start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from), start);
+          const size = fit(
+            start + (before ? 1 : -1) * ((across ? m.clientY : m.clientX) - from),
+            start,
+          );
           if (resizeOnRelease) {
             previewSize = size;
             const offset = (size - start) * (before ? 1 : -1);
@@ -162,7 +158,7 @@ export function Splitter({
         "group absolute z-20 touch-none outline-none",
         across
           ? "inset-x-0 -top-1 h-2 cursor-row-resize"
-          : cn("inset-y-0 w-2 cursor-col-resize", before ? "-right-1" : "-left-1"), // a pane before the bar has it on its far edge
+          : cn("inset-y-0 w-2 cursor-col-resize", before ? "-right-1" : "-left-1"),
         className,
       )}
     >

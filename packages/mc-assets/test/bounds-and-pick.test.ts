@@ -103,7 +103,6 @@ const setupVault = (root: string) => {
     "assets/decor/models/item/flat_coin.json": {
       parent: "minecraft:item/generated",
     },
-    // RP override replacing a 3D vanilla item with a flat 2D sprite via 1.21.4+ items/<id>.json
     "assets/minecraft/items/lantern.json": {
       model: { type: "minecraft:model", model: "minecraft:item/lantern_2d" },
     },
@@ -113,7 +112,6 @@ const setupVault = (root: string) => {
   });
   writeFileSync(join(vaultRoot, "packs/decor.jar"), modZip);
 
-  // Real archive placed at vaultRoot/evil.jar so traversal pack "../evil.jar" would resolve if unguarded
   writeFileSync(join(vaultRoot, "evil.jar"), modZip);
   return vaultRoot;
 };
@@ -141,7 +139,6 @@ describe("resolveMcAssetBounds", () => {
       );
       expect(stone).toEqual({ min: [0, 0, 0], max: [1, 1, 1], size: [1, 1, 1] });
 
-      // Rotated 90 deg around Y: X=[0..16], Z=[4..12] swaps to X=[4..12], Z=[0..16]
       const bench = resolveMcAssetBounds(
         { kind: "block", namespace: "decor", name: "bench", pack: "decor.jar" },
         { vaultRoot },
@@ -153,7 +150,6 @@ describe("resolveMcAssetBounds", () => {
       expect(bench!.max[2]).toBeCloseTo(1, 4);
       expect(bench!.size).toEqual([0.5, 0.5, 1]);
 
-      // Multipart unions unconditional parts (vanilla slab_base [0..0.5] + post_top [0.5..1.0]) and skips conditional arm
       const post = resolveMcAssetBounds(
         { kind: "block", namespace: "decor", name: "post", pack: "decor.jar" },
         { vaultRoot },
@@ -162,7 +158,6 @@ describe("resolveMcAssetBounds", () => {
       expect(post!.size).toEqual([1, 1, 1]);
       expect(post!.max[1]).toBeCloseTo(1, 4);
 
-      // Conditional-only multipart uses first part's apply
       const condOnly = resolveMcAssetBounds(
         { kind: "block", namespace: "decor", name: "cond_only", pack: "decor.jar" },
         { vaultRoot },
@@ -171,7 +166,6 @@ describe("resolveMcAssetBounds", () => {
       expect(condOnly!.min).toEqual([0.375, 0.5, 0.375]);
       expect(condOnly!.max).toEqual([0.625, 1, 0.625]);
 
-      // Missing blockstate falls back directly to <ns>:block/<name>
       const rawPillar = resolveMcAssetBounds(
         { kind: "block", namespace: "decor", name: "raw_pillar", pack: "decor.jar" },
         { vaultRoot },
@@ -203,7 +197,6 @@ describe("resolveMcAssetBounds", () => {
         ),
       ).toBeNull();
 
-      // Vanilla lantern without RP override is 3D; RP 2D items/lantern.json override must return null (no stale 3D fallback)
       expect(
         resolveMcAssetBounds(
           { kind: "item", namespace: "minecraft", name: "lantern" },
@@ -223,7 +216,6 @@ describe("resolveMcAssetBounds", () => {
     withTempDir("mc-bounds-sec-", (root) => {
       const vaultRoot = setupVault(root);
 
-      // evil.jar actually exists at vaultRoot/evil.jar; must still return null
       expect(
         resolveMcAssetBounds(
           { kind: "block", namespace: "decor", name: "bench", pack: "../evil.jar" },
@@ -231,7 +223,6 @@ describe("resolveMcAssetBounds", () => {
         ),
       ).toBeNull();
 
-      // Vanilla stone exists in client_assets.zip; traversal pack must NOT fall back to vanilla
       expect(
         resolveMcAssetBounds(
           { kind: "block", namespace: "minecraft", name: "stone", pack: "../evil.jar" },
@@ -239,7 +230,6 @@ describe("resolveMcAssetBounds", () => {
         ),
       ).toBeNull();
 
-      // Traversal namespace or name must also return null
       expect(
         resolveMcAssetBounds(
           { kind: "block", namespace: "../minecraft", name: "stone" },

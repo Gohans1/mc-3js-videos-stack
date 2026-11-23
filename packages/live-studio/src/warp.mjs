@@ -1,5 +1,3 @@
-// The voice edit's map between the voice's own seconds and the seconds heard (edit.json voice.warp: [source, heard] pairs,
-// straight between them, shifted past either end). a: the side x is on (0 source, 1 heard), b: the side wanted
 export const warp = (w, x, a, b) => {
   if (w.length < 2) return x;
   if (x <= w[0][a]) return x - w[0][a] + w[0][b];

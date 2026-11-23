@@ -1,4 +1,3 @@
-// Draft renders of any film from inside it; HELP below says everything it takes
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
@@ -126,7 +125,6 @@ package.json "live-studio": { "chrome": path } names the headless Chrome (defaul
 { "ratio": "9:16" } makes a Shorts film, drafts at 720x1280 (src/frame.ts). Next: bun run framecheck on the clip.
 Why each setting, YouTube's spec, what survives its re-encode, how to render faster: bun run skills get core --ref render.`;
 
-// Every option is a flag after the target; the value ones take the next word
 const VALUE_FLAGS = {
   "--at": "at",
   "--chunks": "chunks",
@@ -187,7 +185,6 @@ for (let i = 0; i < rawArgs.length; i++) {
 const compare = Boolean(opt.compare);
 const freshCache = Boolean(opt.freshCache);
 envTypos(["LIVE_PROJECT"]);
-// a clip takes minutes and a final far longer: each is only ever made when asked for by name
 if (!TARGETS.includes(what)) {
   const near = what && TARGETS.find((t) => t.startsWith(what.slice(0, 3).toLowerCase()));
   console.error(
@@ -196,7 +193,6 @@ if (!TARGETS.includes(what)) {
   process.exit(2);
 }
 const video = what === "clip" || what === "all" || what === "final";
-// drawn as the upload is: its size, no strip under the picture, sub-frames for motion blur
 const full = what === "final" || what === "poster";
 const misplaced =
   !video && opt.chunks
@@ -245,7 +241,6 @@ if (misplaced) {
 }
 
 const PROJECT = needFilm(resolve(process.env.LIVE_PROJECT ?? process.cwd()));
-// A film file read here: absent gives the fallback, broken stops the render naming it (a stack trace said nothing)
 const readJson = (file, fallback) => {
   if (!existsSync(file)) return fallback;
   try {
@@ -255,7 +250,6 @@ const readJson = (file, fallback) => {
     process.exit(1);
   }
 };
-// a page of the film's own: a wrong path would only fail deep in the bundler
 if (opt.entry && !statSync(resolve(PROJECT, opt.entry), { throwIfNoEntry: false })?.isFile()) {
   const lab = existsSync(join(PROJECT, "lab"))
     ? readdirSync(join(PROJECT, "lab")).filter((f) => /\.[jt]s$/.test(f))
@@ -265,7 +259,6 @@ if (opt.entry && !statSync(resolve(PROJECT, opt.entry), { throwIfNoEntry: false 
   );
   process.exit(2);
 }
-// --ref: each still beside the reference's frame at its second, as a remake is matched (scripts/review/qc.ts vs)
 const vsVideo = opt.ref ? resolve(PROJECT, opt.ref) : null;
 if (opt.ref !== undefined) {
   const other = Object.entries({
@@ -300,9 +293,8 @@ const FPS = 30,
 const RENDERS = join(PROJECT, "renders"),
   CHUNKS = join(RENDERS, what === "final" ? "final_chunks" : "chunks"),
   JOINED = what === "final" ? "final_video.mp4" : "draft_video.mp4",
-  OUT = join(PROJECT, `node_modules/.vite/live-studio-render-${process.pid}`); // per run: two renders of one film must not share a build
+  OUT = join(PROJECT, `node_modules/.vite/live-studio-render-${process.pid}`);
 
-// The voice's captions at the seconds heard (src/captions.mjs), named as the video so a player picks them up with it
 const writeCaptions = (video = "draft_video.mp4") => {
   const name = video.replace(/\.mp4$/, ".srt");
   const map = voiceMapOf(PROJECT),
@@ -343,11 +335,8 @@ const CHROME = resolve(
   PROJECT,
   pkg["live-studio"]?.chrome ?? "tools/chrome-headless-shell/chrome-headless-shell.exe",
 );
-// a typo here once hung the render for good: every number is checked before Chrome opens
 const numbers = (name, value, limits) =>
   value.split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
-// --check <name>:<args>;...: the built-in checks take <target>,<from s>,<to s> in heard seconds (mm:ss too, as notes print
-// them; a minus is kept so the range check below can say the film starts at 0); a film's own take what it takes
 const BUILT_IN = ["motion", "seen", "touch", "text", "order", "probe"];
 const CHECKS = (opt.check ?? "")
   .split(";")
@@ -425,7 +414,6 @@ if (opt.crop !== undefined) {
     process.exit(2);
   }
 }
-// a --check or --entry lab run writes its own outputs; a still at 1 s beside them would only crowd bun run sheet
 const at =
   what === "clip" || what === "final"
     ? []
@@ -458,7 +446,6 @@ const samples = opt.samples
   : full
     ? 8
     : 1;
-// YouTube's upload table for 30 fps (8, 16, 35-45 Mbps), doubled: the GPU's encoder spends bits less well than x264
 const FINAL_SIZES = { 1080: [1920, 16e6], 1440: [2560, 32e6], 2160: [3840, 60e6] };
 const res = opt.res ?? (ratioOf(pkg) === "9:16" ? "1080" : "1440");
 if (full && !FINAL_SIZES[res]) {
@@ -467,13 +454,11 @@ if (full && !FINAL_SIZES[res]) {
   );
   process.exit(2);
 }
-// A second past the end, or a --check range that runs backwards, is refused here: the page would say it too, after the scene build
 const ends = heardLength(PROJECT, pkg["live-studio"] ?? {});
 const lastFrame = ends ? chunksOf(ends.layers, CHUNK, FPS).at(-1)[1] : Infinity;
 const spanFrames = span && spanOf(span, FPS, lastFrame),
   SPAN_FILE = spanFrames?.file;
 if (ends) {
-  // the frame each second draws, as the page counts it (render/page.ts refuses a frame past DURATION, the same length)
   const past = at.filter((s) => Math.round(s * FPS) / FPS > ends.layers + 1e-9);
   if (past.length) {
     console.error(
@@ -576,7 +561,6 @@ const preservePrev = (fileName) => {
   mkdirSync(prevDir, { recursive: true });
   copyFileSync(src, join(prevDir, fileName));
 };
-// bun run sheet lays out every still_*.jpg: one left from an earlier run would show a scene since changed beside this one's
 if (at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS)) {
   for (const f of readdirSync(RENDERS))
     if (/^still_.*\.jpg$/.test(f)) {
@@ -594,8 +578,6 @@ const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
 
-// --check text: each line to be read, at the heard second it is fully on screen (the middle of what is left between its In
-// and its Out), worked out here where the film's clocks are already set (heardLength above)
 const textCheck = CHECKS.find((x) => x.name === "text");
 const textLines = [];
 if (textCheck) {
@@ -640,7 +622,7 @@ if (textCheck) {
 }
 
 const ratio = ratioOf(pkg),
-  [W, H] = sizeOf(ratio, full ? FINAL_SIZES[res][0] : 1280); // package.json "live-studio".ratio: 16:9, or 9:16 for Shorts
+  [W, H] = sizeOf(ratio, full ? FINAL_SIZES[res][0] : 1280);
 const cfg = {
   W,
   H,
@@ -665,11 +647,9 @@ const cfg = {
     ? {
         chunk: CHUNK,
         only,
-        // the frames of a --span run, drawn as one video and none of the chunks
         span: spanFrames && [spanFrames.first, spanFrames.last],
         samples,
         bitrate: final ? FINAL_SIZES[res][1] : 4e6,
-        // YouTube asks for a closed GOP of half a second; a draft only needs a keyframe to start each chunk on
         keyFrameInterval: final ? 0.5 : 2,
       }
     : null,
@@ -702,17 +682,12 @@ const previewOverlayZip = (() => {
   return p;
 })();
 
-// ---------- The page: the studio's render page, or the film's own lab page, built with the film inside
 const entry = opt.entry ? resolve(PROJECT, opt.entry) : join(STUDIO, "render/page.ts");
 const t0 = Date.now();
-// the creator's studio shows the render busy, its build too, until the line at the end, or until this process is gone (src/tell.mjs)
 const ended = await startJob(PROJECT, `render ${what}`, {
   say: `Rendering ${what}${views ? ` (${views.length} view${views.length > 1 ? "s" : ""})` : ""}${span ? ` ${span[0]}-${span[1]} s` : at.length ? ` at ${at.join(", ")} s` : ""}`,
   ...(span ? { at: span[0], to: span[1] } : at.length ? { at: at[0] } : {}),
 });
-// Of the sound timeline only the narration clips change a frame (the mouths follow them, src/lips.ts) and --list's overlay
-// names its rows. A video is built with that part alone (seenSound), so a gain, a bed or an effect keeps every chunk's stamp
-// and render clip redraws nothing for it; the joined video keeps it in <chunks>/seen-sound.json for src/stale.mjs
 const soundPath = pkg["live-studio"]?.soundTimeline
   ? resolve(PROJECT, pkg["live-studio"].soundTimeline)
   : null;
@@ -726,8 +701,6 @@ const noSound = {
   enforce: "pre",
   load: (id) => (soundFile && resolve(id.split("?")[0]) === soundFile ? seenJson : null),
 };
-// A film's code that does not build: rolldown's own report colours every character and Bun prints rolldown's source under
-// it, so only the place and the words are said, plain
 const notBuilt = async (e) => {
   const plain = (s) => stripVTControlCharacters(String(s));
   for (const x of e?.errors ?? [e]) {
@@ -736,21 +709,20 @@ const notBuilt = async (e) => {
       : "";
     const [first, ...frame] = plain(x?.message ?? x).split("\n");
     console.error(`${at}${first.replace(/^\[[A-Z_]+\]\s*/, "")}`);
-    // the code frame names the file relative to the render folder: its own lines (the source) are kept
     console.error(frame.filter((l) => !/╭─|─╯/.test(l)).join("\n"));
   }
   console.error(
     "the film's code does not build: fix it, then bun run render again (nothing was rendered)",
   );
-  rmSync(OUT, { recursive: true, force: true }); // a build folder per run: a failed one is left nowhere
+  rmSync(OUT, { recursive: true, force: true });
   await ended({ say: `Render ${what}: the film's code does not build`, level: "fail" });
   process.exit(1);
 };
 const built = await build({
   configFile: false,
   root: join(STUDIO, "render"),
-  publicDir: false, // the film's assets are served from where they are, never copied
-  logLevel: "silent", // a build error is said by notBuilt
+  publicDir: false,
+  logLevel: "silent",
   plugins: [noSound, filmPlugin({ SRC: join(PROJECT, "src"), threeFrom: threeFromOf(PROJECT) })],
   build: {
     outDir: OUT,
@@ -774,8 +746,6 @@ const styles = (Array.isArray(built) ? built : [built])
   .map((f) => `<link rel="stylesheet" href="/${f.fileName}">`)
   .join("");
 console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
-// A chunk's stamp: the built page (the film's code and timelines, the packages) and every setting that changes a frame.
-// Equal stamps draw equal frames, so such a chunk is kept. Files under assets/public are not in it (--chunks renders anew)
 const stamp = (() => {
   const h = createHash("sha256");
   const walk = (dir) =>
@@ -789,13 +759,11 @@ const stamp = (() => {
   h.update(JSON.stringify({ W, H, draft, list, choices, inspect, ...clip, only: null }));
   return h.digest("hex").slice(0, 16);
 })();
-// stills alone cannot show motion, contact or flicker: say what can, where every render prints
 if (!cfg.checks.length && what !== "poster")
   console.log(
     "if needed: --check motion|seen|touch:<target>,<from s>,<to s>, --check probe:<t>, --check text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
   );
 
-// ---------- Serve it to a headless Chrome and keep what it posts back
 mkdirSync(CHUNKS, { recursive: true });
 const MIME = {
   ".js": "text/javascript",
@@ -824,9 +792,8 @@ const stampsFile = join(CHUNKS, "stamps.json");
 let stamps = {};
 try {
   stamps = JSON.parse(readFileSync(stampsFile, "utf8"));
-} catch {} // none yet, or from before stamps: every chunk renders
+} catch {}
 const renderedNow = new Set();
-// asked again after a restart: what is left. A --chunks list is rendered as asked, the rest skips the chunks still current
 const pageConfig = () =>
   cfg.clip
     ? {
@@ -937,7 +904,6 @@ const server = Bun.serve({
       }
       return new Response("ok");
     }
-    // The classic script reports errors thrown while the module's imports evaluate, before the page's own handlers exist
     if (url === "/")
       return new Response(
         "<!doctype html>" +
@@ -1057,8 +1023,6 @@ const stuck = (why) => {
     close();
   }
 };
-// Once frames flow the page says so every few seconds, and 4 minutes of quiet is a hang (a GPU reset, a lost context);
-// before that (building the scene, a long --check) only an hour of quiet ends the run
 let quietSince = Date.now();
 const watchdog = setInterval(() => {
   if (lastAlive !== null) quietSince = lastAlive;
@@ -1192,7 +1156,6 @@ if (!failed && vsVideo && stillsWritten.length) {
       failed = true;
     }
   }
-  // the pairs come after the stills: the next step stays the last line
   if (!failed && !chunks && !span)
     console.log(
       `next: open ${stillsWritten.length > 1 ? "the renders/vs_*.jpg pictures" : `renders/vs_${basename(stillsWritten[0], extname(stillsWritten[0]))}.jpg`} to look (reference | ours | diff)${nextHint}`,
@@ -1207,7 +1170,6 @@ next: bun run framecheck renders/${SPAN_FILE}; bun run sheet renders/${SPAN_FILE
   );
 }
 
-// Every chunk starts on a keyframe with the same encoder settings, so the join is a lossless stream copy
 if (!failed && chunks) {
   const all = Array.from({ length: chunks }, (_, i) => chunkFile(i));
   const missing = all.flatMap((f, i) => (existsSync(f) ? [] : [i]));
@@ -1241,15 +1203,12 @@ if (!failed && chunks) {
       ],
       { stdio: "inherit" },
     );
-    // a --chunks run keeps the other chunks as they are, even those drawn before the film last changed
     const old =
       only && j.status === 0 ? all.flatMap((_, i) => (stamps[i] === stamp ? [] : [i])) : [];
     if (old.length)
       console.log(
         `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: bun run render ${what} --chunks ${old.join(",")} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
       );
-    // the captions go with the joined video; its next: line stays the last one printed. A chunk joined as it was may show
-    // older mouths: the record of the last whole draw stays, so src/stale.mjs still sees a narration moved since
     if (j.status === 0) {
       writeRenderEvidence(join(RENDERS, JOINED), {
         cuts: old.length ? joinedCuts(all, CHUNK) : encodedCuts,

@@ -80,7 +80,6 @@ test("the sound zip holds every sound of the vault at its vault path and restore
     "mc-sound/mc/mob/zombie/say1.ogg": "zombie",
   };
   for (const [rel, text] of Object.entries(sounds)) put(join(old.local, rel), text);
-  // a build's cache and a download cut short are not sounds
   put(join(old.local, "sfx/mixkit/.sort-cache.json"), "{}");
   put(join(old.local, "sound/sfx/comedy/mixkit-9.wav.123.part.wav"), "half");
 
@@ -97,7 +96,6 @@ test("the sound zip holds every sound of the vault at its vault path and restore
   assert.equal(existsSync(join(fresh.local, "sfx/mixkit/.sort-cache.json")), false);
   assert.equal(existsSync(join(fresh.local, "sound/sfx/comedy/mixkit-9.wav.123.part.wav")), false);
 
-  // a rerun keeps what came out whole and writes again a file that changed (same size, other bytes)
   writeFileSync(join(fresh.local, "sound/sfx/comedy/mixkit-472.wav"), "tromboNE");
   assert.deepEqual(await restoreSound({ zip, ...fresh, log: () => {} }), {
     written: 1,
@@ -141,7 +139,6 @@ test("a Google Drive share link is fetched as the zip itself; a link Drive will 
   );
   const root = mkdtempSync(join(tmpdir(), "mc-sound-zip-link-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  // a private file: Drive answers with its sign-in page, not the zip
   let body = "<!DOCTYPE html><title>Google Drive - Sign in</title>";
   const server = createServer((_req, res) => res.end(body));
   await new Promise((done) => server.listen(0, "127.0.0.1", done));
@@ -214,7 +211,6 @@ test("packVault splits core and heavy pure assets, excludes tools and cache, and
   };
   for (const [rel, text] of Object.entries({ ...coreFiles, ...heavyFiles }))
     put(join(oldVault, rel), text);
-  // Tools (venvs/models) and local caches must NEVER enter a vault backup archive
   put(join(oldVault, "tools/media/venv/python.exe"), "huge-venv");
   put(join(oldVault, "tools/earshot-home-win/model.bin"), "huge-model");
   put(join(oldVault, "cache/mc-catalog.v1.json"), "{}");
@@ -251,7 +247,6 @@ test("packVault splits core and heavy pure assets, excludes tools and cache, and
   assert.equal(existsSync(join(freshVault, "cache")), false);
   assert.equal(existsSync(join(freshVault, "packs/.tmp-cache")), false);
 
-  // Idempotent rerun keeps intact files and restores modified files
   writeFileSync(join(freshVault, "packs/modern-furniture.jar"), "CORRUPTED----");
   const rerun = await restoreVault({ zip: coreZip, local: freshVault, log: () => {} });
   assert.equal(rerun.written, 1);
@@ -387,7 +382,6 @@ test("packVault ignores nested junctions and restoreVault refuses destination ju
   const root = mkdtempSync(join(tmpdir(), "mc-vault-safety-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  // 1) Nested junction inside vault/packs must NOT leak external files, and a non-dir root (motion as file) must not ENOTDIR
   const outside = join(root, "outside-secret");
   put(join(outside, "leak.txt"), "top-secret");
   const oldVault = join(root, "old/vault");
@@ -402,7 +396,6 @@ test("packVault ignores nested junctions and restoreVault refuses destination ju
   const packed = await packVault({ local: oldVault, out: coreZip, part: "core", log: () => {} });
   assert.equal(packed.files, 1);
 
-  // 2) Restore must refuse an existing junction inside destination vault and never write outside
   const victimVault = join(root, "victim/vault");
   const escapeTarget = join(root, "escape-target");
   mkdirSync(victimVault, { recursive: true });
@@ -418,7 +411,6 @@ test("packVault ignores nested junctions and restoreVault refuses destination ju
   );
   assert.equal(existsSync(join(escapeTarget, "ok.jar")), false);
 
-  // 3) Restore must refuse a 0-byte archive file colliding with an existing directory cleanly
   const emptyEntryZip = join(root, "empty-file.zip");
   writeFileSync(emptyEntryZip, zipSync({ "packs/collide.jar": new Uint8Array(0) }, { level: 0 }));
   const dirCollisionVault = join(root, "dir-collision/vault");
@@ -428,7 +420,6 @@ test("packVault ignores nested junctions and restoreVault refuses destination ju
     /directory|refus/i,
   );
 
-  // 4) Restore must refuse an archive containing only a disallowed directory header (tools/)
   const toolsDirZip = join(root, "tools-dir.zip");
   writeFileSync(toolsDirZip, zipSync({ "tools/": new Uint8Array(0) }, { level: 0 }));
   const toolsDest = join(root, "tools-dir/vault");
@@ -484,18 +475,15 @@ test("pack_vault CLI handles non-existent directories, single-part zips, duplica
       env: { ...process.env, MC_VAULT_ROOT: vaultDir, MC_VAULT_EXTERNAL: join(root, "ext") },
     });
 
-  // Duplicate --part must exit 2
   assert.equal(runCli(["--part", "core", "--part", "bogus"]).status, 2);
   assert.equal(runCli(["--part", "core", "--part", "heavy"]).status, 2);
 
-  // Existing non-directory file conflict must exit 2 in both split and single-part directory mode
   const existingFile = join(root, "existing.txt");
   put(existingFile, "keep");
   assert.equal(runCli([existingFile]).status, 2);
   assert.equal(runCli(["--part", "core", existingFile]).status, 2);
   assert.equal(readFileSync(existingFile, "utf8"), "keep");
 
-  // Non-existent directory target in single-part mode must create a directory and place core + heavy zips side by side
   const freshDir = join(root, "new-backup-dir");
   const coreRun = runCli(["--part", "core", `${freshDir}/`, "--json"]);
   assert.equal(coreRun.status, 0, coreRun.stderr);
@@ -513,14 +501,12 @@ test("pack_vault CLI handles non-existent directories, single-part zips, duplica
   assert.equal(existsSync(coreJson.archives[0].out), true);
   assert.equal(existsSync(heavyJson.archives[0].out), true);
 
-  // Explicit .zip target writes to that exact zip path
   const exactZip = join(root, "custom-all.zip");
   const allRun = runCli(["--part", "all", exactZip, "--json"]);
   assert.equal(allRun.status, 0, allRun.stderr);
   assert.equal(JSON.parse(allRun.stdout).archives[0].files, 2);
   assert.equal(existsSync(exactZip), true);
 
-  // Split mode with only core present skips empty heavy half; completely empty vault exits 1
   const coreOnlyVault = join(root, "core-only-vault");
   put(join(coreOnlyVault, "packs/only.jar"), "jar");
   const halfRun = runCli([join(root, "half-out"), "--json"], coreOnlyVault);
@@ -540,7 +526,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
   const root = mkdtempSync(join(tmpdir(), "mc-setup-vault-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  // Build real core, heavy, partial-sound, and sound-only zips
   const srcVault = join(root, "src/vault");
   put(join(srcVault, "packs/mod.jar"), "jar");
   put(join(srcVault, "packs_index.json"), "{}");
@@ -584,7 +569,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     };
   };
 
-  // 1) Repeatable --vault-zip core + heavy skips fetchSoundRaw, build_sound_vault, and build_mc_sound_vault
   {
     const local = join(root, "case1/vault");
     const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
@@ -599,7 +583,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     assert.equal(calls.includes("build_mc_sound_vault.mjs"), false);
   }
 
-  // 2) Partial sound archive (missing PEAKS.json) skips fetchSoundRaw but still runs build_sound_vault + build_mc_sound_vault
   {
     const local = join(root, "case2/vault");
     const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
@@ -609,7 +592,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     assert.equal(calls.includes("build_mc_sound_vault.mjs"), true);
   }
 
-  // 3) Legacy --sound-zip rejects non-sound archives (coreZip has packs/motion) and still builds mc-sound if absent
   {
     const local = join(root, "case3a/vault");
     const { opts } = makeDeps(local, join(root, "nonexistent-ext"));
@@ -623,7 +605,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     assert.equal(depB.calls.includes("build_mc_sound_vault.mjs"), true);
   }
 
-  // 4) Passing a directory to --vault-zip fails cleanly before doing work
   {
     const local = join(root, "case4/vault");
     const { calls, opts } = makeDeps(local, join(root, "nonexistent-ext"));
@@ -634,7 +615,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     assert.deepEqual(calls, []);
   }
 
-  // 5) Missing externalRoot with no sound archive surfaces Waiting for you notice instead of silent skip
   {
     const local = join(root, "case5/vault");
     const { calls, logs, opts } = makeDeps(local, join(root, "does-not-exist-ext"));
@@ -647,7 +627,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     );
   }
 
-  // 6) Remote archive temp filename hashes normalized URL independently of argument order and cleans up on success or failure
   {
     const local = join(root, "case6/vault");
     const runFetch = async (urls, zipSource = [coreZip, heavyZip]) => {
@@ -680,7 +659,6 @@ test("setupVault restores repeatable archives, enforces --sound-zip scope, skips
     assert.equal(first[0], reversed[1], "equivalent Drive links must share the same hash filename");
     assert.equal(first[1], reversed[0], "reversed order must preserve each URL's hash filename");
 
-    // Failed remote restore must also delete the downloaded temp zip
     let orphan = "";
     const badOpts = makeDeps(join(root, "case6-bad/vault"), join(root, "nonexistent-ext")).opts;
     await assert.rejects(

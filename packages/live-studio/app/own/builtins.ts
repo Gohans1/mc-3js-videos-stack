@@ -1,4 +1,3 @@
-// The studio's own libraries, what a film's effects are told apart from (the Film tab and the "Film" mark on the pickers)
 import { ANIMS } from "film-stage/animate-meta";
 import { EASES } from "film-stage/camera-meta";
 import {
@@ -30,9 +29,7 @@ export const BUILTINS = {
   eases: EASES,
   velocityEffects: VELOCITY_EFFECTS,
   textEases: TITLE_EASES,
-  // __timing: what src/timing-data.mjs keeps on a row while the page runs (its time before a freeze moved it), never saved
   rowKeys: {
-    // size, what: the template's framing words for a shot
     Shot: [...SHOT_KEYS, ...SHOT_SLOT_KEYS, "size", "what", "__timing"],
     "Camera key": [...CAM_KEYS, "__timing"],
     Text: [...TEXT_KEYS, ...TEXT_ITEM_KEYS, ...TEXT_SLOT_KEYS, "__timing"],

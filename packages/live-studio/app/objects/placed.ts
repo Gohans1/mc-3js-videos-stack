@@ -1,9 +1,4 @@
 import type { Tools } from "film/scene";
-// Objects the creator drops into the scene (the film's tools.placed, mc-assets/placed.ts), the way Unreal drops an asset from the
-// Content Browser into the level: the Objects library adds one where the pointer lets go or in front of the camera, a left-click on
-// the picture selects one (picture/pointer.ts), and the gizmo (three's TransformControls) moves, turns and sizes it. As with Unreal's Auto Key, a
-// gizmo edit keys the object at the playhead: the key there, or a new one. The objects live in one of the film's key files, so
-// undo, saving and an agent's edits are keys.ts and doc.ts's, and each object's keys are an ordinary key row.
 import * as THREE from "three";
 import { TransformControls } from "three/examples/jsm/controls/TransformControls.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
@@ -53,7 +48,6 @@ const transformOf = (o3: THREE.Object3D) => {
     scale: o3.scale.x,
   };
 };
-// A value being dragged in the Object panel: drawn as it goes, held off its keys until setTransform saves it
 export const previewTransform = (
   name: string,
   v: { at?: number[]; rot?: number[]; scale?: number },
@@ -77,13 +71,11 @@ export const cancelPreviewTransform = (name: string) => {
     S.dirty = true;
   }
 };
-// What the object is at the playhead, as drawn
 export const shownTransform = (name: string) => {
   const o3 = tools()?.objectOf(name);
   return o3 ? transformOf(o3) : null;
 };
 
-// ---------- Selecting and the gizmo
 let gizmo: TransformControls | null = null;
 export const isGizmoDragging = () => !!gizmo?.dragging;
 const overlay = new THREE.Scene();
@@ -194,7 +186,6 @@ const ensureGizmo = () => {
     setTransform(name, transformOf(o));
     p.hold = null;
   });
-  // One size for all three axes: whichever axis handle moved sets the other two
   gizmo.addEventListener("objectChange", () => {
     const o = gizmo!.object;
     if (o && gizmo!.getMode() === "scale") {
@@ -232,8 +223,8 @@ const ensureGizmo = () => {
 const applySnap = () => {
   if (!gizmo) return;
   const on = get().snap;
-  gizmo.setTranslationSnap(on ? 1 / 16 : null); // one game pixel
-  gizmo.setRotationSnap(on ? Math.PI / 12 : null); // 15 degrees
+  gizmo.setTranslationSnap(on ? 1 / 16 : null);
+  gizmo.setRotationSnap(on ? Math.PI / 12 : null);
   gizmo.setScaleSnap(on ? 1 / 16 : null);
 };
 export const setGizmo = (mode: GizmoMode) => {
@@ -257,14 +248,13 @@ studio.subscribe((s, was) => {
     S.dirty = true;
   }
 });
-// Re-points the gizmo whenever the selection or the built objects change (a rename or an undo builds a new one)
 export const attach = (redraw = true) => {
   if (gizmo?.dragging) return;
   const name = get().object;
   if (name && files.length && !placedData()[name]) {
     set({ object: null });
     return;
-  } // undone, or an agent took it out
+  }
   const o = name ? tools()?.objectOf(name) : null;
   if (redraw) S.dirty = true;
   const native = !o ? nativeSelection() : null;
@@ -339,8 +329,6 @@ export const selectTarget = (target: SceneTarget | null, additive = false) => {
       : [ref],
   );
 };
-// After the film draws: the selection's box, what the pointer is over and the gizmo, on top of the picture, outside the film's
-// own effects and its scene
 export const drawGizmo = (sceneTools = S.tools) => {
   if (!sceneTools) return;
   const { clean, mirror } = get().preview;
@@ -371,7 +359,6 @@ export const drawGizmo = (sceneTools = S.tools) => {
   showPath(sceneTools.placed ?? null, own ? name : null, get().keysRev);
   const r = sceneTools.renderer;
   if (!r) return;
-  // Both render sizes occupy the same CSS frame; keep the selection one screen pixel wide in either quality.
   boxMaterial.linewidth = hoverMaterial.linewidth =
     r.domElement.width / Math.max(1, S.el.canvas.clientWidth);
   if (gizmo) gizmo.camera = sceneTools.camera;
@@ -385,7 +372,6 @@ export const pickAt = (x: number, y: number) => {
   return S.tools ? hitTarget(S.tools.scene, S.tools.camera, targets(S.tools), x, y) : null;
 };
 
-// Where a drop at (x, y) on the picture lands: the surface under it, else 3 m in front of the camera; facing the camera
 export const dropPoint = (x: number, y: number, hitWorld?: number[]) => {
   const cam = S.tools!.camera;
   const at = hitWorld
@@ -401,7 +387,6 @@ export const dropPoint = (x: number, y: number, hitWorld?: number[]) => {
   return { at: at.toArray(), yaw: Math.atan2(-to.x, -to.z) * DEG };
 };
 
-// The library's drag: a ghost follows the pointer, and letting go over the picture drops the object on what lies under it
 export const startObjectCarry = (
   what: string,
   e: PointerEvent,
@@ -436,7 +421,6 @@ export const startObjectCarry = (
   addEventListener("pointercancel", end);
   move(e);
 };
-// The + button: the middle of the picture
 export const addInFront = (what: string, look: (x: number, y: number) => { world?: number[] }) => {
   const p = dropPoint(0.5, 0.6, look(0.5, 0.6).world);
   addObject(what, p.at, what.startsWith("mob:") ? p.yaw : 0);

@@ -1,5 +1,3 @@
-// Persistent row fields carry their owner's edit callback; runtime objects and code remain inspection-only.
-
 import { editableFields, type FieldPath } from "./custom-fields";
 type Rec = Record<string, unknown>;
 interface Fx extends Rec {
@@ -21,17 +19,17 @@ export interface OwnInput {
   eases?: Record<string, Fn>;
   velocityEffects?: readonly (string | Fx)[];
   checks?: Record<string, Fn>;
-  sounds?: readonly { name: string; title?: string }[]; // the film's own sound files (the Audio library's This film)
-  objects?: readonly string[]; // draw.tools.objects' names: what the film's code builds in 3D
-  materials?: readonly string[]; // draw.tools.materials' names
-  shapes?: readonly Fx[]; // titles.shapes: stickers only the film draws
-  textEases?: readonly string[]; // titles.eases
+  sounds?: readonly { name: string; title?: string }[];
+  objects?: readonly string[];
+  materials?: readonly string[];
+  shapes?: readonly Fx[];
+  textEases?: readonly string[];
   variants?: readonly {
     id: string;
     title: string;
     options: readonly { id: string; title: string }[];
     pick?: { title: string };
-    ranges: readonly (readonly [number, number])[]; // heard seconds
+    ranges: readonly (readonly [number, number])[];
   }[];
   rows?: readonly {
     kind: string;
@@ -48,39 +46,36 @@ export interface Builtins {
   eases: Record<string, Fn>;
   velocityEffects: readonly string[];
   textEases?: readonly string[];
-  rowKeys?: Record<string, readonly string[]>; // by row kind, the fields the studio or its template reads
+  rowKeys?: Record<string, readonly string[]>;
 }
 type Pick = { fx?: string } | undefined;
 export interface Usage {
-  shots: readonly { t: number; transition?: Pick; anim?: Partial<Record<keyof Slots<Fx>, Pick>> }[]; // heard seconds
+  shots: readonly { t: number; transition?: Pick; anim?: Partial<Record<keyof Slots<Fx>, Pick>> }[];
   texts: readonly { kind: string; from: number; in?: Pick; out?: Pick }[];
   sounds?: readonly { name: string; t: number }[];
 }
 
-// One field as Blender's Custom Properties panel shows it: the name, a one-line value, and the whole of a long one on demand
 export interface OwnField {
   key: string;
   text: string;
-  code?: () => string; // written out only when opened: an engine object the film hands over can be megabytes
+  code?: () => string;
 }
 export interface OwnItem {
   edits?: { t: number; value: unknown; change: (value: unknown) => void }[];
   id: string;
   title: string;
   tip?: string;
-  part?: string; // which list of its group it is in: "In", "Out", "Text In"…
-  changes?: boolean; // a built-in's id with a value of its own
+  part?: string;
+  changes?: boolean;
   used: number[];
   fields: OwnField[];
 }
 export interface OwnGroup {
-  id: string; // "audio", "text"…, or "own:<name>" for a kind the film made up
+  id: string;
   title: string;
   items: OwnItem[];
 }
 
-// What the studio already reads from a film's draw and its tools (src/contract.ts Draw, Tools), what makeTransitions adds, and
-// what templates/film's scene hands over in every film (clips, composer, a props film's anchor): not the film's own work
 const TOOLS = new Set([
   "clips",
   "composer",
@@ -125,7 +120,7 @@ const DRAW = new Set([
 export const otherKeys = (of: object, part: "draw" | "tools" = "draw") =>
   Object.keys(of).filter((k) => !(part === "tools" ? TOOLS : DRAW).has(k));
 
-const SHOWN = new Set(["id", "title", "tip", "cat", "category"]); // already in the item's head
+const SHOWN = new Set(["id", "title", "tip", "cat", "category"]);
 const lines = (s: string) => s.split("\n").length;
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 const MOST = 20_000;
@@ -172,7 +167,6 @@ export const fieldsOf = (x: Rec): OwnField[] =>
     .sort()
     .flatMap((k) => valueField(k, x[k]) ?? []);
 
-// The same value a built-in has: functions by identity (a film can't rewrite one without making its own), the rest by content
 const same = (a: Rec, b: Rec) => {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const k of keys) {
@@ -183,14 +177,13 @@ const same = (a: Rec, b: Rec) => {
     try {
       if (JSON.stringify(x) !== JSON.stringify(y)) return false;
     } catch {
-      return false; // points back at itself: not a built-in's plain value
+      return false;
     }
   }
   return true;
 };
 const seconds = (ts: number[]) => [...new Set(ts)].sort((a, b) => a - b);
 
-// The film's own against the studio's: a new id, or a built-in's id with a value of its own
 export const isOwnFx = (x: Fx, base: readonly Fx[]) => {
   const b = base.find((y) => y.id === x.id);
   return !b || (b !== x && !same(x, b));
@@ -205,7 +198,6 @@ export const isOwnVelocity = (fx: string | Fx, base: readonly string[]) =>
     typeof fx === "string" ? { id: fx } : fx,
     base.map((id) => ({ id })),
   );
-// CapCut's "Yours", named as the Audio tab's: a picker's chip after Favorites keeping only the film's own, when it has any
 export const THIS_FILM = "This film";
 export const withFilmChip = (cats: string[], any: boolean) =>
   any ? cats.flatMap((c) => (c === "Favorites" ? [c, THIS_FILM] : [c])) : cats;
@@ -249,14 +241,12 @@ const named = (rec: Record<string, unknown> | undefined, base: Record<string, un
     );
 const parted = (items: OwnItem[], part: string) => items.map((x) => ({ ...x, part }));
 
-// A kind the film made up: a list whose every entry has an id, as the studio's own libraries are
 const isKind = (v: unknown): v is Fx[] =>
   Array.isArray(v) &&
   v.length > 0 &&
   v.every(
     (x) => !!x && typeof x === "object" && typeof (x as Rec).id === "string" && (x as Rec).id,
   );
-// "tools.clips" → "Clips", "weatherFx" → "Weather fx"
 const kindTitle = (key: string) => {
   const w = key
     .replace(/^tools\./, "")
@@ -266,8 +256,6 @@ const kindTitle = (key: string) => {
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
-// The fields of its own a film puts on its timeline rows, one item per field name and row kind. A kind the studio has no
-// list of read fields for shows none of them, rather than every field as the film's own
 const short = (v: unknown) =>
   typeof v === "boolean"
     ? v
@@ -332,7 +320,7 @@ const rowFields = (rows: OwnInput["rows"], known: Builtins["rowKeys"]): OwnItem[
         ...(uses.some((u) => u.change) && {
           edits: uses.flatMap((u) => (u.change ? [{ t: u.t, value: u.v, change: u.change }] : [])),
         }),
-        id: key, // the row kind is its part, so the name alone heads it
+        id: key,
         title: key,
         part: kind,
         used: seconds(uses.map((u) => u.t)),
@@ -378,7 +366,7 @@ export const ownWork = (film: OwnInput, base: Builtins, usage: Usage): OwnGroup[
           used: seconds((usage.sounds ?? []).flatMap((u) => (u.name === x.name ? [u.t] : []))),
           fields: [],
         }))
-        .sort((a, b) => Number(!a.used.length) - Number(!b.used.length)), // the ones playing first
+        .sort((a, b) => Number(!a.used.length) - Number(!b.used.length)),
     },
     {
       id: "text",

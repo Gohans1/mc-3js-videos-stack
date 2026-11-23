@@ -1,5 +1,3 @@
-// Cherry-picks blocks & items from vetted packs in vault/packs into assets/public/picked.zip.
-// Can be imported ({ pickBlocks, updatePicks, removePicks }) or run inside a film: bun ../../packages/mc-assets/pick.mjs
 import { createHash } from "node:crypto";
 import {
   existsSync,
@@ -97,7 +95,13 @@ function buildPickedZip({
     const hasOverlay = (path) => entries.has(path);
     const get = (path) => {
       if (!entries.has(path)) return undefined;
-      const data = readZipMembers(bytes, entries, [path]).get(path);
+      let zipErr = null;
+      const data = readZipMembers(bytes, entries, [path], {
+        onError: (_name, err) => {
+          zipErr = err;
+        },
+      }).get(path);
+      if (zipErr) throw new Error(`${jar}: failed to extract ${path}: ${zipErr.message}`);
       if (!data) throw new Error(`${jar}: cannot read ${path}`);
       return data;
     };
@@ -300,14 +304,12 @@ function summarizeZip(zip) {
   return zip.summary;
 }
 
-/** Builds `assets/public/picked.zip` from the film's manifest and the prepared vault packs. */
 export function pickBlocks(options = {}) {
   const zip = buildPickedZip(options);
   stagePickFiles([[zip.summary.outPath, zip.bytes]]).commit();
   return summarizeZip(zip);
 }
 
-/** Builds a temporary in-memory picked ZIP for read-only previews without touching film files. */
 export function buildPickedZipBytes({
   picks,
   vaultDir = defaultPacksDir(),
@@ -380,7 +382,6 @@ function mergePickGroup(picks, { jar, namespace, blocks = [], items = [], licenc
   return added;
 }
 
-/** Validates/builds `picked.zip` before atomically committing multiple pack picks into `pack/picks.json`. */
 export function preparePicksBatch(
   cwd,
   groups,
@@ -426,7 +427,6 @@ export function updatePicksBatch(cwd, groups, options) {
   return preparePicksBatch(cwd, groups, options).commit();
 }
 
-/** Atomically merges picked blocks/items into `pack/picks.json` and rebuilds `picked.zip` unless `build === false`. */
 export function updatePicks(
   cwd,
   {
@@ -450,7 +450,6 @@ export function updatePicks(
   });
 }
 
-/** Removes blocks/items from `pack/picks.json`, prunes empty pack entries, and rebuilds `picked.zip` unless `build === false`. */
 export function removePicksBatch(
   cwd,
   groups,

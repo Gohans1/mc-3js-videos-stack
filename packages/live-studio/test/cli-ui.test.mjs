@@ -24,7 +24,7 @@ import { CliBrowse } from "../app/cli/CliBrowse.tsx";
 import { buildVerbatimCopyText, CliConsole } from "../app/cli/CliConsole.tsx";
 import * as cliConsole from "../app/cli/CliConsole.tsx";
 import { SaveTemplatePanel } from "../app/cli/CliDialogs.tsx";
-import { saveCliTemplate } from "../app/cli/client.ts";
+import { openCliRunStream, saveCliTemplate } from "../app/cli/client.ts";
 import { CliFieldControl } from "../app/cli/CliFieldControl.tsx";
 import { CliLegoBar } from "../app/cli/CliLegoBar.tsx";
 import { CliWorkbench, nextCompactTabForChange } from "../app/cli/CliWorkbench.tsx";
@@ -1607,7 +1607,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     assert.ok(catSlice.includes('role="group"'));
     assert.ok(catSlice.includes("overflow-x-auto"));
 
-    // Template card Run button should be disabled when required args are missing
     const { spec: invalidSpec } = buildTemplatePreviewCommand(incompleteTpl, ctx);
     assert.ok(invalidSpec && invalidSpec.validationErrors.length > 0);
     const tplIdx = browseHtml.indexOf("Init missing project");
@@ -1773,7 +1772,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     assert.ok(outputHtml.includes("Usage: find"));
     assert.ok(outputHtml.includes("Run"));
 
-    // Pure transition rules:
     assert.deepEqual(
       nextCompactTabForChange({
         currentTab: "builder",
@@ -1831,7 +1829,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       { nextTab: "builder", consumeFocus: false },
     );
 
-    // Store focusConsoleRunId flow (Browse Output & Browse template Run):
     const origFetch = globalThis.fetch;
     const savedState = cliStore.getState();
     try {
@@ -2510,7 +2507,6 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         ),
       );
 
-    // Default still-PNG mode and video mode hide --out -> no empty Options section rendered
     assert.equal(renderSheet({}).includes('aria-label="Options"'), false);
     assert.equal(
       renderSheet({ video: "renders/draft_video.mp4", target: "overview" }).includes(
@@ -2518,11 +2514,9 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       ),
       false,
     );
-    // Image-list mode shows --out inside Options
     const imagesHtml = renderSheet({ images: ["renders/view_a.png"] });
     assert.equal(imagesHtml.includes('aria-label="Options"'), true);
     assert.equal(imagesHtml.includes("Output Sheet Path"), true);
-    // Conflict (both video + images) hides --out -> Options collapses closed again
     assert.equal(
       renderSheet({
         video: "renders/draft_video.mp4",
@@ -2530,5 +2524,139 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       }).includes('aria-label="Options"'),
       false,
     );
+  });
+
+  test("openCliRunStream handles malformed done JSON, isolates onDone throws, preserves transient reconnects, and cli-store reattaches after terminal error", async () => {
+    const origES = globalThis.EventSource;
+    const origFetch = globalThis.fetch;
+    const prevState = cliStore.getState();
+    const instances = [];
+    class FakeEventSource {
+      static CONNECTING = 0;
+      static OPEN = 1;
+      static CLOSED = 2;
+      constructor(url) {
+        this.url = url;
+        this.listeners = new Map();
+        this.closed = false;
+        this.readyState = FakeEventSource.CONNECTING;
+        this.onerror = null;
+        instances.push(this);
+      }
+      addEventListener(type, fn) {
+        this.listeners.set(type, fn);
+      }
+      close() {
+        this.closed = true;
+        this.readyState = FakeEventSource.CLOSED;
+      }
+    }
+    let doneCalled = 0;
+    const errorArgs = [];
+    try {
+      globalThis.EventSource = FakeEventSource;
+      openCliRunStream("r-bad-done", -1, {
+        onChunk: () => {},
+        onDone: () => {
+          doneCalled++;
+        },
+        onError: (terminal) => {
+          errorArgs.push(terminal);
+        },
+      });
+      instances[0].listeners.get("done")?.({ data: "{bad-json" });
+      assert.equal(doneCalled, 0);
+      assert.deepEqual(errorArgs, [true]);
+      assert.equal(instances[0].closed, true);
+
+      let shapeErrorCalled = 0;
+      openCliRunStream("r-bad-shape", -1, {
+        onChunk: () => {},
+        onDone: () => {
+          doneCalled++;
+        },
+        onError: (terminal) => {
+          assert.equal(terminal, true);
+          shapeErrorCalled++;
+        },
+      });
+      instances[1].listeners.get("done")?.({ data: JSON.stringify({ oops: true }) });
+      assert.equal(doneCalled, 0);
+      assert.equal(shapeErrorCalled, 1);
+
+      let throwErrorCalled = 0;
+      openCliRunStream("r-done-throws", -1, {
+        onChunk: () => {},
+        onDone: () => {
+          throw new Error("boom in onDone");
+        },
+        onError: () => {
+          throwErrorCalled++;
+        },
+      });
+      assert.throws(
+        () =>
+          instances[2].listeners.get("done")?.({
+            data: JSON.stringify({ runId: "r-done-throws", status: "done" }),
+          }),
+        /boom in onDone/,
+      );
+      assert.equal(throwErrorCalled, 0);
+
+      const activeRun = {
+        runId: "r-reattach",
+        commandId: "help",
+        title: "help",
+        displayCommand: "bun run help",
+        cwd: ".",
+        status: "running",
+        startedAt: Date.now(),
+        output: [],
+      };
+      let failRunsSync = true;
+      globalThis.fetch = async (url) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (u.endsWith("/api/cli/runs")) {
+          if (failRunsSync) throw new Error("transient offline");
+          return new Response(JSON.stringify({ active: activeRun, last: null }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ ok: true, run: activeRun }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      };
+      await dispatchCliRun({ commandId: "help" });
+      assert.equal(instances.length, 4);
+
+      instances[3].readyState = FakeEventSource.CONNECTING;
+      instances[3].onerror?.();
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(
+        instances[3].closed,
+        false,
+        "transient EventSource error must keep stream open for browser auto-reconnect",
+      );
+      assert.equal(instances.length, 4);
+
+      failRunsSync = false;
+      instances[3].listeners.get("done")?.({ data: "{corrupt" });
+      await new Promise((r) => setTimeout(r, 15));
+      assert.equal(instances[3].closed, true);
+      assert.equal(
+        instances.length,
+        5,
+        "syncCliRuns should reattach a fresh stream after terminal error",
+      );
+      instances[4].listeners.get("done")?.({
+        data: JSON.stringify({ runId: "r-reattach", status: "done", exitCode: 0 }),
+      });
+    } finally {
+      cliStore.setState(prevState);
+      globalThis.EventSource = origES;
+      globalThis.fetch = origFetch;
+    }
   });
 });

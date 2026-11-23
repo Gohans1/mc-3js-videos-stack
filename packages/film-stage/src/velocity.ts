@@ -2,11 +2,7 @@ import * as THREE from "three";
 import { FullScreenQuad } from "three/addons/postprocessing/Pass.js";
 
 import type { CameraOptics } from "./animate-meta";
-import {
-  type CustomVelocityHandler,
-  VELOCITY_EFFECTS,
-  type VelocityFrame,
-} from "./velocity-meta";
+import { type CustomVelocityHandler, VELOCITY_EFFECTS, type VelocityFrame } from "./velocity-meta";
 
 export * from "./velocity-meta";
 
@@ -33,9 +29,6 @@ const hasOptics = (o?: CameraOptics | null): o is CameraOptics =>
 const VERT =
   "varying vec2 uvOut; void main() { uvOut = uv; gl_Position = vec4(position.xy, 0., 1.); }";
 
-// The screen is copied into `source` once, then every shader below reads it (and the blur of it) and writes over the canvas.
-// No EffectComposer pass is used: its passes expect a render target chain and their materials carry three's output color
-// conversion, which turned a straight copy of the screen into a washed-out frame under r187.
 export function makeVelocity(
   renderer: THREE.WebGLRenderer,
   extra?: Record<string, CustomVelocityHandler>,
@@ -43,7 +36,7 @@ export function makeVelocity(
   const size = renderer.getDrawingBufferSize(new THREE.Vector2());
   const source = new THREE.FramebufferTexture(size.x, size.y);
   source.colorSpace = THREE.NoColorSpace;
-  source.minFilter = THREE.LinearFilter; // the downsample reads it at half res, so let the GPU average the texels
+  source.minFilter = THREE.LinearFilter;
   source.magFilter = THREE.LinearFilter;
   const targetOpts = {
     depthBuffer: false,
@@ -57,7 +50,7 @@ export function makeVelocity(
     targetOpts,
   );
   const blurB = new THREE.WebGLRenderTarget(blurA.width, blurA.height, targetOpts);
-  const composed = new THREE.WebGLRenderTarget(size.x, size.y, targetOpts); // velocity output, when the lens runs after it
+  const composed = new THREE.WebGLRenderTarget(size.x, size.y, targetOpts);
   const quad = new FullScreenQuad();
 
   const downMaterial = new THREE.ShaderMaterial({
@@ -267,8 +260,6 @@ export function makeVelocity(
     }
   };
 
-  // The blur the frame or the lens asks for, made by hand: a 2x downsample, then two box passes whose reach grows with the
-  // amount (each pass is one tap pair per axis, so the last one lands at a defocus radius of about 3.5% of the frame).
   const blur = (amount: number, input: THREE.Texture = source) => {
     downMaterial.uniforms.tex.value = input;
     downMaterial.uniforms.texel.value.set(1 / size.x, 1 / size.y);
@@ -377,8 +368,6 @@ export function makeVelocity(
         opticsMaterial.uniforms.blur.value = lensBlur;
         if (lensBlur > 1e-3) blur(lensBlur, source);
       }
-      // The lens looks at the scene first, then the frame effect rides on top of what the lens produced: a whip flash or
-      // colour split must not be swallowed by a lens blur that was mixed from the untouched frame.
       if (runVel && activeFrame) {
         if (runOpt) {
           drawOptics(composed, effOptics!);

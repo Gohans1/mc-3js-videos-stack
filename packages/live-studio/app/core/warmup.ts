@@ -3,7 +3,6 @@ import { prefetchFile } from "./net";
 
 let warmed = false;
 
-/** Starts film data prefetches once per page load without waiting for React mount. */
 export const warmBootRequests = () => {
   if (warmed) return;
   warmed = true;

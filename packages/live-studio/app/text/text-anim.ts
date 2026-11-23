@@ -44,14 +44,12 @@ export const TINT_SWATCHES = [
   "#8B7EC8",
 ] as const;
 
-// Cinetic on-twos: a voice may step its clock every 2 or 3 film frames
 export const TITLE_HOLDS = [
   { id: "1", title: "Smooth" },
   { id: "2", title: "On twos" },
   { id: "3", title: "On threes" },
 ] as const;
 
-// The ids come from film-stage's TITLE_EASES, so a curve added there shows here even before it gets words of its own
 const CURVE_WORDS: Record<string, { title: string; tip: string }> = {
   auto: { title: "Auto", tip: "Each voice's own tuned Cinetic curve" },
   linear: { title: "Linear", tip: "Constant rate from start to finish" },
@@ -72,7 +70,6 @@ const metaOf = (idOrMeta: string | TitleFxMeta | null | undefined): TitleFxMeta 
   return typeof idOrMeta === "string" ? BUILTIN_VOICES.get(idOrMeta) : idOrMeta;
 };
 
-// What a voice takes comes from its catalogue entry (film-stage titles-catalog.ts) or a film's own voice meta
 export const voiceSupportsStagger = (idOrMeta: string | TitleFxMeta | null | undefined) =>
   metaOf(idOrMeta)?.stagger === true;
 

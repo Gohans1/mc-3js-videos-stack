@@ -24,7 +24,6 @@ const isWheelDefault = (w?: WheelValue) =>
   !w ||
   ((w.rgb ?? [0, 0, 0]).every((v) => Math.abs(v) < 1e-4) &&
     Math.abs((w.saturation ?? 100) - 100) < 1e-4);
-// Hue positions measured from the user's CapCut color-wheel screenshot c1c52e07.
 const RING_HUES = [347.368, 279.718, 224.615, 193.663, 110, 54.247, 30.286, 11.172, -12.632];
 const polar = (rgb: RGB) => {
   const [r, g, b] = rgb,

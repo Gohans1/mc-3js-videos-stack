@@ -1,5 +1,3 @@
-// Rhubarb cues index native audio samples; narration clips place them on the scene clock.
-// voice.warp places narrative anchors, never stretches mouth cues; mc-actor reads [[scene second, shape], ...].
 import { narrationLines } from "./narration.ts";
 
 type Cue = [number, string];
@@ -15,7 +13,6 @@ interface LipsEdit {
   audio?: Parameters<typeof narrationLines>[1];
 }
 
-// Called every frame: kept until one of the lists it reads is replaced (the studio never edits EDIT's lists in place)
 const memo = new Map<string, { of: unknown[]; cues: Cue[] }>();
 export const mouthCues = (edit: LipsEdit, who: string): Cue[] => {
   const of = [edit.takes, edit.mouth, edit.voice?.warp, edit.audio];
@@ -41,7 +38,6 @@ const build = (edit: LipsEdit, who: string): Cue[] => {
   const spans = narrationLines(lines, edit.audio, Infinity, true)
     .flatMap((l) => l.words)
     .sort((a, b) => a.s - b.s);
-  // where a clip cuts a take short the mouth shuts, unless the next shape starts right there
   const cues = spans.flatMap((x, i) => {
     const next = spans[i + 1];
     const cue: Cue = [x.s, x.w];

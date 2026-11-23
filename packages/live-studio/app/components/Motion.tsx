@@ -21,10 +21,6 @@ function resolveDirection(
   return to > from ? 1 : -1;
 }
 
-/**
- * Animates panel content on key changes using WAAPI, skipping the initial mount
- * unless `animateMount` is true and canceling prior runs when interrupted.
- */
 export function TabStage({
   activeKey,
   order,
@@ -100,9 +96,6 @@ export function TabStage({
   );
 }
 
-/**
- * Runs a crisp one-shot entrance animation on mount (and optional key changes).
- */
 export function useEnterMotion(
   ref: RefObject<HTMLElement | null>,
   opts: {

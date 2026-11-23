@@ -1,5 +1,3 @@
-// jev.ts ranking a list longer than one Jev Choice holds (255 options): heats, then heats of the winners, until a final
-// fits. A stand-in vote gives every option a share, as Jev's rounded probabilities do for the few it likes
 import { expect, test } from "bun:test";
 
 import { jevRank } from "../../packages/clip-catalog/jev";

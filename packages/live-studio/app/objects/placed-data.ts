@@ -68,7 +68,6 @@ export const setSnap = (on: boolean) => {
   set({ snap: on });
 };
 
-// ---------- Adding, removing, renaming
 export const addObject = (what: string, at: number[], yaw = 0) => {
   const name = freeName(titleOf(what));
   const ok = edit((d) => {
@@ -95,7 +94,6 @@ export const renameObject = (from: string, to: string): boolean => {
     say(`There's already an object called ${to}`);
     return false;
   }
-  // Rebuilt in the same order, so the key rows stay where they were
   edit((d) => {
     const all = Object.entries(d);
     for (const k of Object.keys(d)) delete d[k];
@@ -105,8 +103,6 @@ export const renameObject = (from: string, to: string): boolean => {
   return true;
 };
 
-// How an object moves into its key i (components/EasePicker.tsx): a key without an ease moves on mc-assets/placed.ts's
-// smoothstep, which the "inout" tile (Ease) draws to within about 1%
 export const OBJECT_EASE = "inout";
 export const setKeyEase = (name: string, i: number, ease: Ease | undefined) =>
   edit((d) => {
@@ -125,7 +121,6 @@ export const placedDoc = {
     }),
 };
 
-// The key at the playhead (within half a frame), or a new one there copied from the key before it
 const keyHere = (o: PlacedObject) => {
   const ks = o.keys,
     near = ks.findIndex((k) => Math.abs(k.t - S.t) < 0.5 / FPS);
@@ -135,11 +130,10 @@ const keyHere = (o: PlacedObject) => {
   const k = { ...structuredClone(ks[Math.max(0, at - 1)]), t: r3(S.t) };
   delete k.visible;
   delete k.clip;
-  delete k.rate; // a copied clip would start over here
+  delete k.rate;
   ks.splice(at, 0, k);
   return { k, fresh: true };
 };
-// Keys the object at the playhead with these values (the gizmo's, or typed in the Object panel); the rest stay as they are there
 export const setTransform = (
   name: string,
   v: { at?: number[]; rot?: number[]; scale?: number },
@@ -158,8 +152,6 @@ export const setTransform = (
   });
   if (fresh) say(`Keyframe added to ${name} at ${stamp(S.t)}`, 2500);
 };
-// CapCut's ◇: off a key, a new key holding the object where it is drawn there, so nothing moves until a value changes; on a
-// key, that key taken out (an object keeps its last one: deleting the object is what takes it out of the film)
 export const toggleKey = (name: string) => {
   const o = placedData()[name];
   if (!o) return;
@@ -181,9 +173,6 @@ export const toggleKey = (name: string) => {
   )
     say(`Keyframe at ${stamp(t)} deleted. Ctrl+Z to undo`);
 };
-// The mob's clip from the playhead on, keyed like a value under CapCut's ◇: the key here names it (a new key if none), so it
-// starts there and runs until a later key names another. A clip set before keys carried clips ran the whole film: it moves
-// onto the first key, where it meant to start
 const ownClip = (o: PlacedObject) => {
   if (o.clip !== undefined && o.keys[0].clip === undefined) {
     o.keys[0].clip = o.clip;
@@ -208,7 +197,6 @@ export const setClip = (name: string, clip: string) => {
     3000,
   );
 };
-// The key at the playhead names no clip of its own again: the one before carries on
 export const clearClip = (name: string) =>
   edit((d) => {
     const o = d[name];
@@ -220,12 +208,11 @@ export const clearClip = (name: string) =>
       delete k.rate;
     }
   });
-// The speed of the clip running at the playhead (clip: its name), on the key that started it, or keyed here if none did
 export const startedBy = (o: PlacedObject) => {
   const on = o.keys.filter((x) => x.t <= S.t + 0.5 / FPS);
   return (
     on.filter((x) => x.clip !== undefined).at(-1) ?? (o.clip !== undefined ? (on[0] ?? null) : null)
-  ); // the object's own: its first key
+  );
 };
 export const setClipRate = (name: string, rate: number, clip: string) =>
   edit((d) => {
@@ -240,9 +227,7 @@ export const setClipRate = (name: string, rate: number, clip: string) =>
     if (rate === 1) delete k.rate;
     else k.rate = rate;
   });
-// CapCut's reset, keyed at the playhead: no turn, size 1. Position has no default to go back to
 export const resetTransform = (name: string) => setTransform(name, { rot: [0, 0, 0], scale: 1 });
-// Shown from here on, or hidden (a key at the playhead holds it)
 export const setVisible = (name: string, on: boolean) =>
   edit((d) => {
     const o = d[name];

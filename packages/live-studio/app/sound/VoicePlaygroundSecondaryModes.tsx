@@ -52,9 +52,6 @@ const ENTITY_REDACTION_MODE_ITEMS = [
   { value: "redacted", label: "Literal ([redacted])" },
 ];
 
-/**
- * Speech-to-Speech (Voice Changer) source audio selector and background noise toggle.
- */
 export function VoiceChangerPanel({
   pg,
   filmTakeOptions,
@@ -124,9 +121,6 @@ export function VoiceChangerPanel({
   );
 }
 
-/**
- * Speech-to-Text (Scribe v2) panel supporting upload, Playground clip, or Film Take transcription.
- */
 export function SttTranscriptionPanel({
   pg,
   filmTakeOptions,

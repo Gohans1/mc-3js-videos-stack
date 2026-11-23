@@ -49,11 +49,6 @@ function groupCandidatesToPicks(candidates) {
   }));
 }
 
-/**
- * Resolves any unpicked (or --source-specified) modpack blocks/items read-only from vault/packs
- * into an ephemeral temporary ZIP so `bun run asset preview` can visually inspect candidates
- * before committing to `pack/picks.json` or mutating `assets/public/picked.zip`.
- */
 export function stagePreviewPackOverlay(project, items, { source } = {}) {
   if (source !== undefined && (typeof source !== "string" || !source.trim())) {
     throw new AssetUsageError("--source must be a non-empty pack slug, jar, or source name", 2);
@@ -180,7 +175,6 @@ export function stagePreviewPackOverlay(project, items, { source } = {}) {
       vanillaJar,
     });
   } catch (batchErr) {
-    // Isolate broken vault assets so valid siblings in the same batch still render cleanly
     validCandidates = [];
     if (candidates.length === 1) {
       const c = candidates[0];

@@ -12,7 +12,6 @@ export type DofUpdate = {
   heightPx?: number;
 };
 
-/** Physical shallow depth-of-field pass placed pre-Bloom/AgX, bypassed at zero GPU cost when fstop <= 0. */
 export function makeDof(
   composer: EffectComposer,
   camera: Camera,

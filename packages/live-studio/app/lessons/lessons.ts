@@ -1,6 +1,3 @@
-// The Lessons tab's state: both this film's and the repo's lessons/*.md (src/lesson-files.mjs), what the creator is typing into them, and the copy of
-// each file they last saw, so what the AI changed since stays inspectable as a quick diff (changes.ts). AI edits always apply
-// immediately: stale local drafts yield automatically to newer versions on disk, while unsaved edits wait on the device through a reload
 import { createStore, useStore } from "zustand";
 
 import { LESSON_TEXT_MAX, lessonPath, lessonTemplate } from "../../src/lesson-template";
@@ -48,7 +45,7 @@ export interface AiNotice {
 }
 interface Edit {
   text: string;
-  base: string | null; // the version these words were typed on
+  base: string | null;
   saving?: boolean;
   failed?: string;
 }
@@ -68,7 +65,7 @@ interface LessonsState {
   viewByPath: Record<string, LessonViewMode>;
   edits: Record<string, Edit>;
   seen: Record<string, { tag: string; text: string }>;
-  pick: { key: string; range: readonly [number, number] } | null; // words to select as the editor opens a new file
+  pick: { key: string; range: readonly [number, number] } | null;
   aiNotice: AiNotice | null;
 }
 export const lessonTrailKey = ({ folder, open }: Pick<LessonsState, "folder" | "open">) =>
@@ -243,7 +240,6 @@ export const loadLessons = async () => {
 
   const incoming = got.files.map(normalizeFile);
 
-  // Keep any local file versions saved or deleted after this GET started so stale responses never overwrite newer actions
   const mergedFiles = incoming.flatMap((f) => {
     if ((savedAtSeq.get(f.key) ?? 0) > startSaveSeq) {
       const local = fileOf(f.key);
@@ -261,7 +257,6 @@ export const loadLessons = async () => {
   }
   const sorted = sortFiles(mergedFiles);
 
-  // a file never opened here starts as read: only what changes from now on is news
   const activeKeys = new Set(sorted.map((f) => f.key));
   const seen: LessonsState["seen"] = {};
   const liveEdits = get().edits;
@@ -271,7 +266,6 @@ export const loadLessons = async () => {
   for (const f of sorted) seen[f.key] ??= { tag: f.tag, text: f.text };
   setSeen(seen);
 
-  // words typed on an older version automatically yield to AI changes on disk
   let edits = get().edits;
   let pick = get().pick;
   let open = get().open;
@@ -308,7 +302,6 @@ export const loadLessons = async () => {
     aiNotice,
   });
 
-  // words a reload cut off before they were saved, still on the version they were typed on (skip actively debounced or failed edits)
   for (const [key, e] of Object.entries(edits))
     if (!e.saving && !e.failed && !timers.has(key)) void saveLesson(key);
 };
@@ -351,7 +344,6 @@ export const saveLesson = async (key: string): Promise<void> => {
     saveSeq += 1;
     savedAtSeq.set(key, saveSeq);
     set({ files: upsertFile(get().files, { key, scope, path, tag, text: sent }) });
-    // the creator's own words are no news to them
     setSeen({ ...get().seen, [key]: { tag, text: sent } });
     const rest = omitKey(get().edits, key);
     if (now.text === sent) setEdits(rest);
@@ -377,7 +369,6 @@ export const saveLesson = async (key: string): Promise<void> => {
               : "the studio didn't answer",
       },
     });
-    // a dropped line tries again; a refused name waits for the creator
     if (!body.error)
       timers.set(
         key,
@@ -550,7 +541,6 @@ export const deleteLesson = async (
   }
 };
 
-// A new file: lessons/<name>.md in this film or every film (src/lesson-template.ts), its rule heading picked for the first words
 export const LESSON_NAME = /^(?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+(?:\.md)?$/;
 export const newLesson = (name: string, scope: LessonScope = "film") => {
   const path = lessonPath(name);
@@ -563,7 +553,6 @@ export const newLesson = (name: string, scope: LessonScope = "film") => {
   openLesson(key);
   void saveLesson(key);
 };
-// the editor takes the pick once, as it opens the file
 export const takePick = (key: string) => {
   const p = get().pick;
   if (p?.key !== key) return null;

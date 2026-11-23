@@ -115,7 +115,6 @@ function FieldContent({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
-// row: the words of a settings row (a switch beside them), in the list's own size and weight
 const fieldLabelVariants = cva("", {
   variants: {
     variant: {

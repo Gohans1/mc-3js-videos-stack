@@ -443,14 +443,12 @@ describe("voice:lips src/edit.json and take validation", () => {
     writeEdit(film, { takes: [{ id: "01", by: "steve", start: 0, text: "Hi" }] });
     writeFileSync(join(film, "voice/takes/01.wav"), makeSilenceWav());
 
-    // Pre-flight failure (missing ffmpeg) must NOT start a studio job
     await withStudioServer(film, async (events) => {
       const noFf = await runLipsAsync([], { cwd: film, env: { RHUBARB: stubRhubarb, PATH: "" } });
       expect(noFf.status).toBe(1);
       expect(events).toHaveLength(0);
     });
 
-    // Success -> start + ok ended
     await withStudioServer(film, async (events) => {
       const ok = await runLipsAsync([], { cwd: film, env: stubEnv() });
       expect(ok.status).toBe(0);
@@ -459,7 +457,6 @@ describe("voice:lips src/edit.json and take validation", () => {
       expect(events.at(-1).level).toBe("ok");
     });
 
-    // Failure -> start + fail ended
     await withStudioServer(film, async (events) => {
       const fail = await runLipsAsync(["01"], {
         cwd: film,
@@ -502,7 +499,6 @@ describe("voice:lips Rhubarb & ffmpeg pre-flight checks", () => {
     writeFileSync(wavPath, makeSilenceWav());
     expect(runLips([], { cwd: film, env: stubEnv() }).status).toBe(0);
 
-    // Move take on timeline and remove RHUBARB/ffmpeg availability: should still update mouth.json
     writeEdit(film, { takes: [{ id: "01", by: "steve", start: 4.5, text: "Hi" }] });
     const res = runLips([], {
       cwd: film,
@@ -609,7 +605,6 @@ describe("voice:lips shaping, tag stripping, non-English, recovery, and partial 
     const mouthFile = `${wavPath}.mouth.json`;
     writeFileSync(wavPath, makeSilenceWav());
 
-    // Newer empty cues file -> bare run must regenerate it
     writeFileSync(mouthFile, JSON.stringify({ cues: [] }));
     const future = new Date(statSync(wavPath).mtimeMs + 10_000);
     utimesSync(mouthFile, future, future);
@@ -619,7 +614,6 @@ describe("voice:lips shaping, tag stripping, non-English, recovery, and partial 
     expect(repairRes.status).toBe(0);
     expect(mouthFaults(film)).toEqual([]);
 
-    // Corrupt JSON mouth file with newer mtime -> bare run must also regenerate it
     writeFileSync(mouthFile, "{broken");
     utimesSync(mouthFile, future, future);
     expect(mouthFaults(film).length).toBeGreaterThan(0);
@@ -627,7 +621,6 @@ describe("voice:lips shaping, tag stripping, non-English, recovery, and partial 
     expect(repairCorrupt.status).toBe(0);
     expect(mouthFaults(film)).toEqual([]);
 
-    // Stub returning empty mouthCues: [] on explicit re-run -> must exit 1
     const emptyRhubarb = runLips(["01"], {
       cwd: film,
       env: stubEnv({ STUB_RHUBARB_EMPTY: "1" }),
@@ -657,7 +650,6 @@ describe("voice:lips shaping, tag stripping, non-English, recovery, and partial 
     const partialMap = JSON.parse(readFileSync(join(film, MOUTH_MAP), "utf8"));
     expect(partialMap.takes.map((t) => t.id)).toEqual(["01"]);
 
-    // Resume without positional args: only shapes 02 and now exits 0
     const ffLogPath = join(film, "resume-ffmpeg.jsonl");
     const resumed = runLips([], {
       cwd: film,
@@ -707,7 +699,6 @@ describe("voice:lips shaping, tag stripping, non-English, recovery, and partial 
     writeFileSync(join(film, "voice/takes/01.wav"), makeSilenceWav());
     expect(runLips([], { cwd: film, env: stubEnv() }).status).toBe(0);
 
-    // Move take in src/edit.json -> mouthFaults detects stale -> voice:lips updates mouth.json
     writeEdit(film, {
       takes: [{ id: "01", by: "steve", start: 2.5, text: "Hello" }],
       voice: {

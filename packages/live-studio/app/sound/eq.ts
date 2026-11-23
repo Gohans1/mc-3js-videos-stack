@@ -1,6 +1,3 @@
-// A clip's EQ and width, kept as the ffmpeg entries mix.py renders (its "filters"), in real-sound's terms: Butterworth cuts of
-// order 1/2/4/6 (6-36 dB/oct, one ffmpeg section per two poles), RBJ shelves at Q 0.7071 and peaking bands, and the side scale
-// (extrastereo, 1 = as recorded). coefficients() is what the studio previews with; test/sound-eq.test.mjs holds it to ffmpeg.
 type Cut = "low" | "high";
 export type Slope = 6 | 12 | 24 | 36;
 export interface Band {
@@ -16,7 +13,6 @@ export interface Shelf {
 const CUT: Record<Cut, string> = { low: "highpass", high: "lowpass" };
 const SHELF: Record<Cut, string> = { low: "lowshelf", high: "highshelf" };
 const SHELF_Q = 0.7071;
-// Butterworth section Qs: order 2n splits into n biquads with Q = 1 / (2 sin((2k-1)π / 4n))
 const BUTTERWORTH: Record<Exclude<Slope, 6>, (number | null)[]> = {
   12: [null],
   24: [0.5412, 1.3066],
@@ -41,7 +37,6 @@ const arg = (args: Record<string, string>, ...keys: string[]) => {
 const named = (filters: readonly string[] | undefined, name: string) =>
   (filters ?? []).filter((f) => parse(f).name === name);
 
-// The entries called `name` swapped for `entries`, where the first of them stood (at the end when there was none)
 const replace = (filters: readonly string[] | undefined, name: string, entries: string[]) => {
   const list = [...(filters ?? [])],
     at = list.findIndex((f) => parse(f).name === name);
@@ -90,7 +85,6 @@ export const readEq = (filters: readonly string[] | undefined) => {
 
 const r = (v: number, digits = 2) => Number(v.toFixed(digits));
 
-// hz 0 removes the cut; slope left out keeps the one the clip has
 export const withCut = (
   filters: readonly string[] | undefined,
   kind: Cut,
@@ -108,7 +102,6 @@ export const withCut = (
   );
 };
 
-// g 0 removes the shelf
 export const withShelf = (
   filters: readonly string[] | undefined,
   kind: Cut,
@@ -128,7 +121,6 @@ export const withBands = (filters: readonly string[] | undefined, bands: readonl
     bands.map((b) => `equalizer=f=${Math.round(b.f)}:t=q:w=${r(b.q)}:g=${r(b.g, 1)}`),
   );
 
-// c=0: no clipping inside the chain, as the studio's preview
 export const withWidth = (filters: readonly string[] | undefined, m: number) =>
   replace(filters, "extrastereo", m === 1 ? [] : [`extrastereo=m=${r(m)}:c=0`]);
 
@@ -137,8 +129,6 @@ export const widthOf = (spec: string) => {
   return name === "extrastereo" ? (arg(args, "m") ?? 2.5) : null;
 };
 
-// The filter as difference-equation sections (Web Audio's IIRFilterNode takes them as they are), or null when the studio can't
-// play it the way ffmpeg renders it: shelves and bands only with their width given as Q, since ffmpeg's defaults differ per filter
 export const coefficients = (spec: string, rate: number): { b: number[]; a: number[] }[] | null => {
   const { name, args } = parse(spec);
   const t = args.t ?? args.width_type,
@@ -153,7 +143,7 @@ export const coefficients = (spec: string, rate: number): { b: number[]; a: numb
   if (name === "highpass" || name === "lowpass") {
     const poles = arg(args, "p", "poles") ?? 2;
     if (poles === 1) {
-      const a1 = -Math.exp(-w0); // ffmpeg's one-pole
+      const a1 = -Math.exp(-w0);
       return name === "lowpass"
         ? [{ b: [1 + a1, 0], a: [1, a1] }]
         : [{ b: [(1 - a1) / 2, -(1 - a1) / 2], a: [1, a1] }];

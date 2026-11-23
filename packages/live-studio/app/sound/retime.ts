@@ -67,7 +67,6 @@ export const retime = (c: Timed, length: number, rate: number) => {
   return length * scale;
 };
 
-// start is the low edge of the source region even in reverse; trimming the right edge then moves that low edge.
 export const trimSource = (
   c: Timed,
   left: number,

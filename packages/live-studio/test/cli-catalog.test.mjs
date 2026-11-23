@@ -337,14 +337,12 @@ test("rejects options hidden in argument and flag values while preserving negati
   const negative = buildCliInvocation({ commandId: "find", flags: { "-n": "-2" } }, BASE_CONTEXT);
   expect(negative.validationErrors).toEqual([]);
   expect(negative.argvTokens).toEqual(["-n", "-2"]);
-  // a camera pose left of the origin is a list of numbers, not an option
   const pose = buildCliInvocation(
     { commandId: "render", args: { target: "stills" }, flags: { "--inspect": "-5,2,3,0,1,0,50" } },
     BASE_CONTEXT,
   );
   expect(pose.validationErrors).toEqual([]);
   expect(pose.argvTokens).toEqual(["stills", "--inspect", "-5,2,3,0,1,0,50"]);
-  // PowerShell reads a bare @word as splatting: the shown command quotes it
   const views = buildCliInvocation(
     { commandId: "render", args: { target: "stills" }, flags: { "--views": "@views.json" } },
     BASE_CONTEXT,
@@ -467,7 +465,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ),
     );
 
-    // 1) Forward check: every runnable script in root, template, and films/* is represented
     for (const [name, scriptCmd] of Object.entries(rootPkg.scripts ?? {})) {
       if (String(scriptCmd).includes("wrong-place.mjs")) continue;
       expect(catalogBunTargets.has(name)).toBe(true);
@@ -479,7 +476,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       }
     }
 
-    // 2) Forward check: every workspace package script in packages/*/package.json is represented
     for (const entry of readdirSync(join(REPO_ROOT, "packages"), { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       const pkgFile = join(REPO_ROOT, "packages", entry.name, "package.json");
@@ -491,7 +487,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       }
     }
 
-    // 3) Reverse check: every catalog command resolves to an actual target/script/file
     const scriptRunFiles = new Set();
     const recordScriptBody = (scriptCmd, baseDir = "") => {
       for (const rawTok of String(scriptCmd).split(/\s+/)) {
@@ -554,7 +549,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     ).toBe(true);
     expect(findCliCommand("studio:init")?.args?.[0]?.choiceSource).toBe("filmDirs");
 
-    // 4) Bidirectional disk entrypoint coverage across scripts/ and packages/
     const INTERNAL_WORKER_OR_HELPER_FILES = new Map([
       ["packages/live-studio/qc.mjs", "film-local entrypoint for the registered qc command"],
       ["scripts/review/frame_metrics.py", "image-region and comparison worker spawned by qc"],
@@ -649,7 +643,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
           /\bimport\.meta\.main\b|\b(?:const|let|var)\s+isMain\b|\bcliArgs\s*\(|\bprocess\.argv\b/.test(
             txt,
           );
-        // Every .py under scripts/ and packages/ must be either catalogued or declared in INTERNAL_WORKER_OR_HELPER_FILES.
         const isPyEntry = entry.name.endsWith(".py");
         const isShEntry = entry.name.endsWith(".sh");
         if (isJsEntry || isPyEntry || isShEntry) {
@@ -675,7 +668,6 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ).toBe(false);
     }
 
-    // 5) Live earshot -h, earshot sfx -h, earshot kit -h bidirectional check (warm Python once before subcommands)
     const earshotCmd = findCliCommand("earshot");
     expect(earshotCmd).toBeDefined();
     const sfxNode = earshotCmd.subcommands?.find((s) => s.id === "sfx");
@@ -785,7 +777,6 @@ describe("cli-catalog resolver rules", () => {
     expect(renderConflict.exclusiveConflicts.length).toBeGreaterThan(0);
     expect(renderConflict.validationErrors.length).toBeGreaterThan(0);
 
-    // --span is clip-only (render.mjs exits 2 on render all with --span)
     const renderAllSpan = buildCliInvocation(
       {
         commandId: "render",
@@ -818,7 +809,6 @@ describe("cli-catalog resolver rules", () => {
     expect(isFieldVisible(fromFlag.visibleWhen, { "--kind": "mocap/hands" })).toBe(true);
     expect(isFieldVisible(fromFlag.visibleWhen, { "--kind": "sfx" })).toBe(false);
 
-    // Hidden flags should also not emit argv tokens even if stale state was set
     const findSfxWithStaleFrom = buildCliInvocation(
       { commandId: "find", flags: { "--kind": "sfx", "--from": "stand" } },
       BASE_CONTEXT,
@@ -896,7 +886,6 @@ describe("cli-catalog resolver rules", () => {
     expect(llmUpload.validationErrors).toEqual([]);
     expect(llmUpload.requiresConfirm).toBe(true);
 
-    // Subcommand-scoped computeEffectiveMeta checks
     const evalWords = buildCliInvocation(
       { commandId: "eval:find", flags: { "--mode": "words" } },
       BASE_CONTEXT,
@@ -920,7 +909,6 @@ describe("cli-catalog resolver rules", () => {
     expect(doctorFetch.meta.effect).toBe("install");
     expect(doctorFetch.meta.speed).toBe("long");
 
-    // Non-mcp earshot subcommand shouldn't treat --tools as read override
     const mcpGuard = buildCliInvocation(
       { commandId: "earshot", subcommandPath: ["mcp"] },
       BASE_CONTEXT,
@@ -953,7 +941,6 @@ describe("cli-catalog resolver rules", () => {
       ).requiresConfirm,
     ).toBe(false);
 
-    // Guards
     expect(
       buildCliInvocation({ commandId: "earshot", subcommandPath: ["mcp"] }, BASE_CONTEXT)
         .guardReason,
@@ -1017,7 +1004,6 @@ describe("cli-catalog resolver rules", () => {
     ).toBe(false);
     for (const target of ["stills", "clip", "poster", "all", "final"]) {
       expect(isFieldVisible(entryDef?.visibleWhen, { target })).toBe(true);
-      // only an --entry page reads cfg.lab
       expect(isFieldVisible(labDef?.visibleWhen, { target })).toBe(false);
       expect(isFieldVisible(labDef?.visibleWhen, { target, "--entry": "lab/prop.ts" })).toBe(true);
     }
@@ -1039,7 +1025,6 @@ describe("cli-catalog resolver rules", () => {
       "zoom=2",
     ]);
 
-    // Studio checks the current film before launching a second Studio.
     expect(
       buildCliInvocation(
         { commandId: "eval:load" },
@@ -1082,7 +1067,6 @@ describe("cli-catalog resolver rules", () => {
     );
     expect(findMulti.argvTokens).toEqual(["--kind", "sfx,mocap", "--from", "stand"]);
 
-    // catalog:review --page requires piped stdin -> guarded on execute, allowed on help
     const catPageExec = buildCliInvocation(
       { commandId: "catalog:review", flags: { "--page": 0 } },
       BASE_CONTEXT,
@@ -1101,7 +1085,6 @@ describe("cli-catalog resolver rules", () => {
       ).guardReason,
     ).toBeNull();
 
-    // Per-flag optionalValue bareLabel & bareHint metadata
     for (const k of [
       "--kind",
       "--source",
@@ -1132,7 +1115,6 @@ describe("cli-catalog resolver rules", () => {
     expect(forgeSub?.flags?.find((x) => x.key === "--render")?.bareLabel).toBeTruthy();
     expect(forgeSub?.flags?.find((x) => x.key === "--seeds")?.bareHint).toBeTruthy();
 
-    // sheet conditional rules matching scripts/review/sheet.py
     expect(buildCliInvocation({ commandId: "sheet" }, BASE_CONTEXT).validationErrors).toEqual([]);
     const sheetMissingTarget = buildCliInvocation(
       { commandId: "sheet", args: { video: "renders/draft_video.mp4" } },
@@ -1188,7 +1170,6 @@ describe("cli-catalog resolver rules", () => {
     expect(isFieldRequired(cutArgDef, { target: "cut" })).toBe(true);
     expect(isFieldRequired(cutArgDef, { target: "shots" })).toBe(false);
 
-    // lint and live-studio:lint take >1s
     expect(findCliCommand("lint")?.meta.speed).toBe("short");
     expect(findCliCommand("live-studio:lint")?.meta.speed).toBe("short");
   });
@@ -1247,7 +1228,6 @@ describe("cli-catalog resolver rules", () => {
   });
 
   test("covers voice:genvoice, sound:mc-peaks, studio:stale, bash-file catalog scripts, and legacy python counterparts", () => {
-    // voice:genvoice requires subcommand, has helpMode: "none", and gates tts/sts behind always confirm + paid
     const gvNoSub = buildCliInvocation({ commandId: "voice:genvoice" }, BASE_CONTEXT);
     expect(gvNoSub.validationErrors.length).toBeGreaterThan(0);
     expect(
@@ -1304,7 +1284,6 @@ describe("cli-catalog resolver rules", () => {
     expect(gvSts.meta.cost).toBe("paid");
     expect(gvSts.requiresConfirm).toBe(true);
 
-    // sound:mc-peaks requires vaultDir
     expect(
       buildCliInvocation({ commandId: "sound:mc-peaks" }, BASE_CONTEXT).validationErrors,
     ).toContain("Missing required argument: Vault Directory");
@@ -1315,7 +1294,6 @@ describe("cli-catalog resolver rules", () => {
       ).displayCommand,
     ).toBe("python scripts/compute_mc_peaks.py vault/sound");
 
-    // studio:stale + legacy python counterparts + bash-file film-relative displayCommand
     expect(
       buildCliInvocation(
         { commandId: "studio:stale", args: { video: "renders/final.mp4" } },
@@ -1665,7 +1643,6 @@ describe("cli-catalog resolver rules", () => {
       "renders/views_sheet.jpg",
     ]);
 
-    // Stale video-submode target/cutIndex/overviewRange/--start must stay hidden in resolver, UI, and Lego bar
     const staleCutDraft = {
       subcommandPath: [],
       args: { target: "cut", cutIndex: 4, images: ["renders/a.png"] },
@@ -1708,7 +1685,6 @@ describe("cli-catalog resolver rules", () => {
     expect(sheetStaleOverview.validationErrors).toEqual([]);
     expect(sheetStaleOverview.argvTokens).toEqual(["renders/a.png"]);
 
-    // Both video and images set together must error and hide --out & cutIndex across resolver, UI, and Lego bar
     const conflictDraft = {
       subcommandPath: [],
       args: {

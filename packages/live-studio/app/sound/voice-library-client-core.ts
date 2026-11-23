@@ -1,4 +1,3 @@
-// Pure client state controller for /api/voice/library (kept DOM-free for Bun unit tests).
 import type {
   SharedVoiceEntry,
   VoiceLibraryPayload,
@@ -180,7 +179,6 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
         setSnapshot({
           ...snapshot,
           status: nextStatus,
-          // Withhold syncedAt update until full GET lands matching voices so transient reload failures can retry.
           syncedAt: shouldReload ? prevSyncedAt : nextSyncedAt,
           totalScanned: meta.totalScanned ?? snapshot.totalScanned,
           totalEnglish: meta.totalEnglish ?? snapshot.totalEnglish,
@@ -196,7 +194,6 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
           void loadVoiceLibrary(true);
         }
       } catch {
-        // Keep current cached voices intact if metadata polling hits a transient error.
       } finally {
         metaInFlight = null;
         if (metaQueued) {

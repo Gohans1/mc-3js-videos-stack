@@ -124,7 +124,6 @@ export function CurvePicture({ curve }: { curve: Curve }) {
 }
 export function FilmSpeedPanel() {
   const enabled = useStudio((s) => s.timing);
-  // The scroller lives here, not in CameraEasePanel: inside the Camera tab's own scroller a second overscroll-contain one swallowed the wheel
   if (!enabled)
     return (
       <div

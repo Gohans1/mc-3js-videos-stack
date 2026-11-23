@@ -9,9 +9,6 @@ import {
 } from "react";
 
 import { Button } from "@/components/ui/button";
-// The film camera's picture in the picture's corner while the free camera is on, to compare the two (picture/filmcam.ts draws
-// it). Starts compact and stays fixed at whatever width the creator drags it to, persisted in localStorage across reloads and
-// hide/show cycles, only softly clamping visually if the player viewport shrinks smaller than the saved width.
 import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
@@ -155,7 +152,6 @@ export function FilmView({ bind, phone }: { bind: Bind; phone: boolean }) {
         />
         {!split && (
           <>
-            {/* Edge resize strips on left & top (PiP sits anchored at bottom-right) */}
             <div
               aria-hidden
               onPointerDown={startResize("left")}

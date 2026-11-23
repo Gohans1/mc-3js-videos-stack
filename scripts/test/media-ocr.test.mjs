@@ -91,11 +91,9 @@ test("a --crop band's offset is in the picture as shown: a phone video's rotatio
     return JSON.parse(r.stdout);
   };
   assert.deepEqual(origin(coded), [80, 67]);
-  // shown 90 wide and 160 tall
   assert.deepEqual(origin(rotated), [45, 120]);
 });
 
-// two captions popping on and off over a grey picture, as burnt-in captions do: white 0.5-1.5 s, yellow 2-2.8 s
 const captionVideo = (dir) => {
   const file = join(dir, "captions.mp4");
   const made = spawnSync(
@@ -155,12 +153,9 @@ test("the band's change peaks on the first frame a caption pops on or off", (t) 
     .filter(([, change]) => change > 1)
     .map(([at]) => at)
     .toSorted((a, b) => a - b);
-  // on from frame 15, off from frame 46 (1.5 s is still on), on again at 60, off from 85
   assert.deepEqual(peaks, [0.5, 1.533, 2, 2.833]);
 });
 
-// "He made" until 0.6 s, the band blank until 0.7 s, then "real cookies"; a prop's "SALT" label shares the band, and the
-// read at 0.375 caught a caption mid-animation; at 0.5 a watermark glues letters on ("madems"), and at 0.95 stray ones ("reall s cookies e"). The band's pixels change most at 0.5 and 0.8 (the background brightening)
 const CAPTIONS = `import runpy,sys,json
 m=runpy.run_path(sys.argv[1])
 box=lambda x,y,h=20:[[x,y],[x+40,y],[x+40,y+h],[x,y+h]]
@@ -182,23 +177,17 @@ test("caption reads keep the caption's line, join alike, and land each change on
   const r = python(["-c", CAPTIONS, SCRIPT]);
   assert.equal(r.status, 0, r.stderr);
   const [byChange, byRead, asked] = JSON.parse(r.stdout);
-  // without frame reads, the frame of most change stands
   assert.deepEqual(byChange, [
     { from: 0, to: 0.5, text: "He made", score: 0.9 },
     { from: 0.8, to: 1, text: "real cookies", score: 0.8 },
   ]);
-  // with them, each change is the first frame not showing the caption before it
   assert.deepEqual(byRead, [
     { from: 0, to: 0.6, text: "He made", score: 0.9 },
     { from: 0.7, to: 1, text: "real cookies", score: 0.8 },
   ]);
-  // only frames between two reads that differ
   assert.ok(asked.every((t) => [0.4, 0.5, 0.6, 0.7, 0.8].includes(t)));
 });
 
-// Shorts stack a long caption in two lines and move one up or down; a stylised font can read under 0.8 every time; a
-// watermark as tall as the caption a line under it sits off the caption's middle; of two readings, the one without a
-// stray letter is the caption
 const STACKED = `import runpy,sys,json
 m=runpy.run_path(sys.argv[1])
 box=lambda x,y,h=20:[[x,y],[x+40,y],[x+40,y+h],[x,y+h]]
@@ -227,7 +216,6 @@ test("a caption stacked in two lines, set lower, or read unsure in every frame i
   ]);
 });
 
-// a creator's handle sits in the band in every frame, more often than any one caption
 const HANDLE = `import runpy,sys,json
 m=runpy.run_path(sys.argv[1])
 box=lambda y,h:[[10,y],[400,y],[400,y+h],[10,y+h]]

@@ -1,14 +1,4 @@
 // @ts-nocheck
-// Human motion (a clip library: Quaternius UAL1/UAL2, Mixamo) onto Steve, as the film's own pose ({joint: [x, y, z]}
-// degrees in his frame, root metres), so it goes through setPose and feet.ts like any hand-made pose; blend it with slerpPose
-// below, not player.ts blendPose (angle by angle: two turns far apart blend the long way round, 170 degrees off).
-// The source and the MCprep rig share no rest pose (a T-pose human with a curved spine against a straight box body with
-// arms hanging down), so copying joint rotations or turns from rest is wrong: an idle human came out hunched 21 degrees.
-// Instead everything is aimed from where the source's joints are: the hips and chest take the frame of the spine and of
-// the hip and shoulder lines; every arm and leg points where the source limb points and folds as a hinge (the rig's lower bones bend one way only), the way game retargeters
-// solve two-bone limbs: an elbow folds in the source's elbow plane, a knee in the plane of the source's foot, so the box leg
-// never rolls away from where the foot points.
-// A source is { at(role, out): world position, head(): world turn of the head }, roles below. Both face +z, left on +x, the floor at y = 0.
 import * as THREE from "three";
 
 import { updaterTo } from "./matrices";
@@ -23,7 +13,7 @@ const ROLES = [
   ]),
 ];
 const D = 180 / Math.PI;
-const SOFT = Math.sin(20 / D); // below this much elbow bend the hinge plane is noise: its twist fades out
+const SOFT = Math.sin(20 / D);
 
 // A glTF skeleton posed by its own mixer. names: role -> bone name (GLTFLoader drops "." and ":")
 export const UAL = {
@@ -46,7 +36,6 @@ export const UAL = {
   ankleR: "DEF-footR",
   toeR: "DEF-toeR",
 };
-// Unreal mannequin names: UAL2's GLB (and UAL1's Unreal-Godot GLB)
 export const UE = {
   hips: "pelvis",
   waist: "spine_02",
@@ -88,7 +77,6 @@ export const MIXAMO = {
   ankleR: "mixamorigRightFoot",
   toeR: "mixamorigRightToeBase",
 };
-// The head copies its turn from the skeleton's rest, which stands upright
 export function skeletonSource(root, names) {
   const bone = {};
   root.traverse((o) => {
@@ -97,7 +85,6 @@ export function skeletonSource(root, names) {
   for (const r of [...ROLES, "head"])
     if (!bone[names[r]]) throw new Error(`mocap source has no ${r} (${names[r]})`);
   root.updateMatrixWorld(true);
-  // the *Now reads below see only these joints
   const update = updaterTo(
     root,
     [...ROLES, "head"].map((r) => bone[names[r]]),
@@ -114,17 +101,12 @@ export function skeletonSource(root, names) {
     at: (r, out = new THREE.Vector3()) => bone[names[r]].getWorldPosition(out),
     head: () => bone[names.head].getWorldQuaternion(new THREE.Quaternion()).multiply(headRest),
     quat: (r, out = new THREE.Quaternion()) => bone[names[r]].getWorldQuaternion(out),
-    // The same as of the last update(), the same numbers while nothing moved the skeleton since: at() walks every parent
-    // again on each call, which was a fifth of a clip's bake (the retargeter reads dozens of joints between two updates)
     atNow: (r, out = new THREE.Vector3()) => out.setFromMatrixPosition(bone[names[r]].matrixWorld),
     headNow: () => quatNow("head").multiply(headRest),
     quatNow,
   };
 }
 
-// Steve's body as boxes, one per joint, axis-aligned in the rest world (the rig's vertices at rest, each to the joint that
-// weighs most on it), plus each joint's rest matrix: a point now maps into the rest world by rest * now^-1, rigid in metres
-// even though the rig's parents are scaled
 export function bodyBoxes(player) {
   const keyOf = new Map(Object.entries(player.bones).map(([k, b]) => [b, k]));
   const box = {},
@@ -156,8 +138,6 @@ export function bodyBoxes(player) {
   return { box, rest };
 }
 
-// Signed distance (metres) from p to a box grown by r with rounded edges (the box swept by a ball of radius r), and the
-// way out: continuous everywhere outside the box itself
 const C = new THREE.Vector3(),
   Hh = new THREE.Vector3(),
   q = new THREE.Vector3(),
@@ -176,8 +156,6 @@ function roundedBox(p, b, r, out) {
     out.set(mx.x * sx, mx.y * sy, mx.z * sz).divideScalar(outside);
     return outside - r;
   }
-  // inside the box: out through the nearest face (it flips to another face where the point crosses the box's diagonal:
-  // pose() holds the hand's push back there)
   const m = Math.max(q.x, q.y, q.z);
   out.set(
     m === q.x ? sx : 0,
@@ -187,26 +165,20 @@ function roundedBox(p, b, r, out) {
   return m - r;
 }
 
-const PXM = 1.875 / 32; // one skin pixel, metres
-const HAND = 2 * PXM; // half the arm's width: the hand is a ball this big around the middle of the arm box's end
-const LEG_R = 1.9 * PXM; // a leg as a capsule, a hair under half its width so legs side by side at rest just touch
-const HEAD_TURN = 90 / D; // the most the head turns to keep out of the floor
-const TRAPPED = 0.12; // a hand deeper than this in his body or the floor is let be (see pose())
-const JUMP = 0.3; // m (Steve's scale) the source's hips may move in a frame before it counts as a cut, see pose()
-const SETTLE = 8; // passes at most, see pose()
-const FIX_SPEED = 1; // m/s, see pose()
-const HEAD_SPEED = Math.PI; // rad/s, see pose()
-const TWIST_SPEED = 2 * Math.PI; // rad/s, see limb()
-const DEAD = 0.03; // the source counts as touching the floor below this much (its body's height is only estimated)
-const HAND_REACH = 0.1; // how far the source's hand reaches past its wrist, as a share of its leg (as REACH)
-// how much the source's hands bear its weight (0..1), from its lowest body point (sl) and its lowest hand (hl): the hand
-// well below everything else and near the floor. A wide ramp, the lift (up to ~40 cm) coming in over the hand's plant: a
-// narrow one (5-20 cm) took the body up 21 cm in a frame. Tried and worse: rate-limiting the lift (the body hung in the
-// air after the hand left), counting only a still hand (mocap hand speed is noisy: the lift flickered on and off)
+const PXM = 1.875 / 32;
+const HAND = 2 * PXM;
+const LEG_R = 1.9 * PXM;
+const HEAD_TURN = 90 / D;
+const TRAPPED = 0.12;
+const JUMP = 0.3;
+const SETTLE = 8;
+const FIX_SPEED = 1;
+const HEAD_SPEED = Math.PI;
+const TWIST_SPEED = 2 * Math.PI;
+const DEAD = 0.03;
+const HAND_REACH = 0.1;
 const CARRY = (sl, hl) =>
   THREE.MathUtils.smoothstep(sl - hl, 0.03, 0.35) * (1 - THREE.MathUtils.smoothstep(hl, 0.1, 0.3));
-// how far the source's body reaches past each joint, as a share of its leg (hip to ankle): its lowest point is estimated
-// from these, the source being a skeleton. Body and legs only, the same parts as his (see lowest)
 const REACH = {
   hips: 0.12,
   waist: 0.12,
@@ -225,8 +197,6 @@ const REACH = {
   toeR: 0.035,
 };
 
-// b over a by weight k, each joint's turn (and the root's) as a quaternion slerp, root place by lerp. A joint one pose
-// leaves out is at rest there
 const HALF_RAD = Math.PI / 360;
 const slerpYXZDeg = (ax, ay, az, bx, by, bz, k) => {
   let qax, qay, qaz, qaw;
@@ -316,7 +286,6 @@ const slerpYXZDeg = (ax, ay, az, bx, by, bz, k) => {
       }
     }
   }
-  // quaternion -> YXZ Euler degrees, matching THREE.Matrix4 + Euler.setFromRotationMatrix("YXZ")
   const x2 = rx + rx,
     y2 = ry + ry,
     z2 = rz + rz;
@@ -388,8 +357,6 @@ export function slerpPose(a, b, k) {
   return out;
 }
 
-// A clip baked in played order at fps (rt: a retargeter; setTime(t): poses the source at clip time t, e.g. a mixer's),
-// read back by at(t): a pure function of time, neighbouring frames slerped
 export function bakeClip(rt, setTime, duration, fps = 60) {
   const n = Math.max(1, Math.ceil(duration * fps)),
     frames = [];
@@ -400,7 +367,6 @@ export function bakeClip(rt, setTime, duration, fps = 60) {
   return { frames, fps, at: framesAt(frames, fps) };
 }
 
-// at(t) over baked frames (bakeClip's, or the same kept from an earlier load: clips.ts)
 export function framesAt(frames, fps) {
   const n = frames.length - 1;
   return (t) => {
@@ -410,23 +376,6 @@ export function framesAt(frames, fps) {
   };
 }
 
-// src: a source as above, at its rest or first frame; player: makePlayer's result, used once for the rig's rest.
-// Returns { pose(dt): Steve's pose for the source's current frame (floor / own: false skip the fixes below; dt: seconds since
-// the previous call when frames are played in order, as a bake does, 0 for a frame on its own), measure(): how far Steve, posed as pose() says at the
-// origin, is from the source }. pose() poses the player on the way (at the origin, his group's place kept): set your own
-// pose after it.
-// Its speed limits remember the last frame, so never call pose() from draw(t): bake the clip with bakeClip below and read
-// its at(t), which is the same pose for the same t in any order; a source hips jump past JUMP (a cut, loop or seek)
-// starts the memory afresh. To make a pose your own (a hand on the door, a turned head), change at(t)'s result or
-// slerpPose another over it: the fixes below don't run again on your change, so keep your hands out of his head yourself.
-// Lock its feet only with a leg IK that keeps the pose's own knee plane (player.ts legTo does): one that folds every knee
-// straight back unfolds a kneel or crossed legs. A film plays clips through src/clips.ts, which bakes them.
-// After the limbs are aimed, two things the box body needs that the human doesn't, both continuous in time:
-//  - the floor: his lowest point goes where the source's lowest point is (scaled), so a body sitting, lying or kneeling on
-//    the floor sits on it instead of hanging above it (the hip path alone can't: his thick box limbs and big head put his
-//    contact points elsewhere than a human's) or sinking into it;
-//  - his own body: a hand that would end inside his head (twice a human's), body or legs stops on their surface, the arm
-//    re-solved as two bones in the plane of its own elbow, so a hand on the face rests on the face. Untouched otherwise.
 const playerBoxes = new WeakMap();
 
 export function retargeter(src, player, { floor = true, own = true } = {}) {
@@ -458,9 +407,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const srcLeg =
     src.atNow("hipL").distanceTo(src.atNow("kneeL")) +
     src.atNow("kneeL").distanceTo(src.atNow("ankleL"));
-  const k = (player.restLegReach ?? player.legReach) / srcLeg; // the source's moves scaled to Steve's shorter legs
-  // everything below reads the source's rest from the pose it is in now: it must stand upright with its limbs square to
-  // +z (a T- or A-pose facing +z), so build the source before any mixer has moved it
+  const k = (player.restLegReach ?? player.legReach) / srcLeg;
   const along = (a, c) => Math.abs(src.atNow(c).sub(src.atNow(a)).normalize().z);
   if (
     src.atNow("neck").y - hip0.y < 0.3 * srcLeg ||
@@ -472,9 +419,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       "mocap source is not at an upright rest facing +z: build it before its mixer runs",
     );
 
-  // Steve at rest: each limb hangs straight down its upper bone
   const b = player.bones,
-    // every call follows a g.updateMatrixWorld(true): no need to walk the parents again, as getWorldPosition does
     pos = (x) => new THREE.Vector3().setFromMatrixPosition(x.matrixWorld),
     wp = new THREE.Vector3(),
     ws = new THREE.Vector3(),
@@ -516,7 +461,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const OBSTACLES = ["head", "body", "chest", "ulL", "ulR", "llL", "llR"].filter(
     (x) => body.box[x],
   );
-  // the middle of each shin box's bottom end, a leg's radius up: the far end of the leg as a capsule
   const footRest = Object.fromEntries(
     ["L", "R"].map((sd) => {
       const bx = body.box[`ll${sd}`];
@@ -527,10 +471,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     }),
   );
 
-  // A turn as the rig's YXZ degrees. Every turn has two ([x, y, z] and [180 - x, y + 180, z + 180]), each up to a whole
-  // turn; played in order, a joint keeps the pair and the whole turns nearest its last frame (angles may pass 180), or a
-  // turn passing x = 90 (an arm straight forward, a body lying flat) swaps y and z by 180, a spin crosses 180 to -180, and
-  // anything reading the angles in between (a resampled bake) spins the joint the long way round
   const e = new THREE.Euler(),
     eulerNow = {};
   let eulerWas = {};
@@ -578,7 +518,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     bz = new THREE.Vector3(),
     M = new THREE.Matrix4(),
     M2 = new THREE.Matrix4();
-  // the world turn whose up is `up` and whose left (+x) is `side`
   const frame = (up, side) => {
     by.copy(up).normalize();
     bx.copy(side).addScaledVector(by, -side.dot(by)).normalize();
@@ -587,12 +526,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   };
   const between = (r1, r2) => src.atNow(r2).sub(src.atNow(r1));
 
-  // The twist of a limb (where its hinge folds) is a choice of the box's roll about its own bone. Bent, the source's own
-  // hinge plane fixes it. Nearly straight, that plane is noise, and the roll comes from the source's upper bone itself: its
-  // rest fold (forward for an elbow, back for a knee, both square to the bone in a T-pose) turned as the bone turns since
-  // its rest, so the roll is continuous where the plane is not (an arm straightening and bending again flipped 70 degrees
-  // in a frame). Bent past 40 degrees the two planes agree within ~5 (Mixamo, lab "hinge gap"); the foot's direction
-  // does not (kneeling, it points back: the knee folded the wrong way round)
   const restQ = Object.fromEntries(
     ["shoulderL", "shoulderR", "hipL", "hipR"].map((r) => [r, src.quatNow(r).invert()]),
   );
@@ -601,7 +534,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const wrap = (x) => x - 2 * Math.PI * Math.round(x / (2 * Math.PI));
   const c = new THREE.Vector3(),
     hv = new THREE.Vector3();
-  // the roll that turns the rest fold b0 onto x about a (x in the upper bone's rest frame); null if x lies along a
   const phiOf = (x, a) => {
     x.addScaledVector(a, -x.dot(a));
     return x.lengthSq() < 1e-8 ? null : Math.atan2(c.crossVectors(b0, x).dot(a), b0.dot(x));
@@ -610,11 +542,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     twistNow = {};
   let twistWas = {},
     frameDt = 0;
-  // upper key, lower key, the upper and lower bones' world directions, the source's hinge (world, see hinge), the foot's
-  // (legs only), the parent's turn, +1 bends forward (elbow) / -1 back (knee); fixed: the limb re-aimed by a fix below.
-  // A fix's twist is held to last frame's final one (what was shown), the source's own to last frame's own (held to the
-  // final one, the next frame's own solve started from a turn a fix had made, and a held frame drifted 23 degrees over 4
-  // frames; a fix held to last frame's fix only had none to keep to where a fix began, and an arm spun 60 in a frame)
   const limb = (pose, u, l, w1, w2, hw, P, fold, fixed = false) => {
     Pi.copy(P).invert();
     d1.copy(w1).applyQuaternion(Pi).normalize();
@@ -622,13 +549,13 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     const a = a0[u];
     S.setFromUnitVectors(a, d1);
     T.copy(S).invert();
-    v.copy(d2).applyQuaternion(T); // the lower bone in the upper bone's rest frame
+    v.copy(d2).applyQuaternion(T);
     const bend = Math.acos(THREE.MathUtils.clamp(v.dot(a), -1, 1));
     perp.copy(v).addScaledVector(a, -v.dot(a));
     const n = perp.length();
     b0.set(0, 0, fold)
       .addScaledVector(a, -fold * a.z)
-      .normalize(); // the rest fold, square to the bone
+      .normalize();
     const straight = phiOf(hv.copy(hw).applyQuaternion(Pi).applyQuaternion(T), a) ?? 0;
     const own = n > 1e-6 ? phiOf(perp, a) : straight;
     if (bend > 40 / D) gap[u] = Math.abs(wrap(own - straight)) * D;
@@ -637,7 +564,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     // (n shrinks again past 90 degrees of bend, and a knee folded flat is the most bent of all)
     let off =
       wrap(own - straight) * THREE.MathUtils.smoothstep(bend > Math.PI / 2 ? 1 : n, 0, SOFT);
-    const key = fixed ? u + "+" : u; // u+: last frame's final twist
+    const key = fixed ? u + "+" : u;
     if (frameDt > 0 && key in twistWas)
       off =
         twistWas[key] +
@@ -655,11 +582,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     pose[l] = [-fold * bend * D, 0, 0];
   };
 
-  // Steve's lowest point now (of the given joints' boxes), and the source's (estimated). The floor fix counts his body, legs
-  // and upper arms, not forearms or head: with his long arms and short legs a hand sweeping the floor would lift the whole
-  // body off it, and his head,
-  // twice a human's, lifted a body lying face down 20 cm whenever the source raised its head (both meet the floor on their
-  // own: headUp, pushOut)
   const corner = new THREE.Vector3(),
     lowPoint = new THREE.Vector3();
   const ARMS = { L: ["uaL", "laL"], R: ["uaR", "laR"] };
@@ -694,7 +616,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     Math.min(...Object.entries(REACH).map(([r, f]) => src.atNow(r).y - f * srcLeg));
   const srcHandLow = () =>
     Math.min(src.atNow("wristL").y, src.atNow("wristR").y) - HAND_REACH * srcLeg;
-  // a world point into joint `key`'s rest world, and back
   const toMats = {},
     fromMats = {};
   const toMat = (key) => {
@@ -719,7 +640,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const fromRest = (key, p) => p.applyMatrix4(fromMat(key));
   const handAt = (sd, out) => fromRest(`la${sd}`, out.copy(handRest[sd]));
   const footAt = (sd, out) => fromRest(`ll${sd}`, out.copy(footRest[sd]));
-  // the closest points of segments a0-a1 and b0-b1: [s, t] along each (0..1)
   const ab = new THREE.Vector3(),
     cd = new THREE.Vector3(),
     ac = new THREE.Vector3();
@@ -740,8 +660,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   };
   const grad = new THREE.Vector3(),
     lp = new THREE.Vector3();
-  // the hand moved out of every obstacle, and above the floor unless floor is false (a few passes: out of one can be into
-  // another); returns how deep it was
   const pushOut = (p, floor = true) => {
     let deepest = 0;
     for (let pass = 0; pass < 3; pass++) {
@@ -789,7 +707,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
   const elbowNow = {};
   const solveFrame = (dt) =>
     atOrigin(() => {
-      for (const x in gap) delete gap[x]; // the source as pose() updated it: nothing moves it until the next pose()
+      for (const x in gap) delete gap[x];
       frameDt = dt;
       twistWas = dt > 0 ? { ...twistNow } : {};
       eulerWas = dt > 0 ? { ...eulerNow } : {};
@@ -827,7 +745,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           -1,
         );
       }
-      // skipped when he already stands as p says: the head and floor fixes below often leave p as the last call placed it
       let placed = null;
       const samePlaced = () => {
         if (!placed) return false;
@@ -865,13 +782,9 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         }
         placed = next;
         player.setPose(p);
-        // the solve reads his bones alone; the rest of him keeps older matrices until a full update (the renderer's, or
-        // clips.ts leaveAsBaked after a bake)
         player.updateBones();
         bonesVer++;
       };
-      // his legs out of each other and of his body: box legs are thicker than a human's, so knees together, legs crossed
-      // or a thigh pressed to the chest ran one box through the other
       if (own) {
         place();
         const L = {},
@@ -894,7 +807,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         const pa = new THREE.Vector3(),
           pb = new THREE.Vector3(),
           nrm = new THREE.Vector3();
-        // moves the point at s along a leg's segment (thigh: hip fixed, so the knee turns it; shin: knee and foot share it)
         const shift = (leg, shin, s, by) => {
           if (shin) {
             leg.K.addScaledVector(by, 1 - s);
@@ -934,13 +846,11 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
               need = 2 * LEG_R + dd;
             }
             (sideNow[pair] ??= new THREE.Vector3()).copy(nrm);
-            // the leg on top takes the push: a leg crossed over the other rests on it rather than pressing it into the floor
             const wl = 0.5 + 0.5 * nrm.y;
             shift(L.L, sl, s1, v.copy(nrm).multiplyScalar(need * wl));
             shift(L.R, sr, t1, v.copy(nrm).multiplyScalar(-need * (1 - wl)));
             hit = true;
           }
-          // knees and feet out of his body
           for (const sd of ["L", "R"])
             for (const key of ["K", "F"]) {
               const at = L[sd][key];
@@ -959,7 +869,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
                 L[sd].moved = hit = true;
               }
             }
-          // back to their own lengths
           for (const sd of ["L", "R"]) {
             const g = L[sd];
             g.K.sub(g.H).setLength(g.l1).add(g.H);
@@ -969,8 +878,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         }
         for (const x in legSide) delete legSide[x];
         Object.assign(legSide, sideNow);
-        // played in order, the knee's and foot's corrections change no faster than FIX_SPEED plus their own move (as the hand's),
-        // both measured in his body's frame so a run's own speed doesn't count as room to jump
         for (const sd of ["L", "R"]) {
           const g = L[sd],
             was = legLast[sd];
@@ -1013,16 +920,10 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
               true,
             );
       }
-      // the floor
       place();
-      // only near the floor: off it (a jump, a ladder) the scaled hip path alone is the source's own move, and which of his
-      // feet is lowest there can change at another moment than the source's (a step up a ladder bumped him 4 cm)
       const sl = srcLowest(),
         near = 1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3);
       if (floor) p.root.y += near * (k * Math.max(0, sl - DEAD) - lowest());
-      // hands bearing his weight (a handstand, a kip-up, a vault: the source's hand on the floor well below the rest of it)
-      // lift the body until they rest on it; else his long arms reach 40 cm into the floor and fold double there, the elbow
-      // flipping side to side. A hand on the floor while feet or knees are down too (crawl, push-up) bears no lift
       const hl = srcHandLow(),
         carry = CARRY(sl, hl);
       if (floor && carry > 0) {
@@ -1030,10 +931,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         p.root.y += carry * Math.max(0, k * Math.max(0, hl - DEAD) - lowest(["laL", "laR"]));
       }
       if (floor) {
-        // the head out of the floor: turned about the neck, away from it, at most HEAD_TURN, less the more his chest hangs
-        // upside down (on his head in a roll no turn gets it out, and the corner it chased flipped side to side 118 degrees a
-        // frame; the head's own upside down is no sign of that: a body lying face down with its chin tucked has it too, and
-        // stood on its head 37 cm up); any rest lifts the body
         let Qh = Qhead.clone();
         const cap =
           HEAD_TURN *
@@ -1049,7 +946,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           pole
             .set(u.x, 0, u.z)
             .cross(by.set(0, 1, 0))
-            .normalize(); // turning about this lifts the corner
+            .normalize();
           const Rm = Math.hypot(A, ry),
             want = THREE.MathUtils.clamp(-sh.y / Rm, -1, 1);
           const th = Math.min(Math.asin(want) - Math.atan2(ry, A), cap - turned);
@@ -1058,7 +955,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           Qh = new THREE.Quaternion().setFromAxisAngle(pole, th).multiply(Qh);
           p.head = deg(rel(Qchest, Qh), "head");
         }
-        // played in order, the turn changes no faster than HEAD_SPEED plus the source head's own turn
         const fixQ = Qh.clone().multiply(T.copy(Qhead).invert());
         if (dt > 0 && lastHead.fix) {
           const max = HEAD_SPEED * dt + Qhead.angleTo(lastHead.src),
@@ -1076,14 +972,11 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         // (held back, the rest lifts the body at once: a lift held back too let the head 26 cm into the floor in a tackle)
         p.root.y += Math.max(0, -lowest(["head"]));
       }
-      // his own body
       place();
       for (const sd of own || floor ? ["L", "R"] : []) {
         handAt(sd, hd);
         tg.copy(hd);
-        const depth = own ? pushOut(tg, false) : 0; // the floor comes after, see below
-        // a hand far inside is one with no room at all (under his cheek on the floor, where his head is twice a human's):
-        // pushing it out of one surface drives it into the other and the arm flips, so it is left where the source has it
+        const depth = own ? pushOut(tg, false) : 0;
         tg.lerp(hd, THREE.MathUtils.smoothstep(depth, TRAPPED, TRAPPED + 0.1));
         sh.setFromMatrixPosition(b[`ua${sd}`].matrixWorld);
         el.setFromMatrixPosition(b[`la${sd}`].matrixWorld);
@@ -1141,18 +1034,9 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
           );
           place();
         };
-        // played in order (dt > 0), the hand's push out of his body follows the hand's own move along last frame's push (a
-        // hand going into a surface is pushed back as fast as it goes), and changes no faster than FIX_SPEED otherwise: the
-        // way out flips to another face as a fast hand passes the box's diagonal or through his head (a bow drawn to a
-        // human's cheek is 17 cm inside his), and the arm snapped straight for a frame; allowing the hand's whole move let a
-        // fast hand flip freely (in his chest's frame, as the legs')
         const hdR = toRest("chest", hR.copy(hd)),
           off = fix[sd].copy(toRest("chest", tR.copy(tg))).sub(hdR);
         if (dt > 0 && last[sd]) {
-          // last frame's push, along its own way: grown at once to this frame's push along it (something pressing in, the
-          // hand or his head turning onto it: held to the hand's move alone, a hand on the chin went 13 cm into a turning
-          // head); else carried by the hand's move along it, never past zero (a hand leaving is not pulled back in) nor past
-          // last frame's push (a hand going on into a surface it has already left is free: a diving hand stayed 28 cm off)
           const n = e1.copy(last[sd].lengthSq() > 1e-6 ? last[sd] : off);
           if (n.lengthSq() > 1e-10) n.normalize();
           const was = last[sd].length(),
@@ -1170,10 +1054,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
         }
         (last[sd] ??= new THREE.Vector3()).copy(off);
         (lastHand[sd] ??= new THREE.Vector3()).copy(hdR);
-        // then the floor, never held back nor remembered (a body turning fast in a fall moves the floor through his chest's
-        // frame: a held-back lift let the hand 20 cm into it, and a lift remembered with the push came back held and was
-        // lifted again, the arm swinging 50 degrees in a frame); twice: the box's own corners can still dip under the floor
-        // once the hand's middle is above it
         if (off.lengthSq() > 1e-12 || (floor && lowest(ARMS[sd]) < 0)) {
           solve();
           for (let pass = 0; floor && pass < 2; pass++) {
@@ -1183,7 +1063,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
             solve();
           }
         }
-        // the elbow's side of the shoulder-hand line, in his chest's frame, for the next frame (see solve)
         el.setFromMatrixPosition(b[`la${sd}`].matrixWorld);
         handAt(sd, e1);
         u.copy(e1).sub(sh).normalize();
@@ -1196,10 +1075,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       }
       return p;
     });
-  // A frame with no last frame (the first, or a cut, loop or seek: the source's hips jump, and what the last frame left is
-  // stale) starts the memories afresh, then is solved again as if held until it stops changing: what a frame's memories
-  // decide (which side legs crossed through each other stay on, the corrections held back) settled over 3-4 frames on
-  // camera (a knee 54 to 77 degrees on a held frame)
   let hipsWas = null;
   const same = (a, c) =>
     Object.keys(c).every((j) =>
@@ -1224,12 +1099,11 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     return p;
   };
 
-  // Call with the player posed by pose() at the origin and matrices updated
   const ang = (a, c) =>
     Math.acos(THREE.MathUtils.clamp(a.clone().normalize().dot(c.clone().normalize()), -1, 1)) * D;
   const measure = () => {
     bonesVer++;
-    src.update(); // a caller may have moved the source's mixer since pose(): the reads below are as of the last update()
+    src.update();
     const dir = {};
     for (const sd of ["L", "R"]) {
       const S0 = pos(b[`ua${sd}`]),
@@ -1266,7 +1140,7 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
     const low = lowest(),
       sl = srcLowest(),
       want = k * Math.max(0, sl - DEAD);
-    const near = (1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3)) * (1 - CARRY(sl, srcHandLow())); // carried on his hands, his body is meant to be up
+    const near = (1 - THREE.MathUtils.smoothstep(sl, 0.1, 0.3)) * (1 - CARRY(sl, srcHandLow()));
     const inside = {};
     for (const sd of ["L", "R"])
       inside[`hand ${sd} in head/body/legs/floor`] = pushOut(handAt(sd, new THREE.Vector3()));
@@ -1283,7 +1157,6 @@ export function retargeter(src, player, { floor = true, own = true } = {}) {
       srcLow: srcLowest(),
     };
   };
-  // how deep a world point (a ball of radius r) is in any of the given joints' boxes (posed as now), for checks
   const depth = (p, keys, r) => {
     bonesVer++;
     return Math.max(

@@ -1,4 +1,3 @@
-// The encoded draft's picture faults; HELP below says how to run it
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join, relative, resolve } from "node:path";
@@ -48,7 +47,6 @@ if (vsAt >= 0 && !existsSync(resolve(PROJECT, args[vsAt + 1]))) {
   console.error(`no ${args[vsAt + 1]}: --vs takes the reference video, as references/ref.mp4`);
   process.exit(2);
 }
-// a broken film file is a fault in the film: named, exit 1
 const readJson = (file) => {
   try {
     return jsonFile(file, PROJECT);
@@ -100,8 +98,6 @@ const requestedStart = startArg !== undefined ? secondArg("--start", startArg) :
 const manual = Math.abs(requestedStart - where.start) > 1e-6;
 const START = manual ? requestedStart : where.start;
 const timeline = Boolean(render && !stale && !manual);
-// a render's own record holds for its frames however the film changed since (a --chunks run joins older chunks): its
-// cuts, its picture's shape and its reference; the timeline rows and the studio marks are the current film's
 const ownRecord = Boolean(render && !manual);
 const clock = manual ? "manual" : render ? "film" : "file";
 if (START)
@@ -124,7 +120,6 @@ const [w, h] = sizeOf(ratio, 192);
 const tall = ratio === "9:16" ? "16/9" : "9/16";
 const crop = useLayout ? `crop=iw:min(ih\\,trunc(iw*${tall}/2)*2):0:0,` : "";
 const filter = `showinfo=checksum=0,${crop}scale=${w}:${h}:flags=area`;
-// the reference's frame-to-frame change (mean per pixel, 0-1) at the film's rate from `from` s, filled to this shape
 function refChanges(file, from, seconds) {
   const r = meter(w, h);
   return new Promise((done, fail) => {
@@ -251,10 +246,8 @@ try {
   process.exit(1);
 }
 
-// only the cuts this video holds (nearCut in checks/frames.mjs reaches 1.5 frames either side)
 const activeCuts = cuts.filter((c) => c >= times[0] - 1.5 / fps && c <= times.at(-1) + 2.5 / fps);
 const { lines, faults, D } = m.report(fps, activeCuts, times, lastDuration);
-// the reference at the same heard seconds: a jump or flash it has too is a move the remake copies, one it has not is ours
 const refFile =
   vsAt >= 0 ? resolve(PROJECT, args[vsAt + 1]) : ownRecord ? referenceVideo(PROJECT) : null;
 const refShown = vsAt >= 0 ? args[vsAt + 1] : refFile;
@@ -282,12 +275,9 @@ if (refFile && sudden.length) {
       ...refD.slice(k + 4, k + 13),
     ].toSorted((a, b) => a - b);
     const median = Math.max(around[Math.floor(around.length / 2)] ?? 0, 0.002);
-    // ours: the change of the frame flagged (a flash's way back too)
     const i = times.indexOf(x.t);
     const own = x.kind === "FLASH" ? Math.max(D[i] ?? 0, D[i + 1] ?? 0) : (D[i] ?? 0);
     const spike = peak > JUMP_MIN && peak > 3 * median;
-    // a frame beside it where ours stops dead and the reference still moves, and another jump of ours within 3 frames:
-    // our move comes in steps (a stutter). One jump between two stills is a cut the render did not record
     const after = x.kind === "FLASH" ? 2 : 1;
     const steps = sudden.some((y) => y !== x && Math.abs(times.indexOf(y.t) - i) <= 3);
     const dead = steps
@@ -297,8 +287,6 @@ if (refFile && sudden.length) {
           .filter((f) => f.ours < JUMP_MIN / 2 && f.theirs >= 2.5 * JUMP_MIN)
           .toSorted((a, b) => b.theirs - a.theirs)[0]
       : undefined;
-    // the reference's fast moves are smeared and ours are sharp: the same move measures about half ours there, and a
-    // reference changing a tenth of the picture a frame is moving fast itself
     const fast = peak >= 5 * JUMP_MIN;
     const asMuch = peak >= 0.5 * own;
     const pct = (v) => `${(v * 100).toFixed(1)}%`;
@@ -322,7 +310,6 @@ if (refFile && sudden.length) {
   }
   for (const [i, x] of faults.entries()) if (x.ref) lines[i + 1] += `; ${x.ref.said}`;
 }
-// film seconds in what is printed and in the file names; the video's own seconds to seek in it
 const film = (s) => (s + START).toFixed(2);
 const exact = (s) => (s + START).toFixed(9).replace(/\.?0+$/, "");
 for (const l of lines)
@@ -336,7 +323,6 @@ mkdirSync(RENDERS, { recursive: true });
 const out = mkdtempSync(join(RENDERS, "framecheck_"));
 const strips = new Map();
 const artifacts = [];
-// a pop the reference does not have is the one to look at first
 const stripFaults = faults
   .toSorted((a, b) => Number(Boolean(b.ref?.ours)) - Number(Boolean(a.ref?.ours)))
   .slice(0, 12)
@@ -568,8 +554,6 @@ await ended(
       }
     : { say: `Frames of ${shown}: no black, flash, jump, shimmer or freeze`, level: "ok" },
 );
-// a mixed video (draft.mp4, final.mp4) gets its new picture through the mix again; the upload's picture goes on to deliver
-// a --start said by hand goes on with the commands that read the same video's seconds
 const again = startArg !== undefined ? ` --start ${START}` : "";
 const mixed = where.mixed;
 const remix =
@@ -604,7 +588,6 @@ if (!timeline) {
   const redraw = where.span
     ? `bun run render clip --span ${where.span.join(",")}`
     : `bun run render ${where.final ? "final" : "clip"} --chunks ${[...new Set(faults.map((x) => Math.floor((x.t + START) / 30)))].join(",")}${remix}: chunk N is N*30 s on`;
-  // checks/frames.mjs skips a flash or jump at a cut the render recorded, not a black or frozen run
   const cutsSaid = !cutInfo?.times
     ? "a planned cut or freeze is fine"
     : activeCuts.length
@@ -613,6 +596,4 @@ if (!timeline) {
   log(
     `next: look at ${strips.has(focus) ? `${strips.get(focus)} first, the other strips beside it` : "the strips"}; ${context} (${cutsSaid}); if unintended, fix the scene and re-render that stretch (${redraw}), then bun run framecheck${videoArg ? ` ${showVideo}` : ""}${again} again`,
   );
-}
-// a clean file is not a good one: what the meter cannot judge is left to the eye
-else log(`next: inspect the picture: bun run sheet ${showVideo} overview${again}${upload}`);
+} else log(`next: inspect the picture: bun run sheet ${showVideo} overview${again}${upload}`);

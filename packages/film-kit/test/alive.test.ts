@@ -15,9 +15,9 @@ test("through: no neighbours is smoothstep; a key on the way keeps its speed, a 
     expect(through(null, 2, 6, null, 0, 1, 2, 3, 1 + u)).toBeCloseTo(2 + 4 * smoothstep(u), 12);
   const speed = (vp: number, vn: number) =>
     (through(vp, 2, 6, vn, 0, 1, 2, 3, 1.001) - through(vp, 2, 6, vn, 0, 1, 2, 3, 1)) / 0.001;
-  expect(speed(0, 9)).toBeGreaterThan(1); // 0 -> 2 -> 6: moving on through the key at t 1
-  expect(Math.abs(speed(4, 9))).toBeLessThan(0.01); // 4 -> 2 -> 6: a trough, it stops there
-  expect(Math.abs(speed(2, 9))).toBeLessThan(0.01); // 2, 2: held, it leaves at rest
+  expect(speed(0, 9)).toBeGreaterThan(1);
+  expect(Math.abs(speed(4, 9))).toBeLessThan(0.01);
+  expect(Math.abs(speed(2, 9))).toBeLessThan(0.01);
   for (let t = 1; t <= 2; t += 0.01) {
     const v = through(0, 2, 6, 6.1, 0, 1, 2, 2.05, t);
     expect(v).toBeGreaterThanOrEqual(2 - 1e-9);
@@ -38,7 +38,6 @@ test("throughPose: per joint and root field, missing joints at rest; addPose add
 });
 
 test("overlap: zero on a still pose, lags a move by about its frames, swings past a stop and settles; legs untouched", () => {
-  // the chest and forearm swing 0 -> 60 degrees over 0.3 s at t 1, then hold
   const ramp = (t: number) => 60 * smoothstep(Math.min(1, Math.max(0, (t - 1) / 0.3)));
   const lagOf = overlap(
     (t) => ({ chest: [ramp(t), 0, 0], laR: [ramp(t), 0, 0], ulL: [ramp(t), 0, 0] }),
@@ -46,9 +45,8 @@ test("overlap: zero on a still pose, lags a move by about its frames, swings pas
   );
   const at = (j: string, t: number) => ((lagOf(t)[j] as number[] | undefined) ?? [0])[0];
   expect(at("chest", 0.5)).toBeCloseTo(0, 9);
-  expect(at("laR", 1.15)).toBeLessThan(at("chest", 1.15)); // trails behind the pose, the forearm more than the chest
+  expect(at("laR", 1.15)).toBeLessThan(at("chest", 1.15));
   expect(at("chest", 1.15)).toBeLessThan(0);
-  // the lagged forearm crosses the pose's angle at about its 3 frames (0.1 s) behind it
   const lagged = (t: number) => ramp(t) + at("laR", t);
   let cross = 1;
   while (lagged(cross) < 30) cross += 0.001;
@@ -56,9 +54,9 @@ test("overlap: zero on a still pose, lags a move by about its frames, swings pas
   expect(cross - 1.15).toBeLessThan(0.13);
   let peak = 0;
   for (let t = 1.3; t < 2; t += 0.005) peak = Math.max(peak, lagged(t));
-  expect(peak).toBeGreaterThan(60.5); // past the stop
+  expect(peak).toBeGreaterThan(60.5);
   expect(peak).toBeLessThan(66);
-  expect(Math.abs(at("laR", 3.5))).toBeLessThan(0.05); // settled
+  expect(Math.abs(at("laR", 3.5))).toBeLessThan(0.05);
   expect(lagOf(1.15).ulL).toBeUndefined();
   expect(
     (overlap((t) => ({ chest: [ramp(t), 0, 0] }), 4, { amount: 0 })(1.15).chest as number[]).every(
@@ -91,8 +89,8 @@ test("gaze: eyes jump in 50 ms and hold; the aim decides the direction; eyeTime 
   expect(eyeTime(4.94, () => 9)).toBeCloseTo(5.5, 9);
   expect(anglesOf([1, 0, 1])![0]).toBeCloseTo(45, 9);
   expect(anglesOf([0, -1, 1])![1]).toBeCloseTo(-45, 9);
-  expect(anglesOf([0, -0.1, 0.05])).toBeNull(); // at the nose
-  expect(anglesOf([0.5, 0, -1])![0]).toBeGreaterThan(90); // behind him: as far round as the eyes go
+  expect(anglesOf([0, -0.1, 0.05])).toBeNull();
+  expect(anglesOf([0.5, 0, -1])![0]).toBeGreaterThan(90);
 });
 
 test("gaze: a jump over 33 degrees always brings a blink that starts with it; under 15 never", () => {
@@ -103,7 +101,6 @@ test("gaze: a jump over 33 degrees always brings a blink that starts with it; un
   for (let i = 1; i < f.length - 1 && f[i] < 190; i++) {
     const turn = (fx: number) => [fx >= f[i] ? 40 : 0, 0] as [number, number];
     const nudge = (fx: number) => [fx >= f[i] ? 10 : 0, 0] as [number, number];
-    // shut at the end of the fast down phase, open again after the slow up phase
     if (eyes(f[i] + BLINKS.down + 0.01, turn).blink > 0.9) bigBlinks++;
     if (eyes(f[i] + BLINKS.down + 0.01, nudge).blink > 0) smallBlinks++;
     if (f[i + 1] > f[i] + BLINK + 0.02) expect(eyes(f[i] + BLINK + 0.01, turn).blink).toBe(0);
@@ -114,7 +111,6 @@ test("gaze: a jump over 33 degrees always brings a blink that starts with it; un
   expect(justBlinked(f[3] + BLINKS.down, (fx) => [fx >= f[3] ? 40 : 0, 0]).blink).toBe(0);
 });
 
-// a 40-degree chest bend over 0.3 s at t 2, held, then back at t 5
 const bend = (t: number) =>
   40 *
   smoothstep(Math.min(1, Math.max(0, (t - 2) / 0.3))) *
@@ -127,9 +123,9 @@ test("cartoon: winds up the other way before a move and carries past its stop; n
     high = 0;
   for (let t = 1.6; t < 2.05; t += 0.005) low = Math.min(low, out(t));
   for (let t = 2.2; t < 2.8; t += 0.005) high = Math.max(high, out(t));
-  expect(low).toBeLessThan(-1.2); // anticipation: about 5% back first
+  expect(low).toBeLessThan(-1.2);
   expect(low).toBeGreaterThan(-3);
-  expect(high).toBeGreaterThan(41.2); // follow-through about 5% past 40
+  expect(high).toBeGreaterThan(41.2);
   expect(high).toBeLessThan(43);
   expect(Math.abs((toon(3.5).chest as number[])[0])).toBeLessThan(0.01);
   expect(Math.abs((toon(0.5).chest as number[])[0])).toBeLessThan(0.01);
@@ -137,7 +133,6 @@ test("cartoon: winds up the other way before a move and carries past its stop; n
 });
 
 test("idle: breathes ~15 a minute at rest and faster, deeper after effort, recovering over tens of seconds", () => {
-  // still for 20 s, then 6 s of hard bending (2 Hz), then still
   const pose = (t: number): Pose => ({
     chest: [t > 20 && t < 26 ? 30 * Math.sin(2 * Math.PI * 2 * t) : 0, 0, 0],
   });
@@ -162,7 +157,7 @@ test("idle: breathes ~15 a minute at rest and faster, deeper after effort, recov
   expect(breaths(26, 34)).toBeGreaterThan(28);
   expect(depth(26, 34)).toBeGreaterThan(3 * depth(4, 20));
   expect(life.effort(26)).toBeGreaterThan(0.9);
-  expect(life.effort(26 + 25)).toBeLessThan(0.45); // one time constant later, about a third left
+  expect(life.effort(26 + 25)).toBeLessThan(0.45);
   expect(life.effort(26 + 25)).toBeGreaterThan(0.25);
 });
 
@@ -182,13 +177,12 @@ test("idle: weight shifts only standing still, about every 4 s; a fast stop dips
   }
   expect(flips).toBeGreaterThan(2);
   expect(flips).toBeLessThan(8);
-  expect(Math.abs(hip(8.2)) + Math.abs(hip(9))).toBeLessThan(1); // sanity: metres, a few cm at most
+  expect(Math.abs(hip(8.2)) + Math.abs(hip(9))).toBeLessThan(1);
   expect(Math.max(...[...Array(600)].map((_, i) => Math.abs(hip(i * 0.05))))).toBeLessThanOrEqual(
     0.035 + 1e-9,
   );
   expect(kneeling(12).root!.x).toBe(0);
-  expect(Math.abs(standing(2.15).root!.x)).toBe(0); // moving: no sway
-  // the stop at ~2.3 s: the chest dips forward and the hips sink, then it is gone within a second and a half
+  expect(Math.abs(standing(2.15).root!.x)).toBe(0);
   expect(standing.stops.length).toBe(2);
   let dip = 0;
   for (let t = 2.3; t < 3.2; t += 0.01) dip = Math.max(dip, (standing(t).chest as number[])[0]);

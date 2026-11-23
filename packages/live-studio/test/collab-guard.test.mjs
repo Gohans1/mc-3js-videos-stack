@@ -57,24 +57,20 @@ test("pending notice warns until non-human protect resolves it, preserves notice
   protection.protect(initial, human, "person");
   protection.remember("v2", human);
 
-  // Direct write collides with human edits -> creates pending notice
   const merged = protection.reconcile({ camera: 50, color: "cold" }, () => []);
   assert.deepEqual(merged, human);
 
-  // Fires repeatedly before resolution (never auto-silenced by reads)
   const firstWarn = captureWarnings(project);
   const secondWarn = captureWarnings(project);
   assert.equal(firstWarn.length, 1);
   assert.match(firstWarn[0], /Studio retained human edits in src\/timeline\/cam\.json/);
   assert.equal(secondWarn.length, 1);
 
-  // Another person edit does NOT acknowledge the pending notice
   const humanAgain = { camera: 65, color: "warm" };
   protection.protect(human, humanAgain, "person");
   protection.remember("v3", humanAgain);
   assert.equal(captureWarnings(project).length, 1);
 
-  // Intentional non-human write acknowledging only /camera leaves /color guarded, yet stops spam
   const aiWrite = { camera: 70, color: "warm" };
   protection.protect(humanAgain, aiWrite, "ai");
   protection.remember("v4", aiWrite);
@@ -82,12 +78,10 @@ test("pending notice warns until non-human protect resolves it, preserves notice
   assert.deepEqual(captureWarnings(project), []);
   assert.deepEqual(captureWarnings(project), []);
 
-  // Audit log still preserves notice 1 untouched
   const logAfterAck = readAuditLog(project);
   assert.equal(logAfterAck.length, 1);
   assert.equal(protection.report().notices.length, 1);
 
-  // A new direct write colliding with the still-guarded /color fires a fresh warning
   const secondMerged = protection.reconcile({ camera: 70, color: "cold" }, () => []);
   assert.deepEqual(secondMerged, aiWrite);
   const freshWarn = captureWarnings(project);
@@ -113,7 +107,6 @@ test("reset and resetProtectedFiles acknowledge pending notices while keeping no
   assert.deepEqual(captureWarnings(project), []);
   assert.equal(readAuditLog(project).length, 1);
 
-  // A subsequent direct write conflicting with the post-reset guard re-arms the warning
   writeFileSync(file, JSON.stringify({ fov: 35 }));
   assert.deepEqual(timeline.read().data, { fov: 60 });
   assert.equal(captureWarnings(project).length, 1);
@@ -145,7 +138,6 @@ test("legacy collaboration state JSON without acknowledgedNoticeId warns until r
     retained: ["/fov"],
     incoming: { fov: 45 },
   });
-  // Legacy notice lacking even `id`
   writeLegacy("src/timeline/shots.json", {
     file: "src/timeline/shots.json",
     retained: ["/fov"],
@@ -155,14 +147,12 @@ test("legacy collaboration state JSON without acknowledgedNoticeId warns until r
   const before = captureWarnings(project);
   assert.equal(before.length, 2);
 
-  // Resolving only cam.json silences cam.json while shots.json still warns
   const cam = openEditProtection(project, "src/timeline/cam.json");
   cam.protect({ fov: 60 }, { fov: 60 }, "agent");
   const middle = captureWarnings(project);
   assert.equal(middle.length, 1);
   assert.match(middle[0], /src\/timeline\/shots\.json/);
 
-  // Resolving shots.json via reset silences it too
   const shots = openEditProtection(project, "src/timeline/shots.json");
   shots.reset("v2", { fov: 60 });
   assert.deepEqual(captureWarnings(project), []);
@@ -242,7 +232,6 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
       JSON.stringify({ project: dir, port: server.port }),
     );
 
-    // Create a human edit on both k0 and k1, then trigger a direct-write collision notice
     const initial = film.cam.read();
     film.cam.write(initial.version, [
       { ...k0, fov: 60 },
@@ -267,7 +256,6 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
       return { status, stdout, stderr };
     };
 
-    // 1) collab read inside film folder (no --film): stdout has valid JSON with notices, stderr is empty
     const readRes = await runCollab(["read", "cam"], { cwd: dir });
     assert.equal(readRes.status, 0, readRes.stderr);
     assert.equal(readRes.stderr, "");
@@ -276,7 +264,6 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(readJson.data[1].fov, 65);
     assert.equal(readJson.notices.length, 1);
 
-    // 1b) Stale-base collab write cam - fails (exit 1, HTTP 409) and leaves pending warning armed
     const staleWrite = await runCollab(["write", "cam", "-"], {
       cwd: dir,
       stdin: JSON.stringify({ base: initial.version, data: [k0, k1] }),
@@ -285,7 +272,6 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(JSON.parse(staleWrite.stdout).conflict, true);
     assert.equal(captureWarnings(dir).length, 1);
 
-    // 2) collab write cam - via stdin (keeps k1's human fov: 65 protected, updates k0 to fov: 72)
     const stdinPayload = JSON.stringify({
       base: readJson.version,
       data: [
@@ -301,11 +287,9 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(afterStdin.data[1].fov, 65);
     assert.equal(JSON.parse(readFileSync(camFile, "utf8"))[0].fov, 72);
 
-    // Pending notice is now acknowledged even though k1/fov remains guarded
     assert.deepEqual(captureWarnings(dir), []);
     assert.equal(readAuditLog(dir).length, 1);
 
-    // 3) Backward-compatible file-path write with explicit --film from outside the film directory
     const payloadFile = join(dir, "payload.json");
     writeFileSync(
       payloadFile,
@@ -326,14 +310,12 @@ test("collab.mjs reads without stderr warning spam, writes via stdin '-', and pr
     assert.equal(afterFile.data[0].fov, 75);
     assert.equal(JSON.parse(readFileSync(camFile, "utf8"))[0].fov, 75);
 
-    // 3b) read's own output, its data edited, writes back: its version is the base
     const reread = JSON.parse((await runCollab(["read", "cam"])).stdout);
     reread.data[0].fov = 80;
     const writeRead = await runCollab(["write", "cam", "-"], { stdin: JSON.stringify(reread) });
     assert.equal(writeRead.status, 0, writeRead.stdout + writeRead.stderr);
     assert.equal(JSON.parse(readFileSync(camFile, "utf8"))[0].fov, 80);
 
-    // 4) Usage errors exit 2
     const missingInput = await runCollab(["--film", dir, "write", "cam"]);
     assert.equal(missingInput.status, 2);
     const extraReadArg = await runCollab(["--film", dir, "read", "cam", "-"]);

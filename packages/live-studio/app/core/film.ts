@@ -1,4 +1,3 @@
-// The film's shots on the studio's clock: which shot a second falls in, and where a shot ends
 import { DURATION, SHOTS_OUT as SHOTS } from "./filmMeta";
 
 export const shotIndex = (x: number) => {

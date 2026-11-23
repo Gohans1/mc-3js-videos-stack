@@ -37,13 +37,6 @@ import { saveView } from "../camera/cam";
 import { Tip } from "../components/Tip";
 import { engine } from "../core/engine";
 import { shotIndex } from "../core/film";
-// The buttons that matter, play, note and draw, then the free camera, the sound, full screen
-// and the settings (playback speed lives there: rarely touched). Settings open in a panel over the page, so the notes and the
-// sound lanes beside the picture never give way to them. As the bar narrows (a narrow window, the page zoomed in, a phone) labels
-// go first, then whole buttons, least needed first, each still on its key: the volume slider (Ctrl+↑ ↓), the snapshot (Shift+\), night
-// vision and the key from view while flying (Shift+K; night vision in Settings), the free camera (F, and in Settings; kept
-// while on); on a phone the speaker (its own volume buttons do it), then on the narrowest the guides (Ctrl+; and
-// Settings). Play, Note, Draw, full screen and the settings never go. The widths are the bar's inside at a phone's larger text
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";
 import { S } from "../core/state";
 import { set, setPref, useStudio } from "../core/store";
@@ -61,7 +54,6 @@ import { PendingChangesBar } from "./PendingChangesBar";
 
 const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Settings })));
 
-// CapCut's player bar is one slim row under the picture: 32 px controls with a mouse, 40 px under a finger (Button size md)
 const square = "pointer-coarse:size-10";
 
 function ReviewScrubBar() {
@@ -261,7 +253,6 @@ export function Transport() {
     night = useStudio((s) => s.nightVision),
     full = useFullscreen();
   return (
-    // A container: what fits depends on the picture's column, which the notes beside it narrow, not on the window
     <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2">
       {review && <ReviewScrubBar />}
       <PendingChangesBar />
@@ -311,7 +302,6 @@ export function Transport() {
             <span className="@max-[480px]:hidden">Draw</span>
           </Button>
         </Tip>
-        {/* Walking the camera needs a mouse and keys, as in Settings */}
         <Tip label="Free camera (F): left-drag to look, Shift+left-drag to orbit, middle-drag to pan, left-click to select, right-click or drag for notes, W A S D to fly, Space up, Shift down">
           <Button
             variant="toolbar"
@@ -458,7 +448,6 @@ export function Transport() {
               <Headphones />
             </Button>
           </Tip>
-          {/* Phones leave the level to their own buttons (iOS ignores a page setting it), so there the speaker only mutes */}
           <div
             className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1060px]:w-20 @max-[900px]:hidden pointer-coarse:hidden"
             title="Volume (Ctrl+↑ ↓)"

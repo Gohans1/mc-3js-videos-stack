@@ -1,4 +1,3 @@
-// src/stale.mjs: framecheck, sheet, pace and deliver say when the video they read is older than the film data it was drawn from
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -76,7 +75,6 @@ test("a video older than a picture change names the newest such file and the com
   }
 });
 
-// draft.mp4 is mix's: draft_video.mp4's picture with the sound of when mix ran, so either can be older than the film
 test("a draft with sound is older than its picture, or than its sound, and says which mix brings it up to date", () => {
   const { dir, at } = film();
   try {
@@ -172,7 +170,6 @@ test("a span or a final chunk older than a picture change names the render that 
   }
 });
 
-// the mouths follow the narration clips (src/lips.ts): a render keeps what it drew them from in <chunks>/seen-sound.json
 test("a video drawn before a narration clip moved is stale; a gain or a bed changed since is not", () => {
   const { dir, at } = film();
   try {

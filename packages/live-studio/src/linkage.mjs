@@ -26,8 +26,6 @@ const canonicalPlan = (p = {}) => {
   return out;
 };
 const equalPlan = (a, b) => equalJson(canonicalPlan(a), canonicalPlan(b));
-// Pure speed plans (no freezes, cuts, gaps, or main-track clips) are strictly bijective and visibility-preserving,
-// so consecutive transitions fold algebraically without altering compileLayerTiming output.
 const isPureSpeedPlan = (p) =>
   !p?.freezes?.length && !p?.cuts?.length && !p?.gaps?.length && !p?.main;
 

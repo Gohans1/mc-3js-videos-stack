@@ -14,7 +14,6 @@ test("blinks: ~17 a minute at rest, ~4.5 while the eyes are busy, never closer t
   expect(per(BLINKS.rate.focus)).toBeLessThan(4.5 * 1.4);
   const b = blinks(600, { rate: () => 26 }).times;
   expect(Math.min(...b.slice(1).map((t, i) => t - b[i]))).toBeGreaterThanOrEqual(BLINKS.gap - 1e-9);
-  // busy, then each break: most bring a blink 0.4-0.6 s after
   const breaks = Array.from({ length: 40 }, (_, i) => 10 + 12 * i);
   const t = blinks(500, { rate: () => BLINKS.rate.focus, breaks }).times;
   const hit = breaks.filter((x) =>
@@ -28,7 +27,6 @@ test("blink shape: shut in ~0.1 s, held, open over ~0.22 s (closing about twice 
   expect(lidShut(BLINKS.down)).toBeCloseTo(1, 5);
   expect(lidShut(BLINKS.down + BLINKS.shut / 2)).toBe(1);
   expect(lidShut(0.05)).toBeCloseTo(0.5, 1);
-  // half shut on the way down after 50 ms, half open on the way up only ~110 ms after it starts opening
   expect(lidShut(BLINKS.down + BLINKS.shut + 0.11)).toBeCloseTo(0.5, 1);
   expect(lidShut(BLINKS.down + BLINKS.shut + BLINKS.up + 0.001)).toBe(0);
 });
@@ -62,7 +60,6 @@ test("handeye: a reach found in a hand path; eyes land before the hand moves, le
   };
   const lerp = (a: number[], b: number[], k: number) =>
     a.map((v, i) => v + (b[i] - v) * ease(k)) as [number, number, number];
-  // up to the shelf 2-3 s, to the table 3.5-4.5 s, back down 6-7 s
   const hand = (t: number) =>
     t < 3.2
       ? lerp(rest, shelf, t - 2)
@@ -79,12 +76,10 @@ test("handeye: a reach found in a hand path; eyes land before the hand moves, le
     for (const x of K) if (x.t <= t) k = x;
     return k.at;
   };
-  expect(lookAt(R[0].start - HANDEYE.lead + 0.01)).toEqual(R[0].at); // there before the hand starts
+  expect(lookAt(R[0].start - HANDEYE.lead + 0.01)).toEqual(R[0].at);
   expect(lookAt(R[0].start - HANDEYE.lead - HANDEYE.turn - 0.01)).toBe(null);
-  // the next reach comes soon: the eyes go on to it just before the first hand lands
   const off = K.find((k, i) => i > 0 && K[i - 1].at === R[0].at && k.at === R[0].at)!;
   expect(off.t).toBeCloseTo(R[0].arrive - HANDEYE.leave, 5);
-  // after the last one, a short dwell, then the look is let go; nothing while the hand goes back down
   expect(lookAt(R[1].arrive + HANDEYE.dwell + HANDEYE.turn + 0.01)).toBe(null);
   expect(lookAt(6.5)).toBe(null);
 });
@@ -97,7 +92,6 @@ test("handeye: a press that only slows at the button is a reach; hands pulled to
     Math.max(0, Math.sin(Math.PI * Math.min(1, Math.max(0, (t - a) / 1.6))));
   const at = (p: number[], k: number) =>
     rest.map((v, i) => v + (p[i] - v) * k) as [number, number, number];
-  // out to the button and straight back (it never stops there), then hands to the chest and back
   const hand = (t: number) =>
     t < 4 ? at(button, bell(t, 1) ** 0.5) : at(chest, bell(t, 5) ** 0.5);
   const R = reaches(hand, 8, { rest });
@@ -121,7 +115,6 @@ test("notice: eyes go to a sudden thing ~0.2 s later, the head after, a short lo
   expect(g(8)).toBe(null);
   expect(g.events[1].pull).toBe(0);
   expect(g(9.6)).toBe(null);
-  // the same spot again: the pull drops each time (the receding one counts as seen too)
   expect(g.events[2].pull).toBeCloseTo(NOTICE.repeat ** 2, 5);
   expect(g.events[4].pull).toBeLessThan(g.events[3].pull);
 });

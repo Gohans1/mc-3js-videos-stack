@@ -114,11 +114,9 @@ export function orientCamera(camera: RigCamera, look: Vector3, roll: number, rig
 
 type StillPose = { p: readonly number[]; l: readonly number[]; fov: number; roll: number };
 
-// The rig option that turns the camera as the shot plays (one pose cannot say where it looks), or null
 export const rigTurnsCamera = (rig: CameraRig | undefined) =>
   rig?.lead ? "lead" : rig?.bank ? "bank" : rig?.look === "tangent" ? "look: tangent" : null;
 
-// The camera the film draws from this pose and rig (applyCameraRig, orientCamera, projectCamera), for one still frame
 function poseCamera(
   pose: StillPose,
   rig: CameraRig | undefined,
@@ -146,8 +144,6 @@ function poseCamera(
   return camera;
 }
 
-// Where a pixel of the picture (x right, y down, in a w x h frame) meets the plane axis = at: a reference's landmark
-// placed in our world. null when the ray never reaches the plane
 export function pixelOnPlane(
   pose: StillPose,
   rig: CameraRig | undefined,
@@ -309,8 +305,6 @@ export function fitBoxFrame(
   return { p, l: p.clone().addScaledVector(direction, distance) };
 }
 
-// The picture's right and up as world directions: a camera turned to face back along +z has its right on the world's -x,
-// where "move it right" by eye goes wrong
 export function screenAxes(
   pose: StillPose,
   rig: CameraRig | undefined,

@@ -1,8 +1,4 @@
 import { MAX_FOV, MIN_FOV } from "film-kit/lens";
-// The Camera tab, laid out as CapCut's Video tab: the shot (its name, where it runs, Split), then the camera keyframe picked on
-// the camera row or on the playhead, with CapCut's ◁◇▷ (◇ keys the picture as it is) and its lens as slider rows. How the
-// camera gets into a key is Keyframe easing (SpeedPanel.tsx), a shot's In / Out / Combo the Animation tab. Each change is one undo
-// step (Ctrl+Z), shared with the sound
 import {
   AudioLines,
   Hourglass,
@@ -69,8 +65,8 @@ import {
 import { cameraKeyNavigation } from "./camera-edit";
 import { CameraFraming } from "./CameraFraming";
 import { CameraKeyStyle, CameraTakePicker } from "./CameraKeyAuthoring";
-import { CameraOpticsTracksPanel } from "./CameraOpticsTracks";
 import { CameraOptics } from "./CameraOptics";
+import { CameraOpticsTracksPanel } from "./CameraOpticsTracks";
 import { CameraShotSettings } from "./CameraShotSettings";
 import { ShotHitsSection } from "./CamKeySections";
 import { FreeCamPanel } from "./FreeCamPanel";
@@ -80,7 +76,6 @@ const CameraEasePanel = lazy(() =>
   import("../shell/LazyPanels").then((m) => ({ default: m.CameraEasePanel })),
 );
 
-// The shot name field, which the camera row's Rename (CameraTrack.tsx) focuses
 export const SHOT_NAME_ID = "shot-name";
 
 function Saved() {
@@ -183,7 +178,6 @@ function ShotSection({ shot }: { shot: number }) {
   );
 }
 
-// The key's time: a key moves inside its shot, a cut moves with its shot's start (a roll edit)
 function TimeField({ i }: { i: number }) {
   const k = keys[i],
     canMove = retimable(i),
@@ -395,7 +389,6 @@ function KeySection() {
   );
 }
 
-// Keys picked with a box on the camera row: their span, and Delete; one of them dragged moves them all
 function PicksSection({ picks }: { picks: number[] }) {
   const a = keys[picks[0]].t,
     b = keys[picks[picks.length - 1]].t;

@@ -416,18 +416,18 @@ export const openRecordingEditor = (
 export const openFilmRecordingEditor = (entry: UnifiedPlaygroundEntry, openerId?: string) => {
   const take = entry.filmTake;
   if (!take?.file || !entry.audioUrl) return;
-  const linked = entry.sourceRecording ?? state.items.find(
-    (item) => item.id === take.playgroundItemId && (item.scope ?? "project") === (take.playgroundScope ?? "project"),
-  );
+  const linked =
+    entry.sourceRecording ??
+    state.items.find(
+      (item) =>
+        item.id === take.playgroundItemId &&
+        (item.scope ?? "project") === (take.playgroundScope ?? "project"),
+    );
   if (linked) {
     openRecordingEditor(linked, { openerId });
     return;
   }
-  const { title, text, tags, voiceId, voiceName, modelId, languageCode, voiceSettings, durationSeconds, favorite } = entry;
-  openRecordingEditor({
-    id: entry.uid,
-    scope: "project",
-    kind: "tts",
+  const {
     title,
     text,
     tags,
@@ -438,16 +438,34 @@ export const openFilmRecordingEditor = (entry: UnifiedPlaygroundEntry, openerId?
     voiceSettings,
     durationSeconds,
     favorite,
-    audioFile: take.file,
-    mimeType: "",
-    bytes: 0,
-    exportTranscript: false,
-    provider: "elevenlabs",
-    isTemplate: false,
-    sourceTakeId: take.id,
-    createdAt: "",
-    updatedAt: "",
-  }, { openerId, filmSource: { takeId: take.id, audioUrl: entry.audioUrl } });
+  } = entry;
+  openRecordingEditor(
+    {
+      id: entry.uid,
+      scope: "project",
+      kind: "tts",
+      title,
+      text,
+      tags,
+      voiceId,
+      voiceName,
+      modelId,
+      languageCode,
+      voiceSettings,
+      durationSeconds,
+      favorite,
+      audioFile: take.file,
+      mimeType: "",
+      bytes: 0,
+      exportTranscript: false,
+      provider: "elevenlabs",
+      isTemplate: false,
+      sourceTakeId: take.id,
+      createdAt: "",
+      updatedAt: "",
+    },
+    { openerId, filmSource: { takeId: take.id, audioUrl: entry.audioUrl } },
+  );
 };
 export const closeRecordingEditor = () =>
   patchState({
@@ -459,7 +477,9 @@ const regionUrl = (item: VoicePlaygroundItem, action: string) =>
 const filmRegionUrl = (takeId: string, action: string, sourceId?: string) =>
   `/api/voice/playground/film-takes/${encodeURIComponent(takeId)}/${action}${sourceId ? `?source=${encodeURIComponent(sourceId)}` : ""}`;
 export const inspectFilmRecordingRegion = (takeId: string) =>
-  fetchJson<{ info: PlaygroundRegionInfo; items: VoicePlaygroundItem[] }>(filmRegionUrl(takeId, "region"));
+  fetchJson<{ info: PlaygroundRegionInfo; items: VoicePlaygroundItem[] }>(
+    filmRegionUrl(takeId, "region"),
+  );
 export const inspectRecordingRegion = (item: VoicePlaygroundItem) =>
   fetchJson<PlaygroundRegionInfo>(regionUrl(item, "region"));
 export const loadRecordingVersions = async (item: VoicePlaygroundItem) =>
@@ -469,7 +489,9 @@ export const saveRecordingVersion = async (
   input: RegionEditInput,
   film?: { takeId: string; sourceId: string },
 ) => {
-  const url = film ? filmRegionUrl(film.takeId, "versions", film.sourceId) : regionUrl(item, "versions");
+  const url = film
+    ? filmRegionUrl(film.takeId, "versions", film.sourceId)
+    : regionUrl(item, "versions");
   const result = await fetchJson<{ job: PlaygroundJob }>(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -497,7 +519,9 @@ export const previewRecordingRegion = async (
   signal: AbortSignal,
   film?: { takeId: string; sourceId: string },
 ) => {
-  const url = film ? filmRegionUrl(film.takeId, "region-preview", film.sourceId) : regionUrl(item, "region-preview");
+  const url = film
+    ? filmRegionUrl(film.takeId, "region-preview", film.sourceId)
+    : regionUrl(item, "region-preview");
   const response = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -1572,7 +1596,6 @@ export const generateFromComposer = async (opts?: {
       return;
     }
 
-    // Voice Changer (STS)
     const stsModel = resolveModeModelId("voice_changer", d.modelId, state.catalog.models);
     const stsSettings = voiceSettingsForModel(activeModelById(stsModel), d);
     const resolvedTakeParts = d.vcSourceTakeValue ? d.vcSourceTakeValue.split(":") : [];
@@ -1854,7 +1877,9 @@ export function recordingRemovalFocus(trigger: HTMLButtonElement) {
     workbench?.querySelectorAll<HTMLElement>("[data-recording-select]") ?? [],
   );
   const current =
-    trigger.closest("[data-recording-row]")?.querySelector<HTMLElement>("[data-recording-select]") ??
+    trigger
+      .closest("[data-recording-row]")
+      ?.querySelector<HTMLElement>("[data-recording-select]") ??
     rows.find((row) => row.getAttribute("aria-current") === "true");
   const index = current ? rows.indexOf(current) : -1;
   const nearby = rows[index + 1] ?? rows[index - 1];

@@ -1,4 +1,3 @@
-// The libraries' search (app/core/search.ts): each word typed begins a word of the item
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

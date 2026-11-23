@@ -1,5 +1,3 @@
-// Every step the theme names itself (app/index.css @theme: text-ui, shadow-float...) is one cn() knows (app/lib/utils.ts):
-// an unknown text-ui counts as a colour, and cn("text-ui", "text-primary") would silently drop the size
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";

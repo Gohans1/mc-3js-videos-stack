@@ -1,5 +1,3 @@
-// Assembles voice/takes/NN.{mp3,wav} + .words.json onto full_voice.wav, updates edit.json voice.lines,
-// builds renders/live/voice_map.json, and populates per-take draggable Phrase Bricks on src/timeline/audio.json.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -43,13 +41,14 @@ const findNarrationOffChoice = (root: string, narrationName: string): string | n
   for (const name of ["choices.json", "sound_choices.json"]) {
     const p = join(root, name);
     if (!existsSync(p)) continue;
+    assertInsideFilm(root, p, name);
+    let raw: Record<string, { set?: unknown }>;
     try {
-      assertInsideFilm(root, p, name);
-      const raw = JSON.parse(readFileSync(p, "utf8")) as Record<string, { set?: unknown }>;
-      if (isPlainObject(raw) && raw[narrationName]?.set === "off") return name;
-    } catch {
-      /* choices.json schema/parse issues are validated by bun run check */
+      raw = JSON.parse(readFileSync(p, "utf8")) as Record<string, { set?: unknown }>;
+    } catch (err) {
+      throw new Error(`Invalid JSON in ${name}: ${(err as Error).message}`);
     }
+    if (isPlainObject(raw) && raw[narrationName]?.set === "off") return name;
   }
   return null;
 };
@@ -200,7 +199,7 @@ interface EditDoc {
   [k: string]: unknown;
 }
 
-const loadAndValidateInputs = (root: string) => {
+const loadAndValidateInputs = (root: string, forceClips = false) => {
   const editPath = join(root, "src/edit.json");
   assertInsideFilm(root, editPath, "src/edit.json");
   const rawEdit = jsonFile(editPath, root);
@@ -330,6 +329,12 @@ const loadAndValidateInputs = (root: string) => {
     }
   }
 
+  const effectiveNarrationName =
+    audio?.narration || (audio && forceClips && sortedPlaced.length ? "narration" : undefined);
+  const choicesOff = effectiveNarrationName
+    ? findNarrationOffChoice(root, effectiveNarrationName)
+    : null;
+
   return {
     editPath,
     edit,
@@ -339,6 +344,7 @@ const loadAndValidateInputs = (root: string) => {
     voiceMapPath,
     mouthMapPath,
     placed: sortedPlaced,
+    choicesOff,
   };
 };
 
@@ -347,8 +353,17 @@ export const runAssemble = async (opts: { cwd?: string; args?: string[] } = {}) 
   const args = opts.args ?? process.argv.slice(2);
   const forceClips = args.includes("--clips");
 
-  const { editPath, edit, audioPath, audio, outWav, voiceMapPath, mouthMapPath, placed } =
-    loadAndValidateInputs(root);
+  const {
+    editPath,
+    edit,
+    audioPath,
+    audio,
+    outWav,
+    voiceMapPath,
+    mouthMapPath,
+    placed,
+    choicesOff,
+  } = loadAndValidateInputs(root, forceClips);
   const priorMap = (() => {
     try {
       return JSON.parse(readFileSync(voiceMapPath, "utf8"));
@@ -463,12 +478,10 @@ export const runAssemble = async (opts: { cwd?: string; args?: string[] } = {}) 
   };
   await writeAtomicText(editPath, JSON.stringify(edit, null, 1) + "\n");
   writeVoiceMap(root, voiceMapPath, placed);
-  // the takes said on screen keep their mouth shapes where the voice now places them
   const onScreen = speakingTakes(root);
   if (onScreen.length || existsSync(mouthMapPath)) writeMouthMap(root);
   const unshaped = onScreen.filter((k) => !k.fresh).map((k) => k.id);
 
-  // Slice audio.json narration into per-take draggable Phrase Bricks when narration is enabled and clips aren't custom-edited
   let bricksWritten = 0;
   let narrationName = audio?.narration;
   if (audio) {
@@ -537,7 +550,6 @@ export const runAssemble = async (opts: { cwd?: string; args?: string[] } = {}) 
     }
   }
 
-  const choicesOff = narrationName ? findNarrationOffChoice(root, narrationName) : null;
   return { outWav, lines, bricksWritten, unshaped, narrationName, choicesOff };
 };
 

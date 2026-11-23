@@ -1,5 +1,3 @@
-// bun run skills: the guides for an AI agent, served from the repo's skill-data/ so they always match the commands checked
-// out next to them. .claude/skills/mc-films/SKILL.md is only a stub that sends an agent here (agent-browser's skills get pattern).
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,13 +34,11 @@ const words = argv.filter(
 const refs = argv.flatMap((a, i) => (argv[i - 1] === "--ref" ? [a] : []));
 const json = argv.includes("--json");
 const emit = (data) => console.log(JSON.stringify({ success: true, data }));
-// every refusal here is a wrong word: exit 2, as every repo command does
 const fail = (why) => {
   console.error(why);
   process.exit(2);
 };
 
-// name and description from a guide's frontmatter
 const about = (name) => {
   const text = readFileSync(join(DATA, name, "SKILL.md"), "utf8");
   const said = (key) => text.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1].trim() ?? "";
@@ -94,7 +90,6 @@ if (verb !== "get") fail(`no ${verb}: bun run skills (the list) or bun run skill
 if (!name)
   fail(`which guide? bun run skills get ${guides[0] ?? "core"} (the list: bun run skills)`);
 if (!guides.includes(name)) {
-  // earshot, real-sound, cinetic: agent skills of their own, read where they are, never served as an mc-films guide
   const own = join(DATA, "../.claude/skills", name, "SKILL.md");
   fail(
     existsSync(own)
@@ -104,7 +99,6 @@ if (!guides.includes(name)) {
 }
 
 const all = files(name);
-// a reference by its path, its file name or its name without .md
 const pick = (want) => {
   const w = want.replace(/\.md$/, "");
   const hits = all.filter(
@@ -112,7 +106,6 @@ const pick = (want) => {
       p === want || p.replace(/\.md$/, "") === w || p.split("/").at(-1).replace(/\.md$/, "") === w,
   );
   if (hits.length === 1) return hits[0];
-  // the guide also routes to repo docs (INSTALL.md): those are opened, never served here
   const doc = [...about(name).text.matchAll(/([\w./-]+\.md)\b/g)]
     .map((m) => m[1])
     .find(

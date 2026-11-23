@@ -1,8 +1,4 @@
 // @ts-nocheck
-// What the built-in checks (motion, seen, touch) look at and how they draw: a target by name, the label of whatever an
-// object belongs to, and the time chart they all print.
-//   target: "cam" (the film camera), a key of draw.tools.bones, any object's .name (mc-actor: handR, handL), or a
-//   draw.tools.objects label ("Steve")
 
 const findChild = (parent, seg) => {
   if (!parent) return null;
@@ -40,7 +36,6 @@ export const findTarget = ({ scene, camera, bones, objects } = {}, name) => {
   return cur;
 };
 
-// the names a target can take, the closest to a wrong one first: case, then a letter or two off
 const close = (a, b) => {
   a = a.toLowerCase();
   b = b.toLowerCase();
@@ -98,7 +93,6 @@ export const targetHelp = ({ bones, objects } = {}, name, { camera = true } = {}
   return `ERROR ${why}. Targets: ${camera ? "the camera: cam; " : ""}bones: ${Object.keys(bones ?? {}).join(", ") || "none"}; objects: ${(objects ?? []).map(([, l]) => l).join(", ") || "none"}; or any object's .name`;
 };
 
-// the draw.tools.objects label of the nearest ancestor that has one, else the object's own name
 export const labelOf = (objects, o) => {
   for (let p = o; p; p = p.parent) {
     const hit = objects?.find(([x]) => x === p);
@@ -112,7 +106,6 @@ export const inside = (root, o) => {
   return false;
 };
 
-// blue (0) to red (1)
 export const hue = (x) => `hsl(${Math.round(240 * (1 - Math.min(1, Math.max(0, x))))} 95% 55%)`;
 
 export const label = (ctx, text, x, y, color = "#fff", align = "left") => {
@@ -124,7 +117,6 @@ export const label = (ctx, text, x, y, color = "#fff", align = "left") => {
   ctx.fillText(text, x, y);
 };
 
-// A W x G chart of film seconds from..to against bottom..top: grid, axis numbers, title; X(t), Y(v) place points on it
 export function chart(W, G, { from, to, top, bottom = 0, title, unit = "" }) {
   const L = 64,
     R = 24,
@@ -171,7 +163,6 @@ export function chart(W, G, { from, to, top, bottom = 0, title, unit = "" }) {
   return { canvas, g, X, Y, T, B, L, R };
 }
 
-// a vertical line across the chart with a word at its top
 export const mark = (c, t, color, word, row = 0, dash = []) => {
   const { g, X, T, B } = c,
     H = g.canvas.height;

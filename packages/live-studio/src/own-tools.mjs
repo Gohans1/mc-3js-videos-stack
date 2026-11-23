@@ -2,10 +2,8 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-// what bun run gap writes (scripts/gap.ts GAPS), each row with the film it was run in
 const GAPS = fileURLToPath(new URL("../../../scripts/gaps.jsonl", import.meta.url));
 const SCRIPT = /\.(?:py|sh|ps1|mjs|cjs|js|ts)$/i;
-// the template's own root files: sound.py and a build config are not tools the film made
 const TEMPLATE = (f) => f === "sound.py" || /\.config\.[cm]?[jt]s$/.test(f);
 const isDir = (p) => statSync(p, { throwIfNoEntry: false })?.isDirectory() ?? false;
 
@@ -33,8 +31,6 @@ const gapsFrom = (file, film) => {
     }).length;
 };
 
-// The template ships no tools, so each script a film grows is a command the repo lacked; logged with bun run gap it
-// reaches whoever builds the next commands, otherwise it dies with the film
 export const ownToolsWarning = (project, gapsFile = GAPS) => {
   const tools = ownTools(project);
   const logged = gapsFrom(gapsFile, basename(project));

@@ -84,7 +84,6 @@ function SelectContent({
         className="isolate z-50"
       >
         <SelectPrimitive.Popup
-          // Focus goes back to the trigger only after a keyboard close: after a click Space must play the film, not reopen this
           finalFocus={(closedBy) => closedBy === "keyboard"}
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}

@@ -14,7 +14,6 @@ import {
 } from "../core/doc";
 import { say } from "../core/store";
 
-// Holds experimental timeline/camera/setting tweaks in preview behind explicit Confirm / Revert so AI edits aren't blocked.
 export function PendingChangesBar() {
   const pending = useSyncExternalStore(subscribePending, getPendingSnapshot, getPendingSnapshot);
   const [busy, setBusy] = useState(false);

@@ -1,5 +1,3 @@
-// Explicit cross-track selection state machine for StudioState (core/store.ts).
-// Picking an item on one timeline row or in the 3D viewport clears every other track's stale picks in one place.
 import type { GradeTarget } from "../camera/adjust";
 import type { KeyRef } from "../keys/slice";
 import type { ClipRef } from "../sound/slice";

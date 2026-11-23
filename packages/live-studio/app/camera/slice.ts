@@ -1,4 +1,3 @@
-// The camera keys' and shots' part of the page state (core/store.ts)
 import type { SaveState } from "../core/doc";
 import type { ContinuityAxis } from "./shots";
 
@@ -36,15 +35,15 @@ export interface CameraSlice {
   layersRev: number;
   layerPicks: string[];
   layersSaved: SaveState;
-  cam: boolean; // the film names its camera keys (package.json "live-studio".camTimeline): the camera row and tab show
-  camKey: number | null; // the key picked on the camera row, by its place in the file
-  camPicks: number[]; // several keys picked at once (two or more; camKey is null then)
-  shotPick: number | null; // the shot block picked on the camera row (its place in SHOTS_OUT), the Animation tab's shot
+  cam: boolean;
+  camKey: number | null;
+  camPicks: number[];
+  shotPick: number | null;
   shotPicks: number[];
-  animSlot: "in" | "out" | "combo"; // the Animation tab's open part
+  animSlot: "in" | "out" | "combo";
   camSaved: SaveState;
   camRev: number;
-  shots: boolean; // the film keeps its shots as data (package.json "live-studio".shotsTimeline): a cut can be moved
+  shots: boolean;
   shotsSaved: SaveState;
   shotsRev: number;
 }

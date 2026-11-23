@@ -1,44 +1,24 @@
-// Things that move the way they do in Minecraft, so a viewer who plays it sees the game: a jump, a fall, a mob knocked
-// back by a hit, an item tossed, an arrow, falling sand, TNT; the red flash of a hit and the death tip-over. Java Edition
-// runs at 20 ticks a second, and each tick an entity adds gravity to its velocity, multiplies it by a drag, and moves by
-// it, in an order that depends on its kind (minecraft.wiki/w/Entity, "Gravity": the table below). Simulating those three
-// steps tick by tick with the table's numbers is exact; between ticks the game draws the entity lerped from its last
-// tick to the next (partialTick), and so does this. 1 block = 1 metre, velocities in blocks a tick.
-//   Jump: 0.42 blocks/tick up (LivingEntity.getJumpPower) peaks 1.2522 blocks up and lands 12 ticks later.
-//   On the ground a living entity's horizontal drag is 0.91 times the block's friction (0.6; slime 0.8, ice 0.98, blue
-//   ice 0.989), so a mob that is hit slides to a stop on ice and barely moves on stone.
-//   A hit (LivingEntity.hurt -> knockback(0.4, from the source), decompiled 1.21.4): the velocity halves, then 0.4 is
-//   taken away horizontally toward the side away from the source and, if on the ground, y = min(0.4, y / 2 + 0.4).
-//   The entity flashes red for 10 ticks (hurtTime). Death (minecraft.wiki/w/Death; LivingEntityRenderer.setupRotations):
-//   red the whole time, tips onto its left side by min(1, sqrt((deathTime - 1) / 20 * 1.6)) * 90 degrees (spiders and
-//   silverfish flip 180), and at deathTime 20 (1 s) it is gone in a puff of white smoke.
-//   const body = mcBody([x, y, z], [{ t: 2, hit: [sx, sz] }, { t: 3, from: [0, -1] }, { t: 4, jump: true }, { t: 6, die: true }]);
-//   body(t) -> { p, v, onGround, red, roll, gone, puff }; body.events: landings and hits (for sounds)
-//   const item = fly("item", [x, y, z], [vx, vy, vz], { ground: 0 });  item(t).p
-// ground: a height, or (x, z) => the top of the block under that point. Only the floor collides (no walls).
 export const TPS = 20;
-// gravity (blocks/tick^2), vertical drag, horizontal drag, and the order of the three steps in a tick: a = acceleration,
-// d = drag, p = position (minecraft.wiki/w/Entity)
 export const KINDS = {
   living: { order: "pad", g: 0.08, dv: 0.98, dh: 0.91 },
   slowFalling: { order: "pad", g: 0.01, dv: 0.98, dh: 0.91 },
-  block: { order: "apd", g: 0.04, dv: 0.98, dh: 0.98 }, // falling sand, gravel, anvils; primed TNT
+  block: { order: "apd", g: 0.04, dv: 0.98, dh: 0.98 },
   item: { order: "apd", g: 0.04, dv: 0.98, dh: 0.98 },
   xp: { order: "apd", g: 0.03, dv: 0.98, dh: 0.98 },
-  thrown: { order: "adp", g: 0.03, dv: 0.99, dh: 0.99 }, // snowballs, eggs, ender pearls (1.21.2 and later)
+  thrown: { order: "adp", g: 0.03, dv: 0.99, dh: 0.99 },
   potion: { order: "adp", g: 0.05, dv: 0.99, dh: 0.99 },
-  arrow: { order: "pda", g: 0.05, dv: 0.99, dh: 0.99 }, // and thrown tridents
+  arrow: { order: "pda", g: 0.05, dv: 0.99, dh: 0.99 },
 } as const;
 export type Kind = keyof typeof KINDS;
 export const FRICTION = { normal: 0.6, slime: 0.8, ice: 0.98, blueIce: 0.989 };
 export const MC = {
-  jump: 0.42, // blocks/tick
-  knock: 0.4, // a hit's knockback strength
-  hurt: 10, // ticks red after a hit
-  death: 20, // ticks from death to the puff
-  flip: 90, // degrees a dying body tips over (180 for spiders and silverfish)
-  fallHurts: 3, // blocks: a fall longer than this hurts (and plays the block's fall sound)
-  speed: { walk: 4.317, sprint: 5.612, sneak: 1.295 }, // m/s (minecraft.wiki/w/Walking, Sprinting, Sneaking)
+  jump: 0.42,
+  knock: 0.4,
+  hurt: 10,
+  death: 20,
+  flip: 90,
+  fallHurts: 3,
+  speed: { walk: 4.317, sprint: 5.612, sneak: 1.295 },
 };
 
 type V3 = [number, number, number];
@@ -46,7 +26,6 @@ type Ground = number | ((x: number, z: number) => number);
 const floorAt = (g: Ground, x: number, z: number) => (typeof g === "number" ? g : g(x, z));
 
 type State = { p: V3; v: V3; on: boolean };
-// one tick of a kind's motion; returns how far it fell this tick if it landed
 function tick(
   s: State,
   k: { order: string; g: number; dv: number; dh: number },
@@ -83,7 +62,6 @@ const lerp3 = (a: V3, b: V3, k: number): V3 => [
   a[2] + (b[2] - a[2]) * k,
 ];
 
-// a thrown or dropped thing from p0 with velocity v0 (blocks/tick) at time t0 (s)
 export function fly(
   kind: Kind,
   p0: V3,
@@ -113,8 +91,6 @@ export function fly(
   return Object.assign((t: number) => ({ p: at(t) }), { landings });
 }
 
-// hit: where the attacker stands on the floor [x, z]; from: the attacker's offset from him at that moment [dx, dz] (for
-// a film keyed by who hits from which side, wherever earlier hits have pushed him)
 export type McEvent = {
   t: number;
   hit?: [number, number];
@@ -124,7 +100,6 @@ export type McEvent = {
   die?: boolean;
   push?: V3;
 };
-// a living entity (a player or mob) standing at p0, moved only by what happens to it: hits, jumps, pushes, death
 export function mcBody(
   p0: V3,
   events: McEvent[],
@@ -144,7 +119,6 @@ export function mcBody(
   const hits: number[] = [];
   for (let i = 0; i < n; i++) {
     const t = i / TPS;
-    // events take effect at the start of the tick they fall in
     while (e < evs.length && evs[e].t <= t) {
       const x = evs[e++];
       if (x.die && died === Infinity) {
@@ -186,22 +160,21 @@ export function mcBody(
   };
   const body = (t: number) => {
     const { i, f } = read(t);
-    const dt = (t - died) * TPS; // deathTime in ticks (with the partial tick)
+    const dt = (t - died) * TPS;
     const hurt = hits.some((h) => t >= h && t < h + MC.hurt / TPS);
     return {
       p: lerp3(P[i], P[i + 1], f),
       v: V[i],
       onGround: ON[i],
-      red: hurt || dt >= 0, // the game's hurt overlay: a flat red tint, on or off
+      red: hurt || dt >= 0,
       roll: dt > 0 ? Math.min(1, Math.sqrt(Math.max(0, (dt - 1) / 20) * 1.6)) * flip : 0,
       gone: dt >= MC.death,
-      puff: dt >= MC.death ? (dt - MC.death) / TPS : -1, // s since the smoke puff, -1 before it
+      puff: dt >= MC.death ? (dt - MC.death) / TPS : -1,
     };
   };
   return Object.assign(body, { events: out });
 }
 
-// how high a jump of v0 blocks/tick goes, and how many ticks until it lands back on the same level
 export function jumpArc(v0 = MC.jump) {
   const s: State = { p: [0, 0, 0], v: [0, v0, 0], on: false };
   let top = 0,

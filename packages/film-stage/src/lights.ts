@@ -77,7 +77,6 @@ function configureDirectionalShadow(
   light.shadow.normalBias = 0.02;
 }
 
-/** Create and attach a Three.js key/fill/rim + hemisphere/ambient rig onto `scene`. */
 export function createLightingRig(scene: THREE.Scene, opts: LightingRigOptions = {}): LightingRig {
   const defaultTarget: Vec3 = opts.target ? [...opts.target] : [0, 1.5, 0];
   const distance = opts.distance ?? 18;
@@ -192,12 +191,10 @@ function removePractical(
   practicals.delete(id);
 }
 
-/** Apply an evaluated `LightsState` snapshot and time `t` (for deterministic flicker) to `rig`. */
 export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): void {
   const { scene, practicals } = rig;
   const target: Vec3 = sample.target ?? rig.defaultTarget;
 
-  // Key
   rig.key.visible = sample.key.enabled;
   rig.key.color.set(sample.key.color);
   rig.key.intensity = sample.key.enabled ? Math.max(0, sample.key.intensity) : 0;
@@ -205,7 +202,6 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
   rig.key.shadow.radius = Math.max(0, sample.key.shadowRadius);
   placeDirectional(rig.key, target, sample.key.azimuth, sample.key.elevation, rig.distance);
 
-  // Fill + Negative Fill bounce attenuation
   const negScale = sample.fill.negativeFill ? 0.15 : 1;
   const bounceScale = sample.fill.negativeFill ? 0.45 : 1;
   rig.fill.visible = sample.fill.enabled;
@@ -213,13 +209,11 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
   rig.fill.intensity = sample.fill.enabled ? Math.max(0, sample.fill.intensity) * negScale : 0;
   placeDirectional(rig.fill, target, sample.fill.azimuth, sample.fill.elevation, rig.distance);
 
-  // Rim
   rig.rim.visible = sample.rim.enabled;
   rig.rim.color.set(sample.rim.color);
   rig.rim.intensity = sample.rim.enabled ? Math.max(0, sample.rim.intensity) : 0;
   placeDirectional(rig.rim, target, sample.rim.azimuth, sample.rim.elevation, rig.distance);
 
-  // World
   const ambientLevel = Math.max(0, sample.world.ambientIntensity);
   rig.hemisphere.color.set(sample.world.skyColor);
   rig.hemisphere.groundColor.set(sample.world.groundColor);
@@ -232,7 +226,6 @@ export function applyLightingRig(rig: LightingRig, sample: LightsState, t = 0): 
 
   (rig as LightingRig & { _syncFog?: (fog: LightsState["fog"]) => void })._syncFog?.(sample.fog);
 
-  // Practicals synced by id
   const wanted = new Set(sample.practicals.map((p) => p.id));
   for (const id of practicals.keys()) {
     if (!wanted.has(id)) removePractical(scene, practicals, id);
@@ -336,10 +329,6 @@ function toGodraysParams(
   };
 }
 
-/**
- * Wrap `three-good-godrays` cleanly so unsupported lights (`SpotLight`, no shadows)
- * or headless/WebGL-less contexts degrade to a harmless no-op instead of throwing.
- */
 export function createGodraysPass(
   light: THREE.Light | null | undefined,
   camera: THREE.Camera | null | undefined,

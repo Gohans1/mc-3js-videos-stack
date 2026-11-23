@@ -1,5 +1,3 @@
-// scripts/studio_tell.py, the Python commands' twin of live-studio src/tell.mjs: what it sends, the studio takes
-// (src/activity.mjs Activity), cut as tell.mjs cuts it
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";

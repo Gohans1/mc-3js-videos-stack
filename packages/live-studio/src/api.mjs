@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-// What the studio page asks the server for, as one Hono app: the built page (src/page.mjs) at / and /_studio/, its data and
-// live events under /api/, and everything else from the film's own files (assets/public as /, small phone copies as /lite/).
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
@@ -86,7 +84,6 @@ const MIME = {
   ".srt": "text/plain; charset=utf-8",
   ".jar": "application/java-archive",
 };
-// The page sends null for a picture it could not make (no pin, no crop): the words still count
 const jpeg = z.string().startsWith("data:image/jpeg;base64,/9j/").nullish();
 const NoteIn = z.object({
   note: z.looseObject({
@@ -98,12 +95,10 @@ const NoteIn = z.object({
   img: jpeg,
   crop: jpeg,
   strip: jpeg,
-  // A drawn note spans moments: one picture per moment it was drawn at, with what was drawn there
   frames: z
     .array(z.object({ t: z.number().refine(Number.isFinite), img: jpeg }))
     .max(8)
     .optional(),
-  // pictures the creator pasted beside the words (a reference, a screenshot), drawn on or not
   refs: z.array(z.string().startsWith("data:image/jpeg;base64,/9j/")).max(6).optional(),
 });
 const LessonScope = z.enum(["film", "all"]).default("all");
@@ -118,7 +113,6 @@ const LessonDelete = z.object({
   path: z.string().max(LESSON_PATH_MAX),
   base: z.string().nullable(),
 });
-// note-state.mjs says which of these may happen to a note now; {remove}/{restore} are the file's own
 const NoteChange = z.object({
   text: z.string().optional(),
   remove: z.boolean().optional(),
@@ -172,11 +166,9 @@ const VoiceUseTry = z.object({
   takeId: z.string().regex(/^[A-Za-z0-9_-]{1,80}$/),
   tryFile: z.string().regex(/^[A-Za-z0-9_-]{1,120}\.(mp3|wav)$/),
 });
-// Formats that are compressed inside already: trying them again only costs time on a first visit
 const PACKED = /\.(png|jpe?g|webp|avif|gif|webm|mp3|mp4|m4a|ogg|opus|flac|woff2|ktx2)$/i;
-const PACK_MAX = 16 * 1024 * 1024; // bigger is held in memory per version: slim it in the film instead
+const PACK_MAX = 16 * 1024 * 1024;
 
-// activity: src/activity.mjs's, what the AI is doing; lessons: src/lesson-files.mjs's, the one live.mjs watches
 export const createApi = (
   film,
   {
@@ -214,9 +206,6 @@ export const createApi = (
   const portsService = ports ?? createPortsService({ repoRoot: film?.PROJECT, selfPort: port });
   const runner = cliRunner ?? createCliRunner(film, cliContextOpts);
   const templates = cliTemplates ?? openCliTemplates();
-  // Text and geometry shrink a lot and pictures don't. Squeezed once per version, so the next visit costs nothing here either;
-  // what barely shrinks (a zip of pictures) is remembered as not worth it and goes out as it is
-  // Off the main thread (a few MB takes a second), and kept as the promise so a second visit meanwhile waits for the same work
   const packed = new Map(),
     toBr = promisify(brotliCompress),
     toGzip = promisify(gzip);
@@ -266,7 +255,6 @@ export const createApi = (
     c.header("content-encoding", how);
     return small;
   };
-  // Track served versioned URLs so '/' can hand the browser current ?v= stamps with zero 304 roundtrips
   const servedTags = new Map();
   const currentSoundVersion = () => film.sound?.read?.()?.version ?? null;
   const statMeta = (p) => {
@@ -368,7 +356,6 @@ export const createApi = (
     },
   });
 
-  // Unchanged means no download, and asking costs a few bytes
   const text = async (c, buf, type = "application/json", knownTag, tagOpts) => {
     const tag = knownTag ?? `"${createHash("md5").update(buf).digest("base64url")}"`;
     const rawTag = tag.slice(1, -1);
@@ -403,7 +390,6 @@ export const createApi = (
         })
       : c.body(null, 404);
 
-  // A film file, with byte ranges (seeking in the sound needs them) and an etag so a reload on a phone fetches nothing again
   const sendFile = async (
     c,
     file,
@@ -422,12 +408,10 @@ export const createApi = (
       c.header("cache-control", "no-store");
     } else {
       c.header("etag", tag);
-      c.header("cache-control", "no-cache"); // a re-made copy shows up at once
+      c.header("cache-control", "no-cache");
       if (c.req.header("if-none-match") === tag && !range) return c.body(null, 304);
     }
     if (!store) {
-      // A copy squeezed once at its best (scripts/mc/slim_jar.mjs writes one for the Minecraft jar): too big to squeeze per
-      // request, and it shrinks most when squeezed whole. Only while it is newer than the file it copies
       const br = `${file}.br`;
       if (!range && /\bbr\b/.test(c.req.header("accept-encoding") ?? "") && existsSync(br)) {
         const copy = statSync(br);
@@ -448,7 +432,7 @@ export const createApi = (
       if (a > b) {
         c.header("content-range", `bytes */${size}`);
         return c.body(null, 416);
-      } // a page still reading past the end of a mix that got shorter
+      }
       c.header("content-range", `bytes ${a}-${b}/${size}`);
       c.header("content-length", String(b - a + 1));
       return c.body(Readable.toWeb(film.openRead(file, { start: a, end: b })), 206);
@@ -506,7 +490,6 @@ export const createApi = (
     }
   });
 
-  // The page names the build it came from, so after the studio restarts it can tell whether it is still the current one
   let lastBuiltHtml = null,
     lastBuildTag = "";
   const build = () => {
@@ -520,7 +503,6 @@ export const createApi = (
   app.get("/", (c) => {
     c.header("cache-control", "no-cache");
     const built = page.html();
-    // No page yet: the first build failed. Shown until a save fixes it
     if (!built)
       return c.html(
         html`<!doctype html><meta charset="utf-8" /><meta http-equiv="refresh" content="3" /><title>
@@ -576,7 +558,6 @@ export const createApi = (
     }),
   );
 
-  // Saves and jobs, as they happen (see send in live.mjs). A browser reconnects to this by itself, without reloading the page
   app.get("/api/events", (c) =>
     streamSSE(c, async (stream) => {
       // Hono tells only the listeners it already has when a page leaves, so listen before the first write can wait on it
@@ -586,7 +567,7 @@ export const createApi = (
       });
       events.add(stream);
       await stream.writeSSE({ event: "hello", data: build() });
-      const alive = setInterval(() => stream.write(": alive\n\n"), 25e3); // a proxy drops a line that stays quiet
+      const alive = setInterval(() => stream.write(": alive\n\n"), 25e3);
       await gone;
       clearInterval(alive);
       events.delete(stream);
@@ -608,10 +589,7 @@ export const createApi = (
     });
   const defaultPostBodyLimit = jsonBodyLimit(20 * 1024 * 1024, "20 MB");
   const notesPostBodyLimit = jsonBodyLimit(24 * 1024 * 1024, "24 MB");
-  // The films' own scripts still call two paths from before /api/: checkpoint.py marks notes done at /notes/:id, and
-  // publish_pages.py reads /edit.json
   app.on("POST", ["/api/*", "/notes/*"], (c, next) => {
-    // Voice Changer (55 MB) and STT (95 MB) declare higher route limits below.
     if (
       c.req.path === "/api/voice/playground/voice-changer" ||
       c.req.path === "/api/voice/playground/clones" ||
@@ -669,14 +647,12 @@ export const createApi = (
     },
   );
 
-  // What the AI is doing (src/activity.mjs): a line from each of the film's commands (src/tell.mjs), the latest for a new page
   app.get("/api/activity", (c) => fresh(c, activity.state()));
   app.post("/api/activity", zValidator("json", Activity), (c) => {
     activity.add(c.req.valid("json"));
     return c.text("ok");
   });
 
-  // Global lessons/*.md plus this film's lessons/*.md (src/lesson-files.mjs): 409 is the AI's newer words
   const lessonAll =
     typeof lessons?.list === "function" ? lessons : (lessons?.all ?? openLessonFiles());
   const lessonFilmRaw = typeof lessons?.list === "function" ? null : (lessons?.film ?? null);
@@ -796,9 +772,7 @@ export const createApi = (
     if (!voiceLibrary.hasKey()) {
       return c.json({ error: "Missing GENVOICE_API_KEY (or ELEVENLABS_API_KEY) on server" }, 400);
     }
-    voiceLibrary.sync().catch(() => {
-      // Failure state is captured in voiceLibrary.state() and broadcast over SSE
-    });
+    voiceLibrary.sync().catch(() => {});
     return c.json({ started: true, ...voiceLibrary.state() }, 202);
   });
 
@@ -810,7 +784,6 @@ export const createApi = (
       projectId: voiceProjectId(film.PROJECT),
     }),
   );
-  // GenVoice (ElevenLabs v4 wrapper) Voice Playground API: config, catalog, async TTS/Dialogue/STS/STT, archive, templates
   app.get(
     "/api/voice/playground/status",
     zValidator("query", PlaygroundConnectionQuery),
@@ -1169,7 +1142,6 @@ export const createApi = (
     film.choose(c.req.valid("json")) ? c.text("ok") : c.body(null, 400),
   );
   app.get("/api/contract.json", (c) => fresh(c, film.contract()));
-  // The film's frame shape (frame.ts), which the page needs before it builds the scene; Settings change it
   app.get("/api/film.json", (c) => fresh(c, filmMeta()));
   app.get("/api/ports", async (c) => {
     const refresh = c.req.query("refresh");
@@ -1190,7 +1162,6 @@ export const createApi = (
     return c.text("ok");
   });
 
-  // The creator's stars, kept for every film (src/favorites.mjs); every open page of this studio hears a change
   app.get("/api/favorites", (c) => fresh(c, favorites.shown()));
   app.post("/api/favorites", zValidator("json", FavoriteChange), async (c) => {
     const change = c.req.valid("json");
@@ -1246,7 +1217,7 @@ export const createApi = (
     return c.json(res);
   });
 
-  let weighed = null; // the heavy files last named, so each reload doesn't say it again
+  let weighed = null;
   app.post("/api/weight", zValidator("json", PageWeight), (c) => {
     const heavy = weighFirstVisit(c.req.valid("json").files);
     if ((heavy?.names ?? null) !== weighed) {
@@ -1258,8 +1229,6 @@ export const createApi = (
     return c.text("ok");
   });
 
-  // The sound lanes, when the film names them (src/sound.mjs). A save names the version it was made on: 409 means the file
-  // changed meanwhile (an agent fixing a note), and the page loads that one instead of writing over it
   const noSound = (c) => c.body(null, 404);
   let soundCache = null;
   let soundUsedCache = null;
@@ -1384,7 +1353,6 @@ export const createApi = (
       return c.json({ error: safeErr(e) }, 422);
     }
   });
-  // The camera keys, the same way (package.json "live-studio".camTimeline)
   app.get("/api/cam", (c) => {
     const s = film.cam?.read();
     return s ? fresh(c, s) : noSound(c);
@@ -1395,7 +1363,6 @@ export const createApi = (
       r = film.cam.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
-  // The shots, the same way (package.json "live-studio".shotsTimeline)
   app.get("/api/shots", (c) => {
     const s = film.shots?.read();
     return s ? fresh(c, s) : noSound(c);
@@ -1406,7 +1373,6 @@ export const createApi = (
       r = film.shots.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
-  // The words and shapes over the picture, the same way (package.json "live-studio".textTimeline)
   app.get("/api/text", (c) => {
     const s = film.text?.read();
     return s ? fresh(c, s) : noSound(c);
@@ -1447,7 +1413,6 @@ export const createApi = (
       r = film.timing.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
-  // The key files (package.json "live-studio".keyFiles), each the same way, by its place in that list
   app.get("/api/keys", (c) =>
     fresh(
       c,
@@ -1465,8 +1430,6 @@ export const createApi = (
       r = k.write(base, data);
     return r.conflict ? c.body(null, 409) : r.problems ? c.json(r, 400) : c.json(r);
   });
-  // Files edited in one go (a cut moved on the camera row changes cam.json and shots.json), named as their own routes name them:
-  // every one is checked before any is written, so a 409 on one never leaves the others half saved
   const named = (name) => {
     if (typeof name !== "string" || !name) return undefined;
     const keyFiles = film.keyFiles ?? [];
@@ -1601,7 +1564,7 @@ export const createApi = (
     return existsSync(film.MIX_SMALL)
       ? sendFile(c, film.MIX_SMALL, { onSound: true, sourceFile: film.MIX })
       : c.body(null, 404);
-  }); // no ffmpeg, no small copy: the page plays the full mix
+  });
   app.get("/api/video.mp4", async (c) => {
     let target;
     try {
@@ -1621,7 +1584,6 @@ export const createApi = (
     return sendFile(c, target);
   });
 
-  // CLI runner & catalog (strict allowlisted repo scripts and earshot; never exposes secret values)
   app.get("/api/cli/catalog", async (c) => {
     const requestedFilm = c.req.query("film") || undefined;
     try {
@@ -1765,7 +1727,6 @@ export const createApi = (
     }
   });
 
-  // The film's own files, last
   app.get("*", (c) => {
     const url = decodeURIComponent(c.req.path);
     const lite = url.startsWith("/lite/");
@@ -1778,6 +1739,6 @@ export const createApi = (
   app.onError((e, c) => {
     console.log(`${c.req.method} ${c.req.path}: ${e.message}`);
     return e instanceof HTTPException ? e.getResponse() : c.body(null, 500);
-  }); // one bad request must not take the studio down, and a page keeps a note it could not save and tries again
+  });
   return app;
 };

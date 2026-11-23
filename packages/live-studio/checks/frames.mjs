@@ -1,23 +1,11 @@
-// The finished picture, frame by frame, on small RGB copies of every frame of the encoded video (framecheck.mjs feeds
-// them): what goes wrong between frames, which no single still shows.
-//   BLACK   a frame with almost no light (a broken render, or a fade the film means)
-//   FLASH   one frame brighter or darker than both its neighbours (a light, exposure or shadow pop)
-//   JUMP    one frame far more different from the last than the frames around it are, away from a cut (a teleport, a
-//           missing frame, a prop or the camera snapping)
-//   SHIMMER pixels flipping between two values, up, down, up over four frames, across a part of the picture for a while
-//           (z-fighting, shadow acne, texture crawl). A light dimming the whole frame, or things moving fast, is not: the
-//           frame's own brightness change is taken out, and each flip must land back on the value of two frames before
-//   FROZEN  the very same picture for a second or more (a still the film means, or a stalled render)
-// meter(w, h, mask?) takes frames one at a time (push), then report(fps, cuts) gives { lines, faults: [{ kind, t, say }] }.
-
-export const DARK = 0.02; // mean brightness (0-1) of a black frame
-export const FLASH = 0.03; // brightness step both ways to count as a one-frame flash
-export const JUMP = 6; // a frame this many times as different as the frames around it ...
-export const JUMP_MIN = 0.02; // ... and at least this different (mean per pixel, 0-1)
-export const WOBBLE = 6 / 255; // a pixel's step that counts as going up or down
-export const SHIMMER = 0.005; // part of the picture shimmering, held SHIMMER_LONG s
+export const DARK = 0.02;
+export const FLASH = 0.03;
+export const JUMP = 6;
+export const JUMP_MIN = 0.02;
+export const WOBBLE = 6 / 255;
+export const SHIMMER = 0.005;
 export const SHIMMER_LONG = 0.3;
-export const SAME = 0.0005; // mean per-pixel difference under which two frames are the same picture
+export const SAME = 0.0005;
 export const FROZEN_LONG = 1;
 
 // Math.min(...xs) runs out of stack near 600 000 values in Bun (5.5 h at 30 fps)
@@ -36,7 +24,7 @@ export function meter(w, h, mask = () => true) {
     b = null,
     lz = 0,
     la = 0,
-    lb = 0; // the three frames before this one, as luma, and their means
+    lb = 0;
   return {
     push(frame) {
       const c = new Float32Array(keep.length);
@@ -131,7 +119,6 @@ export function meter(w, h, mask = () => true) {
           flashSteps.add(i + 1);
         }
       }
-      // a jump needs no frame after it: the video's last frame is measured too
       for (let i = 1; i < n; i++) {
         if (flashSteps.has(i) || L[i] < DARK || L[i - 1] < DARK) continue;
         const around = [...D.slice(Math.max(1, i - 5), i), ...D.slice(i + 1, i + 6)].sort(

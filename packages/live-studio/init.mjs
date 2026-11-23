@@ -1,7 +1,3 @@
-// Connects a film project to this studio: node init.mjs PROJECT [--dry]
-// The film keeps only what is its own, plus package.json scripts that point here (bun run studio, notes, note, render, framecheck, check).
-// It never holds a copy of the studio, so a fix made here reaches every film at once. What a project lacks comes from the demo,
-// and nothing it already has is overwritten (its src/edit.ts may merge files of its own).
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
@@ -26,7 +22,6 @@ const STARTER = [
   "assets/public",
   ".gitignore",
 ];
-// What the film used to hold to reach the studio; package.json scripts do it now (bun run studio, notes, note, render)
 const OLD_POINTERS = {
   "src/live.mjs": `// Opens this film in the studio, which lives in its own repo: node_modules/live-studio links to it.
 import { fileURLToPath } from "node:url";
@@ -112,7 +107,7 @@ pkg.dependencies = { ...pkg.dependencies, "live-studio": spec };
 const SCRIPTS = {
   history: "bun node_modules/live-studio/history.mjs",
   collab: "bun node_modules/live-studio/collab.mjs",
-  studio: "bun node_modules/live-studio/src/live.mjs", // add the film's port, e.g. 4324
+  studio: "bun node_modules/live-studio/src/live.mjs",
   notes: "bun node_modules/live-studio/notes.mjs",
   note: "bun node_modules/live-studio/note.mjs",
   render: "bun node_modules/live-studio/render.mjs",
@@ -121,7 +116,6 @@ const SCRIPTS = {
   sweep: "bun node_modules/live-studio/sweep.mjs",
   check: "bun node_modules/live-studio/check.mjs",
   help: "bun node_modules/live-studio/help.mjs",
-  // the repo's commands typed in a film: bun would run the system fmt or link, or say only "Script not found"
   ...Object.fromEntries(
     [
       "new-film",
@@ -147,7 +141,6 @@ const SCRIPTS = {
     ].map((c) => [c, `bun node_modules/live-studio/wrong-place.mjs ${c}`]),
   ),
 };
-// A script that only opened the old pointer files goes; one a film wrote its own way stays
 const old = { studio: /^node src\/live\.mjs/, notes: /notes_report\.py/ };
 pkg.scripts = {
   ...SCRIPTS,

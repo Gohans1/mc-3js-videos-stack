@@ -821,7 +821,6 @@ test("a damaged source cannot replace the last good draft or its review data", (
   );
 });
 
-// a remake played the reference's own voice as its narration to time to: a guide sound is heard in drafts, never shipped
 test("a guide sound plays in a draft mix and stops the final's, naming it", (t) => {
   const dir = setupFilm(t, "mix-guide-", {
     audio: {
@@ -1016,7 +1015,6 @@ test("renders timing freeze, muted track, choices, gainKeys step, and --live-lan
   assert.equal(rawRes.status, 0, rawRes.stderr);
   assert.doesNotMatch(rawRes.stderr, /Traceback/);
   const samples = readSamples(outWav);
-  // 2.0s edit + 1.0s freeze = 3.0s at 48kHz stereo
   assert.ok(Math.abs(samples.length / 2 / 48_000 - 3.0) < 0.02);
 
   const liveWav = join(dir, "sound/live.wav");
@@ -1028,7 +1026,6 @@ test("renders timing freeze, muted track, choices, gainKeys step, and --live-lan
 });
 
 test("keeps partial narration try swap ducking active under timing freeze", (t) => {
-  // Check bed ducks during second narration piece shifted past 1.0s freeze (1.6s..1.9s) compared to un-ducked tail (2.4s..2.8s)
   const unduckedBedOnly = setupFilm(t, "mix-bed-duck-");
   makeWav(join(unduckedBedOnly, "sound/sfx/bed.wav"), { freq: 220, dur: 3.0 });
   makeWav(join(unduckedBedOnly, "sound/sfx/narr.wav"), { dur: 1.2, silence: true });

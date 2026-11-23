@@ -361,7 +361,6 @@ def pair_with_reference(ours, reference, dest):
     command(["ffmpeg", "-nostdin", "-v", "error", "-y", *left, "-i", str(ours), "-filter_complex",
              f"[0:v]{fit},format=yuvj420p[r];[1:v]setsar=1,format=yuvj420p[o];[r][o]hstack=inputs=2",
              "-frames:v", "1", "-q:v", "2", str(dest)])
-    # the side is named on the picture: a reviewer handed a bare pair has blamed ours for the reference's own logos
     from PIL import Image, ImageDraw, ImageFont
     with Image.open(dest) as opened:
         pair = opened.convert("RGB")
@@ -387,7 +386,7 @@ def rule_grid(frame, step, crop):
         draw.text((x - x0 + 2, 1), str(x), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
     for y in range(-(-y0 // step) * step, y1, step):
         draw.line([(0, y - y0), (x1 - x0, y - y0)], fill=(255, 255, 255, 170))
-        if y - y0 >= 14:  # the top row holds the x labels
+        if y - y0 >= 14:
             draw.text((2, y - y0 + 1), str(y), fill=(255, 255, 0), font=font, stroke_width=2, stroke_fill=(0, 0, 0))
     picture.save(frame, quality=92)
 

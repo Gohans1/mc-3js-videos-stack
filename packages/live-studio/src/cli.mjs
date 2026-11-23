@@ -3,8 +3,6 @@ import { join, relative } from "node:path";
 
 import { warnProtectedEdits } from "./edit-protection.mjs";
 
-// A film's JSON file read by a command: a broken one is named (Bun's parse error says neither file nor place), and
-// bun run check says where in it. root: the film, so the name is the one the film's folder shows
 export const jsonFile = (file, root = process.cwd()) => {
   const text = readFileSync(file, "utf8");
   try {
@@ -17,10 +15,6 @@ export const jsonFile = (file, root = process.cwd()) => {
   }
 };
 
-// What every studio command does with its arguments before any work: -h, --help or a first word "help" prints its help on
-// stdout and exits 0; an option it does not know, an option missing its value or a word too many stops it (exit 2) saying
-// what it takes, so a typo or a probe never runs the default job (gen's default spends voice credits).
-// options: its flags, "--shot N" for one that takes a value; null lets any word through. words: how many plain words it takes
 export const cliArgs = (
   help,
   options = [],
@@ -63,7 +57,6 @@ export const cliArgs = (
   return argv;
 };
 
-// A number from an argument, or exit 2 saying what it takes
 export const numberArg = (name, text, { min = -Infinity, max = Infinity, int = false } = {}) => {
   const n = Number(text);
   if (
@@ -82,14 +75,11 @@ export const numberArg = (name, text, { min = -Infinity, max = Infinity, int = f
   return n;
 };
 
-// A heard second as notes, a draft's strip and bun run at print it (65, 1:05, 01:05.250, 65s), or exit 2 saying so.
-// scripts/review/sheet.py and scripts/sound/listen.py read it the same way (seconds_arg)
 export const secondArg = (name, text, { min = 0, max = Infinity } = {}) => {
   const s = String(text ?? "").trim();
   const m = /^(?:(\d+):([0-5]?\d(?:\.\d+)?)|(\d*\.?\d+)s?)$/.exec(s);
   const t = m ? (m[3] !== undefined ? +m[3] : +m[1] * 60 + +m[2]) : NaN;
   if (!(t >= min && t <= max)) {
-    // 1:75 is a minute and 75 s: say the time it likely meant
     const over = /^(\d+):(\d+(?:\.\d+)?)$/.exec(s);
     const meant =
       over && +over[2] >= 60
@@ -103,8 +93,6 @@ export const secondArg = (name, text, { min = 0, max = Infinity } = {}) => {
   return t;
 };
 
-// A machine setting spelt one letter off (LIVE_PROJCT for LIVE_PROJECT) would be ignored without a word: it stops the
-// command (exit 2). One off in its first letter only warns, since a machine may carry such a variable for itself (a PAT token)
 export const envTypos = (known, env = process.env) => {
   let stop = false;
   const off = (a, b) => {
@@ -127,7 +115,6 @@ export const envTypos = (known, env = process.env) => {
   if (stop) process.exit(2);
 };
 
-// A command that works on one film stops outside one, saying where to run it
 export const needFilm = (dir = process.cwd(), { warnProtected = true } = {}) => {
   if (existsSync(join(dir, "src/scene.ts"))) {
     if (warnProtected) warnProtectedEdits(dir);

@@ -1,36 +1,18 @@
-// Footstep sounds placed by the feet themselves: a step sounds when a sole comes down on the floor, played from the block
-// it lands on, at the game's own volume and pitch for that block. Two ways to time them:
-//   contacts(soles, end): each time a sole comes down and stops (a heel strike), from the soles' paths, so the sound lands
-//     on the frame the foot does whatever the body is doing (keys, a walk cycle, a Mixamo clip).
-//   gameSteps(walked, end): the game's own rhythm, for a body with no feet to watch (a mob far off, an off-screen walk):
-//     Java plays a step each time 0.6 x the distance walked passes a whole number (Entity.applyMovementEmissionAndPlaySound,
-//     decompiled 1.21.4), one every 1.67 blocks.
-// stepSounds(events, blockAt) turns either into sounds. A step plays the block's step sound (block.<type>.step) at 0.15 x
-// the type's volume and its pitch (minecraft.wiki/w/Block_sound_type; almost every type is 1.0 / 1.0; metal is pitch 1.5,
-// anvil volume 0.3). Carpet, snow layers, moss carpet and the like play the block under them too, at 1/3 volume and 4/5
-// pitch under their own step (Java's combination step sounds: both play). Each step picks one of the event's recorded variants, never the same one twice
-// running (repeating a sample is what makes footsteps sound machine-made). The sound files are the film's to choose (CC0
-// recordings per material: the game's own .ogg files are Mojang's and are never published).
-//   const ev = contacts({ L: (t) => soleL(t), R: (t) => soleR(t) }, end, { ground: 0 });
-//   const sounds = stepSounds(ev, (x, y, z) => world.blockBelow(x, y, z));   [{ t, event, volume, pitch, variant, at }]
-// A sole path gives world [x, y, z] metres; ground is a height or (x, z) => the floor there.
 import { hash } from "./hash";
 export const STEP = {
-  volume: 0.15, // x the sound type's volume
-  layered: { volume: 1 / 3, pitch: 0.8 }, // a step through carpet or snow onto the block below
-  lift: 0.03, // m above the floor that still counts as down
-  still: 0.25, // m/s: a sole slower than this is planted
-  gap: 0.25, // s, one foot never steps again sooner
-  every: 1 / 0.6, // blocks walked per step, the game's rhythm
-  variants: 4, // recordings per sound event to pick from
+  volume: 0.15,
+  layered: { volume: 1 / 3, pitch: 0.8 },
+  lift: 0.03,
+  still: 0.25,
+  gap: 0.25,
+  every: 1 / 0.6,
+  variants: 4,
 };
-// sound types whose numbers differ from 1.0 / 1.0 (minecraft.wiki/w/Block_sound_type); everything else is 1.0 / 1.0
 export const SOUND_TYPE: Record<string, { volume: number; pitch: number }> = {
   metal: { volume: 1, pitch: 1.5 },
   anvil: { volume: 0.3, pitch: 1 },
   twisting_vines: { volume: 1, pitch: 0.5 },
 };
-// a few common blocks' sound types; check a new entry against minecraft.wiki/w/Block_sound_type, which lists every block
 export const BLOCK_SOUND: Record<string, string> = {
   stone: "stone",
   cobblestone: "stone",
@@ -66,7 +48,6 @@ export const BLOCK_SOUND: Record<string, string> = {
   snow: "snow",
   moss_carpet: "moss_carpet",
 };
-// blocks that let the block under them be heard (Java's combination_step_sound_blocks)
 export const LAYERED = new Set([
   "carpet",
   "snow",
@@ -80,7 +61,6 @@ type V3 = [number, number, number];
 const HZ = 120;
 
 export type Step = { t: number; foot: string; at: V3; speed: number };
-// heel strikes: a sole that was off the floor (or moving) comes down within `lift` and slows under `still`
 export function contacts(
   soles: Record<string, (t: number) => V3>,
   end: number,
@@ -116,7 +96,6 @@ export function contacts(
   return out.sort((a, b) => a.t - b.t);
 }
 
-// the game's step rhythm from how far he has walked: walked(t) in blocks (horizontal), at(t) where he is
 export function gameSteps(
   walked: (t: number) => number,
   at: (t: number) => V3,
@@ -135,8 +114,6 @@ export function gameSteps(
   return out;
 }
 
-// what each step sounds like: blockAt(x, y, z) names the block the sole is on (asked 0.2 below the sole, as the game
-// does); a block in LAYERED plays its own step and, muffled, the step of the block under it (asked 1 block lower)
 export function stepSounds(
   steps: Step[],
   blockAt: (x: number, y: number, z: number) => string,

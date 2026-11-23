@@ -43,7 +43,6 @@ test("Cinetic role-based eases start at 0, end at 1, and follow arrive, repositi
     expect(fn(0), `${name}(0)`).toBeCloseTo(0, 5);
     expect(fn(1), `${name}(1)`).toBeCloseTo(1, 5);
   }
-  // Arrive family: front-loaded deceleration into rest
   for (const k of [
     "snapOut",
     "glideOut",
@@ -58,12 +57,10 @@ test("Cinetic role-based eases start at 0, end at 1, and follow arrive, repositi
   expect(EASES.jump(0.2)).toBeGreaterThan(EASES.snapOut(0.2));
   expect(EASES.snapOut(0.2)).toBeGreaterThan(EASES.settleOut(0.2));
 
-  // Leave family: accelerates into the cut
   for (const k of ["softIn", "buildIn", "launchIn", "xpLeave"] as const) {
     expect(EASES[k](0.5), `${k}(0.5)`).toBeLessThan(0.36);
   }
 
-  // Reposition family: S-curves, whip build, and anticipation wind-up
   expect(EASES.stdInOut(0.5)).toBeGreaterThan(0.5);
   expect(EASES.strongInOut(0.2)).toBeLessThan(0.2);
   expect(EASES.strongInOut(0.8)).toBeGreaterThan(0.8);

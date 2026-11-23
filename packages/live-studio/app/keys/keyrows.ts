@@ -1,11 +1,4 @@
 import { together } from "../core/doc";
-// The key rows under the camera row, on the same seconds as the stretch above: per key file a heading line, then one row per list
-// of keys in it (keys/keys.ts), names in the column beside (keys/KeyHeads.tsx). A diamond per key, labelled with what it says
-// ("sits up", "tense"); a solid line between two keys that differ (something changes there), a dotted one where the row holds.
-// Dragging a diamond retimes it (and every key picked with it), never past a key of its row that stays, snapping to frames,
-// the playhead, words and cuts (Shift: no snap). A box dragged over empty space picks every key it touches (Shift/Ctrl add), on
-// these rows and the others it crosses (timeline/rowbox.ts, across.ts), and a drag on a picked key moves all of it;
-// a click on a key seeks there; empty space starts a selection box. A touch dragged over empty space scrubs.
 import { SHOTS_OUT as SHOTS } from "../core/filmMeta";
 import { S } from "../core/state";
 import { get, noSnap, say } from "../core/store";
@@ -71,8 +64,6 @@ export const drawKeyRows = () => {
   spots = [];
   const lit = litRow();
   for (const l of lines()) {
-    // Flat rows as CapCut's tracks; the file's heading in the label column's colour (KeyHeads.tsx bg-card), every key of the
-    // file on it as Blender's summary row and Theatre.js's aggregate rows show them, so a folded file still shows where it changes
     if (l.kind === "file") {
       g.fillStyle = tone("card");
       g.fillRect(0, l.y, w, HEAD_H);
@@ -106,7 +97,6 @@ export const drawKeyRows = () => {
     }
     const ks = keysOf(l.row.f, l.row.path),
       y = l.y + ROW_H / 2;
-    // What happens between keys first, so the diamonds sit on top
     for (let i = 1; i < ks.length; i++) {
       const x0 = X(ks[i - 1].t),
         x1 = X(ks[i].t);
@@ -148,7 +138,6 @@ export const drawKeyRows = () => {
       }
     });
   }
-  // Cuts, faint, over everything: a key is often put on one by eye
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
 };
@@ -282,7 +271,6 @@ export const attachKeyRows = () => {
     if (!drag.moved) hold(true);
     drag.moved = true;
     c.style.cursor = "default";
-    // The key under the pointer snaps; the rest of the pick moves as far, none past a key of its row that stays
     restore(drag.snap);
     const { along } = drag,
       [lo, hi] = room(drag.group),
@@ -319,7 +307,6 @@ export const attachKeyRows = () => {
     const { snap, moved, alone, ref, column, group, along, t: was } = drag;
     drag = null;
     c.style.cursor = "";
-    // A plain click also brings the picture to the key, so the Key tab and the frame show the same moment
     if (!moved) {
       if (alone) pickKeys(column);
       seek(keyOf(ref).t);

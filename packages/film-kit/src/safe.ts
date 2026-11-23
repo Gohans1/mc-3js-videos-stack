@@ -1,7 +1,3 @@
-// Safe areas for 16:9 (EBU R 95): essential action stays 3.5% in from every edge, titles, captions and logos 5% in, because
-// players, TVs and overlays still crop or cover the border. Boxes are in pixels, [x0, y0, x1, y1] from the top left.
-//   const [x0, y0, x1, y1] = safe(1920, 1080);  inSafe(captionBox, 1920, 1080)
-
 export type Box = [number, number, number, number];
 export const INSET = { action: 0.035, graphics: 0.05 };
 

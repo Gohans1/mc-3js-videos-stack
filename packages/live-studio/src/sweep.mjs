@@ -1,9 +1,5 @@
-// What bun run sweep ranks: each item { from, to, kind, weight, say }; a heavier weight is looked at first
-
 const s = (t) => t.toFixed(2);
 
-// Runs of samples (one each step seconds) whose ratio of ours to the reference lies outside [low, high], held at
-// least long seconds
 export const stretches = (ratios, step, low, high, long) => {
   const runs = [];
   let start = -1;
@@ -26,7 +22,6 @@ export const stretches = (ratios, step, low, high, long) => {
   return runs;
 };
 
-// Laplacian variance of a grey frame: how much fine detail it holds, which blur takes away
 export const sharpness = (g, w, h) => {
   let sum = 0,
     sq = 0,
@@ -53,8 +48,6 @@ export const median = (xs) => {
   return sorted.length ? sorted[Math.floor(sorted.length / 2)] : 1;
 };
 
-// against the last sweep's items: which are new (a Set of these items) and which of those are gone; the same kind
-// starting within a tenth of a second is the same item
 export const since = (before, items) => {
   if (!before) return { fresh: new Set(), gone: [] };
   const same = (a) => (b) => a.kind === b.kind && Math.abs(a.from - b.from) <= 0.1;

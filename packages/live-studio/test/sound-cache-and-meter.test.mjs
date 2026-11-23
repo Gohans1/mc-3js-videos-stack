@@ -218,7 +218,6 @@ async function loadSoundBundle() {
       `export * as audioMeter from ${JSON.stringify(join(STUDIO, "app/sound/AudioMeter.tsx"))};`,
     ].join("\n"),
   );
-  // Build in a child process because Bun 1.4.4's in-process module loader rejects virtual imports after a plugin build.
   const buildScript = join(dir, "build.mjs");
   writeFileSync(
     buildScript,
@@ -344,7 +343,6 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
       audioWakes++;
     });
 
-    // 1. Load ?used=1 first (decoded sfx_a) -> then load full library (superset [itemA, itemB])
     await sound.loadSound({ usedOnly: true, initial: true });
     assert.ok(soundQueryCount >= 1);
     assert.ok(await mixer.decoded("sfx_a"));
@@ -353,10 +351,8 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
 
     await sound.loadSound();
     assert.ok(await mixer.decoded("sfx_a"));
-    // sfx_a did not change between ?used=1 and full library -> must NOT re-fetch/forget decoded cache
     assert.equal(wavFetches.filter((u) => u.includes("sfx_a")).length, 1);
 
-    // 2. connectMeter waits for async audioWorklet.addModule and MUST wake "audio" once ready
     const meterStartPromise = meter.startMeter();
     const wakesBeforeWorkletResolve = audioWakes;
     releaseWorklet();
@@ -367,7 +363,6 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
       "connectMeter must wake audio when loudness worklet finishes loading",
     );
 
-    // 3. Paused lane audition wakes "audio" and keeps AudioMeter active while source is playing
     for (let i = 0; i < 20 && !store.get().groups.some((g) => g.name === "sfx_a"); i++) {
       await new Promise((r) => setTimeout(r, 15));
     }
@@ -379,7 +374,6 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
     const wakesBeforeAudition = audioWakes;
     const srcCountBeforeAudition = env.sources.length;
     options.choose("sfx_a", 0);
-    // Wait for async loadClip inside audition() to schedule the AudioBufferSourceNode
     await new Promise((r) => setTimeout(r, 20));
     assert.ok(audioWakes > wakesBeforeAudition, "paused audition must wake audio");
     assert.ok(mixer.hasPreviewSounding(), "hasPreviewSounding must be true during audition");
@@ -389,7 +383,6 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
     assert.equal(mixer.hasPreviewSounding(), false);
     assert.equal(audioMeter.meterKeepRunning(false, 1000, 0, -Infinity), false);
 
-    // 4. Paused playSlice also tracks active preview sources beyond the initial 250ms wake window
     const srcCountBeforeSlice = env.sources.length;
     await mixer.playSlice(0, 1.5);
     assert.ok(env.sources.length > srcCountBeforeSlice);

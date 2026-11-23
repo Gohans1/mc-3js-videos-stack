@@ -1,4 +1,3 @@
-// Notion-style Grid/Structured Notes views: Board (Kanban), Table, List, and Gallery.
 import {
   ArrowDown,
   ArrowRightLeft,

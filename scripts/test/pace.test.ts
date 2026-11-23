@@ -1,4 +1,3 @@
-// pace.ts: how long each shot runs and how long the picture holds still, from a film's cuts and its frames
 import { expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
@@ -18,7 +17,6 @@ const flat = (v: number) => new Uint8Array(W * H).fill(v);
 test("a new picture is a cut, or a third of the frame changed since the last new one; a slow change adds up", () => {
   const frames = [
     ...Array.from({ length: 10 }, () => flat(0)),
-    // one row in six turns white a frame at a time: no single frame changes a third, every second row adds up to one
     ...Array.from({ length: 6 }, (_, k) => {
       const f = flat(0);
       f.fill(255, 0, (k + 1) * W);
@@ -26,7 +24,6 @@ test("a new picture is a cut, or a third of the frame changed since the last new
     }),
     ...Array.from({ length: 14 }, () => flat(255)),
   ];
-  // 10 frames a second; a cut at 2.5 s where nothing in the picture changes still starts a new picture
   expect(newPictures(frames, 10, [2.5])).toEqual([0, 1.1, 1.3, 1.5, 2.5]);
 });
 
@@ -80,7 +77,6 @@ test("a Short is read against Shorts: their shot length, and its first 3 s with 
     short: true,
   });
   expect(still.join("\n")).toMatch(/first 3 s: 0 new pictures, the picture first changes at 6\.90/);
-  // nothing said over a hold: the advice is about the picture, and a Short slow to change points next at its opening
   expect(still.join("\n")).toMatch(/with nothing said: a cut, a camera move or something moving/);
   expect(still.at(-1)).toMatch(/^next: bun run render stills --at 1 /);
 });
@@ -96,7 +92,6 @@ test("a word that starts just before a hold and runs into it is said over the ho
   expect(r).toMatch(/HOLD 10\.00-20\.00[^\n]*"listen"/);
 });
 
-// the command on a film folder with a video in renders/: pace measures whole films only
 const paceOn = (video: string, make: string[], cuts = "[1]", stale = false) => {
   const dir = mkdtempSync(join(tmpdir(), "pace-"));
   mkdirSync(join(dir, "src"));
@@ -159,7 +154,6 @@ test("cuts written by hand out of order are read in order; a negative second is 
   const sorted = paceOn("renders/draft_video.mp4", clip, "[1.5, 0.5]");
   expect(sorted.status).toBe(0);
   expect(sorted.stdout).toMatch(/longest: 0\.50-1\.50 \(1\.00 s\)/);
-  // one cut written twice is one cut, not a shot of no length
   const twice = paceOn("renders/draft_video.mp4", clip, "[1, 1]");
   expect(twice.status).toBe(0);
   expect(twice.stdout).not.toMatch(/\(0\.00 s\)/);

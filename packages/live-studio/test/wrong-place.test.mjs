@@ -1,5 +1,3 @@
-// A command typed in the wrong place says where it runs (wrong-place.mjs): every repo command has a stub in a film, and
-// every film command one at the repo root, so bun never answers only "Script not found"
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
@@ -10,6 +8,5 @@ test("every repo command has a stub in a new film, and every film command one at
   const root = scripts("package.json"),
     film = scripts("templates/film/package.json");
   expect(Object.keys(root).filter((k) => !(k in film))).toEqual([]);
-  // postinstall is bun's own hook, run by bun install, never typed
   expect(Object.keys(film).filter((k) => !(k in root) && k !== "postinstall")).toEqual([]);
 });

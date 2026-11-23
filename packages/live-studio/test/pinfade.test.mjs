@@ -1,5 +1,3 @@
-// A note's pin and words on the picture (app/notes/pinfade.ts): shown from its frame, then fading over 3 s of watching, so a
-// note passed while playing can be read and is not one frame long
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
@@ -60,10 +58,8 @@ test("resolvePinLayout separates colliding pins and label boxes while staying in
   assert.equal(layout.length, 3);
   assert.equal(layout[0].dotDx, 0);
   assert.equal(layout[0].dotDy, 0);
-  // Colliding dot separates visibly
   assert.ok(Math.hypot(layout[1].dotDx, layout[1].dotDy) >= 12);
 
-  // Compute rendered label rectangles and assert zero pairwise overlap & within [4, box] bounds
   const rects = layout.map((l, idx) => {
     const x = [0.5, 0.5, 0.52][idx] * 400 + l.dotDx;
     const y = [0.5, 0.5, 0.51][idx] * 225 + l.dotDy;

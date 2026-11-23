@@ -39,9 +39,7 @@ afterEach(() => {
   while (cleanups.length) {
     try {
       cleanups.pop()();
-    } catch {
-      /* ignore teardown error */
-    }
+    } catch {}
   }
   while (dirs.length) {
     rmSync(dirs.pop(), { recursive: true, force: true });
@@ -426,7 +424,6 @@ describe("cli-templates atomic persistence & integrity", () => {
     expect(removed.removed).toBe(true);
     expect(removed.templates).toEqual([]);
 
-    // 100-template cap
     for (let i = 0; i < 100; i++) {
       store.upsert({ name: `Tpl ${i}`, commandId: "help" });
     }
@@ -434,7 +431,6 @@ describe("cli-templates atomic persistence & integrity", () => {
       "Template limit reached",
     );
 
-    // Corrupt file protection: list() returns [], upsert/remove refuse to overwrite
     const corrupt = "{not json!!!";
     writeFileSync(file, corrupt, "utf8");
     expect(store.list()).toEqual([]);
@@ -470,7 +466,6 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(data.context.choices.renders).toContain("renders/draft_video.mp4");
     expect(data.context.choices.filmDirs).toContain("films/test-film");
 
-    // Demo context when filmDir is outside repo films/
     const demoDir = tempDir("demo-outside-");
     const demoCtx = await scanCliContext(
       { PROJECT: demoDir },
@@ -652,7 +647,6 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(joinedOut).not.toContain("\u001b[");
     expect(joinedErr).toContain("STDERR-LINE");
 
-    // Reconnect replay from first chunk seq skips earlier chunks cleanly
     const firstSeq = chunks[0].seq;
     const replayRes = await api.fetch(
       new Request(`http://localhost/api/cli/runs/${started.runId}/stream?afterSeq=${firstSeq}`),
@@ -720,7 +714,6 @@ describe("/api/cli routes, security & process runtime", () => {
     const doneEv = events.find((e) => e.event === "done")?.data;
     expect(doneEv?.status).toBe("stopped");
 
-    // Verify grandchild PID is gone as well
     const gcPid = Number(readFileSync(pidFile, "utf8").trim());
     expect(Number.isInteger(gcPid) && gcPid > 0).toBe(true);
     let alive = true;
@@ -861,7 +854,6 @@ describe("/api/cli routes, security & process runtime", () => {
     delete process.env.OPENCODE_API_KEY;
     delete process.env.OPENROUTER_API_KEY;
 
-    // Blank + comment + empty value + wrong key => false
     writeFileSync(
       join(secretsDir, "opencode_zen.env"),
       "\n# sk-comment-ignored\nOPENCODE_API_KEY=\nOTHER_KEY=secret\n",
@@ -870,13 +862,11 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(readEnvStatus().OPENCODE_API_KEY).toBe(false);
     expect(readEnvStatus().OPENROUTER_API_KEY).toBe(false);
 
-    // Bare single-token key supported by packages/clip-catalog/jev.py
     writeFileSync(join(secretsDir, "opencode_zen.env"), "# comment\n\nsk-zen-bare-token-123\n");
     writeFileSync(join(secretsDir, "openrouter.env"), "export OPENROUTER_API_KEY=sk-or-export-1\n");
     expect(readEnvStatus().OPENCODE_API_KEY).toBe(true);
     expect(readEnvStatus().OPENROUTER_API_KEY).toBe(true);
 
-    // Standard KEY=val
     writeFileSync(join(secretsDir, "opencode_zen.env"), "OPENCODE_API_KEY=sk-zen-kv\n");
     expect(readEnvStatus().OPENCODE_API_KEY).toBe(true);
   });
@@ -984,7 +974,6 @@ describe("/api/cli routes, security & process runtime", () => {
         .join(""),
     ).toContain("render-entry=lab/custom.ts");
 
-    // Film-cwd bun-file displays ../../ prefix while spawning repoRoot/scripts/timeline_fmt.ts inside filmDir
     const okFmt = await postRun({ commandId: "timeline:fmt" });
     expect(okFmt.status).toBe(202);
     const fmtRun = await okFmt.json();
@@ -1005,7 +994,6 @@ describe("/api/cli routes, security & process runtime", () => {
   });
 
   test("truncates multibyte UTF-8 stdout strictly within 2 MB without splitting surrogate pairs", async () => {
-    // Unit boundary checks for sliceUtf8ToByteLimit across 1, 3, and 4-byte code points
     expect(sliceUtf8ToByteLimit("a😀b😀", 0)).toBe("");
     expect(sliceUtf8ToByteLimit("a😀b😀", 1)).toBe("a");
     expect(sliceUtf8ToByteLimit("a😀b😀", 4)).toBe("a");
@@ -1149,7 +1137,6 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(missingRes.status).toBe(404);
     expect((await missingRes.json()).code).toBe("UNKNOWN_COMMAND");
 
-    // Symlink escaping repoRoot must be rejected
     const outsideDir = tempDir("cli-bash-outside-");
     writeFileSync(join(outsideDir, "catalog.sh"), 'print("escape")\n');
     symlinkSync(outsideDir, join(root, "packages", "clip-catalog"), "junction");
@@ -1163,7 +1150,6 @@ describe("/api/cli routes, security & process runtime", () => {
     expect(escapeRes.status).toBe(404);
     expect((await escapeRes.json()).code).toBe("UNKNOWN_COMMAND");
 
-    // Replace escaped junction with contained fixture script and test bashBin mock execution
     rmSync(join(root, "packages", "clip-catalog"), { recursive: true, force: true });
     mkdirSync(join(root, "packages", "clip-catalog"), { recursive: true });
     writeFileSync(

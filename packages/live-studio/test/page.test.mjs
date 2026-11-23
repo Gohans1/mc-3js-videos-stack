@@ -21,7 +21,6 @@ import { build as buildCn } from "cn/build";
 import { openFilm, STUDIO } from "../src/film.mjs";
 import { buildPage, syncCnTables } from "../src/page.mjs";
 
-// A copy of the demo film, so saves here never touch the real one
 const cache = join(STUDIO, ".studio");
 mkdirSync(cache, { recursive: true });
 const dir = mkdtempSync(join(cache, "studio-page-"));
@@ -65,7 +64,6 @@ before(async () => {
     JSON.stringify({ "live-studio": { timingTimeline: "src/timing.json" } }),
   );
   writeFileSync(join(dir, "src/timing.json"), "{}");
-  // A library written for Node that a film may pull in (Minecraft's nbt readers do): its require of zlib is never reached
   mkdirSync(join(dir, "node_modules/nodeish"), { recursive: true });
   writeFileSync(
     join(dir, "node_modules/nodeish/package.json"),
@@ -206,7 +204,6 @@ test("a missing stylesheet leaves the startup error readable", async () => {
 
 const VENDOR_BUDGET_TEST = "the initial UI vendor code fits a 240 KiB Brotli budget";
 test(VENDOR_BUDGET_TEST, () => {
-  // Bun's test environment includes React's development build; measure the shipped build in its own process.
   if (process.env.NODE_ENV !== "production") {
     const result = spawnSync(
       process.execPath,
@@ -321,7 +318,6 @@ test("vendor chunks stay cached across film edits with fresh .br and .gz sibling
     if (statSync(join(code, v)).size < 1024) continue;
     assert.equal(existsSync(join(code, `${v}.br`)), true, `missing ${v}.br`);
     assert.equal(existsSync(join(code, `${v}.gz`)), true, `missing ${v}.gz`);
-    // Age the precompressed siblings near KEEP so a rebuild that forgets to touch them would let clearOld() delete them
     const old = new Date(Date.now() - 3700e3);
     utimesSync(join(code, `${v}.br`), old, old);
     utimesSync(join(code, `${v}.gz`), old, old);
@@ -344,7 +340,6 @@ test("syncCnTables preserves existing CRLF/formatted file without spurious rewri
   const cssPath = join(STUDIO, "app/index.css");
   const outPath = join(cnDir, "cn-tables.ts");
 
-  // 1. Checked-in app/lib/cn-tables.ts (formatted / CRLF) must match app/index.css without rewriting
   const repoTables = readFileSync(join(STUDIO, "app/lib/cn-tables.ts"), "utf8");
   const crlf = repoTables.replaceAll("\r\n", "\n").replaceAll("\n", "\r\n");
   writeFileSync(outPath, crlf);
@@ -354,7 +349,6 @@ test("syncCnTables preserves existing CRLF/formatted file without spurious rewri
   assert.equal(readFileSync(outPath, "utf8"), crlf);
   assert.equal(statSync(outPath).mtimeMs, beforeStat);
 
-  // 2. When outPath is missing or stale, syncCnTables writes fresh tables from buildCn
   rmSync(outPath);
   assert.equal(await syncCnTables({ cssPath, outPath }), true);
   const refOut = join(cnDir, "ref-cn-tables.ts");

@@ -144,7 +144,6 @@ test("film.mjs re-reads .live_hosts on create/edit/delete without restart and su
   writeFileSync(hostsFile, "first.tail.ts.net\n");
   assert.deepEqual(film.hosts, ["first.tail.ts.net"]);
 
-  // Advance mtime explicitly so same-tick writes on coarse filesystems still trigger re-read
   const future = new Date(Date.now() + 5000);
   writeFileSync(hostsFile, "Second.Tail.ts.net:8443\nthird.tail.ts.net\n");
   utimesSync(hostsFile, future, future);
@@ -186,7 +185,6 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
   assert.deepEqual(tailscaleHostsForPort(status, 9999), []);
   assert.deepEqual(tailscaleHostsForPort("not json", 4321), []);
 
-  // Local hosts short-circuit before invoking lazy host lookup thunk
   const neverCalled = () => {
     throw new Error("should not read hosts for local request");
   };
@@ -202,7 +200,6 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
   assert.equal(isKnownHost("other.ts.net:4321", readHosts), false);
   assert.equal(calls, 2);
 
-  // Studio cmdline allowlist verifies bun directly running live.mjs and matches default port 4321
   assert.equal(
     isStudioProcessCmdline("bun W:/repo/packages/live-studio/src/live.mjs 4321", 4321),
     true,
@@ -221,7 +218,6 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
     ),
     true,
   );
-  // Windows paths with apostrophes (single quotes are literal path characters, not Win32 quote delimiters)
   assert.equal(
     isStudioProcessCmdline(
       '"C:\\Users\\O\'Brien\\bun.exe" "C:\\Users\\O\'Brien\\repo\\packages\\live-studio\\src\\live.mjs" 4321',
@@ -236,7 +232,6 @@ test("tailscaleHostsForPort, isKnownHost, and isStudioProcessCmdline validate ho
     ),
     true,
   );
-  // Pre-split argv array (e.g., Linux /proc/<pid>/cmdline with spaces in path)
   assert.equal(
     isStudioProcessCmdline(
       ["/usr/local/bin/bun", "/home/o'brien/my films/packages/live-studio/src/live.mjs", "4321"],
@@ -302,7 +297,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
       timeout: 45000,
     });
 
-  // --help prints new flags and conflicting flags exit 2
   const help = runLive(dir, "--help");
   assert.equal(help.status, 0);
   assert.match(help.stdout, /--detach/);
@@ -311,11 +305,9 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   assert.equal(runLive(dir, "--detach", "--stop").status, 2);
   assert.equal(runLive(dir, "--lan", "--status").status, 2);
 
-  // Not running yet -> --status exits 1
   const statusBefore = runLive(dir, "--status");
   assert.equal(statusBefore.status, 1);
 
-  // Start detached -> exits 0, records pid/project/port, writes studio.log
   const detach = runLive(dir, "--detach");
   assert.equal(
     detach.status,
@@ -334,7 +326,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   recordedPid = studioInfo.pid;
   assert.equal(existsSync(join(dir, "renders/live/studio.log")), true);
 
-  // --status now reports running (exit 0), and a second --detach refuses to double-start
   const statusRunning = runLive(dir, "--status");
   assert.equal(statusRunning.status, 0, statusRunning.stderr);
   assert.match(statusRunning.stdout, new RegExp(`http://localhost:${port}`));
@@ -344,7 +335,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   assert.equal(alreadyRunning.status, 1);
   assert.match(alreadyRunning.stderr, new RegExp(`already runs at http://localhost:${port}`));
 
-  // Dynamic .live_hosts without restarting Studio: 403 before, 200 after
   const denied = await fetch(`http://127.0.0.1:${port}/`, {
     headers: { host: `phone.tail.ts.net:${port}` },
   });
@@ -359,7 +349,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   assert.match(html, /#100F0F/i);
   assert.match(html, /Starting Studio/);
 
-  // --stop refuses to terminate a PID whose studio.json belongs to a different film
   mkdirSync(join(otherDir, "renders/live"), { recursive: true });
   writeFileSync(
     join(otherDir, "renders/live/studio.json"),
@@ -370,8 +359,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   const stillUp = await fetch(`http://127.0.0.1:${port}/`);
   assert.equal(stillUp.status, 200);
 
-  // When a live studio answers on info.port (probe.ok === true) while studio.json points to a DIFFERENT live non-studio pid,
-  // --stop must refuse with exit 1 and leave BOTH that non-studio process AND studio.json intact
   decoyProc = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
     stdio: "ignore",
     windowsHide: true,
@@ -392,7 +379,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   decoyProc = null;
   writeFileSync(studioJsonPath, savedStudioInfo);
 
-  // --stop on the owning film terminates cleanly and exits 0
   const stop = runLive(dir, "--stop");
   assert.equal(stop.status, 0, `stop failed:\nstdout: ${stop.stdout}\nstderr: ${stop.stderr}`);
   recordedPid = null;
@@ -400,7 +386,6 @@ test("live.mjs --detach, --status, dynamic .live_hosts over HTTP, and --stop wor
   const statusAfter = runLive(dir, "--status");
   assert.equal(statusAfter.status, 1);
 
-  // --detach combines cleanly with --lan and stops cleanly
   const detachLan = runLive(dir, "--detach", "--lan");
   assert.equal(
     detachLan.status,
@@ -460,7 +445,6 @@ test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-
   const studioJsonPath = join(dir, "renders/live/studio.json");
   mkdirSync(dirname(studioJsonPath), { recursive: true });
 
-  // --status must fail when another non-studio HTTP server answers 200 on info.port
   writeFileSync(studioJsonPath, JSON.stringify({ port: otherPort, project: dir, pid: benign.pid }));
   const fakeStatus = spawnSync(process.execPath, [LIVE_SCRIPT, String(otherPort), "--status"], {
     cwd: STUDIO,
@@ -474,7 +458,6 @@ test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-
     `status should reject non-studio server:\n${fakeStatus.stdout}`,
   );
 
-  // --stop rejects invalid/missing port in studio.json without touching the PID
   writeFileSync(studioJsonPath, JSON.stringify({ port: 0, project: dir, pid: benign.pid }));
   const stopBadPort = spawnSync(process.execPath, [LIVE_SCRIPT, String(unusedPort), "--stop"], {
     cwd: STUDIO,
@@ -486,7 +469,6 @@ test("live.mjs --stop refuses recycled non-studio PIDs and --status rejects non-
   assert.match(stopBadPort.stderr, /no valid port/i);
   assert.equal(benign.exitCode, null, "non-studio process must still be alive");
 
-  // --stop must NOT kill a recycled PID whose OS command line is not live.mjs, and clears stale studio.json
   writeFileSync(
     studioJsonPath,
     JSON.stringify({ port: unusedPort, project: dir, pid: benign.pid }),
@@ -588,7 +570,6 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
       return mesh;
     };
 
-    // Invisible blockers placed ABOVE the real target
     const shadowCeiling = makePlane(
       "shadow_ceiling",
       4,
@@ -640,9 +621,6 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
       new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }),
     ]);
 
-    // Multi-material box whose struck top (+Y, index 2) face is non-pickable while side/bottom faces are opaque
-    // Note: BoxGeometry ray hits top face (+Y, index 2) AND bottom face (-Y, index 3); make BOTH horizontal faces non-pickable
-    // so only the 4 vertical side faces (0, 1, 4, 5) are visible/opaque!
     const invisibleTopBottomMulti = makeMultiBox("invisible_top_bottom_multi", 1.5, [
       new THREE.MeshBasicMaterial({ color: 0x334455 }),
       new THREE.MeshBasicMaterial({ color: 0x334455 }),
@@ -675,7 +653,6 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     assert.equal(hit.what, "real_floor");
     assert.deepEqual(hit.world, [0, 0, 0]);
 
-    // A multi-material mesh whose struck face (+Y, index 2) is visible MUST be pickable and identify via that face's material
     const topFaceMat = new THREE.MeshBasicMaterial({ color: 0x22aa44 });
     const mixedMulti = makeMultiBox("mixed_multi", 1.0, [
       new THREE.MeshBasicMaterial({ colorWrite: false }),
@@ -698,7 +675,6 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     assert.equal(mixedHit.what, "green_top_face");
     assert.deepEqual(mixedHit.world, [0, 1.1, 0]);
 
-    // An opaque mesh (transparent: false) renders solid even with opacity: 0, so it MUST stay pickable
     const opaqueZeroOpacity = makePlane(
       "opaque_zero_opacity",
       1.25,
@@ -718,9 +694,7 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
     assert.equal(opaqueHit.what, "opaque_zero_opacity");
     assert.deepEqual(opaqueHit.world, [0, 1.25, 0]);
 
-    // lookOnPlane intersects horizontal plane y = 2.0 along camera ray
     assert.deepEqual(lookOnPlane(0.5, 0.5, 2), [0, 2, 0]);
-    // Looking upward away from y = 0 returns null
     camera.lookAt(0, 10, 0);
     camera.updateMatrixWorld(true);
     assert.equal(lookOnPlane(0.5, 0.5, 0), null);
@@ -732,11 +706,9 @@ test("lookAtClick skips colorWrite:false, zero-opacity transparent, non-depthWri
 test("simplifyPenPoints and markHits preserve pen bends (capped at 6) and box center + 4 corners with horizontal plane fallback", async (t) => {
   withBrowserGlobals(t);
   const { inkWords, markHits, simplifyPenPoints } = await import("../app/notes/ink.ts");
-  // Straight line -> 2 endpoints
   const straight = Array.from({ length: 20 }, (_, i) => [0.1 + i * 0.04, 0.5]);
   assert.deepEqual(simplifyPenPoints(straight), [straight[0], straight.at(-1)]);
 
-  // L-shaped stroke -> preserves corner bend
   const lShape = [
     [0.1, 0.2],
     [0.2, 0.2],
@@ -754,7 +726,6 @@ test("simplifyPenPoints and markHits preserve pen bends (capped at 6) and box ce
     [0.4, 0.7],
   ]);
 
-  // Closed circle stroke keeps spread vertices around loop (doesn't collapse to 2 coincident endpoints)
   const circle = Array.from({ length: 36 }, (_, i) => {
     const a = (i / 35) * Math.PI * 2;
     return [0.5 + 0.2 * Math.cos(a), 0.5 + 0.2 * Math.sin(a)];
@@ -764,14 +735,12 @@ test("simplifyPenPoints and markHits preserve pen bends (capped at 6) and box ce
   assert.deepEqual(simplifiedCircle[0], circle[0]);
   assert.deepEqual(simplifiedCircle.at(-1), circle.at(-1));
 
-  // Complex zigzag with many bends -> capped at 6 keeping exact first & last
   const zigzag = Array.from({ length: 25 }, (_, i) => [i / 24, i % 2 === 0 ? 0.2 : 0.8]);
   const capped = simplifyPenPoints(zigzag, 0.015, 6);
   assert.equal(capped.length, 6);
   assert.deepEqual(capped[0], zigzag[0]);
   assert.deepEqual(capped.at(-1), zigzag.at(-1));
 
-  // markHits for pen records keyPts and raycasts every key vertex
   const penMark = { kind: "pen", t: 2, pts: lShape };
   const fakeLook = (x, y) => ({
     what: `p_${Math.round(x * 10)}_${Math.round(y * 10)}`,
@@ -787,7 +756,6 @@ test("simplifyPenPoints and markHits preserve pen bends (capped at 6) and box ce
   assert.equal(penMark.hits.length, 3);
   assert.equal(inkWords([penMark]), "pen stroke 00:02.000: p_1_2 … p_4_7");
 
-  // markHits for box raycasts center + 4 corners (TL, TR, BR, BL) with horizontal plane fallback on misses
   const planeCalls = [];
   const boxMark = {
     kind: "box",
@@ -821,7 +789,6 @@ test("simplifyPenPoints and markHits preserve pen bends (capped at 6) and box ce
     true,
   );
 
-  // When box center also misses, fallback plane defaults to y = 0
   const emptyBox = {
     kind: "box",
     t: 4,
@@ -925,7 +892,6 @@ test("note-detail prints srcT when diverged, prints pen key vertices and box cor
     `should omit empty lesson boilerplate:\n${richOut}`,
   );
 
-  // Legacy 2-hit pen & 1-hit box + non-diverged srcT stay backward-compatible
   const legacyOut = format(
     {
       n: 2,
@@ -961,7 +927,6 @@ test("note-detail prints srcT when diverged, prints pen key vertices and box cor
   ).join("\n");
 
   assert.doesNotMatch(legacyOut, /\(scene /);
-  // Zero srcT (e.g. Freeze holding frame 0) still prints (scene 00:00.000) when heard t diverges
   const frozenOut = format(
     { n: 4, id: "frz1", t: 2.5, srcT: 0, time: "00:02.500", shot: 0, text: "held start" },
     false,
@@ -978,7 +943,6 @@ test("note-detail prints srcT when diverged, prints pen key vertices and box cor
   );
   assert.ok(!legacyOut.includes("corners:"), legacyOut);
 
-  // When the film DOES have voice lines, real silence IS still printed
   mkdirSync(join(dir, "renders/live"), { recursive: true });
   writeFileSync(
     join(dir, "renders/live/voice_map.json"),
@@ -1026,7 +990,6 @@ test("notes.mjs prints local-<8hex> fingerprint instead of parent-repo git hash 
     encoding: "utf8",
   }).trim();
 
-  // Gitignored film folder inside parent repo
   const ignoredFilm = join(repo, "films/my-local-film");
   mkdirSync(join(ignoredFilm, "notes"), { recursive: true });
   mkdirSync(join(ignoredFilm, "src"), { recursive: true });
@@ -1043,7 +1006,6 @@ test("notes.mjs prints local-<8hex> fingerprint instead of parent-repo git hash 
   assert.ok(m1, `expected local-<8hex>:\n${ignoredOut1}`);
   assert.ok(!ignoredOut1.includes(commitHash), `should not leak parent hash:\n${ignoredOut1}`);
 
-  // Changing a file in src/ immediately changes the local version stamp
   writeFileSync(join(ignoredFilm, "src/scene.ts"), "export const v = 2;\n");
   const ignoredOut2 = execFileSync(process.execPath, [NOTES_SCRIPT], {
     cwd: ignoredFilm,
@@ -1054,7 +1016,6 @@ test("notes.mjs prints local-<8hex> fingerprint instead of parent-repo git hash 
   assert.ok(m2, `expected local-<8hex>:\n${ignoredOut2}`);
   assert.notEqual(m2[1], m1[1], "changing src/ must update local version stamp");
 
-  // Untracked local film folder inside parent repo (not in .gitignore) also prints local-<8hex>
   const untrackedFilm = join(repo, "local-films/untracked-film");
   mkdirSync(join(untrackedFilm, "notes"), { recursive: true });
   mkdirSync(join(untrackedFilm, "src"), { recursive: true });
@@ -1068,7 +1029,6 @@ test("notes.mjs prints local-<8hex> fingerprint instead of parent-repo git hash 
   assert.match(untrackedOut, /Film now: local-[0-9a-f]{8}\./);
   assert.ok(!untrackedOut.includes(commitHash), `should not leak parent hash:\n${untrackedOut}`);
 
-  // Tracked folder in the same repo still prints the git describe hash
   const trackedOut = execFileSync(process.execPath, [NOTES_SCRIPT], {
     cwd: join(repo, "tracked"),
     encoding: "utf8",
@@ -1083,13 +1043,11 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
   const s20 = timingPlan({ speeds: [{ from: 0, to: 10, rate: 2.0 }] });
   const s05 = timingPlan({ speeds: [{ from: 0, to: 10, rate: 0.5 }] });
 
-  // 1. Strict identity no-op (including explicit undefined optional keys) leaves timing clean
   const noop = {};
   recordLinkage(noop, flat, flat, true, LINKAGE_DEFAULTS);
   recordLinkage(noop, {}, { speeds: undefined, main: undefined }, true, LINKAGE_DEFAULTS);
   assert.equal(noop.layerKinds, undefined);
 
-  // 2. Repeated pure-speed edits fold cleanly without unbounded changes arrays, and reset removes dead layerKinds
   const t = {};
   for (const [before, after] of [
     [flat, s15],
@@ -1099,7 +1057,6 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
     Object.assign(t, structuredClone(after));
     recordLinkage(t, before, after, true, LINKAGE_DEFAULTS);
   }
-  // Linked text follows s05 (0.5x => source 4 -> output 8); unlinked audio stays at flat (4 -> 4)
   assert.equal(compileLayerTiming(t, 10, "text").outputAt(4), 8);
   assert.equal(compileLayerTiming(t, 10, "audio").outputAt(4), 4);
   for (const kind of Object.keys(LINKAGE_DEFAULTS)) {
@@ -1110,23 +1067,20 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
     );
   }
 
-  // Resetting speed back to flat 1.0x clears dead layerKinds bloat completely
   Object.assign(t, structuredClone(flat));
   recordLinkage(t, s05, flat, true, LINKAGE_DEFAULTS);
   assert.equal(t.layerKinds, undefined);
   assert.equal(compileLayerTiming(t, 10, "text").outputAt(4), 4);
   assert.equal(compileLayerTiming(t, 10, "audio").outputAt(4), 4);
 
-  // 3. Switching audio linkage ON mid-stream folds consecutive pure-speed transitions while preserving base mismatch
   const mid = {};
   Object.assign(mid, structuredClone(s20));
-  recordLinkage(mid, flat, s20, true, LINKAGE_DEFAULTS); // audio stays flat
+  recordLinkage(mid, flat, s20, true, LINKAGE_DEFAULTS);
   Object.assign(mid, structuredClone(s05));
   recordLinkage(mid, s20, s05, true, { ...LINKAGE_DEFAULTS, audio: true });
   Object.assign(mid, structuredClone(s15));
   recordLinkage(mid, s05, s15, true, { ...LINKAGE_DEFAULTS, audio: true });
   assert.equal(mid.layerKinds.audio.changes.length, 1);
-  // Compare against exact uncompacted chain: flat, then s20->s05, then s05->s15
   const reference = {
     ...s15,
     layers: {
@@ -1143,7 +1097,6 @@ test("linkage.mjs skips identity no-ops, folds pure-speed edits/resets without b
     assert.ok(Math.abs(actualClock.outputAt(x) - refClock.outputAt(x)) < 1e-6);
   }
 
-  // 4. Non-bijective cut or gap followed by restoring flat MUST NOT collapse away its visibility/timing effect
   const cut = timingPlan({ cuts: [{ from: 2, to: 5 }] });
   const cutTiming = {};
   Object.assign(cutTiming, structuredClone(cut));

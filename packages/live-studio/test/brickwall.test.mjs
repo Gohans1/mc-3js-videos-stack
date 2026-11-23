@@ -1,5 +1,3 @@
-// The master limiter (app/sound/brickwall.ts) holds mix.py's alimiter ceiling: no sample past 0.45, the sound under it
-// untouched, and back to unity within the release once the loud part has gone
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
@@ -102,8 +100,8 @@ test("a quiet sound passes untouched after FFmpeg's 239-sample look-ahead at 48 
 test("no sample goes past the ceiling, whatever comes in, on either side", () => {
   const l = sine(1, 0.3),
     r = sine(1, 0.3, 331);
-  for (let i = 12000; i < 12010; i++) l[i] = 1.6; // a click, one side only
-  for (let i = 24000; i < 36000; i++) r[i] *= 4; // a loud stretch
+  for (let i = 12000; i < 12010; i++) l[i] = 1.6;
+  for (let i = 24000; i < 36000; i++) r[i] *= 4;
   const { out } = run([l, r], 97);
   assert.ok(peak(out[0]) <= CEILING + 1e-6, `left ${peak(out[0])}`);
   assert.ok(peak(out[1]) <= CEILING + 1e-6, `right ${peak(out[1])}`);

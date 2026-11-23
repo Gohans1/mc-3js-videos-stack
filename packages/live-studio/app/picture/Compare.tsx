@@ -1,4 +1,3 @@
-// The snapshot over the picture while \ or the Compare button is held (picture/snapshot.ts), labelled so it never passes for now
 import { Camera, Grid2X2, SquareSplitHorizontal, X } from "lucide-react";
 import { useEffect } from "react";
 
@@ -22,7 +21,6 @@ export function CompareOverlay() {
   const onion = useStudio((s) => s.preview.onion);
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      // Held keys live outside useStudioHotkeys (they need the key's release), so they give way to any modal over the page here
       if (
         e.code !== "Backslash" ||
         e.ctrlKey ||

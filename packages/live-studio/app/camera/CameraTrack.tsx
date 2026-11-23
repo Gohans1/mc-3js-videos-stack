@@ -13,10 +13,6 @@ import {
   ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-// The camera row's canvas (camrow.ts draws it and takes the pointer) and what a right-click on one of its shot blocks offers, as
-// a clip's menu does in CapCut: rename, split at the playhead, merge with the shot before, copy and paste its attributes (its
-// animations, timeline/attributes.ts), its In / Out / Combo, go to its start.
-// Each also sits in the Camera and Animation tabs, which is where a keyboard reaches them
 import { cn } from "@/lib/utils";
 
 import { DURATION, SHOTS_OUT } from "../core/filmMeta";

@@ -241,7 +241,6 @@ function Field({ f, bare }: { f: OwnField; bare: boolean }) {
     <div className="flex flex-col">
       <dt className="sr-only">{f.key}</dt>
       <dd>
-        {/* Serialize only while open: engine objects can be megabytes. */}
         <details onToggle={(e) => setCode(e.currentTarget.open ? write() : null)}>
           <summary className="text-primary-text focus-visible:ring-ring cursor-pointer rounded-sm py-1 text-sm leading-relaxed wrap-anywhere outline-none focus-visible:ring-2">
             <span className="inline-flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1 align-top">

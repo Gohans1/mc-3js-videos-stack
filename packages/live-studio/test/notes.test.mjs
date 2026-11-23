@@ -1,4 +1,3 @@
-// src/notes.mjs: a note keeps every picture sent with it, a retry is not a second note, and × can be undone
 import assert from "node:assert/strict";
 import {
   existsSync,
@@ -52,11 +51,9 @@ const sent = () => ({
 });
 
 test("a note stays on its picture when a Speed edit after it moves that picture's heard second", () => {
-  // written at 8.2 s with no Speed; then the first 10 scene seconds go 2x, so that picture is heard at 4.1
   const clock = compileTiming({ speeds: [{ from: 0, to: 10, rate: 2 }] }, 20);
   const voiceOnly = (s) => s;
   assert.ok(Math.abs(noteSecond({ t: 8.2, srcT: 8.2, scene: 8.2 }, voiceOnly, clock) - 4.1) < 1e-6);
-  // one from before scene seconds were kept finds its shot by name (a shot added in front renumbered it) and its place there
   const shots = [
     { t: 0, name: "the room" },
     { t: 5, name: "a new insert" },
@@ -70,23 +67,19 @@ test("a note stays on its picture when a Speed edit after it moves that picture'
     context: { shot: { into: 0.2 } },
   };
   assert.ok(Math.abs(noteSecond(old, voiceOnly, clock, shots) - 4.1) < 1e-6);
-  // with no shot of that name left: its narration second, as before
   assert.equal(noteSecond({ ...old, shotName: "gone" }, voiceOnly, clock, shots), 8.2);
 });
 
 test("a note written during a held frame stays at its own second while that frame still holds there", () => {
-  // scene second 0 held for the film's first 6 s (a Freeze): a note at 0 s, at 2 s, and one written before the hold existed
   const held = compileTiming({ freezes: [{ at: 0, duration: 6 }] }, 20),
     voiceOnly = (s) => s;
   assert.equal(noteSecond({ t: 0, srcT: 0, scene: 0 }, voiceOnly, held), 0);
   assert.equal(noteSecond({ t: 2, srcT: 2, scene: 0 }, voiceOnly, held), 2);
-  // the hold moved away from where the note was written: the picture's first heard second, not the end of its hold
   const later = compileTiming(
     { speeds: [{ from: 0, to: 20, rate: 1 }], freezes: [{ at: 0, duration: 6 }] },
     20,
   );
   assert.equal(noteSecond({ t: 9, srcT: 9, scene: 0 }, voiceOnly, later), 0);
-  // malformed t: null with shot context must not throw inside frameAt/sourceAt; non-finite srcT must not turn t into NaN
   assert.equal(
     noteSecond({ t: null, shot: 0, context: { shot: { into: 1.5 } } }, voiceOnly, held, [
       { t: 0, name: "a" },
@@ -442,13 +435,11 @@ test("watchNotesFile detects atomic rename writes even before file exists and su
     for (let i = 0; i < 40 && hits < 1; i++) await new Promise((r) => setTimeout(r, 20));
     assert.equal(hits, 1);
 
-    // Identical content rewrite is ignored
     writeFileSync(tmp, '{"id":"a","t":1,"text":"hi","shot":0,"time":"00:01.000"}\n');
     renameSync(tmp, file);
     await new Promise((r) => setTimeout(r, 80));
     assert.equal(hits, 1);
 
-    // Synced own write does not double-fire
     writeFileSync(tmp, '{"id":"b","t":2,"text":"two","shot":0,"time":"00:02.000"}\n');
     renameSync(tmp, file);
     w.sync();
@@ -479,7 +470,6 @@ test("noteFreeView extracts free-camera pose from cam.world and falls back to ca
     { p: [1, 2, 3], l: [4, 5, 6], fov: 42.5, roll: -0.25, wave: 1.5 },
   );
 
-  // Older notes only store p & l in world and keep fov/roll/wave in cam.line
   assert.deepEqual(
     noteFreeView({
       freeCam: true,
@@ -492,8 +482,6 @@ test("noteFreeView extracts free-camera pose from cam.world and falls back to ca
     { p: [11.2, 4.5, 19.8], l: [14.1, 2.0, 12.6], fov: 68, roll: 0.15, wave: 0.8 },
   );
 
-  // Full Free Cam optics & shake (bob, fstop, focus, handheld) round-trip cleanly from cam.world,
-  // and modern cam.world (with world.fov) does not misparse literal "roll:"/"wave:" inside focus labels in cam.line
   assert.deepEqual(
     noteFreeView({
       freeCam: true,

@@ -2,8 +2,6 @@ export declare const LESSONS: string;
 import type { LessonJevConfig } from "./lesson-config";
 export type LessonScope = "film" | "all";
 export type LessonHead = { line: number; head: string };
-// A lesson file as the AI opens it (heads: every heading with its line) and as Jev reads it (jev).
-// In dual-scope mode `path` stays "lessons/<rel>" for both scopes; use `key`, `file`, or `(scope, rel)` to disambiguate.
 export type LessonFile = {
   key?: string;
   path: string;

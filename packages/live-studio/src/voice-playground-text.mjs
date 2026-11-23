@@ -1,5 +1,3 @@
-// Shared zero-Node text helpers for GenVoice scripts, audio tags, and speaker labels.
-
 export const AUDIO_TAG_RE = /\[([^\]\r\n]{1,400})\]/g;
 const DIALOGUE_SPEAKER_LINE_RE = /^([ \t]*)\[([^\]\r\n:[\]]{1,80})\]:([ \t]*)/gm;
 

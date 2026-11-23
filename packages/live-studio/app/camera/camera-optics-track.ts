@@ -36,7 +36,6 @@ export const opticsOutputsAt = (shot: number, time: number) => {
     ...new Set(
       [...spans, ...picture].flatMap((output) => {
         if (showsKey(output)) return [output];
-        // An exact speed boundary may invert one or two representable times before the shot.
         const interior = output + Math.max(1, Math.abs(output)) * Number.EPSILON * 4;
         return showsKey(interior) ? [interior] : [];
       }),

@@ -41,9 +41,6 @@ test("withCropViewOffset projects the target sub-frustum to full NDC and restore
 
   const beforeProj = cam.projectionMatrix.elements.slice();
 
-  // Compute world point at normalized screen coordinate (nx=0.5, ny=0.5) -> NDC (0, 0)
-  // And point at center of crop [0.25, 0.25, 0.5, 0.5] -> normalized full screen (0.5, 0.5)
-  // And point at top-left of crop [0.25, 0.25, 0.5, 0.5] -> normalized full screen (0.25, 0.25)
   const unprojectScreen = (nx, ny) => new THREE.Vector3(2 * nx - 1, 1 - 2 * ny, 0.5).unproject(cam);
   const topLeftCorner = unprojectScreen(0.25, 0.25);
   const cropCenter = unprojectScreen(0.5, 0.5);

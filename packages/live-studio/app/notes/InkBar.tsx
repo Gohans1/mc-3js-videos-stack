@@ -1,5 +1,3 @@
-// The drawing tools, over the picture's bottom left while one is in hand. A stroke opens the note it belongs to; strokes at other
-// seconds join the same note until Xong, so "here at 1:10, then here at 1:12" is one note
 import { ArrowUpRight, Pencil, Route, Send, Square, Undo2, X } from "lucide-react";
 import type { ReactNode } from "react";
 

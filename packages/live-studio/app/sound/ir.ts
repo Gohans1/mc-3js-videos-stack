@@ -246,7 +246,6 @@ export function generateImpulseResponse(
   const left = new Float32Array(length);
   const right = new Float32Array(length);
 
-  // Early reflections with equal-power pan and linear fractional placement.
   for (const tap of cfg.early) {
     const pos = (tap.ms / 1000) * sampleRate;
     const angle = ((Math.max(-1, Math.min(1, tap.pan)) + 1) * Math.PI) / 4;
@@ -254,7 +253,6 @@ export function generateImpulseResponse(
     addTap(right, pos, tap.gain * Math.sin(angle));
   }
 
-  // Late diffuse velvet-noise tail with complementary 2-band RT60 damping.
   const rng = mulberry32(cfg.seed);
   const step = sampleRate / cfg.density;
   const startSample = Math.max(1, Math.floor((cfg.early[0].ms / 1000) * sampleRate));

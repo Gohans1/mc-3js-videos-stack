@@ -19,7 +19,6 @@ const HANDS =
   "# Hands\n\n## Hands holding a prop follow the carry rig\nwhy\n\n## Fingers stay on the prop\nwhy\n";
 const CUTS = "# Cuts\n\n## Transitions under 0.4 s, ease-out\nwhy\n";
 const note = (id, text) => ({ id, text });
-// a stand-in for Jev: votes and fits each file by its path, as [vote, file, fit]
 const judgeBy =
   (fits, calls = []) =>
   (text, pool, show) => {
@@ -252,7 +251,6 @@ test("lessonsFor evaluates both project and global lessons together without coll
     ],
   );
 
-  // Cache hit when nothing changes; body edit preserves cache; heading edit in projectDir invalidates cache
   writeFileSync(
     join(projectDir, "camera.md"),
     "---\nwhen: camera\n---\n# Film Camera\n## Cut on landing\nBody details only.\n",
@@ -356,7 +354,7 @@ test("lessonsFor runs uncached note lookups concurrently with bounded pool, dedu
     note("n2", "beta"),
     note("n3", "fail-me"),
     note("n4", "gamma"),
-    note("n5", "alpha"), // duplicate text of n1 -> must dedupe judge call
+    note("n5", "alpha"),
     note("n6", "delta"),
     note("n7", "epsilon"),
   ];

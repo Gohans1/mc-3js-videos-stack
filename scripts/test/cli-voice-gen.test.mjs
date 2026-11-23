@@ -478,7 +478,6 @@ test("voice:gen CLI --yes cleans stale artifacts, reports studio activity fail/w
     res.end();
   });
 
-  // Case A: overwriting speaking take clears stale wav/words/mouth files, warns when Rhubarb fails/missing, sends studio warn
   const filmA = makeFilm(
     t,
     { takes: [{ id: "01", text: "Hello.", by: "hero" }] },
@@ -508,7 +507,6 @@ test("voice:gen CLI --yes cleans stale artifacts, reports studio activity fail/w
   );
   assert.equal(activities.at(-1)?.level, "warn");
 
-  // Case B: mid-flight failure after onTake sends level: "fail" to studio
   activities.length = 0;
   mode = "fail-second";
   const filmB = makeFilm(
@@ -528,7 +526,6 @@ test("voice:gen CLI --yes cleans stale artifacts, reports studio activity fail/w
   assert.equal(resB.status, 1);
   assert.equal(activities.at(-1)?.level, "fail");
 
-  // Case C: GenVoice with unrunnable/failing WHISPERX_PYTHON keeps audio, sends level: "warn", exits 1 naming voice:align
   activities.length = 0;
   mode = "ok";
   const filmC = makeFilm(
@@ -561,7 +558,6 @@ test("voice:gen CLI --yes cleans stale artifacts, reports studio activity fail/w
   assert.equal(resDirPy.status, 1);
   assert.match(resDirPy.stderr, /no whisperX python at/);
 
-  // Case D: non-speaking ElevenLabs TTS succeeds -> studio level: "ok", next: voice:assemble; --try --takes 2 --yes writes voice/try
   activities.length = 0;
   const filmD = makeFilm(
     t,
@@ -693,7 +689,6 @@ test("genvoice.ts fixes: clamps invalid alignment times, rejects missing audio_b
 });
 
 test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, rejects 0-byte audio, corrupt .words.json, missing edit.json, and dir/symlink output collisions", async (t) => {
-  // 1. Whitespace-only ELEVENLABS_API_KEY must not bypass missing-key check or misroute GENVOICE_* to live ElevenLabs
   assert.throws(
     () => resolveVoiceProvider({}, { ELEVENLABS_API_KEY: "   ", GENVOICE_API_KEY: "  " }),
     /Missing API key/,
@@ -779,7 +774,6 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
     res.end();
   });
 
-  // Invalid apiBase & whitespace key fail BEFORE onTake / mkdirSync / HTTP calls
   const badBaseDir = makeFilm(t, { takes: [{ id: "01", text: "Hi." }] });
   let tookCalls = 0;
   await assert.rejects(
@@ -822,11 +816,10 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
       GENVOICE_API_BASE: mockBase,
     },
   });
-  assert.equal(wsRouteRes.status, 1); // rejects 0-byte download from gv_ok
+  assert.equal(wsRouteRes.status, 1);
   assert.match(wsRouteRes.stderr, /GenVoice audio download returned empty audio/);
   assert.equal(mockHits, 3);
 
-  // HTTP 401 secret redaction across stderr and Studio /api/activity
   const leakDir = makeFilm(
     t,
     { takes: [{ id: "01", voice: "el_401", text: "Secret check." }] },
@@ -846,7 +839,6 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
   assert.doesNotMatch(lastActivitySay, /el_super_secret_key|tok_secret_abc/);
   assert.match(lastActivitySay, /\[REDACTED\]/);
 
-  // 0-byte decoded base64, GenVoice empty body, and STS empty body must throw without writing 0-byte files
   const emptyOutDir = mkdtempSync(join(tmpdir(), "cli-voice-gen-zero-"));
   t.after(() => rmSync(emptyOutDir, { recursive: true, force: true }));
   await assert.rejects(
@@ -895,7 +887,6 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
   );
   assert.equal(existsSync(join(emptyOutDir, "sts_empty.mp3")), false);
 
-  // Corrupt .words.json in isMain does not emit uncaught stack trace and still prints next:
   const corruptWordsDir = makeFilm(
     t,
     { takes: [{ id: "01", text: "Hello." }] },
@@ -910,7 +901,6 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
   assert.doesNotMatch(corruptWordsRes.stderr, /at .*gen\.ts/);
   assert.match(lastNonEmptyLine(corruptWordsRes.stdout), /^next: /);
 
-  // Directory collision at voice/takes/02.mp3 stops 01 + 02 BEFORE calling API for 01
   const dirCollide = makeFilm(
     t,
     {
@@ -941,7 +931,6 @@ test("regression #32: trims keys/apiBase, redacts secrets in stderr/studio, reje
     "directory output collision must abort before API call",
   );
 
-  // Missing src/edit.json reports actionable message without ENOENT; --guide "   " exits 2; 0-byte guide rejected upfront
   const noEditDir = makeFilm(t, { takes: [] });
   rmSync(join(noEditDir, "src/edit.json"));
   const noEditRes = await runCli([], { cwd: noEditDir });

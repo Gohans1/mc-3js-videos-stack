@@ -49,7 +49,6 @@ import {
 const FOLD_BLOCKED_SELECTOR =
   "button, a, input, textarea, select, form, header, li, [data-slot='empty'], [role='button'], [role='radio'], [role='radiogroup'], [role='dialog']";
 
-/** Fold back only when clicking genuinely empty blank space below rows/empty-state, never gutters, gaps, or scrollbars. */
 export const shouldFoldBlankAreaClick = ({
   detail,
   target,
@@ -90,7 +89,6 @@ export const shouldFoldBlankAreaClick = ({
   return clientY >= section.getBoundingClientRect().top;
 };
 
-/** One Miller deck column holding folder/file rows, header, root filter/search, and empty-area fold click. */
 export function LessonColumnView({
   col,
   idx,
@@ -503,7 +501,6 @@ export function LessonColumnView({
   );
 }
 
-/** One folder or file row inside a Miller deck column. */
 export function LessonColumnRow({
   entry,
   isActive,

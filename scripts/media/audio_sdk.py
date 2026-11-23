@@ -86,7 +86,6 @@ def decode_audio(source, wav, start, end, rate, mono, record_command, *, pcm_cod
         print(error, file=sys.stderr, end="")
         decoded.check_returncode()
 
-    # Keep trim state on a fixed-format stream when the source changes audio properties.
     prepare = ["ffmpeg", "-v", "error", "-xerror", "-nostdin", "-copyts", "-i", str(source), "-vn"]
     resample = f"aresample={rate}"
     if mono:

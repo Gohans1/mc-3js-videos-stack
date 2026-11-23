@@ -141,7 +141,6 @@ console.log(JSON.stringify(times.map((t) => {{
 
     def test_convolution_and_spatial_dsp(self) -> None:
         sr = 48000
-        # 0.2s burst impulse at t=0.05s followed by silence (1.2s total)
         dry = np.zeros((int(0.5 * sr), 2), dtype=np.float32)
         t = np.arange(int(0.15 * sr)) / sr
         burst = (0.5 * np.sin(2.0 * np.pi * 880.0 * t)).astype(np.float32)
@@ -152,11 +151,9 @@ console.log(JSON.stringify(times.map((t) => {{
         wet_out = ir.apply_convolution_reverb(dry, ir_l, ir_r, wet=0.5, pre_delay_ms=15, sample_rate=sr)
         self.assertTrue(np.all(np.isfinite(wet_out)))
         self.assertGreater(len(wet_out), len(dry) + int(0.5 * sr))
-        # Reverb tail rings cleanly after dry buffer ended
         tail_rms = float(np.sqrt(np.mean(wet_out[len(dry) : len(dry) + int(0.5 * sr)] ** 2)))
         self.assertGreater(tail_rms, 1e-4)
 
-        # Hard-right 3D source should put substantially more energy into right channel
         cam_keys = [{"t": 0.0, "p": [0, 1.6, 5], "l": [0, 1.6, 0]}]
         spec = {"at": [6, 1.6, 5], "refDistance": 2, "maxDistance": 40, "rolloff": 1}
         sig = np.tile(np.sin(2.0 * np.pi * 440.0 * np.arange(sr // 2) / sr)[:, None], (1, 2)).astype(np.float32)
@@ -166,7 +163,6 @@ console.log(JSON.stringify(times.map((t) => {{
         rms_r = float(np.sqrt(np.mean(sp_out[:, 1] ** 2)))
         self.assertGreater(rms_r, rms_l * 4.0)
 
-        # Path traversal, directory WAVs, and dotted vault stems on custom IR
         with self.assertRaises(ValueError):
             ir.resolve_custom_ir_file("../outside.wav", REPO_ROOT, lambda p, l: None)
 
@@ -232,7 +228,6 @@ console.log(JSON.stringify(times.map((t) => {{
         sig = np.tile((0.4 * np.sin(2.0 * np.pi * 440.0 * t) + 0.3 * np.sin(2.0 * np.pi * 5500.0 * t))[:, None], (1, 2)).astype(np.float32)
         in_peak = float(np.max(np.abs(sig)))
 
-        # Rapid rotation across behind-listener (<5.5kHz) <-> front (20kHz dry) <-> behind + hard cut
         cam_keys = [
             {"t": 0.0, "p": [0, 1.6, 5], "l": [0, 1.6, 10]},
             {"t": 0.4, "p": [0, 1.6, 5], "l": [0, 1.6, 0]},
@@ -275,12 +270,10 @@ class TestMixPyEndToEnd(unittest.TestCase):
             os.makedirs(sfx_dir, exist_ok=True)
             os.makedirs(tl_dir, exist_ok=True)
 
-            # 0.25s 660Hz burst for hall reverb + left spatial pan
             t_b = np.arange(int(0.25 * sr)) / sr
             burst = 0.6 * np.sin(2.0 * np.pi * 660.0 * t_b)
             self._write_wav(os.path.join(sfx_dir, "beep.wav"), np.column_stack((burst, burst)), sr)
 
-            # 1.8s 440Hz tone for moving target tracking (dry)
             t_d = np.arange(int(1.8 * sr)) / sr
             drone = 0.5 * np.sin(2.0 * np.pi * 440.0 * t_d)
             self._write_wav(os.path.join(sfx_dir, "drone.wav"), np.column_stack((drone, drone)), sr)
@@ -375,12 +368,9 @@ class TestMixPyEndToEnd(unittest.TestCase):
                 sl = out[int(a * sr) : int(b * sr), ch]
                 return float(np.sqrt(np.mean(sl * sl)))
 
-            # Beep at [-8, 1.6, 5] sits hard-left at [0.5, 0.75]
             self.assertGreater(rms(0.52, 0.72, 0), rms(0.52, 0.72, 1) * 1.5)
-            # Hall reverb tail from beep persists past 0.75s into [0.90, 1.80] before drone starts
             self.assertGreater(rms(0.95, 1.65, 0) + rms(0.95, 1.65, 1), 1e-3)
 
-            # Moving target starts left at [2.6, 3.0] and pans hard right by [4.0, 4.35]
             self.assertGreater(rms(2.65, 3.00, 0), rms(2.65, 3.00, 1) * 2.0)
             self.assertGreater(rms(4.00, 4.35, 1), rms(4.00, 4.35, 0) * 2.0)
 
@@ -627,7 +617,6 @@ export function buildScene() {
             rate, out = self._read_wav_f32(str(destination))
             self.assertEqual(rate, 48000)
             cutoff_sample = round(0.3 * rate)
-            # 0.1s at 11025 Hz falls between source samples. FFmpeg emits the rounded tail at 48 kHz.
             self.assertGreater(abs(out[cutoff_sample, 0]), 0.1)
             self.assertEqual(out[cutoff_sample, 1], 0.0)
             original = destination.read_bytes()
@@ -649,12 +638,10 @@ export function buildScene() {
             os.makedirs(tl_dir, exist_ok=True)
             os.makedirs(ir_dir, exist_ok=True)
 
-            # 0.5s high-frequency 4000Hz tone to test occlusion LPF attenuation
             t = np.arange(int(0.5 * sr)) / sr
             hi = 0.6 * np.sin(2.0 * np.pi * 4000.0 * t)
             self._write_wav(os.path.join(sfx_dir, "hiss.wav"), np.column_stack((hi, hi)), sr)
 
-            # Custom IR WAV inside film directory
             ir_t = np.arange(int(0.6 * sr)) / sr
             rng = np.random.default_rng(7)
             custom_ir = rng.normal(0.0, 1.0, (len(ir_t), 2)) * np.exp(-6.0 * ir_t)[:, None]
@@ -667,7 +654,6 @@ export function buildScene() {
             with open(os.path.join(tl_dir, "cam.json"), "w", encoding="utf8") as f:
                 json.dump([{"t": 0.0, "p": [0, 0, 5], "l": [0, 0, 0], "wave": 0}], f)
 
-            # 1) Custom IR + no occlusion
             with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -693,7 +679,6 @@ export function buildScene() {
             )
             _, out_clear = self._read_wav_f32(os.path.join(tmp, "sound", "clear.wav"))
 
-            # 2) Same clip with full occlusion (LPF ~380Hz drops 4kHz tone dramatically)
             with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -722,11 +707,9 @@ export function buildScene() {
             clear_energy = float(np.sqrt(np.mean(out_clear[int(0.25 * sr) : int(0.65 * sr)] ** 2)))
             occ_energy = float(np.sqrt(np.mean(out_occ[int(0.25 * sr) : int(0.65 * sr)] ** 2)))
             self.assertGreater(clear_energy, occ_energy * 8.0)
-            # Custom IR leaves reverb tail past 0.7s
             tail_energy = float(np.sqrt(np.mean(out_clear[int(0.8 * sr) : int(1.2 * sr)] ** 2)))
             self.assertGreater(tail_energy, 1e-3)
 
-            # 3) Path traversal and directory wavs are rejected safely
             with open(os.path.join(tl_dir, "audio.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -782,7 +765,6 @@ export function buildScene() {
                 json.dump({"end": 3.0}, f)
             with open(os.path.join(tl_dir, "cam.json"), "w", encoding="utf8") as f:
                 json.dump([{"t": 0.0, "p": [0, 1.6, 5], "l": [0, 1.6, 0], "wave": 0}], f)
-            # Speed 2x on source [0..2] -> output [0..1]; freeze at source at=1.0 for 1s holding source frame=0.5
             with open(os.path.join(tl_dir, "timing.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -791,7 +773,6 @@ export function buildScene() {
                     },
                     f,
                 )
-            # Non-default placed keyFile: moves from hard-left (-8 at source 0..1) to hard-right (+8 at source 2) after freeze
             with open(os.path.join(tl_dir, "objects.json"), "w", encoding="utf8") as f:
                 json.dump(
                     {
@@ -841,9 +822,7 @@ export function buildScene() {
                 sl = out[int(a * sr) : int(b * sr), ch]
                 return float(np.sqrt(np.mean(sl * sl)))
 
-            # Inside freeze [0.5, 1.5], actor holds at source t=1.0 -> left-heavy
             self.assertGreater(rms(0.55, 1.35, 0), rms(0.55, 1.35, 1) * 1.5)
-            # After freeze exits past output t=1.8 -> moves rapidly toward source t=2.0 -> right-heavy
             self.assertGreater(rms(1.85, 2.20, 1), rms(1.85, 2.20, 0) * 1.5)
 
 

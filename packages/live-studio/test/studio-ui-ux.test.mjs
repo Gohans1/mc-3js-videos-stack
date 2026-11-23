@@ -680,7 +680,6 @@ test("StageNoteComposer embeds Note tools, Cancel, and Add note on the stage, su
     submitDisabled: true,
   });
 
-  // Portrait 9:16 stage width (~315px) must keep the whole StageNoteComposer card inside player view bounds
   await page.evaluate(`window.__UX_TEST__.setStageBox(315, 560)`);
   await Bun.sleep(60);
   const portraitBounds = await page.evaluate(`(() => {
@@ -694,14 +693,12 @@ test("StageNoteComposer embeds Note tools, Cancel, and Add note on the stage, su
   })()`);
   expect(portraitBounds).toEqual({ fitsLeft: true, fitsRight: true, fitsBottom: true });
 
-  // Cancel discards compose directly from the stage card
   await page.evaluate(`(() => {
     const card = document.querySelector('[data-stage-compose]');
     card.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === 'Cancel') b.click(); });
   })()`);
   await waitUntil("window.__UX_TEST__.get().compose === null");
 
-  // Typing draft enables Add note and clicking it saves directly
   await page.evaluate(
     `window.__UX_TEST__.set({ compose: ${JSON.stringify(compose)}, draft: "Move chair left" })`,
   );
@@ -772,7 +769,6 @@ test("InkBar shows Cancel and Add note while a note is open and fits inside a 9:
     noHorizClip: true,
   });
 
-  // Submitting note automatically closes InkBar (clears ink tool too)
   await page.evaluate(`(() => {
     const bar = document.querySelector('[role="toolbar"][aria-label="Draw"]');
     [...bar.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add note').click();
@@ -865,7 +861,6 @@ test("EaseTiles lets user clone any built-in preset into a new named template wi
   await page.evaluate(`${cloneBtnExpr}.click()`);
   await waitUntil(`document.querySelector('input[aria-label="Template name"]')`);
 
-  // Cancel discards cleanly and leaves built-in ease untouched
   await page.evaluate(`(() => {
     const cancel = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Cancel');
     cancel.click();
@@ -873,7 +868,6 @@ test("EaseTiles lets user clone any built-in preset into a new named template wi
   await waitUntil(`!document.querySelector('input[aria-label="Template name"]')`);
   expect(await page.evaluate("window.__UX_TEST__.camKeys()[1].ease ?? null")).toBeNull();
 
-  // Open customize on Smooth preset, focus and edit Curve x1, name it, then Save & apply
   await page.evaluate(`${cloneBtnExpr}.click()`);
   await waitUntil(`document.querySelector('input[aria-label="Template name"]')`);
   await page.evaluate(`(() => {
@@ -900,7 +894,6 @@ test("EaseTiles lets user clone any built-in preset into a new named template wi
   expect(Array.isArray(applied)).toBe(true);
   expect(applied[0]).toBe(0.25);
 
-  // Per-field reset button restores just Curve x1 back to [0.42, 0, 0.58, 1] default without changing custom preset name
   await waitUntil(`document.querySelector('button[aria-label^="Reset x1"]')`);
   await page.evaluate(`document.querySelector('button[aria-label^="Reset x1"]').click()`);
   await waitUntil(`Math.abs(window.__UX_TEST__.camKeys()[1].ease?.[0] - 0.42) < 0.01`);
@@ -923,7 +916,6 @@ test("SpeedPanel exposes EaseTiles, Custom curve, CameraGraph, and Match speed c
   })()`);
   await waitUntil(`window.__UX_TEST__.camKeys()[1].matchSpeed === true`);
 
-  // Select keyframe 3 and pick Ease Out: authored curve stays Ease Out cleanly
   await page.evaluate(`window.__UX_TEST__.set({ camKey: 2 })`);
   await waitUntil("document.body.textContent.includes('Into keyframe 3')");
   await page.evaluate(`(() => {
@@ -1370,7 +1362,6 @@ test("ShotOpticsEditor updates on paused seek after render and renders explicit 
     })()`);
     await waitUntil(`${focalInput}?.value === "39.3" && ${focusInput}?.value === "3"`);
 
-    // Paused seek fires wake("render") BEFORE S.render(3) updates renderedAt, then wake("rendered") runs after.
     await page.evaluate(`(() => {
       const u = window.__UX_TEST__;
       u.seekExact(3);
@@ -1379,7 +1370,6 @@ test("ShotOpticsEditor updates on paused seek after render and renders explicit 
     })()`);
     await waitUntil(`${focalInput}?.value === "69.8" && ${focusInput}?.value === "5"`);
 
-    // Explicit null (Auto) focus key disables Reset, hides redundant Auto button, and renders no empty <p>.
     await page.evaluate(`(() => {
       const u = window.__UX_TEST__;
       u.seekExact(6);
@@ -1764,7 +1754,6 @@ test("Film Cam Pick focus measures at cameraKeySampleTime across a detached Free
     await page.evaluate(`(${filmTab}).click()`);
     await waitUntil(pickBtn);
 
-    // (a) Cut key during a detached Freeze: marker sits at t=4 (frozen shot 0, z=6), while cameraKeySampleTime is t=6 (shot 1, z=12)
     expect(
       await page.evaluate(
         `({ marker: window.__UX_TEST__.camKeys()[1].t, sample: window.__UX_TEST__.cameraKeySampleTime(1) })`,
@@ -1787,7 +1776,6 @@ test("Film Cam Pick focus measures at cameraKeySampleTime across a detached Free
     expect(freezePick.k0Focus).toBeUndefined();
     expect(freezePick.k1Focus).toBeGreaterThan(10);
 
-    // (b) ID-less tail + cut pair sharing t=3: switching cut->tail clears pickFocus, and picking focus writes only to the cut key
     await page.evaluate(`(async () => {
       const u = window.__UX_TEST__;
       u.set({ timing: false });
@@ -1811,11 +1799,9 @@ test("Film Cam Pick focus measures at cameraKeySampleTime across a detached Free
     await waitUntil(
       `window.__UX_TEST__.get().pickFocus?.cut === true && (${activePickBtn})?.getAttribute('aria-pressed') === 'true'`,
     );
-    // Switching selection from cut (index 2) to tail (index 1) at the same timestamp must clear pickFocus
     await page.evaluate(`window.__UX_TEST__.setKey(1)`);
     await waitUntil(`window.__UX_TEST__.get().pickFocus === null`);
 
-    // Re-select ID-less cut (index 2), arm focus pick, click canvas -> updates index 2 only, never index 1
     await page.evaluate(`window.__UX_TEST__.setKey(2)`);
     await waitUntil(pickBtn);
     await page.evaluate(`(${pickBtn}).click()`);
@@ -1951,7 +1937,6 @@ test("CamPanel provides per-field Reset buttons for Time, FOV, Roll, and Sway in
   await page.evaluate("window.__UX_TEST__.loadCameraFixture()");
   await waitUntil(`document.querySelector('input[aria-label="FOV"]')`);
   await waitUntil(`document.querySelector('button[aria-label="Reset Roll to default"]')`);
-  // Set Roll and Sway directly on keyframe 2 then reset only Roll
   await page.evaluate(`(() => {
     const rollReset = document.querySelector('button[aria-label="Reset Roll to default"]');
     const swayReset = document.querySelector('button[aria-label="Reset Sway to default"]');
@@ -2229,7 +2214,6 @@ test("Split cut keyframe edits closing tail ease instead of showing first-keyfra
     smoothVisible: true,
   });
 
-  // Keyframe 0 of the film still explains it has no incoming curve.
   await page.evaluate(`(() => {
     window.__UX_TEST__.S.t = 0;
     window.__UX_TEST__.setKey(0);
@@ -2726,7 +2710,6 @@ test("Free camera exposes FOV, Roll, Sway settings in CamPanel and Settings and 
   expect(res.freeRoll).toBeCloseTo((15 * Math.PI) / 180, 3);
   expect(res.freeWave).toBeCloseTo(1.2, 2);
 
-  // Verify templates/film/src/scene.ts no longer passes free.on to adjust/layerAdjust and applies free.roll + free.wave
   const sceneSrc = await Bun.file(resolve(STUDIO, "../../templates/film/src/scene.ts")).text();
   expect(sceneSrc).toContain("adjust(shot, shotEntry?.adjust, t, false)");
   expect(sceneSrc).toContain("layerAdjust(");
@@ -3279,7 +3262,6 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     expect(draftState.status).toBe(true);
     expect(draftState.hasConfirm).toBe(true);
 
-    // Revert restores original FOV 50 without writing to server
     await page.evaluate(`document.querySelector('${revertButton}').click()`);
     await waitUntil(
       `!document.querySelector('${revertButton}') && window.__UX_TEST__.get().status.startsWith("Reverted ")`,
@@ -3291,7 +3273,6 @@ test("PendingChangesBar holds edits in preview behind Revert and Confirm buttons
     })`);
     expect(afterRevert).toEqual({ mm: null, fov: 50, posts: postsBefore });
 
-    // Confirm persists the edit and clears the pending bar.
     await page.evaluate(setFocal(50));
     await waitUntil(readyButton(confirmButton));
     await page.evaluate(`document.querySelector('${confirmButton}').click()`);
@@ -3328,7 +3309,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     el.blur();
   })()`;
 
-  // 1. Prime 35mm via Prime lens select switches keyframe to mm: 35 and clears fov
   await page.evaluate(`document.querySelector('[aria-label="Prime lens"]').click()`);
   await waitUntil(
     `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes('35mm'))`,
@@ -3341,7 +3321,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     `window.__UX_TEST__.camKeys()[1].mm === 35 && window.__UX_TEST__.camKeys()[1].fov === undefined`,
   );
 
-  // 2. Aperture f/2.0 & Target Focus
   await page.evaluate(setField("Aperture", "2"));
   await waitUntil(`window.__UX_TEST__.camKeys()[1].fstop === 2`);
 
@@ -3353,7 +3332,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
   await page.evaluate(setField("Focus offset Y", "0.25"));
   await waitUntil(`window.__UX_TEST__.camKeys()[1].focus?.offset?.[1] === 0.25`);
 
-  // 3. Focus Eyedropper sets distance from real Three.js raycast click on stage canvas
   await page.evaluate(`(() => {
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Pick focus on frame'));
     btn.click();
@@ -3381,7 +3359,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
   expect(pickedDist).toBeGreaterThan(3);
   expect(pickedDist).toBeLessThan(7);
 
-  // 4. Handheld Select + Sliders & Walking bob
   await page.evaluate(`document.querySelector('[aria-label="Handheld preset"]').click()`);
   await waitUntil(
     `[...document.querySelectorAll('[role="option"]')].some((o) => o.textContent.includes('handycam run'))`,
@@ -3397,7 +3374,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     `window.__UX_TEST__.camKeys()[1].handheld?.amount === 1.4 && window.__UX_TEST__.camKeys()[1].bob === 0.35`,
   );
 
-  // 5. Coordinates Position X & Aim Y (inside Advanced)
   await page.evaluate(`(() => {
     const advBtn = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Advanced');
     if (advBtn && advBtn.getAttribute('aria-expanded') === 'false') advBtn.click();
@@ -3409,7 +3385,6 @@ test("CamPanel exposes Focal/Primes, Aperture/Focus + Eyedropper, Handheld/Step 
     `window.__UX_TEST__.camKeys()[1].p?.[0] === 7.5 && window.__UX_TEST__.camKeys()[1].l?.[1] === 2.25`,
   );
 
-  // 6. Shot Impact hits (Add, update amount, delete)
   await page.evaluate(`(() => {
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent.includes('Add at'));
     btn.click();
@@ -3432,17 +3407,14 @@ test("G toggles Draw in normal and FreeCam, Shift+G toggles Final quality, Q pla
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   })()`);
 
-  // D no longer triggers Draw
   await page.press("d");
   expect(await page.evaluate(`window.__UX_TEST__.get().ink`)).toBeNull();
 
-  // G toggles Draw on & off outside FreeCam
   await page.press("g");
   await waitUntil(`window.__UX_TEST__.get().ink === "pen"`);
   await page.press("g");
   await waitUntil(`window.__UX_TEST__.get().ink === null`);
 
-  // Enter FreeCam: G still toggles Draw and Q toggles Play/Pause without flying
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.S.tools.free.on = true;
@@ -3459,12 +3431,10 @@ test("G toggles Draw in normal and FreeCam, Shift+G toggles Final quality, Q pla
   await page.press("q");
   await waitUntil(`window.__UX_TEST__.get().playing === false`);
 
-  // E seeks back 5 seconds in FreeCam (clamping at 0)
   await page.evaluate(`window.__UX_TEST__.S.t = 7`);
   await page.press("e");
   await waitUntil(`window.__UX_TEST__.S.t === 2`);
 
-  // Shift+G toggles Final quality cleanly without toggling Draw
   const finalBefore = await page.evaluate(`window.__UX_TEST__.finalToggles()`);
   await page.evaluate(
     `document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'G', code: 'KeyG', shiftKey: true, bubbles: true }))`,
@@ -3473,7 +3443,6 @@ test("G toggles Draw in normal and FreeCam, Shift+G toggles Final quality, Q pla
   expect(await page.evaluate(`window.__UX_TEST__.get().ink`)).toBeNull();
   expect(await page.evaluate(`window.__UX_TEST__.get().final`)).toBe(true);
 
-  // One Escape cancels open pinned note + active InkBar + stage .pin dot together even when focus is on InkBar toolbar
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.S.tools.free.on = false;
@@ -3527,7 +3496,6 @@ test("NoteThumb hover shows Before and After side-by-side and clicking Before/Af
   })()`);
   await waitUntil(`document.querySelector('button[aria-label*="Before and After"]')`);
 
-  // Hover trigger to open Before + After popup
   await page.evaluate(`(() => {
     const trig = document.querySelector('button[aria-label*="Before and After"]');
     const r = trig.getBoundingClientRect();
@@ -3559,14 +3527,12 @@ test("NoteThumb hover shows Before and After side-by-side and clicking Before/Af
     hasShiftedTime: true,
   });
 
-  // Click Before -> flies to original cam [1,2,3] at t=2
   await page.evaluate(
     `document.querySelector('[data-note-preview="ba1"] button[aria-label*="before frame"]').click()`,
   );
   await waitUntil(`window.__UX_TEST__.S.t === 2 && window.__UX_TEST__.get().free === true`);
   expect(await page.evaluate(`window.__UX_TEST__.S.tools.free.p.toArray()`)).toEqual([1, 2, 3]);
 
-  // Click After -> flies to AI custom cam [9,4,12] at t=5.5 and fov=40 (re-hover if closeDelay started)
   if (
     !(await page.evaluate(
       `Boolean(document.querySelector('[data-note-preview="ba1"] button[aria-label*="after frame"]'))`,
@@ -3594,7 +3560,6 @@ test("NoteThumb hover shows Before and After side-by-side and clicking Before/Af
     t: 5.5,
   });
 
-  // Clean up test note thumb
   await page.evaluate(`(() => {
     window.__UX_TEST__.set({ uxThumbNote: null, free: false });
     window.__UX_TEST__.S.tools.free.on = false;
@@ -3644,7 +3609,7 @@ test("Transport buttons have visible resting surface+border and bright active to
 
   await page.evaluate(`document.querySelector('button[aria-label="Free camera"]').click()`);
   await waitUntil(`window.__UX_TEST__.get().free === true`);
-  await Bun.sleep(220); // allow 150ms button color transition to settle before sampling computed RGB
+  await Bun.sleep(220);
   const active = await page.evaluate(`(() => {
     const toRgb = (css) => {
       const c = document.createElement('canvas');
@@ -3663,7 +3628,6 @@ test("Transport buttons have visible resting surface+border and bright active to
     };
   })()`);
   expect(active.pressed).toBe("true");
-  // Active toggle uses bright high-luminance sky accent with dark ink, never darker murky navy
   expect(lum(active.bg)).toBeGreaterThan(lum(rest.freeBg) + 40);
   expect(lum(active.fg)).toBeLessThan(40);
 });
@@ -3682,7 +3646,6 @@ test("FilmView starts small, drags freely to saved width without auto-scaling, s
   );
   expect(smallW).toBeLessThanOrEqual(175);
 
-  // Expanding stage must NOT auto-resize FilmView on its own
   await page.evaluate(`window.__UX_TEST__.setStageBox(1200, 680)`);
   await Bun.sleep(60);
   const afterStageGrowW = await page.evaluate(
@@ -3690,7 +3653,6 @@ test("FilmView starts small, drags freely to saved width without auto-scaling, s
   );
   expect(afterStageGrowW).toBe(smallW);
 
-  // Free drag on top-left corner slider grows width continuously and saves to localStorage
   await page.evaluate(`(() => {
     const grip = document.querySelector('figure[aria-label="Film camera"] button[role="slider"]');
     grip.scrollIntoView({ block: "center", inline: "center" });
@@ -3727,7 +3689,6 @@ test("FilmView starts small, drags freely to saved width without auto-scaling, s
   const stored = await page.evaluate(`Number(localStorage.getItem('filmViewWidth'))`);
   expect(stored).toBe(draggedW);
 
-  // Hiding and showing restores exact saved custom width instead of snapping to preset
   await page.evaluate(
     `document.querySelector('button[aria-label="Hide the film camera"]').click()`,
   );
@@ -3741,7 +3702,6 @@ test("FilmView starts small, drags freely to saved width without auto-scaling, s
   );
   expect(restoredW).toBe(draggedW);
 
-  // Shrinking player viewport clamps visually inside bounds without overwriting saved custom width
   await page.evaluate(
     `(() => { window.__UX_TEST__.set({ ratio: "9:16" }); window.__UX_TEST__.S.el.view.style.flex = "none"; window.__UX_TEST__.S.el.view.style.width = "320px"; window.__UX_TEST__.S.el.view.style.height = "260px"; })()`,
   );
@@ -3754,7 +3714,6 @@ test("FilmView starts small, drags freely to saved width without auto-scaling, s
   expect(clampedW).toBeLessThan(draggedW);
   expect(await page.evaluate(`Number(localStorage.getItem('filmViewWidth'))`)).toBe(draggedW);
 
-  // Restoring player viewport recovers the exact saved custom width automatically before Reset
   await page.evaluate(
     `(() => { const v = window.__UX_TEST__.S.el.view; v.style.flex = ""; v.style.width = ""; v.style.height = ""; window.__UX_TEST__.set({ ratio: "16:9" }); })()`,
   );
@@ -3887,7 +3846,6 @@ test("Right-click pin, right-drag stroke, and Transport Note open StageNoteCompo
   await page.evaluate(`window.__UX_TEST__.cancelNote()`);
   await waitUntil(`!document.querySelector('[data-stage-compose]')`);
 
-  // Clicking Transport Note opens StageNoteComposer centered near bottom Stage without forcing sidebar tab
   await page.evaluate(`(() => {
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Note');
     btn?.click();
@@ -3915,7 +3873,6 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
     `document.querySelector('[data-ux-speedcurve] svg[aria-label="Speed curve editor"]')`,
   );
 
-  // Select point 3 (index 2) and click the on-canvas Split icon above its white two-half node
   await page.evaluate(`(() => {
     const p3 = document.querySelector('[data-ux-speedcurve] [role="slider"][aria-label="Speed point 3"]');
     p3?.focus();
@@ -3952,7 +3909,6 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
   expect(splitState.hasReconnectBadge).toBe(true);
   expect(splitState.curveSegments).toBe(2);
 
-  // Move right half UP via ArrowUp: right half rate rises and curves break apart while left half stays at 1x
   await page.evaluate(`(() => {
     const rightHalf = document.querySelector('[data-ux-speedcurve] [role="slider"][aria-label="Speed point 3 outgoing"]');
     rightHalf?.focus();
@@ -3973,7 +3929,6 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
   expect(afterRightPull.pair[1]).toBeGreaterThan(1.05);
   expect(afterRightPull.handles01).toEqual(splitState.beforeHandles01);
 
-  // Reconnect via on-canvas icon merges the two halves back cleanly
   await page.evaluate(`(() => {
     const rejoin = document.querySelector('[data-ux-speedcurve] [role="button"][aria-label="Reconnect speed point 3"]');
     rejoin.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -3983,7 +3938,6 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
   );
   const rejoinedRate = await page.evaluate(`window.__UX_TEST__.get().uxSpeedCurve.curve[2][1]`);
 
-  // Alt+Drag right half of joined point 3 upward: SVG keeps pointer capture across split unmount and commits split
   await page.evaluate(`(() => {
     const svg = document.querySelector('[data-ux-speedcurve] svg[aria-label="Speed curve editor"]');
     const p3 = svg.querySelector('[role="slider"][aria-label="Speed point 3"]');
@@ -4010,7 +3964,6 @@ test("SpeedCurve white halves split cleanly via on-canvas link icon or mouse dra
   expect(altDragPair[0]).toBe(rejoinedRate);
   expect(altDragPair[1]).toBeGreaterThan(1.5);
 
-  // Click Reset -> flat 1x curve with zero splits
   await page.evaluate(`(() => {
     const reset = [...document.querySelectorAll('[data-ux-speedcurve] button')].find((b) => b.textContent?.trim() === 'Reset');
     reset?.click();
@@ -4119,7 +4072,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
   })()`);
 
   await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Camera workspace"]')`);
-  // Advanced starts collapsed: raw Coordinates and Shutter stay hidden in Basic
   expect(
     await page.evaluate(`Boolean(document.querySelector('input[aria-label="Position X"]'))`),
   ).toBe(false);
@@ -4127,7 +4079,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
     await page.evaluate(`Boolean(document.querySelector('input[aria-label="Shutter angle"]'))`),
   ).toBe(false);
 
-  // One-click Match all in shot marks interior keys 1 & 2 cleanly in 1 undo step
   await waitUntil(
     `[...document.querySelectorAll('button')].some((b) => b.textContent?.trim() === 'Match all in shot')`,
   );
@@ -4145,7 +4096,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
     `!window.__UX_TEST__.camKeys()[1].matchSpeed && !window.__UX_TEST__.camKeys()[2].matchSpeed`,
   );
 
-  // Expand Advanced -> Camera rig & Shutter Resets start disabled, enable on edit, then reset cleanly
   await page.evaluate(`(() => {
     const adv = [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Advanced');
     adv.click();
@@ -4186,7 +4136,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
     `!window.__UX_TEST__.shotsData()[0]?.camera && !window.__UX_TEST__.shotsData()[0]?.shutter && [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset camera rig')?.disabled === true && [...document.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Reset shutter')?.disabled === true`,
   );
 
-  // Switch manually to Free cam sub-tab while Free cam is OFF -> shows CTA -> click Enter Free camera (F)
   await page.evaluate(`(() => {
     const tab = [...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Free cam');
     tab.click();
@@ -4200,7 +4149,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
   })()`);
   await waitUntil(`window.__UX_TEST__.get().free === true`);
 
-  // Free cam Pick aim point & Pick focus on frame work via canvas raycast
   await page.evaluate(`window.__UX_TEST__.setStageBox(640, 360)`);
   await page.evaluate(`window.__UX_TEST__.attachAndDrawTimeline()`);
   await page.evaluate(`(() => {
@@ -4232,7 +4180,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
     `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.get().freeFocus === 'number'`,
   );
 
-  // Set Free cam Aperture, Focus, Roll, Sway, Bob, Handheld and click Apply to keyframe
   await page.evaluate(`(() => {
     const fc = window.__UX_TEST__.freecam;
     fc.setFreeFstop(2.8);
@@ -4258,7 +4205,6 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
   expect(applied.handheld).toBe("HANDYCAM_RUN");
   expect(applied.roll).toBeCloseTo(0.2, 3);
 
-  // Single Ctrl+Z undo reverts entire Apply to keyframe cleanly
   await page.evaluate(`window.__UX_TEST__.undo()`);
   await waitUntil(
     `window.__UX_TEST__.camKeys()[1].fstop === undefined && window.__UX_TEST__.camKeys()[1].bob === undefined`,
@@ -4327,7 +4273,6 @@ test("Pre-entry Free Cam FOV syncs with film FOV, ignores stale home.fov after h
     dupResetAllCount: 0,
   });
 
-  // freeDoc.snapshot/restore must restore customFreeFov and freeTouched cleanly after Escape cancel
   const restored = await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     const snap = u.freeDoc.snapshot();
@@ -4380,7 +4325,6 @@ test("Film Cam has single Focus picker, renders point focus chip instead of Auto
   expect(focusUi.dupFocusBtnCount).toBe(0);
   expect(focusUi.focusBtnCount).toBe(1);
 
-  // Clicking Pick focus on frame pauses playback, seeks to keyframe time (t=3), and clears cameraPick
   await page.evaluate(`(() => {
     window.__UX_TEST__.set({ cameraPick: { field: "l", id: "k1", t: 3 } });
     const btn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'));
@@ -4398,7 +4342,6 @@ test("Film Cam has single Focus picker, renders point focus chip instead of Auto
   expect(afterArmFocus.playing).toBe(false);
   expect(afterArmFocus.cameraPick).toBeNull();
 
-  // Clicking Pick aim point clears pickFocus
   await page.evaluate(`(() => {
     const aimBtn = [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick aim point'));
     aimBtn?.click();
@@ -4527,7 +4470,6 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
   })()`);
   await waitUntil(`document.querySelector('input[aria-label="Free cam Position X"]')`);
 
-  // Ensure rememberFreeView baseline is already pushed so subsequent flyCam/moveCam does NOT bump freeHistoryRev
   await page.evaluate(`window.__UX_TEST__.freecam.rememberFreeView()`);
   await Bun.sleep(50);
 
@@ -4537,7 +4479,6 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
     lx: document.querySelector('input[aria-label="Free cam Aim X"]')?.value,
   })`);
 
-  // 1. Canvas wheel dolly updates Position Z live
   await page.evaluate(`(() => {
     const c = window.__UX_TEST__.S.el.canvas;
     c.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true }));
@@ -4546,7 +4487,6 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
     `document.querySelector('input[aria-label="Free cam Position Z"]')?.value !== ${JSON.stringify(before.pz)}`,
   );
 
-  // 2. Canvas left-drag look updates Aim X live
   await page.evaluate(`(() => {
     const c = window.__UX_TEST__.S.el.canvas;
     const r = c.getBoundingClientRect();
@@ -4559,7 +4499,6 @@ test("Free Cam Advanced Position & Aim live-sync on canvas drag, wheel dolly, an
     `document.querySelector('input[aria-label="Free cam Aim X"]')?.value !== ${JSON.stringify(before.lx)}`,
   );
 
-  // 3. Flight (flyCam) updates Position X live
   const beforeFlyX = await page.evaluate(
     `document.querySelector('input[aria-label="Free cam Position X"]')?.value`,
   );
@@ -4740,7 +4679,6 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     `document.querySelector('input[aria-label="Focal length (mm)"]')?.value`,
   );
 
-  // Seek to t=0: seekExact runs BEFORE S.render updates camera.fov, then wake("rendered") runs AFTER
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.seekExact(0);
@@ -4756,7 +4694,6 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
   );
   expect(Number(mmAt45)).toBeLessThan(Number(mmAt28));
 
-  // Seek back to t=3: single seek updates immediately to 28 and restores wider focal length
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.seekExact(3);
@@ -4768,7 +4705,6 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
     await page.evaluate(`document.querySelector('input[aria-label="Focal length (mm)"]')?.value`),
   ).toBe(mmAt28);
 
-  // During playback (S.playing = true), rapid wake("render") + wake("rendered") bursts stay throttled (~8Hz cap)
   const throttleCheck = await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
     // Wait for any prior seek's throttle window (120ms) to expire before testing the leading edge
@@ -4803,7 +4739,6 @@ test("Pre-entry Free Cam FOV, focal length, and Reset disabled state update on t
   expect(throttleCheck.afterWindow).toBe("41");
   await waitUntil(`document.querySelector('input[aria-label="Free cam FOV"]')?.value === "28"`);
 
-  // With customFreeFov=true (45°), Resets (FOV + Reset all) are enabled at t=3 (def=28) and immediately disable on seeking to t=0 (def=45)
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.freecam.setFreeFov(45);
@@ -4869,7 +4804,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
     `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Hold 1 s')) && [...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick focus on frame'))`,
   );
 
-  // 1. Arming Film Cam Pick focus exits Free Cam and measures from Film Cam position (~5.1m), NOT Free Cam (~15m)
   await page.evaluate(`(() => {
     [...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click();
   })()`);
@@ -4891,7 +4825,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
   expect(filmFocusDist).toBeGreaterThan(4);
   expect(filmFocusDist).toBeLessThan(7);
 
-  // 2. Switching to Free cam tab clears armed Film Cam pickFocus
   await page.evaluate(
     `[...document.querySelectorAll('button')].find((b) => b.textContent?.includes('Pick focus on frame'))?.click()`,
   );
@@ -4906,7 +4839,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
     await page.evaluate(`window.__UX_TEST__.S.el.canvas.className.includes('cursor-crosshair')`),
   ).toBe(false);
 
-  // 3. Locking key clears Film Cam pickFocus, and key deletion preserves ID-resolved target
   await page.evaluate(
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Camera workspace"] button')].find((b) => b.textContent?.trim() === 'Film cam')?.click()`,
   );
@@ -4926,7 +4858,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
   );
   await waitUntil(`window.__UX_TEST__.camKeys()[1].locked !== true`);
 
-  // Arm on k2, delete k1 so k2 shifts index 2 -> 1, then click Cube -> updates k2 cleanly
   await page.evaluate(`(() => {
     window.__UX_TEST__.S.t = 5;
     window.__UX_TEST__.setKey(2);
@@ -4952,7 +4883,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
     `window.__UX_TEST__.get().pickFocus === null && typeof window.__UX_TEST__.camKeys().find((k) => k.id === 'k2')?.focus === 'number'`,
   );
 
-  // 4. Exiting Free Cam (F) clears pickFocus === 'free' & cameraPick.target === 'free'
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.freecam.resetFreeLensAll();
@@ -4985,7 +4915,6 @@ test("Film Cam Pick focus exits Free Cam and measures from Film Cam pose; tab/ke
   })()`);
   expect(await page.evaluate(`window.__UX_TEST__.get().freeFocus`)).toBeUndefined();
 
-  // Also test cameraPick.target === 'free' clears on F and on tab switch to Film cam
   await page.evaluate(`window.__UX_TEST__.freecam.setFree(true)`);
   await waitUntil(
     `[...document.querySelectorAll('button')].some((b) => b.textContent?.includes('Pick aim point'))`,
@@ -5036,7 +4965,6 @@ test("Segmented Focus mode stays Tab-reachable in point mode and Target mode wor
   ], 0)`);
   await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Focus mode"]')`);
 
-  // Tab stop on first button when value === "point" + ArrowRight navigates cleanly from idx 0 to Manual (idx 1)
   const tabIndices = await page.evaluate(
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].map((b) => b.tabIndex)`,
   );
@@ -5047,7 +4975,6 @@ test("Segmented Focus mode stays Tab-reachable in point mode and Target mode wor
     btns[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
   })()`);
   await waitUntil(`typeof window.__UX_TEST__.camKeys()[0].focus === 'number'`);
-  // Restore point mode before exercising Target click from point mode
   await page.evaluate(`window.__UX_TEST__.setCamData([
     { id: "k0", t: 0, p: [0, 2, 6], l: [0, 1, 0], fov: 50, focus: { point: [1, 2, 3], label: "Wall" } },
   ], 0)`);
@@ -5055,13 +4982,11 @@ test("Segmented Focus mode stays Tab-reachable in point mode and Target mode wor
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].map((b) => b.tabIndex).join(',') === '0,-1,-1'`,
   );
 
-  // Click Target from point mode when targets.length === 0
   await page.evaluate(
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Target')?.click()`,
   );
   await waitUntil(`document.querySelector('input[aria-label="Focus target name"]')`);
 
-  // Switch to Manual (meters), then click Target again when targets.length === 0
   await page.evaluate(
     `[...document.querySelectorAll('[role="radiogroup"][aria-label="Focus mode"] button')].find((b) => b.textContent?.trim() === 'Manual')?.click()`,
   );

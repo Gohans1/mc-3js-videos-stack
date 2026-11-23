@@ -1,12 +1,14 @@
-// Audio-Lock Word & Silence-Gap GPS: reads the current Phrase Bricks on src/timeline/audio.json plus Speed/Freeze/Cuts
-// in src/timeline/timing.json and outputs the exact heard seconds of every line, word, and silent breathing gap.
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, envTypos, jsonFile, needFilm } from "../../packages/live-studio/src/cli.mjs";
 import { voiceMapOf } from "../../packages/live-studio/src/film.mjs";
-import { isTornByReorder } from "../../packages/live-studio/src/layer-timing.mjs";
+import {
+  compileLayerTiming,
+  isTornByReorder,
+} from "../../packages/live-studio/src/layer-timing.mjs";
+import { LINKAGE_KINDS } from "../../packages/live-studio/src/linkage.mjs";
 import {
   type NarrationAudio,
   narrationClipLength,
@@ -15,12 +17,7 @@ import {
 } from "../../packages/live-studio/src/narration.ts";
 import { openSound, pickSoundClip, probeAudio } from "../../packages/live-studio/src/sound.mjs";
 import { mapVoice } from "../../packages/live-studio/src/timing-data.mjs";
-import {
-  clockForTimeline,
-  layerDuration,
-  setTiming,
-  timingClock,
-} from "../../packages/live-studio/src/timing-state.mjs";
+import { compileTiming } from "../../packages/live-studio/src/timing.mjs";
 import {
   assertInsideDir,
   planVoicePlacements,
@@ -149,11 +146,26 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
   const sourceDur = hasEnd
     ? heard(edit.end)
     : Math.max(maxNarrDur, ...projected.map((l) => l.e), camEnd);
-  setTiming(timing, Math.max(0.1, sourceDur));
-  const clock = clockForTimeline("voice");
-  const filmDuration = Math.max(clock.duration, timingClock.duration, layerDuration());
-  // speed: how much faster than spoken the line plays, when the voice follows the picture's Speed (timing.json layerKinds.voice)
-  // a Freeze inside a line splits it into pieces, so each piece's pace comes from its own source span
+  const clampedSourceDur = Math.max(0.1, sourceDur);
+  const pictureClock = compileTiming(timing, clampedSourceDur);
+  const layerCache = new Map<string, ReturnType<typeof compileLayerTiming>>();
+  const compiledLayers = LINKAGE_KINDS.map((kind) => {
+    const history = timing.layerKinds?.[kind] ?? timing.layers;
+    if (!history) return { kind, clock: pictureClock };
+    const key = JSON.stringify([clampedSourceDur, history]);
+    let compiled = layerCache.get(key);
+    if (!compiled) {
+      compiled = compileLayerTiming(timing, clampedSourceDur, kind);
+      layerCache.set(key, compiled);
+    }
+    return { kind, clock: compiled };
+  });
+  const clock = compiledLayers.find((entry) => entry.kind === "voice")?.clock ?? pictureClock;
+  const filmDuration = Math.max(
+    clock.duration,
+    pictureClock.duration,
+    ...compiledLayers.map((entry) => entry.clock.duration),
+  );
   const heardLines = !rawAudio?.narration
     ? mapVoice(projected, clock)
     : narrClips.flatMap((c) => {
@@ -247,7 +259,6 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
       afterLine: lines.length - 1,
     });
 
-  // takes newer than the assembled voice: their words are read at the old take's place, cut to its length
   const takesDir = join(root, "voice/takes");
   const unplaced =
     existsSync(voiceWav) && existsSync(takesDir)
@@ -261,7 +272,6 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
           .sort()
       : [];
 
-  // takes made but no voice assembled from them yet: generating again would spend credits for nothing
   const unlaid =
     !voiceOff &&
     !voiceMuted &&

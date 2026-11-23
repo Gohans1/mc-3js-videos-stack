@@ -85,7 +85,6 @@ export async function setupVault({
   log = console.log,
 } = {}) {
   const args = cliArgs(HELP, ["--vault-zip FILE", "--sound-zip FILE"], 0, argv);
-  // Archive paths or URLs passed on each machine and never written into the (public) repo
   const zipArgs = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--vault-zip" || args[i] === "--sound-zip") {
@@ -131,7 +130,6 @@ export async function setupVault({
       });
       for (const p of restored.parts) restoredParts.add(p);
     } finally {
-      // a downloaded zip has done its job (or failed validation): never leave orphan GBs in vault/
       if (isLink) rmSync(zip, { force: true });
     }
   }
@@ -150,7 +148,6 @@ export async function setupVault({
   const hasMcSound =
     restoredParts.has("mc-sound") && existsSync(join(local, "mc-sound/SOURCES.json"));
 
-  // Archives already holding vault/sound skip raw packs (and skip WAV/peaks rebuild when SOURCES + PEAKS are intact)
   if (hasSoundComplete) {
     log(
       "Sound vault restored from archive (skipping raw sound packs and rebuild; run bun run setup:sound only to add new packs).",
@@ -173,11 +170,9 @@ export async function setupVault({
         `raw sound packs (Kenney/Sonniss): create ${external} or set MC_VAULT_EXTERNAL, then bun run fetch:sound-raw (or restore with --vault-zip)`,
       );
     }
-    // No time limit: a first build decodes every raw pack (long on a hard disk) and a stopped one resumes where it was
     invokeScript("build_sound_vault.mjs");
   }
 
-  // Archives holding mc-sound skip downloading every Modrinth pack (~600 MB) again
   if (hasMcSound) {
     log("Minecraft sound vault restored from archive (skipping Modrinth sound downloads).");
   } else {

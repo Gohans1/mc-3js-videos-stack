@@ -1,4 +1,3 @@
-// One ranked list of what to look at in a whole draft; HELP below says how to run it
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
@@ -82,7 +81,6 @@ const run = (cmd, argv, onData) =>
     });
   });
 
-// one grey frame per quarter second: its detail and its brightness
 const STEP = 0.25;
 const LONG = 0.75;
 const picture = filmPicture(PROJECT, video) ?? probed;
@@ -152,8 +150,6 @@ try {
 }
 clearTimeout(deadline);
 
-// a pop the reference lacks first, one it makes too last; one never weighed (no reference, or past its end) between.
-// A freeze is often a still the film means
 const popWeight = (f) => {
   if (f.kind !== "JUMP" && f.kind !== "FLASH") return f.kind === "FROZEN" ? 2 : 3;
   if (f.reference?.ours) return 5;

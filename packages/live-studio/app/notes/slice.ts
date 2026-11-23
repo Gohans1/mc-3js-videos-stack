@@ -1,4 +1,3 @@
-// The notes' part of the page state (core/store.ts): the notes, the one being written and what is drawn on it
 import type { NoteFreeView } from "./note-card-meta";
 import type { NoteView } from "./note-views-model";
 
@@ -12,10 +11,10 @@ export interface Fix {
   what: string;
   checkpoint?: string;
   at: string;
-  ask?: boolean; // a question from the AI, not a fix: it wants an answer, not an approval
-  after?: string; // saved proof frame path (notes/img/<id>_fix<N>.<ext>) when AI fixed a visual issue
-  noAfterReason?: string; // explanation recorded when --no-after was passed instead of an image
-  t?: number; // optional custom heard second when the fixed target moved in time
+  ask?: boolean;
+  after?: string;
+  noAfterReason?: string;
+  t?: number;
   cam?: {
     p: number[];
     l: number[];
@@ -24,7 +23,6 @@ export interface Fix {
     wave?: number;
   };
 }
-// Where a note stands (src/note-state.mjs, which decides every change): to fix, waiting for the creator's check, approved
 export type NoteState = "open" | "check" | "done";
 export interface Remember {
   scope: "film" | "all";
@@ -47,19 +45,17 @@ export interface Note {
   img?: string;
   fixes?: Fix[];
   state?: NoteState;
-  asks?: { text: string; at: string }[]; // the creator's words back after a fix or a question
-  edits?: { at?: string; was: string }[]; // earlier creator wordings before an edit
+  asks?: { text: string; at: string }[];
+  edits?: { at?: string; was: string }[];
   approved?: string;
-  remember?: Remember; // the creator asked the AI to keep what this note teaches
-  learned?: { what: string; scope: Remember["scope"]; at: string }; // and what the AI kept, where
+  remember?: Remember;
+  learned?: { what: string; scope: Remember["scope"]; at: string };
   [key: string]: unknown;
 }
-// A picture the creator pasted into the note being written (refs.ts): src as pasted (made a JPEG, its long side at most
-// REF_SIDE), the strokes drawn on it in its pixels (RefSketch.tsx), url the two flattened, which is what is sent
 export interface RefStroke {
   color: string;
   size: number;
-  pts: [number, number, number][]; // x, y, pressure
+  pts: [number, number, number][];
 }
 export interface RefPic {
   id: string;
@@ -67,7 +63,6 @@ export interface RefPic {
   strokes: RefStroke[];
   url: string;
 }
-// The note being written: either a fresh note on a moment/pin ("create") or editing an existing note's text ("edit")
 export interface StageAnchor {
   x: number;
   y: number;
@@ -182,8 +177,6 @@ export const normalizeStoredCompose = (raw: unknown): Compose | null => {
     ...(typeof c.spoken === "string" ? { spoken: c.spoken } : {}),
   };
 };
-// What a drawn note holds (ink.ts): strokes in fractions of the picture, each at the film second it was drawn on. A path is
-// one point per moment ("here at 1:10, then here at 1:12"); hits name what lies under its key points, as a pin's tap does
 export type InkKind = "pen" | "arrow" | "box" | "path";
 export interface Hit {
   what: string;
@@ -197,7 +190,6 @@ export interface Mark {
   hits?: Hit[];
 }
 
-// The list's search, status pills, facets and sort (NoteList.tsx): narrows by status, shot, attachments, thread state and sort order
 export type ReviewTab = NoteState | "asking";
 export type NoteStatusFilter = "all" | NoteState | "asking";
 export type NoteScope = "all" | "shot";
@@ -226,14 +218,14 @@ export interface NotesSlice {
   noteSaving: boolean;
   draft: string;
   replyDrafts: ReadonlyMap<string, string>;
-  refs: RefPic[]; // the note being written's pasted pictures
+  refs: RefPic[];
   nearNote: string | null;
-  ink: InkKind | null; // the drawing tool in hand, null when a tap on the picture pins a note
+  ink: InkKind | null;
   inkDrawing: boolean;
-  inkSaid: string; // what is drawn on the note being written ("" when nothing): "3 strokes across 2 moments: 0:54 → 0:56"
-  review: boolean; // the Review room (ReviewRoom.tsx) in place of the timeline and the panels
+  inkSaid: string;
+  review: boolean;
   reviewTab: ReviewTab;
-  reviewPick: string | null; // the note open in the room
+  reviewPick: string | null;
 }
 export const notesSlice: NotesSlice = {
   noteReturn: null,

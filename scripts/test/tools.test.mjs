@@ -9,7 +9,6 @@ test("a new machine is told every tool it lacks before setup starts, the ones se
   assert.deepEqual(later, [
     "aria2c (Sonniss torrent packs, bun run fetch:sound-raw): scoop install aria2",
   ]);
-  // a new Windows without scoop learns that first, in the list setup cannot do without only when it stops anyway
   has.delete("scoop");
   has.add("ffmpeg");
   assert.deepEqual(

@@ -1,4 +1,3 @@
-// Pure data transformations for Notion-style Notes views (Board, Table, List, Gallery, Timeline, Calendar, Feed, Chart).
 import { noteShotTitle } from "./note-card-meta";
 import type { Placed } from "./notes";
 import type {
@@ -73,7 +72,6 @@ export const combineFilteredNotes = (
     : []),
 ];
 
-// Enforces note-state.mjs transition rules for drag/move actions in Board view.
 export type BoardTransition = "approve" | "feedback" | "reopen";
 export const boardTransition = (
   from: NoteState,
@@ -190,7 +188,6 @@ export interface PackedTimelineItem {
   widthPct: number;
 }
 
-// Packs chronological items into non-overlapping horizontal sub-lanes inside a Shot row.
 export const packTimelineRows = (
   items: readonly TimelineItem[],
   duration: number,
@@ -344,7 +341,6 @@ export const buildCalendarMonth = (
   }
   const todayKey = localDateKey(today.toISOString());
   const firstOfMonth = new Date(year, month, 1);
-  // Monday-first grid (0 = Mon ... 6 = Sun), matching Notion calendar default
   const startOffset = (firstOfMonth.getDay() + 6) % 7;
   const start = new Date(year, month, 1 - startOffset);
 
@@ -553,7 +549,6 @@ export type NoteActivitySource = Pick<
   "at" | "fixes" | "asks" | "edits" | "approved" | "learned"
 >;
 
-// Maximum timestamp across every note lifecycle event so "Recent activity" never sorts by an older superseded fix.
 export const latestNoteActivityMs = (note: NoteActivitySource): number => {
   let latest = 0;
   const bump = (raw: string | undefined) => {
@@ -572,7 +567,6 @@ export const latestNoteActivityMs = (note: NoteActivitySource): number => {
 
 export type NoteThreadSource = Pick<Note, "fixes" | "asks" | "edits">;
 
-// Single partition shared by card/list/board callouts and History disclosure so nothing duplicates or hides creator follow-ups.
 export const summarizeNoteThread = (
   note: NoteThreadSource,
   state: NoteState,
@@ -744,7 +738,6 @@ export interface NoteInlineCue {
   text: string;
 }
 
-/** Single scannable status cue for compact Table and List rows, matching NoteFollowups priority. */
 export const getNoteInlineCue = (n: Note, state: NoteState): NoteInlineCue | null => {
   const { activeAsk, activeFix } = summarizeNoteThread(n, state);
   if (state === "check" && activeFix?.ask && activeFix.what) {

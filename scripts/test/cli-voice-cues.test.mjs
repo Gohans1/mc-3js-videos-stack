@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
+import { setTiming, timingClock } from "../../packages/live-studio/src/timing-state.mjs";
 import { voiceFileOf } from "../../packages/live-studio/src/voice-map.mjs";
 import { whatsAt } from "../at.ts";
 import { buildVoiceCues } from "../voice/cues.ts";
@@ -372,7 +373,6 @@ test("muted voice tracks omit muted bricks cleanly, exclude them from omitted-en
   assert.match(cliMuted.stderr, /muted.*voice/);
   assert.doesNotMatch(cliMuted.stderr, /voice:gen/);
 
-  // Partial mute: keep audible brick on voice_a, ignore muted brick duration on voice_b
   writeFileSync(join(dir, "sound/sfx/short_narr.wav"), makeWav(5));
   put("src/timeline/audio.json", {
     narration: "short_narr",
@@ -455,7 +455,6 @@ test("sub-millisecond edit.end truncation drops 0ms phantom slices instead of re
   assert.equal(r.status, 0);
   assert.doesNotMatch(r.stderr, /another speed/);
 
-  // Line kept (>= 1ms) trims sub-ms final word cleanly without breaking speed
   put("src/edit.json", { end: 2.5004 });
   put("renders/live/voice_map.json", {
     lines: [
@@ -532,7 +531,6 @@ test("keeps audio words on their file clock across narrative warp, reordering, s
   assert.equal(reordered.lines[1].e, 5.5);
   assert.equal(reordered.lines[1].speed, 1);
 
-  // Nested overlapping Phrase Bricks preserve non-negative overall pace span
   put("src/edit.json", { end: 10 });
   put("src/timeline/timing.json", {});
   put("renders/live/voice_map.json", {
@@ -693,4 +691,22 @@ test("finite narration bricks do not acquire phrases outside their mapped playba
       [2.1, 2.8],
     ],
   );
+});
+
+test("buildVoiceCues does not mutate global timingClock singleton state", (t) => {
+  const { dir, put } = makeFilm(t, "pure-timing-clock");
+  writeFileSync(join(dir, "renders/live/full_voice.wav"), makeWav(4));
+  put("src/edit.json", { end: 4 });
+  put("renders/live/voice_map.json", {
+    lines: [{ text: "hello", s: 0.1, e: 0.8, words: [{ w: "hello", s: 0.1, e: 0.8 }] }],
+  });
+
+  t.after(() => setTiming({}, 0));
+  setTiming({ freezes: [{ at: 1, duration: 7 }] }, 42);
+  const beforeSource = timingClock.sourceDuration;
+  const beforeDur = timingClock.duration;
+  const cues = buildVoiceCues(dir);
+  assert.equal(cues.lines.length, 1);
+  assert.equal(timingClock.sourceDuration, beforeSource);
+  assert.equal(timingClock.duration, beforeDur);
 });

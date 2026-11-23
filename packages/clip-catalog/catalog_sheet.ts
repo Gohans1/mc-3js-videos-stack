@@ -3,12 +3,6 @@ import { unzipSync } from "fflate";
 import { canvas, config, done, log, still } from "live-studio/lab";
 import { loadClip } from "mc-actor/clips";
 import { loadRig, makePlayer } from "mc-actor/player";
-// Lab: one still per clip for checking the catalogue by eye: 8 moments of the clip on Steve (baked as the film does,
-// mc-actor/clips), spread evenly from its first to its last frame, each from his front-left at 3/4 over a floor grid (1 m
-// squares), framed on his body, so posture, floor contact and hands read at a glance. renders/sheet_<lib>__<clip>.jpg;
-// clip-catalog/catalog_review.py captions them with their tags and stacks them into review pages. Many clips per run (one build):
-// clip-catalog/catalog_review.sh.
-// bun run render stills --entry ../../packages/clip-catalog/catalog_sheet.ts --lab lib=mixamo --lab clips=a,b,c
 import * as THREE from "three";
 
 (async () => {
@@ -62,7 +56,6 @@ import * as THREE from "three";
       for (let k = 0; k < 8; k++) {
         steve.setPose(clip.frames[Math.round((k * (n - 1)) / 7)]);
         steve.g.updateMatrixWorld(true);
-        // from his front-left at 3/4, wherever he faces now (a turn would otherwise show his back)
         fwd
           .set(0, 0, 1)
           .applyQuaternion(q.copy(steve.bones.root.getWorldQuaternion(q)).multiply(rootRest))

@@ -61,7 +61,6 @@ export const changes = (base, next, path = [], orderedRows = false) => {
     return [...new Set([...Object.keys(base ?? {}), ...Object.keys(next)])].flatMap((k) =>
       changes(base?.[k], Object.hasOwn(next, k) ? next[k] : undefined, [...path, k]),
     );
-  // Arrays without persistent identities are one editing unit; indices are not identities.
   return [{ path, ...(next === undefined ? { remove: true } : { value: next }) }];
 };
 const child = (data, key) =>

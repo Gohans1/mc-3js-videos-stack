@@ -172,7 +172,6 @@ function newLightKeyAt(t: number, state: LightsState, clearPreset = false): Proj
   return key;
 }
 
-/** Add a lighting keyframe at `t` holding the current evaluated lighting state. */
 export function addLightKeyAt(t = S.t) {
   if (findLightKeyAt(t).exactIndex !== null) return;
   const key = newLightKeyAt(t, lightsSampleAt(t));
@@ -182,7 +181,6 @@ export function addLightKeyAt(t = S.t) {
   say(`Added lighting key at ${stamp(key.t)}`);
 }
 
-/** Snapshot evaluated/edited state onto an existing keyframe or insert at `t`. */
 export function mutateLightAt(
   t: number,
   mutate: (state: LightsState, key: LightKey) => void,
@@ -221,7 +219,6 @@ export function removeLightKeyAt(index: number | null) {
   say(`Deleted lighting key at ${stamp(removedT)}`);
 }
 
-/** Update an existing keyframe's values from the current evaluated state at `t`. */
 export function updateLightKey(index: number | null, t = S.t) {
   if (index === null || !keysCache[index]) return;
   const here = lightsSampleAt(t);

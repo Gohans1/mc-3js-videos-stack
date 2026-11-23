@@ -1,4 +1,3 @@
-// Single-clip HTML5 Audio audition state machine with async error and race recovery.
 export interface AuditionAudioLike {
   src: string;
   paused: boolean;
@@ -102,9 +101,7 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
       if (range && (!resuming || audio.currentTime < range.from || audio.currentTime >= range.to)) {
         try {
           audio.currentTime = range.from;
-        } catch {
-          /* seek when metadata arrives */
-        }
+        } catch {}
       }
       const pending = audio.play();
       if (pending && typeof pending.catch === "function") {
@@ -179,7 +176,6 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
 
   audio.addEventListener("ended", () => {
     stopAuditionTick();
-    // Keep target selected so short clips stay docked, replayable, and scrubbable until stopped.
     playing = false;
     audio.currentTime = 0;
     notifyAudition();

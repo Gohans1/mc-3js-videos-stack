@@ -1,4 +1,3 @@
-// app/lessons/lessons.ts: dual-scope store drafts, concurrent load/save races, conflicts, retry, and persistent view mode.
 import assert from "node:assert/strict";
 import { after, beforeEach, test } from "node:test";
 
@@ -16,7 +15,6 @@ const flushMicrotasks = async () => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
 };
 
-// Seed legacy bare keys to verify migration to "all:<path>" on load
 localStorage.setItem(
   "lessonDrafts",
   JSON.stringify({
@@ -294,7 +292,6 @@ test("saveLesson 409 adopts AI version while keeping prior seen snapshot for dif
   assert.equal(lessons.getState().open, null);
   assert.equal(lessons.getState().aiNotice?.removed, true);
 
-  // Non-null 409 on a brand-new topic absent from files[] inserts the AI file automatically
   await saveLesson("all:ai-created.md");
   assert.equal(lessons.getState().edits["all:ai-created.md"], undefined);
   assert.deepEqual(
@@ -676,18 +673,15 @@ test("deleteLesson, loadLessons, and conflict removal clamp stale nested folder 
   openLesson("film:craft/sub/deep.md");
   assert.deepEqual(lessons.getState().folder, ["craft", "sub"]);
 
-  // Deleting last file inside craft/sub shrinks folder to still-valid ancestor ["craft"]
   const delDeep = await deleteLesson("film:craft/sub/deep.md");
   assert.equal(delDeep.removed, true);
   assert.equal(lessons.getState().open, null);
   assert.deepEqual(lessons.getState().folder, ["craft"]);
 
-  // Deleting the remaining file in craft clears folder completely to []
   const delSib = await deleteLesson("film:craft/sibling.md");
   assert.equal(delSib.removed, true);
   assert.deepEqual(lessons.getState().folder, []);
 
-  // Re-open nested folder via loadLessons, then remove it externally via loadLessons & 409 conflict removal
   getHandler = async () =>
     Response.json({
       dir: "lessons",
@@ -707,7 +701,6 @@ test("deleteLesson, loadLessons, and conflict removal clamp stale nested folder 
   await loadLessons();
   assert.deepEqual(lessons.getState().folder, []);
 
-  // External removal discovered via saveLesson 409 conflict (tag: null) also clamps folder
   getHandler = async () =>
     Response.json({
       dir: "lessons",

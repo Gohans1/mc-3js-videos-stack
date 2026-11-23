@@ -312,7 +312,6 @@ describe("PortsPanel read-only rendering and URL safety", () => {
     assert.ok(localLink, "studio URL must remain a native link");
     assert.match(localLink, />http:\/\/localhost:4325</, "the URL itself opens the studio");
 
-    // URL safety & read-only guarantees
     assert.equal(html.includes("javascript:"), false, "must never render javascript: URLs");
     assert.equal(
       />\s*(Kill|Stop|Start|Restart)\s*</i.test(html),

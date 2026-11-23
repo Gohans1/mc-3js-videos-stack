@@ -182,9 +182,7 @@ export const openVoicePlayground = (opts = {}) => {
         ...(payload.item ? { item: { ...withChargeEvidence(payload.item), scope } } : {}),
         scope,
       });
-    } catch {
-      /* ignore SSE listener errors */
-    }
+    } catch {}
   };
 
   const {
@@ -604,9 +602,7 @@ export const openVoicePlayground = (opts = {}) => {
     if (srtUrl) {
       try {
         srtText = await downloadSrtText(srtUrl, apiBase, signal);
-      } catch {
-        /* keep generation usable even if optional SRT fails */
-      }
+      } catch {}
     }
     signal?.throwIfAborted();
     const audio = await archiveAudio(idBase, ext, audioBytes);
@@ -1983,9 +1979,7 @@ export const openVoicePlayground = (opts = {}) => {
         if (!source.sourceFile && !job.remoteTaskId && savedSourceFile) {
           try {
             removeSourceFileIfUnused(savedSourceFile);
-          } catch {
-            /* best effort cleanup */
-          }
+          } catch {}
         }
         throw err;
       }

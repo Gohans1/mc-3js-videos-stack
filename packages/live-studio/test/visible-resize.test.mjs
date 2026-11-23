@@ -32,7 +32,6 @@ describe("timeline visibility cache and ResizeObserver ordering", () => {
 
       expect(visible.isElementShown(el)).toBe(false);
 
-      // Simulate DOM becoming visible (e.g. Tailwind `hidden` removed)
       shownRects = 1;
       expect(visible.isElementShown(el)).toBe(false);
 
@@ -42,7 +41,6 @@ describe("timeline visibility cache and ResizeObserver ordering", () => {
       visible.invalidateShown();
       expect(visible.isElementShown(el)).toBe(true);
 
-      // Re-hide and test ResizeObserver batch ordering: callback must see isElementShown(el) === true!
       shownRects = 0;
       visible.invalidateShown(el);
       expect(visible.isElementShown(el)).toBe(false);

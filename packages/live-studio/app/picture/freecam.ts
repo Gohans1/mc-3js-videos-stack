@@ -1,5 +1,3 @@
-// The free camera: looking around the scene without changing the film. Held like a camera: turning stays where you stand,
-// because orbiting a target leaves these small rooms at once. It flies like Minecraft's creative flight (flight.ts)
 import { clampFov, fovOf, MAX_FOV, MIN_FOV } from "film-kit/lens";
 import type { FocusTargetSpec } from "film-stage/camera";
 import type { FreeCam } from "film/scene";
@@ -30,7 +28,6 @@ const touchFree = (moved = true) => {
 };
 
 export const flight = createFlight(() => wake("render"));
-// One frame's flying, by the time that passed since the last
 export const fly = (dt: number) => {
   if (S.tools?.free.on && !get().freeLocked) {
     const d = flight.step(dt, get().flySpeed);
@@ -208,7 +205,6 @@ export const moveCam = (forward: number, right: number, up: number) => {
   S.viewMoved = true;
   S.finalAt = -1;
 };
-// The flying keys' move (picture/flight.ts), Minecraft's: forward and right level with the floor whatever the pitch, up straight up
 export const flyCam = (forward: number, right: number, up: number) => {
   if (get().freeLocked) return;
   const f = S.tools!.free;
@@ -224,9 +220,6 @@ export const flyCam = (forward: number, right: number, up: number) => {
   S.viewMoved = true;
   S.finalAt = -1;
 };
-// The first free camera after a page load starts at the film's home spot (tools.home), so a reload never leaves the
-// creator wherever the playhead happened to be; later ones start from the shot's own camera, and so does one a drag on the
-// picture turns on (here), which must turn the view seen
 export const FREE_LENS_DEFAULTS = {
   fov: 60,
   roll: 0,
@@ -509,7 +502,8 @@ export const readLiveFreeView = (): FreeView | undefined => {
   const view = readFreeView(S.tools?.free);
   if (!view) return undefined;
   const { p, l, previewEffects: _, ...lens } = view;
-  const round = ([x, y, z]: FreeView["p"]) => [+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)] as const;
+  const round = ([x, y, z]: FreeView["p"]) =>
+    [+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)] as const;
   return { p: round(p), l: round(l), ...lens };
 };
 

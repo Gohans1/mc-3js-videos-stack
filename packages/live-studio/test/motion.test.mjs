@@ -16,7 +16,7 @@ test("a smoothstep move peaks in its middle and has no faults", () => {
   const m = measure(track(0, 2, (t) => smooth((t - 0.5) / 1) * 2));
   assert.equal(m.moves.length, 1);
   assert.ok(Math.abs(m.moves[0].peakAt - 0.5) < 0.06);
-  assert.ok(Math.abs(m.peak.v - 3) < 0.05); // smoothstep peaks at 1.5x the mean speed, 2 m in 1 s
+  assert.ok(Math.abs(m.peak.v - 3) < 0.05);
   assert.deepEqual([m.pops.length, m.stops.length], [0, 0]);
 });
 
@@ -59,7 +59,6 @@ test("a cut is the picture changing, not a pop", () => {
   assert.ok(Math.max(...m.speed) < 0.31);
 });
 
-// a camera turning about the vertical axis: yaw(t) in degrees, a 60° tall view at 16:9 (about 91° wide)
 const pan = (from, to, yaw, fov = () => 60) => {
   const out = [];
   for (let t = from; t <= to + 1e-9; t += DT) {
@@ -71,7 +70,7 @@ const pan = (from, to, yaw, fov = () => 60) => {
 
 test("a camera that only turns is measured in degrees a second and frame widths, not reported as still", () => {
   const m = turns(pan(0, 2, (t) => smooth((t - 0.5) / 1) * 50));
-  assert.ok(Math.abs(m.peak.v - 75) < 1, `peak ${m.peak.v}`); // 50° in 1 s, smoothstep peaks at 1.5x
+  assert.ok(Math.abs(m.peak.v - 75) < 1, `peak ${m.peak.v}`);
   const out = turnReport(m).join("\n");
   assert.match(out, /turns 75°\/s at 1\.00 s/);
   assert.match(out, /a frame width in 1\.2 s: faster than the 7-second rule/);
@@ -124,7 +123,6 @@ test("explicit impulse windows exempt deliberate trauma shakes while still catch
   const impulses = [{ from: 0.4, to: 0.6, kind: "hit" }];
   const m = measure(shakeCam, [], impulses);
   const tm = turns(shakeCam, [], impulses);
-  // Only the real pop outside the impulse window (~1.20 s) is flagged
   assert.equal(m.pops.length, 1);
   assert.ok(Math.abs(m.pops[0].t - 1.2) < 0.03, `expected pop near 1.2, got ${m.pops[0].t}`);
   assert.equal(tm.pops.length, 0);
@@ -135,7 +133,6 @@ test("explicit impulse windows exempt deliberate trauma shakes while still catch
   const lines = [...report("cam", shakeCam, m, tm.pops.length), ...turnReport(tm)].join("\n");
   assert.match(lines, /impulse.*0\.40-0\.60.*hit.*left out/);
 
-  // Stationary frames right before an impulse never absorb the impulse step into peak speed
   const parkedBeforeHit = [];
   for (let t = 0; t <= 1.0 + 1e-9; t += DT) {
     const inHit = t >= 0.4 && t <= 0.6;
@@ -195,14 +192,12 @@ test("FOV snaps and p->l vector turns are detected and attributed without printi
   assert.match(lines, /at \[0\.00, 1\.00, 0\.00\]/);
   assert.match(lines, /cam keys \[1->2\] row /);
 
-  // turnReport includes world coordinates alongside timing-mapped cam key spans during Speed/Freeze
   const clock = compileTiming({ speeds: [{ from: 0, to: 4, rate: 2 }] }, 4);
   const camTimed = [
     { t: 0, p: [1, 2, 3], l: [1, 2, -2], fov: 60 },
     { t: 2, p: [1, 2, 3], l: [1, 2, -2], fov: 60 },
     { t: 4, p: [1, 2, 3], l: [6, 2, -2], fov: 30 },
   ];
-  // Heard 1.5s maps to source ~3.0s inside span [1->2]
   const timedSamples = [];
   for (let t = 0; t <= 2 + 1e-9; t += DT) {
     const src = clock.sourceAt(t);

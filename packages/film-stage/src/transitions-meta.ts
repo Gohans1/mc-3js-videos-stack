@@ -32,15 +32,12 @@ export type TransitionDef = {
   category: string;
   glsl: string;
   len?: number;
-  // Natural ("auto") curve for this transition; built-ins leave it out and pace themselves inside their GLSL
   ease?: TransitionEase;
-  // Studio hints for a film's own shader; left out, the studio reads uFeather / uFlip in the GLSL
   feather?: boolean;
   flip?: boolean;
 };
 
 export const TRANSITIONS = [
-  // ── Basic ──────────────────────────────────────────────────────────────────
   {
     id: "dissolve",
     title: "Dissolve",
@@ -95,7 +92,6 @@ export const TRANSITIONS = [
     }`,
   },
 
-  // ── Wipe & Split ───────────────────────────────────────────────────────────
   {
     id: "topDip",
     title: "Dip from Top",
@@ -258,7 +254,6 @@ export const TRANSITIONS = [
     }`,
   },
 
-  // ── Mask & Iris ────────────────────────────────────────────────────────────
   {
     id: "tornPaper",
     title: "Torn Paper Steps",
@@ -400,7 +395,6 @@ export const TRANSITIONS = [
     }`,
   },
 
-  // ── Light & Focus ──────────────────────────────────────────────────────────
   {
     id: "frameCollapse",
     title: "Frame Collapse",
@@ -504,7 +498,6 @@ export const TRANSITIONS = [
     }`,
   },
 
-  // ── Speed & Glitch ─────────────────────────────────────────────────────────
   {
     id: "crossOver",
     title: "Evaporate Cross-over",

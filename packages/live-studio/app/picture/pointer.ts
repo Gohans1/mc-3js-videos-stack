@@ -1,5 +1,3 @@
-// Preview input: right-click pins a note, right-drag sketches/draws a note; left-click picks an object/title/element,
-// and left-drag moves a text/page title or moves the Free Camera (waking it seamlessly if off). On a phone, tap pins notes.
 import { cameraKeySampleTime, findCameraKeyIndex, keys, setFocus } from "../camera/cam";
 import { applyCameraPick, applyContinuityPick, cancelCameraPick } from "../camera/camera-framing";
 import { applyOpticsFocusPick } from "../camera/camera-optics-track";
@@ -86,7 +84,7 @@ export const attachPicture = () => {
     if (e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
-    } // the gizmo's handle under the pointer takes this drag
+    }
     gesture = next.gesture;
     if (S.tools?.free.on) rememberFreeView();
     if (next.capture)
@@ -152,14 +150,12 @@ export const attachPicture = () => {
     }
     if (e.pointerType === "mouse" && !PHONE && !gizmoBusy()) hover(pickAt(...frac(e)));
   });
-  // A press that didn't move: anything further was the free camera being dragged
   const tappedAt = (x: number, y: number, e: MouseEvent) => {
     if (!S.render || Math.hypot(e.clientX - x, e.clientY - y) > 4) return null;
     if (S.playing) setPlaying(false);
     void engine.render(S.t);
     return frac(e);
   };
-  // A note box opened mid-flight takes no focus, or the W still held would type into it
   const pinNote = (x: number, y: number, e: MouseEvent) =>
     openNote(
       { x: +x.toFixed(4), y: +y.toFixed(4), ...lookAtClick(x, y) },
@@ -296,9 +292,6 @@ export const attachPicture = () => {
     if (!PHONE && (e.ctrlKey || e.metaKey) && get().text) textDoubleClick(e, frac(e));
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-  // Flying keys, by their place on the keyboard (any layout). Typing a note or a shortcut with Ctrl never flies. Any other key,
-  // click or scroll while Shift is held makes a shortcut of it: the height Shift dropped comes back first, which is why these
-  // listen in the capture phase, before the shortcut itself (Shift+K saves the view) reads the camera
   const chord = () => {
     const back = flight.chord();
     if (back) flyCam(0, 0, back);
@@ -346,7 +339,7 @@ export const attachPicture = () => {
   addEventListener("keyup", (e) => flight.release(e.code));
   addEventListener("blur", () => {
     pan = null;
-    flight.clear(); // a key let go in another window never comes back as a keyup
+    flight.clear();
     const res = stepViewport(gesture, { type: "blur" });
     gesture = res.gesture;
     if (res.dropSketch || sketch.on()) sketch.drop();
@@ -373,7 +366,6 @@ export const attachPicture = () => {
     },
     { passive: false },
   );
-  // On click, not pointerup: a phone only lets the note box take focus and raise its keyboard from a click
   canvas.addEventListener("click", (e) => {
     if (e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) {
       if (get().freeLocked) return;

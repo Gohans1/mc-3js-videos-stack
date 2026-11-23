@@ -92,7 +92,6 @@ test("reference studies a real cut and compares with reference first without cla
   }
 }, 30000);
 
-// a draft is its picture over a strip naming the heard time and shot: compare measures the picture, and says the draft
 test("reference compare measures a film draft without the strip under its picture", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-draft-"));
   try {
@@ -137,7 +136,6 @@ test("reference compare measures a film draft without the strip under its pictur
   }
 }, 30000);
 
-// bun run scenes found 0 cuts in a reference with about 30 whip pans: study now follows the camera's motion
 test.skipIf(!existsSync(mediaPython("camera")))(
   "reference study measures the camera's motion each frame and marks a whip pan",
   () => {
@@ -154,7 +152,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
         { encoding: "utf8", timeout: 15000 },
       );
       expect(made.status, made.stderr).toBe(0);
-      // a slow pan of 2 px a frame, a whip of 30 px a frame for frames 30-35, then a hold
       const video = join(dir, "pan.mkv");
       const ff = spawnSync(
         "ffmpeg",
@@ -196,7 +193,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
   30000,
 );
 
-// an emoji in a downloaded reference's name broke ffmpeg in Git Bash, and its AV1 4K had to be transcoded by hand
 test("reference add keeps the source under a plain name and makes an H.264 copy only when needed", () => {
   const film = mkdtempSync(join(tmpdir(), "reference-add-"));
   try {
@@ -274,7 +270,6 @@ test("reference add keeps the source under a plain name and makes an H.264 copy 
   }
 }, 60000);
 
-// a film hand-merged ~300 solved keys into cam.json; solve --write replaces the shot's span and its own earlier solve only
 test.skipIf(!existsSync(mediaPython("camera")))(
   "reference solve --write puts the solved keys in the camera timeline, replacing that span and the shot's earlier keys",
   () => {
@@ -312,7 +307,6 @@ test.skipIf(!existsSync(mediaPython("camera")))(
       expect(cam()).toEqual(["inside", "mm-table-9", "after"]);
       expect(looked.stdout).toMatch(/rerun with --write to put the 13 keys/);
 
-      // a shot whose to is the next shot's cut second would take that cut key with it
       const camFile = join(film, "src/timeline/cam.json");
       const before = readFileSync(camFile, "utf8");
       writeFileSync(

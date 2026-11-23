@@ -40,7 +40,6 @@ const smooth = (x: number) => x * x * (3 - 2 * x);
 const setQuat = (q: THREE.Quaternion, rot = ZERO_ROT) =>
   q.setFromEuler(euler.set(rot[0] * RAD, rot[1] * RAD, rot[2] * RAD, "YXZ"));
 
-// Where a list of keys puts the object at t: position, turn, size, shown. Passing `out` reuses its vectors in hot 60fps loops
 export const poseAt = (keys: PlacedKey[], t: number, out?: Pose): Pose => {
   const i = keyAt(keys, t),
     a = keys[i],
@@ -58,7 +57,6 @@ export const poseAt = (keys: PlacedKey[], t: number, out?: Pose): Pose => {
   return p;
 };
 
-// The clip running at t and the second it started: the last key at or before t that names one; else the object's own, from its first key
 export const clipAt = (o: { clip?: string; rate?: number; keys: PlacedKey[] }, t: number) => {
   let k: PlacedKey | null = null;
   for (const x of o.keys) if (x.t <= t && x.clip !== undefined) k = x;
@@ -67,7 +65,6 @@ export const clipAt = (o: { clip?: string; rate?: number; keys: PlacedKey[] }, t
     : { clip: o.clip, from: o.keys[0].t, rate: o.rate ?? 1 };
 };
 
-// Metres travelled along the keys up to t, for a walk clip
 export const travelled = (keys: PlacedKey[], t: number, curAt?: THREE.Vector3) => {
   let d = 0;
   for (let i = 0; i < keys.length - 1 && keys[i].t < t; i++) {

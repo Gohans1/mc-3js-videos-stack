@@ -2,7 +2,6 @@ import { expect, test } from "bun:test";
 
 import { mouthAt } from "../src/player";
 
-// [width, height, teeth, tongue]: the shape held long after its cue is the shape itself
 const held = (shape: string) => mouthAt([[0, shape]], 10);
 
 test("a shape is whole on its own second, never reached after it (animation may lead the sound, never trail it)", () => {

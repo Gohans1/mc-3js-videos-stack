@@ -21,7 +21,6 @@ const makeAudio = (file, seconds) => {
   assert.equal(made.status, 0, made.stderr);
 };
 
-// A film whose first 10 scene seconds play at 2x: the heard second 4.1 shows scene second 8.2
 const film = (t) => {
   const dir = mkdtempSync(join(tmpdir(), "at-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -57,7 +56,6 @@ const film = (t) => {
       { kind: "text", text: "NEVER", from: 15, to: 16, track: 0 },
     ],
   });
-  // moves walks from 7 to 9; chair holds still from 0 to 20 (two keys, one value)
   put("src/timeline/steve.json", {
     moves: [
       { t: 0, x: 0 },
@@ -209,8 +207,6 @@ test("at estimates the authored rig lens and uses camera anchor fallbacks for do
 test("at #N finds a note's moment after a Speed edit moved it: by its scene second, or by its place in its shot", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));
-  // both written at 8.2 heard before the 2x Speed went in: the hand 0.2 s into its shot. The second is the studio's newer
-  // kind, which keeps its scene second too
   const note = {
     t: 8.2,
     text: "the hand",
@@ -243,10 +239,8 @@ test("at #N finds a note's moment after a Speed edit moved it: by its scene seco
     });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /written at 00:08\.200 heard; that moment is heard at 00:04\.100 now/);
-    // one numbering everywhere: notes, the studio, the draft's strip and the shots file's row
     assert.match(r.stdout, /shot 1 \(shots 0-1\): "his hand"/);
   }
-  // its shot renamed since: its narration second through today's Speed, the second the studio's note list shows it at
   const r = spawnSync("bun", [AT, "renamed"], {
     env: { ...process.env, LIVE_PROJECT: dir },
     encoding: "utf8",
@@ -281,7 +275,6 @@ test("the open notes near a second are those heard near it now, not those writte
 test("a note written just before a cut is in the shot it names, on every line", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));
-  // scene 7.9996, 0.0004 s before the cut into shot 1 at scene 8
   const note = {
     id: "edge",
     t: 7.9996,
@@ -323,7 +316,6 @@ test("a note's moment lists the other notes near it, not itself", (t) => {
 test("a note whose moment a moved cut has put in the next shot says it is there now", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "notes"));
-  // written 8.5 s into "the room" when it ran to 9; its cut into "his hand" sits at 8 now
   const note = {
     id: "late",
     t: 8.5,
@@ -399,7 +391,6 @@ test("a sound whose file's length cannot be read is still heard, its end unknown
   writeFileSync(pkg, JSON.stringify(conf));
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
   writeFileSync(join(dir, "sound/sfx/door.wav"), "not a wav header");
-  // no "length": it lasts as long as its file
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({ beds: [], sfx: [{ name: "door", at: 8, gain: 0 }] }),
@@ -492,7 +483,6 @@ test("a second inside a gap names no shot, camera key or moving row: the picture
   );
   const got = whatsAt(dir, 2.5);
   assert.deepEqual([got.shot, got.cam, got.cuts, got.keys], [null, null, [], []]);
-  // a draft rendered before the gap went in has a cut there
   mkdirSync(join(dir, "renders"));
   writeFileSync(join(dir, "renders/cuts.json"), JSON.stringify([2.5]));
   const r = spawnSync("bun", [AT, "2.5"], {
@@ -666,7 +656,6 @@ test("a velocity effect playing is named with its row", (t) => {
     said("2"),
     /^velocity: retroZoom, intensity 45, scene 1\.00-3\.00 \(a hit on its beat plays now\): src\/timeline\/timing\.json velocity\[0\]$/m,
   );
-  // velocityAt: a hit lasts up to 0.25 s from its beat, nothing before the first beat or between hits
   assert.match(
     said("1.2"),
     /^velocity: retroZoom, .*\(no hit on this frame: it hits at its beats\)/m,
@@ -839,7 +828,6 @@ test("a transition plays only where the render plays it: a gap at its cut or a b
   );
   shots({ fx: "dissolve", len: -1 });
   assert.deepEqual(whatsAt(dir, 4).cuts, []);
-  // a gap at the cut (scene 8 is heard at 4 under the 2x Speed): the render draws no transition there
   shots({ fx: "dissolve", len: 1 });
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
@@ -915,7 +903,6 @@ test("a black second names what blacks it out: a gap row of main[], a Freeze lef
     /black here, a gap in src\/timeline\/timing\.json gaps\[\]/,
   );
 
-  // Layer freeze past timingClock.duration should report picture ended, not gaps[]
   writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 10 }));
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
@@ -948,7 +935,6 @@ test("a draft's cut is in --json too, and said to be the last render's when the 
   );
 });
 
-// a camera key with cut: true cuts inside a shot: the render counts it, so cut n is no longer shot n+1's start
 test("a draft's cut names the shot it opens, and none for a camera key's cut inside a shot", (t) => {
   const dir = film(t);
   mkdirSync(join(dir, "renders"));
@@ -1149,14 +1135,12 @@ test("freeze inside a cut, short-shot nearby transition, sound_choices duration,
   conf["live-studio"].sfx = "sound/sfx";
   writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
 
-  // Cut-out freeze must not report held
   writeFileSync(
     join(dir, "src/timeline/timing.json"),
     JSON.stringify({ cuts: [{ from: 1, to: 4 }], freezes: [{ at: 2, duration: 2 }] }),
   );
   assert.equal(whatsAt(dir, 2.5).held, null);
 
-  // Transition separated by a <1s intermediate shot is still within 1s
   writeFileSync(join(dir, "src/timeline/timing.json"), JSON.stringify({}));
   writeFileSync(
     join(dir, "src/timeline/shots.json"),
@@ -1172,7 +1156,6 @@ test("freeze inside a cut, short-shot nearby transition, sound_choices duration,
     [2],
   );
 
-  // sound_choices.json + picked sound file duration
   mkdirSync(join(dir, "sound/sfx"), { recursive: true });
   const mkWav = (name, dur) => {
     const f = spawnSync(
@@ -1199,12 +1182,10 @@ test("freeze inside a cut, short-shot nearby transition, sound_choices duration,
       ],
     }),
   );
-  // At 2.5s, orig (0.5s) would have ended at 1.5s, but alt (2.0s) runs until 3.0s
   const at25 = whatsAt(dir, 2.5);
   assert.equal(at25.sounds[0]?.picked, "alt");
   assert.ok(Math.abs((at25.sounds[0]?.to ?? 0) - 3) < 0.05);
 
-  // At 8s (outside muted clip 0..5), unvoiced script_lines (including without until at exact t) is visible
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({ end: 20, script_lines: [{ t: 8, text: "UNVOICED AT EIGHT" }] }),
@@ -1286,7 +1267,6 @@ test("camera optics (mm, fstop, focus, handheld) and shot look + active trauma h
   const decayed = whatsAt(dir, 2.25);
   assert.equal(decayed.shot?.hits?.length ?? 0, 0);
 
-  // Overlapping hits in the same decay group report cumulative capped trauma matching film-kit/shake.
   writeFileSync(
     join(dir, "src/timeline/shots.json"),
     JSON.stringify([
@@ -1299,7 +1279,7 @@ test("camera optics (mm, fstop, focus, handheld) and shot look + active trauma h
       },
     ]),
   );
-  const cumHit = whatsAt(dir, 2.1); // scene 4.2 s -> prev 0.5 + 0.7 capped at 1.0, decayed 0.1 s = 0.90
+  const cumHit = whatsAt(dir, 2.1);
   assert.ok(Math.abs((cumHit.shot?.hits?.[1]?.trauma ?? 0) - 0.9) < 0.01);
 });
 
@@ -1463,7 +1443,6 @@ test("Round 15: swapped sfx ignores orig start, voiceOff clears json narration/n
       ],
     }),
   );
-  // Row 0 swaps to alt (plays 1.0..3.0s because mix.py pops start); row 1 has no try[] so plays orig from start=4 (6.0..7.0s)
   const at2 = whatsAt(dir, 2);
   assert.equal(at2.sounds.length, 1);
   assert.equal(at2.sounds[0].picked, "alt");
@@ -1472,7 +1451,6 @@ test("Round 15: swapped sfx ignores orig start, voiceOff clears json narration/n
   assert.equal(at65.sounds.length, 1);
   assert.ok(Math.abs(at65.sounds[0].to - 7) < 0.05);
 
-  // voice:false with voice_map.json present must leave json narration & nextLine null
   mkdirSync(join(dir, "renders/live"), { recursive: true });
   writeFileSync(
     join(dir, "renders/live/voice_map.json"),
@@ -1485,7 +1463,6 @@ test("Round 15: swapped sfx ignores orig start, voiceOff clears json narration/n
   assert.equal(vOff.narration, null);
   assert.equal(vOff.nextLine, null);
 
-  // cam[0].t > scene still evaluates cameraAt clamped to key 0
   writeFileSync(
     join(dir, "src/timeline/cam.json"),
     JSON.stringify([
@@ -1535,7 +1512,6 @@ test("Round 16: swapped try[] and shared c.name respect timing speeds, and off c
       ],
     }),
   );
-  // Row 0 swaps to alt (2s from 0 -> 1.0s at 2x, playing 1.0..2.0s heard); row 1 plays orig from start=4 (1s -> 0.5s at 2x, playing 3.0..3.5s heard)
   const at15 = whatsAt(dir, 1.5);
   assert.equal(at15.sounds.length, 1);
   assert.equal(at15.sounds[0].picked, "alt");
@@ -1548,7 +1524,6 @@ test("Round 16: swapped try[] and shared c.name respect timing speeds, and off c
     `expected to ~3.5, got ${at325.sounds[0].to}`,
   );
 
-  // choices.json "off" on audio.narration must silence narration, nextLine, and script
   makeAudio(join(dir, "sound/sfx/voice_clip.wav"), 5);
   mkdirSync(join(dir, "renders/live"), { recursive: true });
   writeFileSync(
@@ -1591,7 +1566,6 @@ test("Round 16: swapped try[] and shared c.name respect timing speeds, and off c
 test("Round 17: disabled non-look adjustment prints (disabled) and openSound defaults to sound/sfx", (t) => {
   const dir = film(t);
   const conf = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
-  // Intentionally omit live-studio.sfx like templates/film does; mix.py defaults to sound/sfx
   delete conf["live-studio"].sfx;
   conf["live-studio"].adjustmentTimeline = "src/timeline/adjust.json";
   writeFileSync(join(dir, "package.json"), JSON.stringify(conf));
@@ -1630,7 +1604,6 @@ test("Round 17: disabled non-look adjustment prints (disabled) and openSound def
       sfx: [{ name: "orig", at: 1, gain: 0, try: ["alt"] }],
     }),
   );
-  // at=1 with 2s alt under 2x speed plays 0.5..1.5s heard
   const res = whatsAt(dir, 1);
   assert.equal(res.sounds.length, 1);
   assert.equal(res.sounds[0].picked, "alt");
@@ -1642,13 +1615,11 @@ test("Round 17: disabled non-look adjustment prints (disabled) and openSound def
   assert.equal(out.status, 0, out.stderr);
   assert.match(out.stdout, /DisabledExp \(disabled\)/);
 
-  // Off sfx without length still resolves disk duration via audioInfo, never falsely claiming missing file
   writeFileSync(join(dir, "choices.json"), JSON.stringify({ orig: { set: "off" } }));
   writeFileSync(
     join(dir, "src/timeline/audio.json"),
     JSON.stringify({ beds: [], sfx: [{ name: "orig", at: 2, gain: 0 }] }),
   );
-  // orig is 5s starting at 2 -> 2..7s on scene, at 2x speed -> 1.0..3.5s heard
   const offSfx = whatsAt(dir, 2);
   assert.equal(offSfx.sounds.length, 1);
   assert.equal(offSfx.sounds[0].picked, "off");
@@ -1678,7 +1649,6 @@ test("Round 19: at respects cam cut boundary, .mp3 soundSources & cut unknown-le
   );
   assert.equal(ffMp3.status, 0, String(ffMp3.stderr));
 
-  // 1) Camera cut:true stops forward interpolation span at [0]
   writeFileSync(
     join(dir, "src/timeline/cam.json"),
     JSON.stringify([
@@ -1687,7 +1657,6 @@ test("Round 19: at respects cam cut boundary, .mp3 soundSources & cut unknown-le
       { t: 10, p: [10, 2, 0], l: [0, 0, 0], fov: 20 },
     ]),
   );
-  // 2) Hidden adjustment item still active (grade-layers.ts only hides by track.hidden)
   writeFileSync(
     join(dir, "src/timeline/adjust.json"),
     JSON.stringify({
@@ -1696,7 +1665,6 @@ test("Round 19: at respects cam cut boundary, .mp3 soundSources & cut unknown-le
       ],
     }),
   );
-  // 3) .mp3 soundSources + unknown-length missing sfx inside cut + script_lines in cut vs active
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -1741,7 +1709,6 @@ test("Round 19: at respects cam cut boundary, .mp3 soundSources & cut unknown-le
   assert.equal(out2.status, 0, out2.stderr);
   assert.doesNotMatch(out2.stdout, /-> \[1\]/);
 
-  // 4) script_lines lookahead follows heard order across reordered main[]
   writeFileSync(
     join(dir, "src/edit.json"),
     JSON.stringify({
@@ -1812,7 +1779,6 @@ test("Round 21: whatsAt lists nearby open note when t is null and scene places i
 
 test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx under speeds and off-narration ducking, and at keeps cam end across voice cues", (t) => {
   const MIX = resolve(dirname(AT), "sound/mix.py");
-  // 1) Camera keyframes with different fov must interpolate cleanly (no ReferenceError: lmix is not defined)
   const dirCam = film(t);
   writeFileSync(
     join(dirCam, "src/timeline/cam.json"),
@@ -1824,7 +1790,6 @@ test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx
   const gotCam = whatsAt(dirCam, 2.5);
   assert.ok(gotCam.cam && gotCam.cam.fov > 30 && gotCam.cam.fov < 50);
 
-  // 2) mix.py vs at on try[]-swapped sfx under timing.json + "off" narration not ducking beds
   const dirMix = mkdtempSync(join(tmpdir(), "at-mix-r22-"));
   t.after(() => rmSync(dirMix, { recursive: true, force: true }));
   mkdirSync(join(dirMix, "src/timeline"), { recursive: true });
@@ -1894,7 +1859,6 @@ test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx
   assert.equal(atSwapped.sounds.find((s) => s.name === "orig_short")?.picked, "alt");
   const mixRun = spawnSync("python", [MIX], { cwd: dirMix, encoding: "utf8", timeout: 60000 });
   assert.equal(mixRun.status, 0, mixRun.stdout + mixRun.stderr);
-  // 2.0..2.8s has alt swapped onto orig_short (ffmpeg sine default RMS ~ -23 dB vs -91 dB when truncated/skipped)
   const volTail = spawnSync(
     "ffmpeg",
     [
@@ -1912,7 +1876,6 @@ test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx
   );
   const mTail = /mean_volume:\s*([-\d.]+)\s*dB/.exec(volTail.stderr);
   assert.ok(mTail && Number(mTail[1]) > -40, volTail.stderr);
-  // 0.2..1.2s has hum while narr is "off" -> hum stays unducked (~ -23 dB vs ~ -43 dB ducked 20 dB)
   const volDuck = spawnSync(
     "ffmpeg",
     [
@@ -1931,7 +1894,6 @@ test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx
   const mDuck = /mean_volume:\s*([-\d.]+)\s*dB/.exec(volDuck.stderr);
   assert.ok(mDuck && Number(mDuck[1]) > -30, volDuck.stderr);
 
-  // 3) Omitted edit.end keeps cam timing scope across buildVoiceCues before nextScript()
   const dirScript = mkdtempSync(join(tmpdir(), "at-script-r22-"));
   t.after(() => rmSync(dirScript, { recursive: true, force: true }));
   mkdirSync(join(dirScript, "src/timeline"), { recursive: true });
@@ -1988,7 +1950,6 @@ test("Round 22: camera varying fov doesn't throw lmix, mix.py honors swapped sfx
 });
 
 test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx in freeze and gap, and enforces start/EOF/rate/try on sfx with explicit length", (t) => {
-  // 1) voice/takes with .words.json but no full_voice.wav -> at reports silent + unlaid (mix.py has no voice), voice:cues warns on stderr
   const dirUnlaid = film(t);
   writeFileSync(
     join(dirUnlaid, "src/edit.json"),
@@ -2025,7 +1986,6 @@ test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx i
   assert.match(cuesCli.stdout, /Hello world/);
   assert.match(cuesCli.stderr, /voice:assemble/);
 
-  // 2) beds & sfx must not show during freeze or gap spans where mix.py/process.py emit silence
   const dirTiming = film(t);
   const confTiming = JSON.parse(readFileSync(join(dirTiming, "package.json"), "utf8"));
   confTiming["live-studio"].timingTimeline = "src/timeline/timing.json";
@@ -2038,7 +1998,6 @@ test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx i
       gaps: [{ from: 6, to: 8 }],
     }),
   );
-  // source 0..2 -> heard 0..2 (play); freeze @2 len 2 -> heard 2..4 (freeze); source 2..6 -> heard 4..8 (play); gap 6..8 -> heard 8..10 (blank gap); source 8..12 -> heard 10..14 (play)
   writeFileSync(
     join(dirTiming, "src/timeline/audio.json"),
     JSON.stringify({
@@ -2062,7 +2021,6 @@ test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx i
     ["drone", "tone"],
   );
 
-  // 3) sfx with explicit length: start >= seconds skipped, EOF + rate clamped, and try[] swap ignores orig start & clamps to replacement EOF
   const dirLen = film(t);
   writeFileSync(join(dirLen, "src/timeline/timing.json"), "{}");
   mkdirSync(join(dirLen, "sound/sfx"), { recursive: true });
@@ -2085,11 +2043,8 @@ test("Round 23: at marks unlaid takes as silent until assemble, hides beds/sfx i
       voice: false,
       beds: [],
       sfx: [
-        // unswapped start >= seconds with explicit length -> skipped
         { name: "beep_1s", at: 5, start: 5, length: 1, gain: 0 },
-        // EOF clamped + rate 2x: avail = (1.5 - 0.5) / 2 = 0.5s (0..0.5, NOT 0..5)
         { name: "clip_15", at: 0, start: 0.5, rate: 2, length: 5, gain: 0 },
-        // swapped to alt_08 (0.8s): drops orig start=5 and clamps to 0.8s (10..10.8)
         { name: "beep_1s", at: 10, start: 5, length: 2, gain: 0, try: ["alt_08"] },
       ],
     }),
@@ -2214,13 +2169,11 @@ test("--pixel --plane finds where a frame's pixel meets a world plane through th
       env: { ...process.env, LIVE_PROJECT: dir },
       encoding: "utf8",
     });
-  // keys without p or l sit at the origin and look down -z; the frame's middle runs straight along that axis
   const r = at("--pixel", "960,540", "--plane", "z=-5", "--json");
   assert.equal(r.status, 0, r.stderr);
   const got = JSON.parse(r.stdout);
   assert.deepEqual(got.pixel, { at: [960, 540], plane: "z=-5", point: [0, 0, -5] });
   assert.deepEqual(got.cam.pose.p, [0, 0, 0]);
-  // which way the picture's right and up run in the world, for "move it right" by eye
   assert.deepEqual(got.cam.screen, { right: [1, 0, 0], up: [0, 1, 0] });
   assert.match(at().stdout, /picture right is world \+x, up is world \+y/);
   assert.match(at("--pixel", "960,540", "--plane", "y=1").stdout, /never meets y=1/);

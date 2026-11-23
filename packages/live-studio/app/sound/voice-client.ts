@@ -22,8 +22,8 @@ import {
 } from "./sound";
 import {
   findTakeLineIndex,
-  resizeNarrationBrickForSwap,
   recordingCandidatesForClip,
+  resizeNarrationBrickForSwap,
   sliceNarrationClip,
   subscribeVoiceNames,
   type SwappedVoiceSpan,
@@ -116,7 +116,6 @@ export const promoteVoiceTry = async (
   }
 };
 
-// Memoizes timeline label per OneShot object across 60fps scrub/zoom frames; invalidated on sound, timing, or voice changes
 let labelCacheKey = "";
 let labelCache = new WeakMap<object, string>();
 
@@ -135,8 +134,14 @@ export const cachedVoiceClipLabel = (clip: OneShot): string => {
 
 export const currentClipVoiceSummary = (clip: OneShot) =>
   voiceClipSummary(clip, seconds(clip.name), S.voiceBase, takesState);
-export const currentClipRecordingCandidates = (clip:OneShot) =>
-  recordingCandidatesForClip(clip,sourceLanes()?.narration,seconds(clip.name),S.voice.placements ?? [],takesState);
+export const currentClipRecordingCandidates = (clip: OneShot) =>
+  recordingCandidatesForClip(
+    clip,
+    sourceLanes()?.narration,
+    seconds(clip.name),
+    S.voice.placements ?? [],
+    takesState,
+  );
 
 export const findUnsplitNarrationRef = (): { ref: ClipRef; count: number } | null => {
   const src = sourceLanes();

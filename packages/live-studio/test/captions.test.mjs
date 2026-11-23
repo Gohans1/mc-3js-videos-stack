@@ -3,7 +3,6 @@ import { test } from "node:test";
 
 import { cues, srt } from "../src/captions.mjs";
 
-// A voice line as voice_map.json holds it: words with their own seconds
 const line = (text, s, step = 0.3) => {
   const words = text
     .split(" ")

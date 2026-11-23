@@ -31,8 +31,6 @@ const isVec3 = (v: unknown): v is [number, number, number] =>
   Array.isArray(v) && v.length === 3 && v.every((x) => typeof x === "number" && Number.isFinite(x));
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
-// Auto-wires a 3D gizmo when a scene target omits explicit read/write and its key carries standard `at: [x, y, z]`
-// (plus optional `rot: [rx, ry, rz]`, `yaw: number`, `scale: number`), writing back only the fields already present on the key
 export const inferTargetTransform = (
   row: TargetRow,
   sampleKey: Record<string, unknown> | undefined,
@@ -77,7 +75,6 @@ const shown = (object: THREE.Object3D) => {
   return true;
 };
 const partBox = new THREE.Box3();
-// Box3.setFromObject includes hidden variants; selection must bound only what this frame actually draws.
 export const boundsOf = (objects: THREE.Object3D[], box = new THREE.Box3()) => {
   box.makeEmpty();
   for (const root of objects) {

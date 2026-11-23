@@ -1,7 +1,4 @@
 // @ts-nocheck
-// root.updateMatrixWorld(true) for only root and the nodes down to the targets, parents first, with three's own sums: for
-// hot loops that read a few bones of a big tree (a rig's skin, face and hands; a mocap file's mesh and fingers). Everything
-// else under root keeps its old matrices until a full update
 export function updaterTo(root, targets) {
   const want = new Set();
   for (const t of targets)

@@ -33,10 +33,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-// The Objects tab, Unreal's Details panel over its Content Browser: the dropped-in object the gizmo is on (name, where it is at
-// the playhead, its clip if it's a mob), then what is in the film already, then everything it can take: the game's own blocks
-// and mobs first, as Minecraft's creative tabs put them, and every custom block (the shared props, the mod picks) in one tab. A library row is dragged onto the picture, or + puts it in the middle of the view. Every edit keys the object at the
-// playhead (objects/placed.ts) and is one undo step (Ctrl+Z)
 import { cn } from "@/lib/utils";
 
 import { timingClock } from "../../src/timing-state.mjs";
@@ -81,7 +77,6 @@ import { PropRows, usePropCatalog } from "./PropLibrary";
 type Item = { what: string; kind: "block" | "mob" | "custom"; title: string };
 let catalog: Promise<Item[]> | null = null;
 const icons = new Map<string, string | null>();
-// One block drawn at a time: each is a small WebGL render, and a scrolled list asks for dozens at once
 let iconQueue = Promise.resolve();
 const iconOf = (what: string) => {
   if (icons.has(what)) return Promise.resolve(icons.get(what)!);
@@ -101,10 +96,9 @@ const iconOf = (what: string) => {
 };
 
 const r = (x: number, d: number) => +x.toFixed(d);
-const STILL = "none"; // mc-assets/placed.ts plays no clip it doesn't know
+const STILL = "none";
 const label = "text-ui text-muted-foreground";
 
-// A number typed and saved on Enter or on leaving the box; Escape puts the shown value back
 function Num({
   value,
   onSave,
@@ -135,8 +129,6 @@ function Num({
   );
 }
 
-// Where the object is at the playhead, as drawn, and the playhead's frame: read a few times a second, so the panel follows
-// playback, seeking and the gizmo
 const useShown = (name: string) => {
   const [v, setV] = useState(() => ({
     shown: engine.shownTransform(name),
@@ -417,7 +409,6 @@ function Inspector({ name }: { name: string }) {
   );
 }
 
-// How the object moves into the keyframe at the playhead from the one before (CapCut's keyframe curve), as the camera's Speed tab
 function EaseRow({ name, i }: { name: string; i: number }) {
   const o = placedData()[name],
     k = o.keys[i],
@@ -448,8 +439,6 @@ function EaseRow({ name, i }: { name: string; i: number }) {
   );
 }
 
-// The mob's clip, keyed like the transform: what runs at the playhead, and the keyframe that started it. Picking another keys it
-// at the playhead, so a chest opens at the keyframe it is picked on and stays open (a one-shot clip holds its last frame)
 function ClipRow({ name, clips }: { name: string; clips: string[] }) {
   const o = placedData()[name],
     run = tools()?.clipAt(name, timingClock.sourceAt(S.t + 0.5 / FPS)) ?? null,
@@ -556,7 +545,6 @@ const KINDS = [
 ] as const;
 type Kind = (typeof KINDS)[number]["id"];
 const CAP = 200;
-// The game's own by name; custom ones by where they come from, the film's own pack (gohans) first, then each mod
 const nsOf = (x: Item) => x.what.split(":")[1] ?? "";
 const order = (a: Item, b: Item) =>
   a.kind === "custom" && b.kind === "custom" && nsOf(a) !== nsOf(b)
@@ -566,7 +554,6 @@ const order = (a: Item, b: Item) =>
         ? 1
         : nsOf(a).localeCompare(nsOf(b))
     : a.title.localeCompare(b.title);
-// What the film holds already, Unreal's Outliner in one line: a click selects it, on the picture and on its timeline row
 function InFilm() {
   const lights = useActivity((state) => state.lit);
   useStudio((s) => s.keysRev);
@@ -594,7 +581,6 @@ function InFilm() {
   );
 }
 
-// side: a wide library, its kinds in a column down the left as CapCut's sections are
 function ObjectLibrary({ side, placeable }: { side: boolean; placeable: boolean }) {
   const ready = useStudio((s) => s.ready);
   const [items, setItems] = useState<Item[] | null>(null);
@@ -609,7 +595,6 @@ function ObjectLibrary({ side, placeable }: { side: boolean; placeable: boolean 
     catalog ??= tools()!.catalog();
     catalog.then((xs) => setItems([...xs].sort(order))).catch(() => setItems([]));
   }, [ready, placeable]);
-  // Every tab's matches, so the tabs say how many each holds for the words typed
   const found = useMemo(() => {
     const hit = matcher(q);
     const all = (items ?? []).filter((x) => hit(x.what + " " + x.title));
@@ -631,7 +616,6 @@ function ObjectLibrary({ side, placeable }: { side: boolean; placeable: boolean 
     setKind(next);
     setLimit(CAP);
   };
-  // Dragged: a few pixels of movement turn the press into carrying the object to the picture (as the sound library does)
   const press = (what: string) => (e: ReactPointerEvent) => {
     if (e.button !== 0 || (e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
@@ -792,7 +776,6 @@ export function ObjectInspector() {
   );
 }
 
-// part: the whole tab (one column), or on a wide screen the object in the right column and the library in the left one
 export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "library" }) {
   useStudio((s) => s.keysRev);
   const loaded = useStudio((s) => s.keyFiles !== null);

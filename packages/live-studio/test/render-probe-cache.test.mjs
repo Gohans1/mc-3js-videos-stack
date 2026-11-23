@@ -1,4 +1,3 @@
-// Persistent Chrome shader-cache slots, --check seen/text/probe + --inspect/--views warnings, and single-frame --check probe
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
@@ -70,8 +69,6 @@ const makePerspectiveCamera = () => {
   return camera;
 };
 
-// ---------------- chrome-profile.mjs unit tests ----------------
-
 test("chrome-profile acquires locked slots, allocates concurrent slots, and preserves cached files on release", (t) => {
   const root = makeTempDir(t, "chrome-profile-slots-");
   const rendersDir = join(root, "renders");
@@ -95,7 +92,7 @@ test("chrome-profile acquires locked slots, allocates concurrent slots, and pres
   assert.equal(second.dir, join(rendersDir, ".chrome-cache", "slot-1"));
 
   first.release();
-  first.release(); // idempotent
+  first.release();
   second.release();
   assert.ok(!existsSync(first.lockPath), "slot-0 lock file must be removed on release");
   assert.ok(!existsSync(second.lockPath), "slot-1 lock file must be removed on release");
@@ -167,7 +164,7 @@ test("chrome-profile treats fresh empty/corrupt lock files as live and expired o
   mkdirSync(cacheDir, { recursive: true });
 
   const lockPath = join(cacheDir, "slot-0.lock");
-  writeFileSync(lockPath, "{"); // half-written JSON
+  writeFileSync(lockPath, "{");
   const fixedNow = Date.now();
   const recent = new Date(fixedNow - 500);
   utimesSync(lockPath, recent, recent);
@@ -234,7 +231,6 @@ test("chrome-profile serializes stale-lock reclamation so contenders take distin
   const slot0Lock = join(cacheDir, "slot-0.lock");
   const reclaimGuard = `${slot0Lock}.reclaim`;
 
-  // Case A: an active fresh .reclaim guard on slot-0 forces a concurrent caller to take slot-1
   writeFileSync(
     slot0Lock,
     JSON.stringify({ pid: 99999999, startedAt: "2020-01-01T00:00:00.000Z" }),
@@ -247,7 +243,6 @@ test("chrome-profile serializes stale-lock reclamation so contenders take distin
   contender.release();
   unlinkSync(reclaimGuard);
 
-  // Case B: another process wins slot-0 right before our guard re-check -> winner keeps slot-0, we take slot-1
   let checks = 0;
   const interleaved = acquireChromeProfile(rendersDir, {
     isAlive(pid) {
@@ -284,7 +279,6 @@ test("chrome-profile handles ENOENT between EEXIST and inspectLock without unlin
   mkdirSync(cacheDir, { recursive: true });
   const slot0Lock = join(cacheDir, "slot-0.lock");
 
-  // Pure inspectLock state check: missing file returns "missing"
   assert.equal(
     inspectLock(
       slot0Lock,
@@ -295,7 +289,6 @@ test("chrome-profile handles ENOENT between EEXIST and inspectLock without unlin
     "missing",
   );
 
-  // Stale lock disappears right before guard re-check -> retries tryCreateLock directly without unlinking
   writeFileSync(
     slot0Lock,
     JSON.stringify({ pid: 99999999, startedAt: "2020-01-01T00:00:00.000Z" }),
@@ -305,7 +298,7 @@ test("chrome-profile handles ENOENT between EEXIST and inspectLock without unlin
     isAlive(pid) {
       if (firstCall && pid === 99999999) {
         firstCall = false;
-        unlinkSync(slot0Lock); // disappeared before re-check
+        unlinkSync(slot0Lock);
         return false;
       }
       return pid === process.pid;
@@ -348,8 +341,6 @@ test("chrome-profile rejects non-positive PIDs in isPidAlive and recovers expire
   recovered.release();
 });
 
-// ---------------- probe.ts unit tests ----------------
-
 test("measureProbeTarget excludes hidden descendants while still measuring a hidden root target itself", () => {
   const camera = makePerspectiveCamera();
   const group = new THREE.Group();
@@ -372,7 +363,6 @@ test("measureProbeTarget excludes hidden descendants while still measuring a hid
   assert.deepEqual(measured.bounds?.max, [1, 1, 1]);
   assert.deepEqual(measured.bounds?.size, [2, 2, 2]);
 
-  // Probing a hidden root target itself still reports its own geometry with visible: false
   const hiddenRoot = measureProbeTarget(hiddenOutlier, "outlier", camera);
   assert.equal(hiddenRoot.visible, false);
   assert.deepEqual(hiddenRoot.bounds?.min, [99, -1, -1]);
@@ -382,7 +372,6 @@ test("measureProbeTarget excludes hidden descendants while still measuring a hid
 test("measureProbeTarget recomputes re-posed SkinnedMesh and updated InstancedMesh bounds", () => {
   const camera = makePerspectiveCamera();
 
-  // SkinnedMesh whose boundingBox is computed at rest, then bone translates +5 along X
   const geo = new THREE.BoxGeometry(1, 1, 1);
   const count = geo.attributes.position.count;
   const indices = new Uint16Array(count * 4);
@@ -399,14 +388,13 @@ test("measureProbeTarget recomputes re-posed SkinnedMesh and updated InstancedMe
   root.add(skinned);
   root.updateMatrixWorld(true);
   skinned.bind(new THREE.Skeleton([bone]));
-  skinned.computeBoundingBox(); // prime stale rest-pose boundingBox
+  skinned.computeBoundingBox();
 
   bone.position.set(5, 0, 0);
   const skinnedResult = measureProbeTarget(skinned, "rig", camera);
   assert.deepEqual(skinnedResult.bounds?.min, [6.5, -0.5, -0.5]);
   assert.deepEqual(skinnedResult.bounds?.max, [7.5, 0.5, 0.5]);
 
-  // InstancedMesh updated after initial computeBoundingBox, then emptied (count = 0)
   const inst = new THREE.InstancedMesh(
     new THREE.BoxGeometry(1, 1, 1),
     new THREE.MeshBasicMaterial(),
@@ -414,7 +402,7 @@ test("measureProbeTarget recomputes re-posed SkinnedMesh and updated InstancedMe
   );
   inst.setMatrixAt(0, new THREE.Matrix4().makeTranslation(0, 0, 0));
   inst.setMatrixAt(1, new THREE.Matrix4().makeTranslation(1, 0, 0));
-  inst.computeBoundingBox(); // prime stale boundingBox
+  inst.computeBoundingBox();
 
   inst.setMatrixAt(1, new THREE.Matrix4().makeTranslation(6, 0, 0));
   const instUpdated = measureProbeTarget(inst, "cubes", camera);
@@ -439,7 +427,6 @@ test("measureProbeTarget handles zero-scale, moved-root/sibling-bone, unbound Sk
     return geo;
   };
 
-  // 1. Zero-scale SkinnedMesh inside a group must NOT NaN-poison valid sibling geometry
   const group = new THREE.Group();
   const validCube = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial());
   validCube.position.set(1, 0, 0);
@@ -454,7 +441,6 @@ test("measureProbeTarget handles zero-scale, moved-root/sibling-bone, unbound Sk
   assert.deepEqual(groupResult.bounds?.min, [0, -1, -1]);
   assert.deepEqual(groupResult.bounds?.max, [2, 1, 1]);
 
-  // 2. Moved-root attached SkinnedMesh with sibling bone called directly (no 2x translation)
   const rigRoot = new THREE.Group();
   const sibBone = new THREE.Bone();
   const attached = new THREE.SkinnedMesh(makeSkinnedGeo(), new THREE.MeshBasicMaterial());
@@ -467,17 +453,15 @@ test("measureProbeTarget handles zero-scale, moved-root/sibling-bone, unbound Sk
   assert.deepEqual(movedResult.bounds?.min, [9.5, -0.5, -0.5]);
   assert.deepEqual(movedResult.bounds?.max, [10.5, 0.5, 0.5]);
 
-  // 3. Unbound SkinnedMesh degrades cleanly without throwing
   const unbound = new THREE.SkinnedMesh(makeSkinnedGeo(), new THREE.MeshBasicMaterial());
   const unboundResult = measureProbeTarget(unbound, "unbound", camera);
   assert.equal(unboundResult.bounds, null);
 
-  // 4. BatchedMesh recomputes updated instance matrices and returns null when emptied
   const batched = new THREE.BatchedMesh(4, 100, 200, new THREE.MeshBasicMaterial());
   const gid = batched.addGeometry(new THREE.BoxGeometry(1, 1, 1));
   const iid = batched.addInstance(gid);
   batched.setMatrixAt(iid, new THREE.Matrix4().makeTranslation(0, 0, 0));
-  batched.computeBoundingBox(); // prime stale boundingBox
+  batched.computeBoundingBox();
 
   batched.setMatrixAt(iid, new THREE.Matrix4().makeTranslation(4, 2, 0));
   const batchedUpdated = measureProbeTarget(batched, "batched", camera);
@@ -501,7 +485,6 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
   alexHead.name = "Head";
   alex.add(alexHead);
 
-  // Two unparented bones with the same .name disambiguated by tools.bones key
   const looseA = new THREE.Bone();
   looseA.name = "Grip";
   const looseB = new THREE.Bone();
@@ -517,14 +500,12 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
     bones: { gripLeft: looseA, gripRight: looseB },
   };
 
-  // Colliding matched names disambiguate via objectLabels ancestor
   const bothHeads = collectProbeTargets(tools, "head");
   assert.deepEqual(
     bothHeads.map((x) => x.name),
     ["Steve.Head", "Alex.Head"],
   );
 
-  // Single dot-path match keeps clean base name without collision
   const onlyAlex = collectProbeTargets(tools, "ALEX.head");
   assert.deepEqual(
     onlyAlex.map((x) => x.name),
@@ -532,14 +513,12 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
   );
   assert.equal(onlyAlex[0].obj, alexHead);
 
-  // Colliding loose bones disambiguate via unique boneNames key
   const bothGrips = collectProbeTargets(tools, "grip");
   assert.deepEqual(
     bothGrips.map((x) => x.name),
     ["gripLeft", "gripRight"],
   );
 
-  // Same-owner sibling name collisions fall back to owner.parentName.name
   const leftArm = new THREE.Group();
   leftArm.name = "leftArm";
   const leftJoint = new THREE.Bone();
@@ -557,7 +536,6 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
     ["Steve.leftArm.Joint", "Steve.rightArm.Joint"],
   );
 
-  // Missing filter returns empty list cleanly
   assert.deepEqual(collectProbeTargets(tools, "does_not_exist"), []);
 });
 
@@ -571,7 +549,6 @@ test("projectBoundsToScreen handles perspective, near-plane straddling, offscree
   assert.ok(Math.abs((front.x0 + front.x1) / 2 - 0.5) < 0.01);
   assert.ok(Math.abs((front.y0 + front.y1) / 2 - 0.5) < 0.01);
 
-  // Floor straddling near plane clips cleanly instead of flipping behind-camera corners to y0=0
   const floorBox = new THREE.Box3(new THREE.Vector3(-10, -0.1, -10), new THREE.Vector3(10, 0, 10));
   const floor = projectBoundsToScreen(floorBox, new THREE.Vector3(0, 0, 0), camera);
   assert.equal(floor.inView, true);
@@ -601,13 +578,11 @@ test("projectBoundsToScreen handles perspective, near-plane straddling, offscree
   assert.equal(backPt.inView, false);
   assert.equal(backPt.behind, true);
 
-  // Beyond far plane (camera far = 100 from z = 5 -> z < -95 is beyond far plane)
   const farBox = new THREE.Box3(new THREE.Vector3(-1, 0.5, -120), new THREE.Vector3(1, 1.5, -110));
   const far = projectBoundsToScreen(farBox, new THREE.Vector3(0, 1, -115), camera);
   assert.equal(far.inView, false);
   assert.equal(far.behind, undefined);
 
-  // OrthographicCamera projection
   const ortho = new THREE.OrthographicCamera(-4, 4, 2, -2, 0.1, 20);
   ortho.position.set(0, 0, 5);
   ortho.lookAt(0, 0, 0);
@@ -623,7 +598,6 @@ test("projectBoundsToScreen handles perspective, near-plane straddling, offscree
   assert.equal(orthoScreen.past, undefined);
 });
 
-// hiding a head past the top edge took 3 wrong-way tries when the rect stopped at 0: how far past each edge is said
 test("projectBoundsToScreen says how far past each edge, in frames, a cut-off box reaches", () => {
   const ortho = new THREE.OrthographicCamera(-4, 4, 2, -2, 0.1, 20);
   ortho.position.set(0, 0, 5);
@@ -659,7 +633,6 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
 
   setTiming({ speeds: [{ from: 0, to: 4, rate: 2 }], freezes: [{ at: 2, duration: 1 }] }, 4);
   try {
-    // 1. Normal run with --inspect mutating free.roll during draw -> restores all fields cleanly
     const renderOk = Object.assign(
       () => {
         assert.equal(free.on, true);
@@ -668,7 +641,6 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
       },
       { tools: { scene, camera, free, objects: [[box, "box"]] } },
     );
-    // At heard t=0.5 under 2x speed (0..4 -> heard 0..2), sceneT = 1.0
     await probeCheck(renderOk, { inspect: [0, 1, 8, 0, 1, 0, 40] }, postStub)("box", 0.5);
     assert.equal(free.on, false);
     assert.equal(free.fov, 55);
@@ -679,7 +651,6 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
     assert.equal(posted[0].report.t, 0.5);
     assert.equal(posted[0].report.sceneT, 1);
 
-    // 2. Thrown draw(t) still restores free cleanly via finally
     const renderFail = Object.assign(
       () => {
         free.roll = -77;
@@ -701,7 +672,6 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
   }
 });
 
-// a soft target is a focus question: where the lens focused and how blurred each target is, in a 1920-wide frame's px
 test("probeCheck says where the lens focuses and how blurred each target is", async () => {
   const scene = new THREE.Scene();
   const camera = makePerspectiveCamera();
@@ -723,7 +693,6 @@ test("probeCheck says where the lens focuses and how blurred each target is", as
     )("*", 1);
   const lines = await probe({ scene, camera, optics, objects });
   assert.match(lines[0], / focus 2\.00 m on near, f\/2, 50 mm /);
-  // the focus distance is the near box's: it is sharp; 3 m past focus, the far box blurs by blurPx's circle of confusion
   assert.match(
     lines.find((l) => l.startsWith("  near")),
     / blur 0\.0 px/,
@@ -732,12 +701,9 @@ test("probeCheck says where the lens focuses and how blurred each target is", as
     lines.find((l) => l.startsWith("  far")),
     / blur 20\.5 px/,
   );
-  // with no aperture the lens is all sharp, and nothing is said of focus
   const pinhole = await probe({ scene, camera, optics: { ...optics, fstop: 0 }, objects });
   assert.doesNotMatch(pinhole.join("\n"), /focus|blur/);
 });
-
-// ---------------- render CLI validation tests ----------------
 
 test(
   "render CLI validates --check probe syntax, a misspelt --fresh-cache, and help before Chrome boots",
@@ -785,7 +751,6 @@ test(
     assert.equal(typo.status, 2, typo.stdout + typo.stderr);
     assert.match(typo.stderr, /unknown option --fresh-cach/);
 
-    // a second --check would drop the first: it is refused with the one-flag form that runs both
     const twice = run(["stills"], ["--check", "text", "--check", "order"]);
     assert.equal(twice.status, 2, twice.stdout + twice.stderr);
     assert.match(
@@ -793,7 +758,6 @@ test(
       /--check is given twice: once, with every value in it \(--check "text;order"\)/,
     );
 
-    // only an --entry page reads cfg.lab: the film itself would ignore it
     const lab = run(["stills"], ["--lab", "view=desk"]);
     assert.equal(lab.status, 2, lab.stdout + lab.stderr);
     assert.match(lab.stderr, /--lab reaches only an --entry page/);
@@ -826,8 +790,6 @@ test("framecheck missing-video scan skips dot-directories like .chrome-cache and
   assert.match(out.stderr, /renders\/chunks\/c00\.mp4/);
   assert.doesNotMatch(out.stderr, /\.chrome-cache|\.prev/);
 });
-
-// ---------------- Live headless Chrome verification ----------------
 
 const setupProbeFilm = (t, chrome) => {
   const dir = makeTempDir(t, "render-probe-gl-");
@@ -953,7 +915,6 @@ test(
     if (!chrome) return t.skip("no Chrome binary available for live --check probe verification");
     const { dir, render } = setupProbeFilm(t, chrome);
 
-    // 1. Unfiltered --check probe:2 probes all draw.tools.objects at t=2 with film camera
     const allRun = render(["stills"], ["--check", "probe:2"]);
     assert.equal(allRun.status, 0, allRun.stdout + allRun.stderr);
     assert.doesNotMatch(allRun.stderr, /ignores --inspect\/--views/);
@@ -986,7 +947,6 @@ test(
     assert.ok(!existsSync(slot0Lock), "slot-0 lock should be released after render");
     writeFileSync(join(slot0Dir, "keep-cache.marker"), "persisted");
 
-    // 2. Filtered --check probe:dish|elon.head,2 + --inspect honors Free Cam and reports bone axes
     const inspectRun = render(
       ["stills"],
       ["--inspect", "1,1,9,1,1,0,40", "--check", "probe:dish|elon.head,2"],
@@ -1008,7 +968,6 @@ test(
     assert.deepEqual(inspByName.head.axes.y, [0, 0, 1]);
     assert.deepEqual(inspByName.head.axes.z, [0, -1, 0]);
 
-    // 3. Backwards --inspect probe followed by --check seen in the SAME boot proves probe restores free
     const chainedRun = render(
       ["stills"],
       ["--inspect", "0,1,5,0,1,10,50", "--check", "probe:dish,2;seen:dish,2,2.1"],
@@ -1030,7 +989,6 @@ test(
       "seen ran after probe with free restored to film camera and saw dish in frame",
     );
 
-    // 4. Wildcard --check probe:*,1 discovers named scene nodes outside draw.tools.objects
     const wildRun = render(["stills"], ["--check", "probe:*,1"]);
     assert.equal(wildRun.status, 0, wildRun.stdout + wildRun.stderr);
     const reportWild = JSON.parse(readFileSync(join(dir, "renders/probe_1s.json"), "utf8"));
@@ -1038,12 +996,10 @@ test(
     assert.ok(wildNames.includes("extra_marker"), `expected extra_marker in ${wildNames}`);
     assert.ok(wildNames.includes("head"), `expected head bone in ${wildNames}`);
 
-    // 5. Stills render cleans old stills without touching .chrome-cache
     const stillRun = render(["stills"], ["--at", "1"]);
     assert.equal(stillRun.status, 0, stillRun.stdout + stillRun.stderr);
     assert.equal(readFileSync(join(slot0Dir, "keep-cache.marker"), "utf8"), "persisted");
 
-    // 6. --check text and --check probe with --views emit explicit stderr warnings
     const viewsWarn = render(
       ["stills"],
       ["--views", "front:0,1,8,0,1,0,50", "--check", "text:0,1;probe:dish,1"],
@@ -1058,7 +1014,6 @@ test(
       /warning: --check probe uses the film's own camera under --views/,
     );
 
-    // 7. --fresh-cache bypasses renders/.chrome-cache cleanly
     rmSync(join(dir, "renders/.chrome-cache"), { recursive: true, force: true });
     const freshRun = render(["stills"], ["--fresh-cache", "--check", "probe:dish,1"]);
     assert.equal(freshRun.status, 0, freshRun.stdout + freshRun.stderr);

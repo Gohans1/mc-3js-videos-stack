@@ -13,12 +13,6 @@ import {
 } from "lucide-react";
 import { Fragment, lazy, Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 
-// The panels beside the picture, laid out as CapCut's. On a wide screen the libraries are on the left (the note being written,
-// then a toolbar of icons over their names: Notes, Audio, Text, Objects) and the details on the right, whose text tabs are those
-// of what is selected, as CapCut's are: a clip, Audio; a text or shape, Text | Animation; an object, Object; keys, Keyframes; nothing (the camera, CapCut's main
-// track), Camera, Speed and Animation for the shot or key picked, or on the playhead. Narrower, one column on the right (under
-// the picture on an upright phone) holds both: the note being written, then a tab each for the notes, the sound, the objects,
-// the text, the camera (Camera | Speed | Animation under it) and the keys, each with its details above its library.
 import { Tabs } from "@/components/Tabs";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -62,14 +56,13 @@ type Lib = StudioState["lib"];
 const CORE_TABS = ["notes", "lessons", "film", "ports", "cli", "openfilm"] as const;
 type CoreTab = (typeof CORE_TABS)[number];
 
-// CapCut's text tabs: the open one in the accent. The bar under it slides via Tabs.Indicator
 const tab =
   "relative flex h-10 upright:h-9 flex-none cursor-pointer items-center gap-1.5 rounded-sm px-1.5 text-sm font-semibold text-label outline-none transition-colors duration-150 not-data-active:hover:bg-surface-subtle not-data-active:hover:text-heading-foreground focus-visible:ring-2 focus-visible:ring-ring data-active:text-primary-text motion-safe:active:scale-[0.96] motion-reduce:transition-none pointer-coarse:h-11";
 const coreTab =
   "px-2.5 upright:px-2 not-data-active:hover:text-heading-foreground data-active:bg-tint data-active:text-heading-foreground [&_svg]:size-3.5 data-active:[&_svg]:text-primary-text";
 const isCore = (id: string): id is CoreTab => CORE_TABS.some((value) => value === id);
 const tabs =
-  "relative flex flex-none items-center gap-2.5 overflow-x-auto bg-card px-3 upright:gap-1.5 upright:px-2"; // CapCut's panel head: a lighter bar, no line under it
+  "relative flex flex-none items-center gap-2.5 overflow-x-auto bg-card px-3 upright:gap-1.5 upright:px-2";
 const panel = "mt-2 flex min-h-0 flex-1 flex-col";
 
 function TabUnderline({ inset = false, instant = false }: { inset?: boolean; instant?: boolean }) {
@@ -96,7 +89,6 @@ export const useWide = () =>
     },
     () => WIDE.matches,
   );
-// Switching between wide (Library + Details) and narrow (Side) keeps core tabs aligned
 studio.subscribe((s, was) => {
   if (s.side !== was.side) {
     if (isCore(s.side) && s.lib !== s.side) set({ lib: s.side });
@@ -130,13 +122,11 @@ const useParts = () => {
     asking,
   };
 };
-// Whether the film gives the studio anything to edit, so a wide screen has a details column to show
 export const useEditable = () => {
   const p = useParts();
   return p.sound || p.text || p.cam || p.lights || p.keys || p.placed;
 };
 
-// Pending notes ordered by triage urgency (To check amber · AI asks purple · To fix cyan) in one restrained obsidian counter pill
 function NotesCount({ open, check, asking }: { open: number; check: number; asking: number }) {
   if (open <= 0 && check <= 0 && asking <= 0) return null;
   const parts: {
@@ -214,7 +204,6 @@ const useAiTabs = () => {
   };
 };
 
-// Wide: the left column. CapCut's toolbar: an icon over each library's name
 const LIBS: { id: Lib; title: string; icon: LucideIcon }[] = [
   { id: "notes", title: "Notes", icon: MessageSquareText },
   { id: "lessons", title: "Lessons", icon: BookOpenText },
@@ -251,7 +240,6 @@ export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
         onValueChange={(v) => set({ lib: v as Lib })}
         className="flex min-h-0 flex-1 flex-col"
       >
-        {/* More tools than a narrow column holds scroll sideways, the fade saying there are more (the card stays under it) */}
         <div className="bg-card flex-none">
           <Tabs.List
             aria-label="Libraries"
@@ -338,7 +326,6 @@ export function Library({ lessonsWidthPx }: { lessonsWidthPx: number }) {
   );
 }
 
-// Wide: the right column, CapCut's details: the tabs of what is selected
 type Group =
   "adjustment" | "sound" | "text" | "objects" | "keys" | "cam" | "transition" | "openfilm";
 const GROUPS: Record<Group, { id: SideTab; title: string }[]> = {
@@ -488,7 +475,6 @@ function AudioTab() {
   );
 }
 
-// Narrow: the text tab holds the picked item's Text | Animation, or the library when none is picked
 function TextTab() {
   const side = useStudio((s) => s.side),
     picked = useStudio((s) => s.textPicks.length > 0),
@@ -519,7 +505,6 @@ function TextTab() {
   );
 }
 
-// Narrow: the camera tab holds CapCut's three, Camera | Speed | Animation, under it
 function CameraTab() {
   const { cam, lights } = useParts();
   const camTabs = cam ? GROUPS.cam : GROUPS.cam.filter((x) => x.id === "light");
@@ -645,8 +630,6 @@ export function Side({
         onValueChange={(v) => set({ side: v as SideTab })}
         className="flex min-h-0 flex-1 flex-col"
       >
-        {/* Too many for the narrow column beside a phone's picture, the tabs scroll sideways as the timeline tools do; the
-            line under them stays out of the fade, and the padding keeps the focus ring inside what the scroll clips */}
         <div className="bg-card flex-none">
           <Tabs.List
             ref={tabListRef}

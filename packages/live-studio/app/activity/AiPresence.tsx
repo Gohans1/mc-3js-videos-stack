@@ -1,6 +1,3 @@
-// The AI as a collaborator under the picture: a dot that is lit while it works, its latest line beside it, and on a click
-// the lines before (activity.ts). A line names seconds or a note: clicking it there takes the playhead to them, as any jump
-// the creator asks for; the AI's lines alone never move anything
 import { Bot, Check, CircleX, TriangleAlert } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -25,7 +22,6 @@ const ago = (ms: number) => {
         ? `${Math.round(s / 60)} min`
         : `${Math.round(s / 3600)} h`;
 };
-// redrawn only while items are aging: 5 s while recent/busy, 1 min after 90 s, 1 h after an hour, or silent when empty
 const useNow = (active: boolean, since: number | undefined) => {
   const [now, setNow] = useState(Date.now);
   const bump = () => setNow(Date.now());
@@ -46,14 +42,12 @@ const useNow = (active: boolean, since: number | undefined) => {
   }, [active, since]);
   return [now, bump] as const;
 };
-// the second a line is about: its own, else its first note's
 const secondOf = (a: Seen) => {
   if (a.at !== undefined) return a.at;
   const n = a.notes?.length ? get().notes.find((x) => x.id === a.notes![0]) : undefined;
   return n ? noteAt(n) : null;
 };
 
-// how a check or a render came out, beside its line; its words say it too
 function Outcome({ level }: { level: Seen["level"] }) {
   const Icon = level === "fail" ? CircleX : level === "warn" ? TriangleAlert : Check;
   return level ? (
@@ -102,7 +96,6 @@ function Line({ a, now }: { a: Seen; now: number }) {
           {body}
         </button>
       )}
-      {/* what a check found, each a jump to its second, as the ruler lights them */}
       {a.marks?.length ? (
         <ul aria-label="What it found" className="flex flex-wrap gap-1 ps-16 pe-2 pb-1.5">
           {a.marks.map((m, i) => (
@@ -119,7 +112,6 @@ function Line({ a, now }: { a: Seen; now: number }) {
   );
 }
 
-// off in Settings, nothing of it runs
 export function AiPresence({ className }: { className?: string }) {
   return useStudio((s) => s.aiActivity) ? <Presence className={className} /> : null;
 }
@@ -137,7 +129,6 @@ function Presence({ className }: { className?: string }) {
   const idleNeedRef = useRef(0);
   const [compactIdle, setCompactIdle] = useState(false);
 
-  // Collapse the static "AI idle" text before it clips mid-word when Transport's center slot narrows.
   useLayoutEffect(() => {
     const btn = triggerRef.current;
     const slot = btn?.parentElement;
@@ -257,8 +248,6 @@ function Presence({ className }: { className?: string }) {
           </ul>
         </div>
       </PopoverContent>
-      {/* how the AI's latest check or render came out, said to a screen reader as a status: politely, never moving the
-          focus; every line would talk over the film at each rebuild */}
       <span role="status" className="sr-only">
         {items.findLast((a) => a.level)?.say ?? ""}
       </span>
