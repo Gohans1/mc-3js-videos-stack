@@ -594,7 +594,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         id: "list",
         label: "list",
-        summary: "List the available version-matched guides.",
+        summary: "List the available version-matched guides and repo agent skills.",
         inheritFlags: true,
       },
       {

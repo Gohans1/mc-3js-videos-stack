@@ -17,7 +17,7 @@ Start here:
   bun run skills get core --ref sound  Load the sound workflow and checks
 
 Commands:
-  list                                List available guides (also the default)
+  list                                List available guides and repo agent skills (also the default)
   get <name>                          Print one guide
   path [name]                         Print the guide or repo skill directory as an absolute path
                                       Omit the name for the skill-data directory
@@ -43,14 +43,26 @@ const fail = (why) => {
 };
 
 // name and description from a guide's frontmatter
-const about = (name) => {
-  const text = readFileSync(join(DATA, name, "SKILL.md"), "utf8");
+const aboutFrom = (root, name) => {
+  const text = readFileSync(join(root, name, "SKILL.md"), "utf8");
   const said = (key) => text.match(new RegExp(`^${key}:\\s*(.+)$`, "m"))?.[1].trim() ?? "";
   return { name, text, description: said("description"), hidden: said("hidden") === "true" };
 };
-const guides = readdirSync(DATA).filter((d) => existsSync(join(DATA, d, "SKILL.md")));
+const about = (name) => aboutFrom(DATA, name);
+const oneLine = (text, max = 110) => {
+  const first = text.split(/(?<=[.!?])\s+/)[0] ?? text;
+  if (first.length <= max) return first;
+  const cut = first.slice(0, max - 3);
+  const space = cut.lastIndexOf(" ");
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}...`;
+};
+const guides = readdirSync(DATA)
+  .filter((d) => existsSync(join(DATA, d, "SKILL.md")))
+  .toSorted();
 const agentSkills = existsSync(AGENT_SKILLS)
-  ? readdirSync(AGENT_SKILLS).filter((d) => existsSync(join(AGENT_SKILLS, d, "SKILL.md")))
+  ? readdirSync(AGENT_SKILLS)
+      .filter((d) => existsSync(join(AGENT_SKILLS, d, "SKILL.md")))
+      .toSorted()
   : [];
 const files = (name) =>
   readdirSync(join(DATA, name), { recursive: true, withFileTypes: true })
@@ -65,9 +77,26 @@ if (!verb || verb === "list") {
   if (refs.length || argv.includes("--full"))
     fail("--ref and --full go with get: bun run skills get core --ref sound");
   const visible = guides.map(about).filter((g) => !g.hidden);
-  if (json) emit(visible.map(({ name, description }) => ({ name, description })));
+  const skills = agentSkills
+    .map((s) => ({
+      ...aboutFrom(AGENT_SKILLS, s),
+      path: join(AGENT_SKILLS, s),
+    }))
+    .filter((s) => !s.hidden);
+  if (json)
+    emit([
+      ...visible.map(({ name, description }) => ({ name, description, kind: "guide" })),
+      ...skills.map(({ name, description, path }) => ({ name, description, kind: "skill", path })),
+    ]);
   else {
     for (const g of visible) console.log(`${g.name.padEnd(12)}${g.description}`);
+    if (skills.length) {
+      const width = Math.max(12, ...skills.map((s) => s.name.length + 2));
+      console.log(
+        "\nRepo agent skills (open SKILL.md directly or run bun run skills path <name>):",
+      );
+      for (const s of skills) console.log(`  ${s.name.padEnd(width)}${oneLine(s.description)}`);
+    }
     console.log("next: bun run skills get core  (or --ref <topic>, --full, path <skill>)");
   }
   process.exit(0);
@@ -85,7 +114,7 @@ if (verb === "path") {
       : agentSkills.includes(name)
         ? join(AGENT_SKILLS, name)
         : null;
-  if (!dir) fail(`no guide or agent skill ${name}; bun run skills lists guides`);
+  if (!dir) fail(`no guide or agent skill ${name}; bun run skills lists guides and repo skills`);
   if (json) emit({ path: dir });
   else console.log(dir);
   process.exit(0);

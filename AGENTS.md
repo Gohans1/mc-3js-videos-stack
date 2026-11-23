@@ -16,6 +16,9 @@
 | Đường dẫn                               | Nội dung                                                                                                        |
 | --------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
 | .claude/skills/gohans-3js-videos-skills | Skill dựng phim 3js và MC.                                                                                      |
+| .claude/skills/aistudio                 | Điều khiển Google AI Studio qua Chrome ẩn để phân tích video ref và so sánh REF vs OURS.                       |
+| .claude/skills/channel-dna              | Nhà máy reverse-engineer bất kỳ kênh YouTube Shorts nào thành skill sản xuất riêng.                             |
+| .claude/skills/zack-d-films             | Playbook sản xuất Shorts 3D Minecraft theo DNA thực nghiệm của Zack D. Films.                                   |
 | skill-data/core                         | Guide CLI và quy trình; chạy bun run help và bun run skills get core trước khi tự viết lệnh thủ công.           |
 | packages/live-studio                    | Studio, timeline, ghi chú, render; cách dùng: bun run skills get core --ref contract.                           |
 | packages/film-stage                     | Camera, fade, animate, transitions, titles, grade, velocity.                                                    |
@@ -23,7 +26,7 @@
 | packages/mc-actor                       | Player, feet, mob, carry.                                                                                       |
 | packages/mc-assets                      | Pack, placed, screen, ink, variants.                                                                            |
 | packages/clip-catalog                   | Kho mocap.                                                                                                      |
-| templates/film                          | Phim mẫu; bun run new-film.                                                                                     |
+| templates/film                          | Phim mẫu kèm CAPABILITIES.md (bản đồ đầy đủ package exports, acting, VFX, CLI và skills); bun run new-film.    |
 | films/                                  | Phim thật.                                                                                                      |
 | scripts/                                | Voice, sound, find, asset, review (reference, scenes, qc), media (công cụ local: bun run media list), vault.    |
 | INSTALL.md                              | Cài đặt, kho, giấy phép.                                                                                        |

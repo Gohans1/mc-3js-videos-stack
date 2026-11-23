@@ -76,7 +76,7 @@ const GROUPS = [
       sweep:
         "a whole draft against the reference, heaviest first: our pops and stutters, blur, light, cuts; new and gone since the last sweep",
       reference:
-        "add <video> to references/, timecode <video> for a bottom timecode strip copy, inspect <video|URL> for pictures/captions, study/compare timing or solve a shot's camera; optional, no quality gate",
+        "add <video> to references/, timecode <video> for a bottom timecode strip copy, sidebyside <ref> <draft> for one synced REF|OURS video, inspect <video|URL> for pictures/captions, study/compare timing or solve a shot's camera; optional, no quality gate",
       pace: "current whole-film render: shot lengths and picture holds with planned narration",
       deliver:
         "technical upload profile (renders/final.mp4); --youtube adds a local compression and banding preview",
