@@ -43,7 +43,8 @@ Choose the checks below for the affected behavior; they are not a sequence to ru
 bun run at 35.6                              # what plays at a heard second (also 00:35.633, or '#3' for note 3, quoted)
 bun run render stills --at 12,30.5             # frames, with the heard time and shot under each
 bun run sheet                                # every still, six to a picture
-bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg --out renders/grid.jpg  # explicit images into a captioned grid
+bun run sheet vs                             # every renders/vs_still_*.jpg from render stills --ref, six to a picture
+bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg --out renders/grid.jpg  # explicit images or globs into a captioned grid
 bun run sheet renders/draft_video.mp4 shots  # the whole film at a glance: one frame from every shot
 bun run sheet renders/draft_video.mp4 cut 4  # a transition up close: 0.25 s before cut 4 to 0.35 s after, naming shot 4 and 5 and the fx
 bun run render clip                          # the draft video and renders/cuts.json
@@ -167,7 +168,7 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 | --- | --- |
 | Bring a downloaded video into the film | `bun run reference add <video> [--name ref]`: plain name in references/, untouched source kept, H.264 copy for AV1/4K/.mkv |
 | Burn timecode bar below a review copy | `bun run reference timecode references/ref.mp4 [--out <file>] [--label <text>] [--short-edge 720 \| --full] [--crf 22]`: black bottom bar (HH:MM:SS.mmm, frame, label) at 720p short-edge CRF 22 by default for fast AI uploads without touching references/ |
-| Tile reference and remake into one synced review video | `bun run reference sidebyside references/ref.mp4 renders/draft.mp4 [--out <file>] [--audio ours\|ref\|none] [--layout auto\|hstack\|vstack] [--short-edge 720 \| --full] [--crf 22]`: single synced REF\|OURS MP4 with top labels, shared bottom timecode bar, automatic draft-strip crop, and black tail padding for duration mismatch |
+| Tile reference and remake into one synced review video | `bun run reference sidebyside references/ref.mp4 renders/draft.mp4 [--start <sec>] [--out <file>] [--audio ours\|ref\|none] [--layout auto\|hstack\|vstack] [--short-edge 720 \| --full] [--crf 22]`: single synced REF\|OURS MP4 with top labels, shared bottom timecode bar, automatic draft-strip crop, automatic `span_`/`chunks/cNN` film-clock alignment (`--start` overrides), and `--samples 1` blur warning |
 | Frames, 4x4 overviews, captions & URL fetch | `bun run reference inspect <video\|URL>` (`--scenes --frames N --at ... --find ...`) |
 | Cuts, fades & scene gallery | `bun run scenes <video>` (PySceneDetect) or `bun run reference study <video>` |
 | Separate voice, BGM & SFX stems | `bun run media separate <video>` (see `--ref sound`) |
