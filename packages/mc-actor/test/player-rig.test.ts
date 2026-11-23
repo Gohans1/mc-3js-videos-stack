@@ -795,4 +795,54 @@ describe("mc-actor player rig primitives", () => {
       }
     }
   });
+
+  test("full blink hides sclera/iris/pupil meshes and extends eyelid past both eye edges without leaving a 1px slit", async () => {
+    installPixelDocument();
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin());
+    const faceMeshes: THREE.Mesh[] = [];
+    p.g.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (
+        m.isMesh &&
+        !Array.isArray(m.material) &&
+        (m.material as THREE.MeshStandardMaterial).polygonOffset
+      ) {
+        faceMeshes.push(m);
+      }
+    });
+    const byOffset = (factor: number) =>
+      faceMeshes.filter(
+        (m) => (m.material as THREE.MeshStandardMaterial).polygonOffsetFactor === factor,
+      );
+    const whites = byOffset(-1).filter(
+      (m) => (m.material as THREE.MeshStandardMaterial).color.getHexString() === "f4f4f4",
+    );
+    const irises = byOffset(-2).filter((m) => {
+      const { width, height } = (m.geometry as THREE.PlaneGeometry).parameters;
+      return Math.abs(width / height - 0.95) < 0.01;
+    });
+    const pupils = byOffset(-3);
+    const lids = byOffset(-4);
+    expect(whites).toHaveLength(2);
+    expect(irises).toHaveLength(2);
+    expect(pupils).toHaveLength(2);
+    expect(lids).toHaveLength(4);
+
+    p.face({ y: 0, tilt: 0, open: 1, squint: 0, pupil: 1, smile: 0 }, [0, 0, 0, 0], 1, [0, 0]);
+    expect(whites.every((m) => !m.visible)).toBe(true);
+    expect(irises.every((m) => !m.visible)).toBe(true);
+    expect(pupils.every((m) => !m.visible)).toBe(true);
+    const visibleLids = lids.filter((m) => m.visible);
+    expect(visibleLids).toHaveLength(2);
+    const whiteH =
+      (whites[0]!.geometry as THREE.PlaneGeometry).parameters.height * whites[0]!.scale.y;
+    const lidH =
+      (visibleLids[0]!.geometry as THREE.PlaneGeometry).parameters.height * visibleLids[0]!.scale.y;
+    expect(lidH).toBeGreaterThan(whiteH * 1.1);
+
+    p.face({ y: 0, tilt: 0, open: 1, squint: 0, pupil: 1, smile: 0 }, [0, 0, 0, 0], 0, [0, 0]);
+    expect(whites.every((m) => m.visible)).toBe(true);
+    expect(irises.every((m) => m.visible)).toBe(true);
+    expect(pupils.every((m) => m.visible)).toBe(true);
+  });
 });

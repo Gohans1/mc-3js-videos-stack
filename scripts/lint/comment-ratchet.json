@@ -60,7 +60,7 @@
     "packages/mc-actor/src/clips.ts": 2,
     "packages/mc-actor/src/mob.ts": 4,
     "packages/mc-actor/src/mocap.ts": 13,
-    "packages/mc-actor/src/player.ts": 12,
+    "packages/mc-actor/src/player.ts": 11,
     "packages/mc-assets/src/catalog.ts": 1,
     "packages/mc-assets/src/model-bounds.ts": 2,
     "packages/mc-assets/src/placed.ts": 1,

@@ -492,9 +492,12 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
         e.pupil.scale.copy(e.pupilS).multiplyScalar(pupil);
         const cover = Math.min(1, Math.max(1 - open, blink)),
           under = squint * 0.45 * (1 - cover);
-        // each lid reaches LIP past the white, so no sliver of white shows round its edge from a low or high camera
-        const top = cover * H + LIP,
+        const top = cover * H + LIP * (1 + cover),
           low = under * H + LIP;
+        const openEye = cover < 0.995;
+        e.white.visible = openEye;
+        e.iris.visible = openEye;
+        e.pupil.visible = openEye;
         e.top.visible = cover > 0.01;
         e.top.scale.y = (e.topS.y * top) / H;
         at(e.top, e.top0, 0, H / 2 + LIP - top / 2);
