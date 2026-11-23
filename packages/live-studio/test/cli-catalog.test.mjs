@@ -565,6 +565,10 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "scripts/review/reference_transcript.py",
         "raw-preserving transcript import for reference inspect",
       ],
+      [
+        "scripts/review/reference_video.mjs",
+        "timecode and sidebyside video subcommand handlers imported by scripts/review/reference.mjs",
+      ],
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
       ["scripts/evals/find/dual.ts", "dual search evaluation dispatched by eval:find --mode dual"],
@@ -2208,5 +2212,75 @@ describe("cli-catalog resolver rules", () => {
       "--gap",
       "0.1",
     ]);
+  });
+
+  test("resolves reference timecode operation with --out, --label, and --minutes", () => {
+    const tc = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "timecode", reference: "references/ref.mp4" },
+        flags: { "--out": "renders/ref_tc.mp4", "--label": "REF", "--minutes": 5 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(tc.validationErrors).toEqual([]);
+    expect(tc.argvTokens).toEqual([
+      "timecode",
+      "references/ref.mp4",
+      "--out",
+      "renders/ref_tc.mp4",
+      "--label",
+      "REF",
+      "--minutes",
+      "5",
+    ]);
+  });
+
+  test("resolves reference sidebyside operation with --out, --audio, --layout, and --short-edge", () => {
+    const sbs = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: {
+          operation: "sidebyside",
+          reference: "references/ref.mp4",
+          remake: "renders/draft.mp4",
+        },
+        flags: {
+          "--out": "renders/ref_vs_draft.mp4",
+          "--audio": "ours",
+          "--layout": "hstack",
+          "--short-edge": 720,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(sbs.validationErrors).toEqual([]);
+    expect(sbs.argvTokens).toEqual([
+      "sidebyside",
+      "references/ref.mp4",
+      "renders/draft.mp4",
+      "--out",
+      "renders/ref_vs_draft.mp4",
+      "--short-edge",
+      "720",
+      "--audio",
+      "ours",
+      "--layout",
+      "hstack",
+    ]);
+    const conflict = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: {
+          operation: "sidebyside",
+          reference: "references/ref.mp4",
+          remake: "renders/draft.mp4",
+        },
+        flags: { "--short-edge": 720, "--full": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(conflict.exclusiveConflicts.length).toBeGreaterThan(0);
+    expect(conflict.validationErrors.length).toBeGreaterThan(0);
   });
 });

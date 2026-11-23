@@ -11,5 +11,6 @@
 
 # Skills
 
+- Đọc `CAPABILITIES.md` ngay ở thư mục gốc của film này để nắm đủ toàn bộ package exports (`film-stage`, `film-kit`, `mc-actor`, `mc-assets`, `live-studio`), shader, Rapier physics, CLI và repo skills trước khi tự code lại từ đầu
 - LUÔN LUÔN dùng SKILL(và CLI): `mc-films` (`../../.claude/skills/mc-films`, chạy `bun run skills get core` và `bun run help`)
 - Sound/âm-thanh/SFX/BGM/Voice/Audio/etc...: `earshot`; `real-sound`

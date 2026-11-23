@@ -4,6 +4,7 @@ export interface Shutter {
   angle?: number;
   timing?: ShutterTiming;
   phase?: number;
+  samples?: number;
   apertureSamples?: number;
 }
 export interface ApertureSample {
@@ -80,6 +81,12 @@ export const apertureSamples = (count: number, time = 0): (ApertureSample | unde
 
 const GAP_PX = 12;
 export const MAX_SHUTTER_SAMPLES = 64;
+export const shutterSamples = (base: number, shutter?: Shutter) => {
+  if (base <= 1) return base;
+  const raw = shutter?.samples;
+  const target = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw) : base;
+  return Math.min(MAX_SHUTTER_SAMPLES, Math.max(base, target));
+};
 export const samplesForTurn = (
   samples: number,
   before: readonly number[],

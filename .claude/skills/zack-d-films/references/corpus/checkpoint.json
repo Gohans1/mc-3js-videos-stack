@@ -1,0 +1,131 @@
+{
+  "channel": "zack-d-films",
+  "updatedAt": "2026-11-22T21:41:54.996Z",
+  "completedCount": 17,
+  "failedCount": 3,
+  "entries": {
+    "lEXSVWGubLo": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:18:36.631Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1oRfwnxniI9f3_L-UP9UOMq85n5qHF_Dp",
+      "attempts": 1
+    },
+    "0BZ1C83I2R4": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:18:38.384Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1bHc6zimJg8Svc2Z17rc-EkOd91vQjUHk",
+      "attempts": 1
+    },
+    "rPWvvcttpmk": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:24:49.644Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1RjIbGmKyHY7Y1E3JeUmhLrWmM0CFZ3GU",
+      "attempts": 1
+    },
+    "CRGWDiIgMZ4": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:24:16.661Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1HsZs54soVqehmrK3nP36NV8OJ7_0qB_t",
+      "attempts": 1
+    },
+    "fUmofQCc_4s": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:29:06.324Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1GzJJ7sKvWjcTb1Xo3IpOYFozqf1zJ4R9",
+      "attempts": 1
+    },
+    "5puZlZQNArc": {
+      "status": "done",
+      "updatedAt": "2026-11-22T19:28:42.922Z",
+      "chatUrl": "https://aistudio.google.com/prompts/12w__JiMSR8dQpimed6neL-3djifk6rGu",
+      "attempts": 1
+    },
+    "7i6ok0llYUc": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:14:04.036Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1C4cCSXw8TTmyFlGh12ozyWBbW5lVU9yD",
+      "attempts": 1
+    },
+    "SGgYDfeHYXA": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:15:20.663Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1T08TXZAztGMx25eX37YF2Jsdfi5iUvhY",
+      "attempts": 1
+    },
+    "320fjAdEboQ": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:19:46.991Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1iv_iPX1mUwFqLxRptX6sFAhACmP1UMGH",
+      "attempts": 1
+    },
+    "UgP7_6_i1J4": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:20:07.357Z",
+      "chatUrl": "https://aistudio.google.com/prompts/157Nr74srQjx5Mkjc8nDeMzMEtmpFVWFd",
+      "attempts": 1
+    },
+    "NdKRD1j9juE": {
+      "status": "failed",
+      "updatedAt": "2026-11-22T21:22:45.565Z",
+      "chatUrl": null,
+      "attempts": 2,
+      "error": "✗ [14/15] copy answer failed: \"Copy as markdown\" of turn -1 copied nothing |   screenshot: C:\\Users\\ADMIN\\AppData\\Local\\Temp\\aistudio-failed-cdna2-step14.png"
+    },
+    "OXRzmyOMKVw": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:25:11.413Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1ioKMzyvv1zG66YWUlXHxwphFs8v5-2yn",
+      "attempts": 1
+    },
+    "Uzo10EjKC6w": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:27:53.366Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1volSR9bSHTfpcriKPtmEGM4WIFtjhbxU",
+      "attempts": 1
+    },
+    "epP7TB8n3ZU": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:28:40.513Z",
+      "chatUrl": "https://aistudio.google.com/prompts/10lswqfCqFDg0rKdIz-dk9kviibH2vZBD",
+      "attempts": 1
+    },
+    "HF1K91wSTTc": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:31:46.108Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1D18HaXjp-ME6JF17o-b7TWGl29YzfetA",
+      "attempts": 1
+    },
+    "tFbYLBxBB00": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:34:52.712Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "LjHDUQ7Htvk": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:38:33.341Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "KBfPDWqZ28I": {
+      "status": "failed",
+      "updatedAt": "2026-11-22T21:38:36.239Z",
+      "chatUrl": null,
+      "attempts": 0,
+      "error": "yt-dlp download failed: ERROR: [youtube] KBfPDWqZ28I: Sign in to confirm you�re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+    },
+    "vhxGX3kQMXQ": {
+      "status": "failed",
+      "updatedAt": "2026-11-22T21:38:39.074Z",
+      "chatUrl": null,
+      "attempts": 0,
+      "error": "yt-dlp download failed: ERROR: [youtube] vhxGX3kQMXQ: Sign in to confirm you�re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+    },
+    "QXEr924US38": {
+      "status": "done",
+      "updatedAt": "2026-11-22T21:41:54.993Z",
+      "chatUrl": null,
+      "attempts": 1
+    }
+  }
+}

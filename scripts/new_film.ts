@@ -24,10 +24,15 @@ Requires a prepared vault (new machine: bun run setup). Downloads dependencies; 
 The film name must also be unused by any existing workspace package.
 Rejects ports already assigned to another film; an unrelated running service can still occupy the port.
 If a step fails, the film is kept and the error prints the recovery command. Rerunning new-film never overwrites it.
-next: cd films/<name> and run bun run check, then bun run studio --detach (or bun run studio). Data rules: bun run skills get core --ref contract.`;
+next: cd films/<name>, read CAPABILITIES.md (full package, acting, VFX and skill atlas), run bun run check, then bun run studio --detach. Data rules: bun run skills get core --ref contract.`;
 
 export const VALID_RATIOS = ["16:9", "9:16"] as const;
 export type FilmRatio = (typeof VALID_RATIOS)[number];
+export const TEMPLATE_SKIP_NAMES = ["node_modules", "renders", "__pycache__"] as const;
+
+export function shouldCopyTemplateEntry(srcPath: string): boolean {
+  return !(TEMPLATE_SKIP_NAMES as readonly string[]).includes(basename(srcPath));
+}
 
 export function validateRatio(raw: string | undefined): FilmRatio | null {
   if (!raw) return null;
@@ -170,7 +175,7 @@ function main() {
 
   cpSync(join(ROOT, "templates/film"), film, {
     recursive: true,
-    filter: (src) => !["node_modules", "renders"].includes(basename(src)),
+    filter: shouldCopyTemplateEntry,
   });
   mkdirSync(join(film, "assets/public"), { recursive: true });
   const pkg = join(film, "package.json");
@@ -203,8 +208,8 @@ function main() {
   run("bun", [join(studio, "init.mjs"), film], ROOT);
   run("bun", ["scripts/link.ts", name], ROOT);
   console.log(`\nfilms/${name} created, dependencies installed and vault linked (studio port ${port}${ratio ? `, ratio ${ratio}` : ""}).
-The scene has not been opened yet; check it and open the URL Studio prints.
-next: cd films/${name} and run bun run check, then bun run studio --detach (check with --status, stop with --stop)`);
+The scene has not been opened yet; read CAPABILITIES.md for the full package/acting/VFX/skill atlas, check the scene, and open the URL Studio prints.
+next: cd films/${name}, read CAPABILITIES.md, run bun run check, then bun run studio --detach (check with --status, stop with --stop)`);
 }
 
 if (import.meta.main) {

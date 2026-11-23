@@ -75,7 +75,7 @@ const GROUPS = [
       sweep:
         "a whole draft against the reference, heaviest first: our pops and stutters, blur, light, cuts; new and gone since the last sweep",
       reference:
-        "inspect <video|URL> for timestamped pictures/captions and targeted follow-ups; study/compare for measured timing and pictures; optional, no quality gate",
+        "add <video> to references/, timecode <video> for a bottom timecode strip copy, sidebyside <ref> <draft> for one synced REF|OURS video, inspect <video|URL> for pictures/captions, study/compare timing or solve a shot's camera; optional, no quality gate",
       pace: "current whole-film render: shot lengths and picture holds with planned narration",
       deliver:
         "technical upload profile (renders/final.mp4); --youtube adds a local compression and banding preview",
@@ -307,6 +307,10 @@ if (film) {
     timingTimeline: "speed ramps, freezes, velocity",
   };
   const files = [
+    [
+      "CAPABILITIES.md",
+      "full atlas of package exports (film-stage, film-kit, mc-actor, mc-assets, live-studio), shaders, physics and skills (shared: ../../templates/film/CAPABILITIES.md)",
+    ],
     ["src/scene.ts", "the film's code: buildScene, draw(t)"],
     ["src/edit.json", "narration takes and script, voice warp, beats, the film's own settings"],
     ...Object.entries(what).flatMap(([k, about]) => (conf[k] ? [[conf[k], about]] : [])),

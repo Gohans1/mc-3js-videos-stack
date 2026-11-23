@@ -141,6 +141,7 @@ test("help documents discovery, and sends commands to their real working directo
   const commands = spawnSync("bun", [HELP], { encoding: "utf8", timeout: 10000 });
   expect(commands.status).toBe(0);
   expect(commands.stdout).toMatch(/\n {2}earshot\s+ears, its own CLI/);
+  expect(commands.stdout).toMatch(/\n {2}reference\s+[^\n]*sidebyside/);
   const root = spawnSync("bun", [HELP, "render"], { encoding: "utf8", timeout: 10000 });
   expect(root.status).toBe(0);
   expect(root.stdout).toContain("cd films/<name>");

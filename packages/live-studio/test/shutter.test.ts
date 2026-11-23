@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
 
-import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
+import { ShotsTimeline } from "../src/contract";
+import {
+  apertureSamples,
+  MAX_SHUTTER_SAMPLES,
+  samplesForTurn,
+  shutterBounds,
+  shutterSamples,
+  shutterTimes,
+} from "../src/shutter";
 
 test("centred shutter clips at a cut and distributes the surviving samples evenly", () => {
   const before = shutterTimes(0.995, 30, 4, 0, 1, { angle: 360, timing: "center" });
@@ -45,4 +53,20 @@ test("the shutter stops at a camera key's cut inside a shot, as at a shot's star
   expect(shutterBounds(10.01, 0, 20, [], [5, 10.01, 15])).toEqual([10.01, 15]);
   const [from, to] = shutterBounds(10, 0, 20, [], [10.01]);
   expect(Math.max(...shutterTimes(10, 30, 8, from, to))).toBeLessThan(10.01);
+});
+
+test("per-shot shutter.samples boosts multi-sample renders up to MAX_SHUTTER_SAMPLES without slowing 1-sample renders", () => {
+  expect(shutterSamples(1, { samples: 32 })).toBe(1);
+  expect(shutterSamples(8)).toBe(8);
+  expect(shutterSamples(8, { samples: 32 })).toBe(32);
+  expect(shutterSamples(16, { samples: 8 })).toBe(16);
+  expect(shutterSamples(8, { samples: 200 })).toBe(MAX_SHUTTER_SAMPLES);
+  expect(shutterSamples(8, { samples: Number.NaN })).toBe(8);
+  expect(shutterSamples(8, { samples: Number.POSITIVE_INFINITY })).toBe(8);
+
+  const ok = ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 32 } }]);
+  expect(ok.success).toBe(true);
+  expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 0 } }]).success).toBe(false);
+  expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 65 } }]).success).toBe(false);
+  expect(ShotsTimeline.safeParse([{ t: 0, shutter: { samples: 12.5 } }]).success).toBe(false);
 });

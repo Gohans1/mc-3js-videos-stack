@@ -1,0 +1,1033 @@
+{
+  "generatedAt": "2026-11-22",
+  "shippedPrompt": {
+    "file": ".claude/skills/aistudio/system/analyze-ref-video.md",
+    "version": "v4",
+    "lines": 100,
+    "settings": {
+      "thinking": "Extra High",
+      "media": "High",
+      "fps": 24,
+      "search": "off",
+      "videoPrep": "720p short-edge CRF 22 + bottom timecode bar"
+    }
+  },
+  "n60BaselineV3": {
+    "videos": 60,
+    "gtPanelsVerified": 696,
+    "criticAccuracyRangePct": {
+      "min": 98.9,
+      "max": 99.4
+    },
+    "boundaries": {
+      "Opening": 60,
+      "Hard Cut": 23,
+      "Hidden Cut": 66,
+      "Transition": 172,
+      "Continuous": 540
+    },
+    "conf": {
+      "High": 1621,
+      "Med": 224,
+      "Low": 25
+    },
+    "verifiedCraftPresence": {
+      "continuous": 60,
+      "logosToReplace": 59,
+      "particlesOrFluid": 54,
+      "emissiveHighlightPulses": 52,
+      "radialOrTranslationBlur": 49,
+      "graphics2D3D": 48,
+      "cameraTurnBlur": 45,
+      "transitions": 44,
+      "cutaways": 36,
+      "rackFocus": 35,
+      "objectOnlyBlur": 31,
+      "hiddenCut": 27,
+      "cardFlipTransition": 18,
+      "diegeticScreensStrict": 18,
+      "hardCut": 16,
+      "trackingBlur": 16,
+      "pushUpTransition": 12,
+      "thoughtBubblePiP": 8,
+      "splitScreen": 2
+    }
+  },
+  "abEvalV3vsV4": {
+    "pairs": 8,
+    "split": {
+      "zdf3d_gemini4neon": 6,
+      "ood2dAndLiveAction_gemini4hydrogen": 2
+    },
+    "automated": {
+      "v3": {
+        "totalIssues": 8,
+        "avgChars": 12412.8,
+        "avgSec2LensPct": 9.3,
+        "avgSec2CurvePct": 9.6,
+        "avgSec2ShadowPct": 0,
+        "drawTLeaks": 8,
+        "secretSauce": 0,
+        "shadowHardness": 0,
+        "vignetteOrPost": 3,
+        "jlOrSilence": 1,
+        "negSpamTotal": 0
+      },
+      "v4": {
+        "totalIssues": 1,
+        "avgChars": 13829.6,
+        "avgSec2LensPct": 47,
+        "avgSec2CurvePct": 20.6,
+        "avgSec2ShadowPct": 3.3,
+        "drawTLeaks": 0,
+        "secretSauce": 8,
+        "shadowHardness": 6,
+        "vignetteOrPost": 8,
+        "jlOrSilence": 7,
+        "negSpamTotal": 1
+      }
+    },
+    "threeCriticBlindRubricMax240": {
+      "criticA": {
+        "v3": 170,
+        "v4": 233,
+        "delta": 63,
+        "zdfV3": 129,
+        "zdfV4": 174.5,
+        "oodV3": 41,
+        "oodV4": 58.5,
+        "verdict": "SHIP v4 + CONFIRM v4 OOD PASS"
+      },
+      "criticB": {
+        "v3": 175.5,
+        "v4": 228.5,
+        "delta": 53,
+        "zdfV3": 137,
+        "zdfV4": 172.5,
+        "oodV3": 38.5,
+        "oodV4": 56,
+        "verdict": "SHIP v4 + CONFIRM v4 OOD PASS"
+      },
+      "criticC": {
+        "v3": 174,
+        "v4": 232.5,
+        "delta": 58.5,
+        "zdfV3": 132,
+        "zdfV4": 174.5,
+        "oodV3": 42,
+        "oodV4": 58,
+        "verdict": "SHIP v4 + CONFIRM v4 OOD PASS"
+      },
+      "mean": {
+        "v3": 173.2,
+        "v4": 231.3,
+        "v3Pct": 72.2,
+        "v4Pct": 96.4,
+        "delta": 58.2,
+        "sweeps": "24/24"
+      }
+    }
+  },
+  "corpusZackDFilms60": [
+    {
+      "idx": 1,
+      "slug": "01_food",
+      "id": "KNUvtyqbqDc",
+      "title": "How Food Companies Make You Eat More",
+      "genre": "explainer-factory"
+    },
+    {
+      "idx": 2,
+      "slug": "02_bookshelf",
+      "id": "ALeCVSLvwL8",
+      "title": "How A Hidden Bookshelf Door Works",
+      "genre": "mechanism-redstone"
+    },
+    {
+      "idx": 3,
+      "slug": "03_skydive",
+      "id": "vniIZ2bYx2A",
+      "title": "He Skydived Without A Parachute",
+      "genre": "aerial-action-hud"
+    },
+    {
+      "idx": 4,
+      "slug": "04_fire",
+      "id": "Ov5Wsh_ZuoI",
+      "title": "Stranger Saves Five Children From Fire",
+      "genre": "night-rescue-fire"
+    },
+    {
+      "idx": 5,
+      "slug": "05_jungle",
+      "id": "ay7PPTlS_Bk",
+      "title": "He Hid In The Jungle For 30 Years",
+      "genre": "historical-survival",
+      "wave": 1
+    },
+    {
+      "idx": 6,
+      "slug": "06_bunker",
+      "id": "xcGZNNWPIA0",
+      "title": "The Last Doomsday Bunker (fiction)",
+      "genre": "scifi-bunker-suspense",
+      "wave": 1
+    },
+    {
+      "idx": 7,
+      "slug": "07_everest",
+      "id": "0Ofvs3j6PaQ",
+      "title": "Could You Move Mount Everest To America?",
+      "genre": "mega-scale-geography",
+      "wave": 1
+    },
+    {
+      "idx": 8,
+      "slug": "08_matchstick",
+      "id": "X4HlBBPM6l0",
+      "title": "Can You Solve This Matchstick Puzzle",
+      "genre": "tabletop-puzzle-gfx",
+      "wave": 1
+    },
+    {
+      "idx": 9,
+      "slug": "09_grenade",
+      "id": "D_Gtwf9ISPI",
+      "title": "Why Soldiers Put Grenades In Glass Cups",
+      "genre": "military-trap-glass",
+      "wave": 1
+    },
+    {
+      "idx": 10,
+      "slug": "10_skilift",
+      "id": "0P6pOCH_HpE",
+      "title": "Trapped On A Ski Lift Overnight",
+      "genre": "winter-night-survival",
+      "wave": 1
+    },
+    {
+      "idx": 11,
+      "slug": "11_banks",
+      "id": "cgmVXy2Zw94",
+      "title": "How Banks Make Money With Your Savings",
+      "genre": "finance-infographic",
+      "wave": 2
+    },
+    {
+      "idx": 12,
+      "slug": "12_chatgpt",
+      "id": "hKOd4P6Px5o",
+      "title": "Why ChatGPT Contradicted Itself",
+      "genre": "tech-ui-hybrid",
+      "wave": 2
+    },
+    {
+      "idx": 13,
+      "slug": "13_magma",
+      "id": "gpZstBrMiF0",
+      "title": "Dumping Yellowstone's Magma On NYC",
+      "genre": "city-lava-disaster",
+      "wave": 2
+    },
+    {
+      "idx": 14,
+      "slug": "14_car_stranger",
+      "id": "IML9AIp8mXs",
+      "title": "The Stranger Hiding Inside Her Car (urban legend)",
+      "genre": "night-car-horror",
+      "wave": 2
+    },
+    {
+      "idx": 15,
+      "slug": "15_balloons",
+      "id": "GW5zKGgkEmc",
+      "title": "Stuck In The Sky With Balloons",
+      "genre": "aerial-comedy-survival",
+      "wave": 2
+    },
+    {
+      "idx": 16,
+      "slug": "16_gold_plumber",
+      "id": "arxhMfOZFiI",
+      "title": "Plumber Finds Gold Buried Under A House",
+      "genre": "treasure-dig-story",
+      "wave": 2
+    },
+    {
+      "idx": 17,
+      "slug": "17_wonka",
+      "id": "sPKpPv9Pk0w",
+      "title": "The Rotten Chocolate River In Willy Wonka",
+      "genre": "comedy-liquid-crowd",
+      "wave": 3
+    },
+    {
+      "idx": 18,
+      "slug": "18_3d_dimension",
+      "id": "6QqiYZ45nHQ",
+      "title": "How To Show 2D Beings The Third Dimension",
+      "genre": "abstract-2d-3d-math",
+      "wave": 3
+    },
+    {
+      "idx": 19,
+      "slug": "19_jail",
+      "id": "6epSwSuWf7M",
+      "title": "He Was Sent To Jail To Learn A Lesson",
+      "genre": "prison-character-drama",
+      "wave": 3
+    },
+    {
+      "idx": 20,
+      "slug": "20_walking_city",
+      "id": "gYiLlAg-B1I",
+      "title": "How A Walking City Would Work",
+      "genre": "megastructure-mech",
+      "wave": 3
+    },
+    {
+      "idx": 21,
+      "slug": "21_etch_a_sketch",
+      "id": "qOweqqb79KI",
+      "title": "How An Etch A Sketch Works",
+      "genre": "toy-mechanism-cutaway",
+      "wave": 4
+    },
+    {
+      "idx": 22,
+      "slug": "22_echo_chamber",
+      "id": "jORaARvCJrI",
+      "title": "How An Echo Chamber Works",
+      "genre": "acoustics-waves-vfx",
+      "wave": 4
+    },
+    {
+      "idx": 23,
+      "slug": "23_bullet_drop",
+      "id": "bm6iRlDf1Rk",
+      "title": "Can A Fired Bullet Beat A Dropped Bullet",
+      "genre": "ballistics-physics-split",
+      "wave": 4
+    },
+    {
+      "idx": 24,
+      "slug": "24_edge_universe",
+      "id": "hbeuMnpAak4",
+      "title": "The Edge Of The Universe (fiction)",
+      "genre": "space-scifi-cosmos",
+      "wave": 4
+    },
+    {
+      "idx": 25,
+      "slug": "25_staircase_paradox",
+      "id": "BT9qe_6onxw",
+      "title": "How The Staircase Paradox Works",
+      "genre": "math-geometry-illusion",
+      "wave": 4
+    },
+    {
+      "idx": 26,
+      "slug": "26_chaos_theory",
+      "id": "Jc3PzoA4x14",
+      "title": "How Chaos Theory Works",
+      "genre": "physics-butterfly-vfx",
+      "wave": 4
+    },
+    {
+      "idx": 27,
+      "slug": "27_1800s_movie",
+      "id": "fXI5GUXXn4I",
+      "title": "How This 1800s Movie Machine Worked",
+      "genre": "vintage-optics-cinema",
+      "wave": 4
+    },
+    {
+      "idx": 28,
+      "slug": "28_grape_plasma",
+      "id": "cjQBP0Sg7mo",
+      "title": "Microwaving Two Grapes Creates Plasma",
+      "genre": "kitchen-plasma-lightning",
+      "wave": 4
+    },
+    {
+      "idx": 29,
+      "slug": "29_humpty_dumpty",
+      "id": "uBUMTlXdS2I",
+      "title": "The Reason Humpty Dumpty Fell (fiction)",
+      "genre": "medieval-comedy-story",
+      "wave": 4
+    },
+    {
+      "idx": 30,
+      "slug": "30_lightbulb",
+      "id": "fUmofQCc_4s",
+      "title": "Why Companies Shortened Lightbulb Lifespans",
+      "genre": "industrial-history-bulb",
+      "wave": 4
+    },
+    {
+      "idx": 31,
+      "slug": "31_pencil_sharpener",
+      "id": "RQ6-QBj-tYE",
+      "title": "How Pencil Sharpeners Work",
+      "genre": "macro-blade-mechanism",
+      "wave": 5
+    },
+    {
+      "idx": 32,
+      "slug": "32_plato_clock",
+      "id": "cGUU4D4ktic",
+      "title": "How Plato's Alarm Clock Worked",
+      "genre": "ancient-water-clock",
+      "wave": 5
+    },
+    {
+      "idx": 33,
+      "slug": "33_outlet",
+      "id": "0BZ1C83I2R4",
+      "title": "How Electrical Outlets Work",
+      "genre": "electrical-wiring-mechanism",
+      "wave": 5
+    },
+    {
+      "idx": 34,
+      "slug": "34_hide_and_seek",
+      "id": "OXRzmyOMKVw",
+      "title": "How To Trick The Seeker In Hide And Seek",
+      "genre": "spatial-stealth-comedy",
+      "wave": 5
+    },
+    {
+      "idx": 35,
+      "slug": "35_missing_dollar",
+      "id": "mIHafmS6fYc",
+      "title": "Can You Solve The Missing Dollar Riddle?",
+      "genre": "math-riddle-infographic",
+      "wave": 5
+    },
+    {
+      "idx": 36,
+      "slug": "36_invisible_snow",
+      "id": "bZoR8A2znpo",
+      "title": "How They Filmed An Invisible Man In Snow",
+      "genre": "cinema-vfx-winter",
+      "wave": 5
+    },
+    {
+      "idx": 37,
+      "slug": "37_shoebox_projector",
+      "id": "YT3OiJbpd-I",
+      "title": "Turning A Shoebox Into A Movie Projector",
+      "genre": "diy-optics-light",
+      "wave": 5
+    },
+    {
+      "idx": 38,
+      "slug": "38_ladder_trap",
+      "id": "vb_fuTm2FMU",
+      "title": "How A Ladder Trap Works",
+      "genre": "medieval-trap-physics",
+      "wave": 5
+    },
+    {
+      "idx": 39,
+      "slug": "39_naruto_run",
+      "id": "E147qAF-ze8",
+      "title": "Does Running Like Naruto Make You Faster?",
+      "genre": "locomotion-aero-comedy",
+      "wave": 5
+    },
+    {
+      "idx": 40,
+      "slug": "40_google_earth",
+      "id": "oMkomhg6s9o",
+      "title": "Google Earth Helped Him Find His Lost Family",
+      "genre": "map-satellite-story",
+      "wave": 5
+    },
+    {
+      "idx": 41,
+      "slug": "41_venice_poles",
+      "id": "3c-bC4PswlU",
+      "title": "How Wooden Poles Keep Venice Standing",
+      "genre": "underwater-architecture-cutaway",
+      "wave": 6
+    },
+    {
+      "idx": 42,
+      "slug": "42_jurassic_ripple",
+      "id": "-D3gDM6Tz1g",
+      "title": "How Jurassic Park Made The Water Ripple",
+      "genre": "film-sfx-water-ripple",
+      "wave": 6
+    },
+    {
+      "idx": 43,
+      "slug": "43_alcatraz_showers",
+      "id": "zZVlkSIn8BY",
+      "title": "Why Alcatraz Only Gave Prisoners Hot Showers",
+      "genre": "historical-prison-water",
+      "wave": 6
+    },
+    {
+      "idx": 44,
+      "slug": "44_nuke_nc",
+      "id": "DMmXDFQAdVU",
+      "title": "The Bomb That Almost Nuked North Carolina",
+      "genre": "aviation-history-mechanism",
+      "wave": 6
+    },
+    {
+      "idx": 45,
+      "slug": "45_ink_tags",
+      "id": "NNIK86faGPE",
+      "title": "How Ink Tags Stop Clothing Thieves",
+      "genre": "retail-heist-mechanism",
+      "wave": 6
+    },
+    {
+      "idx": 46,
+      "slug": "46_prison_escape",
+      "id": "epP7TB8n3ZU",
+      "title": "He Used Kitchen Supplies To Escape Prison",
+      "genre": "prison-escape-craft",
+      "wave": 6
+    },
+    {
+      "idx": 47,
+      "slug": "47_ram_works",
+      "id": "fXpTLFTfN_w",
+      "title": "How RAM Works",
+      "genre": "computing-circuit-visualizer",
+      "wave": 6
+    },
+    {
+      "idx": 48,
+      "slug": "48_ten_mil_pennies",
+      "id": "58NETNy4gAA",
+      "title": "Inheriting Ten Million Dollars In Pennies",
+      "genre": "mega-scale-coins-crowd",
+      "wave": 6
+    },
+    {
+      "idx": 49,
+      "slug": "49_bttf_lightning",
+      "id": "nw6LtopYGlc",
+      "title": "How Back To The Future Created Its Lightning",
+      "genre": "cinema-lightning-vfx",
+      "wave": 6
+    },
+    {
+      "idx": 50,
+      "slug": "50_car_sinks",
+      "id": "p832whe8hrI",
+      "title": "What To Do If Your Car Sinks?",
+      "genre": "underwater-car-survival",
+      "wave": 6
+    },
+    {
+      "idx": 51,
+      "slug": "51_car_differential",
+      "id": "w-6mTTZgumA",
+      "title": "How A Car Differential Works",
+      "genre": "gears-drivetrain-mechanism",
+      "wave": 7
+    },
+    {
+      "idx": 52,
+      "slug": "52_old_movie_cities",
+      "id": "JG43fT5wz5g",
+      "title": "How Old Movies Created Lifesize Cities",
+      "genre": "miniature-forced-perspective",
+      "wave": 7
+    },
+    {
+      "idx": 53,
+      "slug": "53_no_wheel",
+      "id": "5nv926JJfa4",
+      "title": "What If The Wheel Was Never Invented?",
+      "genre": "alt-history-worldbuilding",
+      "wave": 7
+    },
+    {
+      "idx": 54,
+      "slug": "54_carrier_landing",
+      "id": "ouss9FuL5Lk",
+      "title": "How Fighter Jets Land On Aircraft Carriers",
+      "genre": "aviation-cable-action",
+      "wave": 7
+    },
+    {
+      "idx": 55,
+      "slug": "55_sea_133_days",
+      "id": "NdKRD1j9juE",
+      "title": "He Drifted At Sea For 133 Days",
+      "genre": "ocean-survival-story",
+      "wave": 7
+    },
+    {
+      "idx": 56,
+      "slug": "56_euler_polyhedra",
+      "id": "euSTOTvBBZQ",
+      "title": "How Euler's Formula Works For Polyhedra",
+      "genre": "3d-geometry-math",
+      "wave": 7
+    },
+    {
+      "idx": 57,
+      "slug": "57_typewriter_ball",
+      "id": "1TWf3F5djhA",
+      "title": "Why This Typewriter Used A Spinning Ball",
+      "genre": "precision-mechanical-type",
+      "wave": 7
+    },
+    {
+      "idx": 58,
+      "slug": "58_canoe_trunk",
+      "id": "T28ZhubgLVc",
+      "title": "Turning A Tree Trunk Into A Canoe",
+      "genre": "craft-woodworking-water",
+      "wave": 7
+    },
+    {
+      "idx": 59,
+      "slug": "59_volvo_engine",
+      "id": "ql0DrRJOpNg",
+      "title": "Why This Volvo Engine Drops During A Crash",
+      "genre": "crash-physics-car-cutaway",
+      "wave": 7
+    },
+    {
+      "idx": 60,
+      "slug": "60_waddle_shape",
+      "id": "1dMb23o9h7M",
+      "title": "The Shape That Waddles As It Rolls",
+      "genre": "3d-geometry-rolling-physics",
+      "wave": 7
+    }
+  ],
+  "corpusOOD2": [
+    {
+      "slug": "ood1_kurzgesagt",
+      "id": "35No369rmq0",
+      "title": "What If We Cool Down the Sun?",
+      "genre": "2d-flat-vector"
+    },
+    {
+      "slug": "ood2_apple_cinema",
+      "id": "Hz64WOtsT4Y",
+      "title": "Making of Apple Pay Action Film (Edgar Wright)",
+      "genre": "live-action-commercial"
+    }
+  ],
+  "comparePromptEval": {
+    "evaluatedAt": "2026-11-22",
+    "shippedPrompt": {
+      "file": ".claude/skills/aistudio/system/compare-2-video.md",
+      "version": "v2",
+      "lines": 94,
+      "taxonomyVerbatimParityWithAnalyzeRef": true,
+      "settings": {
+        "model": "gemini-4-hydrogen",
+        "thinking": "Extra High",
+        "media": "High",
+        "fps": 24,
+        "search": "off",
+        "recommendedVideoPrep": "bun run reference sidebyside <ref> <draft> (auto hstack portrait / vstack landscape, 720p short-edge, CRF 22, auto draft-strip crop, audio:ours)"
+      }
+    },
+    "photographicGtPanelsVerified": {
+      "foodEatMoreTotalClaimPanelsInspected": 36,
+      "v1FoodSbsClaimPanelsVerified": "24/24",
+      "v2FoodSbsClaimPanelsVerified": "34/34",
+      "panelScopeNote": "2 of the 36 panels (f690 beehive, f1108 cookie z-fighting) verified v1-only claims; f1562 shows pre-vanish brain consistent with f1561->f1563; overview sheets food_gt_1/2.jpg and verify_food_sbs_10s/end.jpg also inspected",
+      "syntheticControlPanels": "12/12"
+    },
+    "independentReviewRounds": {
+      "round1": {
+        "reviewers": 2,
+        "verdicts": [
+          "FAIL",
+          "FAIL"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "requiredOverlap": 3,
+        "requiredBlockers": [
+          "eval-baseline/doc metric bugs (v2_food_2file truncated=true & 0/13 Sec3, v2_synth_4defects crop_overextended_after_255=true, v2_synth_drift_vstack judder f110-f149 +20f static onset lag & +11f vs +12f, v2 34/34 vs 36/36 panel attribution)",
+          "mutation-blind assertions in reference.test.mjs (sidebyside draft-bar edge pixels + audioHash equality on --audio ref)",
+          "scripts/review/reference.mjs exceeded 1000 lines with duplicated timecode/sidebyside blocks (extracted to reference_video.mjs)"
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 13.5,
+            "r2": 14.5
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.2,
+            "r2": 29.2
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 29,
+            "r2": 28.5
+          },
+          "v2_synth_4defects": {
+            "r1": 26.5,
+            "r2": 25.5
+          }
+        }
+      },
+      "round2": {
+        "reviewers": 2,
+        "verdicts": [
+          "FAIL",
+          "FAIL"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "requiredOverlap": 2,
+        "requiredBlockers": [
+          "eval_cmp_metrics.mjs cross-line and unanchored regex false positives inflated arm_b (6/13->9/13) and arm_c2 (9/13->10/13), plus prompt-compare-design.md misattributed VO desync to v2_food_sbs (fixed with per-row negative-lookbehind regexes and accurate extra catches)",
+          "runAtomicFfmpeg called process.exit(1) inside try, bypassing finally cleanup of ref-tc-*/ref-sbs-* temp dirs on FFmpeg failure/timeout (fixed by moving process.exit(1) after try/finally + adding FFmpeg timeout cleanup regression test)"
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9.5
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 12.5,
+            "r2": 13.5
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.2,
+            "r2": 29.3
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 28.5,
+            "r2": 28.9
+          },
+          "v2_synth_4defects": {
+            "r1": 26,
+            "r2": 26.5
+          }
+        }
+      },
+      "round3": {
+        "reviewers": 2,
+        "verdicts": [
+          "PASS",
+          "PASS"
+        ],
+        "critical": [
+          0,
+          0
+        ],
+        "required": [
+          0,
+          0
+        ],
+        "scoresOutOf30": {
+          "arm_a_old_2file": {
+            "r1": 9.5,
+            "r2": 9.5
+          },
+          "arm_b_naive_copy_2file": {
+            "r1": 12.5,
+            "r2": 13
+          },
+          "arm_c1_v1_sbs": {
+            "r1": 24.5,
+            "r2": 24.5
+          },
+          "v2_food_sbs": {
+            "r1": 29.3,
+            "r2": 29.3
+          },
+          "v2_synth_ident": {
+            "r1": 30,
+            "r2": 30
+          },
+          "v2_synth_drift_vstack": {
+            "r1": 28.9,
+            "r2": 28.8
+          },
+          "v2_synth_4defects": {
+            "r1": 26,
+            "r2": 26.3
+          }
+        }
+      }
+    },
+    "arms": {
+      "arm_a_old_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 326,
+        "chars": 4157,
+        "sections": 2,
+        "truncated": false,
+        "verdict": null,
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "5/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1KRxi8XugiRiJBKzZnaVct0k1VTEii6I2"
+      },
+      "arm_b_naive_copy_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 370.1,
+        "chars": 7888,
+        "sections": 3,
+        "truncated": false,
+        "verdict": null,
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 3,
+        "foodRecall": "6/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1lCygTEg42N2U7hm1fAQ70YQmaH33SkbX"
+      },
+      "arm_c2_v1_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 671.5,
+        "chars": 9331,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "NEEDS POLISH",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 12,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "9/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1U3EySDdQEgJI6f5aje0KnTBDen3tSHgv"
+      },
+      "arm_c1_v1_sbs": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 689.1,
+        "chars": 20410,
+        "sections": 3,
+        "truncated": true,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 12,
+          "Major": 13,
+          "Minor": 0
+        },
+        "sec1CountMismatch": true,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 1,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "13/13",
+        "chatUrl": "https://aistudio.google.com/prompts/16nvtTU_eWYvutuia0bkS4ZErl6equOFV"
+      },
+      "arm_d_synth_gt": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 83671,
+        "sec": 287.1,
+        "chars": 10267,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 4,
+          "Major": 3,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "synthChecks": {
+          "dark_105_179": true,
+          "dropout_210_211": true,
+          "zoom_180_254": true,
+          "drift_255_10f": true,
+          "tail_345_359": true,
+          "crop_overextended_after_255": true
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1tqlhYWgnGY7j-E66ePub_jJA-Btd2y4n"
+      },
+      "v2_food_sbs": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 376411,
+        "sec": 432,
+        "chars": 21812,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 15,
+          "Major": 11,
+          "Minor": 5
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "12/13",
+        "chatUrl": "https://aistudio.google.com/prompts/1-gaC-4BAu7NFeC7O14WOFJWN49W5SqKc"
+      },
+      "v2_food_2file": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 752822,
+        "sec": 475.5,
+        "chars": 2647,
+        "sections": 2,
+        "truncated": true,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": true,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "foodRecall": "0/13",
+        "chatUrl": "https://aistudio.google.com/prompts/113TO5QonTsuFT9xTbXYwo7fKmCYPyDHf",
+        "attempt1Failure": "thought-only exhaustion at 65,536 Output length cap (0 answer chars)"
+      },
+      "v2_synth_4defects": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 83671,
+        "sec": 307.2,
+        "chars": 7012,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 4,
+          "Major": 2,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "synthChecks": {
+          "dark_105_179": true,
+          "dropout_210_211": true,
+          "zoom_180_254": true,
+          "drift_255_10f": true,
+          "tail_345_359": true,
+          "crop_overextended_after_255": true
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1V7K5wbgZJnDCHkDDtnacQVNnEsLlaYai"
+      },
+      "v2_synth_ident": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 69731,
+        "sec": 153.8,
+        "chars": 2917,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "PASS",
+        "sevCounts": {
+          "Blocker": 0,
+          "Major": 0,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "identPass": true,
+        "chatUrl": "https://aistudio.google.com/prompts/1DKslYdANnpRnmFGeFh3WE8uekH2X2XPF"
+      },
+      "v2_synth_drift_vstack": {
+        "model": "gemini-4-hydrogen",
+        "tokens": 97611,
+        "sec": 319.6,
+        "chars": 7519,
+        "sections": 4,
+        "truncated": false,
+        "verdict": "FAIL",
+        "sevCounts": {
+          "Blocker": 5,
+          "Major": 1,
+          "Minor": 0
+        },
+        "sec1CountMismatch": false,
+        "badCat": 0,
+        "badOrder": 0,
+        "missingFix": 0,
+        "engineLeaks": 0,
+        "styleNoise": 0,
+        "vstackChecks": {
+          "judder_detected_f110_149": true,
+          "judder_onset_frame": 110,
+          "judder_onset_lag_frames": 20,
+          "freeze_150_179": true,
+          "drift_reported_frames": 11,
+          "drift_ground_truth_frames": 12,
+          "drift_within_2f": true,
+          "fake_crop_during_drift": false
+        },
+        "chatUrl": "https://aistudio.google.com/prompts/1p95WfqCq-paCveeTxe3vpxbVSsG0XFZb"
+      }
+    }
+  }
+}

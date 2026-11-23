@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -10,11 +10,33 @@ const DATA = join(ROOT, "skill-data");
 const SKILLS = fileURLToPath(new URL("../skills.mjs", import.meta.url));
 const run = (args, cwd = ROOT) =>
   spawnSync("bun", [SKILLS, ...args], { cwd, encoding: "utf8", timeout: 10000 });
+const repoAgentSkills = () => {
+  const names = readdirSync(join(ROOT, ".claude/skills"))
+    .filter((name) => existsSync(join(ROOT, ".claude/skills", name, "SKILL.md")))
+    .toSorted();
+  assert.ok(names.length > 0, "expected at least one repo agent skill");
+  return names;
+};
 
 test("skills JSON supports discovery, selected content and resource paths without text wrappers", () => {
   const list = run(["list", "--json"]);
   assert.equal(list.status, 0, list.stderr);
-  assert.ok(JSON.parse(list.stdout).data.some((g) => g.name === "core"));
+  const listed = JSON.parse(list.stdout).data;
+  assert.ok(
+    listed.some((g) => g.name === "core" && g.kind === "guide" && g.description.length > 0),
+  );
+  for (const name of repoAgentSkills()) {
+    assert.ok(
+      listed.some(
+        (s) =>
+          s.name === name &&
+          s.kind === "skill" &&
+          s.description.length > 0 &&
+          s.path === join(ROOT, ".claude/skills", name),
+      ),
+      `skills list --json missed agent skill ${name}`,
+    );
+  }
   const selected = run(["get", "core", "--ref", "notes", "--ref", "notes.md", "--json"]);
   assert.equal(selected.status, 0, selected.stderr);
   const guide = JSON.parse(selected.stdout).data;
@@ -134,7 +156,15 @@ test("every command the skills name is a command of the repo or of a film", () =
 test("skills get prints a guide, one reference by its name, and names the references a wrong one could be", () => {
   const list = run(["list"]);
   assert.equal(list.status, 0, list.stderr);
-  assert.match(list.stdout, /^core\s/m);
+  assert.match(list.stdout, /^core\s+\S/m);
+  assert.match(list.stdout, /Repo agent skills/);
+  for (const name of repoAgentSkills()) {
+    assert.match(
+      list.stdout,
+      new RegExp(`^  ${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+\\S`, "m"),
+      `skills list missed summary for ${name}`,
+    );
+  }
 
   const ref = md(join(DATA, "core/references"))[0];
   const stem = ref.split(/[\\/]/).at(-1).replace(/\.md$/, "");

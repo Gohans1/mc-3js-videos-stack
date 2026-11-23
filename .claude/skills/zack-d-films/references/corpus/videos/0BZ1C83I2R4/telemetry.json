@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "duration_sec": 24.2,
+  "topic_category": "everyday_object_secret",
+  "topic_sublabel": "wall_outlet_hamster_power_parody",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 2,
+  "opening_spoken_line": "Get up on that wheel and get to spinnin'!",
+  "hook_visual_trigger": "Wall plug insertion seamlessly slices into a miniature diorama inside the wall where prongs poke a tiny sleeping worker awake",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 90,
+  "rehook_timestamps_sec": [
+    5,
+    12.6,
+    15,
+    18.9
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.1,
+      "pct_runtime": 13
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.1,
+      "end_sec": 9,
+      "pct_runtime": 24
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 9,
+      "end_sec": 15,
+      "pct_runtime": 25
+    },
+    {
+      "role": "escalation",
+      "start_sec": 15,
+      "end_sec": 18.867,
+      "pct_runtime": 16
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 18.867,
+      "end_sec": 21.5,
+      "pct_runtime": 11
+    },
+    {
+      "role": "twist",
+      "start_sec": 21.5,
+      "end_sec": 24.2,
+      "pct_runtime": 11
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 8
+  },
+  "transition_types": [],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 4,
+    "MCU": 1,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 4,
+    "low": 1,
+    "ground": 1
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "clean_studio_soft",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "music_sfx_no_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "[MUNDANE EVERYDAY ACTION] triggers an unbroken cutaway into [ABSURD MINIATURE WORKFORCE] -> SO [CHAIN-REACTION MECHANICAL/X-RAY ESCALATION] -> TWIST [ALL THAT EFFORT YIELDS ONLY TINY RESULT + BRAND PUNCHLINE]",
+  "secret_sauce_cues": [
+    "Zero-cut architectural drywall slice penetration (0.5s) and exit (18.9s) preserving full 3D spatial continuity across exterior and interior worlds",
+    "Temporary holographic blue X-ray machinery overlay (12.6-15.9s) paired with a shallow-DOF ground-level plasma bolt chase along the power cord (19.3-21.5s)",
+    "Mood lighting shift from bright exterior (0-0.5s) to dark cool-blue low-key room with wall spotlight cone (18.9-24.2s) so glowing electricity and branded UI pop"
+  ],
+  "weaknesses_or_drag": [
+    "Brief 3.5s wheel spin-up (00:09.0-00:12.5) slows visual novelty slightly before the X-ray cutaway activates, followed by a 2.2s static outro logo hold"
+  ]
+}

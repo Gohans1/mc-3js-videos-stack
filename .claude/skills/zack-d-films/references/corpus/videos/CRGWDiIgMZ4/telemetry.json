@@ -1,0 +1,104 @@
+{
+  "schema_version": 1,
+  "duration_sec": 27.63,
+  "topic_category": "animals_nature_survival",
+  "topic_sublabel": "cookiecutter_shark_feeding",
+  "hook_archetype": "cold_open_crisis",
+  "opening_shot_sec": 1.502,
+  "opening_spoken_line": "As it bites the whale, small upper teeth sink into the flesh, while huge lower teeth drive in like a curved blade.",
+  "hook_visual_trigger": "Tiny green-eyed shark opens jaws mid-lunge against massive whale flank, snapping into macro teeth-sinking ECU",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "rehook_timestamps_sec": [
+    8,
+    18.2
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.871,
+      "pct_runtime": 14
+    },
+    {
+      "role": "escalation",
+      "start_sec": 3.871,
+      "end_sec": 14.281,
+      "pct_runtime": 38
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 14.281,
+      "end_sec": 18.185,
+      "pct_runtime": 14
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 18.185,
+      "end_sec": 24.992,
+      "pct_runtime": 25
+    },
+    {
+      "role": "resolution",
+      "start_sec": 24.992,
+      "end_sec": 27.628,
+      "pct_runtime": 9
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 1,
+    "continuous": 9
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 3,
+    "MCU": 1,
+    "CU": 1,
+    "ECU": 2,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 1,
+    "eye": 10,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "natural_daylight",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "minimal_ambient_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "Mid-action cold open on [CREATURE/MECHANISM ACTION] -> step-by-step macro breakdown ([PART 1] -> [PART 2] -> [TWIST/RESULT]) -> visual proof of [SURVIVAL/OUTCOME] -> causal 'WHY' ([SIZE/CONSTRAINT LIMITATION], SO [CLEVER EVOLUTIONARY ADAPTATION])",
+  "secret_sauce_cues": [
+    "Continuous [NO CUT] macro-to-wide 3D camera choreography spanning 9 seamless reframes before a single graphic cross-dissolve",
+    "Brief 0.4-0.6s golden emissive outline pulses synced to spoken anatomical nouns (teeth, flesh plug) to guide focus without text clutter",
+    "Graphic cross-dissolve anchoring the round wound crater onto the full-body size reveal, plus foreground-masked alpha stage clearing"
+  ],
+  "weaknesses_or_drag": [
+    "Brief white specular/alpha shimmer glitch pulsing near the shark's tail fin during solo swimming (f560-f591)",
+    "Noticeable background alpha fade-out of the squid and extra sharks behind the foreground pass (f764-f768) feels slightly game-engine-like"
+  ]
+}

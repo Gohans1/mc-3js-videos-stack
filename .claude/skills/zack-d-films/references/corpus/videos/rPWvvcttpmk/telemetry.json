@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "duration_sec": 55.1,
+  "topic_category": "pop_culture_media_tech",
+  "topic_sublabel": "gaming_ghost_car_tribute",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 2.436,
+  "opening_spoken_line": "He played the racing game with his dad over and over again, but he could never beat him.",
+  "hook_visual_trigger": "Pull-back from scanlined CRT racing game to father and son gaming on couch with fast pass-by time skips",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 88,
+  "rehook_timestamps_sec": [
+    6.9,
+    22.1,
+    29.4,
+    46
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 6.91,
+      "pct_runtime": 13
+    },
+    {
+      "role": "setup",
+      "start_sec": 6.91,
+      "end_sec": 13.68,
+      "pct_runtime": 12
+    },
+    {
+      "role": "escalation",
+      "start_sec": 13.68,
+      "end_sec": 28.13,
+      "pct_runtime": 26
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 28.13,
+      "end_sec": 40.81,
+      "pct_runtime": 23
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 40.81,
+      "end_sec": 45.98,
+      "pct_runtime": 9
+    },
+    {
+      "role": "twist",
+      "start_sec": 45.98,
+      "end_sec": 51.08,
+      "pct_runtime": 9
+    },
+    {
+      "role": "resolution",
+      "start_sec": 51.08,
+      "end_sec": 55.09,
+      "pct_runtime": 8
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 2,
+    "transition": 6,
+    "continuous": 10
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 4,
+    "M": 8,
+    "MCU": 4,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 2,
+    "high": 4,
+    "eye": 8,
+    "low": 3,
+    "ground": 2
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "[SHARED RITUAL] seemed endless, BUT [TRAGEDY] forced it away -> UNTIL [TIME-LAPSE REDISCOVERY] revealed [PRESERVED MEMORY] -> SO [PROTAGONIST] nearly overcame it, TWIST [INTENTIONAL SACRIFICE] keeps [EMOTIONAL BOND] alive.",
+  "secret_sauce_cues": [
+    "In-camera off-frame prop aging: pans down onto lower shelf for procedural cobweb/dust time-lapse while swapping CRT to flatscreen TV off-frame before booming up",
+    "Foreground pass-by occlusion hidden cuts (TV cabinet and couch backrest) paired with pose/UI graphic-matched cross-dissolves between reality and game world",
+    "Diegetic channel branding easter-eggs (ZACK D FILMS on dad's t-shirt and race finish gantry) and emotional ghost/hologram shader overlays"
+  ],
+  "weaknesses_or_drag": []
+}

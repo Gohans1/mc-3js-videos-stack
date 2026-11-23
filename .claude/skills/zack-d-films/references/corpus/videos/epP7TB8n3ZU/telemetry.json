@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "duration_sec": 27.9,
+  "topic_category": "crime_disaster_accident",
+  "topic_sublabel": "diy_prison_escape",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 0.701,
+  "opening_spoken_line": "He stole Sharpies from the prison kitchen and colored in his uniform, leaving the word police written on the back.",
+  "hook_visual_trigger": "Orange-sleeved hand snatches Sharpies from kitchen cup, whipping behind inmate 17634 before coloring a fake police shirt",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "chronological_and_then",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 88,
+  "rehook_timestamps_sec": [
+    2.2,
+    9.7,
+    15.2,
+    24.7
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.202,
+      "pct_runtime": 8
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.202,
+      "end_sec": 13.447,
+      "pct_runtime": 40
+    },
+    {
+      "role": "escalation",
+      "start_sec": 13.447,
+      "end_sec": 20.052,
+      "pct_runtime": 24
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 20.052,
+      "end_sec": 24.658,
+      "pct_runtime": 16
+    },
+    {
+      "role": "twist",
+      "start_sec": 24.658,
+      "end_sec": 27.895,
+      "pct_runtime": 12
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 5,
+    "continuous": 6
+  },
+  "transition_types": [
+    "cross_dissolve",
+    "card_flip",
+    "radial_zoom_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 2,
+    "M": 5,
+    "MCU": 2,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 9,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "mixed",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "[PROTAGONIST] steals/takes [MUNDANE EVERYDAY ITEMS] to DIY [AUDACIOUS FAKE DISGUISE/TOOL] -> uses it to bluff [AUTHORITY GATEKEEPER] and succeeds -> UNTIL [UNACCOUNTED-FOR FLAW/TRACKER] exposes them [TIME] later.",
+  "secret_sauce_cues": [
+    "Zero hard cuts: connects tactile prop crafting to wide action via 3D card flips, radial zoom-dissolves, and 160-180 degree smeared whip-orbits",
+    "In-shot seamless environment morph (prison yard asphalt turning into grass while pine trees drop from sky) plus brief neon-yellow emissive outline pulses on key props/barriers",
+    "Diegetic 3D floor-projected channel watermark ('ZACK D FILMS') integrated naturally into scene lighting"
+  ],
+  "weaknesses_or_drag": []
+}

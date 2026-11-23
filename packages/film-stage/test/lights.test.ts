@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -6,9 +6,11 @@ import * as THREE from "three";
 
 import {
   applyLightingRig,
+  createEnvironment,
   createGodraysPass,
   createLightingRig,
   DEFAULT_LIGHTS,
+  ENVIRONMENT_PRESETS,
   kelvinToHex,
   LIGHT_PRESET_IDS,
   LIGHT_PRESETS,
@@ -717,5 +719,46 @@ describe("Round 2 regression guards", () => {
     expect(lightsAt(unsorted, Number.NaN).key.intensity).toBe(0);
     expect(lightsAt(unsorted, -Infinity).key.intensity).toBe(0);
     expect(lightsAt(unsorted, Infinity).key.intensity).toBe(8);
+  });
+});
+
+describe("createEnvironment", () => {
+  test("bakes procedural PMREM environment presets, disposes temporary resources immediately, and releases target on dispose", () => {
+    const bakedScenes: THREE.Scene[] = [];
+    const targetDisposed = mock(() => {});
+    const fakeTexture = new THREE.Texture();
+    const fromSceneSpy = spyOn(THREE.PMREMGenerator.prototype, "fromScene").mockImplementation(
+      (scene: THREE.Scene) => {
+        bakedScenes.push(scene);
+        return {
+          texture: fakeTexture,
+          dispose: targetDisposed,
+        } as unknown as THREE.WebGLRenderTarget;
+      },
+    );
+    const pmremDisposeSpy = spyOn(THREE.PMREMGenerator.prototype, "dispose").mockImplementation(
+      () => {},
+    );
+    try {
+      const presets = Object.keys(ENVIRONMENT_PRESETS) as Array<keyof typeof ENVIRONMENT_PRESETS>;
+      for (const preset of presets) {
+        const env = createEnvironment({} as THREE.WebGLRenderer, { preset });
+        expect(env.texture).toBe(fakeTexture);
+        expect(bakedScenes.at(-1)?.children.length).toBeGreaterThanOrEqual(4);
+        env.dispose();
+        env.dispose();
+      }
+      expect(fromSceneSpy).toHaveBeenCalledTimes(presets.length);
+      expect(pmremDisposeSpy).toHaveBeenCalledTimes(presets.length);
+      expect(targetDisposed).toHaveBeenCalledTimes(presets.length);
+      expect(() =>
+        createEnvironment({} as THREE.WebGLRenderer, {
+          preset: "invalid" as unknown as "studio",
+        }),
+      ).toThrow(/studio \| outdoor \| night/);
+    } finally {
+      fromSceneSpy.mockRestore();
+      pmremDisposeSpy.mockRestore();
+    }
   });
 });

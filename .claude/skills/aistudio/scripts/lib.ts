@@ -726,6 +726,22 @@ const LAST_IS_ANSWER = `(() => { const t = ${TURNS}.at(-1);
   const thoughts = ${all("turnThought", "t")};
   return ${all("turnText", "t")}.some((c) => !thoughts.some((th) => th.contains(c))); })()`;
 
+const LAST_IS_THOUGHT_ONLY = `(() => { const t = ${TURNS}.at(-1);
+  if (!t || ${one("turnRole", "t")}?.getAttribute('data-turn-role') !== 'Model') return false;
+  const thoughts = ${all("turnThought", "t")};
+  return thoughts.length > 0 && !${all("turnText", "t")}.some((c) => !thoughts.some((th) => th.contains(c))); })()`;
+
+export function formatStoppedRunError(alerts: string, thoughtOnly: boolean): string {
+  if (alerts) return `the run stopped without an answer; AI Studio says: ${alerts}`;
+  if (thoughtOnly)
+    return "the run stopped after Thoughts with no answer text (likely hit Output length cap on Extra High thinking; shorten/tile video with reference sidebyside or lower --thinking)";
+  return "the run stopped without an answer; AI Studio shows no message (see the screenshot)";
+}
+
+export function formatCopyFailureError(index: number, alerts: string): string {
+  return `"Copy as markdown" of turn ${index} copied nothing${alerts ? `; AI Studio says: ${alerts}` : ""}`;
+}
+
 /** Waits until the model is idle and the last turn is its answer. turnsBefore = turn count before the run, if one was sent here. */
 export async function waitForAnswer(opts: {
   turnsBefore?: number;
@@ -739,6 +755,9 @@ export async function waitForAnswer(opts: {
   const showLast = () => js(`(${TURNS}.at(-1)?.scrollIntoView({ block: 'end' }), true)`);
   showLast();
   if (opts.turnsBefore === undefined && js<boolean>(`${IDLE} && !${LAST_IS_ANSWER}`)) {
+    const alerts = pageAlerts();
+    const thoughtOnly = js<boolean>(LAST_IS_THOUGHT_ONLY);
+    if (alerts || thoughtOnly) throw new StepError(formatStoppedRunError(alerts, thoughtOnly));
     throw new StepError(
       "the last prompt in this chat has no answer (its run was stopped or the page was reloaded mid-run); send it again as a follow-up",
     );
@@ -756,9 +775,10 @@ export async function waitForAnswer(opts: {
     if (s === "idle") showLast();
     if (idleSince && now - idleSince > 10_000) {
       const alerts = pageAlerts();
-      throw new StepError(
-        `the run stopped without an answer; ${alerts ? `AI Studio says: ${alerts}` : "AI Studio shows no message (see the screenshot)"}`,
-      );
+      const thoughtOnly =
+        (opts.turnsBefore === undefined || js<number>(TURN_COUNT) > opts.turnsBefore) &&
+        js<boolean>(LAST_IS_THOUGHT_ONLY);
+      throw new StepError(formatStoppedRunError(alerts, thoughtOnly));
     }
     if (now - start > opts.timeoutMs) {
       throw new StepError(
@@ -816,7 +836,10 @@ export async function openTurnMenu(index = -1) {
   click(button, "turn options button");
   if (!(await waitFor(has("copyMarkdown"), 5_000))) {
     ab("press", "Escape");
-    throw new StepError('the turn\'s options menu did not open or has no "Copy as markdown"');
+    const alerts = pageAlerts();
+    throw new StepError(
+      `the turn's options menu did not open or has no "Copy as markdown"${alerts ? `; AI Studio says: ${alerts}` : ""}`,
+    );
   }
 }
 
@@ -824,20 +847,43 @@ export async function openTurnMenu(index = -1) {
 export async function copyTurnMarkdown(index = -1): Promise<string> {
   // The menu copies through a hidden textarea + execCommand('copy'), not navigator.clipboard: catch it in the copy event,
   // and cancel the event so the user's Windows clipboard keeps what they put there.
-  js(`(() => {
-    window.__aistudioCopied = null;
-    document.addEventListener('copy', (e) => {
-      const a = document.activeElement;
-      window.__aistudioCopied = (a && 'value' in a && a.value) || String(getSelection());
-      e.preventDefault();
-    }, { capture: true, once: true });
-    return true;
-  })()`);
-  await openTurnMenu(index);
-  click(one("copyMarkdown"), "Copy as markdown");
-  if (!(await waitFor(`window.__aistudioCopied !== null`, 5_000)))
-    throw new StepError(`"Copy as markdown" of turn ${index} copied nothing`);
-  return js<string>("window.__aistudioCopied");
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    js(`(() => {
+      if (window.__aistudioCopyHandler) {
+        document.removeEventListener('copy', window.__aistudioCopyHandler, true);
+      }
+      window.__aistudioCopied = null;
+      window.__aistudioCopyHandler = (e) => {
+        const a = document.activeElement;
+        window.__aistudioCopied = (a && 'value' in a && a.value) || String(getSelection());
+        e.preventDefault();
+      };
+      document.addEventListener('copy', window.__aistudioCopyHandler, true);
+      return true;
+    })()`);
+    try {
+      await openTurnMenu(index);
+      click(one("copyMarkdown"), "Copy as markdown");
+      if (await waitFor(`window.__aistudioCopied !== null`, 5_000)) {
+        return js<string>("window.__aistudioCopied");
+      }
+    } finally {
+      try {
+        js(`(() => {
+          if (window.__aistudioCopyHandler) {
+            document.removeEventListener('copy', window.__aistudioCopyHandler, true);
+            window.__aistudioCopyHandler = null;
+          }
+          return true;
+        })()`);
+      } catch {}
+    }
+    const alerts = pageAlerts();
+    if (alerts || attempt === 2) throw new StepError(formatCopyFailureError(index, alerts));
+    ab("press", "Escape");
+    await Bun.sleep(600);
+  }
+  throw new StepError(formatCopyFailureError(index, pageAlerts()));
 }
 
 // ---------- attachment chips ----------

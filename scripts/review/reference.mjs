@@ -23,6 +23,7 @@ import { clockForTimeline } from "../../packages/live-studio/src/timing-state.mj
 import { filmPicture } from "../../packages/live-studio/src/video.mjs";
 import { writeAtomicSync } from "../../packages/live-studio/src/voice-map.mjs";
 import { mediaPython } from "../media/home.mjs";
+import { runSidebyside, runTimecode } from "./reference_video.mjs";
 
 async function runWorker(executable, args, minutes) {
   const child = spawn(executable, args, {
@@ -58,6 +59,8 @@ async function runWorker(executable, args, minutes) {
 
 const HELP = `Optional reference analysis; never required to author a film.
   bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
+  bun run reference timecode <video> [--out <file>] [--label <text>]  Burn a black timecode bar below a copy for AI review; timecode --help
+  bun run reference sidebyside <reference> <remake> [--out <file>]  Tile reference and remake into one synced video with shared timecode bar; sidebyside --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
@@ -297,6 +300,14 @@ if (process.argv[2] === "add") {
   }
   console.log(`next: bun run reference study references/${name}.mp4`);
   process.exit(0);
+}
+
+if (process.argv[2] === "timecode") {
+  await runTimecode(process.argv.slice(3), { usage, runWorker });
+}
+
+if (process.argv[2] === "sidebyside") {
+  await runSidebyside(process.argv.slice(3), { usage, runWorker });
 }
 
 if (process.argv[2] === "solve") {

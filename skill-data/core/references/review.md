@@ -166,6 +166,8 @@ Render speed, GPU, output settings and local compression previews: `bun run skil
 | Breakdown need | Local CLI |
 | --- | --- |
 | Bring a downloaded video into the film | `bun run reference add <video> [--name ref]`: plain name in references/, untouched source kept, H.264 copy for AV1/4K/.mkv |
+| Burn timecode bar below a review copy | `bun run reference timecode references/ref.mp4 [--out <file>] [--label <text>] [--short-edge 720 \| --full] [--crf 22]`: black bottom bar (HH:MM:SS.mmm, frame, label) at 720p short-edge CRF 22 by default for fast AI uploads without touching references/ |
+| Tile reference and remake into one synced review video | `bun run reference sidebyside references/ref.mp4 renders/draft.mp4 [--out <file>] [--audio ours\|ref\|none] [--layout auto\|hstack\|vstack] [--short-edge 720 \| --full] [--crf 22]`: single synced REF\|OURS MP4 with top labels, shared bottom timecode bar, automatic draft-strip crop, and black tail padding for duration mismatch |
 | Frames, 4x4 overviews, captions & URL fetch | `bun run reference inspect <video\|URL>` (`--scenes --frames N --at ... --find ...`) |
 | Cuts, fades & scene gallery | `bun run scenes <video>` (PySceneDetect) or `bun run reference study <video>` |
 | Separate voice, BGM & SFX stems | `bun run media separate <video>` (see `--ref sound`) |

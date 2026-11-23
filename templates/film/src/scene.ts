@@ -22,6 +22,7 @@ import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
 import {
   applyLightingRig,
+  createEnvironment,
   createGodraysPass,
   createLightingRig,
   DEFAULT_LIGHTS,
@@ -90,8 +91,12 @@ export async function buildScene(canvas, W, H, draft = false) {
   renderer.setSize(W, H, false);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
+  const environment = createEnvironment(renderer, { preset: "studio" });
+  scene.environment = environment.texture;
+  scene.environmentIntensity = 0.35;
   const perspective = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
   const parallel = orthographicCamera(60, W / H);
   let camera = perspective;
@@ -476,6 +481,10 @@ export async function buildScene(canvas, W, H, draft = false) {
       const lightsSample = lightsAt(EDIT.lights, t);
       applyLightingRig(lightingRig, lightsSample, t);
       godrays.update(lightsSample.godrays, lightsSample.key.color);
+      scene.environmentIntensity = Math.min(
+        0.85,
+        Math.max(0, (lightsSample.world.ambientIntensity ?? 0) * 1.4),
+      );
       timelineLighting = true;
     } else {
       if (timelineLighting) {
@@ -487,6 +496,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       hemi.visible = roomKey.visible = true;
       hemi.intensity = EDIT.light?.fill ?? 0.6;
       roomKey.intensity = EDIT.light?.spot ?? EDIT.light?.key ?? 28;
+      scene.environmentIntensity = EDIT.light?.env ?? 0.35;
     }
     tone.saturation = EDIT.look.saturation;
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
@@ -637,7 +647,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "IN FRAME / STACK",
         lines: [
           {
-            text: `three.js r186 · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
+            text: `three.js r${THREE.REVISION} · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
           },
         ],
       },
@@ -690,6 +700,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       { target: "Steve", label: "Root" },
     ],
     placed,
+    environment,
     targets: [
       {
         id: "steve",

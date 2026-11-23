@@ -218,6 +218,55 @@ export const TRANSITIONS = [
     }`,
   },
   {
+    id: "pushUp",
+    title: "Vertical Push",
+    tip: "Incoming shot pushes up from the bottom (or down when flipped) with optional vertical shutter blur",
+    category: "Wipe & Split",
+    glsl: `vec4 transition(vec2 uv) {
+      float dir = uFlip > 0.5 ? -1.0 : 1.0;
+      float speed = sin(progress * 3.14159265);
+      float smear = speed * mix(0.0, 0.09, uFeather);
+      float ep = smoothstep(0.0, 1.0, progress);
+      float p = mix(-0.002, 1.002, ep);
+      vec2 outUv = uv - vec2(0.0, dir * ep);
+      vec2 inUv = uv + vec2(0.0, dir * (1.0 - ep));
+      vec4 acc = vec4(0.0);
+      for (int i = -3; i <= 3; i++) {
+        vec2 off = vec2(0.0, float(i) / 3.0 * smear * dir);
+        float useIn = dir > 0.0 ? 1.0 - step(p, uv.y + off.y) : step(1.0 - p, uv.y + off.y);
+        acc += mix(getFromColor(outUv + off), getToColor(inUv + off), useIn);
+      }
+      return acc / 7.0;
+    }`,
+  },
+  {
+    id: "cardFlip",
+    title: "3D Card Flip",
+    tip: "Frame flips 180 degrees around the vertical Y axis in perspective over black to reveal the incoming shot",
+    category: "Wipe & Split",
+    glsl: `vec4 transition(vec2 uv) {
+      float ep = smoothstep(0.0, 1.0, progress);
+      float dir = uFlip > 0.5 ? -1.0 : 1.0;
+      float ang = ep * 3.14159265 * dir;
+      float c = cos(ang);
+      float s = sin(ang);
+      if (abs(c) < 0.004) { return vec4(0.0, 0.0, 0.0, 1.0); }
+      float dist = mix(3.2, 1.9, uFeather);
+      float pull = 1.0 + mix(0.14, 0.28, uFeather) * sin(ep * 3.14159265);
+      vec2 p = (uv - 0.5) * pull;
+      float denom = c * dist - p.x * s;
+      if (denom * c <= 0.0001) { return vec4(0.0, 0.0, 0.0, 1.0); }
+      float u = (p.x * dist) / denom;
+      float v = (p.y * c * dist) / denom;
+      if (max(abs(u), abs(v)) > 0.5) { return vec4(0.0, 0.0, 0.0, 1.0); }
+      float tx = ep < 0.5 ? u + 0.5 : 0.5 - u;
+      vec2 tuv = vec2(tx, v + 0.5);
+      vec4 col = ep < 0.5 ? getFromColor(tuv) : getToColor(tuv);
+      float shade = mix(0.55, 1.0, abs(c));
+      return vec4(col.rgb * shade, 1.0);
+    }`,
+  },
+  {
     id: "doorSplit",
     title: "Parting Doors",
     tip: "Outgoing shot parts outward from the centre line revealing the next shot",

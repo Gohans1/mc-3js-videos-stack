@@ -6,7 +6,13 @@ import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource }
 import { type OffsettableCamera, withCropViewOffset } from "../src/crop.mjs";
 import { chunksOf } from "../src/frame";
 import { renderCost } from "../src/render-cost.mjs";
-import { apertureSamples, samplesForTurn, shutterBounds, shutterTimes } from "../src/shutter";
+import {
+  apertureSamples,
+  samplesForTurn,
+  shutterBounds,
+  shutterSamples,
+  shutterTimes,
+} from "../src/shutter";
 import { renderCutTimes, timingClock } from "../src/timing-state.mjs";
 import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
@@ -217,7 +223,8 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       timingClock.segments,
       cuts,
     );
-    let times = shutterTimes(t, FPS, samples, from, to, shutter);
+    const shotSamples = shutterSamples(samples, shutter);
+    let times = shutterTimes(t, FPS, shotSamples, from, to, shutter);
     const pupils = apertureSamples(
       !cfg.draft && render.tools?.apertureSampling ? (shutter?.apertureSamples ?? 1) : 1,
       frame,
@@ -252,7 +259,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
           acc.add(canvas);
         }
         const e = camera?.matrixWorld?.elements;
-        if (k > 1 || !e || times.length < 2 || times.length > samples) continue;
+        if (k > 1 || !e || times.length < 2 || times.length > shotSamples) continue;
         const now = [-e[8], -e[9], -e[10]];
         if (k === 0) facing = now;
         else {

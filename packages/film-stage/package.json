@@ -13,6 +13,7 @@
     "./camera-meta": "./src/camera-meta.ts",
     "./lights": "./src/lights.ts",
     "./lights-meta": "./src/lights-meta.ts",
+    "./highlight": "./src/highlight.ts",
     "./flicker": "./src/flicker.ts",
     "./fade": "./src/fade.ts",
     "./animate": "./src/animate.ts",
