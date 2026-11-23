@@ -1439,6 +1439,19 @@ if _IS_MAIN:
                             for path, stamp in {**used["files"], **READ_DOCUMENTS}.items()]
                 evidence = {**media_identity(staged), "audioInputs": bindings, "audioSources": used["names"],
                             "audioChoices": audio_choices, "pictureInput": picture_input}
+                src_review = _video_path.with_suffix(".mp4.review.json")
+                if src_review.is_file():
+                    try:
+                        src_meta = json.loads(src_review.read_text(encoding="utf8"))
+                        if (isinstance(src_meta, dict)
+                                and src_meta.get("size") == picture_input.get("size")
+                                and src_meta.get("mtimeMs") == picture_input.get("mtimeMs")):
+                            if isinstance(src_meta.get("samples"), int) and src_meta["samples"] >= 1:
+                                evidence["samples"] = src_meta["samples"]
+                            if isinstance(src_meta.get("start"), (int, float)) and src_meta["start"] >= 0:
+                                evidence["start"] = src_meta["start"]
+                    except (OSError, ValueError):
+                        pass
                 if whole:
                     cut_info = context["cuts"] or {}
                     evidence["cuts"] = cut_info.get("times")

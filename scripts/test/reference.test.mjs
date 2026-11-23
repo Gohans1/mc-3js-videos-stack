@@ -8,6 +8,7 @@ import {
   readFileSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -1066,6 +1067,133 @@ test("reference timecode and sidebyside clean up temp label directories and pres
     expect(readFileSync(sbsOut, "utf8")).toBe("prior-sbs-bytes");
     expect(readdirSync(isolatedTmp)).toEqual([]);
     expect(readdirSync(dir).filter((f) => f.includes(".tmp"))).toEqual([]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30000);
+
+test("reference sidebyside auto-aligns film spans, honors --start with bounded ref audio, and warns on --samples 1", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-span-"));
+  try {
+    mkdirSync(join(dir, "references"), { recursive: true });
+    mkdirSync(join(dir, "renders"), { recursive: true });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "span-test", "live-studio": { ratio: "9:16" } }),
+    );
+    const ref = join(dir, "references/ref.mp4");
+    const span = join(dir, "renders/span_2-3.mp4");
+    expect(
+      spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=red:s=180x320:r=30:d=2",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=blue:s=180x320:r=30:d=2",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=f=440:d=4",
+          "-filter_complex",
+          "[0:v][1:v]concat=n=2:v=1:a=0[v]",
+          "-map",
+          "[v]",
+          "-map",
+          "2:a",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-c:a",
+          "aac",
+          ref,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+    expect(
+      spawnSync(
+        "ffmpeg",
+        [
+          "-v",
+          "error",
+          "-f",
+          "lavfi",
+          "-i",
+          "color=c=green:s=180x320:r=30:d=1",
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          span,
+        ],
+        { encoding: "utf8", timeout: 15000 },
+      ).status,
+    ).toBe(0);
+    const st = statSync(span);
+    writeFileSync(
+      `${span}.review.json`,
+      JSON.stringify({ size: st.size, mtimeMs: Math.trunc(st.mtimeMs), samples: 1, start: 2 }),
+    );
+
+    const autoOut = join(dir, "auto_span.mp4");
+    const rAuto = run(dir, ["sidebyside", ref, span, "--audio", "ref", "--out", autoOut]);
+    expect(rAuto.status, rAuto.stdout + rAuto.stderr).toBe(0);
+    expect(rAuto.stdout).toContain("start 2.00s");
+    expect(rAuto.stdout).toContain("rendered with --samples 1");
+    const dur = Number(
+      spawnSync(
+        "ffprobe",
+        ["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", autoOut],
+        { encoding: "utf8" },
+      ).stdout.trim(),
+    );
+    expect(dur).toBeGreaterThan(0.9);
+    expect(dur).toBeLessThan(1.3);
+
+    const px = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-ss",
+        "0.5",
+        "-i",
+        autoOut,
+        "-vf",
+        "format=rgb24,crop=1:1:90:180",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+      ],
+      { timeout: 15000 },
+    );
+    expect(px.status, String(px.stderr)).toBe(0);
+    expect(px.stdout[2]).toBeGreaterThan(180);
+    expect(px.stdout[0]).toBeLessThan(60);
+
+    const badStart = run(dir, [
+      "sidebyside",
+      ref,
+      span,
+      "--start",
+      "5",
+      "--out",
+      join(dir, "x.mp4"),
+    ]);
+    expect(badStart.status).toBe(2);
+    expect(existsSync(join(dir, "x.mp4"))).toBe(false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

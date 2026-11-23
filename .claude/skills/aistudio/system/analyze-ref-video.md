@@ -70,10 +70,10 @@ Map the entire video chronologically so boundaries and frame spans are unambiguo
 
 ### 3. Craft & Blind-Spot Delta Ledger (Chronological)
 Log ONLY layered craft not already fully captured in Section 2, **strictly sorted in ascending order by start frame** — do NOT copy-paste Section 2 shots verbatim unless adding concrete frame-level mechanics:
-- Sub-0.5s beats, repeat counts, mechanical linkages, **easing/weight curves (`snap`/`overshoot`/`settle`), time remapping (`slow-mo`/`timelapse`/`hit-stop`), `eye-leads-head`**, contact-shadow/foot-plant grounding, and **full prop/effect lifecycles (`entry/ON → state change → exit/reset`)**.
+- Sub-0.5s beats, repeat counts, mechanical linkages, **easing/weight curves (`snap`/`overshoot`/`settle`), time remapping (`slow-mo`/`timelapse`/`hit-stop`), `eye-leads-head`**, contact-shadow/foot-plant grounding, and **full prop/effect lifecycles (`entry edge/vector → state change → exit/reset`)**.
 - Facial/body micro-acting and **ALL readable brand/creator logos or diegetic signs**.
 - Exact sharp focus plane & **exact rack-focus completion frame**, 4-way motion-blur type, plus **only visibly present** optical finishing shifts (bloom/vignette/flare/CA) or glitches.
-- **Per-scene look-dev shifts ONCE on scene entry** (key/rim direction, hard vs soft shadow change, floor reflections, fog/volumetrics, surface wear), plus dynamic light/emissive pulses (ON & OFF), practical flicker spill, cast-shadow motion, non-rigid VFX/cutaways, and kinetic/explanatory graphics.
+- **Per-scene look-dev shifts ONCE on scene entry** (key/rim direction, hard vs soft shadow change, floor reflections, fog/volumetrics, surface wear), plus dynamic light/emissive pulses (exact ON/dim/re-pulse/OFF cadence, never collapsed into one flat hold), practical flicker spill, cast-shadow motion, non-rigid VFX/cutaways, and kinetic/explanatory graphics.
 - **Chronological audio-visual shifts ONLY** (distinct BGM mood shifts/drops/swells, **pre-impact silence vacuums**, **`J-cut`/`L-cut` bridges**, VO beat pauses synced to reveals, audible isolated impacts) at their real timestamps — **never dump a `00:00–END` catch-all Audio row** and **never append audio rows out of chronological order**.
 - Link every row to its Section 2 `ID`.
 

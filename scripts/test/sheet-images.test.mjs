@@ -269,3 +269,52 @@ test(
     assert.match(help.stdout, /--out/);
   },
 );
+
+test(
+  "sheet vs lays out renders/vs_still_*.jpg in numeric time order and image lists expand globs",
+  { timeout: 30000 },
+  (t) => {
+    const dir = mkdtempSync(join(tmpdir(), "sheet-vs-stills-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+    const empty = spawnSync("python", [SHEET, "vs"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    assert.equal(empty.status, 2);
+    assert.match(empty.stderr, /no renders\/vs_still_\*\.jpg/);
+
+    makeImages([
+      { file: join(dir, "renders/vs_still_10s.jpg"), w: 480, h: 270, color: [30, 200, 50] },
+      { file: join(dir, "renders/vs_still_2.5s.jpg"), w: 480, h: 270, color: [220, 40, 40] },
+      { file: join(dir, "renders/vs_still_46s.jpg"), w: 480, h: 270, color: [40, 70, 220] },
+    ]);
+
+    const vs = spawnSync("python", [SHEET, "vs"], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 25000,
+    });
+    assert.equal(vs.status, 0, vs.stdout + vs.stderr);
+    assert.match(vs.stdout, /renders\/sheet_vs_0\.jpg {2}2\.5s, 10s, 46s/);
+    assert.ok(existsSync(join(dir, "renders/sheet_vs_0.jpg")));
+
+    const globbed = spawnSync(
+      "python",
+      [SHEET, "renders/vs_still_*.jpg", "--out", "renders/glob_grid.jpg"],
+      { cwd: dir, encoding: "utf8", timeout: 25000 },
+    );
+    assert.equal(globbed.status, 0, globbed.stdout + globbed.stderr);
+    assert.match(globbed.stdout, /vs_still_2\.5s, vs_still_10s, vs_still_46s/);
+    assert.ok(existsSync(join(dir, "renders/glob_grid.jpg")));
+
+    const noMatch = spawnSync(
+      "python",
+      [SHEET, "renders/vs_nope_*.jpg", "--out", "renders/glob_grid.jpg"],
+      { cwd: dir, encoding: "utf8", timeout: 15000 },
+    );
+    assert.equal(noMatch.status, 2);
+    assert.match(noMatch.stderr, /no image files match/);
+  },
+);

@@ -3775,6 +3775,17 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         },
       },
       {
+        key: "--start",
+        flag: "--start",
+        label: "Reference Start Offset (sec)",
+        type: "string",
+        placeholder: "12.0",
+        visibleWhen: {
+          field: "operation",
+          in: ["sidebyside"],
+        },
+      },
+      {
         key: "--label",
         flag: "--label",
         label: "Timecode Strip Label",
@@ -4156,7 +4167,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "sheet",
     category: "render",
     summary:
-      "Inspect file pictures: bounded overview, exact native frames, shot/cut sheets, rendered stills, or explicit image lists.",
+      "Inspect file pictures: bounded overview, exact native frames, shot/cut sheets, rendered stills (or vs), or explicit image lists/globs.",
     runner: "bun-script",
     target: "sheet",
     cwdModes: ["film"],

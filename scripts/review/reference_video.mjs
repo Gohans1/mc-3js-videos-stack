@@ -13,9 +13,13 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
-import { cliArgs, numberArg } from "../../packages/live-studio/src/cli.mjs";
+import { cliArgs, numberArg, secondArg } from "../../packages/live-studio/src/cli.mjs";
 import { startJob } from "../../packages/live-studio/src/tell.mjs";
-import { filmPicture } from "../../packages/live-studio/src/video.mjs";
+import {
+  filmPicture,
+  filmVideo,
+  readRenderEvidence,
+} from "../../packages/live-studio/src/video.mjs";
 
 const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. aistudio).
   bun run reference timecode <video> [--out <file>] [--label <text>] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
@@ -31,10 +35,12 @@ Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: 
 next: pass the output alongside renders/draft.mp4 to your video reviewer; keep references/ clean`;
 
 const SIDEBYSIDE_HELP = `Tile a reference video and a remake into one synced video with REF/OURS headers and a shared black timecode bar for AI comparison.
-  bun run reference sidebyside <reference> <remake> [--out <file>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
+  bun run reference sidebyside <reference> <remake> [--out <file>] [--start <sec>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
 Writes an H.264 .mp4 copy without touching either source; strips a film draft's bottom studio bar before tiling and pads any shorter clip with black to show duration mismatch.
+Auto-aligns film spans (renders/span_<a>-<b>.mp4) and chunks (renders/chunks/cNN.mp4) to their matching window in <reference> with true film timecode; pass --start to override.
 Default output: renders/reference/<ref-name>_vs_<remake-name>.mp4.
   --out <file>       Output .mp4 path (must differ from both inputs).
+  --start <sec>      Reference start offset in seconds (e.g. 12, 0:12, 00:12.500) to align a partial/span clip against <reference>.
   --audio <mode>     Audio track to keep: ours (default), ref, or none.
   --layout <mode>    auto (default: hstack for portrait/square, vstack for landscape), hstack, or vstack.
   --short-edge <px>  Cap each panel's shorter side in pixels without upscaling (default 720).
@@ -155,18 +161,44 @@ const computeBarTypography = (outW, barH, leftChars, rawRightText) => {
   return { margin, fontSize, rightFontSize, rightText };
 };
 
-const findRemakePicture = (file) => {
-  const direct = filmPicture(process.cwd(), file);
-  if (direct) return direct;
+const findRemakeContext = (file) => {
+  let meta = null;
+  let picture = null;
+  const candidates = [process.cwd()];
   let cur = dirname(file);
   for (let i = 0; i < 4; i++) {
-    const hit = filmPicture(cur, file);
-    if (hit) return hit;
+    candidates.push(cur);
     const parent = dirname(cur);
     if (parent === cur) break;
     cur = parent;
   }
-  return null;
+  for (const dir of candidates) {
+    const found = filmVideo(dir, file);
+    if (found) {
+      meta = found;
+      picture = filmPicture(dir, file);
+      break;
+    }
+  }
+  const evidence = readRenderEvidence(file);
+  let samples = Number.isInteger(evidence?.samples) ? evidence.samples : null;
+  if (samples === null && meta?.mixed) {
+    const sibling = join(
+      dirname(file),
+      basename(file) === "final.mp4" ? "final_video.mp4" : "draft_video.mp4",
+    );
+    const sibEvidence = existsSync(sibling) ? readRenderEvidence(sibling) : null;
+    if (
+      sibEvidence &&
+      Number.isInteger(sibEvidence.samples) &&
+      (!evidence?.pictureInput ||
+        (sibEvidence.size === evidence.pictureInput.size &&
+          sibEvidence.mtimeMs === evidence.pictureInput.mtimeMs))
+    ) {
+      samples = sibEvidence.samples;
+    }
+  }
+  return { meta, picture, evidence, samples };
 };
 
 async function runAtomicFfmpeg({
@@ -344,6 +376,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     SIDEBYSIDE_HELP,
     [
       "--out file",
+      "--start sec",
       "--audio mode",
       "--layout mode",
       "--short-edge px",
@@ -359,6 +392,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     allowPositionals: true,
     options: {
       out: { type: "string" },
+      start: { type: "string" },
       audio: { type: "string" },
       layout: { type: "string" },
       "short-edge": { type: "string" },
@@ -380,6 +414,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     : numberArg("--short-edge", values["short-edge"] ?? "720", { min: 144, max: 4320, int: true });
   const crf = numberArg("--crf", values.crf ?? "22", { min: 0, max: 51, int: true });
   const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  const explicitStart = values.start !== undefined ? secondArg("--start", values.start) : null;
   const refSource = resolve(positionals[0]);
   const remSource = resolve(positionals[1]);
   for (const [raw, file] of [
@@ -405,7 +440,19 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     process.exit(1);
   }
 
-  const remPicture = findRemakePicture(remSource);
+  const remCtx = findRemakeContext(remSource);
+  const remPicture = remCtx.picture;
+  const autoWindow =
+    remCtx.meta && (remCtx.meta.kind === "span" || remCtx.meta.kind === "chunk")
+      ? remCtx.meta.start
+      : null;
+  const startSec = explicitStart ?? autoWindow ?? 0;
+  const isWindow = explicitStart !== null || autoWindow !== null;
+  if (startSec >= refInfo.duration) {
+    usage(
+      `--start ${startSec}s is at or past <reference> duration (${refInfo.duration.toFixed(2)}s)`,
+    );
+  }
   const { width: panelW, height: panelH } = scaleToShortEdge(
     refInfo.dispW,
     refInfo.dispH,
@@ -419,13 +466,17 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   const outH =
     layout === "hstack" ? headH + panelH + barH : headH + panelH + seam + headH + panelH + barH;
   const targetFps = Math.max(1, Math.min(60, Math.round(remInfo.fps || refInfo.fps || 30)));
-  const maxDur = Math.max(refInfo.duration, remInfo.duration);
+  const refWindowDur = isWindow
+    ? Math.min(Math.max(0, refInfo.duration - startSec), remInfo.duration)
+    : refInfo.duration;
+  const maxDur = Math.max(refWindowDur, remInfo.duration);
   if (!(maxDur > 0)) {
     console.error("reference sidebyside: inputs report zero duration; nothing was written");
     process.exit(1);
   }
   const targetDur = Math.max(maxDur, 1 / targetFps);
   const totalFrames = Math.max(1, Math.round(targetDur * targetFps));
+  const startFrame = Math.round(startSec * targetFps);
   const padDur = targetDur + 0.5;
 
   const pickedAudio =
@@ -440,7 +491,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
         : { inputIndex: null, stream: null, tag: "none" };
 
   const layoutLabel = layout === "hstack" ? "REF | OURS" : "REF / OURS";
-  const leftChars = 15 + String(totalFrames).length;
+  const leftChars = 15 + String(startFrame + totalFrames).length;
   const {
     margin,
     fontSize: barFont,
@@ -466,6 +517,8 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   };
 
   const barY = `h-${barH}+(${barH}-text_h)/2`;
+  const ptsExpr = startSec > 0 ? `%{pts\\:hms\\:${startSec.toFixed(6)}}` : "%{pts\\:hms}";
+  const frameExpr = startFrame > 0 ? `f%{eif\\:n+${startFrame}\\:d}` : "f%{n}";
   const cleanupDirs = [];
   const rightDraw = [];
   if (rightText) {
@@ -488,7 +541,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
       `[left][right]hstack=inputs=2,pad=${outW}:${outH}:0:${headH}:black,` +
         `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
         `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=${panelW + seam}+(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
-        `drawtext=${font}:text='%{pts\\:hms}  f%{n}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
+        `drawtext=${font}:text='${ptsExpr}  ${frameExpr}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
     ].join(";");
   } else {
     const botHeaderY = headH + panelH + seam;
@@ -498,7 +551,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
       `[top][bot]vstack=inputs=2,` +
         `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
         `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=${botHeaderY}+(${headH}-text_h)/2,` +
-        `drawtext=${font}:text='%{pts\\:hms}  f%{n}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
+        `drawtext=${font}:text='${ptsExpr}  ${frameExpr}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
     ].join(";");
   }
 
@@ -516,6 +569,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
       "error",
       "-nostdin",
       "-y",
+      ...(startSec > 0 ? ["-ss", startSec.toFixed(6)] : []),
       "-i",
       refSource,
       "-i",
@@ -528,9 +582,11 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
         ? [
             "-map",
             `${pickedAudio.inputIndex}:a:0`,
-            ...(pickedAudio.stream.codec_name === "aac"
-              ? ["-c:a", "copy"]
-              : ["-c:a", "aac", "-b:a", "256k"]),
+            ...(isWindow && pickedAudio.inputIndex === 0
+              ? ["-t", targetDur.toFixed(6), "-c:a", "aac", "-b:a", "256k"]
+              : pickedAudio.stream.codec_name === "aac"
+                ? ["-c:a", "copy"]
+                : ["-c:a", "aac", "-b:a", "256k"]),
           ]
         : ["-an"]),
       "-c:v",
@@ -546,9 +602,14 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     ],
   });
 
+  if (remCtx.samples === 1) {
+    console.log(
+      `warning: ${basename(remSource)} was rendered with --samples 1 (no shutter motion blur); for motion-blur/whip review render with --samples 8`,
+    );
+  }
   const displayOut = formatDisplayOut(outPath);
   console.log(
-    `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refInfo.duration.toFixed(2)}s vs ours ${remInfo.duration.toFixed(2)}s, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
+    `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refWindowDur.toFixed(2)}s vs ours ${remInfo.duration.toFixed(2)}s${startSec > 0 ? `, start ${startSec.toFixed(2)}s` : ""}, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
   );
   console.log(
     `next: pass ${displayOut} to your video reviewer with compare-2-video.md; keep sources clean`,

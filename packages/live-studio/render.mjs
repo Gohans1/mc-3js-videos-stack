@@ -562,12 +562,15 @@ const preservePrev = (fileName) => {
   copyFileSync(src, join(prevDir, fileName));
 };
 if (at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS)) {
-  for (const f of readdirSync(RENDERS))
+  for (const f of readdirSync(RENDERS)) {
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
       preservedThisRun.add(f);
       rmSync(join(RENDERS, f), { force: true });
+    } else if (/^vs_still_.*\.jpg$/.test(f)) {
+      rmSync(join(RENDERS, f), { force: true });
     }
+  }
   const moved = [...preservedThisRun];
   if (moved.length)
     console.log(
@@ -882,6 +885,7 @@ const server = Bun.serve({
           cuts: encodedCuts,
           seenSound: seenJson,
           pictureChoices,
+          samples,
         });
         stamps[i] = stamp;
         writeFileSync(stampsFile, JSON.stringify(stamps));
@@ -895,6 +899,7 @@ const server = Bun.serve({
           seenSound: seenJson,
           pictureChoices,
           start: spanFrames.first / FPS,
+          samples,
         });
         lastAlive = Date.now();
       } else if (url === "/alive") lastAlive = Date.now();
@@ -1129,36 +1134,81 @@ if (!failed && compare && stillsWritten.length) {
 
 if (!failed && vsVideo && stillsWritten.length) {
   const qcCli = resolve(STUDIO, "../../scripts/review/qc.ts");
-  for (const rel of stillsWritten) {
-    const second = /_(\d+(?:\.\d+)?)s\.(?:jpg|png)$/.exec(rel)?.[1];
-    if (!second) continue;
-    const out = `renders/vs_${basename(rel, extname(rel))}.jpg`;
-    const r = spawnSync(
-      process.execPath,
-      [
-        qcCli,
-        "vs",
-        vsVideo,
-        join(PROJECT, rel),
-        "--at",
-        second,
-        "--picture-height",
-        String(H),
-        "--out",
-        join(PROJECT, out),
-        ...(opt.refRegion ? ["--region", opt.refRegion] : []),
-      ],
-      { encoding: "utf8", windowsHide: true, timeout: 180_000 },
-    );
-    if (r.status === 0) console.log(r.stdout.trimEnd().replace(join(PROJECT, out), out));
+  const jobs = stillsWritten
+    .map((rel) => {
+      const second = /_(\d+(?:\.\d+)?)s\.(?:jpg|png)$/.exec(rel)?.[1];
+      return second ? { rel, second, out: `renders/vs_${basename(rel, extname(rel))}.jpg` } : null;
+    })
+    .filter(Boolean);
+  const runVs = (job) =>
+    new Promise((done) => {
+      const proc = spawn(
+        process.execPath,
+        [
+          qcCli,
+          "vs",
+          vsVideo,
+          join(PROJECT, job.rel),
+          "--at",
+          job.second,
+          "--picture-height",
+          String(H),
+          "--out",
+          join(PROJECT, job.out),
+          ...(opt.refRegion ? ["--region", opt.refRegion] : []),
+        ],
+        { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+      );
+      let stdout = "";
+      let stderr = "";
+      let settled = false;
+      const finish = (status, errMsg = "") => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        done({ job, status, stdout, stderr: errMsg || stderr });
+      };
+      const timer = setTimeout(() => {
+        killProcessTree(proc);
+        finish(1, "qc vs timed out");
+      }, 180_000);
+      proc.stdout.setEncoding("utf8");
+      proc.stderr.setEncoding("utf8");
+      proc.stdout.on("data", (d) => {
+        stdout += d;
+      });
+      proc.stderr.on("data", (d) => {
+        stderr += d;
+      });
+      proc.on("error", (err) => finish(1, err.message));
+      proc.on("close", (code) => finish(code ?? 1));
+    });
+  const results = Array.from({ length: jobs.length });
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(4, jobs.length) }, async () => {
+    while (cursor < jobs.length) {
+      const idx = cursor++;
+      results[idx] = await runVs(jobs[idx]);
+    }
+  });
+  await Promise.all(workers);
+  for (const r of results) {
+    if (r.status === 0)
+      console.log(r.stdout.trimEnd().replace(join(PROJECT, r.job.out), r.job.out));
     else {
-      console.log(`ERROR vs ${rel}: ${(r.stderr || r.error?.message || "qc vs failed").trim()}`);
+      console.log(`ERROR vs ${r.job.rel}: ${(r.stderr || "qc vs failed").trim()}`);
       failed = true;
     }
   }
+  const vsHint =
+    views && jobs.length > 1
+      ? `; contact sheet: bun run sheet ${jobs.map((j) => j.out).join(" ")}`
+      : jobs.filter((j) => j.rel.includes("/still_")).length > 1
+        ? "; many stills at once: bun run sheet vs (6 to a picture)"
+        : "";
   if (!failed && !chunks && !span)
     console.log(
-      `next: open ${stillsWritten.length > 1 ? "the renders/vs_*.jpg pictures" : `renders/vs_${basename(stillsWritten[0], extname(stillsWritten[0]))}.jpg`} to look (reference | ours | diff)${nextHint}`,
+      `next: open ${stillsWritten.length > 1 ? "the renders/vs_*.jpg pictures" : `renders/vs_${basename(stillsWritten[0], extname(stillsWritten[0]))}.jpg`} to look (reference | ours | diff)${vsHint}`,
     );
 }
 
@@ -1214,7 +1264,7 @@ if (!failed && chunks) {
         cuts: old.length ? joinedCuts(all, CHUNK) : encodedCuts,
         seenSound: old.length ? null : seenJson,
         pictureChoices,
-        ...(old.length ? { oldChunks: old } : {}),
+        ...(old.length ? { oldChunks: old } : { samples }),
       });
       if (encodedCuts && !old.length)
         writeFileSync(join(RENDERS, "cuts.json"), JSON.stringify(encodedCuts));

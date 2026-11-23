@@ -1,8 +1,9 @@
 """Contact sheets for self-review, 6 pictures each (3 x 2, 640 wide), in time order.
   bun run sheet                                  every renders/still_*.jpg (make them: bun run render stills --at 1,4),
                                                  to renders/sheet_<n>.jpg; a draft still carries its time and shot under it
+  bun run sheet vs                               every renders/vs_still_*.jpg (from render stills --ref), to renders/sheet_vs_<n>.jpg
   bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg]
-                                                 explicit images (.jpg, .jpeg, .png, .webp) into one captioned grid
+                                                 explicit images or globs (.jpg, .jpeg, .png, .webp) into one captioned grid
                                                  (default renders/sheet_custom.jpg; --out must stay inside the film folder)
   bun run sheet renders/draft_video.mp4 10,20,30  only those seconds of a video, to renders/sheet_<video>_<n>.jpg
   bun run sheet renders/chunks/c02.mp4 62,70     film seconds, as framecheck prints them: a chunk or a span starts at its
@@ -38,6 +39,7 @@ Open every sheet, then use commands.frames from the index for details; never rea
   Speech and shots come from the current timeline. Stale, external and manually re-aligned files omit those links.
 Local only, no credits or model. Up to 96 seeks; extraction and timeline-context subprocesses time out after 30 s.
   Interrupted/failed new runs keep images and complete=false in their index; reruns create a new directory."""
+import glob
 import json
 import math
 import os
@@ -127,8 +129,20 @@ def build_image_sheet(paths, out_arg):
     if out_ext not in IMAGE_EXTS:
         usage(f"--out must end in .jpg, .jpeg, .png, or .webp, got {raw_out!r}")
 
+    def sort_key(p):
+        m = re.search(r"_(-?\d+(?:\.\d+)?)s$", p.stem)
+        return (0, float(m.group(1)), p.as_posix()) if m else (1, 0.0, p.as_posix())
+
     img_paths = []
     for raw in paths:
+        if any(ch in raw for ch in "*?["):
+            matched = [Path(x) for x in glob.glob(raw)]
+            matched = [p for p in matched if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
+            if not matched:
+                usage(f"no image files match {raw}")
+            matched.sort(key=sort_key)
+            img_paths.extend(matched)
+            continue
         p = Path(raw)
         if p.suffix.lower() not in IMAGE_EXTS:
             usage(f"unsupported image {raw}: expected .jpg, .jpeg, .png, or .webp")
@@ -236,7 +250,7 @@ def cuts_of(context):
     return sorted(set(cuts["times"]))
 
 
-USE = "bun run sheet, bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
+USE = "bun run sheet [vs], bun run sheet <img1> [<img2> ...] [--out <path>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
 pos = []
 out_arg = None
 vs_arg = None
@@ -295,14 +309,15 @@ while i < len(args):
     i += 1
 
 is_image_list = any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos)
-if start_arg is not None and (is_image_list or not pos):
+vs_stills = len(pos) == 1 and pos[0] == "vs"
+if start_arg is not None and (is_image_list or not pos or vs_stills):
     usage("--start goes with a video: bun run sheet renders/clip.mp4 frames 62 --start 60")
 if is_image_list:
     build_image_sheet(pos, out_arg)
     raise SystemExit
 if out_arg is not None:
     usage("--out is only for image lists: bun run sheet img1.jpg img2.jpg --out renders/grid.jpg")
-args = pos
+args = [] if vs_stills else pos
 mode = args[1] if len(args) >= 2 and args[1] in ("shots", "cut", "overview", "frames") else ""
 if len(args) == 1 and not Path(args[0]).exists() and not re.fullmatch(r"[\d.,:]+", args[0]):
     usage(f"no {args[0]}: bun run sheet <video> 10,20.5,30, a video from renders/ (bun run render clip makes one)")
@@ -451,12 +466,17 @@ if args:
         usage(f"ffmpeg could not read frames from {video}: {e}", 1)
     src, name = tmp, f"sheet_{Path(video).stem}_{'shots_' if mode == 'shots' else f'cut{args[2]}_' if mode else ''}"
 else:
-    src, name = R, "sheet_"
-    tell(Path.cwd(), "Looking at the rendered stills")
+    src = R
+    name = "sheet_vs_" if vs_stills else "sheet_"
+    tell(Path.cwd(), "Looking at the rendered ref-vs-ours stills" if vs_stills else "Looking at the rendered stills")
 try:
-    at_second = {f: re.fullmatch(r"still_(-?\d+(?:\.\d+)?)s\.jpg", f.name) for f in src.glob("still_*.jpg")}
+    stem_prefix = "vs_still_" if vs_stills else "still_"
+    rx = re.compile(rf"{re.escape(stem_prefix)}(-?\d+(?:\.\d+)?)s\.jpg")
+    at_second = {f: rx.fullmatch(f.name) for f in src.glob(f"{stem_prefix}*.jpg")}
     files = sorted((f for f, m in at_second.items() if m), key=lambda f: float(at_second[f].group(1)))
     if not files:
+        if vs_stills:
+            usage("no renders/vs_still_*.jpg to lay out: bun run render stills --at 1,4,8 --ref references/ref.mp4 first")
         usage("no renders/still_*.jpg to lay out: bun run render stills --at 1,4,8 first, or bun run sheet <video> 10,20,30")
     R.mkdir(exist_ok=True)
     for old in R.glob(f"{name}*.jpg"):
@@ -478,7 +498,7 @@ try:
             n += 1
         filt += "".join(f"[v{k}]" for k in range(n)) + f"xstack=inputs={n}:layout=" + "|".join(f"{(k % 3) * 640}_{(k // 3) * TH}" for k in range(n))
         subprocess.run(["ffmpeg", "-v", "error", "-y", *inp, "-filter_complex", filt, "-frames:v", "1", str(R / f"{name}{i // 6}.jpg")], check=True)
-        print(f"renders/{name}{i // 6}.jpg  {', '.join(f.stem.removeprefix('still_') for f in grp)}")
+        print(f"renders/{name}{i // 6}.jpg  {', '.join(f.stem.removeprefix(stem_prefix) for f in grp)}")
 except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
     usage(f"could not lay out frames from {src}: {e}", 1)
 finally:
