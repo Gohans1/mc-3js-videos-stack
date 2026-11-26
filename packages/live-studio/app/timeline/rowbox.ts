@@ -1,6 +1,9 @@
 import { S } from "../core/state";
 
 export type ClientRect = { x0: number; x1: number; y0: number; y1: number };
+export const isSelectionModifier = (e: Pick<PointerEvent, "shiftKey" | "ctrlKey" | "metaKey">) =>
+  e.shiftKey || e.ctrlKey || e.metaKey;
+export const canGrabPlayhead = (add: boolean, onHead: boolean) => !add && onHead;
 export const boxPick = {
   pick: (_r: ClientRect, _base: unknown) => {},
   picked: (): unknown => null,
@@ -60,8 +63,8 @@ export const boxEnd = (e?: PointerEvent) => {
     boxPick.done();
     return true;
   }
-  if (b && e?.type === "pointerup") {
-    if (!b.add) boxPick.clear();
+  if (b && e?.type === "pointerup" && !b.add) {
+    boxPick.clear();
     boxPick.seek(e.clientX);
   }
   return false;

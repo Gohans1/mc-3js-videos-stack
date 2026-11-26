@@ -34,14 +34,19 @@ import {
   pxOf,
   textCheckSample,
 } from "./src/readable.mjs";
+import {
+  changedRenderAsset,
+  publicRenderAsset,
+  renderAssetIdentity,
+} from "./src/render-assets.mjs";
 import { audioInfo } from "./src/sound.mjs";
 import { startJob } from "./src/tell.mjs";
 import { mapTimeline, mapVoice } from "./src/timing-data.mjs";
 import { clockForTimeline, setTiming } from "./src/timing-state.mjs";
-import { joinedCuts, writeRenderEvidence } from "./src/video.mjs";
+import { joinedCuts, readRenderEvidence, writeRenderEvidence } from "./src/video.mjs";
 import { parseViews } from "./src/views.mjs";
 import { filmPlugin } from "./src/vite_film.mjs";
-import { writeVoiceMap } from "./src/voice-map.mjs";
+import { writeAtomicSync, writeVoiceMap } from "./src/voice-map.mjs";
 import { warp } from "./src/warp.mjs";
 
 const HELP = `Renders of the film, run inside it: draft stills, the film as video, its captions, the final for upload.
@@ -56,8 +61,10 @@ const HELP = `Renders of the film, run inside it: draft stills, the film as vide
                               4.5 min on an RTX 2060, against 10 s for a draft one; the GPU fan runs loud meanwhile):
                               1440p, no strip under the picture, full-size AO, 8 sub-frames a frame (180-degree
                               shutter motion blur averaged as light), YouTube's H.264 (GOP half a second, 32 Mbps),
-                              chunks in renders/final_chunks/ joined into renders/final_video.mp4
-A clip or final run keeps every chunk already rendered from the same film code, data and settings, and renders the rest:
+                              chunks in renders/final_chunks/ joined into renders/final_video.mp4.
+                              Before encoding, automatically checks the final scene at 30 fps across the whole film
+                              (up to 10 min, even with --chunks). See renders/pops.json. Any POP or SLIDE stops final.
+A clip or final run keeps chunks whose film code, settings and served picture files still match, and renders the rest:
 after a crash, the same command again picks up where it stopped. The sound timeline is not part of it: after a sound
 edit, bun run mix renders/draft_video.mp4 alone puts the new sound on the draft. Chrome is restarted (up to 3 times)
 when the page goes quiet for 4 minutes mid-video. A clip or final run ends with its cost: wall ms a camera sample per
@@ -69,7 +76,8 @@ Nothing is written outside the film. Options come after the target:
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot. The
                              picture is the frame's top at the film's ratio (720x1280 of a 9:16 draft's 720x1352):
                              crop=iw:iw*16/9:0:0 (16:9: iw*9/16); framecheck, reference compare and --ref cut it off
-  --chunks 3,4               re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there
+  --chunks 3,4               re-render only those chunks (0-based: 3 is 1:30-2:00) and join them with the ones already there.
+                             An encode error names the failing chunk and frame range. Keep the same render flags when retrying.
   --span 40,44               clip only: just those heard seconds, to renders/span_40-44.mp4 (seconds, not a 30 s chunk:
                              try a move, a transition or a shader fast); the chunks and draft_video.mp4 are left as they are
   --samples 16               temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
@@ -90,7 +98,8 @@ Nothing is written outside the film. Options come after the target:
                              brightness ours/reference. The reference is filmed with motion blur: on a moving moment give the
                              stills --samples 8 too, or ours reads sharper than it is
   --compare                  stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
-  --check "slide:0,108;trace:50,51,0.1"  run the film's draw.checks.slide(0, 108) etc. and print the lines they return
+  --check "slide:0,108;trace:50,51,0.1"  with stills or all, run the film's draw.checks.slide(0, 108) etc.
+                             and print the lines they return. Final runs its built-in pops check automatically.
   --check motion:handR,81,83 built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
                              between two HEARD seconds as --at takes them, not the scene seconds of src/timeline rows
                              (bun run at <s> converts and names the shot; the result says which shots it spans):
@@ -99,6 +108,10 @@ Nothing is written outside the film. Options come after the target:
                              seen    how much of the frame it fills, hidden behind what, cut off, too dark, BLURRED (render/seen.ts)
                              touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
                                      question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
+  --check touch, --check touch:20,45  the same for every actor (mc-actor makePlayer) at once, every 0.1 s, an actor off
+                             screen or hidden the whole span named but not judged; renders/touch_actors_<from>-<to>_worst.jpg
+                             circles the worst moments.
+                             Slow: about a minute per actor per film minute
   --check text, --check text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
                              fully shown: OUTSIDE the safe area (5% in; a Short's clears YouTube's buttons and title),
                              LOW contrast around its letters; renders/text_<i>.jpg
@@ -107,13 +120,18 @@ Nothing is written outside the film. Options come after the target:
                              Finds history-dependent pictures without changing how you author the scene.
                              Writes renders/order.json and the first failing pair as lossless PNGs; 2/255 tolerance
                              per 8x8 block. Optional sampled diagnostic, not a quality gate. Stops after 2 minutes.
+  --check pops, --check pops:20,45  every joint, brow, actor root and draw.tools.objects label at 30 fps: one- or two-frame
+                             jumps a viewer reads as a teleport (POP; cuts and transitions excepted, a joint turning 90°
+                             between eligible frames counts) and planted soles sliding relative to the surface underfoot
+                             (SLIDE). Requires draw.tools.scene and draw.tools.camera. Writes renders/pops.json with
+                             each pop's neighbouring steps and fails the run on findings (render/pops.ts).
   --check probe:<t>, --check "probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
                              or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
                              quote | and * in shell); honors --inspect, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
                              screen=[x0,y0..x1,y1] in 0..1 of the frame, "past top 0.12": that far beyond the edge, in frames;
                              with an aperture (fstop > 0) the header says where the lens focuses and each target its blur in px:
                              the lens's own, as a final with shutter.apertureSamples shows it; the DOF post pass (drafts, and finals without it) tops out short of strong blur
-  --entry lab/prop.ts        run a page of the film's own instead (it imports "live-studio/lab")
+  --entry lab/prop.ts        run a page of the film's own instead (it imports "live-studio/lab"); unavailable for final
   --lab view=desk            reaches an --entry page as cfg.lab.view; one --lab per key
   --fresh-cache              use an empty temp Chrome profile instead of the cached GPU shader profile in renders/.chrome-cache/
 Examples:
@@ -239,6 +257,10 @@ if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
 }
+if (what === "final" && opt.entry) {
+  console.error("render final uses the film's scene so it can check the actual output for pops; use --entry with stills");
+  process.exit(2);
+}
 
 const PROJECT = needFilm(resolve(process.env.LIVE_PROJECT ?? process.cwd()));
 const readJson = (file, fallback) => {
@@ -337,7 +359,7 @@ const CHROME = resolve(
 );
 const numbers = (name, value, limits) =>
   value.split(",").map((x, i) => numberArg(`${name} item ${i + 1}`, x.trim(), limits));
-const BUILT_IN = ["motion", "seen", "touch", "text", "order", "probe"];
+const BUILT_IN = ["motion", "seen", "touch", "text", "order", "probe", "pops"];
 const CHECKS = (opt.check ?? "")
   .split(";")
   .filter(Boolean)
@@ -351,10 +373,10 @@ const CHECKS = (opt.check ?? "")
               .slice(colon + 1)
               .split(",")
               .map((a) => a.trim());
-    if (name === "text" || name === "order") {
+    if (["text", "order", "pops"].includes(name) || (name === "touch" && args.length !== 3)) {
       if (args.length !== 0 && args.length !== 2) {
         console.error(
-          `--check ${c}: ${name} takes nothing (whole film) or <from s>,<to s>; got ${args.length} values (bun run render --help)`,
+          `--check ${c}: ${name} takes nothing (whole film) or <from s>,<to s>${name === "touch" ? " for every actor, or <target>,<from s>,<to s>" : ""}; got ${args.length} values (bun run render --help)`,
         );
         process.exit(2);
       }
@@ -498,7 +520,7 @@ for (const { c, name, args } of CHECKS.filter((x) => BUILT_IN.includes(x.name)))
     }
     continue;
   }
-  if (["text", "order"].includes(name) && args[2] === Infinity)
+  if (["text", "order", "pops", "touch"].includes(name) && args[2] === Infinity)
     args[2] = ends ? +ends.layers.toFixed(2) : 1e9;
   const [, from, to] = args;
   if (name === "order" && ends && from >= ends.layers) {
@@ -668,6 +690,7 @@ const cfg = {
       )
     : null,
   checks: CHECKS.map(({ name, args }) => [name, args]),
+  finalPops: final,
   text: textLines,
   choices: choicesFile ? readJson(choicesFile, {}) : {},
   lab: Object.fromEntries(Object.entries(opt.lab).filter(([k]) => k !== "preview_overlay")),
@@ -762,9 +785,9 @@ const stamp = (() => {
   h.update(JSON.stringify({ W, H, draft, list, choices, inspect, ...clip, only: null }));
   return h.digest("hex").slice(0, 16);
 })();
-if (!cfg.checks.length && what !== "poster")
+if (!final && !cfg.checks.length && what !== "poster")
   console.log(
-    "if needed: --check motion|seen|touch:<target>,<from s>,<to s>, --check probe:<t>, --check text (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
+    "if needed: --check motion|seen|touch:<target>,<from s>,<to s>, --check probe:<t>, --check text, --check pops (teleports, foot sliding) (bun run render --help); encoded picture faults: bun run framecheck; editorial rhythm: bun run pace",
   );
 
 mkdirSync(CHUNKS, { recursive: true });
@@ -797,6 +820,21 @@ try {
   stamps = JSON.parse(readFileSync(stampsFile, "utf8"));
 } catch {}
 const renderedNow = new Set();
+const assetInputs = new Map();
+const observeAsset = (path, file) => {
+  if (!assetInputs.has(path)) assetInputs.set(path, renderAssetIdentity(file));
+};
+const currentChunk = (i, current, evidence) => {
+  if (stamps[i] !== stamp) return false;
+  const saved = evidence === undefined ? readRenderEvidence(chunkFile(i)) : evidence;
+  return Boolean(saved?.assetInputs && !changedRenderAsset(PROJECT, saved.assetInputs, current));
+};
+const unchangedChunks = () => {
+  const current = new Map();
+  return Object.keys(stamps)
+    .map(Number)
+    .filter((i) => currentChunk(i, current));
+};
 const pageConfig = () =>
   cfg.clip
     ? {
@@ -804,11 +842,7 @@ const pageConfig = () =>
         clip: {
           ...cfg.clip,
           only: cfg.clip.only?.filter((i) => !renderedNow.has(i)) ?? null,
-          unchanged: cfg.clip.only
-            ? []
-            : Object.keys(stamps)
-                .map(Number)
-                .filter((i) => stamps[i] === stamp && existsSync(chunkFile(i))),
+          unchanged: cfg.clip.only ? [] : unchangedChunks(),
         },
       }
     : cfg;
@@ -820,6 +854,7 @@ let finish,
 let encodedCuts = null;
 let pictureChoices;
 let orderPending = CHECKS.some(({ name }) => name === "order");
+let finalPopsPending = final;
 const finished = new Promise((done) => {
   finish = done;
 });
@@ -831,7 +866,7 @@ const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
   async fetch(req) {
-    const openfilm = openFilmResource(req);
+    const openfilm = openFilmResource(req, cfg.clip ? observeAsset : undefined);
     if (openfilm) return openfilm;
     const url = decodeURIComponent(new URL(req.url).pathname);
     if (req.method === "POST") {
@@ -877,14 +912,16 @@ const server = Bun.serve({
         }
         writeFileSync(dest, b);
         if (url === "/still/order.json") orderPending = false;
+        if (url === "/still/pops.json") finalPopsPending = false;
         if (/\.(jpg|png)$/i.test(name)) stillsWritten.push(`renders/${name}`);
       } else if (url.startsWith("/chunk/")) {
         const i = +url.slice(7);
-        writeFileSync(chunkFile(i), b);
+        writeAtomicSync(chunkFile(i), b);
         writeRenderEvidence(chunkFile(i), {
           cuts: encodedCuts,
           seenSound: seenJson,
           pictureChoices,
+          assetInputs: Object.fromEntries(assetInputs),
           samples,
         });
         stamps[i] = stamp;
@@ -893,11 +930,12 @@ const server = Bun.serve({
         lastAlive = Date.now();
       } else if (url === "/span") {
         const output = join(RENDERS, SPAN_FILE);
-        writeFileSync(output, b);
+        writeAtomicSync(output, b);
         writeRenderEvidence(output, {
           cuts: encodedCuts,
           seenSound: seenJson,
           pictureChoices,
+          assetInputs: Object.fromEntries(assetInputs),
           start: spanFrames.first / FPS,
           samples,
         });
@@ -926,12 +964,14 @@ const server = Bun.serve({
         headers: { "content-type": "application/zip" },
       });
     }
-    const file =
-      url === "/page.js" || url.startsWith("/_render/")
-        ? join(OUT, url)
-        : join(PROJECT, "assets/public", url);
+    const builtFile = url === "/page.js" || url.startsWith("/_render/");
+    const file = builtFile ? join(OUT, url) : publicRenderAsset(PROJECT, url);
+    if (!file) return new Response(null, { status: 404 });
     const f = Bun.file(file);
-    if (!(await f.exists())) return new Response(null, { status: 404 });
+    if (cfg.clip && !builtFile && !assetInputs.has(url)) {
+      observeAsset(url, file);
+      if (!assetInputs.get(url)) return new Response(null, { status: 404 });
+    } else if (!(await f.exists())) return new Response(null, { status: 404 });
     return new Response(f, {
       headers: { "content-type": MIME[extname(file)] ?? "application/octet-stream" },
     });
@@ -1029,7 +1069,14 @@ const stuck = (why) => {
   }
 };
 let quietSince = Date.now();
+const finalPopsDeadline = quietSince + 600_000;
 const watchdog = setInterval(() => {
+  if (finalPopsPending && Date.now() > finalPopsDeadline) {
+    console.error("ERROR final: the pops check exceeded 10 minutes before encoding");
+    failed = true;
+    close();
+    return;
+  }
   if (lastAlive !== null) quietSince = lastAlive;
   const quiet = Date.now() - quietSince;
   if (orderPending && quiet > 120e3) {
@@ -1253,8 +1300,9 @@ if (!failed && chunks) {
       ],
       { stdio: "inherit" },
     );
-    const old =
-      only && j.status === 0 ? all.flatMap((_, i) => (stamps[i] === stamp ? [] : [i])) : [];
+    const evidence = j.status === 0 ? all.map(readRenderEvidence) : [];
+    const current = new Map();
+    const old = evidence.flatMap((item, i) => (currentChunk(i, current, item) ? [] : [i]));
     if (old.length)
       console.log(
         `⚠ ${old.length === 1 ? `chunk ${old[0]} was` : `chunks ${old.join(", ")} were`} drawn before the film's last change and joined as ${old.length === 1 ? "it was" : "they were"}: bun run render ${what} --chunks ${old.join(",")} redraws ${old.length === 1 ? "it" : "them"} (bun run render ${what} redraws every chunk not current)`,
@@ -1264,6 +1312,7 @@ if (!failed && chunks) {
         cuts: old.length ? joinedCuts(all, CHUNK) : encodedCuts,
         seenSound: old.length ? null : seenJson,
         pictureChoices,
+        assetInputs: Object.assign({}, ...evidence.map((item) => item?.assetInputs)),
         ...(old.length ? { oldChunks: old } : { samples }),
       });
       if (encodedCuts && !old.length)

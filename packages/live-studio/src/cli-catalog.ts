@@ -1,6 +1,8 @@
 import { nativeMediaSubcommands } from "./media-cli.ts";
 import { referenceMediaSubcommands } from "./media-reference-cli.ts";
 import { sdkMediaSubcommands } from "./media-sdk-cli.ts";
+import { KIT_CATEGORY_IDS } from "./sound-kit-classify.mjs";
+import { SOUND_KIT_CLI_COMMAND } from "./sound-kit-cli-catalog.ts";
 import { PLAYGROUND_CLI_COMMAND } from "./voice-playground-cli-catalog";
 
 export type CliCategoryId = "daily" | "voice" | "sound" | "render" | "setup" | "dev" | "pipeline";
@@ -259,7 +261,7 @@ export const CLI_CATEGORIES: readonly CliCategory[] = [
     id: "sound",
     label: "Sound and mixing",
     description:
-      "Fetch CC0 SFX, mix and audit soundtracks, and run Earshot audio inspection & synthesis.",
+      "Curate Core Sound Kit picks, fetch CC0 SFX, mix and audit soundtracks, and run Earshot audio inspection & synthesis.",
   },
   {
     id: "render",
@@ -654,7 +656,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "find",
     category: "daily",
     summary:
-      "Find native/imported assets, 3D blocks/items/mobs/props and code helpers; inspect recipes, pick/place cmds, or star favorites.",
+      "Find native and imported assets, toon faces, 3D objects, and code helpers. Inspect recipes, previews, and placement commands.",
     runner: "bun-script",
     target: "find",
     cwdModes: ["film", "root"],
@@ -665,7 +667,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         multi: true,
         placeholder: "creaky door",
-        hint: "Keywords then OpenFilm meaning candidates, in separate blocks. Use English to include local-only assets.",
+        hint: "Keywords then OpenFilm meaning candidates. Toon faces also match common Vietnamese aliases.",
       },
     ],
     flags: [
@@ -678,7 +680,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         ...bareListCopy("kinds & groups"),
         choiceSource: "findKinds",
         tier: "common",
-        hint: "e.g. sound, mocap, block, item, mob, prop, object (all four 3D), transition, text, filter, effect; omit value to list groups",
+        hint: "Examples include face, face/ramp, face/mark, sound, mocap, object (3D), transition, text, filter, and effect. Omit value to list groups.",
       },
       {
         key: "--source",
@@ -934,6 +936,68 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         optionalValue: true,
         ...bareListCopy("favorites lists"),
         tier: "advanced",
+      },
+      {
+        key: "--kit",
+        flag: "--kit",
+        label: "Core Sound Kit",
+        type: "enum",
+        options: KIT_CATEGORY_IDS,
+        optionalValue: true,
+        bareLabel: "(bare flag — all approved Core Kit sounds)",
+        bareHint: "Omit value to search across all 8 approved Core Sound Kit categories",
+        visibleWhen: {
+          field: "--kind",
+          unsetOrStartsWith: [
+            "sound",
+            "sounds",
+            "audio",
+            "sfx",
+            "sfxs",
+            "effect",
+            "effects",
+            "bgm",
+            "bgms",
+            "music",
+            "song",
+            "songs",
+            "soundtrack",
+            "soundtracks",
+            "mc",
+            "minecraft",
+          ],
+        },
+        tier: "common",
+        hint: "Only human-approved Core Sound Kit sounds (sound-kit/core.json); all or one category",
+      },
+      {
+        key: "--include-banned",
+        flag: "--include-banned",
+        label: "Include Banned",
+        type: "boolean",
+        visibleWhen: {
+          field: "--kind",
+          unsetOrStartsWith: [
+            "sound",
+            "sounds",
+            "audio",
+            "sfx",
+            "sfxs",
+            "effect",
+            "effects",
+            "bgm",
+            "bgms",
+            "music",
+            "song",
+            "songs",
+            "soundtrack",
+            "soundtracks",
+            "mc",
+            "minecraft",
+          ],
+        },
+        tier: "advanced",
+        hint: "Include sounds marked ban in sound-kit/core.json (excluded from sound search by default)",
       },
       {
         key: "--star",
@@ -1316,7 +1380,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "check",
     category: "daily",
     summary:
-      "Validate all timelines, sound names, lip-sync requirements, and text readability against contract.",
+      "Validate film data offline: timelines, sound names, lip-sync requirements and text readability. Use render stills --check pops for scene motion.",
     runner: "bun-script",
     target: "check",
     cwdModes: ["film"],
@@ -2022,6 +2086,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     ],
   },
 
+  SOUND_KIT_CLI_COMMAND,
   {
     id: "sfx:get",
     label: "sfx:get",
@@ -3737,7 +3802,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "reference",
     category: "render",
     summary:
-      "Add a reference to the film, burn a bottom timecode bar on a copy, tile reference and remake side-by-side, inspect pictures/captions, study timing, compare videos or matchmove a shot's camera; no required style or quality score.",
+      "Add a reference, make timecoded review media, inspect frames and captions, study timing, compare timing and per-shot look, or matchmove a shot's camera. Advisory analysis.",
     runner: "bun-script",
     target: "reference",
     cwdModes: ["film", "root"],
@@ -3746,7 +3811,16 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "operation",
         label: "Operation",
         type: "enum",
-        options: ["add", "timecode", "sidebyside", "inspect", "study", "compare", "solve"],
+        options: [
+          "add",
+          "timecode",
+          "sidebyside",
+          "frames",
+          "inspect",
+          "study",
+          "compare",
+          "solve",
+        ],
         required: true,
       },
       {
@@ -3759,8 +3833,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "remake",
         label: "Remake Video",
         type: "string",
-        requiredWhen: { field: "operation", in: ["compare", "sidebyside"] },
-        visibleWhen: { field: "operation", in: ["compare", "sidebyside"] },
+        requiredWhen: { field: "operation", in: ["compare", "sidebyside", "frames"] },
+        visibleWhen: { field: "operation", in: ["compare", "sidebyside", "frames"] },
       },
     ],
     flags: [
@@ -3771,7 +3845,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         visibleWhen: {
           field: "operation",
-          in: ["timecode", "sidebyside", "inspect", "study", "compare"],
+          in: ["timecode", "sidebyside", "frames", "inspect", "study", "compare"],
         },
       },
       {
@@ -3780,10 +3854,36 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Reference Start Offset (sec)",
         type: "string",
         placeholder: "12.0",
+        exclusiveGroup: "reference-window",
         visibleWhen: {
           field: "operation",
-          in: ["sidebyside"],
+          in: ["sidebyside", "frames"],
         },
+      },
+      {
+        key: "--range",
+        flag: "--range",
+        label: "Shared Film Time Range",
+        type: "string",
+        placeholder: "1:45,3:35",
+        exclusiveGroup: "reference-window",
+        visibleWhen: { field: "operation", in: ["sidebyside", "frames"] },
+      },
+      {
+        key: "--fps",
+        flag: "--fps",
+        label: "Sample FPS (or native)",
+        type: "string",
+        placeholder: "15",
+        visibleWhen: { field: "operation", in: ["frames"] },
+      },
+      {
+        key: "--batch-size",
+        flag: "--batch-size",
+        label: "Max Images per List",
+        type: "number",
+        placeholder: "450",
+        visibleWhen: { field: "operation", in: ["frames"] },
       },
       {
         key: "--label",
@@ -3800,7 +3900,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "number",
         placeholder: "720",
         exclusiveGroup: "reference-size",
-        visibleWhen: { field: "operation", in: ["timecode", "sidebyside"] },
+        visibleWhen: { field: "operation", in: ["timecode", "sidebyside", "frames"] },
       },
       {
         key: "--full",
@@ -3808,7 +3908,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Keep Native Resolution",
         type: "boolean",
         exclusiveGroup: "reference-size",
-        visibleWhen: { field: "operation", in: ["timecode", "sidebyside"] },
+        visibleWhen: { field: "operation", in: ["timecode", "sidebyside", "frames"] },
       },
       {
         key: "--crf",
@@ -3832,7 +3932,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Side-by-Side Layout",
         type: "enum",
         options: ["auto", "hstack", "vstack"],
-        visibleWhen: { field: "operation", in: ["sidebyside"] },
+        visibleWhen: { field: "operation", in: ["sidebyside", "frames"] },
       },
       {
         key: "--name",
@@ -3957,7 +4057,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flag: "--minutes",
         label: "Time Limit (minutes)",
         type: "number",
-        placeholder: "5",
+        hint: "See the selected operation's help for its default and limit.",
       },
       {
         key: "--fit",
@@ -3965,6 +4065,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Scale Remake Timing",
         type: "boolean",
         visibleWhen: { field: "operation", in: ["compare"] },
+        hint: "Align the remake to the reference duration and total motion over each aligned interval.",
       },
       {
         key: "--film",
@@ -3981,7 +4082,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       cancellable: true,
       helpMode: "flag",
       outputsHint:
-        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). timecode writes an H.264 copy with a bottom black timecode strip to renders/reference/<name>_timecode.mp4 (or --out) without modifying the source. sidebyside tiles reference and remake into one synced H.264 video with REF/OURS headers and a shared bottom timecode bar to renders/reference/<ref>_vs_<remake>.mp4 (or --out), stripping a draft bar automatically. solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. Fresh persistent run folder: inspect writes index.json, raw captions and frames; study/compare write measured reports. inspect URLs contact the source through yt-dlp; no speech models or paid AI.",
+        "add copies the video into references/ (an H.264 copy beside the untouched source when needed). timecode writes an H.264 review copy with a bottom timecode strip. sidebyside writes a synced REF/OURS MP4 with a shared timecode. frames uses the same alignment to write JPEGs at up to 15 fps and lists of up to 450 images in a fresh run-* folder for --batch --files-from. --range cuts sidebyside or frames to one film-time window. solve writes solve.json and sheet.jpg to renders/reference/solve/<shot>/run-*; --write replaces the shot's span in the camera timeline. In a fresh run-* folder, inspect writes index.json, raw captions and frames, and study/compare write JSON and Markdown reports. After bun run media setup camera, compare adds Look per shot (camera and subject motion, brightness, warmth and focus). URL inspection uses yt-dlp. No speech models or paid AI.",
     },
   },
   {
@@ -3989,7 +4090,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
     label: "render",
     category: "render",
     summary:
-      "Render draft stills, video chunks, captions, lossless poster, final upload, view/crop batches, or motion/probe/text/order checks.",
+      "Render drafts, captions, posters or final video. Final checks for pops and foot slides before encoding. Run --check for scene diagnostics on demand.",
     runner: "bun-script",
     target: "render",
     cwdModes: ["film"],
@@ -4064,11 +4165,12 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       {
         key: "--check",
         flag: "--check",
-        label: "Check (motion/seen/touch/text/order/probe)",
+        label: "Check (pops/motion/seen/touch/text/order/probe)",
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
-        placeholder: "motion:cam,81,83 or probe:4 or order:20,25 or text",
+        placeholder: "pops or pops:20,45 or touch:20,45 or motion:cam,81,83",
+        hint: "Times are heard seconds. Pops writes renders/pops.json and fails on pops or slides. Touch without a target checks every player.",
       },
       {
         key: "--fresh-cache",
@@ -4125,7 +4227,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Custom Lab Page",
         type: "string",
         choiceSource: "labs",
-        visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+        visibleWhen: { field: "target", in: ["stills", "clip", "poster", "all"] },
         tier: "advanced",
         placeholder: "lab/prop.ts",
       },
@@ -4139,7 +4241,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         visibleWhen: {
           field: "--entry",
           nonEmpty: true,
-          and: { field: "target", in: ["stills", "clip", "poster", "all", "final"] },
+          and: { field: "target", in: ["stills", "clip", "poster", "all"] },
         },
         tier: "advanced",
         placeholder: "view=desk",
@@ -4156,10 +4258,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         mode: "when-flagged",
         whenArgIn: { key: "target", values: ["final"] },
         message:
-          "render final runs a slow 1440p/2160p production encode on GPU (run only when requested).",
+          "Final checks the whole film for pops and foot slides (up to 10 minutes), then runs a full-quality GPU encode if the check passes.",
       },
       outputsHint:
-        "Writes into renders/ inside target film (stills, chunks, draft_video.mp4, or final_video.mp4)",
+        "Writes into renders/ inside the film. The final pops check writes pops.json before encoding final_video.mp4. An explicit --check pops also writes pops.json.",
     },
   },
   {
@@ -7120,6 +7222,12 @@ function computeEffectiveMeta(
       next.effect = "read";
     } else if (subcommandPath[0] === "list" && isActiveValue(flags["--out"])) {
       next.effect = "write";
+    }
+  } else if (commandId === "sound:kit") {
+    if (subcommandPath[0] === "similar" && isBooleanActive(flags["--stage"])) {
+      next.effect = "write";
+    } else if (subcommandPath[0] === "seed" && isBooleanActive(flags["--dry-run"])) {
+      next.effect = "read";
     }
   }
   return next;

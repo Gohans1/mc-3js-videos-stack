@@ -61,6 +61,10 @@ const SORT = {
 const oneLine = (n) => {
   const tags = [];
   if (n.staleBuild === true) tags.push("older build");
+  if (n.compareVideo?.path) {
+    const file = n.compareVideo.path.split("/").pop() || n.compareVideo.path;
+    tags.push(`compare ${file}`);
+  }
   if (n.pin) tags.push(`tap ${n.pin.what ?? "?"}`);
   if (n.marks?.length)
     tags.push(`drew ${n.marks.length}${n.range ? ` over ${n.range[0]}-${n.range[1]}s` : ""}`);

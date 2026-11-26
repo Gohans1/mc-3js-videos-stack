@@ -7,6 +7,7 @@ import {
   ChevronRight,
   CircleDot,
   ClipboardCheck,
+  Columns2,
   Crosshair,
   Image as ImageIcon,
   MessageCircleQuestion,
@@ -39,6 +40,7 @@ import { Tip } from "../components/Tip";
 import { PHONE } from "../core/device";
 import { set, useDialogModal, useStudio } from "../core/store";
 import { rangeText, stamp } from "../core/time";
+import { noteCompareAspect } from "../picture/compare-video-model";
 import { frameSize } from "../picture/frame";
 import { inkWords } from "./ink";
 import { NoteExitingContext, type NoteMotionKind, usePlayNoteExit } from "./note-action-motion";
@@ -60,6 +62,7 @@ import {
   goToNote,
   noteMedia,
   noteNum,
+  openNoteInCompareVideo,
   originOf,
   removeNote,
   reopenNote,
@@ -941,6 +944,49 @@ export function RefsChip({
   );
 }
 
+export function CompareVideoBadge({
+  note,
+  dense = false,
+  className = "max-w-44",
+  stopPropagation = false,
+}: {
+  note: Note;
+  dense?: boolean;
+  className?: string;
+  stopPropagation?: boolean;
+}) {
+  if (!note.compareVideo) return null;
+  const compareFile = note.compareVideo.path.split("/").pop() ?? note.compareVideo.path;
+  if (PHONE) {
+    return (
+      <Badge variant={dense ? "refs-dense" : "refs"} className={className}>
+        <Columns2 aria-hidden className="text-label" />
+        <span className="truncate">{compareFile}</span>
+      </Badge>
+    );
+  }
+  return (
+    <Badge
+      variant={dense ? "refs-dense" : "refs"}
+      className={className}
+      render={
+        <button
+          type="button"
+          aria-label={`Open ${compareFile} in Compare video`}
+          title={`Open ${note.compareVideo.path} in Compare video`}
+        />
+      }
+      onClick={(e) => {
+        if (stopPropagation) e.stopPropagation();
+        openNoteInCompareVideo(note);
+      }}
+    >
+      <Columns2 aria-hidden className="text-label" />
+      <span className="truncate">{compareFile}</span>
+    </Badge>
+  );
+}
+
 export function NoteTags({
   note,
   dense = false,
@@ -955,10 +1001,14 @@ export function NoteTags({
   const marks = note.marks as Mark[] | undefined;
   const hasMarks = Boolean(marks?.length);
   const refs = Array.isArray(note.refs) ? note.refs.length : 0;
+  const compareFile = note.compareVideo?.path
+    ? note.compareVideo.path.split("/").pop() || note.compareVideo.path
+    : null;
   const showRemember = Boolean(
     note.remember && !(note.learned?.what && note.remember.scope === note.learned.scope),
   );
-  if (!pinName && !range && !note.freeCam && !hasMarks && !refs && !showRemember) return null;
+  if (!pinName && !range && !note.freeCam && !compareFile && !hasMarks && !refs && !showRemember)
+    return null;
   return (
     <div
       className={cn(
@@ -968,6 +1018,7 @@ export function NoteTags({
       )}
     >
       {showRemember && <RememberChip note={note} />}
+      <CompareVideoBadge note={note} dense={dense} stopPropagation />
       {pinName && (
         <Badge variant="tag" title={note.pin!.what} className="max-w-44">
           <Crosshair aria-hidden className="text-label" />
@@ -1072,8 +1123,10 @@ export function BeforeAfterPair({
   mutedDone?: boolean;
   className?: string;
 }) {
+  const ratio = useStudio((s) => s.ratio);
   if (!media.after) return null;
   const hasBefore = Boolean(media.thumb);
+  const compareBefore = Boolean(noteCompareAspect(note, ratio));
   const afterLabel =
     media.afterTime !== null && Math.abs(media.afterTime - t) >= 0.01
       ? `After (${stamp(media.afterTime)})`
@@ -1103,7 +1156,8 @@ export function BeforeAfterPair({
             decoding="async"
             alt={`Before frame at ${stamp(t)}`}
             className={cn(
-              "note-image-outline block size-full object-cover",
+              "note-image-outline block size-full",
+              compareBefore ? "object-contain" : "object-cover",
               mutedDone && "opacity-75 group-hover/card:opacity-100",
             )}
           />
@@ -1151,6 +1205,7 @@ export function NoteThumb({
   dense?: boolean;
   muted?: boolean;
 }) {
+  const ratio = useStudio((s) => s.ratio);
   const media = noteMedia(note);
   const cover = media.thumb ?? media.after;
   if (!cover) return null;
@@ -1158,7 +1213,15 @@ export function NoteThumb({
   const hasAfterTarget = Boolean(media.afterCam || media.afterTime !== null);
   const usesAfterOnThumbClick =
     noteState(note) !== "open" && (hasAfterTarget || (!media.thumb && !!media.after));
-  const [w, h] = frameSize(960);
+  const compareAspect = noteCompareAspect(note, ratio);
+  const isStackedCompare = Boolean(compareAspect);
+  const [w, h] = compareAspect
+    ? (() => {
+        const [cw, ch] = compareAspect;
+        const s = 960 / Math.max(cw, ch);
+        return [Math.round(cw * s), Math.round(ch * s)] as const;
+      })()
+    : frameSize(960);
   const portrait = h > w;
   const pinName = pinShortLabel(note.pin?.what);
   const timeText = stamp(t);
@@ -1207,7 +1270,7 @@ export function NoteThumb({
           alt=""
           className={cn(
             "note-image-outline block size-full",
-            dense && portrait ? "object-contain" : "object-cover",
+            isStackedCompare || (dense && portrait) ? "object-contain" : "object-cover",
           )}
         />
         {hasBoth && (

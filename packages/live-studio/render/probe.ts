@@ -247,14 +247,22 @@ export function collectProbeTargets(
       if (pIds.length) ancestors.push(pIds);
     }
     ancestors.reverse();
-    let ai = 0;
-    for (let si = 0; si < segs.length - 1; si++) {
-      const want = segs[si];
-      while (ai < ancestors.length && !ancestors[ai].some((id) => id.includes(want))) ai++;
-      if (ai >= ancestors.length) return false;
-      ai++;
+    const end = segs.length - 1;
+    const matched = new Set([0]);
+    for (const ancestor of ancestors) {
+      const nextMatches = new Set<number>();
+      for (const start of matched) {
+        for (let next = start + 1; next <= end; next++) {
+          const prefix = segs.slice(start, next).join(".");
+          if (!ancestor.some((id) => (next === start + 1 ? id.includes(prefix) : id === prefix)))
+            continue;
+          if (next === end) return true;
+          nextMatches.add(next);
+        }
+      }
+      for (const next of nextMatches) matched.add(next);
     }
-    return true;
+    return false;
   };
 
   const ordered: THREE.Object3D[] = [];

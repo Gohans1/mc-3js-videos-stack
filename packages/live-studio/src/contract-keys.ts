@@ -33,6 +33,7 @@ export const SOUND_KEYS = {
     "start",
     "duck",
     "guide",
+    "muted",
     "pan",
     "try",
     "filters",
@@ -61,6 +62,7 @@ export const SOUND_KEYS = {
     "fadeIn",
     "fadeOut",
     "guide",
+    "muted",
     "pan",
     "try",
     "filters",
@@ -153,6 +155,9 @@ export const keyRows = (v: any, path: string[] = []): string[][] => {
   const own = path.length > 0 && isTimedKey(v) ? [path] : [];
   return [...own, ...Object.entries(v).flatMap(([k, x]) => keyRows(x, [...path, k]))];
 };
+
+export const keyFileRows = (edit: string, data: object): string[][] =>
+  edit === "face" ? Object.keys(data).map((actor) => [actor]) : keyRows(data);
 
 export const rowAt = (v: any, path: string[]): any => path.reduce((x, k) => x?.[k], v);
 

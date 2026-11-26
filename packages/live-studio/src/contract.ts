@@ -1,4 +1,5 @@
 import { LIGHT_PRESET_IDS } from "film-stage/lights-meta";
+import { FaceTimeline } from "mc-actor/toon-timeline";
 import * as z from "zod";
 
 import { isMcPackFilename } from "../../mc-assets/src/picks-manifest.ts";
@@ -572,6 +573,7 @@ const Bed = z
     start: z.number().nonnegative().optional(),
     duck: z.number().nonnegative().optional(),
     guide: z.boolean().optional(),
+    muted: z.boolean().optional(),
     pan: z.number().min(-1).max(1).optional(),
     try: z.array(name).optional(),
     filters: z.array(audioFilter).optional(),
@@ -592,6 +594,7 @@ const Shot1 = z.looseObject({
   fadeIn: z.number().nonnegative().optional(),
   fadeOut: z.number().nonnegative().optional(),
   guide: z.boolean().optional(),
+  muted: z.boolean().optional(),
   pan: z.number().min(-1).max(1).optional(),
   try: z.array(name).optional(),
   filters: z.array(audioFilter).optional(),
@@ -599,9 +602,20 @@ const Shot1 = z.looseObject({
   reverb: ReverbSpec.optional(),
   spatial: SpatialSpec.optional(),
 });
+const TrackRole = z.enum([
+  "voice",
+  "bgm",
+  "whoosh",
+  "riser",
+  "pop-ui",
+  "impact",
+  "ambience",
+  "custom",
+]);
 const Track = z.looseObject({
   id: z.string().min(1),
   name: z.string(),
+  role: TrackRole.optional(),
   mute: z.boolean().optional(),
   filters: z.array(audioFilter).optional(),
   gain: z.number().min(-60).max(12).optional(),
@@ -1239,8 +1253,8 @@ export const KeyFile = z
         });
     }
   });
-export const keyFileSchema = (requiredRows: string[][] = []) =>
-  KeyFile.superRefine((v: any, ctx) => {
+export const keyFileSchema = (requiredRows: string[][] = [], edit?: string) => {
+  const base = KeyFile.superRefine((v: any, ctx) => {
     for (const path of requiredRows) {
       const keys = rowKeys(v, path);
       if (!keys.length)
@@ -1251,6 +1265,10 @@ export const keyFileSchema = (requiredRows: string[][] = []) =>
         });
     }
   });
+  if (edit === "placed") return base.and(PlacedTimeline);
+  if (edit === "face") return base.and(FaceTimeline);
+  return base;
+};
 
 export const problems = (schema: z.ZodType<any>, value: unknown, where: string): string[] => {
   const r = schema.safeParse(value);

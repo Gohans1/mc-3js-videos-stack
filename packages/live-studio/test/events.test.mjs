@@ -15,7 +15,7 @@ globalThis.EventSource = class extends EventTarget {
   }
 };
 globalThis.document = { querySelector: () => ({ content: "build-1" }) };
-const { onHello } = await import("../app/core/events.ts");
+const { onEvent, onHello } = await import("../app/core/events.ts");
 const stream = () => streams.at(-1);
 
 test("a part of the page that listens late still tells the stream's first hello from a reconnect", () => {
@@ -43,4 +43,19 @@ test("a stream the browser gave up on (a proxy's 502) is opened again, with its 
   assert.notEqual(stream(), old);
   stream().say("hello", "build-1");
   assert.deepEqual(heard, [true]);
+});
+
+test("a closed panel stops receiving events, including on a replacement stream", (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const heard = [];
+  const stop = onEvent("history", (revision) => heard.push(revision));
+  const old = stream();
+  old.say("history", "before close");
+  stop();
+  old.say("history", "while closed");
+  old.readyState = EventSource.CLOSED;
+  old.dispatchEvent(new Event("error"));
+  t.mock.timers.tick(3000);
+  stream().say("history", "after reconnect");
+  assert.deepEqual(heard, ["before close"]);
 });

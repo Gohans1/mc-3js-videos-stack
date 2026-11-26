@@ -22,6 +22,7 @@ export interface NarrationAudio {
     rate?: number;
     reverse?: boolean;
     track?: string;
+    muted?: boolean;
   }[];
   tracks?: { id: string; mute?: boolean }[];
 }
@@ -44,7 +45,8 @@ export const narrationLines = (
   const muted = new Set((audio.tracks ?? []).filter((t) => t.mute).map((t) => t.id));
   const out: NarrationLine[] = [];
   for (const clip of audio.sfx) {
-    if (clip.name !== audio.narration || (audible && muted.has(clip.track ?? ""))) continue;
+    if (clip.name !== audio.narration || (audible && (clip.muted || muted.has(clip.track ?? ""))))
+      continue;
     const rate = clip.rate ?? 1,
       start = clip.start ?? 0,
       length = narrationClipLength(clip, duration),
@@ -74,7 +76,7 @@ export const seenSound = (audio: NarrationAudio | null | undefined) => ({
   narration: audio?.narration,
   sfx: (audio?.sfx ?? [])
     .filter((c) => c.name === audio?.narration)
-    .map(({ name, at, start, length, rate, reverse, track }) => ({
+    .map(({ name, at, start, length, rate, reverse, track, muted }) => ({
       name,
       at,
       start,
@@ -82,6 +84,7 @@ export const seenSound = (audio: NarrationAudio | null | undefined) => ({
       rate,
       reverse,
       track,
+      muted,
     })),
   tracks: (audio?.tracks ?? []).map(({ id, mute }) => ({ id, mute })),
 });

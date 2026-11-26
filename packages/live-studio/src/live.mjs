@@ -23,13 +23,14 @@ import { openFavorites } from "./favorites.mjs";
 import { openFilm } from "./film.mjs";
 import { openLessonFiles } from "./lesson-files.mjs";
 import { buildPage } from "./page.mjs";
+import { openSoundKit } from "./sound-kit.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
 import { openVoicePlayground } from "./voice-playground.mjs";
 
 const HELP = `The studio for one film: a live preview the creator watches and edits, with the timeline, notes and render. Run
 inside the film (or set LIVE_PROJECT); package.json's studio script carries the film's port.
   bun run studio            then open http://localhost:<port>, or the Tailscale link it prints
-  bun run studio --detach   start in the background, wait until ready, print URLs, pid and log path
+  bun run studio --detach   start in the background, wait up to 60s for readiness, print URLs, pid and log path
   bun run studio --status   check whether this film's studio is running and print its URL and pid
   bun run studio --stop     stop this film's recorded studio process
   bun run studio --lan      reachable from other machines on the network too (combinable with --detach)
@@ -37,7 +38,7 @@ Saving the film's code offers "New version" on the page, never reloading it unas
 package.json lists under "live-studio".sound remixes. Problems with the film's data print here (offline: bun run check).
 Ctrl+C or --stop stops it; a port still taken after that belongs to a studio left running.`;
 
-const DETACH_TIMEOUT_MS = 30000;
+const DETACH_TIMEOUT_MS = 60_000;
 const DETACH_POLL_MS = 150;
 
 const canonicalPath = (p) => {
@@ -651,6 +652,7 @@ async function main() {
   });
   const cliRunner = createCliRunner(film);
   const favorites = openFavorites();
+  const soundKit = openSoundKit();
   const voicePlayground = openVoicePlayground({
     project: film.PROJECT,
     archiveExpiry: true,
@@ -669,6 +671,7 @@ async function main() {
     lessons,
     voiceLibrary,
     favorites,
+    soundKit,
     voicePlayground,
     port: PORT,
     cliRunner,
@@ -679,7 +682,11 @@ async function main() {
       rmSync(studioJsonPath, { force: true });
     }
   };
-  const stopCli = () => cliRunner.stopActive();
+  const stopSoundKitWatch = soundKit.watch(() => send("sound-kit"));
+  const stopCli = () => {
+    stopSoundKitWatch();
+    cliRunner.stopActive();
+  };
   process.once("exit", () => {
     stopCli();
     cleanStudioFile();

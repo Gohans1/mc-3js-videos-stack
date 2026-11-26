@@ -19,6 +19,7 @@ function installSoundGlobals(fetchImpl) {
     "addEventListener",
     "removeEventListener",
     "Audio",
+    "EventSource",
     "sessionStorage",
     "localStorage",
     "location",
@@ -31,6 +32,7 @@ function installSoundGlobals(fetchImpl) {
     "GainNode",
     "fetch",
     "__STUDIO_BOOT",
+    "__live",
   ];
   const prev = new Map(keys.map((k) => [k, [k in globalThis, globalThis[k]]]));
   const storage = () => {
@@ -110,7 +112,9 @@ function installSoundGlobals(fetchImpl) {
           return this;
         },
         disconnect() {},
-        start() {},
+        start(_when, offset) {
+          this.startOffset = offset;
+        },
         stop() {},
         addEventListener(type, fn) {
           if (!listeners.has(type)) listeners.set(type, new Set());
@@ -151,6 +155,10 @@ function installSoundGlobals(fetchImpl) {
     play() {
       return Promise.resolve();
     }
+  };
+  globalThis.EventSource = class {
+    addEventListener() {}
+    removeEventListener() {}
   };
   globalThis.document = {
     hidden: false,
@@ -212,6 +220,7 @@ async function loadSoundBundle() {
       `export * as state from ${JSON.stringify(join(STUDIO, "app/core/state.ts"))};`,
       `export * as store from ${JSON.stringify(join(STUDIO, "app/core/store.ts"))};`,
       `export * as options from ${JSON.stringify(join(STUDIO, "app/options/options.ts"))};`,
+      `export * as transport from ${JSON.stringify(join(STUDIO, "app/playback/transport.ts"))};`,
       `export * as mixer from ${JSON.stringify(join(STUDIO, "app/sound/mixer.ts"))};`,
       `export * as meter from ${JSON.stringify(join(STUDIO, "app/sound/meter.ts"))};`,
       `export * as sound from ${JSON.stringify(join(STUDIO, "app/sound/sound.ts"))};`,
@@ -237,7 +246,7 @@ async function loadSoundBundle() {
       namespace: "film-stub",
     }));
     build.onLoad({ filter: /.*/, namespace: "film-stub" }, () => ({
-      contents: "export const EDIT = { end: 10 }; export const fromSource = () => []; export const SCENES = {};",
+      contents: "export const EDIT = { end: 10, beats: {} }; export const fromSource = () => []; export const SCENES = {};",
       loader: "js",
     }));
   },
@@ -261,6 +270,110 @@ if (!out.success) {
   }
   return await import(pathToFileURL(join(dir, "entry.js")).href);
 }
+
+test("the live mixer warms opening sounds first and skips raw downloads for processed sounds of known length", async () => {
+  const raw = [];
+  const processed = [];
+  const opening = Promise.withResolvers();
+  const later = Promise.withResolvers();
+  const env = installSoundGlobals(async (input, options) => {
+    const url = typeof input === "string" ? input : input.url;
+    if (url.startsWith("/api/sfx/")) raw.push(url);
+    if (url === "/api/sound/process") {
+      const { name } = JSON.parse(options.body);
+      processed.push(name);
+      (name === "opening" ? opening : later).resolve();
+    }
+    return new Response(new Uint8Array(64));
+  });
+  try {
+    const { state, mixer } = await loadSoundBundle();
+    state.S.el = {
+      audio: {
+        currentSrc: "/api/mix.wav",
+        muted: false,
+        volume: 1,
+        currentTime: 0,
+        readyState: 4,
+        playbackRate: 1,
+        paused: false,
+      },
+    };
+    mixer.setLive(true, {
+      lanes: () => ({
+        beds: [],
+        sfx: [
+          { at: 0, name: "shotgun", gain: 0, start: 0.04, length: 0.62 },
+          { at: 0, name: "opening", gain: 0, length: 0.62, dialogue: true },
+          { at: 4, name: "later", gain: 0, length: 1, dialogue: true },
+        ],
+      }),
+      library: () => [],
+      span: ({ i }) => (i < 2 ? [0, 0.62] : [4, 5]),
+      voice: () => [],
+    });
+
+    await opening.promise;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(processed, ["opening"]);
+    assert.deepEqual(raw, ["/api/sfx/shotgun.wav"]);
+
+    const playedOpening = Promise.withResolvers();
+    const stopTracking = state.S.watch("audio", () => {
+      if (env.sources.some((source) => source.startOffset === 0.04)) playedOpening.resolve();
+    });
+    try {
+      state.S.playing = true;
+      await playedOpening.promise;
+    } finally {
+      state.S.playing = false;
+      stopTracking();
+    }
+
+    globalThis.__live = { t: 0, shot: 0, drawMs: 0 };
+    mixer.warmLiveClips();
+    await later.promise;
+    assert.deepEqual(processed, ["opening", "later"]);
+    assert.deepEqual(raw, ["/api/sfx/shotgun.wav"]);
+  } finally {
+    env.restore();
+  }
+});
+
+test("playing again retries interrupted audio without reloading decoded or missing sounds", async () => {
+  let online = false;
+  const requests = new Map();
+  const env = installSoundGlobals(async (input) => {
+    const url = typeof input === "string" ? input : input.url;
+    requests.set(url, (requests.get(url) ?? 0) + 1);
+    if (url === "/api/sfx/interrupted.wav" && !online)
+      return new Response(null, { status: 503, headers: { "retry-after": "6" } });
+    if (url === "/api/sfx/missing.wav") return new Response(null, { status: 404 });
+    return new Response(new Uint8Array(64));
+  });
+  try {
+    const { mixer, state, transport } = await loadSoundBundle();
+    const cached = await mixer.decoded("cached");
+    assert.equal(await mixer.decoded("missing"), null);
+    assert.equal(await mixer.decoded("interrupted"), null);
+
+    online = true;
+    assert.equal(await mixer.decoded("interrupted"), null);
+    state.S.el = { audio: { paused: false } };
+    state.S.render = () => {};
+    transport.setPlaying(true);
+    state.S.playing = false;
+
+    assert.ok(await mixer.decoded("interrupted"));
+    assert.equal(await mixer.decoded("cached"), cached);
+    assert.equal(await mixer.decoded("missing"), null);
+    assert.equal(requests.get("/api/sfx/interrupted.wav"), 2);
+    assert.equal(requests.get("/api/sfx/cached.wav"), 1);
+    assert.equal(requests.get("/api/sfx/missing.wav"), 1);
+  } finally {
+    env.restore();
+  }
+});
 
 test("loadSound retains decoded SFX cache on ?used=1 -> full library transition and mixer wakes AudioMeter during paused previews", async () => {
   const wavFetches = [];

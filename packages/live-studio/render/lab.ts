@@ -1,7 +1,12 @@
 // @ts-nocheck
-export const post = (url, body) => fetch(url, { method: "POST", body });
+export const post = async (url, body) => {
+  const response = await fetch(url, { method: "POST", body });
+  if (!response.ok) throw new Error(`POST ${url}: HTTP ${response.status}`);
+  return response;
+};
 let said = Promise.resolve();
-export const log = (m) => (said = said.then(() => post("/log", String(m))));
+export const log = (m) =>
+  (said = said.then(() => post("/log", String(m))).catch((error) => console.error(m, error)));
 window.onerror = (m, s, l, c, e) => {
   log("ERROR " + String(e?.stack ?? (typeof m === "string" ? m : "script error")));
 };

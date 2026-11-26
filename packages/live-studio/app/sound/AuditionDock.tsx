@@ -320,6 +320,7 @@ export function AuditionDock({
   onAdvanceVariant,
   onCopyVoiceId,
   onClearExpanded,
+  onAfterStop,
 }: {
   libraryItems: readonly LibraryItem[];
   voices: readonly SharedVoiceEntry[];
@@ -332,6 +333,7 @@ export function AuditionDock({
   onAdvanceVariant: (groupKey: string, nextIndex: number) => void;
   onCopyVoiceId: (voice: SharedVoiceEntry) => void;
   onClearExpanded: () => void;
+  onAfterStop?: () => void;
 }) {
   const now = useSyncExternalStore(subscribeAudition, listening, listening);
   const targetNow = useSyncExternalStore(subscribeAudition, auditionTarget, auditionTarget);
@@ -395,6 +397,7 @@ export function AuditionDock({
     setSoundInfoOpen(false);
     stopAudition();
     onClearExpanded();
+    onAfterStop?.();
   };
 
   const handleCopyAssetId = (assetId: string) => {

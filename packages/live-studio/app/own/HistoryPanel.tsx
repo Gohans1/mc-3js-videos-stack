@@ -1,8 +1,9 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useReducer, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { flushDocs } from "../core/doc";
+import { onEvent } from "../core/events";
 
 type Revision = {
   seq: number;
@@ -18,7 +19,8 @@ type History = {
   next: number | null;
   problem: string | null;
 };
-type Phase = "loading" | "ready" | "saving" | "restoring" | "paging" | "browsing" | "error";
+type Phase =
+  "loading" | "ready" | "load-error" | "saving" | "restoring" | "paging" | "browsing" | "error";
 const request = async <T,>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> => {
   const timeout = AbortSignal.timeout(15000);
   const response = await fetch(path, {
@@ -43,28 +45,33 @@ export function HistoryPanel() {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [requestVersion, refreshLatest] = useReducer((version: number) => version + 1, 0);
+  const watchingLatest = phase === "loading" || phase === "ready" || phase === "load-error";
   useEffect(() => {
-    if (phase !== "loading" && phase !== "ready") return;
+    if (!watchingLatest) return;
     const controller = new AbortController();
     const load = async () => {
       try {
         const got = await request<History>("/api/history", undefined, controller.signal);
+        if (controller.signal.aborted) return;
         setData(got);
         setPhase("ready");
         setError("");
       } catch (failed) {
         if (controller.signal.aborted) return;
         setError(failed instanceof Error ? failed.message : String(failed));
-        setPhase("error");
+        setPhase("load-error");
       }
     };
-    if (phase === "loading") void load();
-    const timer = setInterval(load, 5000);
+    const offHistory = onEvent("history", refreshLatest);
+    const offHello = onEvent("hello", refreshLatest);
+    void load();
     return () => {
-      clearInterval(timer);
+      offHistory();
+      offHello();
       controller.abort();
     };
-  }, [phase]);
+  }, [watchingLatest, requestVersion]);
   const busy =
     phase === "loading" || phase === "saving" || phase === "restoring" || phase === "paging";
   const save = async () => {
@@ -145,7 +152,15 @@ export function HistoryPanel() {
         <Button type="submit" disabled={busy || !name.trim()}>
           Save version
         </Button>
-        <Button type="button" variant="quiet" disabled={busy} onClick={() => setPhase("loading")}>
+        <Button
+          type="button"
+          variant="quiet"
+          disabled={busy}
+          onClick={() => {
+            setPhase("loading");
+            refreshLatest();
+          }}
+        >
           Refresh
         </Button>
       </form>

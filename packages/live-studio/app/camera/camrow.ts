@@ -30,7 +30,15 @@ import { bladeLine } from "../timeline/blade";
 import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
-import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import {
+  holdView,
+  marks,
+  onPlayhead,
+  playheadDragHit,
+  timeAt,
+  timelineWheel,
+  view,
+} from "../timeline/timeline";
 import {
   originalShot,
   relocateFreeze,
@@ -886,7 +894,7 @@ export const attachCamRow = () => {
       return;
     }
     if (i < 0) {
-      if (onPlayhead(x, w, touch)) {
+      if (playheadDragHit(x, w, touch, add)) {
         startScrub();
         return;
       }
@@ -1189,7 +1197,11 @@ export const attachCamRow = () => {
         if (shot < 0) {
           set(transitionSelection({ kind: "none" }, get().side));
           S.dirty = true;
-        } else pickShot(shot);
+        } else {
+          pickShot(shot);
+          const { x, w } = local(e);
+          if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+        }
       }
       return;
     }
@@ -1206,8 +1218,10 @@ export const attachCamRow = () => {
     drag = null;
     c.style.cursor = "";
     if (!moved) {
-      if (group.length > 1 || along) setKey(i);
-      seek(keys[i].t);
+      if (e.type === "pointerup") {
+        if (group.length > 1 || along) setKey(i);
+        seek(keys[i].t);
+      }
       return;
     }
     shotsDoc.restore(shots);

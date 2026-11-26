@@ -459,32 +459,32 @@ test("onDocMutated ignores preview, restore, no-op edit, and unchanged external 
 
 test("onDocMutated fires on edit, undo, redo, and changed external load until unsubscribed", async (t) => {
   const doc = await open(t, "g2.json", { count: 1 });
-  let hits = 0;
-  const off = onDocMutated(() => {
-    hits += 1;
+  const names = [];
+  const off = onDocMutated((name) => {
+    names.push(name);
   });
 
   doc.edit((d) => {
     d.count = 3;
   });
-  assert.equal(hits, 1);
+  assert.deepEqual(names, ["g2.json"]);
 
   undo();
-  assert.equal(hits, 2);
+  assert.deepEqual(names, ["g2.json", "g2.json"]);
 
   redo();
-  assert.equal(hits, 3);
+  assert.deepEqual(names, ["g2.json", "g2.json", "g2.json"]);
 
   await saveNow(t);
   agentWrites("g2.json", { count: 9 });
   await doc.load();
-  assert.equal(hits, 4);
+  assert.deepEqual(names, ["g2.json", "g2.json", "g2.json", "g2.json"]);
 
   off();
   doc.edit((d) => {
     d.count = 10;
   });
-  assert.equal(hits, 4);
+  assert.deepEqual(names, ["g2.json", "g2.json", "g2.json", "g2.json"]);
 });
 
 test("manual confirm holds edits in preview until confirmDocs or discards them completely via revertDocs", async (t) => {
@@ -516,7 +516,13 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   assert.equal(files.get("confirm-gate").data.camera, 50, "server file untouched before Confirm");
 
   agentWrites("confirm-gate", { camera: 52, roll: 0.1 });
+  const reverted = [];
+  const offRevert = onDocMutated((name) => {
+    reverted.push(name);
+  });
   await revertDocs();
+  offRevert();
+  assert.ok(reverted.length >= 1 && reverted.every((name) => name === "confirm-gate"));
   assert.equal(doc.data.camera, 52);
   assert.equal(doc.data.roll, 0.1);
   assert.equal(savedState, null);
@@ -540,4 +546,51 @@ test("manual confirm holds edits in preview until confirmDocs or discards them c
   assert.equal(files.get("confirm-gate").data.camera, 84);
   assert.equal(savedState, null);
   assert.deepEqual(getPendingSnapshot(), []);
+});
+
+test("manual confirm accepts canonical field order and keeps the next edit pending", async (t) => {
+  await revertDocs();
+  setAutoSave(false);
+  const post = globalThis.fake.post;
+  t.after(async () => {
+    globalThis.fake.post = post;
+    await revertDocs();
+    setAutoSave(true);
+  });
+  const name = "canonical-order";
+  const doc = await open(t, name, { id: "layer" });
+  let acknowledgement;
+  globalThis.fake.post = async (url, body) => {
+    const data = { opacity: body.data.opacity, id: body.data.id };
+    const response = await post(url, { ...body, data });
+    await acknowledgement;
+    return Response.json({ ...(await response.json()), data }, { status: response.status });
+  };
+
+  doc.edit((d) => {
+    d.opacity = 0;
+  });
+  assert.equal(await confirmDocs(), true);
+  assert.deepEqual(getPendingSnapshot(), []);
+
+  doc.edit((d) => {
+    d.opacity = 1;
+  });
+  const deferred = Promise.withResolvers();
+  acknowledgement = deferred.promise;
+  const confirming = confirmDocs();
+  await settle();
+  doc.edit((d) => {
+    d.opacity = 0.5;
+  });
+  deferred.resolve();
+  assert.equal(await confirming, false);
+  assert.deepEqual(getPendingSnapshot(), [{ name, label: name }]);
+  assert.equal(doc.data.opacity, 0.5);
+  assert.equal(files.get(name).data.opacity, 1);
+  undo();
+  assert.deepEqual(getPendingSnapshot(), []);
+  redo();
+  assert.equal(await confirmDocs(), true);
+  assert.equal(files.get(name).data.opacity, 0.5);
 });

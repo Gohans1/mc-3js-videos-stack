@@ -25,9 +25,9 @@ const GROUPS = [
       history:
         "named versions and autosaves for one film; restore with a recovery version kept first (--help)",
       check:
-        "is the film's data what the studio expects? after any edit to src/timeline, src/edit.json or pack/picks.json",
+        "validate film data offline after editing timelines, src/edit.json or pack/picks.json; inspect motion with render stills --check pops",
       at: "what the film has at one heard second, each with its file and row: shot, camera (optics), word, sounds, text, moving keys, notes",
-      find: "native/imported assets, 3D blocks/items/mobs/props and code helpers; BM25 + OpenFilm semantic; --kind object searches 3D",
+      find: "native/imported assets and code helpers; --kind face finds toon acting and marks, --kind object searches 3D, --kit searches Core Sound Kit",
       "assets:semantic":
         "incremental multimodal search: plan, build/resume, query, remove/redo or backup; API only with --yes (--help)",
       asset:
@@ -52,6 +52,8 @@ const GROUPS = [
   [
     "Sound",
     {
+      "sound:kit":
+        "curate the 8 popular SFX/BGM categories, run A/B picks, find similar sounds, or get Top-N core recommendations (--help)",
       "sfx:get": "fetch the CC0 Freesound sounds the film pins, or search Freesound (find)",
       mix: "film soundtrack; mix <video> writes draft/final for whole-film renders, a separate preview for excerpts",
       listen:
@@ -62,7 +64,7 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills (bun run render stills --at 12,30), the film as video (render clip), the upload (render final, only when asked), one frame at its size (bun run render poster --at 12); --check motion:cam,40,48 charts a move; --check probe:4 logs live 3D bounds/screen coords; --check order checks history-dependent frames; --views, --crop and --compare inspect stills",
+        "draft stills, clips, captions and posters; render final automatically checks for pops and foot slides before encoding; render stills --check pops:20,45 checks a range; --check touch scans all actors; see --help for more checks and render options",
       sheet:
         "contact sheets; bare stills, vs (all renders/vs_still_*.jpg), overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence (--vs references/ref.mp4), or explicit image/glob grids; each new run has index.json",
       scenes:
@@ -75,7 +77,7 @@ const GROUPS = [
       sweep:
         "a whole draft against the reference, heaviest first: our pops and stutters, blur, light, cuts; new and gone since the last sweep",
       reference:
-        "add <video> to references/, timecode <video> for a bottom timecode strip copy, sidebyside <ref> <draft> for one synced REF|OURS video, inspect <video|URL> for pictures/captions, study/compare timing or solve a shot's camera; optional, no quality gate",
+        "add a reference; timecode, sidebyside and frames make review media; inspect frames and captions, study timing, compare timing and per-shot look, or solve a shot's camera; advisory (--help)",
       pace: "current whole-film render: shot lengths and picture holds with planned narration",
       deliver:
         "technical upload profile (renders/final.mp4); --youtube adds a local compression and banding preview",

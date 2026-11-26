@@ -1506,6 +1506,79 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     }
   });
 
+  test("virtualizes Timeline lanes within the shared detail scroll area", async () => {
+    const list = `document.querySelector('[aria-label="Timeline shot lanes"]')`;
+    const viewport = `${list}.closest('[class~="@container/timeline"]')`;
+    try {
+      await webview.resize(1920, 1080);
+      await webview.evaluate(`(() => {
+        const panel = document.querySelector('[aria-label="Notes"]').parentElement;
+        panel.style.width = "440px";
+        panel.style.height = "1080px";
+        window.__DOM_TEST__.set({
+          noteView: "timeline",
+          notes: Array.from({ length: 200 }, (_, shot) => ({
+            id: 'lane-' + shot,
+            at: '2026-11-12T10:00:00.000Z',
+            t: shot / 20,
+            shot,
+            shotName: 'Shot ' + shot,
+            text: 'Check shot ' + shot,
+            state: 'open',
+            done: false,
+          })),
+        });
+      })()`);
+      await waitUntil(
+        `${list}?.querySelector('button[data-note="lane-0"]')`,
+        "first Timeline note",
+      );
+      await webview.evaluate(
+        "new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(r))))",
+      );
+      const { mounted, height, detailTop } = await webview.evaluate(`(() => {
+        const bounds = ${viewport}.getBoundingClientRect();
+        const detail = ${viewport}.querySelector('div[data-note="lane-0"]');
+        return {
+          mounted: ${list}.children.length,
+          height: bounds.height,
+          detailTop: detail.getBoundingClientRect().top - bounds.top,
+        };
+      })()`);
+      assert.ok(
+        mounted > 0 && mounted < 40,
+        `Expected a viewport-sized slice of 200 lanes, got ${mounted} in ${height}px`,
+      );
+      assert.ok(
+        detailTop >= height,
+        `The selected note detail follows the lanes below the fold (${detailTop}px in ${height}px)`,
+      );
+
+      await webview.evaluate(`${list}.querySelector('button[data-note="lane-0"]').focus()`);
+      await webview.press("PageDown");
+      await waitUntil(
+        `${viewport}.scrollTop > 0 && ${list}.parentElement.scrollTop === 0`,
+        "page scroll from a lane moves the shared viewport",
+      );
+      await webview.evaluate(`${viewport}.scrollTop = 0`);
+      await webview.press("ArrowLeft");
+      await waitUntil(
+        `(() => {
+          const viewport = ${viewport};
+          const visible = viewport.getBoundingClientRect();
+          const note = document.activeElement;
+          const bounds = note.getBoundingClientRect();
+          return note.dataset.note === "lane-199" &&
+            viewport.scrollTop > 0 &&
+            bounds.top >= visible.top && bounds.bottom <= visible.bottom;
+        })()`,
+        "focused the last Timeline note inside the shared viewport",
+      );
+    } finally {
+      await webview.resize(1024, 720);
+    }
+  });
+
   test("keeps Board column and navigation within a narrow enlarged panel", async () => {
     try {
       await webview.resize(320, 700);

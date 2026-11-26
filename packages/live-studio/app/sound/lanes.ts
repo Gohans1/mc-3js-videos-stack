@@ -8,13 +8,15 @@ import { FPS, makeSnapper, r3, snappedTo, snapTo, stamp } from "../core/time";
 import { seek, setPlaying } from "../playback/transport";
 import { type Along, alongWith, inBox, pickAcross, picked as across } from "../timeline/across";
 import { bladeLine } from "../timeline/blade";
-import { sized, tone, UI_FONT } from "../timeline/canvas";
+import { sized, type Tone, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
 import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { isElementShown, onShownResize } from "../timeline/visible";
 import { GAIN_KEY_EPS, gainAt, gainPoints, toggleGainKey } from "./gain";
 import { shotCutOverlaps } from "./jlcut";
+import { ADD_H, laneLayout, rowAt, TOP, TRACK_H } from "./lane-layout";
+import { canWarmProcessed } from "./mixer";
 import { needsProcessing, processed, processSpec } from "./processed";
 import { type ClipRef } from "./slice";
 import {
@@ -24,6 +26,8 @@ import {
   beatTimes,
   clipBeats,
   clipOf,
+  clipTrackRole,
+  customTrackSplitIndex,
   cutAfter,
   cutBefore,
   edit,
@@ -38,13 +42,11 @@ import {
   snapshot,
   span,
   splitClips,
+  trackRoleOf,
 } from "./sound";
-import { addTrack, placeShift, same } from "./tracks";
+import { addRoleTrack, placeShift, same, type TrackRole } from "./tracks";
 import { cachedVoiceClipLabel } from "./voice-client";
 
-export const TRACK_H = 52,
-  TOP = 2,
-  ADD_H = 24;
 const CLIP_H = 48,
   LABEL_H = 16;
 const NEAR = 10 ** (-1 / 20);
@@ -62,22 +64,26 @@ const gainY = (gain: number) =>
 const fadeX = (x0: number, x1: number, x: number) => Math.max(x0 + 5, Math.min(x1 - 5, x));
 
 const tracks = () => lanes?.tracks ?? [];
-export const trackHeight = (id: string) =>
-  TRACK_H +
-  (lanes && [...lanes.beds, ...lanes.sfx].some((c) => c.track === id && c.beats?.length) ? 10 : 0);
-export const lanesHeight = () => rowY(tracks().length) + ADD_H;
-const rowY = (k: number) =>
-  TOP +
-  tracks()
-    .slice(0, k)
-    .reduce((h, t) => h + trackHeight(t.id), 0);
-const clipY = (k: number) =>
-  rowY(k) + trackHeight(tracks()[k].id) - TRACK_H + (TRACK_H - CLIP_H) / 2;
-const rowAt = (y: number) => {
-  const k = tracks().findIndex((_, i) => y < rowY(i + 1));
-  return k < 0 ? tracks().length : k;
+
+const ROLE_CLIP_TONES: Record<TrackRole, { body: Tone; tag: Tone; wave: Tone }> = {
+  voice: { body: "clip-voice", tag: "clip-voice-tag", wave: "clip-voice-wave" },
+  bgm: { body: "clip-bgm", tag: "clip-bgm-tag", wave: "clip-bgm-wave" },
+  whoosh: { body: "clip-audio", tag: "clip-audio-tag", wave: "clip-wave" },
+  riser: { body: "clip-riser", tag: "clip-riser-tag", wave: "clip-riser-wave" },
+  "pop-ui": { body: "clip-pop", tag: "clip-pop-tag", wave: "clip-pop-wave" },
+  impact: { body: "clip-impact", tag: "clip-impact-tag", wave: "clip-impact-wave" },
+  ambience: { body: "clip-ambience", tag: "clip-ambience-tag", wave: "clip-ambience-wave" },
+  custom: { body: "clip-custom", tag: "clip-custom-tag", wave: "clip-custom-wave" },
 };
-const rowOf = (c: ClipRef) => tracks().findIndex((t) => t.id === clipOf(c)?.track);
+
+const clipPalette = (ref: ClipRef) => {
+  const c = clipOf(ref);
+  if (!c) return ROLE_CLIP_TONES.whoosh;
+  if (c.dialogue || (lanes?.narration && c.name === lanes.narration)) return ROLE_CLIP_TONES.voice;
+  const track = tracks().find((t) => t.id === c.track);
+  const role = track ? trackRoleOf(track) : clipTrackRole(ref);
+  return ROLE_CLIP_TONES[role];
+};
 
 const drawClip = (
   g: CanvasRenderingContext2D,
@@ -89,20 +95,32 @@ const drawClip = (
   cuts: readonly number[],
 ) => {
   const c = clipOf(ref)!,
-    on = picked(ref);
-  const isVoice = Boolean(c.dialogue || (lanes?.narration && c.name === lanes.narration));
+    on = picked(ref),
+    pal = clipPalette(ref);
   const cx0 = Math.max(-2, x0),
     cx1 = Math.min(w + 2, x1);
-  g.fillStyle = tone(isVoice ? "clip-voice" : "clip-audio");
+  g.fillStyle = tone(pal.body);
   g.beginPath();
   g.roundRect(cx0, y, Math.max(2, cx1 - cx0), CLIP_H, 4);
   g.fill();
+  if (c.muted) {
+    g.save();
+    g.strokeStyle = tone("muted-foreground");
+    g.lineWidth = 1;
+    g.setLineDash([4, 3]);
+    g.beginPath();
+    g.roundRect(cx0 + 0.5, y + 0.5, Math.max(2, cx1 - cx0) - 1, CLIP_H - 1, 4);
+    g.stroke();
+    g.restore();
+  }
   const [from, to] = span(ref),
     altered = needsProcessing(c),
-    p = altered
-      ? processed(processSpec(c, to - from, ref.list === "beds"))?.peaks
-      : peaksOf(c.name),
     px = (x1 - x0) / Math.max(1e-3, to - from);
+  const p = altered
+    ? canWarmProcessed(from, to)
+      ? processed(processSpec(c, to - from, ref.list === "beds"))?.peaks
+      : undefined
+    : peaksOf(c.name);
   if (p && x1 - x0 > 6) {
     const start = altered ? 0 : (c.start ?? 0),
       n = p.peaks.length,
@@ -123,7 +141,7 @@ const drawClip = (
       v *= 10 ** (gainAt(c, (x - x0) / px) / 20);
       if (v <= 0) continue;
       const bar = Math.max(1, Math.min(1, v) * room);
-      g.fillStyle = tone(isVoice ? "clip-voice-wave" : "clip-wave");
+      g.fillStyle = tone(pal.wave);
       g.fillRect(x, base - bar, 1, bar);
       if (v >= NEAR) {
         g.fillStyle = tone("level-near");
@@ -181,7 +199,7 @@ const drawClip = (
       }
   }
   if ((on || (hover && same(hover, ref))) && x1 - x0 > KNOB * 4 && !locked(ref)) {
-    g.fillStyle = tone(isVoice ? "clip-voice" : "clip-audio");
+    g.fillStyle = tone(pal.body);
     g.strokeStyle = tone("pick");
     g.lineWidth = 1.5;
     for (const hx of [x0 + fi * px, x1 - fo * px]) {
@@ -240,15 +258,16 @@ const drawClip = (
   g.beginPath();
   g.rect(cx0, y, cx1 - cx0 - 2, CLIP_H);
   g.clip();
-  const label =
+  const baseLabel =
     ref.list === "sfx" && lanes?.narration && c.name === lanes.narration
       ? cachedVoiceClipLabel(c as OneShot)
       : c.name;
+  const label = c.muted ? `${baseLabel} · Off` : baseLabel;
   const lx = Math.max(x0, 0) + 3,
     maxTagW = Math.max(0, cx1 - lx - 4);
   if (maxTagW > 8) {
     const tw = Math.min(maxTagW - 8, g.measureText(label).width);
-    g.fillStyle = tone(isVoice ? "clip-voice-tag" : "clip-audio-tag");
+    g.fillStyle = tone(pal.tag);
     g.beginPath();
     g.roundRect(lx, y + 2, Math.max(8, tw + 8), LABEL_H - 2, 3);
     g.fill();
@@ -283,19 +302,24 @@ const drawClip = (
 export const drawLanes = () => {
   const c = S.el?.lanes;
   if (!c || !lanes || !isElementShown(c)) return;
-  const height = lanesHeight();
+  const { rows, rowsByTrack, bottom } = laneLayout(lanes),
+    height = bottom + ADD_H;
   if (c.style.height !== `${height}px`) c.style.height = `${height}px`;
   const { g, w, h } = sized(c);
   if (!c.width) return;
   const { a, v } = view(),
-    X = (s: number) => ((s - a) / v) * w,
-    ts = tracks();
+    X = (s: number) => ((s - a) / v) * w;
   g.fillStyle = tone("background");
   g.fillRect(0, 0, w, h);
   g.fillStyle = tone("track");
-  g.fillRect(0, 0, w, rowY(ts.length));
+  g.fillRect(0, 0, w, bottom);
   g.fillStyle = tone("background");
-  for (let i = 1; i <= ts.length; i++) g.fillRect(0, rowY(i) - 1, w, 1);
+  for (const row of rows) g.fillRect(0, row.top + row.height - 1, w, 1);
+  const splitIdx = customTrackSplitIndex();
+  if (splitIdx > 0 && splitIdx < rows.length) {
+    g.fillStyle = tone("hairline-strong");
+    g.fillRect(0, rows[splitIdx].top - 1, w, 2);
+  }
   g.fillStyle = tone("grid");
   for (const s of SHOTS) if (s.t > a && s.t < a + v) g.fillRect(X(s.t), 0, 1, h);
   g.font = `12px ${UI_FONT}`;
@@ -307,15 +331,18 @@ export const drawLanes = () => {
     cuts = SHOTS.map((s) => s.t).filter((t) => t > 0);
   for (const ref of allClips()) {
     const [s, e] = span(ref),
-      k = rowOf(ref);
-    if (k < 0 || e <= s || e < a || s > a + v) continue;
+      clip = clipOf(ref)!,
+      row = rowsByTrack.get(clip.track);
+    if (!row || e <= s || e < a || s > a + v) continue;
     const x0 = X(s),
       x1 = Math.max(x0 + 4, X(e)),
-      y = clipY(k),
-      t = ts[k],
-      shine = litSet !== null && litSet.has(clipOf(ref)!.name);
+      y = row.top + row.height - (TRACK_H + CLIP_H) / 2,
+      t = row.track,
+      shine = litSet !== null && litSet.has(clip.name);
     g.globalAlpha =
-      t.mute || (solo.length && !solo.includes(t.id)) || (litSet !== null && !shine) ? 0.35 : 1;
+      t.mute || clip.muted || (solo.length && !solo.includes(t.id)) || (litSet !== null && !shine)
+        ? 0.35
+        : 1;
     if (floating?.refs.some((r) => same(r, ref))) {
       g.fillStyle = tone("raised-3");
       g.beginPath();
@@ -348,14 +375,15 @@ export const drawLanes = () => {
           drawClip(g, b.ref, b.x0, b.x1, b.y0 + dy, w, cuts);
     }
   }
-  if (!ts.length) {
+  if (!rows.length) {
     g.fillStyle = tone("muted-foreground");
-    g.fillText("Drag a sound here from the Audio tab", 8, rowY(0) + ADD_H / 2);
+    g.fillText("Drag a sound here from the Audio tab", 8, TOP + ADD_H / 2);
   }
   if (drop) {
     const x = X(drop.at),
-      y = rowY(drop.row),
-      hh = drop.row === ts.length ? ADD_H : trackHeight(ts[drop.row].id);
+      row = rows[drop.row],
+      y = row?.top ?? bottom,
+      hh = row?.height ?? ADD_H;
     g.globalAlpha = 0.18;
     g.fillStyle = tone("primary");
     g.fillRect(0, y, w, hh);
@@ -489,7 +517,7 @@ export const attachLanes = () => {
     const markerBox = boxes.findLast(
       (b) => y >= b.y0 - 11 && y < b.y0 - 1 && x >= b.x0 - 5 && x <= b.x1 + 5,
     );
-    if (markerBox) {
+    if (!add && markerBox) {
       const [from, to] = span(markerBox.ref),
         mark = clipBeats(markerBox.ref).find(
           (t) =>
@@ -512,10 +540,13 @@ export const attachLanes = () => {
       return;
     }
     c.setPointerCapture(e.pointerId);
-    const grab = playheadGrab(b, x, y, w, touch);
+    const grab = !add && playheadGrab(b, x, y, w, touch);
     if (!b || grab) {
       if (touch || grab) {
-        if (!grab) setClips([]);
+        if (!grab) {
+          setClips([]);
+          if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+        }
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
@@ -535,6 +566,7 @@ export const attachLanes = () => {
     }
     if (locked(b.ref)) {
       setClips([b.ref]);
+      if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
       say("This track is locked. Unlock it in the track header to edit");
       return;
     }
@@ -730,13 +762,16 @@ export const attachLanes = () => {
         target = snapped.target;
         const starts = moving.map((r) => span(r)[0]);
         const room = drag!.along?.room ?? [-Infinity, Infinity];
-        const rows = moving.map(rowOf),
+        const layout = laneLayout(lanes),
+          rows = moving.map((r) => layout.rowsByTrack.get(clipOf(r)?.track)?.index ?? -1),
           n = l.tracks.length;
         const dk = Math.max(
           -Math.min(...rows),
-          Math.min(n - Math.max(...rows), rowAt(y) - rowAt(drag!.y)),
+          Math.min(n - Math.max(...rows), rowAt(layout.rows, y) - rowAt(layout.rows, drag!.y)),
         );
-        const fresh = rows.some((k) => k + dk === n) ? addTrack(l, ref.list).id : "";
+        const fresh = rows.some((k) => k + dk === n)
+          ? addRoleTrack(l, clipTrackRole(ref), n).id
+          : "";
         moving.forEach((r, k) => {
           if (dk) l[r.list][r.i].track = rows[k] + dk === n ? fresh : l.tracks[rows[k] + dk].id;
         });
@@ -836,11 +871,17 @@ export const attachLanes = () => {
     lastPointer = null;
     snapLine(null);
     floating = null;
-    const { snap, moved, alone, ref, copy, moving, along, shift } = drag;
+    const { snap, moved, alone, ref, copy, moving, along, shift, gainKey } = drag;
     drag = null;
     c.style.cursor = "";
     if (!moved) {
-      if (alone && e.type === "pointerup") setClips([ref]);
+      if (e.type === "pointerup") {
+        if (alone) setClips([ref]);
+        if (gainKey === null) {
+          const { x, w } = local(e);
+          if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+        }
+      }
       return;
     }
     const after = snapshot(),
@@ -919,7 +960,7 @@ const overLanes = (e: PointerEvent) => {
   const { a, v } = view(),
     x = e.clientX - r.left;
   return {
-    row: rowAt(e.clientY - r.top),
+    row: rowAt(laneLayout(lanes).rows, e.clientY - r.top),
     at: Math.max(
       0,
       Math.min(

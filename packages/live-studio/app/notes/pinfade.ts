@@ -54,10 +54,11 @@ const firstAtOrAfter = (list: ReadonlyArray<{ t: number }>, t: number) => {
   return lo;
 };
 
-export const activeStageNotes = (
-  open: ReadonlyArray<StageOpenNoteLike>,
+export const activeStageNotes = <N extends StageOpenNoteLike["n"]>(
+  open: ReadonlyArray<{ n: N; t: number }>,
   t: number,
   rate = 1,
+  matchesSpace?: (note: N) => boolean,
 ): { pins: ActivePinNote[]; frame: ActiveFrameNote[] } => {
   if (!open.length) return { pins: [], frame: [] };
   const pins: ActivePinNote[] = [];
@@ -71,9 +72,10 @@ export const activeStageNotes = (
     if (n.freeCam) continue;
     const fade = pinFade(nt, t, rate);
     if (fade <= 0) continue;
-    if (n.pin) pins.push({ id: n.id, pin: n.pin, text: n.text, fade });
-    else if (!(Array.isArray(n.marks) && n.marks.length > 0) && n.text.trim())
-      frame.push({ id: n.id, text: n.text, fade });
+    const spatial = matchesSpace ? matchesSpace(n) : true;
+    const hasMarks = Array.isArray(n.marks) && n.marks.length > 0;
+    if (n.pin && spatial) pins.push({ id: n.id, pin: n.pin, text: n.text, fade });
+    else if ((!spatial || !hasMarks) && n.text.trim()) frame.push({ id: n.id, text: n.text, fade });
   }
   return { pins, frame };
 };

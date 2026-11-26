@@ -95,7 +95,7 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
     >
       <div
         className={cn(
-          "grid size-full min-h-0 min-w-0 grid-cols-[7.5rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] px-3 pt-2 pb-2",
+          "grid size-full min-h-0 min-w-0 grid-cols-[8.75rem_minmax(0,1fr)_auto] grid-rows-[auto_auto_minmax(0,1fr)] px-3 pt-2 pb-2",
           "upright:h-auto upright:grid-cols-[5.5rem_minmax(0,1fr)] upright:grid-rows-none upright:pt-0 sideways:block sideways:h-auto sideways:pt-0 sideways:pb-1.5",
         )}
       >
@@ -167,8 +167,8 @@ export function TimelinePanel({ bind }: { bind: Bind }) {
             </div>
             <canvas
               ref={bind("detail")}
-              title={`${voiceClips ? "Action" : "Voice and action"}: click empty space to move the playhead there, drag to select, Ctrl+scroll to zoom`}
-              aria-label={`${voiceClips ? "Action row" : "Voice and action rows"}: click empty space to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom`}
+              title={`${voiceClips ? "Action" : "Voice and action"}: click to move the playhead there, drag to select, Ctrl+scroll to zoom`}
+              aria-label={`${voiceClips ? "Action row" : "Voice and action rows"}: click to move the playhead there, drag the playhead line to scrub, Ctrl+scroll to zoom`}
               style={{ "--h": `${L.height}px` }}
               className="block h-(--h) w-full touch-none"
             />

@@ -62,7 +62,7 @@ export const addPlayer = (p: Player) => {
   players.push(p);
 };
 
-const LOOKAHEAD = 1;
+export const LOOKAHEAD = 1;
 let sounding: AudioScheduledSourceNode[] = [],
   anchor: { base: number; speed: number; from: number } | null = null;
 export const hasSounding = () => sounding.length > 0;
@@ -96,7 +96,10 @@ export const syncMonitorGain = () => {
   const level = audio.muted ? 0 : audio.volume;
   if (masterLevel !== level) {
     masterLevel = level;
-    monitorNode.gain.setTargetAtTime(level, ctx.currentTime, 0.015);
+    const now = ctx.currentTime;
+    monitorNode.gain.cancelScheduledValues(now);
+    if (level === 0) monitorNode.gain.setValueAtTime(0, now);
+    else monitorNode.gain.setTargetAtTime(level, now, 0.015);
   }
 };
 

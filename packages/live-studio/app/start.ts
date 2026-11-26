@@ -53,11 +53,18 @@ import { readOpenFilm } from "./openfilm/state";
 import { followChips, loadTrials, optionRanges } from "./options/options";
 import { drawCameraMonitor } from "./picture/camera-monitor";
 import { captionAt } from "./picture/captions";
+import {
+  activeCompareVideo,
+  compareLookAt,
+  compareVideoPlayable,
+  loadCompareVideos,
+  syncCompareVideoElement,
+} from "./picture/compare-video";
 import { staleFilmView } from "./picture/filmcam";
 import { filmFeatures, frameSize, loadFilm } from "./picture/frame";
 import { flight, fly, flyFree, setFov, setFree } from "./picture/freecam";
 import { formatOpticsHud } from "./picture/hud";
-import { lookAtClick } from "./picture/look";
+import { lookAtClick, lookOnPlane } from "./picture/look";
 import { attachPicture, fit } from "./picture/pointer";
 import { drawPreviewMonitor } from "./picture/preview-monitor";
 import { drawFinal, finalCanvas, render, renderFilmFrame, setFinal } from "./picture/render";
@@ -72,6 +79,7 @@ import {
   tick,
 } from "./playback/transport";
 import { attachLanes } from "./sound/lanes";
+import { releaseFailedAudioReads, warmLiveClips } from "./sound/mixer";
 import { invalidateSoundCaches, loadSound } from "./sound/sound";
 import { loadVoiceTakes } from "./sound/voice-client";
 import { handleVoiceLibraryEvent } from "./sound/voice-library-client";
@@ -156,7 +164,13 @@ const runFilmCheck = () =>
     .then(({ checkFilm }) => reportFilm(checkFilm(FILM, S.render, camKeys)))
     .catch(() => {});
 
+const reportReadFailure = (error: unknown) =>
+  say(error instanceof Error ? error.message : String(error), 6000);
+const readOptional = (job: Promise<unknown>) => job.catch(reportReadFailure);
+
 const listen = () => {
+  const onReload = (event: string, load: (data: string) => Promise<unknown>) =>
+    onEvent(event, (data) => void readOptional(load(data)));
   const codeChanged = () => set({ newBuild: true });
   onEvent("code", (why) => {
     if (why !== "own") codeChanged();
@@ -172,11 +186,11 @@ const listen = () => {
     invalidateTagPrefix("/api/sfx/");
     invalidateTagPrefix("/api/voice");
     loadMix();
-    loadTrials();
-    loadSound({ usedOnly: true });
+    void readOptional(loadTrials());
+    void readOptional(loadSound({ usedOnly: true }));
     say("Sound updated");
   });
-  onEvent("lanes", () => loadSound({ lanesOnly: true }));
+  onReload("lanes", () => loadSound({ lanesOnly: true }));
   const reloadNotice =
     (
       rev: "camRev" | "lightsRev" | "shotsRev" | "layersRev" | "textRev",
@@ -192,17 +206,15 @@ const listen = () => {
         after?.();
       }
     };
-  onEvent("cam", reloadNotice("camRev", "Camera keys updated", loadCam, runFilmCheck));
-  onEvent("lights", reloadNotice("lightsRev", "Lighting updated", loadLights));
-  onEvent("keys", (i) => loadKeys(Number(i)));
-  onEvent("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
-  onEvent("timing", loadTiming);
-  onEvent("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
-  onEvent("openfilm", () => {
-    void readOpenFilm().catch(showError);
-  });
-  onEvent("text", reloadNotice("textRev", "Titles updated", loadText));
-  onEvent("notes", () => loadNotes({ notify: true }));
+  onReload("cam", reloadNotice("camRev", "Camera keys updated", loadCam, runFilmCheck));
+  onReload("lights", reloadNotice("lightsRev", "Lighting updated", loadLights));
+  onReload("keys", (i) => loadKeys(Number(i)));
+  onReload("shots", reloadNotice("shotsRev", "Shots updated", loadShots));
+  onReload("timing", () => loadTiming());
+  onReload("adjustment", reloadNotice("layersRev", "Color adjustment updated", loadLayers));
+  onReload("openfilm", readOpenFilm);
+  onReload("text", reloadNotice("textRev", "Titles updated", loadText));
+  onReload("notes", () => loadNotes({ notify: true }));
   onEvent("voice", () => {
     invalidateTagPrefix("/api/voice");
     invalidateTagPrefix("/api/mix");
@@ -210,15 +222,20 @@ const listen = () => {
     loadVoice();
     loadVoiceTakes();
   });
-  onEvent("contract", () => loadContract());
+  onReload("contract", () => loadContract());
   onEvent("film", codeChanged);
-  onEvent("favorites", loadFavorites);
-  onEvent("ease-templates", loadEaseTemplates);
+  onReload("favorites", loadFavorites);
+  onReload("ease-templates", loadEaseTemplates);
   onEvent("lessons", () => {
     if (lessons.getState().loaded) void loadLessons();
   });
   onEvent("voice-library", handleVoiceLibraryEvent);
   onEvent("voice-playground", handleVoicePlaygroundEvent);
+  const refreshCompareVideos = () => {
+    const { compareVideoMode, compareVideosLoaded } = get();
+    if (compareVideoMode || compareVideosLoaded) void loadCompareVideos();
+  };
+  onEvent("compare-videos", refreshCompareVideos);
   listenActivity();
   onHello((current, reconnect) => {
     if (!current) codeChanged();
@@ -226,25 +243,27 @@ const listen = () => {
       clearPrefetch();
       invalidateTagPrefix("/api/voice");
       invalidateTagPrefix("/api/sfx/");
-      loadNotes({ notify: true });
+      releaseFailedAudioReads();
+      void readOptional(loadNotes({ notify: true }));
       loadVoice();
       loadVoiceTakes();
       handleVoiceLibraryEvent();
       handleVoicePlaygroundEvent();
-      loadContract();
-      loadTrials();
-      loadTiming();
-      loadSound({ usedOnly: true });
-      loadCam();
-      loadLights();
-      loadKeys();
-      loadShots();
-      loadText();
-      loadLayers();
-      void readOpenFilm().catch(showError);
-      loadFavorites();
+      void readOptional(loadContract());
+      void readOptional(loadTrials());
+      void readOptional(loadTiming());
+      void readOptional(loadSound({ usedOnly: true }));
+      void readOptional(loadCam());
+      void readOptional(loadLights());
+      void readOptional(loadKeys());
+      void readOptional(loadShots());
+      void readOptional(loadText());
+      void readOptional(loadLayers());
+      void readOptional(readOpenFilm());
+      void readOptional(loadFavorites());
       void loadEaseTemplates();
       void loadActivity();
+      refreshCompareVideos();
       if (lessons.getState().loaded) void loadLessons();
     }
   });
@@ -286,7 +305,8 @@ export const start = async (el: Elements) => {
     attachAcross();
   }
   attachInk({
-    look: lookAtClick,
+    look: (x, y) => (get().compareVideoMode ? compareLookAt(x, y) : lookAtClick(x, y)),
+    plane: (x, y, planeY) => (get().compareVideoMode ? null : lookOnPlane(x, y, planeY)),
     begin: ensureNote,
     pause: () => {
       if (S.playing) setPlaying(false);
@@ -298,6 +318,8 @@ export const start = async (el: Elements) => {
   flushNotes();
   setFilmSource(FILM);
   applyEdit();
+  loopStarted = true;
+  scheduleLoop();
   const comments = getFile("/api/shots.json")
     .then(async (r) => {
       if (!r.ok || shotsDoc.data) return;
@@ -311,39 +333,44 @@ export const start = async (el: Elements) => {
   const [w, h] = frameSize(PHONE ? phoneLong(el.stage) : 960);
   el.canvas.width = w;
   el.canvas.height = h;
-  const timeline = Promise.all([
-    loadNotes(),
-    has.voiceMap
-      ? loadVoice()
-      : Promise.resolve().then(() => {
-          S.voiceReady = true;
-          S.dirty = true;
-        }),
-    has.voice ? loadVoiceTakes() : Promise.resolve(),
-  ]);
-  const timingReady = has.timing ? loadTiming() : Promise.resolve(set({ timing: false }));
-  const contractReady = loadContract(true);
-  const earlyExtras = Promise.all([
-    has.shots ? loadShots() : Promise.resolve(set({ shots: false })),
-    loadFavorites(),
-    loadEaseTemplates(),
-  ]);
-  const earlySound = Promise.all([timingReady, timeline]).then(() =>
-    loadSound({ usedOnly: true, initial: true }),
+  const timeline = Promise.all(
+    [
+      loadNotes(),
+      has.voiceMap
+        ? loadVoice()
+        : Promise.resolve().then(() => {
+            S.voiceReady = true;
+            S.dirty = true;
+          }),
+      has.voice ? loadVoiceTakes() : Promise.resolve(),
+    ].map(readOptional),
   );
-  const editingReady = timingReady.then(() =>
-    Promise.all([
-      has.cam ? loadCam() : Promise.resolve(set({ cam: false })),
-      has.lights ? loadLights() : Promise.resolve(set({ lights: false })),
-      has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
-      has.text ? loadText() : Promise.resolve(set({ text: false })),
-      has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
-      readOpenFilm(),
-    ]),
+  const timingReady = has.timing ? loadTiming() : Promise.resolve(set({ timing: false }));
+  const contractReady = readOptional(loadContract(true));
+  const shotsReady = readOptional(has.shots ? loadShots() : Promise.resolve(set({ shots: false })));
+  const favoritesReady = readOptional(loadFavorites());
+  const easeReady = readOptional(loadEaseTemplates());
+  const earlySound = Promise.all([timingReady, timeline]).then(
+    () => readOptional(loadSound({ usedOnly: true, initial: true })),
+    () => {},
+  );
+  const editingReady = timingReady.then(
+    () =>
+      Promise.all(
+        [
+          has.cam ? loadCam() : Promise.resolve(set({ cam: false })),
+          has.lights ? loadLights() : Promise.resolve(set({ lights: false })),
+          has.keys ? loadKeys() : Promise.resolve(set({ keyFiles: [] })),
+          has.text ? loadText() : Promise.resolve(set({ text: false })),
+          has.adjustment ? loadLayers() : Promise.resolve(set({ layers: false })),
+          readOpenFilm(),
+        ].map(readOptional),
+      ),
+    () => {},
   );
   if (has.cam) prefetchFile("/api/cam");
   if (has.lights) prefetchFile("/api/lights");
-  if (has.keys) void prepareKeys();
+  if (has.keys) void readOptional(prepareKeys());
   if (has.text) prefetchFile("/api/text");
   if (has.adjustment) prefetchFile("/api/adjustment");
   if (has.sound) prefetchFile("/api/sound?used=1");
@@ -422,9 +449,10 @@ export const start = async (el: Elements) => {
   const extras = Promise.all([
     comments,
     contractReady,
-    earlyExtras,
+    shotsReady,
+    easeReady,
     timeline,
-    loadTrials(true),
+    readOptional(loadTrials(true)),
     earlySound,
     editingReady,
   ]).then(() => {
@@ -433,14 +461,17 @@ export const start = async (el: Elements) => {
     invalidatePictures();
   });
   refreshTimes();
-  seek(S.t);
-  loopStarted = true;
-  await loop();
+  if (!get().compareVideoMode) seek(S.t);
+  else S.dirty = true;
+  if (!inFrame) await loop();
+  else scheduleLoop();
   set({ loading: "", ready: true });
   if (window.__live) say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
-  extras.then(() => {
+  const noteUiReady = extras.then(() => {
     restoreDraft();
     followNoteLinks();
+  });
+  Promise.all([noteUiReady, favoritesReady]).then(() => {
     panelsLoaded = true;
     markReady();
     reportWeight();
@@ -472,7 +503,13 @@ let loopStarted = false,
   inFrame = false,
   loopKind: 0 | 1 | 2 = 0,
   loopId = 0;
-const needFrame = () => S.dirty || S.viewMoved || S.playing || warm.length > 0 || flight.active();
+let pausePaint: Promise<void> | null = null;
+const needFrame = () =>
+  S.dirty ||
+  S.viewMoved ||
+  S.playing ||
+  (!get().compareVideoMode && Boolean(S.render) && warm.length > 0) ||
+  flight.active();
 const cancelLoop = () => {
   if (loopKind === 1) cancelAnimationFrame(loopId);
   else if (loopKind === 2) clearTimeout(loopId);
@@ -480,7 +517,7 @@ const cancelLoop = () => {
   loopId = 0;
 };
 const scheduleLoop = () => {
-  if (!loopStarted || inFrame || loopKind || !needFrame()) return;
+  if (!loopStarted || inFrame || loopKind || pausePaint || !needFrame()) return;
   if (document.hidden) {
     loopKind = 2;
     loopId = window.setTimeout(loop, 100);
@@ -501,6 +538,7 @@ document.addEventListener("visibilitychange", () => {
 const loop = async () => {
   loopKind = 0;
   loopId = 0;
+  if (pausePaint) return;
   inFrame = true;
   try {
     await frame();
@@ -511,6 +549,20 @@ const loop = async () => {
   }
   scheduleLoop();
 };
+onWake("playing", () => {
+  const paint = !S.playing && S.render && !get().compareVideoMode ? afterPaint() : null;
+  pausePaint = paint;
+  if (!paint) {
+    scheduleLoop();
+    return;
+  }
+  cancelLoop();
+  void paint.then(() => {
+    if (pausePaint !== paint) return;
+    pausePaint = null;
+    scheduleLoop();
+  });
+});
 let lastClockEl: HTMLElement | null = null;
 let lastClockText: string | null = null;
 let lastPeekState: boolean | null = null;
@@ -525,16 +577,24 @@ const frame = async () => {
   fly(dt);
   tick();
   const peeked = peekTime();
+  const compareMode = get().compareVideoMode;
   if (S.dirty || S.viewMoved) {
     if (S.dirty) staleFilmView();
     S.dirty = S.viewMoved = false;
-    const a = performance.now();
-    await render(peeked ?? S.t);
-    followChips();
-    drawMs = drawMs * 0.9 + (performance.now() - a) * 0.1;
-    frames++;
     const showTime = peeked ?? S.t;
     const isPeek = peeked !== null;
+    if (compareMode) {
+      if (activeCompareVideo() && (!S.playing || isPeek))
+        syncCompareVideoElement(showTime, { forceSeek: isPeek || lastPeekState === true });
+    } else if (S.render) {
+      const a = performance.now();
+      const playingAtDraw = S.playing;
+      await render(showTime);
+      if (playingAtDraw && !S.playing) return;
+      followChips();
+      drawMs = drawMs * 0.9 + (performance.now() - a) * 0.1;
+    }
+    frames++;
     const i = shotIndex(S.t);
     if (i !== shownShot) {
       shownShot = i;
@@ -543,7 +603,8 @@ const frame = async () => {
     drawTimelines();
     if (S.el.pins.hidden !== isPeek) S.el.pins.hidden = isPeek;
     if (S.el.ink.hidden !== isPeek) S.el.ink.hidden = isPeek;
-    if (S.el.chips.hidden !== isPeek) S.el.chips.hidden = isPeek;
+    const hideChips = isPeek || compareMode;
+    if (S.el.chips.hidden !== hideChips) S.el.chips.hidden = hideChips;
     drawPins();
     drawInk(drawnNotes);
     if (lastClockEl !== S.el.clock) {
@@ -564,7 +625,7 @@ const frame = async () => {
       lastCaptionEl = S.el.caption;
       lastCaptionText = null;
     }
-    const nextCaption = get().captions ? (captionAt(showTime) ?? "") : "";
+    const nextCaption = !compareMode && get().captions ? (captionAt(showTime) ?? "") : "";
     if (lastCaptionText !== nextCaption) {
       S.el.caption.textContent = nextCaption;
       lastCaptionText = nextCaption;
@@ -573,32 +634,34 @@ const frame = async () => {
       lastHudEl = S.el.hud;
       lastHudText = null;
     }
-    const nextHud = [formatOpticsHud(S.tools?.optics), drawCameraMonitor(showTime)]
-      .filter(Boolean)
-      .join(" · ");
+    const nextHud = compareMode
+      ? ""
+      : [formatOpticsHud(S.tools?.optics), drawCameraMonitor(showTime)].filter(Boolean).join(" · ");
     if (S.el.hud && lastHudText !== nextHud) {
       S.el.hud.textContent = nextHud;
       lastHudText = nextHud;
     }
-    let finalNow = false;
-    if (get().final && S.finalRender) {
-      if (S.playing || S.dragging || peeked !== null) {
-        S.el.final.hidden = true;
-        S.finalAt = -1;
-      } else if (S.finalAt !== S.t) {
-        await drawFinal();
-        finalNow = get().final && S.finalAt === S.t;
+    if (!compareMode && S.render) {
+      let finalNow = false;
+      if (get().final && S.finalRender) {
+        if (S.playing || S.dragging || peeked !== null) {
+          S.el.final.hidden = true;
+          S.finalAt = -1;
+        } else if (S.finalAt !== S.t) {
+          await drawFinal();
+          finalNow = get().final && S.finalAt === S.t;
+        }
       }
+      const painted = !S.el.shutter.hidden
+        ? S.el.shutter
+        : finalNow
+          ? S.el.final
+          : S.el.final.hidden
+            ? S.el.canvas
+            : null;
+      measureScopes(painted);
+      drawPreviewMonitor(painted);
     }
-    const painted = !S.el.shutter.hidden
-      ? S.el.shutter
-      : finalNow
-        ? S.el.final
-        : S.el.final.hidden
-          ? S.el.canvas
-          : null;
-    measureScopes(painted);
-    drawPreviewMonitor(painted);
     followNotes();
     wake("rendered");
     const keptNow = performance.now();
@@ -607,9 +670,19 @@ const frame = async () => {
       keptT = S.t;
       stored.set("t", String(S.t), sessionStorage);
     }
-    window.__live = { t: S.t, shot: i, drawMs };
-    markReady();
-  } else if (warm.length) {
+    const drewPicture =
+      (compareMode && compareVideoPlayable()) || (!compareMode && Boolean(S.render));
+    if (drewPicture) {
+      const firstPicture = !window.__live;
+      window.__live = { t: S.t, shot: i, drawMs };
+      markReady();
+      if (firstPicture && filmFeatures().sound)
+        void afterPaint().then(() => {
+          warmLiveClips();
+          S.dirty = true;
+        });
+    }
+  } else if (warm.length && !compareMode && S.render) {
     // Async preparation can paint between awaits; warm only synchronous film renderers on the visible canvas.
     if (S.render?.renderFrame) warm.length = 0;
     else {

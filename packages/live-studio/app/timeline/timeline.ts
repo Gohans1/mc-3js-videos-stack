@@ -13,7 +13,7 @@ import { seek, setPlaying } from "../playback/transport";
 import { skimSound } from "../sound/skim";
 import { FAST_WPM, SLOW_WPM } from "../sound/voice-view";
 import { drawPlayhead, sized, tone, UI_FONT } from "./canvas";
-import { boxEnd, boxMove, boxPick, boxStart } from "./rowbox";
+import { boxEnd, boxMove, boxPick, boxStart, canGrabPlayhead, isSelectionModifier } from "./rowbox";
 import { LANE_H, rows, SHOTS_STRIP, WORDS_H } from "./rows";
 import { invalidateShown, isElementShown, onShownResize } from "./visible";
 
@@ -201,6 +201,9 @@ export const onPlayhead = (x: number, w: number, touch: boolean) => {
   const { a, v } = view();
   return Math.abs(x - ((S.t - a) / v) * w) <= (touch ? 10 : 4);
 };
+export { isSelectionModifier };
+export const playheadDragHit = (x: number, w: number, touch: boolean, add: boolean) =>
+  canGrabPlayhead(add, onPlayhead(x, w, touch));
 export const view = () => {
   const v = shown();
   return { a: viewCentre() - v / 2, v };
@@ -977,10 +980,15 @@ export const attachTimeline = () => {
       if (grab(e)) start(e);
       else if (e.pointerType === "touch") press = { x: e.clientX, y: e.clientY };
     };
-    const up = () => {
+    const up = (e: PointerEvent) => {
       if (!own) return;
       own = false;
+      const tapped = press !== null && e.type === "pointerup";
       press = null;
+      if (tapped && !S.dragging) {
+        seek(Math.max(0, Math.min(DURATION, toTime(e))));
+        return;
+      }
       if (!S.dragging) return;
       const r = S.dragging.resume;
       S.dragging = null;
@@ -996,7 +1004,7 @@ export const attachTimeline = () => {
           return;
         }
         if (!S.dragging) return;
-        if (!(e.buttons & 1)) up();
+        if (!(e.buttons & 1)) up(e);
         else {
           seek(toTime(e));
           skimSound(S.t);
@@ -1008,14 +1016,18 @@ export const attachTimeline = () => {
     };
     c.addEventListener("pointerdown", down);
     c.addEventListener("pointermove", move);
-    for (const t of ["pointerup", "pointercancel", "lostpointercapture"]) c.addEventListener(t, up);
+    for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const)
+      c.addEventListener(t, up);
   };
   let onThing = false;
+  let onThingAdd = false;
   detail.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     invalidateRects();
     const b = boxAt(e);
+    const add = e.shiftKey || e.ctrlKey || e.metaKey;
     onThing = !!b;
+    onThingAdd = add;
     selected =
       b?.type === "beat"
         ? { type: "beat", id: b.id }
@@ -1024,14 +1036,23 @@ export const attachTimeline = () => {
           : null;
     describeSelection();
     const r = getCachedRect(detail);
-    if (e.pointerType !== "touch" && !onPlayhead(e.clientX - r.left, r.width, false))
-      boxStart(e, e.shiftKey || e.ctrlKey || e.metaKey);
+    if (e.pointerType !== "touch" && !playheadDragHit(e.clientX - r.left, r.width, false, add))
+      boxStart(e, add);
   });
   detail.addEventListener("pointermove", boxMove);
   for (const t of ["pointerup", "pointercancel", "lostpointercapture"])
-    detail.addEventListener(t, (e) => boxEnd(onThing ? undefined : (e as PointerEvent)));
+    detail.addEventListener(t, (e) => {
+      const ev = e as PointerEvent;
+      const wasThing = onThing;
+      const wasAdd = onThingAdd;
+      onThing = false;
+      onThingAdd = false;
+      const boxed = boxEnd(wasThing ? undefined : ev);
+      if (wasThing && !wasAdd && !boxed && ev.type === "pointerup" && !isSelectionModifier(ev))
+        boxPick.seek(ev.clientX);
+    });
   boxPick.seek = (x) => {
-    const r = getCachedRect(detail);
+    const r = detail.getBoundingClientRect();
     if (r.width) seek(Math.max(0, Math.min(DURATION, timeAt(x - r.left, r.width))));
   };
   const local = (c: HTMLCanvasElement, e: PointerEvent) => {
@@ -1050,7 +1071,7 @@ export const attachTimeline = () => {
     },
     (e) => {
       const { x, w } = local(detail, e);
-      return onPlayhead(x, w, e.pointerType === "touch");
+      return playheadDragHit(x, w, e.pointerType === "touch", isSelectionModifier(e));
     },
   );
   for (const c of [ruler, detail]) c.addEventListener("wheel", timelineWheel, { passive: false });
@@ -1075,11 +1096,17 @@ export const attachTimeline = () => {
       },
       (e) => {
         const hit = gapHit(e);
-        return !!hit && onPlayhead(hit.x, hit.w, e.pointerType === "touch");
+        return (
+          !!hit && playheadDragHit(hit.x, hit.w, e.pointerType === "touch", isSelectionModifier(e))
+        );
       },
       (e) => {
         const hit = gapHit(e);
-        return !!hit && (e.pointerType !== "touch" || onPlayhead(hit.x, hit.w, true));
+        return (
+          !!hit &&
+          !isSelectionModifier(e) &&
+          (e.pointerType !== "touch" || onPlayhead(hit.x, hit.w, true))
+        );
       },
     );
     scroller.addEventListener("pointerdown", (e) => {
@@ -1090,13 +1117,23 @@ export const attachTimeline = () => {
         boxPick.clear();
         return;
       }
-      if (e.pointerType !== "touch" && !onPlayhead(hit.x, hit.w, false)) {
+      const add = isSelectionModifier(e);
+      if (e.pointerType !== "touch" && !playheadDragHit(hit.x, hit.w, false, add)) {
+        try {
+          if (!scroller.hasPointerCapture(e.pointerId)) scroller.setPointerCapture(e.pointerId);
+        } catch {}
         gapBox = true;
-        boxStart(e, e.shiftKey || e.ctrlKey || e.metaKey);
+        boxStart(e, add);
       }
     });
     scroller.addEventListener("pointermove", (e) => {
-      if (gapBox) boxMove(e);
+      if (!gapBox) return;
+      if (!(e.buttons & 1)) {
+        gapBox = false;
+        boxEnd();
+        return;
+      }
+      boxMove(e);
     });
     for (const t of ["pointerup", "pointercancel", "lostpointercapture"])
       scroller.addEventListener(t, (e) => {

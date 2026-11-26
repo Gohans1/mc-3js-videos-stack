@@ -1,5 +1,5 @@
 import { ChevronDown, MicOff, Pause, Play, Scissors, SearchX, Sparkles } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,8 @@ export function VoiceoverList({
   query,
   side,
   elsewhere,
+  isTimelineSelected = false,
+  revealed = false,
   onToggleGroup,
   onClearQuery,
 }: {
@@ -54,12 +56,24 @@ export function VoiceoverList({
   query: string;
   side: boolean;
   elsewhere: readonly NavSection[];
+  isTimelineSelected?: boolean;
+  revealed?: boolean;
   onToggleGroup: (group: NavGroupId) => void;
   onClearQuery?: () => void;
 }) {
   useStudio((s) => s.soundRev);
   useStudio((s) => s.timingRev);
   useSyncExternalStore(subscribeVoiceNames, voiceNamesSnapshot, voiceNamesSnapshot);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!revealed) return;
+    const frame = requestAnimationFrame(() => {
+      listRef.current
+        ?.querySelector<HTMLElement>("[data-voiceover-take]")
+        ?.scrollIntoView({ block: "center", behavior: "auto" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealed]);
   const [limit, setLimit] = useState(PAGE);
   const [prevQuery, setPrevQuery] = useState(query);
   const [promoting, setPromoting] = useState<string | null>(null);
@@ -87,7 +101,7 @@ export function VoiceoverList({
   };
 
   return (
-    <div className={cn("flex flex-col", side && "min-h-0 flex-1")}>
+    <div ref={listRef} className={cn("flex flex-col", side && "min-h-0 flex-1")}>
       {takes.length === 0 ? (
         <div
           className={cn(
@@ -185,13 +199,20 @@ export function VoiceoverList({
             return (
               <li
                 key={take.id}
+                data-voiceover-take={take.id}
+                data-timeline-selected={isTimelineSelected || undefined}
+                data-voiceover-revealed={revealed || undefined}
                 className={cn(
                   "group flex min-w-0 flex-col gap-1.5 rounded-lg border px-2.5 py-2 transition-colors duration-150 motion-reduce:transition-none",
-                  isPlaying
-                    ? "border-primary/75 bg-raised-3"
-                    : isActive
-                      ? "border-primary/45 bg-raised-3"
-                      : "bg-card/85 hover:border-raised-4/50 hover:bg-raised-3 focus-within:border-raised-4/60 focus-within:bg-raised-3 border-border",
+                  revealed
+                    ? "border-primary bg-tint/45 ring-primary/50 ring-2"
+                    : isTimelineSelected
+                      ? "border-primary/70 bg-tint/25 ring-primary/35 ring-1"
+                      : isPlaying
+                        ? "border-primary/75 bg-raised-3"
+                        : isActive
+                          ? "border-primary/45 bg-raised-3"
+                          : "bg-card/85 hover:border-raised-4/50 hover:bg-raised-3 focus-within:border-raised-4/60 focus-within:bg-raised-3 border-border",
                 )}
               >
                 <div className="flex min-h-9 min-w-0 flex-1 items-stretch gap-2.5">

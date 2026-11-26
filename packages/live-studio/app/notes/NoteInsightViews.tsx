@@ -66,6 +66,7 @@ import {
   packTimelineRows,
   type PlacedWithState,
   sortPlacedNotes,
+  type TimelineLane,
   timelineMinPillPct,
 } from "./note-views-model";
 import { goToNote, noteMedia, noteNum } from "./notes";
@@ -77,6 +78,14 @@ const SHORT_DAY_FMT = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const noteKey = (item: PlacedWithState) => item.n.id;
+const rowKey = (row: { key: string }) => row.key;
+const timelineLaneKey = (entry: { lane: TimelineLane }) => entry.lane.shot;
+type CalendarRow = { kind: "calendar" } | { kind: "note"; item: PlacedWithState };
+const calendarRowKey = (row: CalendarRow) =>
+  row.kind === "calendar" ? "calendar" : `note:${row.item.n.id}`;
+const calendarRowSize = (index: number) => (index === 0 ? 480 : 108);
+const calendarStickyKeys = ["calendar"];
 
 const formatDayKey = (key: string) => {
   const [y, m, d] = key.split("-").map(Number);
@@ -269,18 +278,32 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [replyId, setReplyId] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
   const scrollToLaneRef = useRef<((index: number) => void) | null>(null);
   const [wrapWidth, setWrapWidth] = useState(320);
+  const [laneOffset, setLaneOffset] = useState(0);
 
   useEffect(() => {
     const el = wrapRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const sync = (w: number) => setWrapWidth((prev) => (Math.abs(prev - w) < 4 ? prev : w));
-    sync(el.clientWidth);
-    const ro = new ResizeObserver((entries) =>
-      sync(entries[0]?.contentRect.width ?? el.clientWidth),
-    );
+    const controls = controlsRef.current;
+    const ruler = rulerRef.current;
+    if (!el || !controls || !ruler) return;
+    const sync = () => {
+      const width = el.clientWidth;
+      setWrapWidth((prev) => (Math.abs(prev - width) < 4 ? prev : width));
+      setLaneOffset(
+        Math.round(
+          ruler.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop,
+        ),
+      );
+    };
+    sync();
+    if (typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(sync);
     ro.observe(el);
+    ro.observe(controls, { box: "border-box" });
+    ro.observe(ruler, { box: "border-box" });
     return () => ro.disconnect();
   }, []);
 
@@ -321,9 +344,7 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
     if (!next) return;
     setPickedId(next.n.id);
     goToNote(next.n);
-    const laneIdx = packedLanes.findIndex((entry) =>
-      entry.lane.items.some((it) => it.p.n.id === next.n.id),
-    );
+    const laneIdx = packedLanes.findIndex((entry) => entry.lane.shot === next.n.shot);
     if (laneIdx >= 0) scrollToLaneRef.current?.(laneIdx);
     const tryFocus = (retries: number) => {
       const btn = wrapRef.current?.querySelector<HTMLButtonElement>(
@@ -339,6 +360,7 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
 
   const ruler = (
     <div
+      ref={rulerRef}
       className={cn(
         "bg-backdrop/95 border-hairline sticky top-0 z-10 flex items-center border-b px-1.5 py-1.5 backdrop-blur-xs @sm/timeline:px-2.5",
         zoomWidthCls,
@@ -378,7 +400,10 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
       data-arrow-scroll
       className="scroll-fade @container/timeline flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain"
     >
-      <div className="flex flex-none flex-wrap items-center justify-between gap-2 px-3 pb-1.5">
+      <div
+        ref={controlsRef}
+        className="flex flex-none flex-wrap items-center justify-between gap-2 px-3 pb-1.5"
+      >
         <span className="text-label text-ui font-mono tabular-nums">
           {lanes.length} shot{lanes.length === 1 ? "" : "s"} · {stamp(duration)} total
         </span>
@@ -397,7 +422,7 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
       <div className="bg-backdrop/55 border-hairline mx-3 mb-2 flex flex-none flex-col overflow-hidden rounded-lg border">
         <VirtualList
           items={packedLanes}
-          getKey={(entry) => entry.lane.shot}
+          getKey={timelineLaneKey}
           estimateSize={(i) => (packedLanes[i]?.rows ?? 1) * (coarseRows ? 52 : 28) + 16}
           gap={0}
           overscan={4}
@@ -406,9 +431,11 @@ export function NoteTimelineView({ items }: { items: readonly PlacedWithState[] 
           data-arrow-scroll
           role="list"
           ariaLabel="Timeline shot lanes"
-          className="scroll-fade min-h-0 flex-none overflow-x-auto overflow-y-hidden overscroll-x-contain overscroll-y-auto"
+          className="scroll-fade flex-none overflow-x-auto overflow-y-hidden overscroll-x-contain overscroll-y-auto"
           listClassName={listWidthCls}
           header={ruler}
+          scrollOwner={wrapRef}
+          scrollMargin={laneOffset}
           renderItem={({ lane, rows, packed }) => (
             <div className="border-hairline-subtle hover:bg-surface-subtle/75 flex items-stretch border-b px-1.5 py-1.5 transition-colors motion-reduce:transition-none @sm/timeline:px-2.5">
               <div className="border-hairline-subtle flex w-22 max-w-[25%] shrink-0 flex-col justify-center border-e pe-2">
@@ -726,18 +753,21 @@ export function NoteCalendarView({ items }: { items: readonly PlacedWithState[] 
     cellRefs.current[targetCell.key]?.focus();
   };
 
-  const calendarRows = [
-    { kind: "calendar" as const },
-    ...(activeCell?.items ?? []).map((item) => ({ kind: "note" as const, item })),
-  ];
+  const calendarRows = useMemo<CalendarRow[]>(
+    () => [
+      { kind: "calendar" },
+      ...(activeCell?.items ?? []).map((item): CalendarRow => ({ kind: "note", item })),
+    ],
+    [activeCell],
+  );
   return (
     <VirtualList
       items={calendarRows}
-      getKey={(row) => (row.kind === "calendar" ? "calendar" : `note:${row.item.n.id}`)}
-      estimateSize={(index) => (index === 0 ? 480 : 108)}
+      getKey={calendarRowKey}
+      estimateSize={calendarRowSize}
       gap={6}
       overscan={4}
-      stickyKeys={["calendar"]}
+      stickyKeys={calendarStickyKeys}
       data-arrow-scroll
       role="region"
       ariaLabel="Note calendar"
@@ -1083,7 +1113,7 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
     );
     return [...active, ...done];
   }, [items, feedSort]);
-  const displayFeed = useExitedNotes(ordered, (it) => it.n.id, `feed|${feedSort}|${filterKey}`);
+  const displayFeed = useExitedNotes(ordered, noteKey, `feed|${feedSort}|${filterKey}`);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-3 pb-2">
@@ -1101,7 +1131,7 @@ export function NoteFeedView({ items }: { items: readonly PlacedWithState[] }) {
 
       <VirtualList
         items={displayFeed}
-        getKey={(entry) => entry.key}
+        getKey={rowKey}
         estimateSize={175}
         gap={10}
         overscan={5}
@@ -1610,7 +1640,7 @@ export function NoteChartView({
             ) : (
               <VirtualList
                 items={selected.items}
-                getKey={(it) => it.n.id}
+                getKey={noteKey}
                 estimateSize={98}
                 gap={6}
                 overscan={6}

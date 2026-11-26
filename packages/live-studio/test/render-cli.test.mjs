@@ -110,6 +110,117 @@ test("a film whose code does not build is named by file and line, in plain words
   assert.doesNotMatch(said, /node_modules|rolldown/);
 });
 
+test("render clip reports the chunk and frame range when encoding fails", (t) => {
+  const chrome = resolve(
+    STUDIO,
+    "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+  );
+  if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 }));
+  copyDemo(dir);
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
+  );
+  const scene = join(dir, "src/scene.ts");
+  writeFileSync(
+    scene,
+    `export const DURATION = 1;\nexport const SHOTS_OUT = [{ t: 0 }];
+VideoEncoder.prototype.encode = () => { throw new Error("test encoder fault"); };
+export function buildScene(canvas, width, height) {
+  const ctx = canvas.getContext("2d");
+  return () => ctx.fillRect(0, 0, width, height);
+}`,
+  );
+  writeFileSync(join(dir, "src/edit.json"), '{"end":1}');
+  const out = spawnSync("bun", [RENDER, "clip", "--chunks", "0", "--fresh-cache"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 25_000,
+    env: { ...process.env, LIVE_PROJECT: dir },
+  });
+  assert.equal(out.status, 1, out.stdout + out.stderr);
+  assert.match(out.stderr, /ERROR chunk 0 \(frames 0-\d+, 0\.00s-/);
+  assert.match(out.stderr, /test encoder fault/);
+});
+
+test(
+  "render final stops at a detected actor pop and reaches the encoder on a clean scan",
+  { timeout: 340_000 },
+  (t) => {
+    const chrome = resolve(
+      STUDIO,
+      "../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+    );
+    if (!existsSync(chrome)) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+    const dir = mkdtempSync(join(tmpdir(), "render-final-pops-"));
+    t.after(() => rmSync(dir, { recursive: true, force: true, maxRetries: 5 }));
+    copyDemo(dir);
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ "live-studio": { chrome: relative(dir, chrome) } }),
+    );
+    writeFileSync(join(dir, "src/edit.json"), '{"end":1}');
+    const sceneFile = join(dir, "src/scene.ts");
+    const sceneSource = `
+import * as THREE from "three";
+export const DURATION = 1;
+export const SHOTS_OUT = [{ t: 0 }];
+VideoEncoder.prototype.encode = () => { throw new Error("test final reached encoder"); };
+export function buildScene(canvas, width, height, draft) {
+  const ctx = canvas.getContext("2d");
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 100);
+  camera.position.z = 5;
+  const actor = new THREE.Group();
+  actor.name = "steve";
+  actor.soleNow = (_, out) => out.copy(actor.position);
+  scene.add(actor);
+  const draw = (t) => {
+    actor.rotation.y = !draft && t >= 0.5 ? Math.PI : 0;
+    ctx.fillRect(0, 0, width, height);
+  };
+  draw.tools = { scene, camera };
+  draw.checks = { pops: () => ["film-defined check would incorrectly bypass final preflight"] };
+  return draw;
+}`;
+
+    const renderFinal = () =>
+      spawnSync(
+        "bun",
+        [RENDER, "final", "--chunks", "0", "--samples", "1", "--res", "1080", "--fresh-cache"],
+        {
+          cwd: dir,
+          encoding: "utf8",
+          timeout: 160_000,
+          env: { ...process.env, LIVE_PROJECT: dir },
+        },
+      );
+    writeFileSync(sceneFile, sceneSource);
+    const out = renderFinal();
+    const log = out.stdout + out.stderr;
+    assert.equal(out.status, 1, log || out.error?.message);
+    assert.match(log, /POP 0\.50 steve: root rotation 180°/);
+    assert.doesNotMatch(
+      log,
+      /test final reached encoder|film-defined check would incorrectly bypass/,
+    );
+    assert.equal(existsSync(join(dir, "renders/final_video.mp4")), false);
+
+    writeFileSync(join(dir, "src/edit.json"), '{"end":1.02}');
+    writeFileSync(
+      sceneFile,
+      sceneSource
+        .replace("DURATION = 1;", "DURATION = 1.02;")
+        .replace("!draft && t >= 0.5", "t >= 1"),
+    );
+    const clean = renderFinal();
+    assert.match(clean.stdout, /no pops, no planted sole sliding/);
+    assert.match(clean.stderr, /test final reached encoder/);
+  },
+);
+
 test("--span is refused before any build when it is misplaced, backwards, or starts past the last frame", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -183,6 +294,9 @@ test("captions, final and stills refuse the options they would ignore", (t) => {
   );
   mkdirSync(join(dir, "lab"));
   writeFileSync(join(dir, "lab/page.ts"), "");
+  const finalLab = render("final", ["--entry", "lab/page.ts"]);
+  assert.equal(finalLab.status, 2, finalLab.stdout + finalLab.stderr);
+  assert.match(finalLab.stderr, /render final uses the film's scene/);
   const blurLab = render("stills", ["--entry", "lab/page.ts", "--at", "1", "--samples", "8"]);
   assert.equal(blurLab.status, 2, blurLab.stdout + blurLab.stderr);
   assert.match(blurLab.stderr, /an --entry page draws its own pictures/);
@@ -261,7 +375,17 @@ const chromeFilm = (t, end, conf = {}) => {
   );
   if (!existsSync(chrome)) return null;
   const dir = mkdtempSync(join(tmpdir(), "render-cli-"));
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  t.after(async () => {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+        return;
+      } catch (error) {
+        if (error.code !== "EBUSY" || attempt === 5) throw error;
+        await Bun.sleep(100 * (attempt + 1));
+      }
+    }
+  });
   copyDemo(dir);
   const scene = join(dir, "src/scene.ts");
   writeFileSync(
@@ -274,15 +398,97 @@ const chromeFilm = (t, end, conf = {}) => {
     join(dir, "package.json"),
     JSON.stringify({ "live-studio": { chrome: relative(dir, chrome), ...conf } }),
   );
-  const render = (what, flags = []) =>
+  const render = (what, flags = [], env = {}) =>
     spawnSync("bun", [RENDER, what, ...flags], {
       cwd: dir,
       encoding: "utf8",
       timeout: 180000,
-      env: { ...process.env, LIVE_PROJECT: dir },
+      env: { ...process.env, ...env, LIVE_PROJECT: dir },
     });
   return { dir, render };
 };
+
+test("a clip keeps its chunk only while the public asset it drew is unchanged", async (t) => {
+  const film = chromeFilm(t, 0.1);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const assets = join(film.dir, "assets/public");
+  mkdirSync(assets, { recursive: true });
+  writeFileSync(join(assets, "picked.zip"), "#ff0000");
+  writeFileSync(
+    join(film.dir, "src/scene.ts"),
+    `export const DURATION = 0.1, SHOTS_OUT = [];
+export async function buildScene(canvas) {
+  const color = await (await fetch('/picked.zip')).text();
+  const ctx = canvas.getContext('2d');
+  return () => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+}`,
+  );
+  const first = film.render("clip");
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  assert.match(first.stdout, /chunk 0: \d+ frames/);
+
+  writeFileSync(join(assets, "unused.png"), "not drawn");
+  const unchanged = film.render("clip");
+  assert.equal(unchanged.status, 0, unchanged.stdout + unchanged.stderr);
+  assert.match(unchanged.stdout, /chunk 0: unchanged since rendered, kept/);
+
+  writeFileSync(join(assets, "picked.zip"), "#0000ff");
+  const { staleVideo } = await import("../src/stale.mjs");
+  const stale = staleVideo(film.dir, "renders/draft_video.mp4");
+  const changed = film.render("clip");
+  assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+  assert.match(changed.stdout, /chunk 0: \d+ frames/);
+  assert.equal(stale?.file, "assets/public/picked.zip");
+  assert.equal(staleVideo(film.dir, "renders/draft_video.mp4"), null);
+});
+
+test("a clip redraws a chunk that used an updated OpenFilm resource", (t) => {
+  const film = chromeFilm(t, 0.1);
+  if (!film) return t.skip("no headless Chrome in the vault (bun run setup:vault)");
+  const env = { MC_VAULT_ROOT: join(film.dir, "vault") };
+  const library = join(env.MC_VAULT_ROOT, "openfilm/library");
+  mkdirSync(library, { recursive: true });
+  const resource = join(library, "color.json");
+  writeFileSync(resource, '"#ff0000"');
+  writeFileSync(
+    join(film.dir, "src/scene.ts"),
+    `export const DURATION = 0.1, SHOTS_OUT = [];
+export async function buildScene(canvas) {
+  const color = await (await fetch('/_openfilm/library/color.json')).json();
+  const ctx = canvas.getContext('2d');
+  return () => {
+    ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  };
+}`,
+  );
+  const first = film.render("clip", [], env);
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+
+  writeFileSync(resource, '"#0000ff"');
+  const stale = spawnSync(
+    "bun",
+    [
+      fileURLToPath(new URL("../src/stale.mjs", import.meta.url)),
+      "renders/draft_video.mp4",
+      "--json",
+    ],
+    {
+      cwd: film.dir,
+      env: { ...process.env, ...env, LIVE_PROJECT: film.dir },
+      encoding: "utf8",
+      timeout: 5000,
+    },
+  );
+  assert.equal(stale.status, 0, stale.stdout + stale.stderr);
+  assert.equal(JSON.parse(stale.stdout).stale?.file, "vault/openfilm/library/color.json");
+  const changed = film.render("clip", [], env);
+  assert.equal(changed.status, 0, changed.stdout + changed.stderr);
+  assert.match(changed.stdout, /chunk 0: \d+ frames/);
+});
 
 test("a render that fails ends on what to do next", (t) => {
   const film = chromeFilm(t, 16);

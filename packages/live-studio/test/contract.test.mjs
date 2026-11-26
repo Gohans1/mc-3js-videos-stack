@@ -831,3 +831,27 @@ test("shot optics keys accept finite negative times and reject non-finite times"
   assert.equal(ShotsTimeline.safeParse(withTime(-Infinity)).success, false);
   assert.equal(ShotsTimeline.safeParse(withTime(Number.NaN)).success, false);
 });
+
+test("SoundTimeline beds and sfx accept optional boolean muted and reject non-booleans", () => {
+  assert.equal(
+    SoundTimeline.safeParse({
+      beds: [{ name: "hum", from: 0, to: 5, gain: -6, fadeIn: 0, fadeOut: 0, muted: true }],
+      sfx: [{ at: 1, name: "tap", gain: 0, muted: false }],
+    }).success,
+    true,
+  );
+  assert.equal(
+    SoundTimeline.safeParse({
+      beds: [{ name: "hum", from: 0, to: 5, gain: -6, fadeIn: 0, fadeOut: 0, muted: "yes" }],
+      sfx: [],
+    }).success,
+    false,
+  );
+  assert.equal(
+    SoundTimeline.safeParse({
+      beds: [],
+      sfx: [{ at: 1, name: "tap", gain: 0, muted: 1 }],
+    }).success,
+    false,
+  );
+});

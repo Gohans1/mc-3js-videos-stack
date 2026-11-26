@@ -28,28 +28,49 @@ import { set, studio, type StudioState, useStudio } from "../core/store";
 import { NoteStatusGlyph } from "../notes/note-parts";
 import { NoteList } from "../notes/NoteList";
 
-const loadPanels = () => import("./LazyPanels");
-const AdjustLibrary = lazy(() => loadPanels().then((m) => ({ default: m.AdjustLibrary })));
-const AdjustPanel = lazy(() => loadPanels().then((m) => ({ default: m.AdjustPanel })));
-const LightPanel = lazy(() => loadPanels().then((m) => ({ default: m.LightPanel })));
-const AnimPanel = lazy(() => loadPanels().then((m) => ({ default: m.AnimPanel })));
-const TransitionLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TransitionLibrary })));
-const TransitionPanel = lazy(() => loadPanels().then((m) => ({ default: m.TransitionPanel })));
-const KeyPanel = lazy(() => loadPanels().then((m) => ({ default: m.KeyPanel })));
-const LessonsPanel = lazy(() => loadPanels().then((m) => ({ default: m.LessonsPanel })));
-const ObjectsPanel = lazy(() => loadPanels().then((m) => ({ default: m.ObjectsPanel })));
-const OwnPanel = lazy(() => loadPanels().then((m) => ({ default: m.OwnPanel })));
-const PortsPanel = lazy(() => loadPanels().then((m) => ({ default: m.PortsPanel })));
-const SoundPanel = lazy(() => loadPanels().then((m) => ({ default: m.SoundPanel })));
-const TextLibrary = lazy(() => loadPanels().then((m) => ({ default: m.TextLibrary })));
+const AdjustLibrary = lazy(() =>
+  import("../camera/AdjustLibrary").then((m) => ({ default: m.AdjustLibrary })),
+);
+const AdjustPanel = lazy(() =>
+  import("../camera/AdjustPanel").then((m) => ({ default: m.AdjustPanel })),
+);
+const LightPanel = lazy(() =>
+  import("../lighting/LightPanel").then((m) => ({ default: m.LightPanel })),
+);
+const AnimPanel = lazy(() => import("../camera/AnimPanel").then((m) => ({ default: m.AnimPanel })));
+const TransitionLibrary = lazy(() =>
+  import("../camera/TransitionLibrary").then((m) => ({ default: m.TransitionLibrary })),
+);
+const TransitionPanel = lazy(() =>
+  import("../camera/TransitionPanel").then((m) => ({ default: m.TransitionPanel })),
+);
+const KeyPanel = lazy(() => import("../keys/KeyPanel").then((m) => ({ default: m.KeyPanel })));
+const LessonsPanel = lazy(() =>
+  import("../lessons/LessonsPanel").then((m) => ({ default: m.LessonsPanel })),
+);
+const ObjectsPanel = lazy(() =>
+  import("../objects/ObjectsPanel").then((m) => ({ default: m.ObjectsPanel })),
+);
+const OwnPanel = lazy(() => import("../own/OwnPanel").then((m) => ({ default: m.OwnPanel })));
+const PortsPanel = lazy(() =>
+  import("../ports/PortsPanel").then((m) => ({ default: m.PortsPanel })),
+);
+const SoundPanel = lazy(() =>
+  import("../sound/SoundPanel").then((m) => ({ default: m.SoundPanel })),
+);
+const TextLibrary = lazy(() =>
+  import("../text/TextLibrary").then((m) => ({ default: m.TextLibrary })),
+);
 const OpenFilmLibrary = lazy(() =>
   import("../openfilm/Library").then((m) => ({ default: m.OpenFilmLibrary })),
 );
 const OpenFilmDetails = lazy(() =>
   import("../openfilm/Library").then((m) => ({ default: m.OpenFilmDetails })),
 );
-const TextPanel = lazy(() => loadPanels().then((m) => ({ default: m.TextPanel })));
-const SpeedPanel = lazy(() => loadPanels().then((m) => ({ default: m.FilmSpeedPanel })));
+const TextPanel = lazy(() => import("../text/TextPanel").then((m) => ({ default: m.TextPanel })));
+const SpeedPanel = lazy(() =>
+  import("../timeline/FilmSpeedPanel").then((m) => ({ default: m.FilmSpeedPanel })),
+);
 
 type SideTab = StudioState["side"];
 type Lib = StudioState["lib"];

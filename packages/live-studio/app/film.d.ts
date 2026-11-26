@@ -52,6 +52,7 @@ declare module "film/scene" {
     home?: { p: [number, number, number]; l: [number, number, number]; fov?: number };
     objects?: [THREE.Object3D, string][];
     targets?: import("./objects/targets").SceneTarget[];
+    toonFaces?: Record<string, readonly string[]>;
     renderer?: THREE.WebGLRenderer;
     resizePreview?: (scale: number) => void;
     materials?: [THREE.Material, string][];

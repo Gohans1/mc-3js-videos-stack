@@ -15,6 +15,7 @@ import type { FreeView } from "../core/engine";
 import { S, wake } from "../core/state";
 import { get, say, set, setPref } from "../core/store";
 import { cameraSurfaces, EYE_HEIGHT, floorAt, walkPosition } from "./camera-collision";
+import { setCompareVideoMode } from "./compare-video";
 import { createFlight } from "./flight";
 import type { FreeTouched } from "./slice";
 
@@ -429,6 +430,7 @@ export const resetFreeLensAll = () => {
 export const setFree = (on: boolean, here = false) => {
   const tools = S.tools;
   if (!tools) return;
+  if (on && get().compareVideoMode) setCompareVideoMode(false);
   const f = tools.free,
     home = !homed && !here && tools.home;
   const preserve = on && homed && get().freeLocked;
@@ -510,6 +512,7 @@ export const readLiveFreeView = (): FreeView | undefined => {
 export const flyFree = (view: FreeView) => {
   const tools = S.tools;
   if (!tools) return;
+  if (get().compareVideoMode) setCompareVideoMode(false);
   const f = tools.free;
   if (!f.on)
     enteredFreeFov =

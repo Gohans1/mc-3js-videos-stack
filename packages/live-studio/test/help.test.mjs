@@ -187,6 +187,7 @@ test("help direct formats clean single-slash paths without duplicating active sc
   const rootHelp = spawnSync("bun", [HELP], { encoding: "utf8", timeout: 10000 });
   expect(rootHelp.status, rootHelp.stderr).toBe(0);
   expect(rootHelp.stdout).not.toContain("\nOther\n");
+  expect(rootHelp.stdout).toMatch(/\n {2}sound:kit\s+curate the 8 popular SFX\/BGM categories/);
 
   const filmHelp = spawnSync("bun", [HELP], {
     cwd: join(import.meta.dir, "../../../templates/film"),
@@ -195,6 +196,19 @@ test("help direct formats clean single-slash paths without duplicating active sc
   });
   expect(filmHelp.status, filmHelp.stderr).toBe(0);
   expect(filmHelp.stdout).not.toContain("\nOther\n");
+  expect(filmHelp.stdout).toMatch(/\n {2}sound:kit\s+curate the 8 popular SFX\/BGM categories/);
+
+  for (const cwd of [undefined, join(import.meta.dir, "../../../templates/film")]) {
+    const kitJson = spawnSync("bun", [HELP, "sound:kit", "--json"], {
+      cwd,
+      encoding: "utf8",
+      timeout: 10000,
+    });
+    expect(kitJson.status, kitJson.stderr).toBe(0);
+    const entry = JSON.parse(kitJson.stdout).data.commands[0];
+    expect(entry.id).toBe("sound:kit");
+    expect(entry.availableHere).toBe(true);
+  }
 
   const direct = spawnSync("bun", [HELP, "direct"], { encoding: "utf8", timeout: 10000 });
   expect(direct.status, direct.stderr).toBe(0);

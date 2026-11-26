@@ -21,6 +21,12 @@ import { CLI_CATEGORIES, CLI_COMMANDS } from "./cli-catalog.ts";
 import { CliRunHttpError, createCliRunner, scanCliContext } from "./cli-runner.ts";
 import { CliTemplateUpsertSchema, openCliTemplates } from "./cli-templates.ts";
 import { mountCollaboration } from "./collaboration-api.mjs";
+import {
+  isValidCompareVideoPath,
+  listCompareVideos,
+  probeCompareVideo,
+  resolveCompareVideoFile,
+} from "./compare-videos.mjs";
 import { SoundProcess, SoundTimeline } from "./contract.ts";
 import { EaseTemplateUpload, openEaseTemplates } from "./ease-templates.mjs";
 import { FavoriteChange, openFavorites } from "./favorites.mjs";
@@ -41,6 +47,8 @@ import { noteNumbers } from "./notes.mjs";
 import { openFilmLut, openFilmResource, openOpenFilm } from "./openfilm.mjs";
 import { createPortsService } from "./ports.mjs";
 import { openPropLibrary } from "./prop-library.ts";
+import { mountSoundKit } from "./sound-kit-api.mjs";
+import { openSoundKit } from "./sound-kit.mjs";
 import { openVoiceLibrary } from "./voice-library.mjs";
 import { assertInsideDir } from "./voice-map.mjs";
 import {
@@ -80,17 +88,25 @@ const MIME = {
   ".wav": "audio/wav",
   ".webm": "audio/webm",
   ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
   ".m4a": "audio/mp4",
   ".srt": "text/plain; charset=utf-8",
   ".jar": "application/java-archive",
 };
 const jpeg = z.string().startsWith("data:image/jpeg;base64,/9j/").nullish();
+const NoteCompareVideo = z.object({
+  path: z.string().min(1).max(300).refine(isValidCompareVideoPath, "Invalid compare video path"),
+  category: z.enum(["compare", "render", "reference"]),
+  layout: z.enum(["hstack", "vstack", "single"]),
+  startSec: z.number().finite().nonnegative().optional(),
+});
 const NoteIn = z.object({
   note: z.looseObject({
     id: z.string().regex(/^[a-z0-9]+$/),
     t: z.number().refine(Number.isFinite),
     text: z.string(),
     staleBuild: z.boolean().optional(),
+    compareVideo: NoteCompareVideo.optional(),
   }),
   img: jpeg,
   crop: jpeg,
@@ -186,6 +202,8 @@ export const createApi = (
       onEvent: () => send("voice-library"),
     }),
     favorites = openFavorites(),
+    soundKit = openSoundKit(),
+    soundKitSemanticDb,
     voicePlayground = openVoicePlayground({
       project: film?.PROJECT,
       voice: film?.voice,
@@ -393,15 +411,30 @@ export const createApi = (
   const sendFile = async (
     c,
     file,
-    { store = false, pack = false, onSound = false, sfxName = null, sourceFile = null } = {},
+    {
+      store = false,
+      pack = false,
+      onSound = false,
+      sfxName = null,
+      sourceFile = null,
+      contentType = null,
+      trackTag = true,
+    } = {},
   ) => {
     const { size, mtimeMs } = statSync(file);
-    c.header("content-type", MIME[extname(file)] ?? "application/octet-stream");
+    c.header(
+      "content-type",
+      contentType ?? MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
+    );
     c.header("accept-ranges", "bytes");
-    const range = c.req.header("range");
     const rawTag = `${size}-${Math.round(mtimeMs)}`;
     const tag = `"${rawTag}"`;
-    recordTag(c.req.path, rawTag, { file, isFileTag: true, onSound, sfxName, sourceFile });
+    const head = c.req.method === "HEAD";
+    const ifRange = c.req.header("if-range");
+    const range = !head && (!ifRange || ifRange === tag) ? c.req.header("range") : undefined;
+    if (trackTag) {
+      recordTag(c.req.path, rawTag, { file, isFileTag: true, onSound, sfxName, sourceFile });
+    }
     if (c.req.query("v") === rawTag) {
       c.header("cache-control", "public, max-age=31536000, immutable");
     } else if (store) {
@@ -409,7 +442,7 @@ export const createApi = (
     } else {
       c.header("etag", tag);
       c.header("cache-control", "no-cache");
-      if (c.req.header("if-none-match") === tag && !range) return c.body(null, 304);
+      if (c.req.header("if-none-match") === tag) return c.body(null, 304);
     }
     if (!store) {
       const br = `${file}.br`;
@@ -419,17 +452,29 @@ export const createApi = (
         if (copy.mtimeMs >= mtimeMs) {
           c.header("content-encoding", "br");
           c.header("content-length", String(copy.size));
-          return c.body(Readable.toWeb(film.openRead(br)));
+          return c.body(head ? null : Readable.toWeb(film.openRead(br)));
         }
       }
-      if (pack && !range && size <= PACK_MAX)
+      if (!head && pack && !range && size <= PACK_MAX)
         return c.body(await squeeze(c, readFileSync(file), tag));
     }
-    const m = /bytes=(\d*)-(\d*)/.exec(range ?? "");
-    if (m) {
-      const a = m[1] ? +m[1] : 0,
-        b = m[2] ? Math.min(+m[2], size - 1) : size - 1;
-      if (a > b) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec((range ?? "").trim());
+    if (m && (m[1] || m[2])) {
+      let a;
+      let b;
+      if (!m[1] && m[2]) {
+        const suffix = Number(m[2]);
+        if (!Number.isFinite(suffix) || suffix <= 0 || size <= 0) {
+          c.header("content-range", `bytes */${size}`);
+          return c.body(null, 416);
+        }
+        a = Math.max(0, size - suffix);
+        b = size - 1;
+      } else {
+        a = Number(m[1]);
+        b = m[2] ? Math.min(Number(m[2]), size - 1) : size - 1;
+      }
+      if (a > b || a < 0 || b >= size) {
         c.header("content-range", `bytes */${size}`);
         return c.body(null, 416);
       }
@@ -438,7 +483,7 @@ export const createApi = (
       return c.body(Readable.toWeb(film.openRead(file, { start: a, end: b })), 206);
     }
     c.header("content-length", String(size));
-    return c.body(Readable.toWeb(film.openRead(file)));
+    return c.body(head ? null : Readable.toWeb(film.openRead(file)));
   };
 
   const app = new Hono();
@@ -1178,6 +1223,8 @@ export const createApi = (
     return c.json(all);
   });
 
+  mountSoundKit(app, { film, soundKit, soundKitSemanticDb, send, fresh, safeErr });
+
   const grades = openGrades(film.PUBLIC);
   const gradeResult = (c, fn) => {
     try {
@@ -1582,6 +1629,37 @@ export const createApi = (
     const suffix = !film.VIDEO_SMALL || target === film.VIDEO_SMALL ? "-540p" : "";
     c.header("content-disposition", `attachment; filename="${safeName}${suffix}.mp4"`);
     return sendFile(c, target);
+  });
+  app.get("/api/compare-videos", (c) =>
+    fresh(
+      c,
+      film?.PROJECT
+        ? listCompareVideos(film.PROJECT)
+        : { videos: [], defaultPath: null, canBuild: { ref: null, ours: null } },
+    ),
+  );
+  app.get("/api/compare-videos/probe", async (c) => {
+    if (!film?.PROJECT) return c.body(null, 404);
+    const probed = await probeCompareVideo(film.PROJECT, c.req.query("path"));
+    if (!probed.ok) return c.json({ error: probed.error }, probed.status);
+    const { ok: _ok, ...meta } = probed;
+    return fresh(c, meta);
+  });
+  app.get("/api/compare-videos/file", async (c) => {
+    if (!film?.PROJECT) return c.body(null, 404);
+    const resolved = resolveCompareVideoFile(film.PROJECT, c.req.query("path"));
+    if (!resolved.ok) return c.json({ error: resolved.error }, resolved.status);
+    c.header("content-disposition", "inline");
+    c.header("x-content-type-options", "nosniff");
+    try {
+      return await sendFile(c, resolved.file, {
+        contentType: extname(resolved.file).toLowerCase() === ".webm" ? "video/webm" : null,
+        trackTag: false,
+      });
+    } catch (err) {
+      if (err?.code === "ENOENT") return c.json({ error: "Video file not found" }, 404);
+      throw err;
+    }
   });
 
   app.get("/api/cli/catalog", async (c) => {

@@ -1,4 +1,5 @@
 import { narrationLines } from "../../src/narration.ts";
+import type { KitCategoryId } from "../../src/sound-kit-classify.d.mts";
 import { mapVoice } from "../../src/timing-data.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { lightEdit } from "../activity/activity";
@@ -22,23 +23,28 @@ import type { ReverbSpec, ShotSpace } from "./ir";
 import { computeJCutStart, computeLCutEnd, DEFAULT_JL_CUT_SEC } from "./jlcut";
 import { compareVariants, warmSearchTokens } from "./library-view";
 import { measureFinal } from "./meter";
-import { forgetSounds, replan, setLive } from "./mixer";
+import { forgetSounds, rememberFailedAudioRead, replan, setLive } from "./mixer";
 import { type AudioProcessing, retime, retimedLength, sourceRoom, trimSource } from "./retime";
 import { prepareSceneTargets, sceneCameraPoseAt, sceneTargetAt } from "./scene-spatial";
 import { type ClipRef } from "./slice";
 import type { SpatialSpec } from "./spatial";
 import {
-  addTrack,
+  addRoleTrack,
+  firstCustomTrackIndex,
   fits,
   freeTrack,
+  inferClipTrackRole,
+  inferTrackRole,
   missingSoundNames,
   normalize,
+  organizeTracks,
   placeShift,
   refs,
   same,
   tidy,
   type Track,
   trackOf,
+  type TrackRole,
 } from "./tracks";
 
 export interface Bed extends GainClip, AudioProcessing, BeatMarkers {
@@ -49,6 +55,7 @@ export interface Bed extends GainClip, AudioProcessing, BeatMarkers {
   fadeOut: number;
   start?: number;
   duck?: number;
+  muted?: boolean;
   pan?: number;
   track?: string;
   try?: string[];
@@ -63,6 +70,7 @@ export interface OneShot extends GainClip, AudioProcessing, BeatMarkers {
   length?: number;
   fadeIn?: number;
   fadeOut?: number;
+  muted?: boolean;
   pan?: number;
   track?: string;
   try?: string[];
@@ -176,6 +184,23 @@ const changed = () => {
   measureFinal();
   if (get().clips.some((c) => !clipOf(c))) setClips([]);
 };
+const roleForEntry = (l: Lanes, ref: ClipRef): TrackRole => {
+  const c = l[ref.list][ref.i];
+  if (!c) return "custom";
+  const dur =
+    ref.list === "beds" ? Math.max(0, (c as Bed).to - (c as Bed).from) : clipLength(c as OneShot);
+  return inferClipTrackRole(c, ref.list, itemOf(c.name), l.narration, dur);
+};
+
+export const clipTrackRole = (ref: ClipRef): TrackRole =>
+  lanes ? roleForEntry(lanes, ref) : "custom";
+
+export const trackRoleOf = (t: Track): TrackRole =>
+  lanes ? inferTrackRole(lanes, t, (r) => roleForEntry(lanes!, r)) : (t.role ?? "custom");
+
+export const customTrackSplitIndex = (): number =>
+  lanes ? firstCustomTrackIndex(lanes, (r) => roleForEntry(lanes!, r)) : -1;
+
 const doc = createTimedDoc<Lanes>(
   "sound",
   {
@@ -183,7 +208,7 @@ const doc = createTimedDoc<Lanes>(
     changed,
     tidy: (l) => {
       lanes = l;
-      normalize(l, span);
+      normalize(l, span, (r) => roleForEntry(l, r));
       tidy(l);
     },
     received: (before, after) => {
@@ -301,6 +326,7 @@ export const ensureSoundLibrary = (): Promise<void> => {
         doc.refresh();
         set({ soundRev: get().soundRev + 1 });
       })
+      .catch((e: unknown) => say(e instanceof Error ? e.message : String(e)))
       .finally(() => {
         fullLibraryLoading = null;
       });
@@ -329,8 +355,20 @@ export const loadSound = async (opts?: {
         ? "?used=1"
         : "";
   let got: { data?: Lanes; library?: LibraryItem[]; live?: boolean } = {};
+  const acceptLibrary = (
+    raw: { data?: Lanes; library?: LibraryItem[]; live?: boolean },
+    full: boolean,
+  ) => {
+    if (Array.isArray(raw.library) && (!fullLibraryLoaded || full)) {
+      if (library.length && anyItemChanged(library, raw.library)) forgetSounds();
+      library = raw.library;
+      if (full) fullLibraryLoaded = true;
+      rebuildLibraryIndex();
+    }
+  };
   const r = await doc.load(query, (raw) => {
     got = raw as { data?: Lanes; library?: LibraryItem[]; live?: boolean };
+    acceptLibrary(got, query === "");
   });
   if (!r) {
     set({ sound: false });
@@ -344,13 +382,8 @@ export const loadSound = async (opts?: {
   ) {
     await doc.load("?used=1", (raw) => {
       got = raw as { data?: Lanes; library?: LibraryItem[]; live?: boolean };
+      acceptLibrary(got, false);
     });
-  }
-  if (Array.isArray(got.library) && (!fullLibraryLoaded || query === "")) {
-    if (library.length && anyItemChanged(library, got.library)) forgetSounds();
-    library = got.library;
-    if (query === "") fullLibraryLoaded = true;
-    rebuildLibraryIndex();
   }
   set({ sound: true, liveLanes: !!got.live });
   setLive(!!got.live, {
@@ -461,19 +494,28 @@ export const pickAt = (t: number) => {
     here.length ? here[(k + 1) % here.length] : all.reduce((p, q) => (dist(q) < dist(p) ? q : p)),
   );
 };
-const onto = (l: Lanes, kind: "beds" | "sfx", s: number, e: number, want?: string) => {
-  if (want === "new") return addTrack(l, kind).id;
+const onto = (
+  l: Lanes,
+  kind: "beds" | "sfx",
+  s: number,
+  e: number,
+  role: TrackRole,
+  want?: string,
+) => {
+  const roleOf = (r: ClipRef) => roleForEntry(l, r);
+  if (want === "new") return addRoleTrack(l, role, l.tracks.length, roleOf).id;
   if (want && l.tracks.some((t) => t.id === want && !t.lock) && fits(l, want, [s, e], span))
     return want;
-  const home = new Set(
-    refs(l)
-      .filter((r) => r.list === kind)
-      .map((r) => l[r.list][r.i].track),
-  );
-  const t = l.tracks.find((t) => home.has(t.id) && !t.lock && fits(l, t.id, [s, e], span));
-  if (t && !want) return t.id;
+  if (!want) {
+    const match = l.tracks.find(
+      (t) => inferTrackRole(l, t, roleOf) === role && !t.lock && fits(l, t.id, [s, e], span),
+    );
+    if (match) return match.id;
+    return addRoleTrack(l, role, undefined, roleOf).id;
+  }
   const row = l.tracks.findIndex((t) => t.id === want);
-  return addTrack(l, kind, row < 0 ? undefined : row + 1).id;
+  const targetRole = row >= 0 ? inferTrackRole(l, l.tracks[row], roleOf) : role;
+  return addRoleTrack(l, targetRole, row < 0 ? undefined : row + 1, roleOf).id;
 };
 export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?: string) => {
   const item = itemOf(name),
@@ -481,15 +523,17 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
     kind = list ?? (item && kindOf(item) === "bgm" ? "beds" : "sfx");
   let ref: ClipRef = { list: kind, i: 0 };
   edit((l) => {
+    const clipDur = kind === "beds" ? Math.min(len, 30) : len;
+    const role = inferClipTrackRole({ name }, kind, item, l.narration, clipDur);
     if (kind === "beds") {
       l.beds.push({
         name,
         from: r3(at),
-        to: r3(at + Math.min(len, 30)),
+        to: r3(at + clipDur),
         gain: 0,
         fadeIn: 0.5,
         fadeOut: 0.5,
-        track: onto(l, kind, at, at + Math.min(len, 30), track),
+        track: onto(l, kind, at, at + clipDur, role, track),
       });
       ref = { list: "beds", i: l.beds.length - 1 };
     } else {
@@ -499,7 +543,7 @@ export const addClip = (name: string, at: number, list?: "beds" | "sfx", track?:
         at: at3,
         name,
         gain: 0,
-        track: onto(l, kind, at3, at3 + len, track),
+        track: onto(l, kind, at3, at3 + len, role, track),
       });
       ref = { list: "sfx", i: i < 0 ? l.sfx.length - 1 : i };
     }
@@ -529,7 +573,8 @@ export const addShots = (shots: NewShot[]) => {
         ...(x.length && { length: r3(x.length) }),
         ...(x.fadeOut && { fadeOut: x.fadeOut }),
       };
-      o.track = onto(l, "sfx", at, at + len);
+      const role = inferClipTrackRole(o, "sfx", itemOf(x.name), l.narration, len);
+      o.track = onto(l, "sfx", at, at + len, role);
       const i = l.sfx.findIndex((s) => s.at > at);
       l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
       made.push(o);
@@ -543,6 +588,7 @@ export type CopiedClip = { list: ClipRef["list"]; x: Bed | OneShot };
 export const pasteClips = (items: CopiedClip[], d: number) => {
   const made: { list: ClipRef["list"]; x: Bed | OneShot }[] = [];
   edit((l) => {
+    const roleOf = (r: ClipRef) => roleForEntry(l, r);
     for (const { list, x } of items) {
       const c = structuredClone(x);
       if (list === "beds") {
@@ -550,13 +596,15 @@ export const pasteClips = (items: CopiedClip[], d: number) => {
           len = b.to - b.from;
         b.from = r3(Math.max(0, b.from + d));
         b.to = r3(b.from + len);
-        b.track = freeTrack(l, list, [b.from, b.to], span, b.track ?? "");
+        const role = inferClipTrackRole(b, list, itemOf(b.name), l.narration, len);
+        b.track = freeTrack(l, list, [b.from, b.to], span, b.track ?? "", role, roleOf);
         l.beds.push(b);
       } else {
         const o = c as OneShot,
           len = clipLength(o);
         o.at = r3(Math.max(0, o.at + d));
-        o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "");
+        const role = inferClipTrackRole(o, list, itemOf(o.name), l.narration, len);
+        o.track = freeTrack(l, list, [o.at, o.at + len], span, o.track ?? "", role, roleOf);
         const i = l.sfx.findIndex((s) => s.at > o.at);
         l.sfx.splice(i < 0 ? l.sfx.length : i, 0, o);
       }
@@ -588,6 +636,64 @@ export const removeClips = (cs: ClipRef[]) => {
   say(`${gone.length > 1 ? `${gone.length} clips` : first} deleted. Ctrl+Z to undo`);
 };
 export const removeClip = (c: ClipRef) => removeClips([c]);
+export const isClipMuted = (c: ClipRef): boolean => Boolean(clipOf(c)?.muted);
+export const allClipsMuted = (cs: readonly ClipRef[]): boolean => {
+  const ok = cs.filter((c) => clipOf(c) && !locked(c));
+  return ok.length > 0 && ok.every((c) => Boolean(clipOf(c)?.muted));
+};
+export const toggleMuteClips = (cs: readonly ClipRef[]) => {
+  const ok = cs.filter((c) => clipOf(c) && !locked(c));
+  if (!ok.length) {
+    if (cs.length) say("This track is locked. Unlock it in the track header to edit");
+    return;
+  }
+  const nextMuted = !ok.every((c) => Boolean(clipOf(c)?.muted));
+  const first = clipOf(ok[0])!.name;
+  edit((l) => {
+    for (const c of ok) {
+      const row = l[c.list][c.i];
+      if (nextMuted) row.muted = true;
+      else delete row.muted;
+    }
+  });
+  say(
+    `${nextMuted ? "Disabled" : "Enabled"} ${ok.length > 1 ? `${ok.length} clips` : first}. Ctrl+Z to undo`,
+  );
+};
+let revealSeq = 0;
+export const revealSoundInAudio = (
+  cs: readonly ClipRef[],
+  target: "auto" | "all" | "kit" = "auto",
+) => {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const c of cs) {
+    const row = clipOf(c);
+    const name = row ? (audibleName(row) ?? row.name) : undefined;
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    names.push(name);
+  }
+  if (!names.length) return;
+  const seq = ++revealSeq;
+  set((s) => ({
+    lib: "sound",
+    side:
+      s.side === "sound" || s.side === "voiceChanger" || s.side === "audioSpeed" ? s.side : "sound",
+    soundReveal: { names, target, seq },
+  }));
+};
+export const browseKitCategory = (category: KitCategoryId) => {
+  const seq = ++revealSeq;
+  set((s) => ({
+    lib: "sound",
+    side:
+      s.side === "sound" || s.side === "voiceChanger" || s.side === "audioSpeed" ? s.side : "sound",
+    soundReveal: { names: [], target: "kit", category, seq },
+  }));
+};
+export const clearSoundReveal = (seq: number) =>
+  set((s) => (s.soundReveal?.seq === seq ? { soundReveal: null } : s));
 export const moveToTrack = (c: ClipRef, id: string) => {
   if (locked(c) || lanes?.tracks.find((t) => t.id === id)?.lock) {
     say("This track is locked. Unlock it in the track header to edit");
@@ -598,7 +704,10 @@ export const moveToTrack = (c: ClipRef, id: string) => {
     return;
   }
   edit((l) => {
-    l[c.list][c.i].track = id === "new" ? addTrack(l, c.list).id : id;
+    l[c.list][c.i].track =
+      id === "new"
+        ? addRoleTrack(l, roleForEntry(l, c), l.tracks.length, (r) => roleForEntry(l, r)).id
+        : id;
   });
 };
 export const setTrack = (id: string, change: Partial<Track>) =>
@@ -606,6 +715,18 @@ export const setTrack = (id: string, change: Partial<Track>) =>
     const t = l.tracks.find((t) => t.id === id);
     if (t) Object.assign(t, change);
   });
+export const organizeAudioTracks = () => {
+  if (!lanes) return;
+  let changedAny = false;
+  edit((l) => {
+    changedAny = organizeTracks(l, span, (r) => roleForEntry(l, r));
+  });
+  say(
+    changedAny
+      ? "Organized audio tracks by category. Ctrl+Z to undo"
+      : "Audio tracks are already organized",
+  );
+};
 export const moveTo = (c: ClipRef, at: number) => {
   if (!lanes || locked(c)) return;
   const [from] = span(c),
@@ -902,7 +1023,7 @@ export const swapSound = (c: ClipRef, name: string) =>
     }
   });
 
-const peaks = new Map<string, Peaks | null>();
+const peaks = new Map<string, { value: Peaks | null }>();
 export const invalidateSoundCaches = () => {
   forgetSounds();
   peaks.clear();
@@ -911,17 +1032,23 @@ export const invalidateSoundCaches = () => {
 };
 export const peaksOf = (name: string) => {
   if (!peaks.has(name)) {
-    peaks.set(name, null);
-    getFile(`/api/sfx/${encodeURIComponent(name)}/peaks`)
+    const entry = { value: null as Peaks | null };
+    peaks.set(name, entry);
+    getFile(`/api/sfx/${encodeURIComponent(name)}/peaks`, "interactive")
       .then((r) => (r.ok ? r.json() : null))
       .then((p) => {
-        if (p) {
-          peaks.set(name, p);
+        if (p && peaks.get(name) === entry) {
+          entry.value = p;
           S.dirty = true;
         }
-      });
+      })
+      .catch((error: unknown) =>
+        rememberFailedAudioRead(error, () => {
+          if (peaks.get(name) === entry) peaks.delete(name);
+        }),
+      );
   }
-  return peaks.get(name) ?? null;
+  return peaks.get(name)?.value ?? null;
 };
 
 const auditionCtrl = createAuditionController({
@@ -934,6 +1061,8 @@ export const listen = auditionCtrl.listen;
 export const listening = auditionCtrl.listening;
 export const auditionActive = auditionCtrl.auditionActive;
 export const auditionTarget = auditionCtrl.auditionTarget;
+export const attachExternalAudition = auditionCtrl.attachExternalAudition;
+export const releaseExternalAudition = auditionCtrl.releaseExternalAudition;
 export const stopAudition = auditionCtrl.stopAudition;
 export const playNativeAudition = auditionCtrl.playNativeAudition;
 export const releaseNativeAudition = auditionCtrl.releaseNativeAudition;

@@ -206,6 +206,14 @@ describe("CLI workbench keyboard and validation in Chrome", () => {
 
   test("Run opens More options and focuses its invalid field without executing", async () => {
     await webview.evaluate("window.__CLI_TEST__.open('earshot')");
+    const subcommand = "document.querySelector('[role=combobox][aria-label=Subcommand]')";
+    await waitUntil(subcommand, "subcommand selector");
+    await webview.evaluate(`(${subcommand}).focus()`);
+    await webview.press("Space");
+    const describeOption =
+      "[...document.querySelectorAll('[role=option]')].find(n=>n.textContent==='describe')";
+    await waitUntil(describeOption, "describe subcommand option");
+    await webview.evaluate(`(${describeOption}).click()`);
     await fill("Audio or video file", "sound/fixture.wav");
     await webview.evaluate(`(${moreButton}).click()`);
     await fill("CPU Threads", "wrong");

@@ -12,6 +12,7 @@ import {
   VALUE_CHECK_MODES,
   type ValueCheckMode,
 } from "../picture/director-eye";
+import { toggleMute } from "../playback/transport";
 
 const EyeSwitchRow = ({
   id,
@@ -49,12 +50,14 @@ export function DirectorEyeSettings({
   ghost,
   ghostOpacity,
   colorScript,
+  muted,
   blindAudio,
 }: {
   valueCheck: ValueCheckMode;
   ghost: boolean;
   ghostOpacity: number;
   colorScript: boolean;
+  muted: boolean;
   blindAudio: boolean;
 }) {
   return (
@@ -126,6 +129,16 @@ export function DirectorEyeSettings({
         checked={colorScript}
         onChange={(on) => set({ colorScript: on })}
         help="Horizontal storyboard strip under the picture with shot thumbnails, dominant 4-color palettes, Rec.709 luminance and pacing highlights."
+      />
+      <EyeSwitchRow
+        id="mute-audio"
+        label="Mute audio"
+        keys={["Alt", "M"]}
+        checked={muted}
+        onChange={(on) => {
+          if (on !== muted) toggleMute();
+        }}
+        help="Silences audio for picture-only review while preserving your current volume level."
       />
       <EyeSwitchRow
         id="blind-audio"

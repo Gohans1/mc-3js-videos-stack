@@ -227,6 +227,7 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
         notes: prev.notes,
         saved: prev.saved,
         newBuild: prev.newBuild,
+        ready: prev.ready,
         loading: prev.loading,
         status: prev.status,
         contract: prev.contract,
@@ -242,10 +243,11 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
     }
   };
 
-  test("Stage hides status/reload/loading/contract overlays on phone", () => {
+  test("phone Stage shows startup progress while secondary notices stay in the Notes header", () => {
     withStore(
       {
         newBuild: true,
+        ready: false,
         status: "Loaded in 1.2 s",
         loading: "Loading the scene… 3/5",
         contract: ["Missing hit"],
@@ -256,8 +258,13 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
         );
         assert.equal(phoneHtml.includes("New version"), false);
         assert.equal(phoneHtml.includes("Loaded in 1.2 s"), false);
-        assert.equal(phoneHtml.includes("Loading the scene"), false);
+        assert.match(phoneHtml, /role="status"[^>]*>Loading the scene… 3\/5/);
         assert.equal(phoneHtml.includes("FILM CONTRACT ERRORS"), false);
+        storeMod.set({ ready: true });
+        assert.doesNotMatch(
+          renderHtml(createElement(stageMod.Stage, { bind: () => () => {}, phone: true })),
+          /Loading the scene/,
+        );
       },
     );
   });

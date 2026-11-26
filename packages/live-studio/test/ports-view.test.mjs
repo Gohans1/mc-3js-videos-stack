@@ -638,7 +638,7 @@ describe("store & Side.tsx Ports tab navigation integration", () => {
     assert.equal(storeMod.get().lib, "film");
   });
 
-  test("Library and narrow Side both expose the Ports tab after Film and render PortsPanel lazily when selected", async () => {
+  test("Library and narrow Side put Ports before CLI and mount the scan when selected", async () => {
     const withStoreState = async (patch, renderFn) => {
       const origGetInitialState = storeMod.studio.getInitialState;
       storeMod.studio.getInitialState = storeMod.get;
@@ -661,7 +661,7 @@ describe("store & Side.tsx Ports tab navigation integration", () => {
         createElement(tooltipMod.TooltipProvider, { delay: 0 }, createElement(sideMod.Library)),
       ),
     );
-    assert.match(defaultLibHtml, /Film[\s\S]*Ports/);
+    assert.match(defaultLibHtml, /data-tab-value="ports"[\s\S]*data-tab-value="cli"/);
     assert.doesNotMatch(defaultLibHtml, /aria-label="Active studio ports"/);
 
     const libHtml = await withStoreState({ lib: "ports", side: "ports" }, () =>
@@ -669,7 +669,7 @@ describe("store & Side.tsx Ports tab navigation integration", () => {
         createElement(tooltipMod.TooltipProvider, { delay: 0 }, createElement(sideMod.Library)),
       ),
     );
-    assert.match(libHtml, /Film[\s\S]*Ports/);
+    assert.match(libHtml, /data-tab-value="ports" aria-selected="true"/);
     assert.match(libHtml, /aria-label="Active studio ports"/);
     assert.match(libHtml, /Scanning active studios/);
 
@@ -682,7 +682,10 @@ describe("store & Side.tsx Ports tab navigation integration", () => {
         ),
       ),
     );
-    assert.match(sideHtml, /Film[\s\S]*Ports/);
+    assert.match(
+      sideHtml,
+      /data-tab-value="ports" aria-selected="true"[\s\S]*data-tab-value="cli"/,
+    );
     assert.match(sideHtml, /aria-label="Active studio ports"/);
     assert.match(sideHtml, /Scanning active studios/);
   });

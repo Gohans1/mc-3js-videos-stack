@@ -216,7 +216,16 @@ export function openOpenFilm(project, conf = {}, options = {}) {
   return { ...timeline, read, check, write, use, view, edit };
 }
 
-export function openFilmResource(req) {
+const libraryPrefix = "/_openfilm/library/";
+export const openFilmAssetFile = (path) =>
+  path.startsWith(libraryPrefix)
+    ? safePath(
+        join(LOCAL, "openfilm/library"),
+        decodeURIComponent(path.slice(libraryPrefix.length)),
+      )
+    : null;
+
+export function openFilmResource(req, observeAsset) {
   const url = new URL(req.url);
   if (req.method !== "GET") return null;
   if (url.pathname === "/_openfilm/catalog") return Response.json(openFilmCatalog());
@@ -225,12 +234,10 @@ export function openFilmResource(req) {
       "<!doctype html><style>html,body{width:100%;height:100%;margin:0;overflow:hidden;background:transparent}</style><script>window.film={frame(){}}</script>",
       { headers: { "content-type": "text/html" } },
     );
-  if (!url.pathname.startsWith("/_openfilm/library/")) return null;
   try {
-    const file = safePath(
-      join(LOCAL, "openfilm/library"),
-      decodeURIComponent(url.pathname.slice("/_openfilm/library/".length)),
-    );
+    const file = openFilmAssetFile(url.pathname);
+    if (!file) return null;
+    observeAsset?.(url.pathname, file);
     if (!existsSync(file)) return new Response("OpenFilm asset not found", { status: 404 });
     let body = readFileSync(file);
     if (extname(file) === ".html")

@@ -7,8 +7,10 @@ import { canvas } from "./lab";
 import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
 
 const MAX_PROBES = 6000;
+const WHOLE_STEP = 0.1;
 
 export const touchCheck = (render) => {
+  const draw = render.renderFrame?.bind(render) ?? render;
   const surfaces = (scene, owner, objects) => {
     const out = [];
     scene.updateMatrixWorld(true);
@@ -83,51 +85,176 @@ export const touchCheck = (render) => {
     return out.filter((_, i) => i % stride === 0);
   };
 
+  const worldVisible = (o) => {
+    for (let p = o; p; p = p.parent) if (!p.visible) return false;
+    return true;
+  };
+  const ownerOf = (obj, objects) => {
+    for (let p = obj; p; p = p.parent) if (objects?.some(([o]) => o === p)) return p;
+    return obj;
+  };
+  const partsOf = (owner, bones, fallback) => {
+    const boneName = new Map(Object.entries(bones ?? {}).map(([k, b]) => [b, k]));
+    return (o) => {
+      for (let p = o; p && p !== owner.parent; p = p.parent) {
+        if (boneName.has(p)) return boneName.get(p);
+        if (p.isBone && p.name) return p.name;
+      }
+      for (let p = o.parent; p && p !== owner.parent; p = p.parent) if (p.name) return p.name;
+      return fallback;
+    };
+  };
+  const onScreen = (camera, obj) => {
+    camera.updateMatrixWorld();
+    const view = new THREE.Frustum().setFromProjectionMatrix(
+      new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse),
+    );
+    return view.intersectsBox(new THREE.Box3().setFromObject(obj));
+  };
+  const frameOf = ({ scene, camera, objects }, { obj, owner, partOf, name }, t, step, last) => {
+    const here = obj.getWorldPosition(new THREE.Vector3());
+    const speed = last ? here.distanceTo(last) / step : 0;
+    if (!worldVisible(obj))
+      return [
+        {
+          t,
+          d: Infinity,
+          part: name,
+          surface: "-",
+          p: [0, 0, 0],
+          speed,
+          inFrame: false,
+          shown: false,
+        },
+        here,
+      ];
+    const list = surfaces(scene, owner, objects);
+    let best = { d: Infinity, part: name, surface: "-", p: [0, 0, 0] };
+    for (const [p, part] of probes(obj, partOf)) {
+      const g = gap(p, list);
+      if (g.d < best.d) best = { ...g, part, p: p.toArray() };
+    }
+    const q = new THREE.Vector3(...best.p).project(camera);
+    return [
+      {
+        t,
+        ...best,
+        speed,
+        inFrame: q.z < 1 && Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1,
+        shown: onScreen(camera, obj),
+      },
+      here,
+    ];
+  };
+  const sample = async (tools, who, from, to, step) => {
+    const frames = who.map(() => []),
+      last = who.map(() => null);
+    for (let i = 0, k = Math.floor((to - from) / step + 1e-9); i <= k; i++) {
+      const t = Math.min(to, from + i * step);
+      await draw(t);
+      who.forEach((w, n) => {
+        const [frame, here] = frameOf(tools, w, t, step, last[n]);
+        frames[n].push(frame);
+        last[n] = here;
+      });
+    }
+    return frames;
+  };
+  const worstSheet = async (camera, worst) => {
+    const gl = canvas(),
+      shown = worst.slice(0, 6),
+      TW = gl.width / 2,
+      TH = gl.height / 2;
+    const sheet = document.createElement("canvas");
+    sheet.width = TW * Math.min(2, shown.length);
+    sheet.height = TH * Math.ceil(shown.length / 2);
+    const s = sheet.getContext("2d");
+    for (const [k, x] of shown.entries()) {
+      await draw(x.t);
+      const x0 = (k % 2) * TW,
+        y0 = Math.floor(k / 2) * TH;
+      s.drawImage(gl, x0, y0, TW, TH);
+      const q = new THREE.Vector3(...x.p).project(camera);
+      if (q.z < 1) {
+        s.strokeStyle = x.kind === "SINK" ? "#ff3030" : "#ffd84d";
+        s.lineWidth = 3;
+        s.beginPath();
+        s.arc(x0 + ((q.x + 1) / 2) * TW, y0 + ((1 - q.y) / 2) * TH, 14, 0, 7);
+        s.stroke();
+      }
+      s.font = "bold 16px Consolas, monospace";
+      label(
+        s,
+        `${x.kind} ${x.t.toFixed(2)}: ${x.say}${q.z < 1 ? "" : " (behind the camera)"}`,
+        x0 + 10,
+        y0 + 24,
+      );
+      s.strokeStyle = "#000";
+      s.lineWidth = 2;
+      s.strokeRect(x0, y0, TW, TH);
+    }
+    return sheet;
+  };
+
+  const everyActor = async (tools, from, to) => {
+    const { scene, camera, objects, bones } = tools;
+    const actors = [];
+    scene.traverse((o) => {
+      if (o.soleNow) actors.push(o);
+    });
+    if (!actors.length)
+      return [
+        "ERROR --check touch without a target scans every actor (makePlayer from mc-actor); this film has none: --check touch:<target>,<from s>,<to s>",
+      ];
+    const who = actors.map((obj, n) => {
+      const name = labelOf(objects, obj) === obj.type ? `actor ${n + 1}` : labelOf(objects, obj);
+      const owner = ownerOf(obj, objects);
+      return { obj, owner, name, partOf: partsOf(owner, bones, name) };
+    });
+    const frames = await sample(tools, who, from, to, WHOLE_STEP);
+    const lines = [
+      `touch ${from}-${to} s every ${WHOLE_STEP} s on ${who.length} actor${who.length === 1 ? "" : "s"} (${who.map((w) => w.name).join(", ")}); one in question: --check touch:<target>,<from s>,<to s> at 30 fps`,
+    ];
+    const worst = [],
+      unseen = [];
+    who.forEach((w, n) => {
+      if (frames[n].every((x) => !x.shown)) return unseen.push(w.name);
+      const r = summarize(w.name, frames[n]);
+      lines.push(...r.lines);
+      worst.push(...r.worst);
+    });
+    if (unseen.length)
+      lines.push(`  off screen or hidden the whole span, not judged: ${unseen.join(", ")}`);
+    if (worst.length) {
+      worst.sort((a, b) => (a.kind === b.kind ? a.t - b.t : a.kind === "SINK" ? -1 : 1));
+      lines.push({
+        still: `touch_actors_${from}-${to}_worst.jpg`,
+        canvas: await worstSheet(camera, worst),
+      });
+    }
+    return lines;
+  };
+
   return async (target, from, to, step = 1 / 30) => {
     if (typeof target !== "string" || !(to > from) || !(step > 0))
-      return ["ERROR usage: --check touch:<target>,<from s>,<to s>"];
+      return [
+        "ERROR usage: --check touch:<target>,<from s>,<to s>, or --check touch:<from s>,<to s> for every actor",
+      ];
     const tools = render.tools ?? {};
     if (!tools.scene || !tools.camera)
       return ["ERROR --check touch requires draw.tools.scene and draw.tools.camera on the film"];
-    const { scene, camera, objects, bones } = tools;
+    if (target === "") return everyActor(tools, from, to);
+    const { camera, objects, bones } = tools;
     const obj = findTarget(tools, target);
     if (!obj || target === "cam") return [targetHelp(tools, target, { camera: false })];
-    let owner = obj;
-    for (let p = obj; p; p = p.parent)
-      if (objects?.some(([o]) => o === p)) {
-        owner = p;
-        break;
-      }
-    const boneName = new Map(Object.entries(bones ?? {}).map(([k, b]) => [b, k]));
-    const partOf = (o) => {
-      for (let p = o; p && p !== owner.parent; p = p.parent)
-        if (boneName.has(p)) return boneName.get(p);
-      for (let p = o.parent; p && p !== owner.parent; p = p.parent) if (p.name) return p.name;
-      return target;
-    };
-
-    const frames = [],
-      last = new THREE.Vector3(),
-      here = new THREE.Vector3();
-    for (let i = 0, k = Math.round((to - from) / step); i <= k; i++) {
-      const t = from + i * step;
-      render(t);
-      const list = surfaces(scene, owner, objects);
-      let best = { d: Infinity, part: target, surface: "-", p: [0, 0, 0] };
-      for (const [p, part] of probes(obj, partOf)) {
-        const g = gap(p, list);
-        if (g.d < best.d) best = { ...g, part, p: p.toArray() };
-      }
-      obj.getWorldPosition(here);
-      const q = new THREE.Vector3(...best.p).project(camera);
-      frames.push({
-        t,
-        ...best,
-        speed: i ? here.distanceTo(last) / step : 0,
-        inFrame: q.z < 1 && Math.abs(q.x) <= 1 && Math.abs(q.y) <= 1,
-      });
-      last.copy(here);
-    }
+    const owner = ownerOf(obj, objects);
+    const [frames] = await sample(
+      tools,
+      [{ obj, owner, name: target, partOf: partsOf(owner, bones, target) }],
+      from,
+      to,
+      step,
+    );
     const { lines, worst } = summarize(target, frames);
 
     const tag = `touch_${target}_${from}-${to}`,
@@ -162,41 +289,8 @@ export const touchCheck = (render) => {
       mark(c, x.t, x.kind === "SINK" ? "#ff4d4d" : "#ffd84d", x.kind, i % 3, [3, 3]),
     );
     lines.push({ still: `${tag}.jpg`, canvas: c.canvas });
-
-    if (worst.length) {
-      const shown = worst.slice(0, 6),
-        TW = gl.width / 2,
-        TH = gl.height / 2;
-      const sheet = document.createElement("canvas");
-      sheet.width = TW * Math.min(2, shown.length);
-      sheet.height = TH * Math.ceil(shown.length / 2);
-      const s = sheet.getContext("2d");
-      shown.forEach((x, k) => {
-        render(x.t);
-        const x0 = (k % 2) * TW,
-          y0 = Math.floor(k / 2) * TH;
-        s.drawImage(gl, x0, y0, TW, TH);
-        const q = new THREE.Vector3(...x.p).project(camera);
-        if (q.z < 1) {
-          s.strokeStyle = x.kind === "SINK" ? "#ff3030" : "#ffd84d";
-          s.lineWidth = 3;
-          s.beginPath();
-          s.arc(x0 + ((q.x + 1) / 2) * TW, y0 + ((1 - q.y) / 2) * TH, 14, 0, 7);
-          s.stroke();
-        }
-        s.font = "bold 16px Consolas, monospace";
-        label(
-          s,
-          `${x.kind} ${x.t.toFixed(2)}: ${x.say}${q.z < 1 ? "" : " (behind the camera)"}`,
-          x0 + 10,
-          y0 + 24,
-        );
-        s.strokeStyle = "#000";
-        s.lineWidth = 2;
-        s.strokeRect(x0, y0, TW, TH);
-      });
-      lines.push({ still: `${tag}_worst.jpg`, canvas: sheet });
-    }
+    if (worst.length)
+      lines.push({ still: `${tag}_worst.jpg`, canvas: await worstSheet(camera, worst) });
     return lines;
   };
 };

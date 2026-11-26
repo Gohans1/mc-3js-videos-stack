@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import {
   type PointerEvent as ReactPointerEvent,
+  lazy,
+  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -32,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +76,14 @@ import {
   tools,
 } from "./placed-data";
 import { PropRows, usePropCatalog } from "./PropLibrary";
+
+const ExpressionLibrary = lazy(() =>
+  import("./ExpressionLibrary").then((module) => ({ default: module.ExpressionLibrary })),
+);
+const LIBRARY_VIEWS = [
+  { id: "assets", title: "3D assets" },
+  { id: "expressions", title: "Expressions" },
+] as const;
 
 type Item = { what: string; kind: "block" | "mob" | "custom"; title: string };
 let catalog: Promise<Item[]> | null = null;
@@ -780,6 +791,7 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
   useStudio((s) => s.keysRev);
   const loaded = useStudio((s) => s.keyFiles !== null);
   const hasPlacement = useStudio((s) => s.placed);
+  const [view, setView] = useState<(typeof LIBRARY_VIEWS)[number]["id"]>("assets");
   if (!loaded) return null;
   const placeable = hasPlacement && canPlace();
   if (part === "object" && !placeable)
@@ -789,7 +801,7 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
         contract).
       </EmptyCard>
     );
-  return (
+  const assets = (
     <div
       data-arrow-scroll
       className="scroll-fade flex min-h-0 flex-1 flex-col gap-3 overflow-auto overscroll-contain px-3 pt-1 pb-3 *:shrink-0"
@@ -798,5 +810,33 @@ export function ObjectsPanel({ part = "all" }: { part?: "all" | "object" | "libr
       {placeable && part !== "object" && <InFilm />}
       {part !== "object" && <ObjectLibrary side={part === "library"} placeable={placeable} />}
     </div>
+  );
+  if (part === "object") return assets;
+  return (
+    <>
+      <Segmented
+        label="Objects view"
+        className="mx-3 mb-2 flex-none"
+        items={[...LIBRARY_VIEWS]}
+        value={view}
+        onChange={setView}
+        animateIndicator={false}
+        keepClickFocus
+      />
+      {view === "expressions" ? (
+        <Suspense
+          fallback={
+            <div role="status" className="mx-3">
+              <span className="sr-only">Loading expressions</span>
+              <Skeleton className="h-28" />
+            </div>
+          }
+        >
+          <ExpressionLibrary />
+        </Suspense>
+      ) : (
+        assets
+      )}
+    </>
   );
 }

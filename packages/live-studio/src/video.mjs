@@ -23,7 +23,7 @@ export const renderIdentity = (file) => {
   return { size: st.size, mtimeMs: Math.trunc(st.mtimeMs) };
 };
 
-const reviewFile = (file) => `${file}.review.json`;
+export const reviewFile = (file) => `${file}.review.json`;
 export const readRenderEvidence = (file) => {
   if (!existsSync(reviewFile(file))) return null;
   try {

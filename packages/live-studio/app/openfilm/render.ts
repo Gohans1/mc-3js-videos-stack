@@ -18,10 +18,15 @@ export function setOpenFilmTimeline(data: OpenFilmTimeline) {
   for (const listener of timelineListeners) listener(data);
 }
 export const loadOpenFilmCatalog = () =>
-  (catalog ??= fetch("/_openfilm/catalog").then(async (res) => {
-    if (!res.ok) throw new Error(`OpenFilm catalog: HTTP ${res.status}`);
-    return res.json();
-  }));
+  (catalog ??= fetch("/_openfilm/catalog")
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`OpenFilm catalog: HTTP ${res.status}`);
+      return res.json();
+    })
+    .catch((error) => {
+      catalog = undefined;
+      throw error;
+    }));
 export async function prepareOpenFilm(
   shots: { transition?: { fx: string } }[],
   timeline: OpenFilmTimeline,
@@ -46,7 +51,9 @@ export function withOpenFilm(
     prepareFrame?: (t: number) => Promise<void>;
     renderFrame?: (t: number) => void | Promise<void>;
   };
-  const drawFrame = asyncDraw.renderFrame?.bind(draw) ?? ((t: number, options?: FrameOptions) => Promise.resolve(draw(t, options)));
+  const drawFrame =
+    asyncDraw.renderFrame?.bind(draw) ??
+    ((t: number, options?: FrameOptions) => Promise.resolve(draw(t, options)));
   const changed = (data: OpenFilmTimeline) => {
     timeline = data;
   };

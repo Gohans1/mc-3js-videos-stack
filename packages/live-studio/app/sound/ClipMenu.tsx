@@ -15,16 +15,23 @@ import { get, useStudio } from "../core/store";
 import { askPaste, copyAttrs, hasAttrs } from "../timeline/attributes";
 import { copy, cut, hasCopy, paste } from "../timeline/clipboard";
 import { clipAtPointer } from "./lanes";
+import { resolveClipMenuRevealCounts } from "./library-view";
 import {
+  allClipsMuted,
   applyJCut,
   applyLCut,
+  audibleName,
   clipCutBounds,
+  clipOf,
+  lanes,
   locked,
   picked,
   removeClips,
+  revealSoundInAudio,
   setClips,
   span,
   splitClips,
+  toggleMuteClips,
 } from "./sound";
 
 export function ClipMenu({ bind }: { bind: Bind }) {
@@ -37,6 +44,19 @@ export function ClipMenu({ bind }: { bind: Bind }) {
     return a + 0.05 < S.t && S.t < b - 0.05;
   });
   const isLocked = onClip && picks.length === 1 && locked(picks[0]);
+  const allLocked = picks.length > 0 && picks.every((c) => locked(c));
+  const allMuted = allClipsMuted(picks);
+  const distinctNames = [
+    ...new Set(
+      picks
+        .map((c) => {
+          const row = clipOf(c);
+          return row ? (audibleName(row) ?? row.name) : undefined;
+        })
+        .filter((n): n is string => Boolean(n)),
+    ),
+  ];
+  const { kitCount, allCount } = resolveClipMenuRevealCounts(distinctNames, lanes?.narration);
   const cutInfo = onClip && picks.length === 1 ? clipCutBounds(picks[0]) : null;
   const pasteItem = (
     <ContextMenuItem disabled={!hasCopy()} onClick={paste}>
@@ -55,7 +75,7 @@ export function ClipMenu({ bind }: { bind: Bind }) {
       >
         <canvas
           ref={bind("lanes")}
-          aria-label="Audio tracks: drag a clip to move it, drag its edge to trim, drag on empty space to select several, right-click a clip for more"
+          aria-label="Audio tracks: click to move the playhead, drag a clip to move it, drag its edge to trim, drag on empty space to select several, right-click a clip for more"
           className="block w-full touch-none"
         />
       </ContextMenuTrigger>
@@ -71,8 +91,31 @@ export function ClipMenu({ bind }: { bind: Bind }) {
               Cut<ContextMenuShortcut>Ctrl+X</ContextMenuShortcut>
             </ContextMenuItem>
             {pasteItem}
+            <ContextMenuItem disabled={allLocked} onClick={() => toggleMuteClips(get().clips)}>
+              {allMuted
+                ? picks.length > 1
+                  ? `Enable ${picks.length} clips`
+                  : "Enable"
+                : picks.length > 1
+                  ? `Disable ${picks.length} clips`
+                  : "Disable"}
+              <ContextMenuShortcut>D</ContextMenuShortcut>
+            </ContextMenuItem>
             <ContextMenuItem onClick={() => removeClips(get().clips)}>
               Delete<ContextMenuShortcut>Del</ContextMenuShortcut>
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+            <ContextMenuItem
+              disabled={!kitCount}
+              onClick={() => revealSoundInAudio(get().clips, "kit")}
+            >
+              {kitCount > 1 ? `Reveal ${kitCount} sounds in Core Kit` : "Reveal in Core Kit"}
+            </ContextMenuItem>
+            <ContextMenuItem
+              disabled={!allCount}
+              onClick={() => revealSoundInAudio(get().clips, "all")}
+            >
+              {allCount > 1 ? `Reveal ${allCount} sounds in All Library` : "Reveal in All Library"}
             </ContextMenuItem>
             <ContextMenuSeparator />
             <ContextMenuItem disabled={!inside} onClick={() => splitClips(get().clips)}>

@@ -1,0 +1,1085 @@
+{
+  "version": 1,
+  "items": {
+    "of-bgm-accelerating-cello-pulses-292444": {
+      "id": "of-bgm-accelerating-cello-pulses-292444",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "tense"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-bgm-bouncing-marimba-loop-5118e0": {
+      "id": "of-bgm-bouncing-marimba-loop-5118e0",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "playful"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-bgm-1950s-office-typewriter-8f5cf8": {
+      "id": "of-bgm-1950s-office-typewriter-8f5cf8",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "lofi"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "bgm-amalgam": {
+      "id": "bgm-amalgam",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "human",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T11:49:23.132Z"
+    },
+    "of-bgm-basketball-buzzer-hype-0292e9": {
+      "id": "of-bgm-basketball-buzzer-hype-0292e9",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "upbeat"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-bgm-acoustic-handcraft-rhythm-1dd127": {
+      "id": "of-bgm-acoustic-handcraft-rhythm-1dd127",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "warm"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-bgm-accelerating-toms-alarm-e1adae": {
+      "id": "of-bgm-accelerating-toms-alarm-e1adae",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [
+        "tense"
+      ],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1473": {
+      "id": "mixkit-1473",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "medium",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1465": {
+      "id": "mixkit-1465",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "long",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-168": {
+      "id": "mixkit-168",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "medium",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1491": {
+      "id": "mixkit-1491",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "medium",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1487": {
+      "id": "mixkit-1487",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "short",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1469": {
+      "id": "mixkit-1469",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "long",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1489": {
+      "id": "mixkit-1489",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "long",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-3115": {
+      "id": "mixkit-3115",
+      "category": "whoosh",
+      "status": "inbox",
+      "tags": [
+        "short",
+        "whoosh"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1430": {
+      "id": "mixkit-1430",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "shutter"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2534": {
+      "id": "mixkit-2534",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "key"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1433": {
+      "id": "mixkit-1433",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "shutter"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2533": {
+      "id": "mixkit-2533",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "key"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-3109": {
+      "id": "mixkit-3109",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "glass"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1432": {
+      "id": "mixkit-1432",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "shutter"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1049": {
+      "id": "mixkit-1049",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "tick"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-275": {
+      "id": "mixkit-275",
+      "category": "pop-ui",
+      "status": "inbox",
+      "tags": [
+        "click"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2070": {
+      "id": "mixkit-2070",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "impact"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2908": {
+      "id": "mixkit-2908",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "lockup"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-557": {
+      "id": "mixkit-557",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "impact"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-565": {
+      "id": "mixkit-565",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "sub"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2909": {
+      "id": "mixkit-2909",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "lockup"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2182": {
+      "id": "mixkit-2182",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "impact"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-556": {
+      "id": "mixkit-556",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "sub"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2150": {
+      "id": "mixkit-2150",
+      "category": "impact",
+      "status": "inbox",
+      "tags": [
+        "impact"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-790": {
+      "id": "mixkit-790",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "riser"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-784": {
+      "id": "mixkit-784",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "reverse"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1094": {
+      "id": "mixkit-1094",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "reverse"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1092": {
+      "id": "mixkit-1092",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "reverse"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-1088": {
+      "id": "mixkit-1088",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "reverse"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2668": {
+      "id": "mixkit-2668",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "reverse"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-645": {
+      "id": "mixkit-645",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [
+        "riser"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-air-tension-before-impact-04956e": {
+      "id": "of-sfx-air-tension-before-impact-04956e",
+      "category": "riser",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-air-settling-into-quiet-d3121b": {
+      "id": "of-sfx-air-settling-into-quiet-d3121b",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-airliner-cabin-hum-24ea4a": {
+      "id": "of-sfx-airliner-cabin-hum-24ea4a",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-airplane-cabin-hum-3c2957": {
+      "id": "of-sfx-airplane-cabin-hum-3c2957",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-arcade-room-tone-rain-417e77": {
+      "id": "of-sfx-arcade-room-tone-rain-417e77",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-archive-reading-room-676e4a": {
+      "id": "of-sfx-archive-reading-room-676e4a",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-archive-room-tone-19a379": {
+      "id": "of-sfx-archive-room-tone-19a379",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-arena-crowd-roar-78e556": {
+      "id": "of-sfx-arena-crowd-roar-78e556",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-auction-room-murmur-1bc60c": {
+      "id": "of-sfx-auction-room-murmur-1bc60c",
+      "category": "ambience",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2327": {
+      "id": "mixkit-2327",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [
+        "note"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-2384": {
+      "id": "mixkit-2384",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [
+        "paper"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "mixkit-154": {
+      "id": "mixkit-154",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [
+        "glass"
+      ],
+      "note": "earshot-verified candidate",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T13:24:07.679Z"
+    },
+    "of-sfx-abacus-bead-slide-9fce61": {
+      "id": "of-sfx-abacus-bead-slide-9fce61",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-accelerating-mechanical-clock-315634": {
+      "id": "of-sfx-accelerating-mechanical-clock-315634",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-acetate-sheet-flap-drop-ad1530": {
+      "id": "of-sfx-acetate-sheet-flap-drop-ad1530",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-acid-fizzing-sizzle-65398c": {
+      "id": "of-sfx-acid-fizzing-sizzle-65398c",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-acrylic-nameplate-set-down-60641d": {
+      "id": "of-sfx-acrylic-nameplate-set-down-60641d",
+      "category": "foley-core",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-8-bit-coin-blip-310f34": {
+      "id": "of-sfx-8-bit-coin-blip-310f34",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-accelerating-soft-hops-fd2d67": {
+      "id": "of-sfx-accelerating-soft-hops-fd2d67",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-bitcrush-glitch-zip-41bc71": {
+      "id": "of-sfx-bitcrush-glitch-zip-41bc71",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-bouncy-icon-pop-93680e": {
+      "id": "of-sfx-bouncy-icon-pop-93680e",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-bubbly-emoji-pops-3b49cb": {
+      "id": "of-sfx-bubbly-emoji-pops-3b49cb",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-buzzer-and-crowd-roar-d8e067": {
+      "id": "of-sfx-buzzer-and-crowd-roar-d8e067",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-card-drop-and-catch-a511d2": {
+      "id": "of-sfx-card-drop-and-catch-a511d2",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "of-sfx-cartoon-biscuit-crunch-4362e9": {
+      "id": "of-sfx-cartoon-biscuit-crunch-4362e9",
+      "category": "comedy-glitch",
+      "status": "inbox",
+      "tags": [],
+      "note": "seeded for triage",
+      "addedBy": "ai",
+      "tier": 0,
+      "elo": 1500,
+      "wins": 0,
+      "losses": 0,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T09:16:36.037Z"
+    },
+    "bgm-chill-abstract-intention": {
+      "id": "bgm-chill-abstract-intention",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [],
+      "note": "",
+      "addedBy": "human",
+      "tier": 0,
+      "elo": 1490.8,
+      "wins": 0,
+      "losses": 1,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T11:48:19.315Z"
+    },
+    "bgm-beauty-flow": {
+      "id": "bgm-beauty-flow",
+      "category": "bgm",
+      "status": "inbox",
+      "tags": [],
+      "note": "",
+      "addedBy": "human",
+      "tier": 0,
+      "elo": 1490.8,
+      "wins": 0,
+      "losses": 1,
+      "picks": 0,
+      "lastUsedAt": null,
+      "updatedAt": "2026-11-24T11:49:32.489Z"
+    }
+  },
+  "abSlots": [
+    "mixkit-1489"
+  ],
+  "decisions": [
+    {
+      "winner": "bgm-brain-dance",
+      "rejected": [
+        "bgm-close-up",
+        "bgm-chill-abstract-intention",
+        "bgm-beauty-flow"
+      ],
+      "category": "bgm",
+      "reason": "",
+      "context": "mini-studio",
+      "at": "2026-11-24T11:48:19.315Z"
+    }
+  ]
+}

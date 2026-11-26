@@ -1,8 +1,16 @@
+import type { KitCategoryId } from "../../src/sound-kit-classify.d.mts";
 import type { SaveState } from "../core/doc";
 import type { Loudness } from "./meter";
 export interface ClipRef {
   list: "beds" | "sfx";
   i: number;
+}
+
+export interface SoundRevealRequest {
+  names: string[];
+  target: "auto" | "all" | "kit";
+  category?: KitCategoryId;
+  seq: number;
 }
 
 export interface SoundSlice {
@@ -12,6 +20,7 @@ export interface SoundSlice {
   soundSaved: SaveState;
   soundRev: number;
   soundLit: readonly string[] | null;
+  soundReveal: SoundRevealRequest | null;
   liveLanes: boolean;
   voiceClips: boolean;
   solo: string[];
@@ -25,6 +34,7 @@ export const soundSlice: Omit<SoundSlice, "meter"> = {
   soundSaved: null,
   soundRev: 0,
   soundLit: null,
+  soundReveal: null,
   liveLanes: false,
   voiceClips: false,
   solo: [],

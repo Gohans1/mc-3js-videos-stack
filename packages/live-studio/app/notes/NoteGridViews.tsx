@@ -56,7 +56,7 @@ import { useVirtualTable, VirtualList } from "../components/VirtualList";
 import { PHONE } from "../core/device";
 import { get, say, useStudio } from "../core/store";
 import { stamp } from "../core/time";
-import { useExitedNotes, useNoteMotion } from "./note-action-motion";
+import { type AnimatedEntry, useExitedNotes, useNoteMotion } from "./note-action-motion";
 import { noteActionTarget, noteShotTitle } from "./note-card-meta";
 import {
   BeforeAfterPair,
@@ -109,6 +109,9 @@ import {
 import type { NoteState, NoteStatusFilter } from "./slice";
 
 const useIsoLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+const noteKey = (item: PlacedWithState) => item.n.id;
+const rowKey = (row: { key: string }) => row.key;
+const galleryRowKey = (row: AnimatedEntry<PlacedWithState>[]) => row.map(rowKey).join(":");
 
 const cueTextClass = (kind: NoteInlineCue["kind"]) =>
   kind === "ask"
@@ -397,7 +400,7 @@ function BoardColumnList({
   onDragStartNote: (item: PlacedWithState) => void;
   onDragEndNote: () => void;
 }) {
-  const animated = useExitedNotes(items, (it) => it.n.id, scopeKey);
+  const animated = useExitedNotes(items, noteKey, scopeKey);
   if (animated.length === 0 && emptyText) {
     return (
       <div className="min-h-0 flex-1 p-2">
@@ -408,7 +411,7 @@ function BoardColumnList({
   return (
     <VirtualList
       items={animated}
-      getKey={(entry) => entry.key}
+      getKey={rowKey}
       estimateSize={120}
       gap={8}
       overscan={4}
@@ -1189,7 +1192,7 @@ export function NoteTableView({ items }: { items: readonly PlacedWithState[] }) 
   const sorted = useMemo(() => sortTableItems(items, sortKey, sortDir), [items, sortKey, sortDir]);
   const { scrollRef, virtualItems, spacers, measureRow, rowFocusProps } = useVirtualTable({
     items: sorted,
-    getKey: (it) => it.n.id,
+    getKey: noteKey,
     estimateSize: 52,
     overscan: 8,
   });
@@ -1504,7 +1507,7 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
   }, [grouped, items]);
   const displayRows = useExitedNotes(
     flatRows,
-    (r) => r.key,
+    rowKey,
     `${grouped ? "list|grouped" : "list|flat"}|${filterKey}`,
   );
 
@@ -1529,7 +1532,7 @@ export function NoteListView({ items }: { items: readonly PlacedWithState[] }) {
       <div className="bg-backdrop/55 border-hairline flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border">
         <VirtualList
           items={displayRows}
-          getKey={(entry) => entry.key}
+          getKey={rowKey}
           estimateSize={(i) => (displayRows[i]?.item.kind === "head" ? 34 : 58)}
           gap={0}
           overscan={8}
@@ -1747,7 +1750,7 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
     return () => ro.disconnect();
   }, []);
 
-  const animatedItems = useExitedNotes(items, (it) => it.n.id, `gallery|${cols}|${filterKey}`);
+  const animatedItems = useExitedNotes(items, noteKey, `gallery|${cols}|${filterKey}`);
   const rows = useMemo(() => chunkRows(animatedItems, cols), [animatedItems, cols]);
   const gridCls =
     cols === 3
@@ -1760,7 +1763,7 @@ export function NoteGalleryView({ items }: { items: readonly PlacedWithState[] }
     <div ref={hostRef} className="flex min-h-0 flex-1 flex-col">
       <VirtualList
         items={rows}
-        getKey={(row) => row.map((entry) => entry.key).join(":")}
+        getKey={galleryRowKey}
         estimateSize={255}
         gap={10}
         overscan={4}

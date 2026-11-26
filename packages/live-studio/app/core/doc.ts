@@ -89,15 +89,15 @@ const undos: Entry[] = [],
   redos: Entry[] = [];
 let group = 0,
   touched: Set<Side> | null = null;
-const mutListeners = new Set<() => void>();
-export const onDocMutated = (fn: () => void) => {
+const mutListeners = new Set<(name: string) => void>();
+export const onDocMutated = (fn: (name: string) => void) => {
   mutListeners.add(fn);
   return () => {
     mutListeners.delete(fn);
   };
 };
-const emitMutated = () => {
-  for (const fn of mutListeners) fn();
+const emitMutated = (name: string) => {
+  for (const fn of mutListeners) fn(name);
 };
 const link = (sides: Iterable<Side>) => {
   const all = [...sides];
@@ -233,8 +233,10 @@ export const revertDocs = async () => {
   const dirty = [...sides].filter((s) => s.unsaved);
   for (const s of sides) s.cancelTimer();
   if (!dirty.length) return;
-  for (const s of dirty) s.revert();
-  emitMutated();
+  for (const s of dirty) {
+    s.revert();
+    emitMutated(s.name);
+  }
   emitPending();
   await Promise.all(dirty.map((s) => s.load()));
 };
@@ -266,14 +268,15 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     saved: hooks.saved,
     cancelTimer: () => clearTimeout(timer),
     accept: (sent, canonical) => {
-      const diskCopy = structuredClone(canonical) as T;
-      hooks.tidy?.(diskCopy);
-      diskJson = JSON.stringify(diskCopy);
       if (equalJson(sent, canonical)) {
+        diskJson = JSON.stringify(sent);
         side.unsaved = kept !== diskJson;
         emitPending();
         return;
       }
+      const diskCopy = structuredClone(canonical) as T;
+      hooks.tidy?.(diskCopy);
+      diskJson = JSON.stringify(diskCopy);
       const old = data;
       const next = mergeEdits(sent, JSON.parse(kept), canonical, orderedRows).data as T;
       kept = JSON.stringify(next);
@@ -289,7 +292,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
         data = next;
         hooks.tidy?.(data);
         hooks.changed();
-        emitMutated();
+        emitMutated(name);
         hooks.replaced?.(old);
       }
       emitPending();
@@ -304,7 +307,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       kept = JSON.stringify(data);
       side.unsaved = kept !== diskJson;
       hooks.changed();
-      emitMutated();
+      emitMutated(name);
       hooks.replaced?.(old);
       if (!side.unsaved) {
         side.cancelTimer();
@@ -344,7 +347,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
     diskJson = kept = JSON.stringify(data);
     side.unsaved = false;
     hooks.changed();
-    emitMutated();
+    emitMutated(name);
     hooks.replaced?.(old);
     if (before !== null && !equalJson(before, data)) hooks.received?.(before, data);
     hooks.saved?.(null);
@@ -395,7 +398,7 @@ export const createDoc = <T>(name: string, hooks: Hooks<T>): Doc<T> => {
       kept = next;
       side.unsaved = next !== diskJson;
       hooks.changed();
-      emitMutated();
+      emitMutated(name);
       if (!side.unsaved) {
         side.cancelTimer();
         side.saved?.(null);

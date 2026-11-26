@@ -4,6 +4,11 @@ import type { Ratio } from "../../src/frame.ts";
 import type { CameraKeyIdentity } from "../camera/cam";
 import type { FreeView } from "../core/engine";
 import type { FilmViewSize } from "../core/prefs";
+import type {
+  CompareVideoAudioMode,
+  CompareVideoItem,
+  CompareVideoMeta,
+} from "./compare-video-model";
 import type { GuideMode, ValueCheckMode } from "./director-eye";
 import { initialPreview, type PreviewOptions } from "./preview-model";
 
@@ -52,6 +57,18 @@ export interface PictureSlice {
   pickFocus: CameraKeyIdentity | "free" | null;
   still: PreviewStill | null;
   comparing: boolean;
+  compareVideoMode: boolean;
+  compareVideos: CompareVideoItem[];
+  compareVideosLoaded: boolean;
+  compareCatalogError: string | null;
+  compareCanBuild: { ref: string | null; ours: string | null };
+  compareVideoPath: string | null;
+  compareVideoAudio: CompareVideoAudioMode;
+  compareReferenceAudioStatus: { src: string; state: "ready" | "silent" | "unavailable" } | null;
+  compareVideoMeta: CompareVideoMeta | null;
+  compareVideoReady: boolean;
+  compareVideoError: string | null;
+  compareLatestNotice: string | null;
 }
 export const pictureSlice: Omit<
   PictureSlice,
@@ -66,6 +83,7 @@ export const pictureSlice: Omit<
   | "filmViewWidth"
   | "scopes"
   | "freeLook"
+  | "compareVideoAudio"
 > = {
   ratio: "16:9",
   valueCheck: "off",
@@ -94,4 +112,15 @@ export const pictureSlice: Omit<
   pickFocus: null,
   still: null,
   comparing: false,
+  compareVideoMode: false,
+  compareVideos: [],
+  compareVideosLoaded: false,
+  compareCatalogError: null,
+  compareCanBuild: { ref: null, ours: null },
+  compareVideoPath: null,
+  compareVideoMeta: null,
+  compareReferenceAudioStatus: null,
+  compareVideoReady: false,
+  compareVideoError: null,
+  compareLatestNotice: null,
 };

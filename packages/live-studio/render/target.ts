@@ -18,22 +18,32 @@ export const findTarget = ({ scene, camera, bones, objects } = {}, name) => {
     null;
   if (direct || !name?.includes(".")) return direct;
 
-  const [head, ...rest] = name.split(".");
-  if (!head || rest.some((seg) => !seg)) return null;
-  let cur =
-    bones?.[head] ??
-    objects?.find(([, label]) => label === head)?.[0] ??
-    scene?.getObjectByName?.(head) ??
-    null;
-  for (let i = 0; i < rest.length && cur; i++) {
-    const seg = rest[i];
-    const next = findChild(cur, seg);
-    if (next) cur = next;
-    else if (i === rest.length - 1 && rest.length === 1 && bones?.[seg] && inside(cur, bones[seg]))
-      cur = bones[seg];
-    else cur = null;
+  const parts = name.split(".");
+  if (parts.some((seg) => !seg)) return null;
+  const fromRoot = (rootLength) => {
+    const prefix = parts.slice(0, rootLength).join(".");
+    let cur =
+      bones?.[prefix] ??
+      objects?.find(([, label]) => label === prefix)?.[0] ??
+      scene?.getObjectByName?.(prefix) ??
+      null;
+    const rest = parts.slice(rootLength);
+    for (const seg of rest) {
+      if (!cur) break;
+      const next = findChild(cur, seg);
+      if (next) cur = next;
+      else if (rest.length === 1 && bones?.[seg] && inside(cur, bones[seg])) cur = bones[seg];
+      else cur = null;
+    }
+    return cur;
+  };
+  const legacy = fromRoot(1);
+  if (legacy) return legacy;
+  for (let length = parts.length - 1; length >= 2; length--) {
+    const target = fromRoot(length);
+    if (target) return target;
   }
-  return cur;
+  return null;
 };
 
 const close = (a, b) => {

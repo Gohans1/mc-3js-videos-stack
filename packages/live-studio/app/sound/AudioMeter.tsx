@@ -31,6 +31,7 @@ const signed = (v: number) => `${v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(1)}`
 export function AudioMeter() {
   const small = useSmall(),
     on = useStudio((s) => s.meter) && !small,
+    ready = useStudio((s) => s.ready),
     live = useStudio((s) => s.liveLanes),
     loudness = useStudio((s) => s.loudness);
   const canvas = useRef<HTMLCanvasElement>(null),
@@ -42,7 +43,6 @@ export function AudioMeter() {
   useEffect(() => {
     if (!on) return;
     void startMeter();
-    measureFinal();
     const C = {
       ok: tone("ok"),
       warn: tone("warn"),
@@ -298,6 +298,10 @@ export function AudioMeter() {
       stopMeter();
     };
   }, [on]);
+
+  useEffect(() => {
+    if (on && ready) measureFinal();
+  }, [on, ready]);
 
   useEffect(() => {
     pokeRef.current?.();

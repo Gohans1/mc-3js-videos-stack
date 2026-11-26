@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { buildScene, DURATION, SHOTS_OUT as SHOTS } from "film/scene";
+import { transitionLength } from "film-stage/transitions";
 import { EDIT } from "live-studio/edit";
 import { BufferTarget, Mp4OutputFormat, Output, VideoSample, VideoSampleSource } from "mediabunny";
 
@@ -19,6 +20,7 @@ import { makeAccumulator } from "./accum";
 import { canvas as glCanvas, config, done, log, post, still } from "./lab";
 import { motionCheck } from "./motion";
 import { orderCheck } from "./order";
+import { popsCheck } from "./pops";
 import { probeCheck } from "./probe";
 import { seenCheck } from "./seen";
 import { textCheck } from "./text";
@@ -79,15 +81,20 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
         variants: (render.variants ?? []).map((v) => v.id),
       }),
     );
+  const transitionWindows = SHOTS.map((s, i) => {
+    const len = transitionLength(SHOTS, DURATION, i, render.transitions);
+    return [s.t - len / 2, s.t + len / 2];
+  }).filter(([a, b]) => b > a);
   const builtin = {
     order: orderCheck(render, DURATION, [0, ...cuts]),
+    pops: popsCheck(render, cuts, transitionWindows, ranges.at(-1)?.[1]),
     motion: motionCheck(render, cfg, cuts),
     seen: seenCheck(render, cfg),
     touch: touchCheck(render),
     text: textCheck(render, cfg),
     probe: probeCheck(render, cfg, post),
   };
-  for (const [name, args] of cfg.checks ?? []) {
+  for (const [name, given] of cfg.checks ?? []) {
     const fn = render.checks?.[name] ?? builtin[name];
     if (!fn) {
       log(
@@ -95,6 +102,10 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       );
       return;
     }
+    const args =
+      builtin[name] && !render.checks?.[name] && typeof given[2] === "number" && given[2] > DURATION
+        ? [given[0], given[1], DURATION]
+        : given;
     const t1 = performance.now();
     if (
       builtin[name] &&
@@ -126,6 +137,12 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     Object.assign(render.tools.free, { on: true, fov });
     render.tools.free.p.set(px, py, pz);
     render.tools.free.l.set(lx, ly, lz);
+  }
+  if (cfg.finalPops) {
+    await log("final: checking the whole film for pops and foot slides (up to 10 minutes)");
+    const lines = await builtin.pops("", 0, DURATION);
+    for (const line of lines) await log(line);
+    if (lines.some((line) => line.startsWith("ERROR"))) return;
   }
   const hasViewCams = (cfg.stills ?? []).some((s) => s.cam);
   if (hasViewCams && !render.tools?.free) {
@@ -404,7 +421,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
   const alive = (f) => {
     if (performance.now() - beat < 5000) return;
     beat = performance.now();
-    post("/alive", String(f));
+    void post("/alive", String(f)).catch((error) => console.warn(error));
   };
   const encode = async (first, last, bitrate) => {
     const output = new Output({
@@ -435,6 +452,16 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     await output.finalize();
     return output.target.buffer;
   };
+  const encodeTo = async (path, name, first, last) => {
+    try {
+      await post(path, await encode(first, last, cfg.clip.bitrate));
+      return true;
+    } catch (error) {
+      const range = `${(first / FPS).toFixed(2)}s-${(last / FPS).toFixed(2)}s`;
+      await log(`ERROR ${name} (frames ${first}-${last}, ${range}): ${error?.stack ?? error}`);
+      return false;
+    }
+  };
   const whipped = () => {
     const said = whips.frames ? ` (${whips.frames} fast-turning frames up to x${whips.most})` : "";
     whips.frames = whips.most = 0;
@@ -450,7 +477,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       );
       return;
     }
-    await post("/span", await encode(first, last, cfg.clip.bitrate));
+    if (!(await encodeTo("/span", "span", first, last))) return;
     log(
       `span: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
     );
@@ -473,7 +500,7 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       }
       const started = performance.now(),
         [first, last] = ranges[index];
-      await post(`/chunk/${index}`, await encode(first, last, cfg.clip.bitrate));
+      if (!(await encodeTo(`/chunk/${index}`, `chunk ${index}`, first, last))) return;
       log(
         `chunk ${index}: ${last - first + 1} frames x${cfg.clip.samples}${whipped()} in ${((performance.now() - started) / 1000).toFixed(1)}s`,
       );

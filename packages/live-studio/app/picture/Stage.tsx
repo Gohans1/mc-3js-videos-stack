@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import { Tip } from "../components/Tip";
-import type { Bind } from "../core/state";
+import { type Bind, S } from "../core/state";
 import { set, useStudio } from "../core/store";
 import { StageNoteComposer } from "../notes/Compose";
 import { InkBar } from "../notes/InkBar";
@@ -15,6 +15,15 @@ import { FullscreenTransport } from "../shell/FullscreenTransport";
 import { BlindAudioCurtain } from "./BlindAudioCurtain";
 import { ColorScriptStrip } from "./ColorScript";
 import { AngleGrid, CompareOverlay } from "./Compare";
+import {
+  handleCompareReferenceError,
+  handleCompareVideoError,
+  handleCompareVideoLoadedMetadata,
+  loadCompareReferenceAudio,
+  syncCompareReferenceAudio,
+} from "./compare-video";
+import { compareReferenceItem, compareVideoUrl } from "./compare-video-model";
+import { CompareVideoBar, CompareVideoEmpty } from "./CompareVideoBar";
 import { valueCheckLabel } from "./director-eye";
 import { ExposureLegend } from "./ExposureLegend";
 import { FilmView } from "./FilmView";
@@ -30,23 +39,24 @@ function Badges() {
     final = useStudio((s) => s.final),
     night = useStudio((s) => s.nightVision),
     valueCheck = useStudio((s) => s.valueCheck),
-    muted = useStudio((s) => s.muted);
+    muted = useStudio((s) => s.muted),
+    compareVideoMode = useStudio((s) => s.compareVideoMode);
   const contract = useStudio((s) => s.contract.length),
     status = useStudio((s) => s.status),
     newBuild = useStudio((s) => s.newBuild);
   return (
     <div className="upright:mr-25 upright:min-h-5.5 sideways:mr-25 sideways:min-h-5.5 mr-45 flex min-h-8.5 flex-wrap items-start gap-1.5 self-stretch">
-      {free && (
+      {!compareVideoMode && free && (
         <Badge variant="alarm" render={<b />}>
           FREE CAMERA
         </Badge>
       )}
-      {free && night && (
+      {!compareVideoMode && free && night && (
         <Badge variant="alarm" render={<b />}>
           NIGHT VISION
         </Badge>
       )}
-      {final && (
+      {!compareVideoMode && final && (
         <Badge variant="alarm" render={<b />}>
           FINAL QUALITY
         </Badge>
@@ -116,12 +126,51 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
     error = useStudio((s) => s.error);
   const ink = useStudio((s) => s.ink),
     free = useStudio((s) => s.free);
+  const compareVideoMode = useStudio((s) => s.compareVideoMode);
+  const compareVideos = useStudio((s) => s.compareVideos);
+  const compareVideoPath = useStudio((s) => s.compareVideoPath);
+  const preferredReference = useStudio((s) => s.compareCanBuild.ref);
+  const compareVideoMeta = useStudio((s) => s.compareVideoMeta);
+  const activeCompareItem =
+    compareVideoMode && compareVideoPath
+      ? (compareVideos.find((v) => v.path === compareVideoPath) ?? null)
+      : null;
+  const compareVideoSrc =
+    !phone && activeCompareItem ? compareVideoUrl(activeCompareItem) : undefined;
+  const reference = !phone
+    ? compareReferenceItem(activeCompareItem, compareVideos, preferredReference)
+    : null;
+  const referencePath = reference?.path;
+  const referenceSrc = reference ? compareVideoUrl(reference) : undefined;
+  useEffect(() => {
+    if (!referenceSrc || !referencePath) {
+      S.el?.compareReferenceAudio?.load();
+      return;
+    }
+    const controller = new AbortController();
+    void loadCompareReferenceAudio(referencePath, referenceSrc, controller.signal);
+    return () => controller.abort();
+  }, [referencePath, referenceSrc]);
+  useEffect(() => {
+    if (compareVideoSrc) return;
+    const video = S.el?.compareVideo;
+    if (!video || (!video.getAttribute("src") && video.readyState === 0)) return;
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }, [compareVideoSrc]);
   const savedPreview = useStudio((s) => s.preview);
   const preview = phone ? null : savedPreview;
   const mode = useStudio((s) => s.filmView);
-  const split = !phone && free && mode === "split";
+  const split = !phone && !compareVideoMode && free && mode === "split";
   const clean = !!preview?.clean;
-  useLayoutEffect(stageFit, [split]);
+  useLayoutEffect(stageFit, [
+    split,
+    compareVideoMode,
+    compareVideoPath,
+    compareVideoMeta?.width,
+    compareVideoMeta?.height,
+  ]);
   const pickingCamera = useStudio((s) => s.cameraPick !== null);
   const pickFocus = useStudio((s) => s.pickFocus !== null);
   const valueCheck = useStudio((s) => s.valueCheck);
@@ -171,6 +220,17 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           </defs>
         </svg>
       )}
+      {!phone && compareVideoMode && !clean && <CompareVideoBar />}
+      {!phone && (
+        <audio
+          ref={bind("compareReferenceAudio")}
+          src={referenceSrc}
+          preload="metadata"
+          onLoadedMetadata={() => syncCompareReferenceAudio()}
+          onSeeked={() => syncCompareReferenceAudio()}
+          onError={(e) => handleCompareReferenceError(e.currentTarget)}
+        />
+      )}
       <div
         ref={bind("view")}
         className="@container relative flex min-h-0 w-full flex-1 items-center justify-center"
@@ -185,6 +245,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
           <div
             ref={bind("stage")}
             data-clean={clean || undefined}
+            data-compare-video-mode={compareVideoMode || undefined}
             data-preview-mirror={preview?.mirror || undefined}
             className={cn(
               "bg-stage @container relative flex-none [transform:var(--preview-transform)] overflow-hidden",
@@ -211,16 +272,40 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
               data-value-check={!phone && !clean && valueCheck !== "off" ? valueCheck : undefined}
               className="absolute inset-0"
             >
+              {!phone && (
+                <video
+                  ref={bind("compareVideo")}
+                  data-compare-path={activeCompareItem?.path}
+                  src={compareVideoSrc}
+                  playsInline
+                  preload="auto"
+                  crossOrigin="anonymous"
+                  onLoadedMetadata={(e) => {
+                    handleCompareVideoLoadedMetadata(e.currentTarget);
+                    stageFit();
+                  }}
+                  onSeeked={() => {
+                    if (compareVideoMode && !S.playing) S.dirty = true;
+                  }}
+                  onError={(e) => handleCompareVideoError(e.currentTarget)}
+                  className={cn(
+                    "pointer-events-none absolute inset-0 block size-full object-fill",
+                    (!compareVideoMode || !compareVideoSrc) && "hidden",
+                  )}
+                />
+              )}
               <canvas
                 ref={bind("canvas")}
                 className={cn(
                   "absolute inset-0 block size-full touch-none",
                   preview && preview.zoom > 100 && "[image-rendering:pixelated]",
-                  pickingCamera || pickFocus
-                    ? "cursor-crosshair"
-                    : free
-                      ? "cursor-grab"
-                      : "cursor-default",
+                  compareVideoMode
+                    ? "cursor-crosshair opacity-0"
+                    : pickingCamera || pickFocus
+                      ? "cursor-crosshair"
+                      : free
+                        ? "cursor-grab"
+                        : "cursor-default",
                 )}
               />
               <canvas
@@ -229,6 +314,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
                 className={cn(
                   "pointer-events-none absolute inset-0 block size-full",
                   preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                  compareVideoMode && "hidden",
                 )}
               />
               <canvas
@@ -237,26 +323,28 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
                 className={cn(
                   "pointer-events-none absolute inset-0 block size-full",
                   preview && preview.zoom > 100 && "[image-rendering:pixelated]",
+                  compareVideoMode && "hidden",
                 )}
               />
-              {!phone && !clean && <GhostOverlay />}
+              {!phone && !clean && !compareVideoMode && <GhostOverlay />}
             </div>
             <canvas
               ref={bind("inspection")}
-              hidden={!preview || clean || preview.layers === "off"}
+              hidden={compareVideoMode || !preview || clean || preview.layers === "off"}
               className="pointer-events-none absolute inset-0 size-full [image-rendering:pixelated]"
             />
-            {!clean && <Guides />}
-            {!clean && <CompareOverlay />}
+            {!clean && !compareVideoMode && <Guides />}
+            {!clean && !compareVideoMode && <CompareOverlay />}
             <div
               ref={bind("horizon")}
-              hidden={!preview?.horizon || clean}
+              hidden={compareVideoMode || !preview?.horizon || clean}
               data-horizon
               className="viewport-horizon data-level:bg-primary pointer-events-none absolute top-1/2 left-1/2 z-6 h-0.5 w-1/4 bg-white shadow-sm"
               aria-label="Horizon level"
             />
             <div
               ref={bind("textsel")}
+              hidden={compareVideoMode}
               data-studio-overlay
               data-text-selection
               aria-hidden
@@ -271,7 +359,10 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
               data-studio-overlay
               data-page-selection
               aria-hidden
-              className="pointer-events-none absolute inset-0 z-3 size-full overflow-visible"
+              className={cn(
+                "pointer-events-none absolute inset-0 z-3 size-full overflow-visible",
+                compareVideoMode && "hidden",
+              )}
             >
               <polygon fill="none" stroke="var(--picture)" strokeWidth="1.5" />
             </svg>
@@ -283,40 +374,45 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
                 ink ? "cursor-crosshair" : "pointer-events-none",
               )}
             />
-            <div data-studio-overlay className="stage-caption">
+            <div data-studio-overlay className={cn("stage-caption", compareVideoMode && "hidden")}>
               <span ref={bind("caption")} className="stage-caption-text" />
             </div>
           </div>
         </div>
+        {!phone && compareVideoMode && <CompareVideoEmpty />}
         {!phone && <StageNoteComposer />}
         {!phone && !clean && <InkBar />}
-        {!phone && !clean && <AngleGrid />}
-        {!phone && !clean && <ShotList />}
-        {!phone && !clean && <ExposureLegend />}
+        {!phone && !clean && !compareVideoMode && <AngleGrid />}
+        {!phone && !clean && !compareVideoMode && <ShotList />}
+        {!phone && !clean && !compareVideoMode && <ExposureLegend />}
         <div ref={bind("clock")} hidden={phone || clean} className="stage-clock">
           00:00.000
         </div>
         <div className="upright:inset-x-1.5 upright:top-1.5 sideways:inset-x-1.5 sideways:top-1.5 pointer-events-none absolute inset-x-2.5 top-2.5 z-2 flex flex-col items-start gap-1">
-          <div ref={bind("hud")} hidden={phone || clean} className="stage-hud" />
+          <div
+            ref={bind("hud")}
+            hidden={phone || clean || compareVideoMode}
+            className="stage-hud"
+          />
           {!phone && !clean && <Badges />}
         </div>
-        <div hidden={phone} className="contents">
+        <div hidden={phone || compareVideoMode} className="contents">
           <div hidden={clean} className="contents">
             <OptionChips ref={bind("chips")} />
           </div>
           <FilmView bind={bind} phone={phone} />
         </div>
-        {!phone && !clean && <FreeCameraControls />}
+        {!phone && !clean && !compareVideoMode && <FreeCameraControls />}
         <canvas
           ref={bind("minimap")}
-          hidden={!preview?.minimap || clean}
+          hidden={compareVideoMode || !preview?.minimap || clean}
           aria-label="Camera minimap, top view with world axes"
           className="bg-scrim-strong border-border pointer-events-none absolute top-24 right-3 z-4 size-28 rounded-lg border"
         />
-        {!phone && !clean && <GhostHud />}
+        {!phone && !clean && !compareVideoMode && <GhostHud />}
         {!phone && <BlindAudioCurtain />}
         {!phone && <FullscreenTransport />}
-        {loading && !ready && <PreviewStartup status={loading} />}
+        {loading && !ready && !compareVideoMode && <PreviewStartup status={loading} />}
         {!phone && loading && ready && (
           <div
             role="status"
@@ -328,7 +424,7 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
       </div>
       <div hidden={blindAudio} className="contents">
         {!phone && <ColorScriptStrip />}
-        <div hidden={phone} className="contents">
+        <div hidden={phone || compareVideoMode} className="contents">
           <Oscilloscope bind={bind} />
         </div>
       </div>

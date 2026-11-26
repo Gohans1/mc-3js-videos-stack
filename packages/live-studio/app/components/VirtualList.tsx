@@ -33,29 +33,36 @@ export interface VirtualListProps<T> {
   role?: "list" | "region";
   stickyKeys?: readonly (string | number)[];
   scrollToIndex?: number | null;
-  scrollToRef?: RefObject<((index: number) => void) | null>;
+  scrollToRef?: RefObject<
+    ((index: number, align?: "auto" | "center" | "start" | "end") => void) | null
+  >;
   resetKey?: string | number;
   "data-arrow-scroll"?: boolean;
   header?: ReactNode;
+  scrollOwner?: RefObject<HTMLDivElement | null>;
+  scrollMargin?: number;
   footer?: ReactNode;
 }
 
 function useKeyedVirtualizer<T>({
+  scrollRef,
   items,
   getKey,
   estimateSize,
   overscan,
   gap,
   stickyKeys,
+  scrollMargin = 0,
 }: {
+  scrollRef: RefObject<HTMLDivElement | null>;
   items: readonly T[];
   getKey: (item: T, index: number) => string | number;
   estimateSize: number | ((index: number) => number);
   overscan: number;
   gap?: number;
   stickyKeys?: readonly (string | number)[];
+  scrollMargin?: number;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
   const focusedKey = useRef<string | number | null>(null);
 
   const keyIndex = useMemo(() => {
@@ -68,6 +75,7 @@ function useKeyedVirtualizer<T>({
     (index: number) => (typeof estimateSize === "function" ? estimateSize(index) : estimateSize),
     [estimateSize],
   );
+  const getItemKey = useCallback((index: number) => getKey(items[index]!, index), [items, getKey]);
 
   const rangeExtractor = useCallback(
     (range: Range) => {
@@ -92,9 +100,10 @@ function useKeyedVirtualizer<T>({
     count: items.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: estimate,
-    getItemKey: (index) => getKey(items[index]!, index),
+    getItemKey,
     overscan,
     gap,
+    scrollMargin,
     initialRect: INITIAL_VIRTUAL_RECT,
     observeElementRect: observeVirtualRect,
     measureElement: measureVirtualElement,
@@ -115,7 +124,7 @@ function useKeyedVirtualizer<T>({
     [],
   );
 
-  return { scrollRef, virtualizer, itemFocusProps };
+  return { virtualizer, itemFocusProps };
 }
 
 /**
@@ -140,21 +149,28 @@ export function VirtualList<T>({
   resetKey,
   "data-arrow-scroll": arrowScroll,
   header,
+  scrollOwner,
+  scrollMargin = 0,
   footer,
 }: VirtualListProps<T>) {
-  const { scrollRef, virtualizer, itemFocusProps } = useKeyedVirtualizer({
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollRef = scrollOwner ?? listRef;
+  const { virtualizer, itemFocusProps } = useKeyedVirtualizer({
+    scrollRef,
     items,
     getKey,
     estimateSize,
     overscan,
     gap,
     stickyKeys,
+    scrollMargin,
   });
   const prevScrollIdx = useRef<number | null>(null);
 
   useEffect(() => {
     if (!scrollToRef) return;
-    scrollToRef.current = (index: number) => virtualizer.scrollToIndex(index, { align: "auto" });
+    scrollToRef.current = (index: number, align: "auto" | "center" | "start" | "end" = "auto") =>
+      virtualizer.scrollToIndex(index, { align });
     return () => {
       scrollToRef.current = null;
     };
@@ -183,7 +199,7 @@ export function VirtualList<T>({
 
   return (
     <div
-      ref={scrollRef}
+      ref={listRef}
       data-arrow-scroll={arrowScroll || undefined}
       className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)}
     >
@@ -203,7 +219,7 @@ export function VirtualList<T>({
               data-index={it.index}
               ref={virtualizer.measureElement}
               className={cn("absolute inset-x-0 top-0 translate-y-(--start)", itemClassName)}
-              style={{ "--start": `${it.start}px` }}
+              style={{ "--start": `${it.start - scrollMargin}px` }}
               {...itemFocusProps(k)}
             >
               {renderItem(item, it.index)}
@@ -227,7 +243,9 @@ export function useVirtualTable<T>({
   estimateSize?: number;
   overscan?: number;
 }) {
-  const { scrollRef, virtualizer, itemFocusProps } = useKeyedVirtualizer({
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const { virtualizer, itemFocusProps } = useKeyedVirtualizer({
+    scrollRef,
     items,
     getKey,
     estimateSize,

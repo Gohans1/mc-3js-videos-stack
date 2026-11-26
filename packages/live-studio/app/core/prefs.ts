@@ -1,7 +1,14 @@
 import { LINKAGE_DEFAULTS, LINKAGE_KINDS, type LinkageSettings } from "../../src/linkage.mjs";
 import { NOTE_VIEWS } from "../notes/note-views-model";
+import type { CompareVideoAudioMode } from "../picture/compare-video-model";
 import { GHOST_OPACITY, GUIDE_MODES } from "../picture/director-eye";
 import { stored } from "./storage";
+
+export const COMPARE_VIDEO_AUDIO_MODES: readonly CompareVideoAudioMode[] = [
+  "video",
+  "studio",
+  "reference",
+];
 
 export const FILM_VIEW_SIZES = ["s", "m", "l", "split", "off"] as const;
 export type FilmViewSize = (typeof FILM_VIEW_SIZES)[number];
@@ -75,6 +82,7 @@ const PREFS = {
   },
   flySpeed: within("flySpeed", FLY_SPEED.min, FLY_SPEED.max, FLY_SPEED.start),
   noteView: oneOf("noteView", NOTE_VIEWS, "cards"),
+  compareVideoAudio: oneOf("compareVideoAudio", COMPARE_VIDEO_AUDIO_MODES, "video"),
 };
 export type Prefs = { [K in keyof typeof PREFS]: ReturnType<(typeof PREFS)[K]["read"]> };
 

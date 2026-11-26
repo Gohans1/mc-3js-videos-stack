@@ -5,7 +5,6 @@ import { copyCam } from "../camera/camline";
 import { AWAY, PHONE } from "../core/device";
 import { redo, undo } from "../core/doc";
 import { engine } from "../core/engine";
-import { DURATION } from "../core/filmMeta";
 import { hasAnySelection, transitionSelection } from "../core/selection";
 import { S } from "../core/state";
 import { get, say, set, setPref, useStudio } from "../core/store";
@@ -20,6 +19,7 @@ import {
   stepReview,
 } from "../notes/notes";
 import { chooseInGroup } from "../options/options";
+import { comparePlaybackEnd, toggleCompareVideoMode } from "../picture/compare-video";
 import { DIRECTOR_EYE_HOTKEYS, nextGuideMode, nextValueCheckMode } from "../picture/director-eye";
 import { restoreFreeView } from "../picture/freecam";
 import {
@@ -28,10 +28,13 @@ import {
   seek,
   setPlaying,
   shuttleOn,
+  skipCompareVideo,
   toggleMute,
   togglePlay,
 } from "../playback/transport";
-import { allClips, locked, setClips } from "../sound/sound";
+import { allClips, locked, setClips, toggleMuteClips } from "../sound/sound";
+import { redoKit, undoKit } from "../sound/sound-kit-client";
+import { isSoundKitModalFallbackTarget } from "../sound/sound-kit-view";
 import { askPaste, copyAttrs } from "../timeline/attributes";
 import { setBlade } from "../timeline/blade";
 import { copy, cut, hasCopy, paste } from "../timeline/clipboard";
@@ -69,6 +72,16 @@ const clipKey = { preventDefault: false, ignoreInputs: true } as const;
 const fresh = (f: () => void) => (e: KeyboardEvent) => {
   if (!e.repeat) f();
 };
+const modalKitKey = (fn: () => Promise<unknown>) => (e: KeyboardEvent) => {
+  if (e.defaultPrevented || !isSoundKitModalFallbackTarget(e.target)) return;
+  e.preventDefault();
+  void fn();
+};
+const SOUND_KIT_MODAL_KEYS: UseHotkeyDefinition[] = [
+  { hotkey: "Mod+Z", callback: modalKitKey(undoKit), options: clipKey },
+  { hotkey: "Mod+Shift+Z", callback: modalKitKey(redoKit), options: clipKey },
+  { hotkey: "Mod+Y", callback: modalKitKey(redoKit), options: clipKey },
+];
 const zoomKey = (d: -1 | 1) => () => {
   if (get().free) engine.setFov(-2 * d);
   else zoomSpan(d > 0 ? 1 / 1.5 : 1.5);
@@ -93,6 +106,7 @@ const REVIEW_KEYS = new Set([
   "L",
   "G",
   "Shift+G",
+  "V",
   "Mod+;",
   "Mod+Shift+F",
   "Mod+ArrowUp",
@@ -104,6 +118,7 @@ export function useStudioHotkeys() {
   const settingsOpen = useStudio((s) => s.settingsOpen);
   const composeOpen = useStudio((s) => s.compose !== null);
   const pickFocus = useStudio((s) => s.pickFocus !== null);
+  const compareVideoMode = useStudio((s) => s.compareVideoMode);
   const ink = useStudio((s) => s.ink),
     blindAudio = useStudio((s) => s.blindAudio),
     picks = useStudio((s) => s.clips.length),
@@ -162,17 +177,23 @@ export function useStudioHotkeys() {
     },
   ];
   const keys: UseHotkeyDefinition[] = [
-    { hotkey: "Space", callback: togglePlay, options: { enabled: !free } },
-    { hotkey: "Q", callback: togglePlay, options: { enabled: free } },
+    { hotkey: "Space", callback: fresh(togglePlay), options: { enabled: !free } },
+    { hotkey: "Q", callback: fresh(togglePlay), options: { enabled: free } },
     { hotkey: "E", callback: () => seek(S.t - 5), options: { enabled: free } },
-    { hotkey: "ArrowLeft", callback: () => seek(S.t - 1 / FPS) },
-    { hotkey: "ArrowRight", callback: () => seek(S.t + 1 / FPS) },
+    {
+      hotkey: "ArrowLeft",
+      callback: () => (compareVideoMode ? skipCompareVideo(-1) : seek(S.t - 1 / FPS)),
+    },
+    {
+      hotkey: "ArrowRight",
+      callback: () => (compareVideoMode ? skipCompareVideo(1) : seek(S.t + 1 / FPS)),
+    },
     { hotkey: "Shift+ArrowLeft", callback: () => seek(S.t - 5 / FPS) },
     { hotkey: "Shift+ArrowRight", callback: () => seek(S.t + 5 / FPS) },
     cutKey(-1),
     cutKey(1),
     { hotkey: "Home", callback: () => seek(0) },
-    { hotkey: "End", callback: () => seek(DURATION) },
+    { hotkey: "End", callback: () => seek(comparePlaybackEnd()) },
     {
       hotkey: "Mod+B",
       callback: () => splitHere(),
@@ -213,6 +234,11 @@ export function useStudioHotkeys() {
         else selectSide(1);
       },
       options: { enabled: free || sound || cam },
+    },
+    {
+      hotkey: "D",
+      callback: fresh(() => toggleMuteClips(get().clips)),
+      options: { enabled: picks > 0 && !free },
     },
     {
       hotkey: "Mod+A",
@@ -283,13 +309,18 @@ export function useStudioHotkeys() {
     { hotkey: "=", callback: zoomKey(1) },
     { hotkey: "-", callback: zoomKey(-1) },
     { hotkey: "Shift+Z", callback: zoomToFit },
-    { hotkey: "Mod+;", callback: fresh(() => setPref("guides", !get().guides)) },
+    {
+      hotkey: "Mod+;",
+      callback: fresh(() => setPref("guides", !get().guides)),
+      options: { enabled: !compareVideoMode },
+    },
     {
       hotkey: DIRECTOR_EYE_HOTKEYS.guideMode,
       callback: fresh(() => {
         setPref("guideMode", nextGuideMode(get().guideMode));
         if (!get().guides) setPref("guides", true);
       }),
+      options: { enabled: !compareVideoMode },
     },
     {
       hotkey: DIRECTOR_EYE_HOTKEYS.valueCheck,
@@ -298,6 +329,7 @@ export function useStudioHotkeys() {
     {
       hotkey: DIRECTOR_EYE_HOTKEYS.ghost,
       callback: fresh(() => set({ ghost: !get().ghost })),
+      options: { enabled: !compareVideoMode },
     },
     {
       hotkey: DIRECTOR_EYE_HOTKEYS.mute,
@@ -316,6 +348,7 @@ export function useStudioHotkeys() {
       hotkey: "G",
       callback: fresh(() => setInk(get().ink ? null : "pen")),
     },
+    { hotkey: "V", callback: fresh(toggleCompareVideoMode) },
     { hotkey: "F", callback: fresh(() => engine.setFree(!get().free)) },
     { hotkey: "J", callback: () => shuttleOn(-1) },
     {
@@ -325,7 +358,11 @@ export function useStudioHotkeys() {
       },
     },
     { hotkey: "L", callback: () => shuttleOn(1) },
-    { hotkey: "Shift+K", callback: () => saveView(), options: { enabled: cam } },
+    {
+      hotkey: "Shift+K",
+      callback: () => saveView(),
+      options: { enabled: cam && !compareVideoMode },
+    },
     {
       hotkey: "F9",
       callback: () => easeCameraPicks(false),
@@ -346,28 +383,28 @@ export function useStudioHotkeys() {
       callback: () => nudgeCameraPicks(1),
       options: { enabled: cam && cameraSelected },
     },
-    { hotkey: "Alt+C", callback: copyCam },
+    { hotkey: "Alt+C", callback: copyCam, options: { enabled: !compareVideoMode } },
     {
       hotkey: "Shift+G",
       callback: fresh(() => engine.setFinal(!get().final)),
-      options: { enabled: !AWAY },
+      options: { enabled: !AWAY && !compareVideoMode },
     },
     { hotkey: "Mod+ArrowUp", callback: () => nudgeVolume(true) },
     { hotkey: "Mod+ArrowDown", callback: () => nudgeVolume(false) },
     {
       hotkey: "W",
       callback: () => engine.setGizmo("translate"),
-      options: { enabled: object !== null && !free },
+      options: { enabled: object !== null && !free && !compareVideoMode },
     },
     {
       hotkey: "E",
       callback: () => engine.setGizmo("rotate"),
-      options: { enabled: object !== null && !free },
+      options: { enabled: object !== null && !free && !compareVideoMode },
     },
     {
       hotkey: "R",
       callback: () => engine.setGizmo("scale"),
-      options: { enabled: object !== null && !free },
+      options: { enabled: object !== null && !free && !compareVideoMode },
     },
     ...escPopups,
     {
@@ -409,17 +446,19 @@ export function useStudioHotkeys() {
     { hotkey: "ArrowDown", callback: () => void stepReview(1) },
     { hotkey: "A", callback: () => void approveReviewCurrent() },
   ];
-  const modal = useStudio((s) => s.modal !== null);
+  const modalKind = useStudio((s) => s.modal);
   const review = useStudio((s) => s.review);
   useHotkeys(
-    modal
-      ? []
-      : review
-        ? [
-            ...keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey)),
-            ...reviewOnlyKeys,
-          ]
-        : keys,
+    modalKind === "soundKit"
+      ? SOUND_KIT_MODAL_KEYS
+      : modalKind !== null
+        ? []
+        : review
+          ? [
+              ...keys.filter((k) => typeof k.hotkey === "string" && REVIEW_KEYS.has(k.hotkey)),
+              ...reviewOnlyKeys,
+            ]
+          : keys,
     {
       preventDefault: true,
     },

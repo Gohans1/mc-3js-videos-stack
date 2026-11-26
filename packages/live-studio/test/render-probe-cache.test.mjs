@@ -25,6 +25,7 @@ import {
   probeCheck,
   projectBoundsToScreen,
 } from "../render/probe.ts";
+import { findTarget } from "../render/target.ts";
 import { acquireChromeProfile, inspectLock, isPidAlive } from "../src/chrome-profile.mjs";
 import { STUDIO } from "../src/film.mjs";
 import { setTiming } from "../src/timing-state.mjs";
@@ -471,6 +472,53 @@ test("measureProbeTarget handles zero-scale, moved-root/sibling-bone, unbound Sk
   batched.deleteInstance(iid);
   const batchedEmpty = measureProbeTarget(batched, "batched", camera);
   assert.equal(batchedEmpty.bounds, null);
+});
+
+test("a qualified target resolves a bone under a registered actor name containing dots", () => {
+  const actor = new THREE.Group();
+  const head = new THREE.Bone();
+  head.name = "Head";
+  actor.add(head);
+  const menu = new THREE.Group();
+  const scene = new THREE.Scene();
+  scene.add(actor, menu);
+  const tools = { scene, objects: [[actor, "diner.dreamer"], [menu, "menu"]] };
+
+  assert.equal(findTarget(tools, "diner.dreamer.Head"), head);
+  assert.deepEqual(
+    collectProbeTargets(tools, "diner.dreamer.head|menu").map(({ obj }) => obj),
+    [menu, head],
+  );
+});
+
+test("a dotted registration does not shadow a working legacy hierarchy", () => {
+  const diner = new THREE.Group();
+  const branch = new THREE.Group();
+  branch.name = "dreamer";
+  const head = new THREE.Bone();
+  head.name = "Head";
+  branch.add(head);
+  diner.add(branch);
+  const otherActor = new THREE.Group();
+  const otherHead = new THREE.Bone();
+  otherHead.name = "Head";
+  otherActor.add(otherHead);
+  const tools = { objects: [[diner, "diner"], [otherActor, "diner.dreamer"]] };
+  assert.ok(findTarget(tools, "diner.dreamer.Head") === head);
+});
+
+test("a partial ancestor match does not hide an actor's full dotted name", () => {
+  const scene = new THREE.Scene();
+  const stage = new THREE.Group();
+  stage.name = "diner-stage";
+  const actor = new THREE.Group();
+  const head = new THREE.Bone();
+  head.name = "Head";
+  actor.add(head);
+  stage.add(actor);
+  scene.add(stage);
+  const targets = collectProbeTargets({ scene, objects: [[actor, "diner.dreamer.hero"]] }, "DINER.dreamer.hero.head");
+  assert.deepEqual(targets.map(({ name }) => name), ["Head"]);
 });
 
 test("collectProbeTargets disambiguates duplicate bone names and handles case-insensitive, dot-path, and missing filters", () => {

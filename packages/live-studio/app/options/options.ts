@@ -1,6 +1,7 @@
 import { EDIT, fromSource } from "film/edit";
 import type { Variant } from "film/scene";
 
+import { classifyPopularSound, isSafeSoundId } from "../../src/sound-kit-classify.mjs";
 import { SMALL_SOUND } from "../core/device";
 import { getFile, postJson } from "../core/net";
 import { S } from "../core/state";
@@ -92,16 +93,26 @@ export const rangesOf = (name: string): [number, number][] => {
   });
 };
 
-const loadOption = (o: SoundOption) =>
-  o.files
-    ? (o.loading ??= Promise.all(
-        o.files.map(async (f) =>
-          getAudioCtx().decodeAudioData(await (await getFile(f)).arrayBuffer()),
-        ),
-      ).then((b) => {
-        o.buffers = b;
-      }))
-    : Promise.resolve();
+const audioLoadError = (error: unknown) =>
+  say(error instanceof Error ? error.message : String(error), 6000);
+const decodeFile = async (path: string) => {
+  const response = await getFile(path);
+  if (!response.ok) throw new Error(`Couldn't load ${path} (HTTP ${response.status})`);
+  return getAudioCtx().decodeAudioData(await response.arrayBuffer());
+};
+const failedOptions = new WeakSet<SoundOption>();
+const loadOption = (o: SoundOption, retry = false) => {
+  if (!o.files) return Promise.resolve();
+  if (retry && failedOptions.delete(o)) o.loading = undefined;
+  return (o.loading ??= Promise.all(o.files.map(decodeFile))
+    .then((buffers) => {
+      o.buffers = buffers;
+    })
+    .catch((error) => {
+      failedOptions.add(o);
+      audioLoadError(error);
+    }));
+};
 const playHit = (name: string, cue: Cue, when: number, speed: number) => {
   const o = optionOf(name),
     buf = o.buffers?.[cue.pick % o.buffers.length];
@@ -157,7 +168,17 @@ const playStem = (name: string, when: number, offset: number, speed: number, len
 };
 const soundFiles: Record<string, { buf: AudioBuffer; scale: number }> = {};
 let soundsJob: Promise<void> | null = null;
-export const ensureBeatSounds = () => (soundsJob ??= loadSounds());
+let soundsFailed = false;
+export const ensureBeatSounds = (retry = false) => {
+  if (retry && soundsFailed) {
+    soundsJob = null;
+    soundsFailed = false;
+  }
+  return (soundsJob ??= loadSounds().catch((error) => {
+    soundsFailed = true;
+    audioLoadError(error);
+  }));
+};
 export const loadSounds = async () => {
   const names = new Set(Object.values(EDIT.beats).flatMap((b) => b.sounds.map((s) => s[1])));
   if (!names.size) return;
@@ -166,9 +187,9 @@ export const loadSounds = async () => {
     [...names].map(async (n) => {
       if (soundFiles[n]) return;
       const small = SMALL_SOUND ? await getFile(`/lite/agent/sfx2/${n}.webm`) : null;
-      const buf = await ctx.decodeAudioData(
-        await (small?.ok ? small : await getFile(`/agent/sfx2/${n}.wav`)).arrayBuffer(),
-      );
+      const buf = small?.ok
+        ? await ctx.decodeAudioData(await small.arrayBuffer())
+        : await decodeFile(`/agent/sfx2/${n}.wav`);
       let peak = 1e-6;
       for (const v of buf.getChannelData(0)) if (Math.abs(v) > peak) peak = Math.abs(v);
       soundFiles[n] = { buf, scale: 0.9 / peak };
@@ -290,8 +311,8 @@ export const choose = (name: string, i: number) => {
     if (!S.playing) g.audition?.();
     return;
   }
-  loadOption(o).then(() => {
-    if (S.playing) return;
+  void loadOption(o, true).then(() => {
+    if (S.playing || !o.buffers?.length) return;
     const ctx = getAudioCtx();
     if (g.cues?.length)
       playHit(name, g.cues[Math.floor(Math.random() * g.cues.length)], ctx.currentTime, 1);
@@ -321,7 +342,32 @@ export const pinPick = async (name: string) => {
   }
   trials[name].chosen = p;
   publish();
-  say(`${trials[name].title}: using ${optionOf(name).title} from the next render`);
+  const group = trials[name];
+  if (group.kind !== "picture" && p.set !== "off" && isSafeSoundId(p.set)) {
+    const rejected = group.options
+      .filter((o) => !o.off && o.id !== p.set && isSafeSoundId(o.id))
+      .map((o) => o.id)
+      .slice(0, 8);
+    const isBed = group.kind === "lane" && group.title.endsWith(" (bed)");
+    const inferredCategory =
+      group.kind === "lane"
+        ? isBed
+          ? "bgm"
+          : classifyPopularSound({
+              name: p.set,
+              title: optionOf(name).title,
+              kind: "sfx",
+              seconds: 0,
+            })
+        : null;
+    void postJson("/api/sound-kit/use", {
+      id: p.set,
+      ...(inferredCategory ? { category: inferredCategory } : {}),
+      rejected,
+      context: group.title.slice(0, 160),
+    }).catch(() => {});
+  }
+  say(`${group.title}: using ${optionOf(name).title} from the next render`);
 };
 export const whereNext = (name: string) => {
   const r = rangesOf(name);
@@ -339,7 +385,7 @@ const merge = () => {
   publish();
 };
 export const warmTrialAudio = () =>
-  Promise.all(Object.keys(trials).map((name) => loadOption(optionOf(name))));
+  Promise.all(Object.keys(trials).map((name) => loadOption(optionOf(name), true)));
 export const loadTrials = async (initial = false) => {
   const has = filmFeatures();
   const [r, c] = await Promise.all([

@@ -1,6 +1,7 @@
 import { EDIT } from "film/edit";
+import type { ToonFaceKey } from "mc-actor/toon-timeline";
 
-import { isTimedKey, keyRows, rowAt } from "../../src/contract-keys.ts";
+import { isTimedKey, keyFileRows, keyRows, rowAt } from "../../src/contract-keys.ts";
 import { equalJson } from "../../src/merge-edits.mjs";
 import { clockForTimeline } from "../../src/timing-state.mjs";
 import { lightEdit } from "../activity/activity";
@@ -55,7 +56,7 @@ export const sameKey = (a: KeyRef, b: KeyRef) =>
   a.f === b.f && a.i === b.i && a.path.join(".") === b.path.join(".");
 export const isPicked = (r: KeyRef) => get().keyPicks.some((p) => sameKey(p, r));
 export const nameOf = (k: Key) => {
-  for (const f of ["do", "mood", "pose", "clip", "title", "text"])
+  for (const f of ["do", "face", "mood", "pose", "clip", "title", "text"])
     if (typeof k[f] === "string") return k[f] as string;
   return "";
 };
@@ -154,7 +155,7 @@ const changed = (f: number, previous?: TimedProjection<object>) => {
   } else push(f);
   rows = files.flatMap((y, g) =>
     y.doc.data
-      ? keyRows(y.doc.data).map((path: string[]) => ({
+      ? keyFileRows(y.edit, y.doc.data).map((path) => ({
           f: g,
           path,
           id: rowId(g, path),
@@ -362,6 +363,24 @@ export const snapshot = () => files.map((x) => x.doc.snapshot());
 export const restore = (snaps: string[]) => snaps.forEach((s, f) => files[f].doc.restore(s));
 export const editKeys = editRefs;
 
+export const faceRows = () => rows.filter((row) => files[row.f]?.edit === "face" && row.path.length === 1);
+
+export function putFaceKey(row: Row, t: number, face: ToonFaceKey["face"], k: number) {
+  if (!faceRows().some((current) => current.id === row.id)) return;
+  const time = r3(t);
+  const list = keysOf(row.f, row.path);
+  const at = list.findIndex((key) => key.t > time);
+  const i = at < 0 ? list.length : at;
+  const existing = list[i - 1]?.t === time;
+  const r = { f: row.f, path: row.path, i: existing ? i - 1 : i };
+  editRefs([r], (_, keys) => {
+    if (existing) Object.assign(keys[r.i], { face, k });
+    else keys.splice(r.i, 0, { t: time, face, k });
+  });
+  pickKeys([r]);
+  say(`Face keyframe ${existing ? "updated" : "added"} for ${row.label} at ${stamp(t)}`);
+}
+
 export const setField = (r: KeyRef, field: string, v: unknown) =>
   editRefs([r], (x, ks) => {
     if (v === undefined) delete ks[x.i][field];
@@ -401,7 +420,11 @@ export const addKeyAt = (f: number, path: string[], t: number) => {
   const ks = keysOf(f, path),
     at = ks.findIndex((k) => k.t > t),
     from = ks[(at < 0 ? ks.length : at) - 1] ?? ks[0];
-  if (!from) return;
+  if (!from) {
+    const row = faceRows().find((candidate) => candidate.id === rowId(f, path));
+    if (row) putFaceKey(row, t, null, 1);
+    return;
+  }
   const i = at < 0 ? ks.length : at;
   editRefs([{ f, path, i }], (_, list) => {
     list.splice(i, 0, { ...structuredClone(from), t: r3(t) });

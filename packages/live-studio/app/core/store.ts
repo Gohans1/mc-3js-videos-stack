@@ -30,6 +30,7 @@ export type ModalKind =
   | "phoneDownload"
   | "voicePlayground"
   | "voiceRegion"
+  | "soundKit"
   | "cliConfirm"
   | "cliReset"
   | "cliHelp"

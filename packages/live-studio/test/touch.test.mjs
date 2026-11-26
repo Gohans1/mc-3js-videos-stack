@@ -1,7 +1,38 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import * as THREE from "three";
+
 import { summarize } from "../checks/touch.mjs";
+
+test("whole-film touch awaits asynchronous frames and stays within a fractional endpoint", async () => {
+  const windowBefore = globalThis.window;
+  globalThis.window = {};
+  try {
+    const { touchCheck } = await import("../render/touch.ts");
+    const scene = new THREE.Scene();
+    const actor = new THREE.Group();
+    actor.soleNow = (_, out) => out.copy(actor.position);
+    actor.visible = false;
+    actor.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshBasicMaterial()));
+    scene.add(actor);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 0, 5);
+    const render = () => {};
+    render.renderFrame = async () => {
+      await Promise.resolve();
+      actor.visible = true;
+    };
+    render.tools = { scene, camera, objects: [[actor, "steve"]], bones: {} };
+
+    const lines = await touchCheck(render)("", 0, 1.06);
+
+    assert.match(lines.join("\n"), /steve 0\.00-1\.00 s: near a surface 0%/);
+  } finally {
+    if (windowBefore === undefined) delete globalThis.window;
+    else globalThis.window = windowBefore;
+  }
+});
 
 const DT = 1 / 30;
 const frames = (n, at) =>

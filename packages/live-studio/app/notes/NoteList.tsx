@@ -138,6 +138,7 @@ import { type NoteFacet, type NoteScope, type NoteSort, type NoteStatusFilter } 
 
 const HOLD_LIST = 4000;
 const EMPTY_FACETS: NoteFacet[] = [];
+const rowKey = (row: Row) => row.key;
 
 const NOTE_VIEW_META: Record<NoteView, { label: string; icon: LucideIcon; tip: string }> = {
   cards: { label: "Cards", icon: LayoutList, tip: "Detailed card stream" },
@@ -1139,7 +1140,7 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
   }, [status, open, readyCheck, askNotes, done, doneOpen, narrowed, notes.length]);
   const displayRows = useExitedNotes(
     rows,
-    (r) => r.key,
+    rowKey,
     `${view}|${status}|${scope}|${shot ?? ""}|${facets.join(",")}|${sort}|${q}|${doneOpen ? 1 : 0}`,
     true,
   );
@@ -1158,10 +1159,11 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     },
     [rowOf],
   );
+  const getItemKey = useCallback((i: number) => displayRows[i].key, [displayRows]);
   const v = useVirtualizer({
     count: displayRows.length,
     getScrollElement: () => list.current,
-    getItemKey: (i) => displayRows[i].key,
+    getItemKey,
     rangeExtractor,
     gap: PHONE ? 5 : 8,
     overscan: 6,

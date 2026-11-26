@@ -454,6 +454,21 @@ test("check --json gives the reference coverage, matching sound hits with effect
   assert.deepEqual(coverage.picture, { seconds: 5, share: 0.5 });
 });
 
+test("check skips per-clip muted sfx for gain warnings, start-past-end, past-film-end, and reference hit coverage", (t) => {
+  const { problems, warnings, coverage } = coverageFilm(
+    t,
+    [{ at: 2 }, { at: 6 }],
+    [
+      { name: "line", at: 0, gain: 0 },
+      { name: "door_slam", at: 2, gain: 18, start: 5, muted: true },
+      { name: "door_slam", at: 25, gain: 0, muted: true },
+    ],
+  );
+  assert.deepEqual(problems, []);
+  assert.ok(!warnings.some((w) => /gain \+18 dB/.test(w)));
+  assert.deepEqual(coverage.sounds, { matched: 0, of: 2 });
+});
+
 test("check warns of an unstudied reference and of a sound that is a reference's file, until its rows are guides", (t) => {
   const film = (guide) =>
     coverageFilm(
@@ -605,6 +620,17 @@ test("check refuses a sound placed after the film ends, and only warns of a gain
   const muted = check();
   assert.equal(muted.status, 0, muted.stdout + muted.stderr);
   assert.doesNotMatch(muted.stdout, /gain \+20/);
+
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      beds: [{ name: "door_slam", from: 0, to: 9, gain: 20, fadeIn: 0, fadeOut: 0, muted: true }],
+      sfx: [],
+    }),
+  );
+  const clipMutedBed = check();
+  assert.equal(clipMutedBed.status, 0, clipMutedBed.stdout + clipMutedBed.stderr);
+  assert.doesNotMatch(clipMutedBed.stdout, /gain \+20/);
 
   writeFileSync(
     join(dir, "src/timeline/audio.json"),

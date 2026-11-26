@@ -201,10 +201,13 @@ export const attachTextRow = () => {
       return;
     }
     c.setPointerCapture(e.pointerId);
-    const grab = playheadGrab(b, x, w, touch);
+    const grab = !add && playheadGrab(b, x, w, touch);
     if (!b || grab) {
       if (touch || grab) {
-        if (!grab) pickText([]);
+        if (!grab) {
+          pickText([]);
+          if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+        }
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
@@ -224,6 +227,7 @@ export const attachTextRow = () => {
     }
     if (locked(b.i)) {
       pickText([b.i]);
+      if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
       say("This text track is locked. Unlock it in the track header to edit");
       return;
     }
@@ -386,7 +390,11 @@ export const attachTextRow = () => {
     drag = null;
     c.style.cursor = "";
     if (!moved) {
-      if (alone && e.type === "pointerup") pickText([i]);
+      if (e.type === "pointerup") {
+        if (alone) pickText([i]);
+        const { x, w } = local(e);
+        if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+      }
       return;
     }
     const after = snapshot();

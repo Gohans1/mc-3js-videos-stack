@@ -5,11 +5,12 @@ import { Slider } from "@/components/Slider";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
 import { useStudio } from "../core/store";
 import { FPS, pad } from "../core/time";
 import { useFrame } from "../core/useFrame";
+import { comparePlaybackEnd } from "../picture/compare-video";
+import { ComparePlaybackControls, handleCompareSeekKey } from "../picture/ComparePlaybackControls";
 import { seek, togglePlay } from "../playback/transport";
 import { toggleFullscreen, useFullscreen } from "./fullscreen";
 
@@ -20,7 +21,10 @@ function Controls() {
   useStudio((s) => s.metaRev);
   const frame = useFrame(),
     playing = useStudio((s) => s.playing),
-    ready = useStudio((s) => s.ready);
+    ready = useStudio((s) => s.ready),
+    compareVideoMode = useStudio((s) => s.compareVideoMode),
+    compareVideoReady = useStudio((s) => s.compareVideoReady),
+    compareVideoError = useStudio((s) => s.compareVideoError);
   const bar = useRef<HTMLDivElement>(null);
   const [visibility, setVisibility] = useState<"visible" | "hidden">("visible");
   useEffect(() => {
@@ -44,14 +48,16 @@ function Controls() {
       view.removeEventListener("focusout", show);
     };
   }, []);
-  const end = Math.max(1, Math.ceil(DURATION * FPS) - 1);
+  const duration = useStudio(comparePlaybackEnd);
+  const end = Math.max(1, Math.ceil(duration * FPS) - 1);
   return (
     <div
       ref={bar}
       role="group"
       aria-label="Full screen playback"
       className={cn(
-        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-20 flex h-11 w-[36rem] max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
+        "bg-scrim-strong absolute bottom-[6.2%] left-1/2 z-20 flex h-11 max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-2 rounded-md px-2 text-xs transition-opacity duration-150 focus-within:pointer-events-auto focus-within:opacity-100 motion-reduce:transition-none",
+        compareVideoMode ? "w-[52rem]" : "w-[36rem]",
         visibility === "hidden" && "pointer-events-none opacity-0",
       )}
     >
@@ -59,7 +65,9 @@ function Controls() {
         variant="toolbar"
         size="icon"
         aria-label={playing ? "Pause full screen" : "Play full screen"}
-        disabled={!ready}
+        disabled={
+          !playing && (compareVideoMode ? !compareVideoReady || Boolean(compareVideoError) : !ready)
+        }
         onClick={togglePlay}
       >
         {playing ? <Pause /> : <Play />}
@@ -67,7 +75,7 @@ function Controls() {
       <span className="flex shrink-0 gap-1 tabular-nums">
         <span className="text-primary-text">{timecode(frame)}</span>
         <span>/</span>
-        <span>{timecode(Math.round(DURATION * FPS))}</span>
+        <span>{timecode(Math.round(duration * FPS))}</span>
       </span>
       <Slider
         aria-label="Full screen playhead"
@@ -78,8 +86,10 @@ function Controls() {
         step={1}
         largeStep={FPS}
         value={Math.min(frame, end)}
+        onKeyDown={compareVideoMode ? handleCompareSeekKey : undefined}
         onValueChange={(value) => seek(Number(value) / FPS)}
       />
+      {compareVideoMode && <ComparePlaybackControls />}
       <span aria-hidden className="border-hairline-strong ml-1 h-3 border-l" />
       <Button
         variant="toolbar"

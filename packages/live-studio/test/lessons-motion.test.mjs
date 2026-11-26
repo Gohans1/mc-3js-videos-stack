@@ -300,7 +300,9 @@ describe("LessonsPanel mounted real-browser deck folding, WAAPI animations, and 
     );
     server = await createServer({
       configFile: resolve(STUDIO_DIR, "vite.config.ts"),
-      logLevel: "silent",
+      cacheDir: join(tempDir, "vite-cache"),
+      logLevel: "error",
+      optimizeDeps: { exclude: ["loudness-worklet/worklet?url"] },
       plugins: [filmPlugin({ SRC: src, threeFrom: STUDIO_DIR }), deckPlugin()],
       server: { port: 0, host: "127.0.0.1", strictPort: false, hmr: false },
     });

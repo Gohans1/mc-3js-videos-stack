@@ -212,6 +212,23 @@ export const noteDetailFormat = ({
     }
     if (n.freeCam) lines.push(`seen through the free camera${n.cam ? `: ${n.cam.line}` : ""}`);
     if (n.finalLook) lines.push("seen in final quality");
+    if (n.compareVideo?.path) {
+      const layoutLabel =
+        n.compareVideo.layout === "hstack"
+          ? "REF | OURS side-by-side"
+          : n.compareVideo.layout === "vstack"
+            ? "REF / OURS top-bottom"
+            : n.compareVideo.category === "reference"
+              ? "reference video"
+              : n.compareVideo.category === "compare"
+                ? "compare video"
+                : "rendered video";
+      const startPart =
+        Number.isFinite(n.compareVideo.startSec) && n.compareVideo.startSec > 0
+          ? `, start ${n.compareVideo.startSec}s`
+          : "";
+      lines.push(`seen in compare video: ${n.compareVideo.path} (${layoutLabel}${startPart})`);
+    }
     const writtenAt = shortTimestamp(n.at);
     if (n.version) {
       const diff =

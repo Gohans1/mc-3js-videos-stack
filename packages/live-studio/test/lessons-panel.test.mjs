@@ -4,7 +4,6 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import react from "@vitejs/plugin-react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
@@ -66,6 +65,8 @@ describe("LessonsPanel rendered component behavior", () => {
       "location",
       "matchMedia",
       "EventSource",
+      "Audio",
+      "AudioWorkletNode",
       "requestAnimationFrame",
       "cancelAnimationFrame",
       "addEventListener",
@@ -107,13 +108,15 @@ describe("LessonsPanel rendered component behavior", () => {
       removeEventListener() {},
       documentElement: { style: { setProperty() {} } },
     };
-    const loc = { search: "", pathname: "/", origin: "http://localhost" };
+    const loc = new URL("http://localhost/");
     Object.assign(globalThis, {
       localStorage: memStorage(),
       sessionStorage: memStorage(),
       location: loc,
       matchMedia: mm,
       EventSource: StubEventSource,
+      Audio: class StubAudio extends EventTarget {},
+      AudioWorkletNode: class StubAudioWorkletNode {},
       document: stubDoc,
       requestAnimationFrame: () => 0,
       cancelAnimationFrame() {},
@@ -148,13 +151,9 @@ describe("LessonsPanel rendered component behavior", () => {
       "export const EDIT = {}; export const fromSource = (t) => t; export const toSource = (t) => t;",
     );
     server = await createServer({
-      configFile: false,
+      configFile: resolve(STUDIO_DIR, "vite.config.ts"),
       logLevel: "silent",
-      root: join(STUDIO_DIR, "app"),
-      plugins: [react(), filmPlugin({ SRC: src, threeFrom: STUDIO_DIR })],
-      resolve: {
-        alias: [{ find: "@", replacement: join(STUDIO_DIR, "app") }],
-      },
+      plugins: [filmPlugin({ SRC: src, threeFrom: STUDIO_DIR })],
       server: { middlewareMode: true, hmr: false },
     });
     lessonsMod = await server.ssrLoadModule("/lessons/lessons.ts");

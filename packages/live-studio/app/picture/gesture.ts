@@ -1,7 +1,15 @@
 export type ViewportGesture<E = unknown> =
   | { kind: "idle" }
   | { kind: "tap_press"; id: number; x: number; y: number; moved: boolean }
-  | { kind: "left_press"; id: number; x: number; y: number; shiftKey: boolean; event?: E }
+  | {
+      kind: "left_press";
+      id: number;
+      x: number;
+      y: number;
+      shiftKey: boolean;
+      drawOnLeft?: boolean;
+      event?: E;
+    }
   | { kind: "right_press"; id: number; x: number; y: number; event?: E }
   | {
       kind: "cam_drag";
@@ -14,7 +22,7 @@ export type ViewportGesture<E = unknown> =
       tap: boolean;
       moved: boolean;
     }
-  | { kind: "sketching"; id: number }
+  | { kind: "sketching"; id: number; button?: 0 }
   | { kind: "pending_click"; x: number; y: number };
 
 export type ViewportEvent<E = unknown> =
@@ -27,6 +35,7 @@ export type ViewportEvent<E = unknown> =
       y: number;
       free: boolean;
       shiftKey: boolean;
+      drawOnLeft?: boolean;
       raw?: E;
     }
   | { type: "move"; id: number; x: number; y: number; canWake: boolean }
@@ -85,6 +94,7 @@ export function stepViewport<E>(
             x: event.x,
             y: event.y,
             shiftKey: event.shiftKey,
+            ...(event.drawOnLeft ? { drawOnLeft: true } : {}),
             event: event.raw,
           },
           dropSketch: false,
@@ -126,6 +136,14 @@ export function stepViewport<E>(
         gesture.kind === "left_press" &&
         Math.hypot(event.x - gesture.x, event.y - gesture.y) > 4
       ) {
+        if (gesture.drawOnLeft) {
+          return {
+            gesture: { kind: "sketching", id: gesture.id, button: 0 },
+            dropSketch: false,
+            startSketchFrom: gesture.event,
+            capture: true,
+          };
+        }
         return {
           gesture: {
             kind: "cam_drag",
@@ -160,10 +178,11 @@ export function stepViewport<E>(
     case "windowUp": {
       if ("id" in gesture && event.id !== gesture.id)
         return { gesture, dropSketch: false, armClickAt: null };
-      if (
-        (gesture.kind === "sketching" || gesture.kind === "right_press") &&
-        (event.buttons & 2) !== 0
-      )
+      if (gesture.kind === "sketching") {
+        const mask = gesture.button === 0 ? 1 : 2;
+        if ((event.buttons & mask) !== 0) return { gesture, dropSketch: false, armClickAt: null };
+      }
+      if (gesture.kind === "right_press" && (event.buttons & 2) !== 0)
         return { gesture, dropSketch: false, armClickAt: null };
       if (
         (gesture.kind === "left_press" ||

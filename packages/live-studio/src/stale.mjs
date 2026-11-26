@@ -4,6 +4,7 @@ import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { seenSound } from "./narration.ts";
+import { changedRenderAsset } from "./render-assets.mjs";
 import { drawnCuts, filmVideo, readRenderEvidence, renderIdentity } from "./video.mjs";
 
 const mixer = fileURLToPath(new URL("../../../scripts/sound/mix.py", import.meta.url));
@@ -96,6 +97,7 @@ export const staleVideo = (root, video) => {
   if (choiceChanged === true && !newest)
     newest = { rel: choices ?? "choices.json (removed)", m: Date.now() };
   else if (choiceChanged === undefined && choices) consider(join(root, choices));
+  const changedAsset = changedRenderAsset(root, evidence?.assetInputs);
   let voiceMoved = false;
   const drawnWith = join(
     root,
@@ -158,6 +160,11 @@ export const staleVideo = (root, video) => {
       return {
         file: newest.rel,
         message: `${shown} has a picture older than ${newest.rel}: its frames may not show that change; bun run render ${basename(file) === "final.mp4" ? "final" : "clip"} draws the picture again, then ${mix}`,
+      };
+    if (changedAsset)
+      return {
+        file: changedAsset,
+        message: `${shown} used a different picture asset (${changedAsset}); bun run render ${where?.final ? "final" : "clip"} redraws the picture, then ${mix}`,
       };
     if (mixedEvidence && Object.hasOwn(mixedEvidence, "audioChoices")) {
       const recorded = mixedEvidence.audioChoices;
@@ -222,13 +229,19 @@ export const staleVideo = (root, video) => {
       ? { file: rel(heard), message: `${shown} has an older sound than ${rel(heard)}: ${mix}` }
       : null;
   }
-  if (!newest && !voiceMoved) return null;
+  if (!newest && !voiceMoved && !changedAsset) return null;
   const again = where?.final
     ? "bun run render final draws it again"
     : where?.kind === "span"
       ? `bun run render clip --span ${where.span.join(",")} draws it again`
       : "bun run render clip draws it again (--chunks <n> for one 30 s chunk only)";
-  if (!newest) return { file: sound, message: `${shown}: ${moved}; ${again}` };
+  if (!newest) {
+    if (voiceMoved) return { file: sound, message: `${shown}: ${moved}; ${again}` };
+    return {
+      file: changedAsset,
+      message: `${shown} used a different picture asset (${changedAsset}); ${again}`,
+    };
+  }
   return {
     file: newest.rel,
     message: `${shown} is older than ${newest.rel} (changed ${Math.max(1, Math.round((newest.m - made) / 60000))} min after it): its frames may not show that change; ${again}`,

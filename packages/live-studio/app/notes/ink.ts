@@ -3,6 +3,13 @@ import { S } from "../core/state";
 import { stored } from "../core/storage";
 import { get, say, set, ui } from "../core/store";
 import { SAME, stamp } from "../core/time";
+import {
+  activeCompareNoteSource,
+  activeCompareVideo,
+  checkCompareFeedbackRange,
+  compareHooks,
+} from "../picture/compare-video";
+import { composeMatchesStageSpace, noteMatchesStageSpace } from "../picture/compare-video-model";
 import { lookOnPlane } from "../picture/look";
 import { picturePoint } from "../picture/preview-state";
 import { tone } from "../timeline/canvas";
@@ -14,6 +21,7 @@ import {
   type Compose,
   type Hit,
   type InkKind,
+  isComposeDirty,
   type Mark,
   type Note,
   type StageAnchor,
@@ -50,11 +58,16 @@ export const clearInk = () => {
 };
 let resetActiveInk = () => {};
 export const setInk = (tool: InkKind | null) => {
+  if (tool && get().compareVideoMode && (!activeCompareVideo() || get().compareVideoError)) {
+    say("Load a compare video or switch to Live 3D (V) before drawing", 3500);
+    return;
+  }
   if (!tool) resetActiveInk();
   set({ ink: tool });
   S.dirty = true;
   if (!tool && get().compose && !PHONE) ui.focusNote();
 };
+compareHooks.clearInk = () => setInk(null);
 
 export const INK_KEYS: InkKind[] = ["pen", "arrow", "box", "path"];
 export const toolsOpen = (s: { ink: InkKind | null; compose: Compose | null; playing: boolean }) =>
@@ -260,14 +273,21 @@ let inked = false;
 export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[]) => {
   const c = S.el?.ink;
   if (!c) return;
-  const { compose, draft, rate } = get();
+  const { compose, draft, rate, compareVideoMode, compareVideoPath } = get();
+  const source = activeCompareNoteSource();
   const raw = S.tools?.free.on ? [] : saved();
   let here: { n: Note; marks: Mark[]; fade: number }[] | null = null;
   for (const { n, span } of raw) {
+    if (!noteMatchesStageSpace(n, compareVideoMode, source)) continue;
     const fade = spanFade(span, S.t, rate);
     if (fade > 0) (here ??= []).push({ n, marks: n.marks as Mark[], fade });
   }
-  if (!here && !inkMarks.length) {
+  const showDraftInk =
+    inkMarks.length > 0 &&
+    (!compose ||
+      compose.kind !== "create" ||
+      composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath));
+  if (!here && !showDraftInk) {
     if (!inked) return;
     inked = false;
   } else inked = true;
@@ -298,9 +318,11 @@ export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[
       }
     }
   }
-  for (const m of inkMarks) drawMark(g, m, S.t, w, h, tone("ink"), scale);
-  if (inkMarks.length && compose && !compose.pin && draft.trim())
-    words(g, draft, inkMarks[0].pts[0], w, h, scale, placedLabels);
+  if (showDraftInk) {
+    for (const m of inkMarks) drawMark(g, m, S.t, w, h, tone("ink"), scale);
+    if (compose && !compose.pin && draft.trim())
+      words(g, draft, inkMarks[0].pts[0], w, h, scale, placedLabels);
+  }
 };
 
 const pointSegmentDist = (p: [number, number], a: [number, number], b: [number, number]) => {
@@ -402,7 +424,12 @@ let hooks: {
   begin: () => {},
   pause: () => {},
 };
-let live: { mark: Mark; smart: boolean } | null = null;
+let live: {
+  mark: Mark;
+  smart: boolean;
+  compareVideoMode: boolean;
+  compareVideoPath: string | null;
+} | null = null;
 const pointerOrigin = (e: PointerEvent): ComposeOrigin => ({
   left: e.clientX,
   top: e.clientY,
@@ -414,17 +441,47 @@ const at = (e: PointerEvent): [number, number] => {
   const [x, y] = picturePoint(e, S.el.ink);
   return [+Math.min(1, Math.max(0, x)).toFixed(4), +Math.min(1, Math.max(0, y)).toFixed(4)];
 };
+const canDrawInCurrentSpace = () => {
+  const {
+    compareVideoMode,
+    compareVideoPath,
+    compareVideoError,
+    compose,
+    draft,
+    refs,
+    noteSaving,
+  } = get();
+  if (noteSaving) return false;
+  if (compareVideoMode && (!activeCompareVideo() || Boolean(compareVideoError))) return false;
+  if (!checkCompareFeedbackRange()) return false;
+  if (compose?.kind === "edit") {
+    ui.focusNote();
+    say("Save or cancel the note edit before drawing", 3000);
+    return false;
+  }
+  if (
+    compose?.kind === "create" &&
+    !composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath) &&
+    (compose.pin || isComposeDirty(compose, draft, inkMarks.length > 0 || refs.length > 0))
+  ) {
+    say("Finish or close your open note from the other view before drawing here", 4000);
+    return false;
+  }
+  return true;
+};
 const startStroke = (
   kind: "pen" | "arrow" | "box",
   p: [number, number],
   smart = false,
   origin?: ComposeOrigin,
 ) => {
+  if (!canDrawInCurrentSpace()) return;
   hooks.pause();
   set({ inkDrawing: true });
   hooks.begin(origin, { x: p[0], y: p[1] });
+  const { compareVideoMode, compareVideoPath } = get();
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
-  live = { mark, smart };
+  live = { mark, smart, compareVideoMode, compareVideoPath };
   inkMarks.push(mark);
   S.dirty = true;
 };
@@ -446,11 +503,16 @@ const endStroke = () => {
   live = null;
   if (!active) return;
   const { mark: m, smart } = active;
+  const now = get();
+  const spaceChanged =
+    now.compareVideoMode !== active.compareVideoMode ||
+    (active.compareVideoMode && now.compareVideoPath !== active.compareVideoPath);
   const r = S.el.ink.getBoundingClientRect(),
     [a, b] = [m.pts[0], m.pts.at(-1)!];
   const big =
-    Math.hypot((b[0] - a[0]) * r.width, (b[1] - a[1]) * r.height) >= 8 ||
-    (m.kind === "pen" && m.pts.length > 3);
+    !spaceChanged &&
+    (Math.hypot((b[0] - a[0]) * r.width, (b[1] - a[1]) * r.height) >= 8 ||
+      (m.kind === "pen" && m.pts.length > 3));
   if (!big) {
     inkMarks.pop();
     S.dirty = true;
@@ -501,12 +563,14 @@ export const attachInk = (opts: typeof hooks) => {
   hooks = opts;
   let gesture: InkGesture = IDLE_INK_GESTURE;
   let passPointerId: number | null = null;
+  let pathPressSpace: { compareVideoMode: boolean; compareVideoPath: string | null } | null = null;
   const forwardToCanvas = (e: PointerEvent) => {
     try {
       S.el.canvas?.dispatchEvent(new PointerEvent(e.type, e));
     } catch {}
   };
   resetActiveInk = () => {
+    pathPressSpace = null;
     const res = stepInk(gesture, { type: "reset" });
     gesture = res.gesture;
     if (res.effect === "drop") dropStroke();
@@ -520,6 +584,7 @@ export const attachInk = (opts: typeof hooks) => {
       id: e.pointerId,
       button: e.button,
       pointerType: e.pointerType,
+      drawOnLeft: get().compareVideoMode,
       tool,
       x: e.clientX,
       y: e.clientY,
@@ -531,6 +596,7 @@ export const attachInk = (opts: typeof hooks) => {
       }
       return;
     }
+    if (!canDrawInCurrentSpace()) return;
     passPointerId = null;
     e.preventDefault();
     try {
@@ -541,6 +607,8 @@ export const attachInk = (opts: typeof hooks) => {
       const p = at(e);
       hooks.pause();
       hooks.begin(pointerOrigin(e), { x: p[0], y: p[1] });
+      const { compareVideoMode, compareVideoPath } = get();
+      pathPressSpace = { compareVideoMode, compareVideoPath };
     } else if (res.effect === "start_stroke" && tool && tool !== "path")
       startStroke(tool, at(e), false, pointerOrigin(e));
   });
@@ -571,6 +639,18 @@ export const attachInk = (opts: typeof hooks) => {
       return;
     }
     if (res.effect === "commit_path") {
+      const startedSpace = pathPressSpace;
+      pathPressSpace = null;
+      const now = get();
+      const spaceChanged =
+        startedSpace !== null &&
+        (now.compareVideoMode !== startedSpace.compareVideoMode ||
+          (startedSpace.compareVideoMode &&
+            now.compareVideoPath !== startedSpace.compareVideoPath));
+      if (spaceChanged || !canDrawInCurrentSpace()) {
+        inkHooks.cancelEmpty();
+        return;
+      }
       const p = at(e);
       let m = inkMarks.find((x) => x.kind === "path");
       if (!m) {

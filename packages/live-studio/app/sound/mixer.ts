@@ -1,6 +1,6 @@
 import { SMALL_SOUND } from "../core/device";
 import { DURATION } from "../core/filmMeta";
-import { getFile } from "../core/net";
+import { FileRequestError, getFile } from "../core/net";
 import { S, wake } from "../core/state";
 import { get, say } from "../core/store";
 import { type LaneGroup, lanePick, setLaneGroups } from "../options/options";
@@ -12,6 +12,7 @@ import {
   getAudio,
   getAudioCtx,
   hasAudio,
+  LOOKAHEAD,
   onAudioReady,
   STEREO,
   track,
@@ -135,28 +136,40 @@ const ensureRouting = () => {
 
 const sounds = new Map<string, Promise<Sound | null>>(),
   ready = new Map<string, Sound>();
+const failedAudioReads = new Set<() => void>();
+export const rememberFailedAudioRead = (error: unknown, release: () => void): null => {
+  if (error instanceof FileRequestError && error.retryable) failedAudioReads.add(release);
+  return null;
+};
+export const releaseFailedAudioReads = () => {
+  for (const release of failedAudioReads) release();
+  failedAudioReads.clear();
+};
+
 const load = (name: string) => {
   if (!sounds.has(name)) {
     const url = `/api/sfx/${encodeURIComponent(name)}.${SMALL_SOUND ? "webm" : "wav"}`;
-    sounds.set(
-      name,
-      getFile(url)
-        .then(async (r) => {
-          if (!r.ok) return null;
-          const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer());
-          let sum = 0,
-            n = 0;
-          for (let c = 0; c < buf.numberOfChannels; c++) {
-            const d = buf.getChannelData(c);
-            for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
-            n += d.length;
-          }
-          const s = { buf, mean: 10 * Math.log10(sum / n || 1e-12) };
-          ready.set(name, s);
-          return s;
-        })
-        .catch(() => null),
-    );
+    const job = getFile(url, "interactive")
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const buf = await getAudioCtx().decodeAudioData(await r.arrayBuffer());
+        let sum = 0,
+          n = 0;
+        for (let c = 0; c < buf.numberOfChannels; c++) {
+          const d = buf.getChannelData(c);
+          for (let i = 0; i < d.length; i++) sum += d[i] * d[i];
+          n += d.length;
+        }
+        const s = { buf, mean: 10 * Math.log10(sum / n || 1e-12) };
+        if (sounds.get(name) === job) ready.set(name, s);
+        return s;
+      })
+      .catch((error: unknown) =>
+        rememberFailedAudioRead(error, () => {
+          if (sounds.get(name) === job) sounds.delete(name);
+        }),
+      );
+    sounds.set(name, job);
   }
   return sounds.get(name)!;
 };
@@ -175,19 +188,22 @@ let convolversByBus = new WeakMap<AudioNode, Map<string, ConvolverNode>>();
 
 const loadIrBytes = (space: string): Promise<ArrayBuffer | null> => {
   if (!irBytePromises.has(space)) {
-    irBytePromises.set(
-      space,
-      getFile(`/api/sound/ir?path=${encodeURIComponent(space)}`)
-        .then(async (r) => {
-          const buf = r.ok ? await r.arrayBuffer() : null;
-          irBytes.set(space, buf);
-          return buf;
-        })
-        .catch(() => {
-          irBytes.set(space, null);
-          return null;
-        }),
-    );
+    const job = getFile(`/api/sound/ir?path=${encodeURIComponent(space)}`, "interactive")
+      .then(async (r) => {
+        const buf = r.ok ? await r.arrayBuffer() : null;
+        if (irBytePromises.get(space) === job) irBytes.set(space, buf);
+        return buf;
+      })
+      .catch((error: unknown) => {
+        if (irBytePromises.get(space) === job) irBytes.set(space, null);
+        return rememberFailedAudioRead(error, () => {
+          if (irBytePromises.get(space) !== job) return;
+          irBytePromises.delete(space);
+          irBytes.delete(space);
+          irDecodePromises = new WeakMap();
+        });
+      });
+    irBytePromises.set(space, job);
   }
   return irBytePromises.get(space)!;
 };
@@ -359,14 +375,16 @@ let mixDecoded: { url: string; buf: Promise<AudioBuffer | null> } | null = null;
 const mixBuffer = () => {
   const url = S.el?.audio?.currentSrc;
   if (!url) return Promise.resolve(null);
-  if (mixDecoded?.url !== url)
-    mixDecoded = {
-      url,
-      buf: getFile(url)
-        .then((r) => r.arrayBuffer())
-        .then((b) => getAudioCtx().decodeAudioData(b))
-        .catch(() => null),
-    };
+  if (mixDecoded?.url !== url) {
+    const buf = getFile(url, "interactive")
+      .then(async (r) => (r.ok ? getAudioCtx().decodeAudioData(await r.arrayBuffer()) : null))
+      .catch((error: unknown) =>
+        rememberFailedAudioRead(error, () => {
+          if (mixDecoded?.buf === buf) mixDecoded = null;
+        }),
+      );
+    mixDecoded = { url, buf };
+  }
   return mixDecoded.buf;
 };
 
@@ -413,7 +431,14 @@ const clips = (l: Lanes, all = false): Clip[] => {
       (l.tracks ?? []).map((t) => [t.id, (t.filters as string[] | undefined) ?? []]),
     ),
     solo = all ? [] : get().solo;
-  const pick = (e: { name: string; gain: number; track?: string; try?: string[] }) => {
+  const pick = (e: {
+    name: string;
+    gain: number;
+    track?: string;
+    try?: string[];
+    muted?: boolean;
+  }) => {
+    if (e.muted) return null;
     if (e.track && muted.has(e.track)) return null;
     if (solo.length && !solo.includes(e.track ?? "")) return null;
     const td = trackDb.get(e.track ?? "") ?? 0;
@@ -464,15 +489,16 @@ const clips = (l: Lanes, all = false): Clip[] => {
       });
   });
   l.sfx.forEach((s, i) => {
-    const p = pick(s),
-      buf = p && ready.get(p.name)?.buf;
+    const p = pick(s);
     if (!p) return;
-    if (!buf) {
+    const start = p.own ? (s.start ?? 0) : 0;
+    const buf = ready.get(p.name)?.buf;
+    const length = s.length ?? (buf && (buf.duration - start) / (s.rate ?? 1));
+    if (length === undefined) {
       load(p.name);
       return;
     }
-    const start = p.own ? (s.start ?? 0) : 0;
-    const t1 = s.at + (s.length ?? (buf.duration - start) / (s.rate ?? 1));
+    const t1 = s.at + length;
     out.push({
       key: `sfx:${i}`,
       name: p.name,
@@ -507,6 +533,16 @@ const clips = (l: Lanes, all = false): Clip[] => {
 };
 const soundFor = (c: Clip) => (c.process ? processed(c.process) : ready.get(c.name));
 const loadClip = (c: Clip) => (c.process ? loadProcessed(c.process) : load(c.name));
+export const canWarmProcessed = (from: number, to: number) =>
+  Boolean(window.__live) || (from < S.t + LOOKAHEAD * get().rate && S.t < to);
+
+export const warmLiveClips = () => {
+  const lanes = on && source?.lanes();
+  if (lanes)
+    for (const clip of clips(lanes))
+      if (!clip.process || canWarmProcessed(clip.t0, clip.t1)) void loadClip(clip);
+};
+
 const preloadSources = (l: Lanes) =>
   Promise.all([
     ...[
@@ -953,7 +989,7 @@ export const setLive = (live_: boolean, src: Source) => {
   levelMix();
   const l = src.lanes();
   if (on && l) {
-    for (const c of clips(l)) loadClip(c);
+    warmLiveClips();
     void preloadReverbIrs(l, hasAudio() ? getAudioCtx() : undefined).then((loadedNew) => {
       if (loadedNew && on) replan();
     });

@@ -15,6 +15,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { analyzeBeats, renderAudio } from "./audio-process.mjs";
+import { compareVideosFingerprint, isSkippedRenderDir } from "./compare-videos.mjs";
 import {
   AdjustmentTimeline,
   CamTimeline,
@@ -25,7 +26,6 @@ import {
   keyFileSchema,
   LightsTimeline,
   OpenFilmTimeline,
-  PlacedTimeline,
   problems,
   ShotsTimeline,
   SoundTimeline,
@@ -116,8 +116,7 @@ export const contractFiles = (project) => {
         ? [[OPENFILM_FILE, [OpenFilmTimeline, textOf(OPENFILM_FILE)]]]
         : []),
     ...Object.entries(conf.keyFiles ?? {}).map(([rel, edit]) => {
-      const base = keyFileSchema(rowsOf(edit));
-      return [rel, [edit === "placed" ? base.and(PlacedTimeline) : base, textOf(rel)]];
+      return [rel, [keyFileSchema(rowsOf(edit), edit), textOf(rel)]];
     }),
   ];
   const files = new Map();
@@ -235,8 +234,7 @@ export const openFilm = (projectDir, { send, activity }) => {
     lights = lightsRel ? openTimelineFile(PROJECT, lightsRel, LightsTimeline) : null;
   const keyFiles = Object.entries(pkg["live-studio"]?.keyFiles ?? {}).map(([rel, edit]) => {
     const requiredRows = pkg["live-studio"]?.requiredKeyRows?.[edit] ?? [],
-      base = keyFileSchema(requiredRows),
-      schema = edit === "placed" ? base.and(PlacedTimeline) : base;
+      schema = keyFileSchema(requiredRows, edit);
     return { rel, edit, requiredRows, schema, ...openTimelineFile(PROJECT, rel, schema) };
   });
   const shotsRel = pkg["live-studio"]?.shotsTimeline,
@@ -556,6 +554,7 @@ export const openFilm = (projectDir, { send, activity }) => {
   };
 
   const watchers = [];
+  let stopped = false;
   const watch = (...a) => watchers.push(fsWatch(...a));
   const timelineContent = (file) => {
     const text = textOf(file);
@@ -758,6 +757,61 @@ export const openFilm = (projectDir, { send, activity }) => {
     const notesWatcher = watchNotesFile(notes.file, () => send("notes"), { debounceMs: 80 });
     watchers.push(notesWatcher);
     syncNotes = () => notesWatcher.sync();
+    const REFERENCES = join(PROJECT, "references");
+    let compareSeen = compareVideosFingerprint(PROJECT);
+    const checkCompareVideos = debounce(() => {
+      if (stopped) return;
+      const now = compareVideosFingerprint(PROJECT);
+      if (now !== compareSeen) {
+        compareSeen = now;
+        send("compare-videos");
+      }
+    }, 300);
+    if (existsSync(RENDERS)) {
+      try {
+        watch(RENDERS, { recursive: true }, (_ev, filename) => {
+          if (stopped) return;
+          if (typeof filename === "string" && filename) {
+            const first = filename.split(/[\\/]/)[0];
+            if (first && isSkippedRenderDir(first)) return;
+          }
+          checkCompareVideos();
+        });
+      } catch {}
+    }
+    let watchingRefsDir = false;
+    let refsBootWatcher = null;
+    const ensureRefsWatch = () => {
+      if (stopped || watchingRefsDir || !existsSync(REFERENCES)) return;
+      try {
+        watch(REFERENCES, checkCompareVideos);
+        watchingRefsDir = true;
+        if (refsBootWatcher) {
+          try {
+            refsBootWatcher.close();
+          } catch {}
+          const idx = watchers.indexOf(refsBootWatcher);
+          if (idx >= 0) watchers.splice(idx, 1);
+          refsBootWatcher = null;
+        }
+      } catch {}
+    };
+    ensureRefsWatch();
+    if (!watchingRefsDir) {
+      try {
+        refsBootWatcher = fsWatch(
+          PROJECT,
+          debounce(() => {
+            if (stopped) return;
+            if (existsSync(REFERENCES)) {
+              ensureRefsWatch();
+              checkCompareVideos();
+            }
+          }, 300),
+        );
+        watchers.push(refsBootWatcher);
+      } catch {}
+    }
     const voiceEdits = () => {
       try {
         return JSON.stringify(JSON.parse(readFileSync(EDIT, "utf8")).voice.edits);
@@ -946,6 +1000,7 @@ export const openFilm = (projectDir, { send, activity }) => {
     smallVideo,
     start,
     stop: () => {
+      stopped = true;
       history.close();
       watchers.splice(0).forEach((w) => w.close());
     },

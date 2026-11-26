@@ -14,6 +14,8 @@ import { pickPageAt, startPageDrag } from "../openfilm/onpicture";
 import { setPlaying } from "../playback/transport";
 import { startTextDrag, textAt, textDoubleClick } from "../text/onpicture";
 import { pickText } from "../text/text";
+import { activeCompareLayout, activeCompareVideo, compareVideoNaturalSize } from "./compare-video";
+import { compareHitForPoint, compareStageAspect } from "./compare-video-model";
 import { frameSize } from "./frame";
 import {
   applyFreeCameraPick,
@@ -31,12 +33,23 @@ import { lookAtClick } from "./look";
 import { changePreview, picturePoint } from "./preview-state";
 
 export const fit = () => {
-  const r = (S.el.view.querySelector("[data-preview-pane]") ?? S.el.view).getBoundingClientRect(),
-    [w, h] = frameSize(16),
-    s = Math.min(r.width / w, r.height / h);
-  S.el.stage.style.width = `${Math.floor(s * w)}px`;
+  const r = (S.el.view.querySelector("[data-preview-pane]") ?? S.el.view).getBoundingClientRect();
+  let w: number;
+  let h: number;
+  if (get().compareVideoMode) {
+    const [nw, nh] = compareVideoNaturalSize();
+    [w, h] = compareStageAspect(activeCompareVideo(), nw, nh, get().ratio);
+  } else {
+    [w, h] = frameSize(16);
+  }
+  const s = Math.min(r.width / w, r.height / h);
+  const nextW = `${Math.floor(s * w)}px`;
+  const nextH = `${Math.floor(s * h)}px`;
+  const changed = S.el.stage.style.width !== nextW || S.el.stage.style.height !== nextH;
+  S.el.stage.style.width = nextW;
   S.el.view.style.setProperty("--split-height", Math.floor(r.height) + "px");
-  S.el.stage.style.height = `${Math.floor(s * h)}px`;
+  S.el.stage.style.height = nextH;
+  if (changed) S.dirty = true;
 };
 export const stageFit = () => {
   if (S.el?.stage && S.el.view) fit();
@@ -60,14 +73,18 @@ export const attachPicture = () => {
     S.viewMoved = true;
   };
   canvas.addEventListener("pointerdown", (e) => {
+    const compareMode = get().compareVideoMode;
     const p = get().preview;
-    if (!PHONE && e.button === 1 && (p.zoom !== 100 || !S.tools?.free.on)) {
+    if (!PHONE && e.button === 1 && (compareMode || p.zoom !== 100 || !S.tools?.free.on)) {
       e.preventDefault();
       pan = { id: e.pointerId, x: e.clientX, y: e.clientY, fromX: p.panX, fromY: p.panY };
-      canvas.setPointerCapture(e.pointerId);
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {}
       return;
     }
-    if (e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) return;
+    if (compareMode && (!activeCompareVideo() || Boolean(get().compareVideoError))) return;
+    if (!compareMode && e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) return;
     const prev = gesture;
     const next = stepViewport(gesture, {
       type: "press",
@@ -76,17 +93,18 @@ export const attachPicture = () => {
       button: e.button,
       x: e.clientX,
       y: e.clientY,
-      free: !!S.tools?.free.on,
+      free: !compareMode && !!S.tools?.free.on,
       shiftKey: e.shiftKey,
+      drawOnLeft: compareMode,
       raw: e,
     });
     if (next.gesture === prev) return;
-    if (e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
+    if (!compareMode && e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     }
     gesture = next.gesture;
-    if (S.tools?.free.on) rememberFreeView();
+    if (!compareMode && S.tools?.free.on) rememberFreeView();
     if (next.capture)
       try {
         canvas.setPointerCapture(e.pointerId);
@@ -104,7 +122,7 @@ export const attachPicture = () => {
       id: e.pointerId,
       x: e.clientX,
       y: e.clientY,
-      canWake: !!S.tools && !PHONE,
+      canWake: !get().compareVideoMode && !!S.tools && !PHONE,
     });
     gesture = step.gesture;
     if (step.startSketchFrom) {
@@ -148,20 +166,50 @@ export const attachPicture = () => {
       stepCamDrag(gesture.mode, e.clientX - prev.x, e.clientY - prev.y);
       return;
     }
-    if (e.pointerType === "mouse" && !PHONE && !gizmoBusy()) hover(pickAt(...frac(e)));
+    if (!get().compareVideoMode && e.pointerType === "mouse" && !PHONE && !gizmoBusy())
+      hover(pickAt(...frac(e)));
   });
   const tappedAt = (x: number, y: number, e: MouseEvent) => {
+    if (get().compareVideoMode) {
+      if (
+        !activeCompareVideo() ||
+        Boolean(get().compareVideoError) ||
+        Math.hypot(e.clientX - x, e.clientY - y) > 4
+      ) {
+        return null;
+      }
+      if (S.playing) setPlaying(false);
+      return frac(e);
+    }
     if (!S.render || Math.hypot(e.clientX - x, e.clientY - y) > 4) return null;
     if (S.playing) setPlaying(false);
     void engine.render(S.t);
     return frac(e);
   };
-  const pinNote = (x: number, y: number, e: MouseEvent) =>
+  const pinCompareNote = (x: number, y: number, e: MouseEvent) => {
+    const item = activeCompareVideo();
+    if (!item) return;
+    openNote(
+      {
+        x: +x.toFixed(4),
+        y: +y.toFixed(4),
+        ...compareHitForPoint(x, y, item.category, activeCompareLayout() ?? item.layout),
+      },
+      true,
+      pointOrigin(e.clientX, e.clientY),
+    );
+  };
+  const pinNote = (x: number, y: number, e: MouseEvent) => {
+    if (get().compareVideoMode) {
+      pinCompareNote(x, y, e);
+      return;
+    }
     openNote(
       { x: +x.toFixed(4), y: +y.toFixed(4), ...lookAtClick(x, y) },
       !flight.flying(),
       pointOrigin(e.clientX, e.clientY),
     );
+  };
   const armClick = () => {
     setTimeout(() => {
       if (gesture.kind === "pending_click") gesture = IDLE_VIEWPORT_GESTURE;
@@ -176,7 +224,8 @@ export const attachPicture = () => {
   canvas.addEventListener("pointerup", (e) => {
     if (e.pointerType !== "mouse" || ("id" in gesture && e.pointerId !== gesture.id)) return;
     if (e.button === 2) {
-      if (gesture.kind !== "sketching" && gesture.kind !== "right_press") return;
+      if (!(gesture.kind === "sketching" && gesture.button !== 0) && gesture.kind !== "right_press")
+        return;
       const g = gesture;
       gesture = IDLE_VIEWPORT_GESTURE;
       if (g.kind === "sketching" || sketch.on()) {
@@ -189,6 +238,11 @@ export const attachPicture = () => {
       return;
     }
     if (e.button !== 0) return;
+    if (gesture.kind === "sketching" && gesture.button === 0) {
+      gesture = IDLE_VIEWPORT_GESTURE;
+      sketch.end();
+      return;
+    }
     if (gesture.kind !== "left_press" && !(gesture.kind === "cam_drag" && gesture.mode !== "slide"))
       return;
     const g = gesture;
@@ -196,6 +250,10 @@ export const attachPicture = () => {
     if (g.kind !== "left_press") return;
     const at = tappedAt(g.x, g.y, e);
     if (!at) return;
+    if (get().compareVideoMode) {
+      pinCompareNote(...at, e);
+      return;
+    }
     if (handleCameraPick(...at)) return;
     if (handlePickFocus(at)) return;
     if (pickCameraPath(...at)) return;
@@ -289,7 +347,8 @@ export const attachPicture = () => {
     true,
   );
   canvas.addEventListener("dblclick", (e) => {
-    if (!PHONE && (e.ctrlKey || e.metaKey) && get().text) textDoubleClick(e, frac(e));
+    if (!get().compareVideoMode && !PHONE && (e.ctrlKey || e.metaKey) && get().text)
+      textDoubleClick(e, frac(e));
   });
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   const chord = () => {
@@ -385,8 +444,12 @@ export const attachPicture = () => {
       if (handleCameraPick(nx, ny)) return;
     }
     const at = tappedAt(x, y, e);
-    if (!at || pickCameraPath(...at)) return;
-    if (handlePickFocus(at)) return;
+    if (!at) return;
+    if (get().compareVideoMode) {
+      pinCompareNote(...at, e);
+      return;
+    }
+    if (pickCameraPath(...at) || handlePickFocus(at)) return;
     pinNote(...at, e);
   });
 };

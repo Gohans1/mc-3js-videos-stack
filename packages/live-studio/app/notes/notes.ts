@@ -21,6 +21,21 @@ import { stored } from "../core/storage";
 import { get, invalidatePictures, say, set, ui } from "../core/store";
 import { FPS, stamp } from "../core/time";
 import { captionAt } from "../picture/captions";
+import {
+  activeCompareNoteSource,
+  activeCompareVideo,
+  checkCompareFeedbackRange,
+  compareLayoutForSize,
+  compareVideoDimensions,
+  seekRecordedCompareTime,
+  setCompareVideoMode,
+  withCompareVideoSession,
+} from "../picture/compare-video";
+import {
+  compareHitForPoint,
+  composeMatchesStageSpace,
+  noteMatchesStageSpace,
+} from "../picture/compare-video-model";
 import { readLiveFreeView } from "../picture/freecam";
 import { seek, setPlaying } from "../playback/transport";
 import { inOutAt } from "../timeline/inout";
@@ -44,6 +59,7 @@ import {
   inkSpan,
   inkTimes,
   inkWords,
+  markHits,
   restoreInk,
   setInk,
 } from "./ink";
@@ -72,8 +88,10 @@ export const noteAt = (n: Note) =>
     timingClock,
     SHOTS.map((s, i) => ({ t: frameAt(timingClock, s.t), name: S.comments[i] })),
   );
-const whereText = (n: Note) =>
-  `${stamp(n.t)} | shot ${n.shot} (${n.shotName ?? ""})${n.pin ? ` | ${n.pin.what}` : ""}${(n.marks as Mark[] | undefined)?.length ? ` | drawn: ${inkWords(n.marks as Mark[])}` : ""}`;
+const whereText = (n: Note) => {
+  const videoTag = n.compareVideo?.path ? ` | ${n.compareVideo.path.split("/").pop()}` : "";
+  return `${stamp(n.t)} | shot ${n.shot} (${n.shotName ?? ""})${videoTag}${n.pin ? ` | ${n.pin.what}` : ""}${(n.marks as Mark[] | undefined)?.length ? ` | drawn: ${inkWords(n.marks as Mark[])}` : ""}`;
+};
 const lastFixAt = (n: Note) => n.fixes?.at(-1)?.at ?? n.at;
 
 export interface Placed {
@@ -105,7 +123,7 @@ const indexed = () => {
       n,
       t,
       span: marks?.length ? inkSpan(marks) : null,
-      words: `${num != null ? `#${num} ` : ""}${n.text} ${n.pin?.what ?? ""} shot ${n.shot} ${n.shotName ?? ""} ${stamp(t)} ${fixesText} ${asksText} ${n.learned?.what ?? ""}`,
+      words: `${num != null ? `#${num} ` : ""}${n.text} ${n.pin?.what ?? ""} ${n.compareVideo?.path ?? ""} shot ${n.shot} ${n.shotName ?? ""} ${stamp(t)} ${fixesText} ${asksText} ${n.learned?.what ?? ""}`,
     };
   });
   const open = all.filter((p) => noteState(p.n) === "open").sort((a, b) => a.t - b.t);
@@ -245,7 +263,12 @@ const noteContext = (c: ComposeCreate) => {
     beats,
     view: {
       phone: PHONE,
-      canvas: [S.el.canvas.width, S.el.canvas.height],
+      ...(c.compareVideo
+        ? (() => {
+            const dims = compareVideoDimensions(c.compareVideo.path);
+            return dims ? { canvas: dims } : {};
+          })()
+        : { canvas: [S.el.canvas.width, S.el.canvas.height] as [number, number] }),
       screen: [innerWidth, innerHeight],
     },
   };
@@ -465,6 +488,7 @@ let notesRequest = 0,
 export const loadNotes = async ({ notify = false } = {}) => {
   const request = ++notesRequest;
   const res = await getFile("/api/notes");
+  if (!res.ok) throw new Error(`Couldn't load notes (HTTP ${res.status})`);
   const numHeader = res.headers.get("x-note-numbers");
   const have: Note[] = await res.json();
   if (request < appliedNotesRequest) return;
@@ -626,13 +650,32 @@ export const openNote = async (
     ui.focusNote();
     return;
   }
+  if (get().compareVideoMode && (!activeCompareVideo() || get().compareVideoError)) {
+    say("Load a compare video or switch to Live 3D (V) before adding a note", 3500);
+    return;
+  }
+  if (!checkCompareFeedbackRange()) return;
   const wasPlaying = compose ? compose.wasPlaying : S.playing;
-  if (compose && draft.trim() && Math.abs(S.t - compose.t) > 0.01 && !inkMarks.length) {
-    set({ compose: { ...compose, resume: false } });
-    await saveNote();
+  const { compareVideoMode, compareVideoPath } = get();
+  const spaceMismatch = Boolean(
+    compose && !composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath),
+  );
+  if (
+    compose &&
+    (spaceMismatch || (draft.trim() && Math.abs(S.t - compose.t) > 0.01 && !inkMarks.length))
+  ) {
+    if (isComposeDirty(compose, draft, more())) {
+      set({ compose: { ...compose, resume: false } });
+      await saveNote();
+      if (get().compose) return;
+    } else {
+      set({ compose: { ...compose, resume: false } });
+      closeNote("cancel", { keepInk: true });
+    }
   }
   if (S.playing) setPlaying(false);
-  void engine.render(S.t);
+  const compareSource = get().compareVideoMode ? activeCompareNoteSource() : null;
+  if (!get().compareVideoMode) void engine.render(S.t);
   const i = shotIndex(S.t);
   const resolvedAnchor = anchor ?? (pin ? { x: pin.x, y: pin.y } : undefined);
   openBox(
@@ -643,6 +686,7 @@ export const openNote = async (
       shotName: S.comments[i] ?? "",
       pin,
       ...(resolvedAnchor ? { anchor: resolvedAnchor } : {}),
+      ...(compareSource ? { compareVideo: compareSource } : {}),
       resume: !!wasPlaying,
       wasPlaying,
       spoken: captionAt(S.t) ?? undefined,
@@ -667,19 +711,47 @@ export const mergeVoiceNoteDraft = (draft: string, voiceName: string, voiceId: s
   if (!cur) return line;
   return cur.split(/[\s()]+/).includes(voiceId) ? draft : `${cur}\n${line}`;
 };
-export const openVoiceNote = (voiceName: string, voiceId: string, origin?: ComposeOrigin) => {
+export const openVoiceNote = async (voiceName: string, voiceId: string, origin?: ComposeOrigin) => {
   if (get().compose?.kind === "edit") {
     set({ settingsOpen: false, side: "notes", lib: "notes" });
     ui.focusNote();
     say("Save or cancel the note edit before adding a voice to a new note");
     return;
   }
-  openNote(null, true, origin);
+  await openNote(null, true, origin);
+  if (get().compose?.kind !== "create") return;
   const next = mergeVoiceNoteDraft(get().draft, voiceName, voiceId);
   if (next !== get().draft) setDraft(next);
 };
 export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
-  if (!get().compose) openNote(null, false, origin, anchor);
+  const { compose, compareVideoMode, compareVideoPath, draft, refs } = get();
+  if (!compose) {
+    void openNote(null, false, origin, anchor);
+    return;
+  }
+  if (
+    compose.kind === "create" &&
+    !compose.pin &&
+    !inkMarks.length &&
+    !draft.trim() &&
+    !refs.length &&
+    !composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath)
+  ) {
+    const compareSource = compareVideoMode ? activeCompareNoteSource() : null;
+    const i = shotIndex(S.t);
+    const next: Compose = {
+      ...compose,
+      t: S.t,
+      shot: i,
+      shotName: S.comments[i] ?? "",
+      spoken: captionAt(S.t) ?? undefined,
+      ...(anchor ? { anchor } : {}),
+      compareVideo: compareSource ?? undefined,
+    };
+    const orig = origin ?? composeOrigin(compose);
+    if (orig) setComposeOrigin(next, orig);
+    set({ compose: next });
+  }
 };
 inkHooks.changed = () => setDraft(get().draft);
 inkHooks.anchor = (anchor) => setComposeAnchor(anchor);
@@ -709,7 +781,13 @@ export const restoreDraft = () => {
     setRefs([]);
     return;
   }
-  seek(compose.t);
+  if (compose.kind === "create" && compose.compareVideo?.path) {
+    setCompareVideoMode(true, compose.compareVideo.path);
+    seekRecordedCompareTime(compose.compareVideo.path, compose.t);
+  } else {
+    if (compose.kind === "create" && get().compareVideoMode) setCompareVideoMode(false);
+    seek(compose.t);
+  }
   openBox(compose, words);
 };
 export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
@@ -781,7 +859,15 @@ export const cancelNote = () => {
         await saveNote();
       }
       if (S.playing) setPlaying(false);
-      if (was.kind === "create") seek(was.t);
+      if (was.kind === "create" && was.compareVideo?.path) {
+        setCompareVideoMode(true, was.compareVideo.path);
+      } else if (was.kind === "create" && get().compareVideoMode) {
+        setCompareVideoMode(false);
+      }
+      if (was.kind === "create") {
+        if (was.compareVideo?.path) seekRecordedCompareTime(was.compareVideo.path, was.t);
+        else seek(was.t);
+      }
       inkMarks.push(...strokes);
       setRefs(refs);
       openBox({ ...was, resume: false }, words);
@@ -814,11 +900,19 @@ const saveNoteNow = async () => {
     return;
   }
   const tools = S.tools;
-  if (!tools) {
+  const rawCompareSource = compose.compareVideo ?? undefined;
+  const compareDims = rawCompareSource ? compareVideoDimensions(rawCompareSource.path) : null;
+  if (!tools && !rawCompareSource) {
     say("Your note draft is kept. Save once the preview loads.");
     return;
   }
   const sp = inkSpan(strokes);
+  let noteMarks: Mark[] = strokes.map((m) => ({
+    ...m,
+    pts: m.pts.slice(),
+    ...(m.ts ? { ts: m.ts.slice() } : {}),
+    ...(m.hits ? { hits: m.hits.slice() } : {}),
+  }));
   const n: Note = {
     id: Date.now().toString(36),
     at: new Date().toISOString(),
@@ -831,35 +925,80 @@ const saveNoteNow = async () => {
     scene: +frameAt(timingClock, compose.t).toFixed(3),
     spoken: compose.spoken,
     pin: compose.pin,
-    cam: camLine(),
-    freeCam: tools.free.on || undefined,
-    finalLook: get().final || undefined,
+    ...(rawCompareSource ? { compareVideo: rawCompareSource } : { cam: camLine() }),
+    freeCam: rawCompareSource ? undefined : tools?.free.on || undefined,
+    finalLook: rawCompareSource ? undefined : get().final || undefined,
     ...(get().newBuild ? { staleBuild: true } : {}),
     context: noteContext(compose),
     text: body,
     done: false,
-    marks: strokes.length ? strokes : undefined,
+    marks: noteMarks.length ? noteMarks : undefined,
     range: strokes.length ? (sp && sp[1] - sp[0] > 1 / FPS ? sp : undefined) : inOutAt(compose.t),
   };
+  let appliedCompareLayout = rawCompareSource?.layout ?? null;
+  const applyCompareLayout = (nextLayout: NonNullable<Note["compareVideo"]>["layout"]) => {
+    if (!n.compareVideo || nextLayout === appliedCompareLayout) return;
+    const category = n.compareVideo.category;
+    n.compareVideo = { ...n.compareVideo, layout: nextLayout };
+    if (n.pin) {
+      n.pin = {
+        ...n.pin,
+        ...compareHitForPoint(n.pin.x, n.pin.y, category, nextLayout),
+      };
+    }
+    if (noteMarks.length) {
+      const look = (x: number, y: number) => compareHitForPoint(x, y, category, nextLayout);
+      noteMarks = noteMarks.map((m) => {
+        const copy: Mark = { ...m, pts: m.pts.slice(), ...(m.ts ? { ts: m.ts.slice() } : {}) };
+        if (copy.kind === "path") copy.hits = copy.pts.map(([x, y]) => look(x, y));
+        else markHits(copy, { look, plane: () => null });
+        return copy;
+      });
+      n.marks = noteMarks;
+    }
+    appliedCompareLayout = nextLayout;
+  };
+  if (rawCompareSource && compareDims) {
+    applyCompareLayout(compareLayoutForSize(rawCompareSource, compareDims[0], compareDims[1]));
+  }
+  const compareTarget = n.compareVideo ?? null;
   let img: string | null = null,
     crop: string | null = null,
     strip: string | null = null,
     frames: { t: number; img: string }[] = [];
-  try {
-    strip = await momentStrip(compose.t);
-  } catch {}
-  if (strokes.length)
+  const captureAll = async (
+    target: typeof compareTarget | Parameters<Parameters<typeof withCompareVideoSession>[1]>[0],
+  ) => {
     try {
-      for (const t of spread(inkTimes(strokes), 8)) {
-        const frameImg = await snapshot(null, t, strokes);
-        if (frameImg) frames.push({ t: +t.toFixed(3), img: frameImg });
-      }
+      strip = await momentStrip(compose.t, target);
     } catch {}
-  try {
-    img = await snapshot(n.pin, compose.t, strokes);
-    if (n.pin) crop = await pinCrop(n.pin, compose.t);
-  } catch {}
-  await engine.render(S.t);
+    if (noteMarks.length)
+      try {
+        for (const t of spread(inkTimes(noteMarks), 8)) {
+          const frameImg = await snapshot(null, t, noteMarks, true, target);
+          if (frameImg) frames.push({ t: +t.toFixed(3), img: frameImg });
+        }
+      } catch {}
+    try {
+      img = await snapshot(n.pin, compose.t, noteMarks, true, target);
+      if (n.pin) crop = await pinCrop(n.pin, compose.t, target);
+    } catch {}
+  };
+  if (compareTarget) {
+    await withCompareVideoSession(compareTarget, async (session) => {
+      if (session.dimensions && n.compareVideo) {
+        applyCompareLayout(
+          compareLayoutForSize(n.compareVideo, session.dimensions[0], session.dimensions[1]),
+        );
+        const ctx = n.context as { view?: { canvas?: [number, number] } } | undefined;
+        if (ctx?.view) ctx.view.canvas = session.dimensions;
+      }
+      await captureAll(session);
+    });
+  } else {
+    await captureAll(null);
+  }
+  if (!get().compareVideoMode && S.render) await engine.render(S.t);
   S.dirty = true;
   signalNoteAction(n.id, "save");
   changed([...get().notes, n]);
@@ -958,6 +1097,7 @@ export const goToNote = (n: Note, newVisit = !get().review, mode: NoteJumpMode =
   }
   const wasView = readLiveFreeView();
   const wasFree = wasView !== undefined;
+  const wasCompare = { on: get().compareVideoMode, path: get().compareVideoPath };
   const wantsFree = useAfter && media.afterCam !== null ? true : Boolean(n.freeCam);
   const targetView =
     useAfter && media.afterCam !== null ? media.afterCam : n.freeCam ? noteFreeView(n) : null;
@@ -965,12 +1105,18 @@ export const goToNote = (n: Note, newVisit = !get().review, mode: NoteJumpMode =
   const willChangeCam = wantsFree
     ? !wasFree || (targetView !== null && !sameFreeView(wasView, targetView))
     : wasFree;
-  if (!PHONE && (newVisit || !get().noteReturn) && (willChangeTime || willChangeCam)) {
+  const willChangeCompare = wantsFree && wasCompare.on;
+  if (
+    !PHONE &&
+    (newVisit || !get().noteReturn) &&
+    (willChangeTime || willChangeCam || willChangeCompare)
+  ) {
     set({
       noteReturn: {
         at: S.t,
         clock: timingClock,
         ...(wasFree ? { free: true, view: wasView } : { free: false }),
+        compareVideo: wasCompare,
       },
     });
   }
@@ -1005,14 +1151,47 @@ export const returnFromNote = () => {
   if (!position) return;
   set({ noteReturn: null });
   if (S.playing) setPlaying(false);
+  if (position.compareVideo) {
+    setCompareVideoMode(position.compareVideo.on, position.compareVideo.path ?? undefined);
+  } else if (get().compareVideoMode) {
+    setCompareVideoMode(false);
+  }
   if (position.free) {
     if (position.view) engine.flyFree(position.view);
     else if (!(S.tools?.free.on ?? get().free)) engine.setFree(true, true);
   } else if (position.free === false && (S.tools?.free.on ?? get().free)) {
     engine.setFree(false);
   }
-  seek(noteReturnTime(position));
+  if (position.compareVideo?.on && position.compareVideo.path) {
+    seekRecordedCompareTime(position.compareVideo.path, position.at);
+  } else seek(noteReturnTime(position));
   setReview(false);
+};
+export const openNoteInCompareVideo = (n: Note) => {
+  if (!n.compareVideo) return;
+  const at = n.t;
+  const inReview = get().review;
+  const wasView = readLiveFreeView();
+  const wasFree = Boolean(S.tools?.free.on ?? get().free);
+  const wasCompare = { on: get().compareVideoMode, path: get().compareVideoPath };
+  const willChange =
+    !wasCompare.on ||
+    wasCompare.path !== n.compareVideo.path ||
+    (Number.isFinite(at) && Math.abs(S.t - at) > 0.01);
+  if (!PHONE && (!inReview || !get().noteReturn) && willChange) {
+    set({
+      noteReturn: {
+        at: S.t,
+        clock: timingClock,
+        ...(wasFree ? { free: true, view: wasView } : { free: false }),
+        compareVideo: wasCompare,
+      },
+    });
+  }
+  if (inReview) setReview(false);
+  if (S.playing) setPlaying(false);
+  setCompareVideoMode(true, n.compareVideo.path);
+  seekRecordedCompareTime(n.compareVideo.path, at);
 };
 export const playNote = (n: Note) => {
   seek(Math.max(0, noteAt(n) - 2));
@@ -1024,14 +1203,44 @@ let nowPictureQueue: Promise<unknown> = Promise.resolve();
 onDocMutated(invalidatePictures);
 export const nowPicture = (n: Note): Promise<string | null> => {
   const run = nowPictureQueue.then(async () => {
-    if (!S.render) return null;
     const rev = get().pictureRev;
     if (nowPicturesRev !== rev) {
       nowPictures.clear();
       nowPicturesRev = rev;
     }
-    const at = noteAt(n),
-      marks = (n.marks as Mark[] | undefined) ?? [];
+    const marks = (n.marks as Mark[] | undefined) ?? [];
+    if (n.compareVideo) {
+      const s = get();
+      const item = activeCompareVideo();
+      const target = activeCompareNoteSource();
+      if (
+        !s.compareVideoMode ||
+        s.compareVideoError ||
+        !item ||
+        !target ||
+        !noteMatchesStageSpace(n, s.compareVideoMode, target)
+      )
+        return null;
+      const at = target.path === n.compareVideo.path ? n.t : noteAt(n);
+      const key = JSON.stringify([
+        at,
+        n.pin ?? null,
+        marks,
+        "compare",
+        item.path,
+        item.size,
+        item.mtimeMs,
+      ]);
+      const cached = nowPictures.get(n.id);
+      if (!cached || cached.key !== key) {
+        const url = await snapshot(n.pin, at, marks, false, target).catch(() => null);
+        if (get().pictureRev !== rev) return null;
+        if (url !== null) nowPictures.set(n.id, { key, url });
+      }
+      return nowPictures.get(n.id)?.url ?? null;
+    }
+    if (!S.render) return null;
+    const at = noteAt(n);
     const wantFree = Boolean(n.freeCam);
     const wantView = wantFree ? noteFreeView(n) : null;
     const liveView = readLiveFreeView();
@@ -1332,11 +1541,27 @@ const EMPTY_STAGE_NOTES = {
   pins: [] as ActivePinNote[],
   frame: [] as { id: string; text: string; fade: number }[],
 };
+let compareStageNotes: { open: Placed[]; path: string; placed: Placed[] } | null = null;
+const notesAtCompareSourceTime = (open: Placed[], path: string): Placed[] => {
+  if (compareStageNotes?.open === open && compareStageNotes.path === path) {
+    return compareStageNotes.placed;
+  }
+  const placed = open
+    .map((p) => (p.n.compareVideo?.path === path ? { ...p, t: p.n.t } : p))
+    .sort((a, b) => a.t - b.t);
+  compareStageNotes = { open, path, placed };
+  return placed;
+};
 const stageNotesHere = () => {
   if (S.tools?.free.on) return EMPTY_STAGE_NOTES;
   const open = indexed().open;
   if (!open.length) return EMPTY_STAGE_NOTES;
-  return activeStageNotes(open, S.t, get().rate);
+  const { rate, compareVideoMode } = get();
+  const source = activeCompareNoteSource();
+  const placed = source ? notesAtCompareSourceTime(open, source.path) : open;
+  return activeStageNotes(placed, S.t, rate, (note) =>
+    noteMatchesStageSpace(note, compareVideoMode, source),
+  );
 };
 
 addEventListener("online", flushNotes);
@@ -1352,8 +1577,14 @@ export const pinWordsUp = (y: number) => y > 0.88;
 export const drawPins = () => {
   const box = S.el?.pins;
   if (!box) return;
-  const own = get().compose?.pin,
-    { pins: here, frame: frameNotes } = stageNotesHere();
+  const { compose, compareVideoMode, compareVideoPath } = get();
+  const own =
+    compose?.pin &&
+    (compose.kind !== "create" ||
+      composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath))
+      ? compose.pin
+      : null;
+  const { pins: here, frame: frameNotes } = stageNotesHere();
   if (!here.length && !frameNotes.length && !own) {
     lastPinLayoutSig = "";
     if (pinEls.size) {

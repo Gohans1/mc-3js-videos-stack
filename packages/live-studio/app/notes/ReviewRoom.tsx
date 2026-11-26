@@ -41,6 +41,7 @@ import { Tip } from "../components/Tip";
 import { VirtualList } from "../components/VirtualList";
 import { get, set, useDialogModal, useStudio } from "../core/store";
 import { stamp } from "../core/time";
+import { noteCompareAspect } from "../picture/compare-video-model";
 import { Compose } from "./Compose";
 import {
   useExitedNotes,
@@ -51,6 +52,7 @@ import {
 import { noteShotTitle, pinShortLabel } from "./note-card-meta";
 import {
   ActiveFilterChips,
+  CompareVideoBadge,
   hasSelectedText,
   LearnedCallout,
   NoteExitSlot,
@@ -82,6 +84,8 @@ import { nextReviewNeighborId, replyStaysInList } from "./review-nav";
 import type { Note, ReviewTab } from "./slice";
 
 const when = (at: string) => (at ? formatShortDate(at) : "");
+const noteKey = (item: Placed) => item.n.id;
+const rowKey = (row: { key: string }) => row.key;
 const lastFix = (n: Note) => n.fixes?.at(-1);
 type Kind = "fix" | "ask" | "open" | "done";
 const kindOf = (n: Note): Kind => {
@@ -110,8 +114,18 @@ function Compare({ n, at }: { n: Note; at: number }) {
   const showDiff = !!fix && !fix.ask && noteState(n) !== "open";
   const loading = useStudio((s) => s.loading),
     final = useStudio((s) => s.final),
-    pictureRev = useStudio((s) => s.pictureRev);
-  const nowKey = `${n.id}|${at.toFixed(3)}|${final ? 1 : 0}|${pictureRev}`;
+    ratio = useStudio((s) => s.ratio),
+    pictureRev = useStudio((s) => s.pictureRev),
+    compareVideoMode = useStudio((s) => s.compareVideoMode),
+    compareVideoPath = useStudio((s) => s.compareVideoPath),
+    compareVideoReady = useStudio((s) => s.compareVideoReady),
+    compareVideoLayout = useStudio((s) => s.compareVideoMeta?.layout ?? null);
+  const compareAspect = noteCompareAspect(n, ratio);
+  const frameAspect = compareAspect ? `${compareAspect[0]} / ${compareAspect[1]}` : undefined;
+  const compareKey = n.compareVideo
+    ? `|${compareVideoMode ? 1 : 0}|${compareVideoPath ?? ""}|${compareVideoReady ? 1 : 0}|${compareVideoLayout ?? ""}`
+    : "";
+  const nowKey = `${n.id}|${at.toFixed(3)}|${final ? 1 : 0}|${pictureRev}${compareKey}`;
   const [liveNowState, setLiveNowState] = useState<{ key: string; url: string | null } | null>(
     null,
   );
@@ -139,7 +153,10 @@ function Compare({ n, at }: { n: Note; at: number }) {
   if (!then && aiAfter) {
     return (
       <div className="bg-backdrop/90 border-hairline flex w-full flex-col items-center gap-1.5 rounded-lg border p-2">
-        <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md">
+        <figure
+          style={frameAspect ? { "--frame": frameAspect } : undefined}
+          className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md"
+        >
           <img
             src={aiAfter}
             alt={`After proof at ${stamp(media.afterTime ?? at)}`}
@@ -167,7 +184,10 @@ function Compare({ n, at }: { n: Note; at: number }) {
     return (
       <>
         <div className="bg-backdrop/90 border-hairline flex w-full justify-center rounded-lg border p-2">
-          <figure className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md">
+          <figure
+            style={frameAspect ? { "--frame": frameAspect } : undefined}
+            className="bg-backdrop upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md"
+          >
             <img
               src={then!}
               alt={`Saved frame at ${stamp(at)}`}
@@ -186,7 +206,11 @@ function Compare({ n, at }: { n: Note; at: number }) {
       <div className="bg-backdrop/90 border-hairline flex w-full flex-col items-center gap-1.5 rounded-lg border p-2">
         <figure
           className="bg-backdrop has-focus-visible:ring-ring upright:max-w-[calc(min(12rem,24dvh)*(var(--frame)))] note-image-outline relative aspect-(--frame) w-full max-w-[calc(min(15.5rem,32dvh)*(var(--frame)))] overflow-hidden rounded-md has-focus-visible:ring-2"
-          style={{ "--split": `${split}%`, "--hide": `${100 - split}%` }}
+          style={
+            frameAspect
+              ? { "--frame": frameAspect, "--split": `${split}%`, "--hide": `${100 - split}%` }
+              : { "--split": `${split}%`, "--hide": `${100 - split}%` }
+          }
         >
           {now && (
             <img
@@ -255,7 +279,11 @@ function Compare({ n, at }: { n: Note; at: number }) {
                 size="sm"
                 onClick={() => setPreferLiveKey((k) => (k === afterKey ? null : afterKey))}
               >
-                {preferLive ? "Show AI after shot" : "Compare live scene"}
+                {preferLive
+                  ? "Show AI after shot"
+                  : n.compareVideo
+                    ? "Compare current video"
+                    : "Compare live scene"}
               </Button>
             )}
             {(media.afterCam || media.afterTime !== null) && (
@@ -602,6 +630,7 @@ function Detail({
             <span className="text-label font-medium">{shot.primary}</span>
             {shot.secondary && <span className="text-muted-foreground"> · {shot.secondary}</span>}
           </span>
+          <CompareVideoBadge note={n} className="max-w-36" />
           {pinShortLabel(n.pin?.what) && (
             <Badge variant="tag" title={n.pin!.what} className="max-w-28">
               <Crosshair aria-hidden className="text-label" />
@@ -886,7 +915,7 @@ export function ReviewRoom() {
   const list = lists[tab],
     displayList = useExitedNotes(
       list,
-      (x) => x.n.id,
+      noteKey,
       `review|${tab}|${q}|${scope}|${shotFilter ?? ""}|${facets.join(",")}`,
     ),
     matched = displayList.findIndex((e) => !e.exiting && e.item.n.id === pickId),
@@ -1033,7 +1062,7 @@ export function ReviewRoom() {
             {displayList.length > 0 ? (
               <VirtualList
                 items={displayList}
-                getKey={(entry) => entry.key}
+                getKey={rowKey}
                 estimateSize={74}
                 gap={2}
                 role="list"

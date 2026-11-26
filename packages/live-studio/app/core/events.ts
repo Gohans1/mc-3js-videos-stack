@@ -1,8 +1,8 @@
-const listeners: [string, (e: Event) => void][] = [];
+const listeners = new Map<(e: Event) => void, string>();
 let source: EventSource;
 const open = () => {
   source = new EventSource("/api/events");
-  for (const [event, listener] of listeners) source.addEventListener(event, listener);
+  for (const [listener, event] of listeners) source.addEventListener(event, listener);
   source.addEventListener("error", () => {
     if (source.readyState === EventSource.CLOSED) setTimeout(open, 3000);
   });
@@ -10,8 +10,12 @@ const open = () => {
 open();
 export const onEvent = (event: string, run: (data: string) => void) => {
   const listener = (e: Event) => run((e as MessageEvent<string>).data);
-  listeners.push([event, listener]);
+  listeners.set(listener, event);
   source.addEventListener(event, listener);
+  return () => {
+    listeners.delete(listener);
+    source.removeEventListener(event, listener);
+  };
 };
 
 const built = document.querySelector<HTMLMetaElement>('meta[name="live-build"]')?.content;

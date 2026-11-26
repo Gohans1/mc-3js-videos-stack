@@ -1,3 +1,4 @@
+import type { NoteCompareSource } from "../picture/compare-video-model";
 import type { NoteFreeView } from "./note-card-meta";
 import type { NoteView } from "./note-views-model";
 
@@ -41,6 +42,7 @@ export interface Note {
   done: boolean;
   pin?: Pin | null;
   freeCam?: boolean;
+  compareVideo?: NoteCompareSource;
   staleBuild?: boolean;
   img?: string;
   fixes?: Fix[];
@@ -77,6 +79,7 @@ export interface ComposeCreate {
   resume: boolean;
   wasPlaying?: boolean;
   spoken?: string;
+  compareVideo?: NoteCompareSource;
 }
 export interface ComposeEdit {
   kind: "edit";
@@ -138,6 +141,23 @@ const normalizeAnchor = (raw: unknown): StageAnchor | undefined => {
   return { x: Math.min(1, Math.max(0, a.x)), y: Math.min(1, Math.max(0, a.y)) };
 };
 
+const normalizeCompareSource = (raw: unknown): NoteCompareSource | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const v = raw as Record<string, unknown>;
+  if (typeof v.path !== "string" || !v.path) return undefined;
+  if (v.category !== "compare" && v.category !== "render" && v.category !== "reference")
+    return undefined;
+  if (v.layout !== "hstack" && v.layout !== "vstack" && v.layout !== "single") return undefined;
+  return {
+    path: v.path,
+    category: v.category,
+    layout: v.layout,
+    ...(typeof v.startSec === "number" && Number.isFinite(v.startSec) && v.startSec > 0
+      ? { startSec: v.startSec }
+      : {}),
+  };
+};
+
 export const normalizeStoredCompose = (raw: unknown): Compose | null => {
   if (!raw || typeof raw !== "object") return null;
   const c = raw as Record<string, unknown>;
@@ -165,6 +185,7 @@ export const normalizeStoredCompose = (raw: unknown): Compose | null => {
   }
   const pin = normalizePin(c.pin);
   const anchor = normalizeAnchor(c.anchor) ?? (pin ? { x: pin.x, y: pin.y } : undefined);
+  const compareVideo = normalizeCompareSource(c.compareVideo);
   return {
     kind: "create",
     t: c.t,
@@ -175,6 +196,7 @@ export const normalizeStoredCompose = (raw: unknown): Compose | null => {
     resume: false,
     ...(typeof c.wasPlaying === "boolean" ? { wasPlaying: c.wasPlaying } : {}),
     ...(typeof c.spoken === "string" ? { spoken: c.spoken } : {}),
+    ...(compareVideo ? { compareVideo } : {}),
   };
 };
 export type InkKind = "pen" | "arrow" | "box" | "path";
@@ -203,6 +225,7 @@ export interface NotesSlice {
     clock: import("../../src/timing.mjs").TimingClock;
     free?: boolean;
     view?: NoteFreeView;
+    compareVideo?: { on: boolean; path: string | null };
   } | null;
   reviewTarget: string | null;
   notes: Note[];

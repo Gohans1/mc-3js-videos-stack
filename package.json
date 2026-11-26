@@ -75,6 +75,7 @@
     "voice:assemble": "bun packages/live-studio/wrong-place.mjs voice:assemble",
     "voice:cues": "bun packages/live-studio/wrong-place.mjs voice:cues",
     "sfx:get": "bun packages/live-studio/wrong-place.mjs sfx:get",
+    "sound:kit": "bun scripts/sound-kit.ts",
     "mix": "bun packages/live-studio/wrong-place.mjs mix",
     "listen": "bun packages/live-studio/wrong-place.mjs listen",
     "media": "bun scripts/media.mjs",

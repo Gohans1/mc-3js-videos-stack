@@ -53,6 +53,7 @@ import { set, setPref, useStudio } from "../core/store";
 import { FPS, rangeText } from "../core/time";
 import { copyAll } from "../notes/notes";
 import { choose, pinPick, setGain, whereNext } from "../options/options";
+import { setCompareVideoMode } from "../picture/compare-video";
 import { GUIDE_MODES, type GuideMode } from "../picture/director-eye";
 import { frameSize, setRatio } from "../picture/frame";
 import { FreeCamLensFields } from "../picture/FreeCamLens";
@@ -366,8 +367,8 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
             <Kbd>→</Kbd>
           </>
         ),
-        description: "1 frame (Shift: 5 frames)",
-        search: "arrow left right 1 frame shift 5 frames step",
+        description: "Live 3D: 1 frame. Compare: 5 seconds. Shift: 5 frames.",
+        search: "arrow left right 1 frame shift 5 frames step compare skip seek seconds",
       },
       {
         keys: (
@@ -526,6 +527,12 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
         ),
         description: "snapshot the picture; hold \\ to compare after a change",
         search: "shift+\\ snapshot picture compare",
+      },
+      {
+        keys: <Kbd>V</Kbd>,
+        description:
+          "toggle Compare video mode (watch REF | OURS or rendered video, click to pin, drag to draw)",
+        search: "v compare video side by side sbs ref ours render pin draw",
       },
       {
         keys: (
@@ -794,6 +801,12 @@ const SHORTCUT_GROUPS: ShortcutGroup[] = [
         search: "delete clips keyframes object cut merge shots",
       },
       {
+        keys: <Kbd>D</Kbd>,
+        description:
+          "disable or enable selected audio clips (keeps them on the timeline, silenced)",
+        search: "d disable enable mute audio clips selected",
+      },
+      {
         keys: (
           <>
             <Kbd>Ctrl</Kbd>
@@ -985,8 +998,10 @@ export function Settings() {
       valueCheck: x.valueCheck,
       ghost: x.ghost,
       ghostOpacity: x.ghostOpacity,
+      muted: x.muted,
       blindAudio: x.blindAudio,
       colorScript: x.colorScript,
+      compareVideoMode: x.compareVideoMode,
       tryOn: x.tryOn,
       free: x.free,
       flySpeed: x.flySpeed,
@@ -1139,6 +1154,16 @@ export function Settings() {
               </SettingCard>
 
               <SettingCard title="Playback & Frame" icon={Film} accent="primary" rows>
+                <div className="contents pointer-coarse:hidden">
+                  <SwitchRow
+                    id="compare-video"
+                    label="Compare video"
+                    keys={["V"]}
+                    checked={s.compareVideoMode}
+                    onChange={(on) => setCompareVideoMode(on)}
+                    help="Watch rendered REF | OURS side-by-side videos (renders/reference/*_vs_*.mp4 or *_sbs.mp4) or renders directly on the stage, synced to the timeline, with click-to-pin and drag-to-draw notes."
+                  />
+                </div>
                 <Row>
                   <span className="text-foreground text-sm whitespace-nowrap">Speed</span>
                   <Speed />
@@ -1279,6 +1304,7 @@ export function Settings() {
                     ghost={s.ghost}
                     ghostOpacity={s.ghostOpacity}
                     colorScript={s.colorScript}
+                    muted={s.muted}
                     blindAudio={s.blindAudio}
                   />
                 </div>

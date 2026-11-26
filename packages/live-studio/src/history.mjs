@@ -181,7 +181,8 @@ export const openFilmHistory = (
     const last = db
       .query("SELECT seq,id,name,kind,at,fingerprint FROM revisions ORDER BY seq DESC LIMIT 1")
       .get();
-    if (kind === "auto" && last?.fingerprint === state.fingerprint) return last;
+    if (kind === "auto" && last?.fingerprint === state.fingerprint)
+      return { revision: last, created: false };
     const id = randomUUID(),
       at = new Date().toISOString();
     for (const path of watched) db.query("INSERT OR IGNORE INTO paths VALUES (?)").run(path);
@@ -192,8 +193,12 @@ export const openFilmHistory = (
     db.query(
       "INSERT INTO revisions(id,name,kind,at,fingerprint,manifest) VALUES (?,?,?,?,?,?)",
     ).run(id, name, kind, at, state.fingerprint, JSON.stringify(state.manifest));
-    changed();
-    return db.query("SELECT seq,id,name,kind,at,fingerprint FROM revisions WHERE id=?").get(id);
+    return {
+      revision: db
+        .query("SELECT seq,id,name,kind,at,fingerprint FROM revisions WHERE id=?")
+        .get(id),
+      created: true,
+    };
   });
   const capture = (name = "Autosave", kind = "auto") => {
     if (
@@ -203,7 +208,9 @@ export const openFilmHistory = (
       !["auto", "named", "before-restore", "restore"].includes(kind)
     )
       throw new HistoryError("A revision needs a name of 1-160 characters and a valid kind");
-    return keep(name.trim(), kind, snapshot());
+    const { revision, created } = keep(name.trim(), kind, snapshot());
+    if (created) changed();
+    return revision;
   };
   const list = (limit = 100, before = Number.MAX_SAFE_INTEGER) =>
     db
@@ -230,7 +237,8 @@ export const openFilmHistory = (
         throw new HistoryError(`Missing or corrupt history content: ${name}`, 500);
       contents.set(name, blob);
     }
-    const backup = keep("Before restoring " + row.name, "before-restore", before);
+    const { revision: backup } = keep("Before restoring " + row.name, "before-restore", before);
+    changed();
     const touchedPaths = new Map();
     for (const name of [...before.files.keys(), ...contents.keys()]) {
       const actual = actualName(name);
@@ -277,7 +285,8 @@ export const openFilmHistory = (
     } finally {
       for (const [temp] of staged) rmSync(temp, { force: true });
     }
-    const restored = keep("Restored " + row.name, "restore", snapshot());
+    const { revision: restored } = keep("Restored " + row.name, "restore", snapshot());
+    changed();
     const previousPackage = before.files.get("package.json"),
       nextPackage = contents.get("package.json");
     return {
@@ -293,13 +302,16 @@ export const openFilmHistory = (
   const start = () => {
     if (watchers.length) return;
     const autosave = () => {
+      const previousProblem = problem ?? preparationProblem;
+      let created = false;
       try {
-        capture();
+        ({ created } = keep("Autosave", "auto", snapshot()));
         problem = null;
       } catch (error) {
         problem = error.message;
         onError(error.message);
       }
+      if (created || previousProblem !== (problem ?? preparationProblem)) changed();
     };
     autosave();
     const schedule = () => {

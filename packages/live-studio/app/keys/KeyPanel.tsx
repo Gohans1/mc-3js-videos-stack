@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Plus, Redo2, Trash2, Undo2, X } from "lucide-react";
+import { FACE_BLEND, isTimelineFaceName } from "mc-actor/toon-timeline";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,7 +55,7 @@ function Typed({
   value: string | number;
   number?: boolean;
   step?: number;
-  onSave: (v: string) => void;
+  onSave: (v: string) => false | void;
   name: string;
   tight?: boolean;
 }) {
@@ -77,7 +78,8 @@ function Typed({
         }
       }}
       onBlur={(e) => {
-        if (e.target.value !== String(value)) onSave(e.target.value);
+        if (e.target.value !== String(value) && onSave(e.target.value) === false)
+          e.target.value = String(value);
       }}
     />
   );
@@ -85,19 +87,41 @@ function Typed({
 
 function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; optional: boolean }) {
   useStudio((s) => s.keysRev);
-  const v = k[field],
+  const faceLane = files[r.f].edit === "face",
+    v = k[field] ?? (faceLane && field === "k" ? 1 : faceLane && field === "blend" ? FACE_BLEND : k[field]),
     save = (x: unknown) => setField(r, field, x),
     row = keysOf(r.f, r.path);
   const num = (s: string) => {
     const x = Number(s);
     if (s.trim() === "" || !Number.isFinite(x)) {
       say(`${field} needs a number`);
-      return;
+      return false;
+    }
+    if (faceLane && (field === "k" || field === "blend") && (x < 0 || (field === "k" && x > 1))) {
+      say(field === "k" ? "Intensity must be between 0 and 1" : "Blend must be 0 seconds or more");
+      return false;
     }
     save(x);
   };
   let control;
-  if (typeof v === "number") control = <Typed name={field} number value={v} onSave={num} />;
+  if (faceLane && field === "face") {
+    control = (
+      <Typed
+        name="Face preset or family"
+        value={typeof v === "string" ? v : ""}
+        onSave={(value) => {
+          const name = value.trim();
+          const custom = S.tools?.toonFaces?.[r.path[0]];
+          if (name && (!isTimelineFaceName(name) ||
+            (name.startsWith("custom/") && custom && !custom.includes(name.slice("custom/".length))))) {
+            say("Unknown face. Pick one in Expressions, or use a custom/<name> from this film.");
+            return false;
+          }
+          save(name || null);
+        }}
+      />
+    );
+  } else if (typeof v === "number") control = <Typed name={field} number value={v} onSave={num} />;
   else if (typeof v === "boolean")
     control = <Switch checked={v} onCheckedChange={(on) => save(on)} aria-label={field} />;
   else if (typeof v === "string") {
@@ -180,7 +204,7 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
         {field}
       </span>
       {control}
-      {v !== null && row.some((x) => x[field] === null) ? (
+      {v !== null && (faceLane && field === "face" || row.some((x) => x[field] === null)) ? (
         <Tip label={`Turn ${field} off on this keyframe (null), as on some others in this track`}>
           <Button
             variant="quiet"
@@ -212,6 +236,9 @@ function Field({ r, k, field, optional }: { r: KeyRef; k: Key; field: string; op
           Clips load with the page. Reload to see a new one.
         </p>
       )}
+      {faceLane && field === "face" && v === null && (
+        <p className="text-muted-foreground col-span-3 text-xs">Using the film’s original face.</p>
+      )}
     </div>
   );
 }
@@ -229,9 +256,10 @@ function One({ r }: { r: KeyRef }) {
     (x) => x.edit === files[r.f].edit && x.path.join(".") === r.path.join("."),
   );
   const editable = (f: string) => f !== "t" && f !== "__timing" && !(easing && f === "ease");
-  const fields = Object.keys(k).filter(editable);
+  const faceLane = files[r.f].edit === "face";
+  const fields = faceLane ? ["face", "k", "blend"] : Object.keys(k).filter(editable);
   const everyone = (f: string) => ks.every((x) => f in x);
-  const missing = [...new Set(ks.flatMap((x) => Object.keys(x)))].filter(
+  const missing = faceLane ? [] : [...new Set(ks.flatMap((x) => Object.keys(x)))].filter(
     (f) => editable(f) && !(f in k),
   );
   const lastWith = (f: string) => {
@@ -308,7 +336,7 @@ function One({ r }: { r: KeyRef }) {
       </div>
       <div className="flex flex-col gap-2">
         {fields.map((f) => (
-          <Field key={f} r={r} k={k} field={f} optional={!everyone(f)} />
+          <Field key={f} r={r} k={k} field={f} optional={faceLane ? f !== "face" && f in k : !everyone(f)} />
         ))}
       </div>
       <TargetTransformTools selected={r} />
@@ -451,7 +479,7 @@ function AtPlayhead({ add }: { add?: boolean }) {
   const what = add
     ? "Add a keyframe at the playhead to…"
     : "Select the keyframe nearest the playhead in…";
-  const choices = add ? rows.filter((r) => !isSingleKeyRow(r.f, r.path)) : rows;
+  const choices = rows.filter((r) => add ? !isSingleKeyRow(r.f, r.path) : keysOf(r.f, r.path).length > 0);
   return (
     <Select
       items={choices.map((r) => ({ value: r.id, label: r.label }))}

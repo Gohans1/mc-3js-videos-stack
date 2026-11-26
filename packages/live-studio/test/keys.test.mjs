@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
 
+import { keyFileRows } from "../src/contract-keys.ts";
 import { KeyFile, keyFileSchema, keyRows, problems, rowAt } from "../src/contract.ts";
 import { compactJson, openTimelineFile } from "../src/timeline_file.mjs";
 
@@ -35,6 +36,13 @@ test("key rows: every list of timed keys, at any depth; lists of other things an
   assert.deepEqual(keyRows(v), [["moves"], ["screen", "typing", "tries"]]);
   assert.deepEqual(rowAt(v, ["screen", "typing", "tries"]), [{ t: 5, text: "a" }]);
   assert.deepEqual(keyRows([{ t: 0 }, { t: 1 }]), [[]]);
+});
+
+test("empty registered face tracks remain available for the first key", () => {
+  const cast = { steve: [{ t: 0, face: null }], alex: [] };
+  assert.deepEqual(keyFileSchema([], "face").parse(cast), cast);
+  assert.deepEqual(keyFileRows("face", cast), [["steve"], ["alex"]]);
+  assert.deepEqual(keyFileRows("cast", cast), [["steve"]]);
 });
 
 test("single timed event objects with finite t become key rows while untimed or custom-named prop shapes stay untouched", () => {

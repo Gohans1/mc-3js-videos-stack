@@ -9,7 +9,15 @@ import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/ac
 import { keyReach, REACH, sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
-import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import {
+  holdView,
+  marks,
+  onPlayhead,
+  playheadDragHit,
+  timeAt,
+  timelineWheel,
+  view,
+} from "../timeline/timeline";
 import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   editKeys,
@@ -212,9 +220,12 @@ export const attachKeyRows = () => {
     }
     c.setPointerCapture(e.pointerId);
     if (!s) {
-      const grab = onPlayhead(x, w, touch);
+      const grab = playheadDragHit(x, w, touch, add);
       if (touch || grab) {
-        if (!grab) pickKeys([]);
+        if (!grab) {
+          pickKeys([]);
+          if (w) seek(timeAt(x, w));
+        }
         scrub = { resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
@@ -308,8 +319,10 @@ export const attachKeyRows = () => {
     drag = null;
     c.style.cursor = "";
     if (!moved) {
-      if (alone) pickKeys(column);
-      seek(keyOf(ref).t);
+      if (e.type === "pointerup") {
+        if (alone) pickKeys(column);
+        seek(keyOf(ref).t);
+      }
       return;
     }
     const after = group.map((r) => keyOf(r).t),

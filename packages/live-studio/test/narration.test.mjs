@@ -92,3 +92,19 @@ test("narration keeps an explicit span when the source duration is unknown", () 
   const audio = { narration: "voice", sfx: [{ name: "voice", at: 0, length: 8 }] };
   assert.deepEqual(narrationLines(lines, audio, 0), lines);
 });
+
+test("clip-level muted hides narration from audible ducking while keeping subtitle editing", () => {
+  const audio = {
+    narration: "voice",
+    tracks: [{ id: "v" }],
+    sfx: [
+      { name: "voice", at: 0, length: 3, track: "v", muted: true },
+      { name: "voice", at: 10, start: 3, length: 5, track: "v" },
+    ],
+  };
+  assert.equal(narrationLines(lines, audio, 8).length, 2);
+  const audible = narrationLines(lines, audio, 8, true);
+  assert.equal(audible.length, 1);
+  assert.equal(audible[0].s, 10);
+  assert.equal(seenSound(audio).sfx[0].muted, true);
+});

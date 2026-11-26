@@ -316,4 +316,127 @@ describe("createAuditionController", () => {
     expect(ctrl.auditionTarget()).toBe("");
     expect(ctrl.listening()).toBe("");
   });
+
+  test("external loudness-matched audition shares AuditionDock target, progress, toggle, seek, and stop cleanly", () => {
+    const audio = createFakeAudio();
+    const ctrl = createAuditionController({
+      audio,
+      setInterval: () => 1,
+      clearInterval: () => {},
+      onSoundBump: () => {},
+      onPlayError: () => {},
+    });
+    let playing = true;
+    let time = 0.4;
+    let toggles = 0;
+    let stops = 0;
+    const seeks = [];
+    const ext = {
+      id: "mixkit-1489",
+      duration: 2.0,
+      currentTime: () => time,
+      isPlaying: () => playing,
+      toggle: () => {
+        toggles += 1;
+        playing = !playing;
+      },
+      seek: (to) => {
+        time = to;
+        seeks.push(to);
+      },
+      stop: () => {
+        stops += 1;
+        playing = false;
+      },
+    };
+    ctrl.attachExternalAudition(ext);
+    expect(ctrl.auditionTarget()).toBe("mixkit-1489");
+    expect(ctrl.listening()).toBe("mixkit-1489");
+    expect(ctrl.auditionProgress(0)).toEqual({ at: 0.4, duration: 2.0, known: true });
+
+    ctrl.seekAudition("mixkit-1489", 1.1, 2.0);
+    expect(seeks).toEqual([1.1]);
+    expect(ctrl.auditionProgress(0).at).toBe(1.1);
+
+    ctrl.listen("mixkit-1489");
+    expect(toggles).toBe(1);
+    expect(ctrl.listening()).toBe("");
+    expect(ctrl.auditionTarget()).toBe("mixkit-1489");
+
+    ctrl.releaseExternalAudition(ext, true);
+    expect(ctrl.auditionTarget()).toBe("mixkit-1489");
+
+    ctrl.listenUrl("other-sfx", "/api/sfx/other-sfx.wav");
+    expect(stops).toBe(1);
+    expect(ctrl.auditionTarget()).toBe("other-sfx");
+  });
+
+  test("async HTMLAudio pause and delayed error events never freeze or abort active external Match dB audition", async () => {
+    const audio = createFakeAudio();
+    audio.pause = () => {
+      if (audio.paused) return;
+      audio.paused = true;
+      queueMicrotask(() => audio.emit("pause"));
+    };
+    let activeTick = null;
+    let tickId = 0;
+    const errors = [];
+    const ctrl = createAuditionController({
+      audio,
+      setInterval: (fn) => {
+        tickId += 1;
+        activeTick = { id: tickId, fn };
+        return tickId;
+      },
+      clearInterval: (id) => {
+        if (activeTick?.id === id) activeTick = null;
+      },
+      onSoundBump: () => {},
+      onPlayError: (msg) => errors.push(msg),
+    });
+
+    ctrl.listenUrl("bgm-row", "/api/sfx/bgm-row.wav");
+    audio.emit("play");
+    expect(ctrl.listening()).toBe("bgm-row");
+    expect(activeTick).not.toBeNull();
+
+    let extTime = 0.2;
+    let extPlaying = true;
+    const ext = {
+      id: "mixkit-1489",
+      duration: 2.0,
+      currentTime: () => extTime,
+      isPlaying: () => extPlaying,
+      toggle: () => {
+        extPlaying = !extPlaying;
+      },
+      stop: () => {
+        extPlaying = false;
+      },
+    };
+    ctrl.attachExternalAudition(ext);
+    await flushMicrotasks();
+
+    expect(activeTick).not.toBeNull();
+    expect(ctrl.listening()).toBe("mixkit-1489");
+    expect(ctrl.auditionTarget()).toBe("mixkit-1489");
+
+    const revBeforeTick = ctrl.auditionSnapshot();
+    extTime = 1.05;
+    activeTick.fn();
+    expect(ctrl.auditionSnapshot()).toBeGreaterThan(revBeforeTick);
+    expect(ctrl.auditionProgress(0).at).toBe(1.05);
+
+    audio.emit("error");
+    audio.emit("ended");
+    audio.emit("timeupdate");
+    expect(errors).toEqual([]);
+    expect(activeTick).not.toBeNull();
+    expect(ctrl.listening()).toBe("mixkit-1489");
+    expect(ctrl.auditionTarget()).toBe("mixkit-1489");
+
+    audio.src = "/api/sfx/stale.wav";
+    ctrl.listenUrl("mixkit-1489", "/api/sfx/mixkit-1489.wav");
+    expect(audio.src).toBe("/api/sfx/mixkit-1489.wav");
+  });
 });

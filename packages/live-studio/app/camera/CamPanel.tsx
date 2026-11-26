@@ -73,7 +73,7 @@ import { FreeCamPanel } from "./FreeCamPanel";
 import { renameShot, setShotCameraClock, shotsDoc } from "./shots";
 
 const CameraEasePanel = lazy(() =>
-  import("../shell/LazyPanels").then((m) => ({ default: m.CameraEasePanel })),
+  import("./SpeedPanel").then((m) => ({ default: m.CameraEasePanel })),
 );
 
 export const SHOT_NAME_ID = "shot-name";

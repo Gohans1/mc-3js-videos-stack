@@ -25,6 +25,8 @@ export interface Elements {
   view: HTMLElement;
   stage: HTMLElement;
   canvas: HTMLCanvasElement;
+  compareVideo?: HTMLVideoElement | null;
+  compareReferenceAudio?: HTMLAudioElement | null;
   final: HTMLCanvasElement;
   inspection: HTMLCanvasElement;
   shutter: HTMLCanvasElement;
@@ -126,6 +128,7 @@ export const S = {
   voiceOut: [] as Line[],
   voiceBase: [] as Line[],
   clockStart: 0,
+  shuttle: 0,
   dragging: null as { resume: boolean } | null,
   failedFile: "",
   timesRev: 0,

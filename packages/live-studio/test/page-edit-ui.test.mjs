@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, afterEach, beforeAll, beforeEach, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -7,6 +7,8 @@ import { openFilm } from "../src/film.mjs";
 import { buildPage } from "../src/page.mjs";
 
 let dir, film, page, server, view;
+let favoritesFailure = 0;
+let favoritesRequests = 0;
 const input = (name) => `document.querySelector('input[aria-label=${JSON.stringify(name)}]')`;
 const button = (text) =>
   `[...document.querySelectorAll('button')].find(n=>n.textContent.trim()===${JSON.stringify(text)}||n.querySelector('span')?.textContent===${JSON.stringify(text)})`;
@@ -17,27 +19,21 @@ const until = async (expr) => {
     if (await view.evaluate(`Boolean(${expr})`)) return;
     await new Promise((r) => setTimeout(r, 25));
   }
-  throw new Error(`Timed out: ${expr}\n${await view.evaluate("document.body.innerText.slice(-1600)")}`);
-};
-const fill = (name, value) =>
-  until(
-    `(()=>{const el=${input(name)};if(!el)return false;el.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,${JSON.stringify(value)});el.dispatchEvent(new Event('input',{bubbles:true}));el.blur();return true})()`,
+  throw new Error(
+    `Timed out: ${expr}\n${await view.evaluate("document.body.innerText.slice(-1600)")}`,
   );
-const click = async (x, y, button = "right") => {
-  await view.cdp("Input.dispatchMouseEvent", {
-    type: "mousePressed",
-    x,
-    y,
-    button,
-    clickCount: 1,
-  });
-  await view.cdp("Input.dispatchMouseEvent", {
-    type: "mouseReleased",
-    x,
-    y,
-    button,
-    clickCount: 1,
-  });
+};
+const fill = async (name, value) => {
+  await until(`(() => {
+    const el = ${input(name)};
+    if (!el) return false;
+    el.focus();
+    el.select();
+    return document.activeElement === el;
+  })()`);
+  if (value) await view.type(value);
+  else await view.press("Backspace");
+  await view.press("Enter");
 };
 const drag = async (from, to) => {
   await view.cdp("Input.dispatchMouseEvent", {
@@ -61,23 +57,34 @@ const drag = async (from, to) => {
     clickCount: 1,
   });
 };
-const center = (id) =>
+const geometry = (id) =>
   view.evaluate(
-    `(()=>{const frame=document.querySelector('iframe'),r=frame.contentDocument.getElementById(${JSON.stringify(id)}).getBoundingClientRect(),s=document.querySelector('canvas').getBoundingClientRect();return [s.x+(r.x+r.width/2)/frame.clientWidth*s.width,s.y+(r.y+r.height/2)/frame.clientHeight*s.height]})()`,
+    `(() => {
+      const frame = document.querySelector('iframe');
+      const r = frame.contentDocument.getElementById(${JSON.stringify(id)}).getBoundingClientRect();
+      const canvas = document.querySelector('canvas').getBoundingClientRect();
+      const center = [r.x + r.width / 2, r.y + r.height / 2];
+      const scale = [canvas.width / frame.clientWidth, canvas.height / frame.clientHeight];
+      return { center, scale, pointer: [canvas.x + center[0] * scale[0], canvas.y + center[1] * scale[1]] };
+    })()`,
   );
 const pick = async (id) => {
-  await click(...(await center(id)));
+  await view.click(...(await geometry(id)).pointer);
   await until(`${button("Back to layer")}`);
 };
-const clickWhenReady = (target) => until(`(()=>{const target=${target};if(!target)return false;target.click();return true})()`);
-const effectsTab = "[...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='Effects')";
+const clickWhenReady = (target) =>
+  until(`(()=>{const target=${target};if(!target)return false;target.click();return true})()`);
+const effectsTab =
+  "[...document.querySelectorAll('[role=tab]')].find(n=>n.textContent==='Effects')";
 const editFront = async () => {
   await pick("front");
   await until(`${input("Text")}?.value === 'Front'`);
 };
 const overrides = async () =>
   (await (await fetch(new URL("/api/openfilm", server.url))).json()).data.items[0].elements ?? [];
-const saved = async (matches, read = overrides) => {
+const confirmSaved = async (matches, read = overrides) => {
+  await view.click('[aria-label="Confirm pending changes"]', { timeout: 4000 });
+  await until(`!document.querySelector('[aria-label="Unconfirmed Studio changes"]:not([inert])')`);
   const end = Date.now() + 4000;
   while (Date.now() < end) {
     if (matches(await read())) return;
@@ -105,8 +112,13 @@ beforeAll(async () => {
   server = Bun.serve({
     port: 0,
     idleTimeout: 0,
-    fetch: (req) =>
-      new URL(req.url).pathname === "/_openfilm/catalog"
+    fetch: (req) => {
+      const path = new URL(req.url).pathname;
+      if (path === "/api/favorites") {
+        favoritesRequests++;
+        if (favoritesFailure) return new Response(null, { status: favoritesFailure });
+      }
+      return path === "/_openfilm/catalog"
         ? Response.json([
             {
               id: "fixture-card",
@@ -119,8 +131,12 @@ beforeAll(async () => {
               h: 1080,
             },
           ])
-        : app.fetch(req),
+        : app.fetch(req);
+    },
   });
+}, 30000);
+
+beforeEach(async () => {
   view = new Bun.WebView({
     backend: { type: "chrome", argv: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"] },
   });
@@ -131,14 +147,12 @@ beforeAll(async () => {
     deviceScaleFactor: 1,
     mobile: false,
   });
-}, 30000);
-
-beforeEach(async () => {
   const current = film.openfilm.read();
   film.openfilm.write(current.version, {
     items: [{ id: "own-page", asset: "/custom-title.html", from: 0, to: 6 }],
   });
   await view.navigate(server.url.href);
+  await until("window.__readyAt");
   await until("document.querySelector('iframe')?.contentDocument?.getElementById('front')");
   await clickWhenReady(effectsTab);
   await until(button("Another card"));
@@ -150,8 +164,11 @@ beforeEach(async () => {
   );
 }, 60000);
 
-afterAll(async () => {
+afterEach(() => {
   view?.close();
+});
+
+afterAll(async () => {
   server?.stop(true);
   await page?.close();
   film?.stop();
@@ -159,72 +176,181 @@ afterAll(async () => {
 });
 
 test("picture picking follows the painted stacking order", async () => {
-  await pick("front");
-  await until(input("Text"));
-  expect(await view.evaluate(`${input("Text")}.value`)).toBe("Front");
+  await editFront();
 }, 20000);
 
+const startupPaths = async () => {
+  await view.navigate(server.url.href);
+  await until("window.__readyAt");
+  return view.evaluate(
+    "performance.getEntriesByType('resource').map(({name})=>new URL(name).pathname)",
+  );
+};
+
+test("loading the Studio reads the overlay timeline once", async () => {
+  expect((await startupPaths()).filter((path) => path === "/api/openfilm")).toHaveLength(1);
+});
+
+test("opening Compare loads its catalog on demand", async () => {
+  expect(await startupPaths()).not.toContain("/api/compare-videos");
+  await view.click('button[aria-label="Compare video"]');
+  await until(
+    "performance.getEntriesByType('resource').some(({name})=>new URL(name).pathname==='/api/compare-videos')",
+  );
+});
+
+test("holding Space pauses once even when the keyboard repeats", async () => {
+  await view.click('button[aria-label="Play"]');
+  await until("document.querySelector('button[aria-label=\"Pause\"]')");
+  await view.evaluate("document.activeElement.blur()");
+  const space = (type, autoRepeat = false) =>
+    view.cdp("Input.dispatchKeyEvent", {
+      type,
+      code: "Space",
+      key: " ",
+      windowsVirtualKeyCode: 32,
+      autoRepeat,
+    });
+  await space("rawKeyDown");
+  await until("document.querySelector('button[aria-label=\"Play\"]')");
+  await space("rawKeyDown", true);
+  await space("keyUp");
+  expect(
+    await view.evaluate(
+      `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() =>
+        resolve(Boolean(document.querySelector('button[aria-label="Play"]')))
+      )))`,
+    ),
+  ).toBe(true);
+});
+
+test("Pause updates the controls before restoring the full-resolution picture", async () => {
+  const fullWidth = await view.evaluate("document.querySelector('canvas').width");
+  await view.click('button[aria-label="Play"]');
+  await until(`document.querySelector('canvas').width < ${fullWidth}`);
+  await view.evaluate(`(() => {
+    const canvas = document.querySelector('canvas');
+    const playingWidth = canvas.width;
+    const width = Object.getOwnPropertyDescriptor(HTMLCanvasElement.prototype, 'width');
+    let painted = false;
+    addEventListener('click', () => {
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        painted = Boolean(document.querySelector('button[aria-label="Play"]'));
+      }));
+    }, { capture: true, once: true });
+    Object.defineProperty(canvas, 'width', {
+      configurable: true,
+      get() { return width.get.call(this); },
+      set(value) {
+        if (value > playingWidth) {
+          window.__pausePicture = { painted, width: value };
+          delete canvas.width;
+        }
+        width.set.call(this, value);
+      },
+    });
+  })()`);
+  await view.click('button[aria-label="Pause"]');
+  await until("window.__pausePicture");
+  expect(await view.evaluate("window.__pausePicture")).toEqual({ painted: true, width: fullWidth });
+});
+
+test("an unavailable optional document leaves the first picture usable", async () => {
+  favoritesFailure = 403;
+  try {
+    await view.navigate(server.url.href);
+    await until(
+      "window.__live && document.querySelector('button[aria-label=Play]')?.disabled === false",
+    );
+    expect(
+      await view.evaluate("document.querySelector('[role=alert] pre')?.textContent ?? null"),
+    ).toBeNull();
+    await until("window.__readyAt");
+  } finally {
+    favoritesFailure = 0;
+  }
+}, 30000);
+
+test("a note link opens while an optional document retries after the first usable picture", async () => {
+  film.notes.add({ note: { id: "startup-link", t: 1, text: "Review the opening" } }, {});
+  favoritesFailure = 503;
+  favoritesRequests = 0;
+  try {
+    await view.navigate(new URL("?startup-link=1#note=startup-link", server.url).href);
+    await until("window.__live && !document.querySelector('button[aria-label=Play]')?.disabled");
+    await until(`document.querySelector('[aria-label="Review notes"] [data-note="startup-link"]')`);
+    const boot = await view.evaluate("performance.timeOrigin");
+    expect(await view.evaluate("Boolean(window.__readyAt)")).toBe(false);
+    const deadline = Date.now() + 10_000;
+    while (favoritesRequests < 3 && Date.now() < deadline) await Bun.sleep(25);
+    expect(favoritesRequests).toBeGreaterThanOrEqual(3);
+    favoritesFailure = 0;
+    await until("window.__readyAt");
+    expect(favoritesRequests).toBeGreaterThanOrEqual(4);
+    expect(await view.evaluate("performance.timeOrigin")).toBe(boot);
+  } finally {
+    favoritesFailure = 0;
+  }
+}, 30000);
+
 test("dragging through scaled and rotated parents follows the pointer and is one undo step", async () => {
-  const start = await center("move");
-  await view.cdp("Input.dispatchMouseEvent", {
-    type: "mousePressed",
-    x: start[0],
-    y: start[1],
-    button: "left",
-    clickCount: 1,
-  });
-  await view.cdp("Input.dispatchMouseEvent", {
-    type: "mouseMoved",
-    x: start[0] + 35,
-    y: start[1] + 20,
-    buttons: 1,
-  });
-  await view.cdp("Input.dispatchMouseEvent", {
-    type: "mouseReleased",
-    x: start[0] + 35,
-    y: start[1] + 20,
-    button: "left",
-    clickCount: 1,
-  });
+  const start = await geometry("move");
+  await drag(start.pointer, [start.pointer[0] + 35, start.pointer[1] + 20]);
   await until(`${iframe}.getElementById('move').style.translate !== ''`);
-  const moved = await center("move");
-  expect(moved[0] - start[0]).toBeCloseTo(35, 0);
-  expect(moved[1] - start[1]).toBeCloseTo(20, 0);
+  const moved = await geometry("move");
+  expect((moved.center[0] - start.center[0]) * start.scale[0]).toBeCloseTo(35, 0);
+  expect((moved.center[1] - start.center[1]) * start.scale[1]).toBeCloseTo(20, 0);
   await view.click('[aria-label="Undo"]');
   await until(`${iframe}.getElementById('move').style.translate === ''`);
-  expect(await center("move")).toEqual(start);
+  expect((await geometry("move")).center).toEqual(start.center);
 }, 20000);
 
 test("empty text keeps its editor and accepts a replacement", async () => {
   await editFront();
   await fill("Text", "");
   await until(`${iframe}.getElementById('front').textContent === ''`);
-  await view.evaluate("new Promise(r=>setTimeout(r,200))");
+  await confirmSaved((items) => items.some((it) => it.selector === "#front" && it.text === ""));
   expect(await view.evaluate(`Boolean(${input("Text")})`)).toBe(true);
   await fill("Text", "Replacement");
   await until(`${iframe}.getElementById('front').textContent === 'Replacement'`);
-  await saved((items) => items.some((it) => it.selector === "#front" && it.text === "Replacement"));
+  await confirmSaved((items) =>
+    items.some((it) => it.selector === "#front" && it.text === "Replacement"),
+  );
 }, 20000);
 
 test("numeric-looking text stays a string editor", async () => {
   await editFront();
   await fill("Text", "42");
   await until(`${iframe}.getElementById('front').textContent === '42'`);
-  await view.evaluate("new Promise(r=>setTimeout(r,200))");
+  await confirmSaved((items) => items.some((it) => it.selector === "#front" && it.text === "42"));
   await fill("Text", "Words");
   await until(`${iframe}.getElementById('front').textContent === 'Words'`);
-  await saved((items) => items.some((it) => it.selector === "#front" && it.text === "Words"));
+  await confirmSaved((items) =>
+    items.some((it) => it.selector === "#front" && it.text === "Words"),
+  );
 }, 20000);
 
 test("a hidden override remains selectable after reload and can reset to source", async () => {
+  const library = '[aria-label="Effects library from OpenFilm"]';
+  const libraryButton = (name) =>
+    `[...document.querySelectorAll(${JSON.stringify(`${library} button`)})].find(b => b.textContent.trim() === ${JSON.stringify(name)})`;
+  const opacityDown = `${library} button[aria-label="opacity down"]`;
+  const opacity = `document.querySelector(${JSON.stringify(`${library} input[aria-label="opacity"]`)})`;
+  const reset = libraryButton("Reset element to source");
   await editFront();
-  await fill("opacity", "0");
+  for (let tenth = 9; tenth >= 0; tenth--) {
+    await view.scrollTo(opacityDown);
+    await view.click(opacityDown);
+    await until(`Number(${opacity}?.value) === ${tenth / 10}`);
+  }
   await until(`getComputedStyle(${iframe}.getElementById('front')).opacity === '0'`);
-  await view.evaluate("new Promise(r=>setTimeout(r,200))");
-  expect(await view.evaluate(`Boolean(${button("Reset element to source")})`)).toBe(true);
+  await until(`(${reset})?.disabled === false`);
   await until(`document.querySelector('[aria-label="Undo"]:not([disabled])')`);
-  await saved((items) => items.some((it) => it.selector === "#front" && it.style.opacity === "0"));
+  await confirmSaved((items) =>
+    items.some((it) => it.selector === "#front" && it.style.opacity === "0"),
+  );
   await view.navigate(server.url.href);
+  await until("window.__readyAt");
   await until("document.querySelector('iframe')?.contentDocument?.getElementById('front')");
   await clickWhenReady(effectsTab);
   await until(
@@ -233,10 +359,10 @@ test("a hidden override remains selectable after reload and can reset to source"
   await view.click(
     '[aria-label="Overlay layers: click to edit, drag to move, drag either edge to trim"]',
   );
-  await clickWhenReady(button("front"));
-  await clickWhenReady(button("Reset element to source"));
+  await clickWhenReady(libraryButton("front"));
+  await clickWhenReady(reset);
   await until(`getComputedStyle(${iframe}.getElementById('front')).opacity === '1'`);
-  await saved((items) => !items.some((it) => it.selector === "#front"));
+  await confirmSaved((items) => !items.some((it) => it.selector === "#front"));
 }, 45000);
 
 test("choosing a catalog recipe after a page element opens its placement form", async () => {
@@ -250,17 +376,19 @@ test("native text custom fields exclude the built-in title controls", async () =
   const stage = await view.evaluate(
     "document.querySelector('canvas').getBoundingClientRect().toJSON()",
   );
-  await click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.8);
+  await view.click(stage.x + stage.width * 0.5, stage.y + stage.height * 0.8);
   await until(input("Position X"));
   expect(await view.evaluate(`Boolean(${button("Custom fields")})`)).toBe(false);
 }, 20000);
 
 test("native text handles and inline typing each undo as one edit; Escape discards typing", async () => {
-  const stage = await view.evaluate(
-    "document.querySelector('canvas').getBoundingClientRect().toJSON()",
-  );
-  const anchor = [stage.x + stage.width * 0.5, stage.y + stage.height * 0.8];
-  await click(...anchor);
+  const textAnchor = () =>
+    view.evaluate(`(() => {
+      const stage = document.querySelector('canvas').getBoundingClientRect();
+      return [stage.x + stage.width * 0.5, stage.y + stage.height * 0.8];
+    })()`);
+  const anchor = await textAnchor();
+  await view.click(...anchor);
   await until("document.querySelector('svg[data-text-index] circle[cx]')");
   await until(input("Scale"));
   await until(input("Rotate"));
@@ -278,32 +406,35 @@ test("native text handles and inline typing each undo as one edit; Escape discar
   await until(`Math.abs(Number(${input("Scale")}.value)-${initialScale * 0.75}) < 0.5`);
   await view.click('[aria-label="Undo"]');
   await until(`Number(${input("Scale")}.value) === ${initialScale}`);
+  await until(`!document.querySelector('[aria-label="Unconfirmed Studio changes"]')`);
+  const pivot = await textAnchor();
   const turn = await handle(4),
-    dx = turn[0] - anchor[0],
-    dy = turn[1] - anchor[1],
+    dx = turn[0] - pivot[0],
+    dy = turn[1] - pivot[1],
     angle = (20 * Math.PI) / 180;
   await drag(turn, [
-    anchor[0] + dx * Math.cos(angle) - dy * Math.sin(angle),
-    anchor[1] + dx * Math.sin(angle) + dy * Math.cos(angle),
+    pivot[0] + dx * Math.cos(angle) - dy * Math.sin(angle),
+    pivot[1] + dx * Math.sin(angle) + dy * Math.cos(angle),
   ]);
-  await until(`Number(${input("Rotate")}.value) === ${initialRotation + 20}`);
+  await until(`Math.abs(Number(${input("Rotate")}.value) - ${initialRotation + 20}) < 0.5`);
   await view.click('[aria-label="Undo"]');
   await until(`Number(${input("Rotate")}.value) === ${initialRotation}`);
   const words = "document.querySelector('textarea[aria-label=\"Text\"]')";
   const original = await view.evaluate(`${words}.value`);
   const open = async () => {
+    const [x, y] = await textAnchor();
     await view.cdp("Input.dispatchMouseEvent", {
       type: "mousePressed",
-      x: anchor[0],
-      y: anchor[1],
+      x,
+      y,
       button: "left",
       modifiers: 2,
       clickCount: 2,
     });
     await view.cdp("Input.dispatchMouseEvent", {
       type: "mouseReleased",
-      x: anchor[0],
-      y: anchor[1],
+      x,
+      y,
       button: "left",
       modifiers: 2,
       clickCount: 2,
@@ -354,12 +485,12 @@ test("custom text fields require one owner and preserve differently shaped neigh
   const track = await view.evaluate(
     "document.querySelector('canvas[aria-label^=\"Text tracks:\"]').getBoundingClientRect().toJSON()",
   );
-  await click(track.x + track.width * 0.25, track.y + track.height / 2, "left");
+  await view.click(track.x + track.width * 0.25, track.y + track.height / 2);
   await until(button("Custom fields"));
   if (await view.evaluate(`${button("Custom fields")}.getAttribute('aria-expanded') !== 'true'`))
     await view.evaluate(`${button("Custom fields")}.click()`);
   await fill("strength", "2");
-  await saved(
+  await confirmSaved(
     (items) => items[0].custom.strength === 2 && !("custom" in items[1]),
     async () => (await (await fetch(endpoint)).json()).data.items,
   );
@@ -367,12 +498,12 @@ test("custom text fields require one owner and preserve differently shaped neigh
 
 test("page edits and undo refresh the visible Final quality canvas at the same playhead", async () => {
   await editFront();
-  await view.press("g");
+  await view.press("g", { modifiers: ["Shift"] });
   await until("document.querySelectorAll('canvas')[1]?.hidden === false");
   await until("document.querySelectorAll('iframe').length >= 2");
   await view.evaluate("window.__finalBefore=document.querySelectorAll('canvas')[1].toDataURL()");
   await fill("Text", "Final changed");
-  await saved((items) =>
+  await confirmSaved((items) =>
     items.some((it) => it.selector === "#front" && it.text === "Final changed"),
   );
   await until("document.querySelectorAll('canvas')[1].toDataURL() !== window.__finalBefore");
@@ -386,5 +517,5 @@ test("page edits and undo refresh the visible Final quality canvas at the same p
     "[...document.querySelectorAll('iframe')].at(-1).contentDocument.getElementById('front').textContent === 'Front'",
   );
   await until("document.querySelectorAll('canvas')[1].toDataURL() === window.__finalBefore");
-  await saved((items) => items.length === 0);
+  await confirmSaved((items) => items.length === 0);
 }, 45000);

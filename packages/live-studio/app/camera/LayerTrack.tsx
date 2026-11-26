@@ -18,7 +18,15 @@ import { type Along, alongWith, inBox, pickAcross, picked } from "../timeline/ac
 import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { boxEnd, boxMove, boxStart } from "../timeline/rowbox";
 import { snapLine } from "../timeline/snapline";
-import { holdView, marks, onPlayhead, timeAt, timelineWheel, view } from "../timeline/timeline";
+import {
+  holdView,
+  isSelectionModifier,
+  marks,
+  playheadDragHit,
+  timeAt,
+  timelineWheel,
+  view,
+} from "../timeline/timeline";
 import { isElementShown, onShownResize } from "../timeline/visible";
 import {
   addLayer,
@@ -119,12 +127,13 @@ function attach(canvas: HTMLCanvasElement) {
     if (e.button !== 0) return;
     e.preventDefault();
     const { x, y, w } = xy(e),
-      box = hit(x, y);
-    if (S.playing) setPlaying(false);
+      box = hit(x, y),
+      adding = isSelectionModifier(e);
+    if (!adding && S.playing) setPlaying(false);
     canvas.setPointerCapture(e.pointerId);
     if (
       (!box || (x > box.x0 + 6 && x < box.x1 - 6)) &&
-      onPlayhead(x, w, e.pointerType === "touch")
+      playheadDragHit(x, w, e.pointerType === "touch", adding)
     ) {
       gesture = { kind: "scrub" };
       holdView(true);
@@ -132,11 +141,10 @@ function attach(canvas: HTMLCanvasElement) {
     }
     if (!box) {
       gesture = { kind: "box" };
-      boxStart(e, e.shiftKey || e.ctrlKey || e.metaKey);
+      boxStart(e, adding);
       return;
     }
-    const adding = e.ctrlKey || e.metaKey || e.shiftKey,
-      p = picked();
+    const p = picked();
     if (adding) {
       pickAcross({
         ...p,
@@ -147,7 +155,10 @@ function attach(canvas: HTMLCanvasElement) {
       return;
     }
     if (!p.layers.includes(box.id)) pickLayers([box.id]);
-    if (layerLocked(box.id)) return;
+    if (layerLocked(box.id)) {
+      if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+      return;
+    }
     if (get().blade) {
       splitLayers([box.id], timeAt(x, w));
       return;
@@ -290,6 +301,10 @@ function attach(canvas: HTMLCanvasElement) {
           });
           d.along?.commit(d.delta);
         });
+      else if (!cancel && !d.moved && e instanceof PointerEvent) {
+        const { x, w } = xy(e);
+        if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+      }
     }
     S.dragging = null;
     holdView(false);
@@ -343,11 +358,16 @@ export function LayerTrack() {
   const ref = useRef<HTMLCanvasElement>(null),
     enabled = useStudio((s) => s.layers);
   useStudio((s) => s.layersRev);
-  const lit = useLit("tab:adjust"), lights = useActivity((state) => state.lit);
+  const lit = useLit("tab:adjust"),
+    lights = useActivity((state) => state.lit);
   useEffect(() => attach(ref.current!), []);
   return (
     <div className={`col-span-2 grid grid-cols-subgrid ${enabled ? "" : "hidden"}`}>
-      <ul data-ai-lit={lit || undefined} aria-label="Adjustment tracks" className="border-track-line bg-track-head border-e">
+      <ul
+        data-ai-lit={lit || undefined}
+        aria-label="Adjustment tracks"
+        className="border-track-line bg-track-head border-e"
+      >
         {Array.from({ length: trackCount() }, (_, row) => {
           const track = trackCount() - row - 1,
             state = layerTrack(track),
@@ -358,7 +378,11 @@ export function LayerTrack() {
               f.tracks[track] = { ...f.tracks[track], [prop]: value || undefined };
             });
           return (
-            <li key={track} data-ai-lit={(`track:adjust:${track}` in lights) || undefined} className="border-background flex h-7 items-center border-b">
+            <li
+              key={track}
+              data-ai-lit={`track:adjust:${track}` in lights || undefined}
+              className="border-background flex h-7 items-center border-b"
+            >
               <Tip label={`${name}: select its clips`}>
                 <Button
                   variant="quiet"

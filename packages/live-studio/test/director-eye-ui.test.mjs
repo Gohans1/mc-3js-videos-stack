@@ -325,7 +325,9 @@ test("B&W Value Check cycles Normal -> B&W Rec.709 -> Silhouette -> Normal via b
   })()`);
   expect(beforeRgb).toEqual([220, 40, 40]);
 
-  await page.evaluate(`document.querySelector('button[aria-label="Value check"]').click()`);
+  await page.evaluate(
+    `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "V", code: "KeyV", shiftKey: true, bubbles: true }))`,
+  );
   await waitUntil(`window.__EYE_TEST__.get().valueCheck === "bw"`);
   const bwState = await page.evaluate(`(() => {
     const wrap = document.querySelector('[data-value-check="bw"]');
@@ -363,7 +365,9 @@ test("B&W Value Check cycles Normal -> B&W Rec.709 -> Silhouette -> Normal via b
 test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame at Shot 1 without mutating S.t/FreeCam/canvas, defers while dragging, and adds zero listeners when OFF", async () => {
   const baseWatchTime = await page.evaluate(`window.__EYE_TEST__.watchCounts.time`);
 
-  await page.evaluate(`document.querySelector('button[aria-label="Cut-boundary ghost"]').click()`);
+  await page.evaluate(
+    `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "O", code: "KeyO", shiftKey: true, bubbles: true }))`,
+  );
   await waitUntil(`document.querySelector('[aria-label="Cut-boundary ghost controls"]')`);
   expect(await page.evaluate(`window.__EYE_TEST__.watchCounts.time`)).toBeGreaterThan(
     baseWatchTime,
@@ -477,7 +481,20 @@ test("Cut-boundary Ghost handles Shot 0 feedback, captures outgoing Shot 0 frame
 });
 
 test("Extra Composition Guides render Golden Ratio Phi Grid, Diagonals, and Safe Zones across 16:9 and 9:16", async () => {
-  await page.evaluate(`document.querySelector('button[aria-label="Guides"]').click()`);
+  const toolbarButtons = await page.evaluate(`({
+    fullscreen: !!document.querySelector('button[aria-label="Full screen preview"]'),
+    hiddenCount: [
+      'button[aria-label="Guides"]',
+      'button[aria-label^="Value check"]',
+      'button[aria-label="Cut-boundary ghost"]',
+      'button[aria-label="Color script"]',
+      'button[aria-label="Mute"]',
+      'button[aria-label="Blind audio test"]',
+    ].filter((sel) => document.querySelector(sel)).length,
+  })`);
+  expect(toolbarButtons).toEqual({ fullscreen: true, hiddenCount: 0 });
+
+  await page.evaluate(`document.getElementById("guides").click()`);
   await waitUntil(`document.querySelector('svg[data-guide-mode="thirds"]')`);
 
   await page.evaluate(
@@ -511,6 +528,14 @@ test("Mute Test preserves volume across Alt+M/button, and Blind Audio Test shows
     window.__EYE_TEST__.S.playing = true;
     window.__EYE_TEST__.set({ playing: true });
   })()`);
+
+  await page.evaluate(`document.getElementById("mute-audio").click()`);
+  await waitUntil(`window.__EYE_TEST__.get().muted === true`);
+  expect(await page.evaluate(`window.__EYE_TEST__.get().volume`)).toBe(0.65);
+
+  await page.evaluate(`document.getElementById("mute-audio").click()`);
+  await waitUntil(`window.__EYE_TEST__.get().muted === false`);
+  expect(await page.evaluate(`window.__EYE_TEST__.get().volume`)).toBe(0.65);
 
   await page.evaluate(
     `document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "m", code: "KeyM", altKey: true, bubbles: true }))`,
@@ -573,7 +598,7 @@ test("Color Script Strip lazily captures shot thumbnails, extracts 4-color swatc
 
   await page.evaluate(`(() => {
     window.__EYE_TEST__.S.dragging = { resume: false };
-    document.querySelector('button[aria-label="Color script"]').click();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "C", code: "KeyC", shiftKey: true, bubbles: true }));
   })()`);
   await waitUntil(`document.querySelector('section[aria-label="Color script strip"]')`);
   await Bun.sleep(50);

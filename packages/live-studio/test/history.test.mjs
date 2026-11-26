@@ -7,23 +7,106 @@ import { test } from "node:test";
 import { Hono } from "hono";
 import * as z from "zod";
 
+import { openPage } from "../../film-stage/test/gpu.ts";
 import { openFilm } from "../src/film.mjs";
 import { mountHistory } from "../src/history-api.mjs";
 import { openFilmHistory } from "../src/history.mjs";
 import { openTimelineFile } from "../src/timeline_file.mjs";
 
-const setup = (t) => {
+const setup = (t, options) => {
   const project = mkdtempSync(join(tmpdir(), "film-history-"));
   mkdirSync(join(project, "src"));
   writeFileSync(join(project, "src/scene.ts"), "export const lighting = 'cold';\n");
   writeFileSync(join(project, "package.json"), '{"name":"film"}');
-  const history = openFilmHistory(project);
+  const history = openFilmHistory(project, options);
   t.after(() => {
     history.close();
     rmSync(project, { recursive: true, force: true });
   });
   return { project, history };
 };
+
+test("autosave notifies Versions about failure and recovery without a new revision", async (t) => {
+  let fail = false;
+  const reported = [];
+  const { project, history } = setup(t, {
+    beforeCapture: () => {
+      if (fail) throw new Error("Could not read the editing files");
+    },
+    changed: () => reported.push(history.problem),
+    onError() {},
+  });
+  history.capture("Working", "named");
+  reported.length = 0;
+  fail = true;
+  history.start();
+  assert.deepEqual(reported, ["Could not read the editing files"]);
+
+  fail = false;
+  writeFileSync(join(project, "src/scene.ts"), "export const lighting = 'cold';\n");
+  const deadline = Date.now() + 4000;
+  while (reported.length < 2 && Date.now() < deadline) await Bun.sleep(25);
+  assert.deepEqual(reported, ["Could not read the editing files", null]);
+  assert.equal(history.list().length, 1);
+});
+
+test("Versions stays idle between updates and catches up after a reconnect", async (t) => {
+  const { history } = setup(t);
+  history.capture("First version", "named");
+  let events,
+    reads = 0,
+    unavailable = false;
+  const page = await openPage(join(import.meta.dirname, "history-page.tsx"), (req) => {
+    const path = new URL(req.url).pathname;
+    if (path === "/api/history") {
+      reads++;
+      if (unavailable)
+        return Response.json({ error: "Versions temporarily unavailable" }, { status: 503 });
+      return Response.json({
+        revisions: history.list(),
+        current: history.current(),
+        next: null,
+        problem: history.problem,
+      });
+    }
+    if (path === "/api/events") {
+      return new Response(
+        new ReadableStream({
+          start(controller) {
+            events = controller;
+            events.enqueue("retry: 100\nevent: hello\ndata: test\n\n");
+          },
+        }),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    }
+  });
+  t.after(() => page.close());
+  const shown = async (name) => {
+    const deadline = Date.now() + 3000;
+    while (Date.now() < deadline) {
+      if (await page.run(`document.body.innerText.includes(${JSON.stringify(name)})`)) return;
+      await Bun.sleep(25);
+    }
+    assert.fail(`Versions did not show ${name}`);
+  };
+  await shown("First version");
+  assert.ok(events);
+  history.capture("Second version", "named");
+  events.enqueue("event: history\ndata: \n\n");
+  await shown("Second version");
+  const readsAfterChange = reads;
+  await Bun.sleep(5200);
+  assert.equal(reads, readsAfterChange);
+
+  unavailable = true;
+  events.enqueue("event: history\ndata: \n\n");
+  await shown("Versions temporarily unavailable");
+  unavailable = false;
+  history.capture("Version saved during disconnect", "named");
+  events.close();
+  await shown("Version saved during disconnect");
+});
 
 test("named and automatic revisions survive reopening without touching project Git or media", (t) => {
   const { project, history } = setup(t);

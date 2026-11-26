@@ -607,6 +607,36 @@ describe("normalizeStoredCompose and isComposeDirty", () => {
     });
     assert.equal(badPin?.kind, "create");
     assert.equal(badPin?.pin, null);
+
+    const validCompare = normalizeStoredCompose({
+      kind: "create",
+      t: 3.2,
+      shot: 1,
+      compareVideo: {
+        path: "renders/reference/v2_sbs.mp4",
+        category: "compare",
+        layout: "hstack",
+        startSec: 10,
+      },
+    });
+    assert.deepEqual(validCompare?.kind === "create" ? validCompare.compareVideo : null, {
+      path: "renders/reference/v2_sbs.mp4",
+      category: "compare",
+      layout: "hstack",
+      startSec: 10,
+    });
+
+    const badCompare = normalizeStoredCompose({
+      kind: "create",
+      t: 3.2,
+      shot: 1,
+      compareVideo: {
+        path: "",
+        category: "bogus",
+        layout: "hstack",
+      },
+    });
+    assert.equal(badCompare?.kind === "create" ? badCompare.compareVideo : "err", undefined);
   });
 
   test("isComposeDirty ignores untouched edit notes while flagging edited text or ink-only create notes", () => {
@@ -748,6 +778,35 @@ describe("stepViewport", () => {
       assert.equal(sketchStep.startSketchFrom, rawEvent);
       assert.equal(sketchStep.capture, true);
     }
+  });
+
+  test("left-drag with drawOnLeft transitions left_press into left-button sketching and respects left button mask", () => {
+    const rawEvent = { pointerId: 9 };
+    const left = stepViewport(IDLE_VIEWPORT_GESTURE, {
+      type: "press",
+      id: 9,
+      pointerType: "mouse",
+      button: 0,
+      x: 50,
+      y: 50,
+      free: false,
+      shiftKey: false,
+      drawOnLeft: true,
+      raw: rawEvent,
+    }).gesture;
+    assert.equal(left.kind, "left_press");
+    const sketchStep = stepViewport(left, { type: "move", id: 9, x: 64, y: 50, canWake: false });
+    assert.deepEqual(sketchStep.gesture, { kind: "sketching", id: 9, button: 0 });
+    assert.equal(sketchStep.startSketchFrom, rawEvent);
+    assert.equal(sketchStep.capture, true);
+    assert.deepEqual(
+      stepViewport(sketchStep.gesture, { type: "windowUp", id: 9, x: 64, y: 50, buttons: 1 }),
+      { gesture: sketchStep.gesture, dropSketch: false, armClickAt: null },
+    );
+    assert.deepEqual(
+      stepViewport(sketchStep.gesture, { type: "windowUp", id: 9, x: 64, y: 50, buttons: 0 }),
+      { gesture: IDLE_VIEWPORT_GESTURE, dropSketch: true, armClickAt: null },
+    );
   });
 
   test("recovers to idle on off-canvas pointercancel or blur and drops active sketch", () => {
@@ -982,6 +1041,61 @@ describe("stepInk", () => {
     assert.deepEqual(stepInk(drawing, { type: "reset" }), {
       gesture: IDLE_INK_GESTURE,
       effect: "drop",
+    });
+  });
+
+  test("accepts mouse left-button for explicit box and path tools when drawOnLeft is enabled", () => {
+    const rejected = stepInk(IDLE_INK_GESTURE, {
+      type: "down",
+      id: 10,
+      button: 0,
+      pointerType: "mouse",
+      tool: "box",
+      x: 10,
+      y: 10,
+    });
+    assert.deepEqual(rejected, { gesture: IDLE_INK_GESTURE, effect: "none" });
+
+    const boxDown = stepInk(IDLE_INK_GESTURE, {
+      type: "down",
+      id: 11,
+      button: 0,
+      pointerType: "mouse",
+      drawOnLeft: true,
+      tool: "box",
+      x: 10,
+      y: 10,
+    });
+    assert.deepEqual(boxDown, {
+      gesture: { kind: "drawing", id: 11, mask: 1 },
+      effect: "start_stroke",
+    });
+    assert.deepEqual(stepInk(boxDown.gesture, { type: "up", id: 11, buttons: 1, tool: "box" }), {
+      gesture: boxDown.gesture,
+      effect: "none",
+    });
+    assert.deepEqual(stepInk(boxDown.gesture, { type: "up", id: 11, buttons: 0, tool: "box" }), {
+      gesture: IDLE_INK_GESTURE,
+      effect: "end_stroke",
+    });
+
+    const pathDown = stepInk(IDLE_INK_GESTURE, {
+      type: "down",
+      id: 12,
+      button: 0,
+      pointerType: "mouse",
+      drawOnLeft: true,
+      tool: "path",
+      x: 20,
+      y: 30,
+    });
+    assert.deepEqual(pathDown, {
+      gesture: { kind: "path_press", id: 12, mask: 1 },
+      effect: "start_path",
+    });
+    assert.deepEqual(stepInk(pathDown.gesture, { type: "up", id: 12, buttons: 0, tool: "path" }), {
+      gesture: IDLE_INK_GESTURE,
+      effect: "commit_path",
     });
   });
 });

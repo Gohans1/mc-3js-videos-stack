@@ -8,15 +8,12 @@ import { seek, setPlaying } from "../playback/transport";
 import { sized, tone, UI_FONT } from "../timeline/canvas";
 import { holdView, marks, timeAt, timelineWheel, view } from "../timeline/timeline";
 import { onShownResize } from "../timeline/visible";
-import { readOpenFilm, saveOpenFilm, useOpenFilm } from "./state";
+import { saveOpenFilm, useOpenFilm } from "./state";
 
 export function OpenFilmTrack() {
   const doc = useOpenFilm((s) => s.doc),
     selected = useOpenFilm((s) => s.selected);
   const canvas = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    void readOpenFilm().catch((e) => say(e.message));
-  }, []);
   useEffect(() => {
     const c = canvas.current;
     if (!c || !doc.data.items.length) return;

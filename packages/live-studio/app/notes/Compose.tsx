@@ -1,4 +1,12 @@
-import { Crosshair, GripHorizontal, ImagePlus, PenLine, TriangleAlert, X } from "lucide-react";
+import {
+  Columns2,
+  Crosshair,
+  GripHorizontal,
+  ImagePlus,
+  PenLine,
+  TriangleAlert,
+  X,
+} from "lucide-react";
 import {
   type CSSProperties,
   lazy,
@@ -416,9 +424,13 @@ export function Compose({
   const st = noteShotTitle(shownCompose.shot, shownCompose.shotName);
   const shotText = st.secondary ? `${st.primary} · ${st.secondary}` : st.primary;
   const pinLabel = shownCompose.pin ? pinShortLabel(shownCompose.pin.what) : null;
+  const compareVideoName =
+    shownCompose.kind === "create" && shownCompose.compareVideo?.path
+      ? shownCompose.compareVideo.path.split("/").pop()
+      : null;
   const where = isEdit
     ? `Editing note · ${shownCompose.time} · ${shotText}`
-    : `${stamp(shownCompose.t)} · ${shotText}${shownCompose.pin ? ` · ${shownCompose.pin.what}` : ""}`;
+    : `${stamp(shownCompose.t)} · ${shotText}${compareVideoName ? ` · ${compareVideoName}` : ""}${shownCompose.pin ? ` · ${shownCompose.pin.what}` : ""}`;
   const locationHeader = stage ? (
     <div
       onPointerDown={draggableHeader ? onDragHeaderPointerDown : undefined}
@@ -444,6 +456,15 @@ export function Compose({
           <span className="text-foreground/90 font-medium">{st.primary}</span>
           {st.secondary && <span className="text-muted-foreground"> · {st.secondary}</span>}
         </span>
+        {compareVideoName && (
+          <span
+            title={shownCompose.kind === "create" ? shownCompose.compareVideo?.path : undefined}
+            className="border-hairline bg-surface-subtle text-label inline-flex max-w-28 min-w-0 shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-xs leading-none font-medium"
+          >
+            <Columns2 aria-hidden className="size-3 shrink-0" />
+            <span className="truncate">{compareVideoName}</span>
+          </span>
+        )}
         {shownCompose.pin && (
           <span
             title={shownCompose.pin.what}

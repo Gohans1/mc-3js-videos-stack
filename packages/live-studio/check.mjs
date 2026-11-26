@@ -73,7 +73,8 @@ options) against the sounds the studio can play (with the nearest names or the o
 every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
 both "mm" and "fov", shot "hits[].t" outside its shot, unpicked mod blocks, invalid blockstate property values, stale picked.zip,
 and on-screen text too brief to read or too small for a phone, plus keyFiles arrays hiding nested {t} rows that Studio cannot load; where text sits and how it reads over the picture: bun run render stills --check text.
-Not checked here: what src/scene.ts exports and what draw(t) returns (the studio page and bun run render say those).
+For rendered motion, run bun run render stills --check pops (or pops:20,45 for a range). Render final checks it automatically.
+Scene code and draw(t) are evaluated by Studio and render commands.
 Exit 0 ok, 1 problems found. Find a sound, 3D object or preset: bun run find <words>.`;
 
 const json = cliArgs(HELP, ["--json"], 0).includes("--json");
@@ -644,7 +645,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   const muted = new Set((lanes.tracks ?? []).flatMap((k) => (k?.mute ? [k.id] : [])));
   for (const list of ["beds", "sfx"])
     (lanes[list] ?? []).forEach((e, i) => {
-      if (e.gain > 12 && !muted.has(e.track))
+      if (e.gain > 12 && !e.muted && !muted.has(e.track))
         warnings.push(
           `⚠ ${list}[${i}] "${e.name}" gain +${e.gain} dB (${conf.soundTimeline}): over +12 a sound is pushed far past its file's own level and the limiter flattens it; meant? bun run listen --at <its second> hears it`,
         );
@@ -677,6 +678,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
   selected.sfx.forEach((e, i) => {
     if (
       !e._off &&
+      !e.muted &&
       !muted.has(e.track) &&
       typeof e.start === "number" &&
       typeof soundDurations[e.name] === "number" &&
@@ -698,7 +700,13 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
     const heard = mapTimeline("sound", selected, soundClock, false, null, soundDurations);
     heard.sfx.forEach((c, i) => {
       const clip = selected.sfx[i];
-      if (!clip._off && !clip._narration && !muted.has(lanes.sfx[i].track) && !(c.length <= 0))
+      if (
+        !clip._off &&
+        !clip._narration &&
+        !lanes.sfx[i].muted &&
+        !muted.has(lanes.sfx[i].track) &&
+        !(c.length <= 0)
+      )
         covered.sfx.push(c.at);
     });
     const late = [
@@ -707,6 +715,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
         return !selected.beds[i]._off &&
           c.to > c.from &&
           c.from >= end &&
+          !lanes.beds[i].muted &&
           !muted.has(lanes.beds[i].track)
           ? [["beds", i, c.name, lanes.beds[i].from, c.from, end]]
           : [];
@@ -716,6 +725,7 @@ if (lanesPath && existsSync(lanesPath) && !soundBroken) {
         return !selected.sfx[i]._off &&
           !(c.length !== undefined && c.length <= 0) &&
           c.at >= end &&
+          !lanes.sfx[i].muted &&
           !muted.has(lanes.sfx[i].track)
           ? [["sfx", i, c.name, lanes.sfx[i].at, c.at, end]]
           : [];

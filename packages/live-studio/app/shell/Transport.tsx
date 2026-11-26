@@ -1,22 +1,16 @@
 import {
   Brush,
-  Contrast,
+  Columns2,
   Ellipsis,
-  Ghost,
-  Grid3x3,
-  Headphones,
   Maximize,
   Minimize,
   MoonStar,
   Move3d,
-  Palette,
   Pause,
   Pencil,
   Play,
   Save,
   Undo2,
-  Volume2,
-  VolumeX,
 } from "lucide-react";
 import {
   lazy,
@@ -45,9 +39,10 @@ import { setInk } from "../notes/ink";
 import { noteMarks, openNote, originOf, returnFromNote } from "../notes/notes";
 import { ClipExport } from "../picture/ClipExport";
 import { SnapshotButtons } from "../picture/Compare";
-import { guideModeLabel, nextValueCheckMode, valueCheckLabel } from "../picture/director-eye";
+import { comparePlaybackEnd, toggleCompareVideoMode } from "../picture/compare-video";
+import { handleCompareSeekKey } from "../picture/ComparePlaybackControls";
 import { PreviewControls } from "../picture/PreviewControls";
-import { seek, setPlaying, setVolume, toggleMute, togglePlay } from "../playback/transport";
+import { seek, setPlaying, setVolume, togglePlay } from "../playback/transport";
 import { skimSound } from "../sound/skim";
 import { canFullscreen, toggleFullscreen, useFullscreen } from "./fullscreen";
 import { PendingChangesBar } from "./PendingChangesBar";
@@ -56,7 +51,7 @@ const Settings = lazy(() => import("./Settings").then((m) => ({ default: m.Setti
 
 const square = "pointer-coarse:size-10";
 
-function ReviewScrubBar() {
+function PlaybackScrubBar({ compare }: { compare: boolean }) {
   useStudio((s) => s.notes);
   useStudio((s) => s.metaRev);
   const trackRef = useRef<HTMLDivElement>(null),
@@ -64,20 +59,18 @@ function ReviewScrubBar() {
     shotRef = useRef<HTMLSpanElement>(null);
   const [hover, setHover] = useState<{ t: number; pct: number } | null>(null);
 
-  const total = Math.max(DURATION, 0.001);
+  const total = Math.max(useStudio(comparePlaybackEnd), 0.001);
 
   useEffect(() => {
-    let shown = -1,
-      raf = 0;
+    let shown = -1;
     const sync = () => {
-      raf = requestAnimationFrame(sync);
       const track = trackRef.current;
       if (!track || S.t === shown) return;
       shown = S.t;
       const frac = Math.min(1, Math.max(0, S.t / total));
       track.style.setProperty("--at", String(frac));
       track.setAttribute("aria-valuenow", S.t.toFixed(2));
-      track.setAttribute("aria-valuetext", `${stamp(S.t)} of ${stamp(DURATION)}`);
+      track.setAttribute("aria-valuetext", `${stamp(S.t)} of ${stamp(total)}`);
       if (timeRef.current) timeRef.current.textContent = stamp(S.t);
       if (shotRef.current) {
         const i = shotIndex(S.t);
@@ -86,13 +79,13 @@ function ReviewScrubBar() {
       }
     };
     sync();
-    return () => cancelAnimationFrame(raf);
+    return S.watch("time", sync);
   }, [total]);
 
   const timeFromPointer = (e: ReactPointerEvent<HTMLDivElement>) => {
     const r = trackRef.current!.getBoundingClientRect();
     const pct = Math.min(Math.max((e.clientX - r.left) / Math.max(r.width, 1), 0), 1);
-    return { t: pct * DURATION, pct: pct * 100 };
+    return { t: pct * total, pct: pct * 100 };
   };
 
   const finishDrag = () => {
@@ -111,7 +104,7 @@ function ReviewScrubBar() {
   return (
     <div
       className="border-hairline-subtle flex flex-col gap-0.5 border-b px-3 pt-2 pb-1"
-      aria-label="Review playback scrub"
+      aria-label={compare ? "Compare playback scrub" : "Review playback scrub"}
     >
       <div className="flex items-center justify-between gap-2 text-xs tabular-nums">
         <div className="flex min-w-0 items-center gap-2">
@@ -119,7 +112,7 @@ function ReviewScrubBar() {
             <span ref={timeRef} className="text-primary-text font-semibold">
               {stamp(S.t)}
             </span>
-            <span className="text-muted-foreground"> / {stamp(DURATION)}</span>
+            <span className="text-muted-foreground"> / {stamp(total)}</span>
           </span>
           <span ref={shotRef} className="text-muted-foreground truncate">
             {initialShotName ? `Shot ${initialShot} · ${initialShotName}` : `Shot ${initialShot}`}
@@ -135,10 +128,10 @@ function ReviewScrubBar() {
         ref={trackRef}
         role="slider"
         tabIndex={0}
-        aria-label="Review playhead"
+        aria-label={compare ? "Compare playhead" : "Review playhead"}
         aria-valuemin={0}
         aria-valuenow={+S.t.toFixed(2)}
-        aria-valuemax={+DURATION.toFixed(2)}
+        aria-valuemax={+total.toFixed(2)}
         style={{ "--at": String(initialFrac) }}
         className="group/scrub focus-visible:ring-ring relative h-7 w-full cursor-pointer touch-none rounded-md outline-none select-none focus-visible:ring-2 pointer-coarse:h-10"
         onPointerDown={(e) => {
@@ -166,6 +159,7 @@ function ReviewScrubBar() {
         onPointerCancel={finishDrag}
         onLostPointerCapture={finishDrag}
         onKeyDown={(e) => {
+          if (compare && handleCompareSeekKey(e)) return;
           const step = e.shiftKey ? 1 / FPS : 1;
           const by =
             e.key === "ArrowRight" || e.key === "ArrowUp"
@@ -179,7 +173,7 @@ function ReviewScrubBar() {
                     : 0;
           if (by) seek(S.t + by);
           else if (e.key === "Home") seek(0);
-          else if (e.key === "End") seek(DURATION);
+          else if (e.key === "End") seek(total);
           else return;
           e.preventDefault();
           e.stopPropagation();
@@ -242,19 +236,22 @@ export function Transport() {
   const settingsOpen = useStudio((s) => s.settingsOpen),
     free = useStudio((s) => s.free),
     ink = useStudio((s) => s.ink),
-    cam = useStudio((s) => s.cam);
-  const guides = useStudio((s) => s.guides),
-    guideMode = useStudio((s) => s.guideMode),
-    valueCheck = useStudio((s) => s.valueCheck),
-    ghost = useStudio((s) => s.ghost),
-    blindAudio = useStudio((s) => s.blindAudio),
-    colorScript = useStudio((s) => s.colorScript),
-    ratio = useStudio((s) => s.ratio),
+    cam = useStudio((s) => s.cam),
     night = useStudio((s) => s.nightVision),
+    compareVideoMode = useStudio((s) => s.compareVideoMode),
+    compareVideoReady = useStudio((s) => s.compareVideoReady),
+    compareVideoError = useStudio((s) => s.compareVideoError),
+    hasActiveCompareVideo = useStudio((s) =>
+      Boolean(s.compareVideoPath && s.compareVideos.some((v) => v.path === s.compareVideoPath)),
+    ),
+    hasCompareVideos = useStudio((s) => s.compareVideos.some((v) => v.category === "compare")),
     full = useFullscreen();
+  const compareUnavailable =
+    compareVideoMode && (!hasActiveCompareVideo || Boolean(compareVideoError));
+  const compareExtendsTimeline = useStudio(() => comparePlaybackEnd() > DURATION + 1 / FPS);
   return (
     <div className="bg-background upright:flex-none upright:rounded-none sideways:rounded-none @container col-start-1 row-start-2 flex min-w-0 flex-col overflow-hidden rounded-b-lg in-data-cli-expanded:hidden in-data-inspector-active:hidden in-data-lessons-focused:hidden in-data-review:col-start-2 in-data-wide:col-start-2">
-      {review && <ReviewScrubBar />}
+      {(review || compareExtendsTimeline) && <PlaybackScrubBar compare={compareVideoMode} />}
       <PendingChangesBar />
       <div className="flex min-w-0 items-center gap-1.5 px-3 py-1 @max-[380px]:gap-1 @max-[380px]:px-2">
         <Button
@@ -262,7 +259,10 @@ export function Transport() {
           size="md"
           className="min-w-19 @max-[440px]:min-w-0"
           aria-label={playing ? "Pause" : "Play"}
-          disabled={!ready}
+          disabled={
+            !playing &&
+            (compareVideoMode ? !compareVideoReady || Boolean(compareVideoError) : !ready)
+          }
           onClick={togglePlay}
         >
           {playing ? <Pause data-icon="inline-start" /> : <Play data-icon="inline-start" />}
@@ -271,6 +271,7 @@ export function Transport() {
         <Button
           size="md"
           className="upright:flex-1 sideways:flex-1"
+          disabled={compareUnavailable}
           onClick={(e) => openNote(null, true, originOf(e.currentTarget), { x: 0.5, y: 0.88 })}
           aria-label="Add note"
         >
@@ -296,10 +297,30 @@ export function Transport() {
             className={cn(!ink && "@max-[330px]:hidden")}
             aria-label="Draw"
             aria-pressed={!!ink}
+            disabled={compareUnavailable}
             onClick={() => setInk(ink ? null : "pen")}
           >
             <Brush data-icon="inline-start" />
             <span className="@max-[480px]:hidden">Draw</span>
+          </Button>
+        </Tip>
+        <Tip label="Compare video (V): watch REF | OURS side-by-side or rendered video, click to pin, drag to draw">
+          <Button
+            variant="toolbar"
+            size="md"
+            className={cn(
+              "pointer-coarse:hidden",
+              !compareVideoMode && (free ? "@max-[720px]:hidden" : "@max-[460px]:hidden"),
+            )}
+            aria-label="Compare video"
+            aria-pressed={compareVideoMode}
+            onClick={toggleCompareVideoMode}
+          >
+            <Columns2 data-icon="inline-start" />
+            <span className={cn("@max-[760px]:hidden", free && "hidden")}>Compare</span>
+            {hasCompareVideos && !compareVideoMode && (
+              <span aria-hidden className="bg-primary size-1.5 shrink-0 rounded-full" />
+            )}
           </Button>
         </Tip>
         <Tip label="Free camera (F): left-drag to look, Shift+left-drag to orbit, middle-drag to pan, left-click to select, right-click or drag for notes, W A S D to fly, Space up, Shift down">
@@ -315,7 +336,7 @@ export function Transport() {
             <span className="@max-[820px]:hidden">Free camera</span>
           </Button>
         </Tip>
-        {free && (
+        {free && !compareVideoMode && (
           <Tip label="Night vision: light up this view and clear the fog to find your way. The film's own light stays as it is">
             <Button
               variant="toolbar"
@@ -330,7 +351,7 @@ export function Transport() {
             </Button>
           </Tip>
         )}
-        {free && cam && (
+        {free && cam && !compareVideoMode && (
           <Tip label="Add a camera keyframe at the playhead from this view (Shift+K)">
             <Button
               variant="toolbar"
@@ -348,69 +369,13 @@ export function Transport() {
           <AiPresence className="max-w-full" />
         </div>
         <div className="upright:ml-0 sideways:ml-0 ms-auto flex flex-none items-center gap-0.5">
-          <ClipExport className="@max-[420px]:hidden pointer-coarse:hidden" />
-          <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
+          {!compareVideoMode && (
+            <>
+              <ClipExport className="@max-[420px]:hidden pointer-coarse:hidden" />
+              <SnapshotButtons className="@max-[600px]:hidden pointer-coarse:hidden" />
+            </>
+          )}
           <PreviewControls />
-          <Tip
-            label={
-              valueCheck === "off"
-                ? "Value check (Shift+V): inspect Rec.709 B&W luminance or high-contrast silhouette (viewport only)"
-                : `${valueCheckLabel(valueCheck)} (Shift+V) · click to cycle`
-            }
-          >
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(
-                square,
-                "pointer-coarse:hidden",
-                valueCheck === "off" && "@max-[720px]:hidden",
-              )}
-              aria-label="Value check"
-              aria-pressed={valueCheck !== "off"}
-              onClick={() => set({ valueCheck: nextValueCheckMode(valueCheck) })}
-            >
-              <Contrast />
-            </Button>
-          </Tip>
-          <Tip label="Cut-boundary ghost (Shift+O): overlay previous shot's outgoing frame to align cuts">
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(square, "pointer-coarse:hidden", !ghost && "@max-[760px]:hidden")}
-              aria-label="Cut-boundary ghost"
-              aria-pressed={ghost}
-              onClick={() => set({ ghost: !ghost })}
-            >
-              <Ghost />
-            </Button>
-          </Tip>
-          <Tip label="Color script strip (Shift+C): shot thumbnails, palettes, luminance & pacing">
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(square, "pointer-coarse:hidden", !colorScript && "@max-[820px]:hidden")}
-              aria-label="Color script"
-              aria-pressed={colorScript}
-              onClick={() => set({ colorScript: !colorScript })}
-            >
-              <Palette />
-            </Button>
-          </Tip>
-          <Tip
-            label={`Guides (Ctrl+; · Alt+; cycles): ${guideModeLabel(guideMode)}, and ${ratio === "9:16" ? "Shorts/TikTok safe zone" : "SMPTE safe areas"}`}
-          >
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(square, "@max-[360px]:hidden")}
-              aria-label="Guides"
-              aria-pressed={guides}
-              onClick={() => setPref("guides", !guides)}
-            >
-              <Grid3x3 />
-            </Button>
-          </Tip>
           {canFullscreen() && (
             <Tip label={full ? "Leave full screen (Esc)" : "Full screen preview (Ctrl+Shift+F)"}>
               <Button
@@ -424,30 +389,6 @@ export function Transport() {
               </Button>
             </Tip>
           )}
-          <Tip label="Mute test (Alt+M): silence audio for picture-only review (preserves volume)">
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(square, "pointer-coarse:@max-[384px]:hidden")}
-              aria-label="Mute"
-              aria-pressed={muted}
-              onClick={toggleMute}
-            >
-              {muted ? <VolumeX /> : <Volume2 />}
-            </Button>
-          </Tip>
-          <Tip label="Blind audio test (Shift+H): black out picture to listen to audio alone (Esc exits)">
-            <Button
-              variant="toolbar"
-              size="icon-lg"
-              className={cn(square, "pointer-coarse:hidden", !blindAudio && "@max-[680px]:hidden")}
-              aria-label="Blind audio test"
-              aria-pressed={blindAudio}
-              onClick={() => set({ blindAudio: !blindAudio })}
-            >
-              <Headphones />
-            </Button>
-          </Tip>
           <div
             className="upright:hidden sideways:hidden ms-1 flex h-8 w-24 items-center @max-[1060px]:w-20 @max-[900px]:hidden pointer-coarse:hidden"
             title="Volume (Ctrl+↑ ↓)"

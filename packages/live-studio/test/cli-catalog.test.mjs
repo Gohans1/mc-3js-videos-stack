@@ -567,7 +567,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
       ],
       [
         "scripts/review/reference_video.mjs",
-        "timecode and sidebyside video subcommand handlers imported by scripts/review/reference.mjs",
+        "timecode, sidebyside and frames handlers imported by scripts/review/reference.mjs",
       ],
       ["scripts/evals/load/compare.mjs", "developer helper comparing recorded performance runs"],
       ["scripts/evals/load/frame.mjs", "developer frame-measurement probe for load evaluations"],
@@ -595,6 +595,7 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
         "camera motion and solve worker spawned by media CLI and reference study/solve",
       ],
       ["scripts/media/camera_solve.py", "matchmove solver imported by the camera worker"],
+      ["scripts/media/shot_look.py", "per-shot look worker spawned by reference compare"],
       ["scripts/media/library.py", "local Foley catalog worker spawned by media CLI"],
       [
         "scripts/media/llama.py",
@@ -1006,11 +1007,20 @@ describe("cli-catalog resolver rules", () => {
     expect(
       isFieldVisible(labDef?.visibleWhen, { target: "captions", "--entry": "lab/prop.ts" }),
     ).toBe(false);
-    for (const target of ["stills", "clip", "poster", "all", "final"]) {
+    for (const target of ["stills", "clip", "poster", "all"]) {
       expect(isFieldVisible(entryDef?.visibleWhen, { target })).toBe(true);
       expect(isFieldVisible(labDef?.visibleWhen, { target })).toBe(false);
       expect(isFieldVisible(labDef?.visibleWhen, { target, "--entry": "lab/prop.ts" })).toBe(true);
     }
+    const final = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "final" },
+        flags: { "--entry": "lab/prop.ts", "--lab": ["view=desk"] },
+      },
+      BASE_CONTEXT,
+    );
+    expect(final.argvTokens).toEqual(["final"]);
     const labRun = buildCliInvocation(
       {
         commandId: "render",
@@ -1097,6 +1107,7 @@ describe("cli-catalog resolver rules", () => {
       "--edition",
       "--license",
       "--fav",
+      "--kit",
     ]) {
       const f = findCmd?.flags?.find((x) => x.key === k);
       expect(f?.bareLabel).toBeTruthy();
@@ -2243,6 +2254,29 @@ describe("cli-catalog resolver rules", () => {
     ]);
   });
 
+  test("builds a reference frames invocation for a film-time window", () => {
+    const result = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "frames", reference: "ref.mp4", remake: "ours.mp4" },
+        flags: { "--range": "3,23", "--fps": "native", "--batch-size": 300 },
+      },
+      BASE_CONTEXT,
+    );
+    expect(result.validationErrors).toEqual([]);
+    expect(result.argvTokens).toEqual([
+      "frames",
+      "ref.mp4",
+      "ours.mp4",
+      "--range",
+      "3,23",
+      "--fps",
+      "native",
+      "--batch-size",
+      "300",
+    ]);
+  });
+
   test("resolves reference sidebyside operation with --out, --audio, --layout, and --short-edge", () => {
     const sbs = buildCliInvocation(
       {
@@ -2289,5 +2323,145 @@ describe("cli-catalog resolver rules", () => {
     );
     expect(conflict.exclusiveConflicts.length).toBeGreaterThan(0);
     expect(conflict.validationErrors.length).toBeGreaterThan(0);
+  });
+
+  test("resolves sound:kit subcommands and find --kit / --include-banned options", () => {
+    const bare = buildCliInvocation({ commandId: "sound:kit" }, BASE_CONTEXT);
+    expect(bare.validationErrors).toEqual(["Choose a sound:kit subcommand first."]);
+
+    const rec = buildCliInvocation(
+      {
+        commandId: "sound:kit",
+        subcommandPath: ["recommend"],
+        flags: {
+          "--category": "whoosh",
+          "--q": "short whip",
+          "--top": 5,
+          "--dur": "0.1-1.2",
+          "--json": true,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(rec.validationErrors).toEqual([]);
+    expect(rec.meta.effect).toBe("read");
+    expect(rec.argvTokens).toEqual([
+      "recommend",
+      "--category",
+      "whoosh",
+      "--q",
+      "short whip",
+      "--top",
+      "5",
+      "--dur",
+      "0.1-1.2",
+      "--json",
+    ]);
+
+    const abPick = buildCliInvocation(
+      {
+        commandId: "sound:kit",
+        subcommandPath: ["ab", "pick"],
+        args: { winner: "bgm-amalgam" },
+        flags: { "--category": "bgm", "--ban-losers": true, "--reason": "tighter pulse" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(abPick.validationErrors).toEqual([]);
+    expect(abPick.meta.effect).toBe("write");
+    expect(abPick.argvTokens).toEqual([
+      "ab",
+      "pick",
+      "bgm-amalgam",
+      "--category",
+      "bgm",
+      "--ban-losers",
+      "--reason",
+      "tighter pulse",
+    ]);
+
+    const bareAb = buildCliInvocation(
+      { commandId: "sound:kit", subcommandPath: ["ab"] },
+      BASE_CONTEXT,
+    );
+    expect(bareAb.validationErrors).toEqual(["Choose a sound:kit ab subcommand first."]);
+
+    const similarRead = buildCliInvocation(
+      {
+        commandId: "sound:kit",
+        subcommandPath: ["similar"],
+        args: { id: "bgm-amalgam" },
+        flags: { "--category": "bgm" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(similarRead.validationErrors).toEqual([]);
+    expect(similarRead.meta.effect).toBe("read");
+    expect(similarRead.argvTokens).toEqual(["similar", "bgm-amalgam"]);
+
+    const similarStage = buildCliInvocation(
+      {
+        commandId: "sound:kit",
+        subcommandPath: ["similar"],
+        args: { id: "bgm-amalgam" },
+        flags: { "--stage": true, "--category": "bgm" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(similarStage.validationErrors).toEqual([]);
+    expect(similarStage.meta.effect).toBe("write");
+    expect(similarStage.argvTokens).toEqual([
+      "similar",
+      "bgm-amalgam",
+      "--stage",
+      "--category",
+      "bgm",
+    ]);
+
+    const seedWrite = buildCliInvocation(
+      { commandId: "sound:kit", subcommandPath: ["seed"] },
+      BASE_CONTEXT,
+    );
+    expect(seedWrite.meta.effect).toBe("write");
+    const seedDry = buildCliInvocation(
+      { commandId: "sound:kit", subcommandPath: ["seed"], flags: { "--dry-run": true } },
+      BASE_CONTEXT,
+    );
+    expect(seedDry.meta.effect).toBe("read");
+
+    const findBareKit = buildCliInvocation(
+      { commandId: "find", flags: { "--kit": "" } },
+      BASE_CONTEXT,
+    );
+    expect(findBareKit.validationErrors).toEqual([]);
+    expect(findBareKit.argvTokens).toEqual(["--kit"]);
+
+    const findKit = buildCliInvocation(
+      {
+        commandId: "find",
+        args: { words: "whoosh" },
+        flags: { "--kind": "sfx", "--kit": "whoosh", "--include-banned": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(findKit.validationErrors).toEqual([]);
+    expect(findKit.argvTokens).toEqual([
+      "whoosh",
+      "--kind",
+      "sfx",
+      "--kit",
+      "whoosh",
+      "--include-banned",
+    ]);
+
+    const findBlockStripsKit = buildCliInvocation(
+      {
+        commandId: "find",
+        flags: { "--kind": "block", "--kit": "whoosh", "--include-banned": true },
+      },
+      BASE_CONTEXT,
+    );
+    expect(findBlockStripsKit.validationErrors).toEqual([]);
+    expect(findBlockStripsKit.argvTokens).toEqual(["--kind", "block"]);
   });
 });

@@ -27,6 +27,7 @@ import { noteNumbers } from "./notes.mjs";
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 const POSTURES = ["stand", "crouch", "kneel", "sitSeat", "sitFloor", "allFours", "lie"];
 const FIND_KINDS = [
+  "face",
   "sfx",
   "bgm",
   "mc",
@@ -54,6 +55,7 @@ const FIND_KINDS = [
   "ease",
 ];
 const FIND_SOURCES = [
+  "mc-actor",
   "minecraft",
   "gohans",
   "global",

@@ -171,7 +171,8 @@ export const measureFinal = () => {
   timer = window.setTimeout(measure, 1500);
 };
 const measure = async () => {
-  if (!get().meter) return;
+  const { meter, ready } = get();
+  if (!meter || !ready) return;
   if (busy) {
     again = true;
     return;

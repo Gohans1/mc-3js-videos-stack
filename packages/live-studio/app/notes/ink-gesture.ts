@@ -13,6 +13,7 @@ export type InkEvent =
       id: number;
       button: number;
       pointerType?: string;
+      drawOnLeft?: boolean;
       tool: InkKind | null;
       x: number;
       y: number;
@@ -33,10 +34,11 @@ export function stepInk(gesture: InkGesture, event: InkEvent): InkStep {
   switch (event.type) {
     case "down": {
       const isMouse = (event.pointerType ?? "mouse") === "mouse";
-      const drawButton = isMouse ? 2 : 0;
-      if (!event.tool || gesture.kind !== "idle" || event.button !== drawButton)
-        return { gesture, effect: "none" };
-      const mask = isMouse ? 2 : 1;
+      const allowed = isMouse
+        ? event.button === 2 || (Boolean(event.drawOnLeft) && event.button === 0)
+        : event.button === 0;
+      if (!event.tool || gesture.kind !== "idle" || !allowed) return { gesture, effect: "none" };
+      const mask: 1 | 2 = event.button === 2 ? 2 : 1;
       if (event.tool === "path")
         return { gesture: { kind: "path_press", id: event.id, mask }, effect: "start_path" };
       return { gesture: { kind: "drawing", id: event.id, mask }, effect: "start_stroke" };

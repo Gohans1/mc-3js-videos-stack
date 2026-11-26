@@ -963,3 +963,69 @@ export const cleanAudioTitle = (raw: string, opts?: { mc?: boolean }): string =>
   }
   return cleaned;
 };
+
+export type LibraryRevealPlan =
+  | { mode: "voiceover" }
+  | { mode: "single"; nav: NavPick; openGroup: NavGroupId; pendingName: string }
+  | { mode: "multi"; filterNames: string[]; pendingName: string };
+
+export const resolveLibraryRevealPlan = ({
+  names,
+  narrationName,
+  hasVoiceTakes,
+  itemOf,
+  kindOf,
+}: {
+  names: readonly string[];
+  narrationName: string | null;
+  hasVoiceTakes: boolean;
+  itemOf: (name: string) => LibraryItem | undefined;
+  kindOf: (item: LibraryItem) => SoundKind;
+}): LibraryRevealPlan | null => {
+  if (!names.length) return null;
+  const nonNarration = names.filter((n) => n !== narrationName);
+  if (nonNarration.length === 0) {
+    if (hasVoiceTakes) return { mode: "voiceover" };
+    return {
+      mode: "single",
+      nav: { group: "yours", leaf: "timeline" },
+      openGroup: "yours",
+      pendingName: names[0]!,
+    };
+  }
+  if (nonNarration.length === 1) {
+    const name = nonNarration[0]!;
+    const item = itemOf(name);
+    if (!item) {
+      return {
+        mode: "single",
+        nav: { group: "yours", leaf: "timeline" },
+        openGroup: "yours",
+        pendingName: name,
+      };
+    }
+    const grp = kindOf(item);
+    return {
+      mode: "single",
+      nav: { group: grp, leaf: item.category || ALL },
+      openGroup: grp,
+      pendingName: name,
+    };
+  }
+  return {
+    mode: "multi",
+    filterNames: nonNarration,
+    pendingName: nonNarration[0]!,
+  };
+};
+
+export const resolveClipMenuRevealCounts = (
+  distinctNames: readonly string[],
+  narrationName: string | null | undefined,
+): { kitCount: number; allCount: number } => {
+  const nonNarrationCount = distinctNames.filter((n) => n !== narrationName).length;
+  return {
+    kitCount: nonNarrationCount,
+    allCount: nonNarrationCount > 0 ? nonNarrationCount : distinctNames.length,
+  };
+};

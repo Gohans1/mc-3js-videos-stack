@@ -20,6 +20,8 @@ import {
   originOf,
   originOptions,
   originTitle,
+  resolveClipMenuRevealCounts,
+  resolveLibraryRevealPlan,
   searchPlaceholder,
   siblingsOf,
   sortLibraryItems,
@@ -919,4 +921,121 @@ test("cleanAudioTitle & soundCardDetail > strips dangling commas/periods, expand
       origin: "real",
     }),
   ).toBe("Bed Creak — the bed frame — Real / Studio · This film — ID: bed_creak");
+});
+
+test("resolveLibraryRevealPlan routes Voiceover to voice leaf, strips narration from mixed multi-select, and narrows category leaf", () => {
+  const catalog = new Map([
+    ["bgm-fun", { name: "bgm-fun", kind: "bgm", category: "playful", seconds: 120 }],
+    ["sfx-boom", { name: "sfx-boom", kind: "sfx", category: "impacts", seconds: 1.2 }],
+    ["sfx-raw", { name: "sfx-raw", kind: "sfx", seconds: 0.4 }],
+  ]);
+  const itemOf = (name) => catalog.get(name);
+  const kindOf = (item) => item.kind ?? "sfx";
+
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["ref-vox"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: true,
+      itemOf,
+      kindOf,
+    }),
+    { mode: "voiceover" },
+  );
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["ref-vox"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: false,
+      itemOf,
+      kindOf,
+    }),
+    {
+      mode: "single",
+      nav: { group: "yours", leaf: "timeline" },
+      openGroup: "yours",
+      pendingName: "ref-vox",
+    },
+  );
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["ref-vox", "bgm-fun"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: true,
+      itemOf,
+      kindOf,
+    }),
+    {
+      mode: "single",
+      nav: { group: "bgm", leaf: "playful" },
+      openGroup: "bgm",
+      pendingName: "bgm-fun",
+    },
+  );
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["ref-vox", "bgm-fun", "sfx-boom"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: true,
+      itemOf,
+      kindOf,
+    }),
+    {
+      mode: "multi",
+      filterNames: ["bgm-fun", "sfx-boom"],
+      pendingName: "bgm-fun",
+    },
+  );
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["sfx-raw"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: true,
+      itemOf,
+      kindOf,
+    }),
+    {
+      mode: "single",
+      nav: { group: "sfx", leaf: ALL },
+      openGroup: "sfx",
+      pendingName: "sfx-raw",
+    },
+  );
+  assert.deepEqual(
+    resolveLibraryRevealPlan({
+      names: ["missing-sfx"],
+      narrationName: "ref-vox",
+      hasVoiceTakes: true,
+      itemOf,
+      kindOf,
+    }),
+    {
+      mode: "single",
+      nav: { group: "yours", leaf: "timeline" },
+      openGroup: "yours",
+      pendingName: "missing-sfx",
+    },
+  );
+
+  assert.deepEqual(resolveClipMenuRevealCounts([], "ref-vox"), { kitCount: 0, allCount: 0 });
+  assert.deepEqual(resolveClipMenuRevealCounts(["ref-vox"], "ref-vox"), {
+    kitCount: 0,
+    allCount: 1,
+  });
+  assert.deepEqual(resolveClipMenuRevealCounts(["bgm-fun"], "ref-vox"), {
+    kitCount: 1,
+    allCount: 1,
+  });
+  assert.deepEqual(resolveClipMenuRevealCounts(["ref-vox", "bgm-fun"], "ref-vox"), {
+    kitCount: 1,
+    allCount: 1,
+  });
+  assert.deepEqual(resolveClipMenuRevealCounts(["ref-vox", "bgm-fun", "sfx-boom"], "ref-vox"), {
+    kitCount: 2,
+    allCount: 2,
+  });
+  assert.deepEqual(resolveClipMenuRevealCounts(["bgm-fun", "sfx-boom"], "ref-vox"), {
+    kitCount: 2,
+    allCount: 2,
+  });
 });

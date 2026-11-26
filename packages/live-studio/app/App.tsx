@@ -23,10 +23,6 @@ import { useStudio } from "./core/store";
 import { useDeckShrinkLatch } from "./lessons/deck-latch";
 import { lessonTrailKey, useLessons } from "./lessons/lessons";
 import { Stage } from "./picture/Stage";
-
-const ReviewRoom = lazy(() =>
-  import("./shell/LazyPanels").then((m) => ({ default: m.ReviewRoom })),
-);
 import { useBoot } from "./shell/boot";
 import { Library, Side, useEditable, useWide } from "./shell/Side";
 import { Transport } from "./shell/Transport";
@@ -35,6 +31,9 @@ import { useVoicePlaygroundSelector } from "./sound/voice-playground-client";
 import { PasteAttributes } from "./timeline/PasteAttributes";
 import { TimelinePanel } from "./timeline/TimelinePanel";
 
+const ReviewRoom = lazy(() =>
+  import("./notes/ReviewRoom").then((m) => ({ default: m.ReviewRoom })),
+);
 const VoicePlaygroundWorkbenchDialog = lazy(() =>
   import("./sound/VoicePlaygroundWorkspace").then((m) => ({
     default: m.VoicePlaygroundWorkbenchDialog,
