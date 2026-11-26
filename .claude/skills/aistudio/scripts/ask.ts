@@ -7,9 +7,10 @@
 // Every mode takes --tab <label> to work in its own window, in parallel with other tabs.
 // Logs go to stderr, the answer to --out (or stdout). Exit 0 = answer saved, 1 = a step failed, 2 = bad input.
 import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, extname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
+import { probeVideoMeta } from "../../../../scripts/review/gemini-video-input.ts";
 import {
   ASK,
   browserSteps,
@@ -17,7 +18,10 @@ import {
   chatUrlFrom,
   chip,
   chipCount,
+  chipNameClashes,
   chipReady,
+  chipsNamedReady,
+  chipTextsByName,
   chipTokens,
   click,
   closeDialog,
@@ -28,13 +32,19 @@ import {
   fill,
   GENERATING,
   has,
+  isVideoFile,
   js,
   one,
   openChat,
   openNewChat,
   openVideoDialog,
   pageAlerts,
+  parseTokenCount,
+  planUploads,
   pollUntil,
+  readDeliveredTokensWithRetry,
+  readSetting,
+  resumeVideoVerificationArgs,
   runSteps,
   secs,
   selectOption,
@@ -50,6 +60,8 @@ import {
   TURN_COUNT,
   upload,
   useTab,
+  verifyDeliveredVideoTokens,
+  verifyVideoChipTokens,
   waitFor,
   waitForAnswer,
 } from "./lib";
@@ -59,6 +71,7 @@ import {
   DEFAULT_THINKING,
   dynamic,
   MEDIA,
+  TEXT,
   THINKING,
   toolName,
   TOOLS,
@@ -74,6 +87,8 @@ const USAGE = `Usage:
   A prompt that starts with "-" goes after --:  ${ASK} a.mp4 --out x.md -- "- list the cuts"
 Options:
   --prompt-file <file>       read the prompt from a file (long prompts); then every argument is an attachment
+  --files-from <file>        also attach every path listed in this file, one per line (beats the ~32K-char Windows
+                             command line, e.g. hundreds of --batch frames)
   --tab <label>              work in this tab (default main); other tabs can run at the same time
   --out <file.md>            save the answer here (default: print to stdout)
   --model <id>               new chat only, default ${DEFAULT_MODEL} (list: studio.ts models)
@@ -83,10 +98,18 @@ Options:
   --system-file <file>       the same, read from a file (e.g. a workflow skill's system/*.md or any non-empty UTF-8 prompt file)
   --tool <name>=<on|off>     switch a tool before sending, repeatable: ${Object.keys(TOOLS).join(" | ")} or its full name
                              (AI Studio carries the Google Search switch over to every new chat, so set it when it matters)
+  --min-in-tokens <n>        fail if delivered IN/total tokens fall below <n> (also works with --collect)
+  --previous-tokens <in,total>  resume a follow-up delivery check with the previous token counts (use none for unavailable)
+  --batch                    upload every non-video file in one go (seconds, not ~20 s per file); AI Studio then lists
+                             them in upload-finish order, so label each file (e.g. a burned timecode) instead of relying
+                             on order; videos still upload one by one after the batch; keep a prompt at or below
+                             ~450 images (600 froze AI Studio)
 Video files only (${VIDEO_EXT.join(" ")}):
   --fps <n>                  0 < n <= 24 (default 24)
   --start <t> --end <t>      clip window like 1m10s / 2m30s (default whole video)
-  --agentic                  "Agentic video understanding" (replaces --fps/--start/--end)
+  --agentic                  "Agentic video understanding" (replaces --fps/--start/--end); AI Studio still feeds it
+                             1 frame per second, so use --batch stills for sub-second checks
+                             Static video checks use ffprobe to verify the requested sampling.
 Waits:
   --upload-timeout-min <n>   default 15
   --run-timeout-min <n>      default 60`;
@@ -103,6 +126,7 @@ function parse() {
       options: {
         help: { type: "boolean", short: "h" },
         "prompt-file": { type: "string" },
+        "files-from": { type: "string" },
         tab: { type: "string" },
         chat: { type: "string" },
         collect: { type: "boolean" },
@@ -117,6 +141,9 @@ function parse() {
         start: { type: "string" },
         end: { type: "string" },
         agentic: { type: "boolean" },
+        batch: { type: "boolean" },
+        "min-in-tokens": { type: "string" },
+        "previous-tokens": { type: "string" },
         "upload-timeout-min": { type: "string", default: "15" },
         "run-timeout-min": { type: "string", default: "60" },
       },
@@ -131,6 +158,14 @@ if (opts.help) {
   process.exit(0);
 }
 const isNumber = (s?: string) => s !== undefined && /^\d+(\.\d+)?$/.test(s);
+let minInTokens: number | undefined;
+if (opts["min-in-tokens"] !== undefined) {
+  const raw = opts["min-in-tokens"].trim();
+  const parsed = Number(raw);
+  if (!/^\d+$/.test(raw) || !Number.isSafeInteger(parsed) || parsed <= 0)
+    usage(`--min-in-tokens must be a positive integer, got "${opts["min-in-tokens"]}"`);
+  minInTokens = parsed;
+}
 
 if (opts.tab !== undefined) {
   if (!TAB_RE.test(opts.tab))
@@ -173,7 +208,9 @@ if (opts.collect) {
     tools.length ||
     videoOptions
   ) {
-    usage("--collect takes only --out and --tab (it reads the chat already open in the tab)");
+    usage(
+      "--collect takes --out, --tab, --min-in-tokens, --previous-tokens, and --run-timeout-min (it reads the chat open in the tab)",
+    );
   }
   mode = "collect";
 } else {
@@ -198,7 +235,13 @@ if (opts.collect) {
         `the last argument is a file (${prompt}); the prompt goes last: ${ASK} <file ...> "<prompt>"`,
       );
   }
-  if (opts.chat && !args.length && promptFile === undefined) {
+  const filesFrom = opts["files-from"];
+  if (filesFrom !== undefined) {
+    if (!existsSync(filesFrom)) usage(`--files-from list not found: ${filesFrom}`);
+    const listed = readFileSync(filesFrom, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    files = [...files, ...listed.map((f) => resolve(f))];
+  }
+  if (opts.chat && !args.length && promptFile === undefined && filesFrom === undefined) {
     mode = "collect";
     if (opts.thinking || opts.media || system !== undefined || tools.length || videoOptions)
       usage("collect mode sends nothing, so it takes no settings");
@@ -208,7 +251,19 @@ if (opts.collect) {
   }
 }
 
-const isVideo = (f: string) => VIDEO_EXT.includes(extname(f).toLowerCase());
+const previousTokens = opts["previous-tokens"];
+const decodePrevious = (value: string) => (value === "none" ? null : Number(value));
+let previousBaseline: { lastTurnInTokens: number | null; topTokens: number | null } | undefined;
+if (previousTokens !== undefined) {
+  const fields = previousTokens.split(",");
+  if (
+    mode !== "collect" || minInTokens === undefined || fields.length !== 2 ||
+    fields.some((value) => value !== "none" && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))))
+  ) usage("--previous-tokens takes in,total (numbers or none) in collect mode with --min-in-tokens");
+  previousBaseline = { lastTurnInTokens: decodePrevious(fields[0]!), topTokens: decodePrevious(fields[1]!) };
+}
+
+const isVideo = isVideoFile;
 const videos = files.filter(isVideo);
 if (videoOptions && !videos.length)
   usage("--fps/--start/--end/--agentic need at least one video file");
@@ -226,6 +281,14 @@ for (const file of files) {
 const names = files.map((f) => basename(f));
 if (new Set(names).size !== names.length)
   usage(`two files share a name (${names.join(", ")}); rename or copy one first`);
+if (opts.batch) {
+  if (files.every(isVideo))
+    usage("--batch needs at least one non-video file (videos always upload one by one)");
+  const [clash] = chipNameClashes(names);
+  if (clash) usage(`with --batch, "${clash[0]}" also appears inside "${clash[1]}"; rename one`);
+}
+const plan = planUploads(files, !!opts.batch);
+const uploadOrder = [...plan.batch, ...plan.serial];
 
 const model = opts.model ?? DEFAULT_MODEL;
 // Levels differ per model, so only the default model gets a default level; the page reports what a model offers.
@@ -307,6 +370,13 @@ add("check input", () => {
 
 steps.push(...browserSteps);
 
+const shouldVerifyDelivery =
+  (mode !== "collect" && videos.length > 0 && !agentic) || minInTokens !== undefined;
+let baselineTokens: { topTokens: number | null; lastTurnInTokens: number | null } = {
+  topTokens: null,
+  lastTurnInTokens: null,
+};
+
 if (mode === "new") {
   add("open new chat", () => openNewChat(model));
 } else {
@@ -325,6 +395,9 @@ if (mode === "new") {
       throw new StepError(
         "this chat is still generating; collect that answer before sending another prompt",
       );
+    if (mode === "follow-up" && shouldVerifyDelivery) {
+      baselineTokens = await readDeliveredTokensWithRetry();
+    }
     return `${turns} turns${here ? ", tab was already on it (not reloaded)" : ""}${busy ? ", still generating" : ""}`;
   });
 }
@@ -340,7 +413,42 @@ if (system !== undefined) {
 }
 for (const { name, on } of tools) add(`turn ${name} ${on ? "on" : "off"}`, () => setTool(name, on));
 
-for (const [i, file] of files.entries()) {
+const videoChipTokensByIndex = new Map<number, number>();
+let sourceTokenFloor = 0;
+let checkedMedia = media;
+const expectedChipTokens = () => [...videoChipTokensByIndex.values()].reduce((sum, n) => sum + n, 0);
+if (plan.batch.length) {
+  const batchNames = plan.batch.map((f) => basename(f));
+  add(`upload ${plan.batch.length} file(s) at once`, async () => {
+    const before = js<number>(chipCount);
+    if (before !== 0) {
+      throw new StepError(
+        `the prompt box already holds ${before} attachment(s) from an earlier run in this tab; remove them or use another --tab`,
+      );
+    }
+    const t0 = Date.now();
+    upload(one("fileInput"), "file input", ...plan.batch);
+    try {
+      await pollUntil(
+        `${chipCount} === ${plan.batch.length} && ${chipsNamedReady(batchNames)}`,
+        uploadTimeoutMs,
+        (ms) => console.error(`  … still uploading, ${js<number>(chipCount)}/${plan.batch.length} chips (${secs(ms)})`),
+      );
+    } catch (e) {
+      if (!(e instanceof TimeoutError)) throw e;
+      throw new StepError(
+        `the batch is still uploading after ${secs(uploadTimeoutMs)} (${js<number>(chipCount)}/${plan.batch.length} chips); raise --upload-timeout-min. AI Studio alerts: ${pageAlerts() || "none"}`,
+      );
+    }
+    const tokens = js<(string | null)[]>(chipTextsByName(batchNames))
+      .map((t) => parseTokenCount(t?.match(TEXT.chipReady)?.[0] ?? "") ?? 0)
+      .reduce((sum, n) => sum + n, 0);
+    return `${plan.batch.length} file(s) ready in ${secs(Date.now() - t0)}, ${tokens.toLocaleString("en-US")} tokens, listed in upload-finish order`;
+  });
+}
+
+for (const [j, file] of plan.serial.entries()) {
+  const i = plan.batch.length + j;
   const name = basename(file);
   const tag = files.length > 1 ? ` ${i + 1}/${files.length} (${name})` : ` (${name})`;
 
@@ -393,7 +501,15 @@ for (const [i, file] of files.entries()) {
     const saved = readDialog();
     await closeDialog("dialogCancel");
     checkDialog(name, saved);
-    return `${describe(saved)} saved, now ${chipTokens(i, name)}`;
+    await pollUntil(chipReady(i, name), uploadTimeoutMs);
+    const tokLabel = chipTokens(i, name);
+    if (!agentic) {
+      const tokNum = parseTokenCount(tokLabel);
+      if (tokNum === null)
+        throw new StepError(`could not parse token count from chip of ${name} (got "${tokLabel}")`);
+      videoChipTokensByIndex.set(i, tokNum);
+    }
+    return `${describe(saved)} saved, now ${tokLabel}`;
   });
 }
 
@@ -401,16 +517,47 @@ if (videos.length > 1) {
   add("recheck all videos", async () => {
     // Saving one video's settings must not have reset another's.
     const report: string[] = [];
-    for (const [i, file] of files.entries()) {
+    for (const [i, file] of uploadOrder.entries()) {
       if (!isVideo(file)) continue;
       const name = basename(file);
       await openVideoDialog(i, name, uploadTimeoutMs);
       const saved = readDialog();
       await closeDialog("dialogCancel");
       checkDialog(name, saved);
-      report.push(`${name} ${describe(saved)} ${chipTokens(i, name)}`);
+      await pollUntil(chipReady(i, name), uploadTimeoutMs);
+      const tokLabel = chipTokens(i, name);
+      if (!agentic) {
+        const tokNum = parseTokenCount(tokLabel);
+        if (tokNum === null)
+          throw new StepError(
+            `could not parse token count from chip of ${name} (got "${tokLabel}")`,
+          );
+        videoChipTokensByIndex.set(i, tokNum);
+      }
+      report.push(`${name} ${describe(saved)} ${tokLabel}`);
     }
     return report.join("; ");
+  });
+}
+
+if (videos.length && !agentic) {
+  add("verify video chip counts", async () => {
+    const actualMedia = await readSetting("media");
+    if (!MEDIA.includes(actualMedia))
+      throw new StepError(`Media resolution could not be verified (got "${actualMedia}")`);
+    checkedMedia = actualMedia;
+    for (const [index, tokens] of videoChipTokensByIndex) {
+      const file = uploadOrder[index]!;
+      const { floor, reason } = verifyVideoChipTokens(tokens, probeVideoMeta(file), {
+        start: opts.start === undefined ? undefined : toSeconds(opts.start),
+        end: opts.end === undefined ? undefined : toSeconds(opts.end),
+        fps,
+        media: actualMedia,
+      });
+      if (reason) throw new StepError(`${basename(file)}: ${reason}`);
+      sourceTokenFloor += floor;
+    }
+    return `${sourceTokenFloor.toLocaleString("en-US")} minimum input tokens from source video`;
   });
 }
 
@@ -449,10 +596,42 @@ add("wait for answer", () =>
     timeoutMs: runTimeoutMs,
     resumeHint: () => {
       const url = chatUrl || currentChatUrl();
-      return `${ASK}${tabFlag()} ${url ? `--chat ${url}` : "--collect"}${outArg}`;
+      const minArg = resumeVideoVerificationArgs(
+        expectedChipTokens(),
+        Math.max(sourceTokenFloor, minInTokens ?? 0),
+        mode === "follow-up" ? baselineTokens : previousBaseline,
+      );
+      return `${ASK}${tabFlag()} ${url ? `--chat ${url}` : "--collect"}${minArg}${outArg}`;
     },
   }),
 );
+
+if (shouldVerifyDelivery) {
+  add("verify video delivery", async () => {
+    const hasNonAgenticVideos = mode !== "collect" && videos.length > 0 && !agentic;
+    if (hasNonAgenticVideos && videoChipTokensByIndex.size !== videos.length) {
+      throw new StepError(
+        `missing parsed chip token counts (${videoChipTokensByIndex.size}/${videos.length} videos)`,
+      );
+    }
+    const delivered = await readDeliveredTokensWithRetry();
+    const baseline = mode === "follow-up" ? baselineTokens : previousBaseline;
+    const verdict = verifyDeliveredVideoTokens({
+      expectedVideoTokens: expectedChipTokens(),
+      actualInTokens: delivered.lastTurnInTokens,
+      topTokens: delivered.topTokens,
+      requestedFps: fps,
+      requestedMedia: checkedMedia,
+      baselineInTokens: baseline?.lastTurnInTokens,
+      baselineTopTokens: baseline?.topTokens,
+      requireBaseline: baseline !== undefined,
+      hasNonAgenticVideos,
+      minDeliveredTokens: Math.max(sourceTokenFloor, minInTokens ?? 0),
+    });
+    if (!verdict.ok) throw new StepError(verdict.reason!);
+    return verdict.summary;
+  });
+}
 
 let truncationReason: string | null = null;
 

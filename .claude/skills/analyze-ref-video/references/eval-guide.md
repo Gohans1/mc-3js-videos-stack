@@ -1,5 +1,7 @@
 # Prompt Evaluation & Upgrade Guide (`analyze-ref-video`)
 
+This guide reproduces the archived video-input baselines. The [active breakdown workflow](../SKILL.md) uses timecoded JPEGs and needs a separate still-frame baseline.
+
 Standard operating guide for future AI sessions upgrading `system/analyze-ref-video.md` (v4 -> v5+) with measured A/B evidence instead of guesswork.
 
 ## Mandatory Pre-Edit Principles

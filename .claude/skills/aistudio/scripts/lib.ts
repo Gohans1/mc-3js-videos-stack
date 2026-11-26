@@ -4,7 +4,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { type Candidate, dynamic, type Key, MAP, TEXT, URLS } from "./page-map";
+import { expectedVideoTokensFloor, pictureDurationInRange } from "../../../../scripts/review/gemini-video-input.ts";
+import { type Candidate, dynamic, type Key, MAP, TEXT, URLS, VIDEO_EXT } from "./page-map";
 import {
   currentDesktopName,
   guardWindows,
@@ -236,7 +237,7 @@ export const click = (elementExpr: string, what: string) => ab("click", target(e
 export const fill = (elementExpr: string, what: string, text: string) =>
   abStdin(["fill", target(elementExpr, what), "--", text]);
 export const upload = (elementExpr: string, what: string, ...files: string[]) =>
-  ab("upload", target(elementExpr, what), ...files);
+  abStdin(["upload", target(elementExpr, what), ...files]);
 export const focus = (elementExpr: string, what: string) => ab("focus", target(elementExpr, what));
 
 // ---------- page facts ----------
@@ -671,8 +672,7 @@ export async function openChat(
 
 // ---------- settings ----------
 
-/** On a fresh chat the prompt box takes focus back from mouse clicks, so dropdowns are opened with the keyboard. */
-export async function selectOption(combo: "thinking" | "media", option: string): Promise<string> {
+export async function readSetting(combo: "thinking" | "media"): Promise<string> {
   const label = MAP[combo].what;
   if (!js<boolean>(has(combo))) {
     // Media resolution lives under Advanced settings, which can be folded.
@@ -684,7 +684,13 @@ export async function selectOption(combo: "thinking" | "media", option: string):
       );
     }
   }
-  if (dropdownValue(combo) === option) return `already "${option}"`;
+  return dropdownValue(combo);
+}
+
+/** On a fresh chat the prompt box takes focus back from mouse clicks, so dropdowns are opened with the keyboard. */
+export async function selectOption(combo: "thinking" | "media", option: string): Promise<string> {
+  const label = MAP[combo].what;
+  if ((await readSetting(combo)) === option) return `already "${option}"`;
   const anyOption = has(dynamic.anyOption);
   for (let attempt = 1; !js<boolean>(anyOption); attempt++) {
     if (attempt > 10) throw new StepError(`the ${label} list never opened`);
@@ -844,6 +850,256 @@ export function formatStoppedRunError(alerts: string, thoughtOnly: boolean): str
 
 export function formatCopyFailureError(index: number, alerts: string): string {
   return `"Copy as markdown" of turn ${index} copied nothing${alerts ? `; AI Studio says: ${alerts}` : ""}`;
+}
+
+export function parseTokenCount(text: string): number | null {
+  const m =
+    /^\s*(?:Tokens:\s*)?(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?(?:\s*(?:\/\s*\d[\d,]*(?:\.\d+)?\s*[kKmM]?\s*)?(?:tokens?|IN)\b|\s*$)/i.exec(
+      text,
+    );
+  if (!m) return null;
+  const base = Number(m[1]!.replaceAll(",", ""));
+  if (!Number.isFinite(base)) return null;
+  const suffix = (m[2] ?? "").toLowerCase();
+  const mult = suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : 1;
+  return Math.round(base * mult);
+}
+
+export function readDeliveredTokens(): {
+  topTokens: number | null;
+  lastTurnInTokens: number | null;
+} {
+  const chunkSelector = (["turnBody", "turnThought", "turnText", "turnMedia"] as const)
+    .flatMap((k) => MAP[k].candidates)
+    .map((c) => ("css" in c ? c.css : ""))
+    .filter(Boolean)
+    .join(", ");
+  const raw = js<{ top: string | null; lastIn: string | null }>(`(() => {
+    const totalRe = new RegExp(${JSON.stringify(TEXT.totalTokens.source)}, 'i');
+    const inRe = new RegExp(${JSON.stringify(TEXT.turnUsageIn.source)}, 'gi');
+    const chunkSel = ${JSON.stringify(chunkSelector)};
+    let top = null;
+    const titleEl = ${one("title")};
+    let el = titleEl?.parentElement ?? null;
+    for (let depth = 0; el && depth < 6; depth++, el = el.parentElement) {
+      if (${has("turn", "el")} || ${has("promptBox", "el")}) break;
+      const nonTitleText = [...el.children]
+        .filter((c) => !titleEl || !c.contains(titleEl))
+        .map((c) => c.innerText || '')
+        .join(' ');
+      const m = nonTitleText.match(totalRe);
+      if (m) { top = m[1]; break; }
+    }
+    const allTurns = ${TURNS};
+    const trailingModelTurns = [];
+    for (let i = allTurns.length - 1; i >= 0; i--) {
+      const t = allTurns[i];
+      if (${one("turnRole", "t")}?.getAttribute('data-turn-role') !== 'Model') break;
+      trailingModelTurns.push(t);
+    }
+    let lastIn = null;
+    const findLastIn = (src) => {
+      const matches = [...src.matchAll(inRe)];
+      if (!matches.length) return null;
+      const last = matches.at(-1);
+      return last[1] + (last[2] || '');
+    };
+    for (const t of trailingModelTurns) {
+      const bodies = chunkSel ? [...t.querySelectorAll(chunkSel)] : [];
+      const walker = document.createTreeWalker(t, NodeFilter.SHOW_TEXT);
+      const metaChunks = [];
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const p = node.parentElement;
+        if (!p || p.tagName === 'STYLE' || p.tagName === 'SCRIPT') continue;
+        if (p.closest('[aria-hidden="true"], [hidden]')) continue;
+        if (p.getClientRects().length === 0 || getComputedStyle(p).visibility === 'hidden') continue;
+        if (bodies.some((b) => b.contains(node))) continue;
+        const txt = (node.nodeValue || '').trim();
+        if (txt) metaChunks.push(txt);
+      }
+      lastIn = findLastIn(metaChunks.join(' '));
+      if (lastIn) break;
+    }
+    return { top, lastIn };
+  })()`);
+  return {
+    topTokens: raw.top ? parseTokenCount(raw.top) : null,
+    lastTurnInTokens: raw.lastIn ? parseTokenCount(raw.lastIn) : null,
+  };
+}
+
+export function scrollLastModelHeaderIntoView(which: "first" | "last" = "first"): void {
+  js(`(() => {
+    const allTurns = ${TURNS};
+    let target = null;
+    for (let i = allTurns.length - 1; i >= 0; i--) {
+      const t = allTurns[i];
+      if (${one("turnRole", "t")}?.getAttribute('data-turn-role') !== 'Model') break;
+      if (${JSON.stringify(which)} === 'last') { target = t; break; }
+      target = t;
+    }
+    target?.scrollIntoView({ block: 'start' });
+    return true;
+  })()`);
+}
+
+export async function readDeliveredTokensWithRetry(): Promise<{
+  topTokens: number | null;
+  lastTurnInTokens: number | null;
+}> {
+  let delivered = readDeliveredTokens();
+  for (let waitAttempt = 0; waitAttempt < 6 && delivered.lastTurnInTokens === null; waitAttempt++) {
+    if (waitAttempt === 0) scrollLastModelHeaderIntoView("first");
+    else if (waitAttempt === 2) scrollLastModelHeaderIntoView("last");
+    await Bun.sleep(500);
+    delivered = readDeliveredTokens();
+  }
+  return delivered;
+}
+
+export function verifyVideoChipTokens(
+  tokens: number,
+  source: { startSec?: number; durationSec: number; sourceFps: number },
+  request: { start?: number; end?: number; fps: number; media: string },
+): { floor: number; reason: string | null } {
+  if (!(source.durationSec > 0 && source.sourceFps > 0)) {
+    return { floor: 0, reason: "ffprobe could not read the video duration and frame rate" };
+  }
+  const duration = pictureDurationInRange(source, request.start, request.end);
+  if (!(duration > 0)) return { floor: 0, reason: "the selected window contains no source video" };
+  const floor = expectedVideoTokensFloor(
+    duration,
+    request.fps,
+    request.media,
+    source.sourceFps,
+  );
+  const reason =
+    tokens < floor
+      ? `AI Studio estimated ${tokens.toLocaleString("en-US")} video tokens, below the source-based floor ${floor.toLocaleString("en-US")} for ${request.fps} fps. Try uploading the selected window as its own file or use gemini-api.ts.`
+      : null;
+  return { floor, reason };
+}
+
+const videoChipFloor = (tokens: number) => (tokens >= 1_000 ? Math.floor(tokens * 0.45) : 0);
+
+export function resumeVideoVerificationArgs(
+  chipTokens: number,
+  minTokens: number,
+  baseline?: { lastTurnInTokens: number | null; topTokens: number | null },
+): string {
+  const floor = Math.max(videoChipFloor(chipTokens), minTokens);
+  if (floor === 0) return "";
+  const previous = baseline
+    ? ` --previous-tokens ${baseline.lastTurnInTokens ?? "none"},${baseline.topTokens ?? "none"}`
+    : "";
+  return ` --min-in-tokens ${floor}${previous}`;
+}
+
+export function verifyDeliveredVideoTokens(opts: {
+  expectedVideoTokens: number;
+  actualInTokens: number | null;
+  topTokens: number | null;
+  requestedFps: number;
+  requestedMedia?: string;
+  baselineInTokens?: number | null;
+  baselineTopTokens?: number | null;
+  requireBaseline?: boolean;
+  hasNonAgenticVideos?: boolean;
+  minDeliveredTokens?: number;
+}): { ok: boolean; summary: string; reason?: string } {
+  const {
+    expectedVideoTokens,
+    actualInTokens,
+    topTokens,
+    requestedFps,
+    requestedMedia,
+    baselineInTokens,
+    baselineTopTokens,
+    requireBaseline,
+    hasNonAgenticVideos,
+    minDeliveredTokens,
+  } = opts;
+  if (hasNonAgenticVideos && expectedVideoTokens <= 0) {
+    return {
+      ok: false,
+      summary: "missing video chip token count",
+      reason:
+        "video sampling could not be verified: failed to parse expected token count from uploaded video chip(s). Refusing to save unverified output.",
+    };
+  }
+  const meter = actualInTokens !== null ? "IN" : topTokens !== null ? "total" : null;
+  const rawDelivered = actualInTokens ?? topTokens;
+  const chipFloor = videoChipFloor(expectedVideoTokens);
+  const enforceFloor = Math.max(chipFloor, minDeliveredTokens ?? 0);
+
+  if (enforceFloor <= 0) {
+    const baseline =
+      meter === "IN"
+        ? (baselineInTokens ?? baselineTopTokens ?? 0)
+        : meter === "total"
+          ? (baselineTopTokens ?? 0)
+          : 0;
+    const delivered = rawDelivered !== null ? Math.max(0, rawDelivered - baseline) : null;
+    const seen =
+      delivered !== null ? `${delivered.toLocaleString("en-US")} ${meter} tokens` : "unreported";
+    return {
+      ok: true,
+      summary: `${seen} (chip ${expectedVideoTokens.toLocaleString("en-US")} tokens)`,
+    };
+  }
+  if (rawDelivered === null) {
+    return {
+      ok: false,
+      summary: `usage meter unavailable (need >= ${enforceFloor.toLocaleString("en-US")})`,
+      reason: `video sampling could not be verified: AI Studio displayed no token usage meter after generation (expected >= ${enforceFloor.toLocaleString("en-US")} tokens). Refusing to save unverified output.`,
+    };
+  }
+  const rawBaseline =
+    meter === "IN"
+      ? (baselineInTokens ?? baselineTopTokens ?? null)
+      : meter === "total"
+        ? (baselineTopTokens ?? null)
+        : null;
+  if (requireBaseline && rawBaseline === null) {
+    return {
+      ok: false,
+      summary: `follow-up baseline unavailable (need >= ${enforceFloor.toLocaleString("en-US")} new tokens)`,
+      reason: `video sampling could not be verified: AI Studio displayed no prior token baseline before this follow-up run (expected >= ${enforceFloor.toLocaleString("en-US")} new tokens). Refusing to save unverified output.`,
+    };
+  }
+  const baseline = rawBaseline ?? 0;
+  const delivered = Math.max(0, rawDelivered - baseline);
+  if (delivered < enforceFloor) {
+    const floorRaised = minDeliveredTokens !== undefined && minDeliveredTokens > chipFloor;
+    const refTok = floorRaised
+      ? enforceFloor
+      : expectedVideoTokens > 0
+        ? expectedVideoTokens
+        : enforceFloor;
+    const pct = ((delivered / refTok) * 100).toFixed(1);
+    const cfg = `${requestedFps} fps${requestedMedia ? `, media ${requestedMedia}` : ""}`;
+    const expectedDesc =
+      expectedVideoTokens > 0 && floorRaised
+        ? `uploaded video chip confirmed ${expectedVideoTokens.toLocaleString("en-US")} tokens (${cfg}) and minimum delivered floor was ${enforceFloor.toLocaleString("en-US")} tokens`
+        : expectedVideoTokens > 0
+          ? `uploaded video chip confirmed ${expectedVideoTokens.toLocaleString("en-US")} tokens (${cfg})`
+          : `minimum delivered floor was ${enforceFloor.toLocaleString("en-US")} tokens`;
+    return {
+      ok: false,
+      summary: `${delivered.toLocaleString("en-US")} ${meter} vs ${refTok.toLocaleString("en-US")} (${pct}%)`,
+      reason: `video sampling silently downgraded by AI Studio: ${expectedDesc}, but AI Studio delivered only ${delivered.toLocaleString("en-US")} ${meter} tokens (${pct}% — likely silent 1 fps / Low resolution fallback on CreateInteraction). Refusing to save degraded output.`,
+    };
+  }
+  const refNote =
+    expectedVideoTokens > 0 && (minDeliveredTokens === undefined || minDeliveredTokens <= chipFloor)
+      ? `chip ${expectedVideoTokens.toLocaleString("en-US")} tokens`
+      : expectedVideoTokens > 0
+        ? `chip ${expectedVideoTokens.toLocaleString("en-US")} tokens, floor ${enforceFloor.toLocaleString("en-US")}`
+        : `floor ${enforceFloor.toLocaleString("en-US")} tokens`;
+  return {
+    ok: true,
+    summary: `delivered ${delivered.toLocaleString("en-US")} ${meter} tokens (${refNote})`,
+  };
 }
 
 export function detectPossibleTruncation(markdown: string): string | null {
@@ -1026,8 +1282,45 @@ export const chip = (n: number, name: string) => `(() => {
   return c && ${all("removeMedia", "c")}.length === 1 ? { chip: c, button: ${one("videoSettings", "c")} } : null;
 })()`;
 const chipText = (n: number, name: string) => `AS.norm(${chip(n, name)}?.chip.innerText)`;
+
+export const isVideoFile = (file: string) =>
+  VIDEO_EXT.includes(file.slice(file.lastIndexOf(".")).toLowerCase());
+
+/** One upload call per file takes ~15-20 s each; one call for many files takes seconds, but its chips land in
+ * upload-finish order. So --batch sends every non-video file at once and keeps videos one by one after it, since
+ * each video chip is then found by position to open its own settings dialog. */
+export function planUploads(files: string[], batch: boolean): { batch: string[]; serial: string[] } {
+  if (!batch) return { batch: [], serial: files };
+  return { batch: files.filter((f) => !isVideoFile(f)), serial: files.filter(isVideoFile) };
+}
+
+export function chipNameClashes(names: string[]): [string, string][] {
+  return names.flatMap((a) =>
+    names.filter((b) => b !== a && ` ${b} `.includes(` ${a} `)).map((b): [string, string] => [a, b]),
+  );
+}
+
+/** JS expression: each name's chip text wherever the batch put it, or null until exactly one chip holds that name.
+ * Each chip's text is read once (its widest ancestor holding one remove button): reading innerText per name per chip
+ * took longer than agent-browser's eval timeout at 150+ files. */
+export const chipTextsByName = (names: string[]) => `(() => {
+  const buttons = ${all("removeMedia")};
+  const held = new Map();
+  for (const btn of buttons) for (let c = btn; c; c = c.parentElement) held.set(c, (held.get(c) ?? 0) + 1);
+  const texts = buttons.map((btn) => {
+    let c = btn;
+    while (c.parentElement && held.get(c.parentElement) === 1) c = c.parentElement;
+    return ' ' + AS.norm(c.innerText) + ' ';
+  });
+  return ${JSON.stringify(names)}.map((name) => {
+    const hits = texts.filter((t) => t.includes(' ' + name + ' '));
+    return hits.length === 1 ? hits[0].trim() : null;
+  });
+})()`;
+export const chipsNamedReady = (names: string[]) =>
+  `(${chipTextsByName(names)}).every((t) => t !== null && new RegExp(${JSON.stringify(TEXT.chipReady.source)}, ${JSON.stringify(TEXT.chipReady.flags)}).test(t))`;
 export const chipReady = (n: number, name: string) =>
-  `new RegExp(${JSON.stringify(TEXT.chipReady.source)}).test(${chipText(n, name)})`;
+  `new RegExp(${JSON.stringify(TEXT.chipReady.source)}, ${JSON.stringify(TEXT.chipReady.flags)}).test(${chipText(n, name)})`;
 /** "41,851 tokens" or "Agentic" (that mode shows no count). */
 export const chipTokens = (n: number, name: string) =>
   js<string>(chipText(n, name)).match(TEXT.chipReady)?.[0] ?? "?";

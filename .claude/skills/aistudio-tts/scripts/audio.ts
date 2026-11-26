@@ -1,0 +1,197 @@
+import { link, mkdir, mkdtemp, rmdir, unlink, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
+
+import { js, pageAlerts, secs, StepError } from "../../aistudio/scripts/lib";
+import { enabled, exists, item, tap } from "./page-map";
+
+const player = `(${item("player")}?.querySelector('audio'))`;
+const source = `(${player}?.currentSrc || ${player}?.src || '')`;
+const runBaseline = "window.__gohansAistudioTtsBeforeRun";
+const awaitingNewAudio = `(typeof ${runBaseline} === 'string' && ${runBaseline} === ${source})`;
+
+type PlaybackEvidence = {
+  duration: number | null;
+  timelineEnd: number | null;
+  playing: boolean;
+  mediaPaused: boolean;
+  sourceSettled: boolean;
+};
+
+export type SpeechAudioEvidence = {
+  generating: boolean;
+  controlsReady: boolean;
+  hasSource: boolean;
+  awaitingNewAudio: boolean;
+  playback: PlaybackEvidence;
+};
+
+export const speechAudioEvidence = `(() => {
+  const panel = ${item("player")};
+  const audio = panel?.querySelector('audio');
+  const seek = ${item("seek", "panel")};
+  return {
+    generating: ${exists("stop")},
+    controlsReady: ${enabled(item("run"))} && ${enabled(item("download", "panel"))},
+    hasSource: Boolean(audio?.src || audio?.currentSrc),
+    awaitingNewAudio: ${awaitingNewAudio},
+    playback: {
+      duration: audio?.duration ?? null,
+      timelineEnd: seek?.max ? Number(seek.max) : null,
+      playing: ${exists("pause", "panel")},
+      mediaPaused: audio?.paused ?? true,
+      sourceSettled: Boolean(audio?.currentSrc && (!audio.src || audio.src === audio.currentSrc))
+    }
+  };
+})()`;
+
+export function playbackIsFinal(
+  playback: PlaybackEvidence,
+): playback is PlaybackEvidence & { duration: number } {
+  const { duration, timelineEnd, playing, mediaPaused, sourceSettled } = playback;
+  return (
+    duration !== null &&
+    duration > 0 &&
+    sourceSettled &&
+    !(playing && mediaPaused) &&
+    (timelineEnd === null || timelineEnd <= Math.ceil(duration))
+  );
+}
+
+export function inspectSpeechAudio(evidence: SpeechAudioEvidence) {
+  if (evidence.generating) return { phase: "generating", duration: null } as const;
+  if (!playbackIsFinal(evidence.playback)) {
+    return { phase: evidence.hasSource ? "streaming" : "idle", duration: null } as const;
+  }
+  if (evidence.controlsReady && !evidence.awaitingNewAudio) {
+    return { phase: "ready", duration: evidence.playback.duration } as const;
+  }
+  return { phase: "idle", duration: null } as const;
+}
+
+export const readSpeechAudio = () =>
+  inspectSpeechAudio(js<SpeechAudioEvidence>(speechAudioEvidence));
+
+export function decodeWav(data: string) {
+  const prefix = "data:audio/wav;base64,";
+  if (!data.startsWith(prefix))
+    throw new StepError("The AI Studio player did not expose a WAV data source.");
+  return requireWav(Buffer.from(data.slice(prefix.length), "base64"));
+}
+
+export function requireWav(bytes: Buffer) {
+  const { correction } = inspectWav(bytes);
+  if (!correction) return bytes;
+  const corrected = Buffer.from(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+  corrected.writeUInt32LE(correction.rate, correction.offset);
+  return corrected;
+}
+
+function inspectWav(bytes: Buffer) {
+  if (
+    bytes.length <= 44 ||
+    bytes.toString("ascii", 0, 4) !== "RIFF" ||
+    bytes.toString("ascii", 8, 12) !== "WAVE" ||
+    bytes.readUInt32LE(4) + 8 !== bytes.length
+  ) {
+    throw new StepError("AI Studio audio is truncated or is not a valid RIFF WAVE file.");
+  }
+  let bytesPerSecond = 0;
+  let frameBytes = 0;
+  let dataBytes = 0;
+  let correction: { rate: number; offset: number } | undefined;
+  for (let offset = 12; offset + 8 <= bytes.length;) {
+    const chunk = bytes.toString("ascii", offset, offset + 4);
+    const size = bytes.readUInt32LE(offset + 4);
+    const content = offset + 8;
+    if (content + size > bytes.length)
+      throw new StepError("AI Studio audio has a truncated WAV chunk.");
+    if (chunk === "fmt " && size >= 16) {
+      const offset = content + 8;
+      bytesPerSecond = bytes.readUInt32LE(offset);
+      if (bytes.readUInt16LE(content) === 1) {
+        frameBytes = bytes.readUInt16LE(content + 12);
+        const pcmRate = bytes.readUInt32LE(content + 4) * frameBytes;
+        if (!pcmRate || pcmRate > 0xffffffff) throw new StepError("WAV has an invalid PCM format.");
+        if (bytesPerSecond !== pcmRate) correction = { rate: pcmRate, offset };
+        bytesPerSecond = pcmRate;
+      }
+    }
+    if (chunk === "data") dataBytes += size;
+    offset = content + size + (size % 2);
+  }
+  if (!bytesPerSecond || !dataBytes || (frameBytes > 0 && dataBytes % frameBytes !== 0))
+    throw new StepError("WAV output has no usable format or audio data chunk.");
+  return { duration: dataBytes / bytesPerSecond, correction };
+}
+
+export async function saveNewFile(output: string, bytes: Buffer) {
+  const destination = resolve(output);
+  await mkdir(dirname(destination), { recursive: true });
+  const stage = await mkdtemp(join(dirname(destination), ".aistudio-tts-"));
+  const temporary = join(stage, "audio.wav");
+  try {
+    await writeFile(temporary, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+    await link(temporary, destination);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+      throw new StepError(`Output already exists: ${destination}. Choose a new take path.`);
+    }
+    throw error;
+  } finally {
+    await unlink(temporary).catch((error) => {
+      if (error.code !== "ENOENT") throw error;
+    });
+    await rmdir(stage);
+  }
+  return destination;
+}
+
+export function submitSpeech() {
+  const { phase } = readSpeechAudio();
+  if (phase === "generating" || phase === "streaming") {
+    throw new StepError(
+      "This tab is still generating or streaming. Collect on this tab before running again.",
+    );
+  }
+  if (!js<boolean>(enabled(item("run")))) {
+    throw new StepError(
+      "Run is unavailable. Check the text, open panels, and any AI Studio alert.",
+    );
+  }
+  js(`(${runBaseline} = ${source}, true)`);
+  try {
+    tap("run");
+  } catch (error) {
+    js(`delete ${runBaseline}`);
+    throw error;
+  }
+}
+
+export async function waitForAudio(timeoutMs: number) {
+  const start = Date.now();
+  let heartbeat = start;
+  while (Date.now() - start < timeoutMs) {
+    const state = readSpeechAudio();
+    if (state.phase === "ready") {
+      js(`delete ${runBaseline}`);
+      return state.duration;
+    }
+    const alert = pageAlerts();
+    if (alert) throw new StepError(`AI Studio says: ${alert}`);
+    if (Date.now() - heartbeat >= 15_000) {
+      heartbeat = Date.now();
+      console.error(`… waiting for speech audio (${state.phase}, ${secs(heartbeat - start)}).`);
+    }
+    await Bun.sleep(1_000);
+  }
+  throw new StepError(
+    `No completed audio verified after ${secs(timeoutMs)}. Keep the tab open and run collect on the same tab. Check status before running again.`,
+  );
+}
+
+export async function exportAudio(output: string) {
+  const data = js<string>(source);
+  const bytes = decodeWav(data);
+  const path = await saveNewFile(output, bytes);
+  return { path, bytes: bytes.length, duration: inspectWav(bytes).duration };
+}

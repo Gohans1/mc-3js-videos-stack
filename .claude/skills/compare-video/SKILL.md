@@ -1,71 +1,43 @@
 ---
 name: compare-video
-description: Compares a reference video (REF) against a remake render (OURS) at 24 FPS to surface frame-accurate camera, boundary, motion, acting, VFX, lighting, caption, and render/technical defects in a prioritized Blocker/Major/Minor ledger, driving an iterative verify-and-fix QA loop until pass. Backend-agnostic, style-agnostic multimodal workflow (defaults today to the aistudio CLI). Use when asked to compare two videos, audit a remake against its reference, or iterate compare-and-fix until pass. Triggers include "compare video", "compare 2 videos", "compare ref vs ours", "audit remake", or Vietnamese equivalents ("so sánh 2 video", "so sánh video ref", "compare video đến khi pass").
+description: Compares a reference video (REF) against a remake render (OURS) using timecoded JPEG batches at 15 FPS for scene and full-film QA. Surfaces visual craft defects and verifies findings against original frames. Use when asked to compare two videos, review a remake scene against its reference, or iterate compare-and-fix until pass ("so sánh 2 video", "so sánh video ref", "compare video đến khi pass").
 ---
 
 # compare-video
 
-Backend-agnostic, style-agnostic `REF` vs `OURS` comparison and remake QA skill: tiles both videos into one synced 720p side-by-side composite, runs the calibrated 4-section comparison prompt [system/compare-2-video.md](system/compare-2-video.md) through any 24 FPS multimodal runner (defaulting today to `.claude/skills/aistudio/scripts/ask.ts`), and enforces native 30fps local ground-truth verification before every fix round. Target visual-style filtering always belongs at the filmmaking-agent layer (Step 5) — never hardcode a specific visual style into this skill or its system prompt.
+Use timecoded image batches for every AI-assisted visual comparison, from scene dailies through the final whole-film review. Use local audio checks and native-frame evidence to make fix and pass decisions.
 
 ## Review Gate & Iterative QA Loop
 
-Never invoke external multimodal video runs unsolicited — confirm with the user unless explicitly delegated.
+Run external AI review when delegated. Review each scene as soon as its render is ready.
 
-| Step | Action | Output / Verification |
+In `mc-films`, `bun run reference compare <ref> <draft>` adds local `Look per shot` estimates after `bun run media setup camera`. Use them to locate frames for verification. Use `bun run render stills --check pops:<from>,<to>` to inspect scene movement. `bun run render final` checks the whole scene for pops and foot slides before encoding.
+
+| Step | Action | Evidence |
 | --- | --- | --- |
-| 1. Render blur-accurate remake | Inside `films/<name>/`, render with `--samples 8` or `--samples 16` when camera whips or fast motion blur matter (a `--samples 1` draft triggers a blur warning in `sidebyside`) | `renders/draft.mp4`, `renders/span_<a>-<b>.mp4`, or `renders/final.mp4` |
-| 2. Build synced `REF\|OURS` composite | Inside `films/<name>/`: `bun run reference sidebyside references/ref.mp4 renders/draft.mp4 --out renders/reference/vN_sbs.mp4` | Single synced 720p composite (`hstack` for portrait, `vstack` for landscape; auto-strips draft bar, auto-aligns spans/chunks, keeps `audio:ours`, cuts token usage by ~50% to avoid 65k Thoughts cap) |
-| 3. Run blind multimodal comparison | Pass `vN_sbs.mp4` + [system/compare-2-video.md](system/compare-2-video.md) through the configured runner with a strictly neutral layout prompt (`"Compare REF (left) vs OURS (right) across the full video."`). **Never** inject Creator Notes, project-specific style rules, or "do not flag" lists into the VLM prompt — keep the comparator 100% blind, open, and style-agnostic so it works for any medium and cannot be biased or distracted | Saves raw blind 4-section defect report (`renders/reference/vN_compare.md`) |
-| 4. Check for truncation | Watch for truncation warnings (`⚠ warning: answer may be truncated (...)` / `may be truncated:`) or missing Section 4; if truncated, send a follow-up continuation (e.g., `ASK --chat <url>`) from the last completed row | Complete 4 sections: Verdict & Drift, Shot-by-Shot Diff, Prioritized Defect Ledger (`Blocker -> Major -> Minor`), Local Verification Watchlist |
-| 5. Mandatory local 30fps verify & orchestrator triage | **Never trust any VLM claim blindly.** Inspect every flagged `Blocker` / `Major` on native 30fps frames (`bun run sheet renders/reference/vN_sbs.mp4 frames ...` or `bun run render stills --samples 16 --ref references/ref.mp4 --at ...`) and check active Creator Notes (`bun run notes`) plus the film's chosen visual style. Classify each raw row locally at the filmmaking-agent layer into: `Verified Defect` (real bug to fix), `Dismissed (Intentional Medium Adaptation)` (inherent to the project's chosen target style — filter here, never hardcode specific styles into this skill), `Dismissed (Intentional Override)` (matches an explicit Creator Note or user-approved creative divergence), or `Dismissed (VLM False Positive)` (disproved by 30fps pixels) | Filtered root-cause fix list (`Verified Blocker` / `Verified Major` only; fix monorepo engine/CLI bugs upstream when uncovered) |
-| 6. Fix full, re-render full, stop by brakes | Apply all verified fixes across the film, run deterministic checks (`check`, `--check order`, `framecheck`, `sweep`), re-render the full draft/final, and run a fresh blind full-video comparison round under the stopping rules below | Verified pass or escalated stall report |
+| 1. Render | Use physical motion blur when whips or fast moves matter. In `mc-films`, use `--samples 8` or `--samples 16`. | Versioned scene or film render |
+| 2. Package | Run `bun run reference frames <ref> <render>` from the film directory. Use `--start` for a standalone scene or `--range` for a shared film-time window. Span and chunk exports auto-align. | Synced REF/OURS JPEGs with burned film clock, sampled at 15 fps and capped at 450 per list |
+| 3. Review | Follow the [AI Studio recipe](references/stills-field-audit.md#recipe). Upload one list per fresh chat through `--batch --files-from` with `gemini-4-hydrogen`, `--thinking High`, `--media High`, and `--tool search=off`. State the layout and use [one scope per prompt](references/stills-field-audit.md#prompt-template) for detailed audits. Use the overview prompt for a quick scan. | Timestamped visual findings with evidence from both panels |
+| 4. Check coverage | Save each report beside its list. Recover partial answers from the same chat or retry smaller windows using the same model. For a whole-film review, process all lists and merge verified findings by film time. Mark missing or failed windows and requested fields pending. | Coverage of all requested windows and fields |
+| 5. Verify & triage | Check reported defects on the reviewed source frames with `sheet` or engine stills. Use a short `--fps native` export for a cut or pop. Apply creator notes and intentional style choices, then classify each finding as a verified defect, intentional adaptation, intentional override, or false positive. | Prioritized ledger of verified defects |
+| 6. Fix & recheck | Re-render and review affected spans, then review the whole film in image batches for final QA. Listen to both soundtracks locally and verify sync against the picture. Use `earshot` and FFmpeg `ebur128`, `silencedetect`, dual-mono and `aphasemeter` checks where relevant. | Verified pass or escalated stall report |
 
-**Direct 2-file audio comparison fallback:** Because `reference sidebyside` carries one audio track (`audio:ours` by default), pass two separate files (`ref_timecode.mp4` + `draft.mp4`) with `--start`/`--end` **only on `< 20s` clips** (or lower `--thinking High`) when you explicitly need Gemini to compare both audio streams simultaneously.
+Use the image evidence for visual claims. Record audio findings from the local listening and measurement pass.
 
-## Stopping Rules & Anti-Loop Brakes
-
-Never hardcode an arbitrary round ceiling (stopping early while `Verified Blocker`s are still dropping leaves broken video shipped), and never chase raw VLM `0/0/0` on cross-medium stylized remakes. All counts below are computed **locally in Step 5 after filtering out `Dismissed (Intentional Medium Adaptation)`, `Dismissed (Intentional Override)`, and `Dismissed (VLM False Positive)` rows**:
+## Stopping Rules
 
 | Rule | Condition | Action |
 | --- | --- | --- |
-| **Verified PASS** | `0 Verified Blocker` AND `< 2 Verified Major` (`0` or `1` genuine Major remaining after local 30fps verification and Creator Note triage) | **PASS & STOP** immediately |
-| **Monotonic Progress (`Fix Full -> Compare Full`)** | `>= 1 Verified Blocker` OR `>= 2 Verified Major` remain, AND verified defect counts are dropping across rounds | Fix all verified issues across the film, re-render the full video, and run a fresh blind full-video comparison round (no arbitrary round cap while progress continues) |
-| **Stall Circuit Breaker** | **2 consecutive rounds** fail to reduce `Verified Blocker` count (flat or regressed) OR the same verified defect in the same shot survives 2 consecutive fix attempts | **STOP & REPORT** to the user with 30fps `sheet`/`stills` evidence and root cause instead of burning quota in circles |
+| Verified PASS | All requested windows covered, 0 verified Blockers and fewer than 2 verified Majors | Pass and stop |
+| Progress | Verified defects remain and counts are dropping | Fix and review the affected spans |
+| Stall | Two consecutive rounds fail to reduce the verified Blocker count, or a verified defect survives two fix attempts | Report the frame evidence and suspected cause |
 
-## Default Runner Recipe (`aistudio` CLI)
+## Scope & References
 
-Run from the repo root (`ASK = bun .claude/skills/aistudio/scripts/ask.ts`):
-
-```bash
-ASK --tab cmp-qa --model gemini-4-hydrogen --thinking "Extra High" --media High --fps 24 --tool search=off --system-file .claude/skills/compare-video/system/compare-2-video.md films/<name>/renders/reference/vN_sbs.mp4 "Compare REF (left) vs OURS (right) across the full video." --out films/<name>/renders/reference/vN_compare.md
-```
-
-Keep the user prompt strictly blind and neutral (panel layout + scope only) — never add Creator Notes, style rules, or "ignore X" instructions to AI Studio; filter intentional medium adaptations and overrides locally in Step 5 instead. **Always prefer `--model gemini-4-hydrogen --thinking "Extra High" --tool search=off`** for `compare-video` (empirical A/B testing proved `gemini-4-neon` suffers central-tendency enum collapse to `NEEDS POLISH`/`Major`/`Med` even on `0/0/0` identical clips and blackout faults, whereas `gemini-4-hydrogen` hits exact `PASS 0/0/0` + `Conf=High` and strict `Blocker` recall), and close temporary tabs afterward via `bun .claude/skills/aistudio/scripts/studio.ts tab close cmp-qa`.
-
-## Backend-Agnostic Runner Contract
-
-This skill owns the **comparison QA workflow, system prompt, design rationale, and eval baselines** — never the transport. Swap the default `aistudio` runner for Gemini API, Vertex AI, or another 24 FPS multimodal CLI by honoring this contract without editing [system/compare-2-video.md](system/compare-2-video.md):
-
-| Input / Output | Contract |
-| --- | --- |
-| `files` | `[vN_sbs.mp4]` (synced `REF\|OURS` composite; or `[ref, ours]` on `< 20s` dual-audio checks) |
-| `systemFile` | `.claude/skills/compare-video/system/compare-2-video.md` |
-| `prompt` | Strictly blind, neutral directive naming panel layout and scope only (`"Compare REF (left) vs OURS (right) across the full video."` or top/bottom for `vstack`) — never include Creator Notes or override hints |
-| `model` & `thinking` | High-precision multimodal video model (`gemini-4-hydrogen` / equivalent) with Extra High reasoning; web search / grounding **OFF** |
-| `mediaResolution` & `fps` | High resolution at `24 fps` |
-| `range` *(optional)* | `{ startSec, endSec }` — reserved seam for future long-form windowing |
-| Return value | Raw UTF-8 markdown containing all 4 sections of `compare-2-video.md` |
-
-## Scope & Future Long-Form Extensibility Seam (`> 3 min`, Not Yet Implemented)
-
-- **Current production scope (`<= 3 min`):** Single-pass 24 FPS `reference sidebyside` composites of Shorts, scenes, and `span_`/`chunks/cNN` renders (`~375k` tokens for 55s at 24fps Media High).
-- **Reserved long-form seam (`15+ min`, planned — NOT yet implemented):** Do not pass a single 15-minute side-by-side render into one call (exceeds context/65k output limits). Future automation should slice `REF` and `OURS` into aligned windows (`bun run reference sidebyside` with film-clock start/end offsets), run the exact same [system/compare-2-video.md](system/compare-2-video.md) per window, and aggregate per-window findings into one global film-clock Defect Ledger.
-
-## Reference Index (1 Level Deep From SKILL.md)
+Use paired REF/OURS comparison for a remake with a matching reference. For original work, use the production skill's visual review against its own storyboard and craft targets.
 
 | Path | Purpose |
 | --- | --- |
-| [system/compare-2-video.md](system/compare-2-video.md) | Official open, style-agnostic v3 system prompt (94 lines, 4 sections, medium-neutral adaptation guard, 3-way byte-identical Craft Taxonomy) |
-| [references/prompt-design.md](references/prompt-design.md) | v2/v3 engineering log, documented VLM comparison traps, 10-arm + 4-clip A/B eval matrices, and `sidebyside` rationale |
-| [references/eval-guide.md](references/eval-guide.md) | Mandatory pre-edit rules, 5-step upgrade loop, 4-clip real+synthetic control suite, and 6-axis 30-point rubric |
-| [references/eval-baseline.json](references/eval-baseline.json) | Machine-readable JSON storing the historical v2 and v3 A/B benchmark results and ground-truth metrics |
+| [references/stills-field-audit.md](references/stills-field-audit.md) | Current packaging, upload, recovery, and visual prompts |
+| [references/prompt-design.md](references/prompt-design.md) | Historical experiments and measured still-frame results |
+| [references/eval-baseline.json](references/eval-baseline.json) | Historical model and transport baselines |

@@ -46,9 +46,12 @@ export const DEFAULT_MEDIA = "High";
 /** Text patterns read off the page (in-page code builds them with new RegExp(source, flags)). */
 export const TEXT = {
   /** An attachment chip is ready when it shows its token count; Agentic video mode shows "Agentic" instead. */
-  chipReady: /[\d,]+ tokens|\bAgentic\b/,
+  chipReady: /\d[\d,]*(?:\.\d+)?\s*[kKmM]?\s+tokens|\bAgentic\b/i,
   /** A model id such as gemini-3.1-flash-lite inside a picker item's name. */
   modelId: /\b[a-z][a-z0-9]*(-[a-z0-9.]+)+\b/,
+  totalTokens:
+    /\b(\d[\d,]*(?:\.\d+)?(?:\s*[kKmM])?)\s*(?:\/\s*\d[\d,]*(?:\.\d+)?(?:\s*[kKmM])?\s*)?tokens\b/i,
+  turnUsageIn: /Tokens:\s*(\d[\d,]*(?:\.\d+)?)\s*([kKmM])?\s*IN\b/i,
 };
 
 const re = (source: string, flags = "") => ({ re: source, flags });

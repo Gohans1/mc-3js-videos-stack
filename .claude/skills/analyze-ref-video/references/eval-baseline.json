@@ -675,5 +675,207 @@
         "leaks": 0
       }
     }
+  },
+  "modelComparisonAistudio20261125": {
+    "evaluatedAt": "2026-11-25",
+    "backend": "aistudio",
+    "shippedPrompt": {
+      "file": ".claude/skills/analyze-ref-video/system/analyze-ref-video.md",
+      "version": "v4-open",
+      "lines": 100
+    },
+    "transportVerification": {
+      "gemini38Flash": {
+        "model": "gemini-3.8-flash",
+        "thinkingOptions": ["Low", "Medium", "High"],
+        "thinkingUsed": "High",
+        "mediaUsed": "High",
+        "fpsUsed": 24,
+        "real24fpsHighDelivered": true,
+        "runsCompleted": "4/4",
+        "truncations": 0
+      },
+      "gemini31ProPreview": {
+        "model": "gemini-3.1-pro-preview",
+        "thinkingOptions": ["Low", "Medium", "High"],
+        "thinkingUsed": "High",
+        "mediaUsed": "High",
+        "fpsUsed": 24,
+        "real24fpsHighDelivered": true,
+        "runsCompleted": "4/4",
+        "truncations": 0
+      }
+    },
+    "summaryMeanOutOf100": {
+      "gemini4HydrogenBaseline": 98.25,
+      "gemini38Flash": 87.25,
+      "gemini31ProPreview": 75.56,
+      "shipGateMin": 95.0,
+      "verdict": "Neither model matches gemini-4-hydrogen (98.25/100) or clears the 95.0 Ship Gate. gemini-3.8-flash (87.25) beats gemini-3.1-pro-preview (75.56) by +11.69 pts and achieves 100% PySceneDetect cut recall on hard-cut live-action (32/32) and 2D vector (11/11) clips (93/100 each), but misclassifies continuous 3D camera moves as Hard/Hidden Cuts (80-83/100) and fabricates 1Kbps foley. gemini-3.1-pro-preview drops cuts (26/32, 7/11), skips entire scenes, hallucinates actions, outputs terse 6-14 row Sec 3 ledgers, and guesses audio instead of listening."
+    },
+    "models": {
+      "gemini-3.8-flash": {
+        "meanPillar1": 23.63,
+        "meanPillar2": 25.0,
+        "meanPillar3": 38.63,
+        "meanTotalOutOf100": 87.25,
+        "meanAnswerSec": 112.5,
+        "meanWallSec": 352.2,
+        "meanChars": 9926.8,
+        "clips": {
+          "zdf28_grape_plasma": {
+            "genre": "3d-macro-vfx",
+            "chipTokens": 181665,
+            "deliveredTokens": 195401,
+            "answerSec": 94.0,
+            "wallSec": 310.1,
+            "chars": 7431,
+            "sec2Rows": 10,
+            "sec3Rows": 14,
+            "pillar1Max25": 24.0,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 31.0,
+            "totalOutOf100": 80.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1veuKu5Xyc2wZtA-D-YumwTkz1fdquLbc",
+            "keyFindings": "Hallucinated 5 Hard Cuts on continuous camera sweeps (f38, f88, f100, f371, f768) and fabricated 1Kbps microwave clicks/beep SFX; caught ZACK D. FILMS watermark and ~0.5 IN callout."
+          },
+          "food_3dcg": {
+            "genre": "3d-explainer",
+            "chipTokens": 356841,
+            "deliveredTokens": 370258,
+            "answerSec": 90.2,
+            "wallSec": 425.1,
+            "chars": 10562,
+            "sec2Rows": 21,
+            "sec3Rows": 18,
+            "pillar1Max25": 24.0,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 34.0,
+            "totalOutOf100": 83.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1D5jJEonXacoHP1NuxOqyoRuYYPVhlEta",
+            "keyFindings": "Misclassified continuous 3D camera moves as 4 Hard Cuts + 9 Hidden Cuts (vs GT 0/1/15), missed 45-jar glow and conveyor blur, misread paper bag as measuring scoop and standing bald man as young man on couch with cookie/burger, fabricated 1Kbps foley; caught executives, honeycomb-to-Oreo morph, trembling hand, and factory/snack brands."
+          },
+          "ood2_apple_cinema": {
+            "genre": "live-action-commercial",
+            "chipTokens": 337377,
+            "deliveredTokens": 355930,
+            "answerSec": 123.0,
+            "wallSec": 365.8,
+            "chars": 11960,
+            "sec2Rows": 40,
+            "sec3Rows": 16,
+            "scenesMatched": "32/32",
+            "pillar1Max25": 22.5,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 45.5,
+            "totalOutOf100": 93.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1z01essix1FLDth9Qr4GiGT8Vf6G6yZL9",
+            "keyFindings": "100% PySceneDetect cut recall (32/32), frame-accurate 40-shot breakdown with names and Chase/Visa brands; 1 Sec 3 frame typo (f19 instead of f481-f514), missing Sec 1 shadow/finishing & audio keywords."
+          },
+          "ood1_kurzgesagt": {
+            "genre": "2d-flat-vector",
+            "chipTokens": 506065,
+            "deliveredTokens": 520773,
+            "answerSec": 142.8,
+            "wallSec": 307.6,
+            "chars": 9754,
+            "sec2Rows": 18,
+            "sec3Rows": 16,
+            "scenesMatched": "11/11",
+            "pillar1Max25": 24.0,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 44.0,
+            "totalOutOf100": 93.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1LQ0HOprB4fTw1XXVY47gjMAmM7m7Nf45",
+            "keyFindings": "100% cut recall (11/11), exact UI numbers (92%->70%, 5800K->4060K, 15C->5C, -10C, 38C), exact f2098-f2105 radial blur and Rainbow Dash IP flag; fabricated subtle 1Kbps foley (winter wind, bubbling water), 0 Sec 3 audio rows."
+          }
+        }
+      },
+      "gemini-3.1-pro-preview": {
+        "meanPillar1": 22.75,
+        "meanPillar2": 20.31,
+        "meanPillar3": 32.5,
+        "meanTotalOutOf100": 75.56,
+        "meanAnswerSec": 90.6,
+        "meanWallSec": 332.1,
+        "meanChars": 7579.3,
+        "clips": {
+          "zdf28_grape_plasma": {
+            "genre": "3d-macro-vfx",
+            "chipTokens": 181665,
+            "deliveredTokens": 193165,
+            "answerSec": 67.8,
+            "wallSec": 291.4,
+            "chars": 5697,
+            "sec2Rows": 7,
+            "sec3Rows": 6,
+            "pillar1Max25": 22.0,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 36.0,
+            "totalOutOf100": 83.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1PEuHh3hCtN0jL6UfDoS8Ech1vhw5en1A",
+            "keyFindings": "Correctly recognized 0 Hard Cuts and continuous pull-backs, but terse (6 Sec 3 rows), Sec 1/2 Continuous mismatch (3 vs 2), missed ZACK D. FILMS watermark, and guessed 'BGM is likely...' without listening."
+          },
+          "food_3dcg": {
+            "genre": "3d-explainer",
+            "chipTokens": 356841,
+            "deliveredTokens": 371499,
+            "answerSec": 136.8,
+            "wallSec": 428.6,
+            "chars": 10823,
+            "sec2Rows": 21,
+            "sec3Rows": 14,
+            "pillar1Max25": 22.0,
+            "pillar2Max25": 25.0,
+            "pillar3Max50": 24.0,
+            "totalOutOf100": 71.0,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1GSGewNVAMqcqJa-yCNE_u9JOvZ9-dOY5",
+            "keyFindings": "Severe hallucinations (caveman 'enthusiastically chews' & 'aggressively gnaws bone', fake Hard Cuts f630 & f1622, fake honeycomb wipe-down instead of factory set-slide, steam from hot liquid), skipped executives (f1219-f1286) and honeycomb-to-Oreo morph (f1566-f1601), 2 Sec 1/2 count mismatches, forbidden 00:00-END inferred audio row, missed all ZACK D FILMS logos."
+          },
+          "ood2_apple_cinema": {
+            "genre": "live-action-commercial",
+            "chipTokens": 337377,
+            "deliveredTokens": 352171,
+            "answerSec": 80.5,
+            "wallSec": 329.9,
+            "chars": 6455,
+            "sec2Rows": 33,
+            "sec3Rows": 6,
+            "scenesMatched": "26/32",
+            "pillar1Max25": 23.0,
+            "pillar2Max25": 20.31,
+            "pillar3Max50": 33.0,
+            "totalOutOf100": 76.31,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/1cHtBQ31oluDhbcxA8BIeCFtnWiXvyix8",
+            "keyFindings": "Missed 6/32 PySceneDetect cuts (f224, f260, f402, f539, f1024, f1131), skeletal 6-row Sec 3, missed Chase/Visa brands and director name."
+          },
+          "ood1_kurzgesagt": {
+            "genre": "2d-flat-vector",
+            "chipTokens": 506065,
+            "deliveredTokens": 519175,
+            "answerSec": 77.2,
+            "wallSec": 278.5,
+            "chars": 7342,
+            "sec2Rows": 17,
+            "sec3Rows": 10,
+            "scenesMatched": "7/11",
+            "pillar1Max25": 24.0,
+            "pillar2Max25": 15.91,
+            "pillar3Max50": 32.0,
+            "totalOutOf100": 71.91,
+            "leaks": 0,
+            "chatUrl": "https://aistudio.google.com/prompts/19meEuAuGwBECrsc3IzfmB1myWtkSa1Bq",
+            "keyFindings": "Missed 4/11 cuts (f518, f687, f1117, f2001), falsely claimed zero motion blur despite f2103 radial blur, inverted photon color physics (purple vs red), misread Plants as insect feeding, missed exact UI numbers."
+          }
+        }
+      }
+    }
   }
 }

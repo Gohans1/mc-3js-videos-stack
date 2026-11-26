@@ -6,7 +6,9 @@ Canonical record of architectural rationale, trade-offs, the `N=60` baseline mat
 
 The `## Reusable Film & Motion Craft Taxonomy` section in `system/analyze-ref-video.md` is strictly mode-agnostic (zero mentions of `reference`, `Claude`, `Three.js`, `draw(t)`, or CLI flags) and spans 3D CG, 2D flat-vector, and live-action video. Copy this 8-category block **byte-identically** into `.claude/skills/compare-video/system/compare-2-video.md`, `.claude/skills/channel-dna/system/learn-channel-video.md`, and any future single-video review prompt (enforced by automated unit test in `.claude/skills/channel-dna/scripts/channel-dna.test.ts`).
 
-## Division of Labor: Gemini 24fps vs Local CLI
+For current breakdowns, use the [timecoded JPEG workflow](../SKILL.md#workflow) and local audio verification. The settings below describe the archived video-input baselines.
+
+## Archived Division of Labor: Gemini 24fps vs Local CLI
 
 | Capability | Best Owner | Why |
 | --- | --- | --- |
@@ -15,7 +17,7 @@ The `## Reusable Film & Motion Craft Taxonomy` section in `system/analyze-ref-vi
 | Continuous BGM, mood shifts, audible `J/L-cuts`, pre-impact silence, VO pauses | Gemini 24fps | Local pixel checks are deaf; note Gemini audio is 1Kbps mono so subtle SFX must never be fabricated |
 | Static subtitle wording, pixel coordinates, exact RGB hex, LUFS loudness, SFX waveforms | Local CLI (`media ocr`, `sheet`, `at`, `qc`, `earshot`) | Deterministic local measurement beats VLM visual estimation |
 
-## Video Prep & Standard AI Studio Settings
+## Archived Video Prep & AI Studio Settings
 
 | Step | Standard Setting | Measured Result |
 | --- | --- | --- |

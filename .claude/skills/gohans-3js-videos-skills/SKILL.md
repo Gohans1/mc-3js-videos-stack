@@ -6,6 +6,12 @@ license: MIT
 
 # Using References
 
+## Review scene dựng theo REF
+
+Khi đã được giao review, render xong scene nào thì so scene đó ngay. Dùng `bun run reference frames <ref> <render>` để xuất JPEG ghép REF/OURS có timecode phim ở 15 fps, tối đa 450 ảnh mỗi list. Gửi từng list qua AI Studio `--batch --files-from` với `gemini-4-hydrogen`, `--thinking High`, `--media High`, rồi lưu report cạnh list và kiểm chứng lỗi trên frame gốc.
+
+Đọc [guide review Gemini](./references/gohans-gemini-review-video.md) để chọn đúng luồng cho scene, âm thanh hoặc cả phim. [Recipe Compare](../compare-video/references/stills-field-audit.md#recipe) có lệnh đóng gói, prompt quét nhanh, prompt từng field và cách xử lý lượt lỗi.
+
 ## [references/gohans-3js-videos-minecraft](./references/gohans-3js-videos-minecraft.md) (file lớn, đọc từ từ cẩn thận)
 
 Kiến trúc, thư viện & kho tài nguyên(Blocks custom/original; character; sound; articles; gun; structures; vehicles; sci-fi; foods; clothes;physics; animals;natural; items; etc...) tất tần tật liên quan đến lảm video Minecraft
@@ -16,13 +22,6 @@ Kiến trúc, thư viện & kho tài nguyên(Blocks custom/original; character; 
 - dev muốn thêm bất kì điều gì vào scene/project minecraft
 - dev muốn bạn research/tìm hiểu/giải thích thêm về mọi thứ trong minecraft
 - khi bạn chuẩn bị tự chế custom bất kì món/công thức/code/etc... gì trong minecraft (nếu trong list không có -> thì hãy tự vẽ custom phù hợp với block-model-renderer
-
-## [references/gohans-separate-agent-review](./references/gohans-separate-agent-review.md)
-
-### When Using
-
-- Chỉ khi dev yêu cầu
-- CẤM TỰ TIỆN DÙNG
 
 ## [references/gohans-threejs-stack.md](./references/gohans-threejs-stack.md)
 
@@ -42,18 +41,6 @@ Tất tần tật repo/tools/kiến thức/etc... Phục vụ cho làm videos 3j
 - Không giới hạn danh sách cố định ("There is no definitive ElevenLabs Audio Tags list"): được tự chế vô hạn bằng ngôn ngữ tự nhiên trong ngoặc vuông `[...]`, ví dụ `[out of breath after running up the stairs]`, `[nervous, trying to sound confident]`.
 - English Audio Tags only
 
-### Giọng kể Ngôi thứ 3 (Fern / Atrium / Blackfiles)
-
-- Hạng 1 (`Seff Echo - Cinematic Storyteller` — ID: `ZaZosYpkIGmSqOwAlfnk`): Giọng dẫn chính ưu tiên số 1 (lai `Blackfiles × Atrium`). Phân khúc `PVC` (`professional` người thật thu phòng thu, `~2.5k` lượt dùng cực ít đụng hàng), giọng nam Mỹ trẻ `en-US`, `rate=1`, `notice_period=730` ngày, tắt kiểm duyệt ngầm (`live_moderation_enabled=null`), nhịp gốc chuẩn ngay trên `eleven_v4`.
-- Hạng 2 (`Jake – Deep, Smooth, Dramatic` — ID: `ev2kMR9ZJZZsemuogS5u`):
-- Hạng 3 (`True - Crime & Horror Narrator` — ID: `tZssYepgGaQmegsMEXjK`):
-
 ## Image
 
 Dùng `codex` CLI để tạo ảnh nếu cần
-
-# Inspired:
-
-- Fern: https://www.youtube.com/@fern-tv
-- Atrium: https://www.youtube.com/@AtriumExplores
-- Primal Space: https://www.youtube.com/@primalspace

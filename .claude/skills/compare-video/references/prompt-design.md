@@ -83,3 +83,32 @@ All hardcoded Minecraft/voxel/blocky/3D-only terms were purged from `compare-2-v
 | `synth_ident_sbs` (`10.0s`) | `gemini-4-hydrogen` | `PASS` `0/0/0` (`6/6 High`, `111s`) | `0` hallucinations (`30.0/30`), confirms `PASS` contract |
 | `synth_sbs` (`12.0s`, 5 zones) | `gemini-4-hydrogen` | `FAIL` `3/2/0` (`225s`) | `5/5` exact-frame planted faults (`0` FP in `f0–f104`), strict `Blocker` floor on blackouts, rewind cut & black tail |
 | `food-eat-more` `final` -> `final2` -> `final3` (`54.8s` 1080p) | `gemini-4-hydrogen` | `final` `0/11/0` (11 real bugs fixed) -> `final2` `0/5/5` (5 real bugs + 3 Minors fixed) -> `final3` `0/6/0` | Native 30fps verification (`f12`, `f78`, `f378`, `f702`, `f948`, `f1374`) confirmed **`0 Verified Blocker` / `0 Verified Major` -> `VERIFIED PASS`** (0 style-hardcoding noise) |
+
+## Still-Frame Field-Split Audit (`gemini-4-hydrogen`, AI Studio, 2026-11-25/26)
+
+AI Studio downgrades static hydrogen video to 1 FPS / Low, and the Gemini API returned 5x `503` again, so the composite was sent as burned-timecode stills (`ask.ts --batch --files-from`). Clip: `girl-joined-navy` `sbs` (`30.5s`, `915` frames, `1444x1414`). Ground truth: the creator's 57 timed notes across 9 fields, each judged by hand as hit / partial / miss. Recipe and prompts: [stills-field-audit.md](stills-field-audit.md).
+
+| Arm | Input | Result |
+| --- | --- | --- |
+| Transport | 150 / 300 / 450 stills | `100%` frame counters read back, `0` invented, ~`95%` of chip tokens delivered. Three 600-image attempts timed out during browser upload or Run. |
+| All fields in one prompt (`Extra High`) | 305 stills (10 fps) | 25 hit / 10 partial / 22 miss of 57; missed all 5 optics notes; time-overlap recall said `100%` (meaningless) |
+| One prompt per field (`Extra High`) | 305 stills (10 fps) | direction 3/4 (+1 partial), camera 5/7 (+2 partial), set 11/11, asset 8/9, lighting 5/5: 32/36 vs 18/36 for the all-fields arm on the same notes |
+| Acting field and fast-event prompt (`Extra High`) | 305 stills | Two detailed runs stopped after Thoughts without a report. Use `High` for these audits. |
+| Agentic video understanding (AI Studio) | native `.mp4` | 26 hit / 14 partial / 17 miss, but the model saw only 31 frames (`f14`, `f44`, ... `f914`), refused a frame-level audit, missed 4 of 5 verified sub-second events, and fabricated 2 facts (OURS wall colour, "no snake") |
+| Fast-event prompt (`Extra High`) | 305 stills, 30 fps window `f610–f914` | Exact first/last frames of 5 transitions; caught 1-frame hand jumps at `f699` and `f714` (verified) |
+
+Verified sub-second events the 10 fps all-fields arm caught: a 3-frame head flip (`f318→f321`), the `f832–f847` slide transition, caption lag at `f213`, a stray beam `14.4–15.2s`, and early dissolve timing at `9.5–9.7s` (half right: reported as a hard cut). Not measured yet: 5 fps / 2 fps density, repeat variance, the optics / acting / text / transition split runs, and `gemini-3.8-flash` on stills.
+
+## Target field with and without a field overview (2026-11-26)
+
+The paired experiment compares the same specialized target-field prompt with and without the full nine-field map as context. Both arms report only the target field, at 15 fps with Hydrogen High, High media, and Search off. The 27 planned pairs span three frozen windows from two films. The dataset contains 706 exact JPEGs and 64 visually adjudicated episodes. Older all-fields results test a different treatment.
+
+The local artifact directory is `renders/field-overview-2026-11-26/`. `PROTOCOL.md` specifies the scoring and recovery rules. `manifest.json`, `truth.tsv`, `exclusions.tsv`, `prompts-by-field/`, `evidence/`, `logs/`, and `out/` retain the inputs, adjudication, prompts, and raw attempts. Use `summary.json` for actual completed and graded pair counts. Conclusions require matched replies; transport-only failures are recorded separately.
+
+Pilot checkpoint: one Navy `direction` cell completed and was graded blind. Field-only matched 1/2 annotated events with 3/4 supported claims; the overview variant matched 0/2, partially matched 1/2, and had 2/4 supported claims. Browser transport failures and Hydrogen service availability prevented a nine-field result at this checkpoint. See `RESULTS.md` in the artifact directory for evidence and resume instructions. Do not treat this cell as evidence for changing the default prompt.
+
+## Batch capacity follow-up (2026-11-26)
+
+Hydrogen High and High media completed one short, single-tab frame-range probe at 500 stills (546,000 `IN`, range `0–499`) and one at 550 stills (600,000 `IN`, range `0–549`, 708.2 s end to end). Three earlier 600-still attempts timed out in the browser. The provider's absolute limit and full-audit quality at 550 remain unmeasured. Use 15 fps and the 450-image cap for review.
+
+The Hydrogen dropdown offered Low, Medium, High, and Extra High. The daily Playground quota stopped the new 15 fps grouped-versus-split experiment after the 180-image grouped upload. No new quality scores or matched Extra High capacity result were obtained. See `renders/field-overview-2026-11-26/STRESS.md` for local raw evidence and resume instructions.

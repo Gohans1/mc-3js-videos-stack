@@ -521,5 +521,384 @@
         "chatUrl": "https://aistudio.google.com/prompts/1b388F3GibU7Dojr8uvXdBN_gw4Iafet_"
       }
     }
+  },
+  "modelComparisonAistudio20261125": {
+    "evaluatedAt": "2026-11-25",
+    "backend": "aistudio",
+    "shippedPrompt": {
+      "file": ".claude/skills/compare-video/system/compare-2-video.md",
+      "version": "v3-open",
+      "lines": 94
+    },
+    "transportVerification": {
+      "gemini38Flash": {
+        "model": "gemini-3.8-flash",
+        "thinkingOptions": [
+          "Low",
+          "Medium",
+          "High"
+        ],
+        "thinkingUsed": "High",
+        "mediaUsed": "High",
+        "fpsUsed": 24,
+        "real24fpsHighDelivered": true,
+        "runsCompleted": "5/5",
+        "truncations": 0
+      },
+      "gemini31ProPreview": {
+        "model": "gemini-3.1-pro-preview",
+        "thinkingOptions": [
+          "Low",
+          "Medium",
+          "High"
+        ],
+        "thinkingUsed": "High",
+        "mediaUsed": "High",
+        "fpsUsed": 24,
+        "real24fpsHighDelivered": true,
+        "runsCompleted": "5/5",
+        "truncations": 0
+      }
+    },
+    "summaryMeanOutOf30": {
+      "gemini4HydrogenBaseline": 29,
+      "gemini38Flash": 19.9,
+      "gemini31ProPreview": 11,
+      "verdict": "NEITHER model is viable as a gemini-4-hydrogen replacement for compare-video. Both pass the trivial identical control (PASS 0/0/0), but both score 0/5 (0% recall) on real verified Majors in food_final2_sbs. gemini-3.8-flash (19.9/30) also suffers gemini-4-neon-style central-tendency collapse (0 Blockers + 100% Med across synth_sbs, synth_drift_vstack, and food_final2_sbs) and misses 1.35x zoom, 6fps judder, and 30f freeze. gemini-3.1-pro-preview (11.0/30) suffers catastrophic hallucinations (0/3 + 6/6 fake defects on synth_drift_vstack, fake 01:00.125 timestamps on 54.8s food_final2_sbs, and 5 fake Blockers on verified-pass food_final3_sbs)."
+    },
+    "models": {
+      "gemini-3.8-flash": {
+        "meanScoreOutOf30": 19.9,
+        "meanAnswerSec": 80.5,
+        "meanWallSec": 415.7,
+        "meanChars": 4306.4,
+        "arms": {
+          "synth_ident_sbs": {
+            "chipTokens": 62961,
+            "deliveredTokens": 76617,
+            "answerSec": 62.7,
+            "wallSec": 376.7,
+            "chars": 2140,
+            "verdict": "PASS",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 0,
+              "Minor": 0
+            },
+            "falsePositives": 0,
+            "sec2ConfHighPct": 100,
+            "scoreOutOf30": 29.5,
+            "chatUrl": "https://aistudio.google.com/prompts/1ptejGYNSaanGtRNFdMLmt8dbCIo8JUkD",
+            "note": "Passed ViDiC identical gate cleanly (0 FP, 7/7 High); minor enum nit labeling continuous moves as Transition."
+          },
+          "synth_sbs": {
+            "chipTokens": 75553,
+            "deliveredTokens": 89557,
+            "answerSec": 81,
+            "wallSec": 277.4,
+            "chars": 3881,
+            "verdict": "NEEDS POLISH",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 5,
+              "Minor": 0
+            },
+            "falsePositivesF0_104": 0,
+            "plantedFaultsCaught": "4/5",
+            "missedFaults": [
+              "1.35x zoom f180-f254"
+            ],
+            "centralTendencyCollapse": true,
+            "sec2ConfHighPct": 0,
+            "sec3ConfHighPct": 0,
+            "scoreOutOf30": 19.5,
+            "chatUrl": "https://aistudio.google.com/prompts/1WZWG-6IHyyCiLBSpg8KISS1wvU42-1yJ",
+            "note": "Missed 1.35x zoom (f180-f254), bled dark drop to f209, and collapsed to NEEDS POLISH 0/5/0 + 100% Med (violated Hard Blocker Floor on 2f blackout, +10f lag, and 15f black tail)."
+          },
+          "synth_drift_vstack": {
+            "chipTokens": 86801,
+            "deliveredTokens": 100514,
+            "answerSec": 69.2,
+            "wallSec": 439.1,
+            "chars": 4881,
+            "verdict": "NEEDS POLISH",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 5,
+              "Minor": 2
+            },
+            "plantedFaultsCaught": "1/3",
+            "judderDetected": false,
+            "freezeDetected": false,
+            "driftReportedFrames": 12,
+            "falsePositivesCleanZone": 1,
+            "centralTendencyCollapse": true,
+            "scoreOutOf30": 14.5,
+            "chatUrl": "https://aistudio.google.com/prompts/1TevQy_hvEhs_pK2V3srIT8fsRxlPNA_S",
+            "note": "Missed 6fps judder (f90-f149), 30f freeze (f150-f179), and Hard Cut (f180); caught ~12f lag but spammed 4 duplicate drift rows + 1 FP in pixel-identical f0-f15 + collapsed to 0 Blocker / 100% Med."
+          },
+          "food_final2_sbs": {
+            "chipTokens": 346281,
+            "deliveredTokens": 358636,
+            "answerSec": 87.8,
+            "wallSec": 384.5,
+            "chars": 5031,
+            "verdict": "NEEDS POLISH",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 2,
+              "Minor": 2
+            },
+            "verifiedRealMajorsCaught": "0/5",
+            "centralTendencyCollapse": true,
+            "scoreOutOf30": 11,
+            "chatUrl": "https://aistudio.google.com/prompts/1vngI4qChF89S8E1SWrCOoRT-AVcRsu9J",
+            "note": "0% recall (0/5) on verified real Majors: missed floating sauce (f231-f240), scientist arm/wrong jar/freeze (f406-f486), bee-nest clipping (f694-f711), neon-pink face bloom blowout (f966-f996), and brain-hair clipping (f1498-f1565); 100% Med."
+          },
+          "food_final3_sbs": {
+            "chipTokens": 346281,
+            "deliveredTokens": 360381,
+            "answerSec": 101.9,
+            "wallSec": 600.9,
+            "chars": 5599,
+            "verdict": "NEEDS POLISH",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 2,
+              "Minor": 2
+            },
+            "fakeBlockers": 0,
+            "scoreOutOf30": 25,
+            "chatUrl": "https://aistudio.google.com/prompts/1dFuRp7y-2-23kmi3OQvogMGeQVahdw7H",
+            "note": "Low false-positive noise on clean verified-pass remake (0/2/2, 25/26 High), but mirrors its 0/2/2 rubber-stamp blindness seen on food_final2_sbs."
+          }
+        }
+      },
+      "gemini-3.1-pro-preview": {
+        "meanScoreOutOf30": 11,
+        "meanAnswerSec": 66.7,
+        "meanWallSec": 350.2,
+        "meanChars": 4331.6,
+        "arms": {
+          "synth_ident_sbs": {
+            "chipTokens": 62961,
+            "deliveredTokens": 73484,
+            "answerSec": 26,
+            "wallSec": 361,
+            "chars": 1927,
+            "verdict": "PASS",
+            "sevCounts": {
+              "Blocker": 0,
+              "Major": 0,
+              "Minor": 0
+            },
+            "falsePositives": 0,
+            "sec2ConfHighPct": 100,
+            "scoreOutOf30": 29.5,
+            "chatUrl": "https://aistudio.google.com/prompts/13oGMidsjHtw2jHFKk27kUlZ-dT0LthAi",
+            "note": "Passed ViDiC identical gate cleanly (0 FP, 6/6 High); minor enum nit labeling continuous moves as Hidden Cut."
+          },
+          "synth_sbs": {
+            "chipTokens": 75553,
+            "deliveredTokens": 84733,
+            "answerSec": 34,
+            "wallSec": 195.1,
+            "chars": 2772,
+            "verdict": "FAIL",
+            "sevCounts": {
+              "Blocker": 2,
+              "Major": 1,
+              "Minor": 1
+            },
+            "plantedFaultsCaught": "2/5",
+            "missedFaults": [
+              "1.35x zoom f180-f254",
+              "2f black flash f210-f211",
+              "+10f lag f255-f344"
+            ],
+            "hallucinatedDefects": 2,
+            "orderViolations": 1,
+            "scoreOutOf30": 11.5,
+            "chatUrl": "https://aistudio.google.com/prompts/15fWz0XvvlwufnKsW8-zkc2LaU0sYGAn5",
+            "note": "Only caught dark drop (wrong bounds f123-f215) and black tail; missed 1.35x zoom, 2f black flash, and +10f lag; misread +10f lag as duplicated THICK label and hallucinated 1f text pops at f124/f175."
+          },
+          "synth_drift_vstack": {
+            "chipTokens": 86801,
+            "deliveredTokens": 102436,
+            "answerSec": 77.7,
+            "wallSec": 325.6,
+            "chars": 4732,
+            "verdict": "FAIL",
+            "sevCounts": {
+              "Blocker": 5,
+              "Major": 0,
+              "Minor": 1
+            },
+            "plantedFaultsCaught": "0/3",
+            "judderDetected": false,
+            "freezeDetected": false,
+            "driftReportedFrames": 0,
+            "hallucinatedDefects": 6,
+            "scoreOutOf30": 4,
+            "chatUrl": "https://aistudio.google.com/prompts/1k41I7fWkEJeIfUCdtvJQjLo-QmTOb8Fh",
+            "note": "Total hallucination meltdown: claimed zero drift/identical sync, missed 6fps judder + 30f freeze + +12f lag, and fabricated 6/6 fake High-conf defects including fake jar glow in identical f30-f60 and fake spoon-through-jawline clipping."
+          },
+          "food_final2_sbs": {
+            "chipTokens": 346281,
+            "deliveredTokens": 359691,
+            "answerSec": 85.7,
+            "wallSec": 433.8,
+            "chars": 5086,
+            "verdict": "FAIL",
+            "sevCounts": {
+              "Blocker": 1,
+              "Major": 2,
+              "Minor": 1
+            },
+            "verifiedRealMajorsCaught": "0/5",
+            "hallucinatedDefects": 4,
+            "fabricatedTimestampsBeyondDuration": true,
+            "scoreOutOf30": 4.5,
+            "chatUrl": "https://aistudio.google.com/prompts/1sjKrR9fS6Bc8aDURTae0fUKaJB8gepiB",
+            "note": "0/5 real Majors caught; fabricated 4/4 fake defects (fake Hard Cuts, fake empty jar at f1277, fake robotic arm in REF) and invented timestamps up to 01:00.125 on a 54.8s clip by dividing frame numbers by 24 instead of reading the timebar."
+          },
+          "food_final3_sbs": {
+            "chipTokens": 346281,
+            "deliveredTokens": 363303,
+            "answerSec": 110.1,
+            "wallSec": 435.3,
+            "chars": 7141,
+            "verdict": "FAIL",
+            "sevCounts": {
+              "Blocker": 5,
+              "Major": 4,
+              "Minor": 1
+            },
+            "fakeBlockers": 5,
+            "orderViolations": 3,
+            "scoreOutOf30": 5.5,
+            "chatUrl": "https://aistudio.google.com/prompts/1XCWYxbopFEU_rvbs22mf1rNvp3GRTIFT",
+            "note": "False-positive explosion on verified-pass remake: 5 fake Blockers (2f container rounding <6f, fake static droplet, fake static honeycomb, fake blue-chips clipping, fake vial sinking through brain), 3 order violations, HTML &rarr; arrows."
+          }
+        }
+      }
+    }
+  },
+  "stillFrameAuditAistudio20261126": {
+    "evaluatedAt": "2026-11-26",
+    "backend": "aistudio",
+    "model": "gemini-4-hydrogen",
+    "media": "High",
+    "clip": {
+      "name": "girl-joined-navy sbs",
+      "seconds": 30.5,
+      "frames": 915,
+      "size": "1444x1414",
+      "groundTruth": "57 creator notes, hand-judged hit/partial/miss"
+    },
+    "transport": {
+      "tokensPerStill": 1151,
+      "stills": {
+        "150": {
+          "uploadSec": 62.7,
+          "deliveredIn": 164000,
+          "counterReadBackPct": 100
+        },
+        "300": {
+          "uploadSec": 108.9,
+          "deliveredIn": 327000,
+          "counterReadBackPct": 100
+        },
+        "450": {
+          "uploadSec": 153.7,
+          "deliveredIn": 491000,
+          "counterReadBackPct": 100
+        },
+        "600": {
+          "result": "page froze past agent-browser per-command wait at upload or Run, 3 of 3 tries"
+        }
+      }
+    },
+    "allFieldsOnePrompt10fps": {
+      "thinking": "Extra High",
+      "stills": 305,
+      "hit": 25,
+      "partial": 10,
+      "miss": 22,
+      "opticsHit": 0,
+      "timeOverlapRecallPct": 100
+    },
+    "perFieldPrompt10fps": {
+      "thinking": "Extra High",
+      "stills": 305,
+      "byField": {
+        "direction": {
+          "notes": 4,
+          "hit": 3,
+          "partial": 1,
+          "allFieldsHit": 2
+        },
+        "camera": {
+          "notes": 7,
+          "hit": 5,
+          "partial": 2,
+          "allFieldsHit": 2
+        },
+        "set": {
+          "notes": 11,
+          "hit": 11,
+          "allFieldsHit": 8
+        },
+        "asset": {
+          "notes": 9,
+          "hit": 8,
+          "allFieldsHit": 5
+        },
+        "lighting": {
+          "notes": 5,
+          "hit": 5,
+          "allFieldsHit": 1
+        }
+      },
+      "totalHit": 32,
+      "allFieldsTotalHit": 18,
+      "notMeasured": [
+        "optics",
+        "acting",
+        "text",
+        "transition"
+      ]
+    },
+    "extraHighThoughtExhaustion": {
+      "runs": 2,
+      "failed": 2,
+      "prompts": [
+        "acting field",
+        "fast events"
+      ],
+      "stills": 305,
+      "fix": "--thinking High"
+    },
+    "agenticVideoAistudio": {
+      "framesSeen": 31,
+      "hit": 26,
+      "partial": 14,
+      "miss": 17,
+      "subSecondEventsCaught": "1/5",
+      "fabricatedFacts": 2
+    },
+    "fastEvent30fpsWindow": {
+      "frames": "f610-f914",
+      "stills": 305,
+      "transitionsWithExactBounds": 5,
+      "oneFrameJumpsCaught": 2
+    },
+    "spotCheckPrecision": {
+      "checked": 10,
+      "true": 9,
+      "halfTrue": 1
+    },
+    "geminiApi24fps": "5x HTTP 503, no baseline",
+    "verdict": "Use burned-timecode stills at 10 fps for the whole clip, one prompt per field, High thinking, <=450 stills per prompt; add 30 fps windows around cuts and fast action. Do not use AI Studio Agentic or static video for sub-second checks."
   }
 }

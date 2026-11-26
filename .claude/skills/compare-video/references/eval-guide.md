@@ -1,10 +1,12 @@
 # Prompt Evaluation & Upgrade Guide (`compare-2-video`)
 
-Standard operating guide for future AI sessions upgrading `system/compare-2-video.md` (v3 -> v4+) with measured A/B evidence instead of guesswork.
+## Current still-frame A/B
 
-## Mandatory Pre-Edit Principles
+Use the [still-frame recipe](stills-field-audit.md#recipe) and freeze the JPEG lists, windows, and ground truth before sending either arm. Set Hydrogen High, High media, and Search off unless one of those settings is the variable under test. Use one fresh chat per pass. For grouped versus split comparisons, compare the same fields on the same images. Score matched, completed reports by visual evidence. Keep quota, transport, and Thoughts-only failures in the run log. See [measured results](prompt-design.md#batch-capacity-follow-up-2026-11-26).
 
-Every change must pass head-to-head live A/B testing on the same multimodal backend before replacing the official system prompt.
+## Archived video-input baseline
+
+The settings and rubric below reproduce the archived evaluations of `system/compare-2-video.md`. Compare variants head to head on the same backend and inputs.
 
 | Rule | Requirement | Why |
 | --- | --- | --- |
