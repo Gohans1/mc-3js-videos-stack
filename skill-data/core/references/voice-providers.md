@@ -9,7 +9,7 @@ Reviewed November 18, 2026. The review used official documentation found through
 | GenVoice | Studio supports voice generation, dubbing, Voice Changer, MiniMax cloning, and Scribe. Some job types still have limited Cloud controls. |
 | ElevenLabs and Gemini | Both have credential setup, model and account voice discovery, Speech, archive, and retry. A live Gemini Flash-Lite request produced Vietnamese WAV audio. Direct ElevenLabs was verified with a mock API. |
 | Dialogue | All three share the script, cast, templates, and take history. A live Gemini request produced a two-voice Vietnamese scene. Direct ElevenLabs was verified with a mock API. |
-| Current priority | Focus on TTS and the GenVoice library. Further ElevenLabs and Gemini integration is paused. |
+| Current priority | Focus on TTS and the GenVoice library. Further ElevenLabs and Gemini API integration is paused; for free Gemini 3.8 Flash TTS via the AI Studio web playground, use `.claude/skills/aistudio-tts/SKILL.md`. |
 | Remaining workflows | The tables below describe provider contracts and integration decisions. Track unimplemented workflows separately. |
 | CLI | Run bun run voice:playground schema generate tts for connection and speechStyle. Use status or catalog with connection to inspect configuration and capabilities. |
 

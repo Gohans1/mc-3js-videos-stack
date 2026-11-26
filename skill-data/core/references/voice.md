@@ -105,6 +105,8 @@ Choosing an upload saves its source for free before generating or saving a templ
 
 ## The voice loop
 
+For free Gemini 3.8 Flash TTS narration and two-speaker dialogue via the logged-in Google AI Studio speech playground (exporting WAV takes directly into `voice/takes/`), see `.claude/skills/aistudio-tts/SKILL.md` (`speak` / `batch`), then run `voice:align`, `voice:lips`, `voice:assemble`, and `voice:cues` below.
+
 Inside a film, after writing the takes in `src/edit.json` `"takes"` (English Audio Tags in brackets, such as `[tense, hushed]`):
 
 ```bash
@@ -129,3 +131,12 @@ A Phrase Brick moved by hand in the studio is kept by `voice:assemble`; `--clips
 | `pace` about 120-160 wpm  | A narrated documentary's pace                                                                                            |
 | An `x` after a line's wpm | The narration follows the picture's Speed or Freeze there (`timing.json` `layerKinds.voice`); over about 1.1x words blur |
 | A word's seconds          | Heard seconds: where to put a cut, a sound or a title on that word; `bun run at` converts to scene seconds               |
+
+## Production and sync notes
+
+- **AI Studio TTS (`gemini-3.8-flash-tts`)**: For audited voices, `style`/pace levers, `<...>` vocal tags, `/IPA/` pronunciation, and audition traps, read `.claude/skills/aistudio-tts/references/voice-casting-and-direction.md`.
+- **Contiguous vs multi-take**: For short films (`<= 60s`), generate the full script in one contiguous pass to keep timbre and pitch floor uniform, then slice into scene-anchored Phrase Bricks at true silent troughs (`<= -70 dBFS`) with `10–15ms` fades. For long-form (`> 60s`), use beat-anchored takes with one frozen `style` and `temperature`.
+- **Keep Phrase Bricks natural**: Run `bun run voice:align` and `bun run voice:assemble --clips` once before splitting Phrase Bricks manually in `audio.json` (`--clips` resets manual brick splits and clip filters). Aim for `rate: 1.0`; keep formant-preserving Rubber Band R3 adjustments within `<= ±5%`, otherwise tighten the script and regenerate.
+- **Listen directly and protect tails**: Always listen directly to generated takes and `sound/mix.wav` (`read_file` on WAV)—metrics and WhisperX alone miss subtle slurs and truncated final syllables. Avoid aggressive tail silence-cropping (`trimTail`) without checking the last ~300ms RMS.
+- **WhisperX low-RAM fallback (Windows)**: If `bun run voice:align` fails on CPU with `mkl_malloc: failed to allocate memory`, run it with `WHISPER_DEVICE=cuda` and `WHISPER_COMPUTE_TYPE=int8`.
+- **Mix headroom**: Avoid stacking high `voiceGain` with high `drive` (which crushes master `PLR`); pull down and duck beds (`duck: 3–5`) to keep voice separation cleanly above 15 LU with healthy dynamics.

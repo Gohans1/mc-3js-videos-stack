@@ -34,12 +34,9 @@ Tất tần tật repo/tools/kiến thức/etc... Phục vụ cho làm videos 3j
 
 ## Voice
 
-- Dùng `ElevenLabs` v4 qua `genvoice.pro`. API/tham số/endpoint/etc... research nếu cần
-
-### Audio Tags (research nếu cần)
-
-- Không giới hạn danh sách cố định ("There is no definitive ElevenLabs Audio Tags list"): được tự chế vô hạn bằng ngôn ngữ tự nhiên trong ngoặc vuông `[...]`, ví dụ `[out of breath after running up the stairs]`, `[nervous, trying to sound confident]`.
-- English Audio Tags only
+- **Google AI Studio TTS (`gemini-3.8-flash-tts`)**: Dùng qua skill [aistudio-tts](../aistudio-tts/SKILL.md). Đọc ngay [voice-casting-and-direction.md](../aistudio-tts/references/voice-casting-and-direction.md) để tra list giọng đã test thực tế (`Koda`, `Cruz`, `Enzo`, `Rami`, `Ludo` + bẫy nhãn giới tính `Sami`/`Olin`), cách viết `style`, `<vocal tags>`, `|backchannel|`, `/IPA/` và các bài học sync/QA.
+- **ElevenLabs v4 (qua `genvoice.pro`)**: API/tham số/endpoint/etc... research nếu cần (`bun run skills get core --ref voice`).
+  - **Audio Tags (`[...]`)**: Không giới hạn danh sách cố định ("There is no definitive ElevenLabs Audio Tags list"): tự chế bằng ngôn ngữ tự nhiên trong ngoặc vuông `[...]`, ví dụ `[out of breath after running up the stairs]`, `[nervous, trying to sound confident]` (English Audio Tags only). Khác với Gemini 3.8 tách riêng `style` + `<...>` vocal tags.
 
 ## Image
 
