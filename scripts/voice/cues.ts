@@ -114,7 +114,7 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
     if (!rawAudio?.narration || !c || c.name !== rawAudio.narration) continue;
     const picked = pickOf(c);
     if (!picked) continue;
-    if (picked.track && mutedTracks.has(picked.track)) mutedClips.push(picked);
+    if (picked.muted || (picked.track && mutedTracks.has(picked.track))) mutedClips.push(picked);
     else narrClips.push(picked);
   }
   const projectClip = (c: NarrationAudio["sfx"][number]) =>
@@ -214,14 +214,20 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
     (rawAudio && !rawAudio.narration && rawAudio.voice === false) ||
     (rawAudio?.narration && choices?.[rawAudio.narration]?.set === "off"),
   );
-  const voiceMuted =
-    !voiceOff && !narrClips.length && mutedClips.length > 0 ? (mutedClips[0]!.track ?? null) : null;
+  const trackMuted =
+    !voiceOff &&
+    !narrClips.length &&
+    mutedClips.length > 0 &&
+    mutedClips.every((c) => Boolean(c.track && mutedTracks.has(c.track)));
+  const voiceMuted = trackMuted ? mutedClips[0]!.track! : null;
+  const voiceClipMuted = !voiceOff && !narrClips.length && mutedClips.length > 0 && !trackMuted;
+  const isVoiceMuted = Boolean(voiceMuted || voiceClipMuted);
   const hasLines = mappedLines.length > 0;
   const lines = voiceOff ? [] : mappedLines;
 
   const expectsVoiceAudio =
     !voiceOff &&
-    !voiceMuted &&
+    !isVoiceMuted &&
     (rawAudio?.narration ? narrClips.length > 0 : assembled || baseLines.length > 0);
   const wordTimingMissing = expectsVoiceAudio && !baseLines.length;
   const missingAudio = expectsVoiceAudio
@@ -274,7 +280,7 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
 
   const unlaid =
     !voiceOff &&
-    !voiceMuted &&
+    !isVoiceMuted &&
     !rawAudio?.narration &&
     !existsSync(voiceWav) &&
     existsSync(takesDir) &&
@@ -288,6 +294,7 @@ export const buildVoiceCues = (projectDir = process.cwd(), minGap = 0.4) => {
     unlaid,
     voiceOff,
     voiceMuted,
+    voiceClipMuted,
     hasLines,
     audioFault,
   };
@@ -317,11 +324,13 @@ if (isMain) {
       cues.audioFault ??
         (cues.voiceOff
           ? "narration: off (no voice in the mix)"
-          : cues.voiceMuted
-            ? `narration: muted (its clip sits on track ${cues.voiceMuted}, muted in tracks[]: the mix leaves the voice out)`
-            : cues.unlaid
-              ? "no narration lines on the film yet, but voice/takes has audio: bun run voice:assemble lays them on it"
-              : "no narration lines yet: bun run voice:gen (what it would make), then voice:gen --yes, then voice:assemble"),
+          : cues.voiceClipMuted
+            ? "narration: muted (its clip is disabled in audio.json: the mix leaves the voice out)"
+            : cues.voiceMuted
+              ? `narration: muted (its clip sits on track ${cues.voiceMuted}, muted in tracks[]: the mix leaves the voice out)`
+              : cues.unlaid
+                ? "no narration lines on the film yet, but voice/takes has audio: bun run voice:assemble lays them on it"
+                : "no narration lines yet: bun run voice:gen (what it would make), then voice:gen --yes, then voice:assemble"),
     );
   }
   if (cues.lines.length && cues.unlaid)

@@ -35,6 +35,7 @@
     "pace": "bun ../../scripts/review/pace.ts",
     "deliver": "python ../../scripts/review/deliver.py",
     "sfx:get": "python ../../scripts/sound/get_sfx.py",
+    "sound:kit": "bun ../../scripts/sound-kit.ts",
     "mix": "python ../../scripts/sound/mix.py",
     "listen": "python ../../scripts/sound/listen.py",
     "new-film": "bun node_modules/live-studio/wrong-place.mjs new-film",
@@ -97,11 +98,13 @@
     "shotsTimeline": "src/timeline/shots.json",
     "keyFiles": {
       "src/timeline/steve.json": "steve",
+      "src/timeline/face.json": "face",
       "src/timeline/props.json": "props",
       "src/timeline/placed.json": "placed",
       "src/timeline/fx.json": "fx"
     },
     "requiredKeyRows": {
+      "face": [["steve"]],
       "steve": [
         [
           "moves"

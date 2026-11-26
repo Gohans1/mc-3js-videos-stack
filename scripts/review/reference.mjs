@@ -23,7 +23,8 @@ import { clockForTimeline } from "../../packages/live-studio/src/timing-state.mj
 import { filmPicture } from "../../packages/live-studio/src/video.mjs";
 import { writeAtomicSync } from "../../packages/live-studio/src/voice-map.mjs";
 import { mediaPython } from "../media/home.mjs";
-import { runSidebyside, runTimecode } from "./reference_video.mjs";
+import { compareLooks, lookLines } from "./look.mjs";
+import { runComparison, runTimecode } from "./reference_video.mjs";
 
 async function runWorker(executable, args, minutes) {
   const child = spawn(executable, args, {
@@ -57,16 +58,74 @@ async function runWorker(executable, args, minutes) {
   return { status, stopped };
 }
 
+async function addLook(compareJson, [reference, remake], minutes) {
+  const python = mediaPython("camera");
+  if (!existsSync(python)) {
+    console.error(
+      "reference: each shot's look (camera move, subject motion, light, focus) needs bun run media setup camera; the rest stands",
+    );
+    return;
+  }
+  const compared = JSON.parse(readFileSync(compareJson, "utf8"));
+  const shots = (compared.pictures?.shots ?? []).map(({ from, to }) => ({ from, to }));
+  if (!shots.length) return;
+  const dir = mkdtempSync(join(resolve(compareJson, ".."), "look-"));
+  try {
+    const looks = join(dir, "look.json");
+    const { status, stopped } = await runWorker(
+      python,
+      ["-B", fileURLToPath(new URL("../media/shot_look.py", import.meta.url)), reference, remake, "--out", looks],
+      minutes,
+    );
+    if (status !== 0 || stopped) {
+      console.error(
+        `reference: each shot's look was not measured (${stopped ? "out of time: give --minutes more" : `exit ${status}`}); the rest stands`,
+      );
+      return;
+    }
+    const [ref, ours] = JSON.parse(readFileSync(looks, "utf8")).videos;
+    const scale = compared.scale ?? 1;
+    const look = compareLooks(shots, { bin: ref.bin, scale, ref: ref.bins, ours: ours.bins });
+    writeFileSync(
+      compareJson,
+      `${JSON.stringify(
+        {
+          ...compared,
+          look: {
+            clock: "reference seconds; remake motion integrated over each reference interval times scale",
+            bin: ref.bin,
+            scale,
+            shots: look,
+            reference: ref.bins,
+            remake: ours.bins,
+          },
+        },
+        null,
+        1,
+      )}\n`,
+    );
+    const md = join(resolve(compareJson, ".."), "compare.md");
+    if (existsSync(md)) appendFileSync(md, `\n${lookLines(look).join("\n")}\n`);
+    const off = look.filter((c) => c.findings.length).length;
+    console.error(
+      `reference: look differences flagged in ${off} of ${look.length} shots (camera, subject, light, focus; compare.md "Look per shot")`,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 const HELP = `Optional reference analysis; never required to author a film.
   bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
   bun run reference timecode <video> [--out <file>] [--label <text>]  Burn a black timecode bar below a copy for AI review; timecode --help
-  bun run reference sidebyside <reference> <remake> [--out <file>]  Tile reference and remake into one synced video with shared timecode bar; sidebyside --help
+  bun run reference sidebyside <reference> <remake> [--range <from,to>] [--out <file>]  Tile the two videos into one synced video with shared film timecode; sidebyside --help
+  bun run reference frames <reference> <remake> [--range <from,to>] [--fps 15]  Export synced, timecoded JPEG batches for AI review; frames --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
   bun run reference solve <shot.json> [--write]  Matchmove one shot's camera from points of our set; solve --help
   --out <folder>     Reports and comparison PNGs (default renders/reference/<video-name> or compare).
-  --fit              Compare after scaling the remake's time to the reference's length (compare only).
+  --fit              Align the remake to the reference duration and total motion over each aligned interval (compare only).
   --film <film.html> Optional OpenFilm project for the upstream reused-media check (compare only).
   --minutes <N>      Stop analysis and its FFmpeg processes after N minutes (default 5, maximum 60).
 study/compare need local video files and ffmpeg/ffprobe on PATH; no account or paid API.
@@ -75,6 +134,9 @@ inspect --detail transcript skips media download/decoding and never starts a spe
 Writes study.json/study.md or compare.json/compare.md with side-by-side PNGs in a fresh run-* subfolder; earlier evidence is kept.
 Cuts and pace are image-change estimates; flashes and equal-luminance cuts can fool them.
 study also lists whip pans and the camera's move each frame once bun run media setup camera is done (tracked corners, not a solved camera).
+With that camera setup, compare adds estimates of camera and subject motion, brightness, warmth and focus by shot
+(compare.json look, compare.md "Look per shot"). Motion uses half-second samples. Samples across shot boundaries
+and camera estimates without enough tracking evidence are skipped. Focus compares top-third and center edge blur.
 Metrics and reused-media detection are advisory, not a quality gate or a copyright certificate.
 Exit 0: analysis finished; 1: failed analysis OR detected reference-media reuse (read the report); 2: usage error.
 Analysis keeps completed reports but does not resume decoding after interruption; use short reference clips.
@@ -306,8 +368,9 @@ if (process.argv[2] === "timecode") {
   await runTimecode(process.argv.slice(3), { usage, runWorker });
 }
 
-if (process.argv[2] === "sidebyside") {
-  await runSidebyside(process.argv.slice(3), { usage, runWorker });
+if (process.argv[2] === "sidebyside" || process.argv[2] === "frames") {
+  await runComparison(process.argv[2], process.argv.slice(3), { usage, runWorker });
+  process.exit(0);
 }
 
 if (process.argv[2] === "solve") {
@@ -478,6 +541,14 @@ const { status, stopped } = await runWorker(
   ],
   Math.max(0.01, minutes - (Date.now() - began) / 60_000),
 );
+if (command === "compare" && !stopped && existsSync(join(out, "compare.json")))
+  await addLook(
+    join(out, "compare.json"),
+    measured,
+    Math.max(0.01, minutes - (Date.now() - began) / 60_000),
+  ).catch((error) =>
+    console.error(`reference: each shot's look was not measured (${error.message}); the rest stands`),
+  );
 if (picture) {
   rmSync(pictureDir, { recursive: true, force: true });
   const compareJson = join(out, "compare.json");

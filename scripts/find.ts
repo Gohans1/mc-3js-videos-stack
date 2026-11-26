@@ -35,6 +35,11 @@ import {
   PROP_MEDIA_EXTS,
 } from "../packages/live-studio/src/prop-library.ts";
 import {
+  KIT_CATEGORY_IDS,
+  openSoundKit,
+  type SoundKitStore,
+} from "../packages/live-studio/src/sound-kit.mjs";
+import {
   findVaults,
   openSound,
   probeAudio,
@@ -49,6 +54,8 @@ import {
   type McAssetItem,
 } from "../packages/mc-assets/src/catalog.ts";
 import { readAssetCatalog } from "./openfilm/catalog.mjs";
+import { facePreview } from "./search/face-preview";
+import { faceAliases, faceDetails, faceEntries, faceEntry, type FaceResult, foldFaceWords } from "./search/faces";
 import { openFilmCategory, type OpenFilmLookup, openFilmSearch } from "./search/openfilm";
 import { displayAbout, dualSearchOutput } from "./search/output";
 import { assetFile, assetKey } from "./semantic/catalog";
@@ -65,6 +72,8 @@ export type Entry = {
   secs?: number;
   note?: string;
   fav?: boolean;
+  kitCategory?: string;
+  kitBanned?: boolean;
   data?: Detail;
   semantic?: {
     score: number;
@@ -74,6 +83,7 @@ export type Entry = {
   };
 };
 type Detail = {
+  aliases?: string[];
   format?: string;
   group?: string;
   license?: string;
@@ -113,6 +123,7 @@ const OBJECT_KINDS = ["block", "item", "mob", "prop"] as const;
 const isObjectKind = (k: string) => (OBJECT_KINDS as readonly string[]).includes(k);
 
 const USE: Record<string, string> = {
+  face: "toon expression, ramp, or manga mark: bun run find --show <face/id>; timeline face.json (core --ref film)",
   sound:
     'audio.json sfx[] {"at","name","gain"} | beds[] {"name","from","to","gain","fadeIn","fadeOut"}',
   block:
@@ -229,13 +240,14 @@ const fromSource = (entry: Entry, source: string) => {
       (src === source ||
         src === cleanSource ||
         src.startsWith(`${source}/`) ||
-        (source === "builtin" && src.startsWith("film-stage/")))) ||
+        (source === "builtin" && (src.startsWith("film-stage/") || entry.kind === "face")))) ||
     (pack && (pack === source || pack.replace(/\.(?:jar|zip)$/i, "") === cleanSource)),
   );
 };
 const groupOf = (entry: Entry) => String(entry.data?.group ?? entry.cat);
 
 const KIND_WORDS: Record<string, string> = {
+  face: "facial expression cartoon toon acting reaction",
   bgm: "music song track score",
   sfx: "sound effect",
   mc: "minecraft sound",
@@ -325,7 +337,7 @@ const fieldWords = (x: Entry, withKind = true) => {
   const kind = withKind
     ? words(`${x.kind} ${KIND_WORDS[x.kind] ?? ""} ${CAT_WORDS[catKey(x)] ?? ""}`)
     : [];
-  return [...head, ...head, ...head, ...cat, ...cat, ...words(x.about), ...kind];
+  return [...head, ...head, ...head, ...cat, ...cat, ...words(x.about), ...words(foldFaceWords(faceAliases(x).join(" "))), ...kind];
 };
 
 export function kindFilter(asked: string[], pool: Entry[]) {
@@ -415,6 +427,7 @@ const KIND_ALIAS: Record<string, string> = Object.fromEntries(
     caption: "text",
     subtitle: "text",
     typeface: "font",
+    expression: "face",
     camera: "anim",
     animation: "anim",
     move: "anim",
@@ -650,6 +663,20 @@ export function rank(
 
 export const keywordSearch = (entries: Entry[], query: string, kinds?: string[]) => {
   const foreign = isForeign(query);
+  const faceWords = foldFaceWords(query);
+  const accentedWords = (value: string) =>
+    (value.toLowerCase().normalize("NFC").match(/\p{L}+/gu) ?? []).filter(
+      (word) => foldFaceWords(word) !== word,
+    );
+  const localizedWords = new Set(foreign ? accentedWords(query) : []);
+  const localizedFaces = (pool: Entry[]) =>
+    pool.filter((entry) =>
+      faceAliases(entry).some((alias) => accentedWords(alias).some((word) => localizedWords.has(word))),
+    );
+  const options = { ownOnly: Boolean(kinds?.length) };
+  const localizedHits = foreign ? rank(localizedFaces(entries), faceWords, options) : [];
+  const localized = localizedHits.length > 0;
+  const matchQuery = localized ? faceWords : query;
   const kindNames = kinds?.map((kind) => kind.split("/")[0]!);
   const kindSaid = new Set(
     (kindNames ?? []).flatMap((kind) =>
@@ -664,26 +691,34 @@ export const keywordSearch = (entries: Entry[], query: string, kinds?: string[])
     const own = kinds?.length
       ? new Set(pool.flatMap((entry) => fieldWords(entry, false)))
       : undefined;
-    const said = plain(query).filter((word) => !kindSaid.has(stem(word)) || own?.has(stem(word)));
-    return { said, asks: said.length ? said.join(" ") : query };
+    const said = plain(matchQuery).filter((word) => !kindSaid.has(stem(word)) || own?.has(stem(word)));
+    return { said, asks: said.length ? said.join(" ") : matchQuery };
   };
-  const options = { ownOnly: Boolean(kinds?.length) };
-  const rankIn = (pool: Entry[]) => rank(pool, asksOf(pool).asks, options);
+  const rankIn = (pool: Entry[]) => foreign
+    ? rank(localizedFaces(pool), faceWords, options)
+    : rank(pool, asksOf(pool).asks, options);
   const { said, asks } = asksOf(entries);
-  const ranked = foreign ? [] : rank(entries, asks, options);
+  const ranked = foreign ? localizedHits : rank(entries, asks, options);
   const typed = [...new Set(plain(asks))].filter(
     (word) => !STOP.has(stem(word)) && !/^\d+$/.test(word),
   );
   const named = kinds ? [] : [...new Set(typed.flatMap((word) => KIND_NAMED[stem(word)] ?? []))];
   const whole = plain(query).join(" ");
+  const foldedQuery = plain(faceWords).join(" ");
+  const exactFaceAlias = (entry: Entry) =>
+    faceAliases(entry).some((alias) => plain(foldFaceWords(alias)).join(" ") === foldedQuery);
+  const prefersFaces = ranked.some(exactFaceAlias);
   const first = (entry: Entry) =>
     plain(entry.id).join(" ") === whole
-      ? -1
+      ? -2
+      : exactFaceAlias(entry)
+        ? -1
       : (entry.kind === "mocap" && (entry.secs ?? 1) < 0.1 ? 2 : 0) +
+        (prefersFaces && entry.kind !== "face" ? 1 : 0) +
         (named.length && !named.includes(top(entry.kind)) ? 1 : 0);
   const wordMatches = ranked.toSorted((a, b) => first(a) - first(b));
   return {
-    foreign,
+    foreign: foreign && !localized,
     said,
     asks,
     ranked,
@@ -743,11 +778,15 @@ const foldSoundEntries = <T extends Entry>(
     if (!SOUND.includes(takes[0]!.kind)) return takes[0]!;
     const first = representative(takes);
     const names = [...new Set(takes.flatMap((take) => take.data?.takes ?? [take.id]))];
+    const kitCategory = first.kitBanned
+      ? undefined
+      : (first.kitCategory ?? takes.find((take) => take.kitCategory)?.kitCategory);
     return {
       ...first,
       takes: Math.max(names.length, ...takes.map((take) => take.takes ?? 1)),
       data: { ...first.data, takes: names },
       ...(takes.some((take) => take.fav) && { fav: true }),
+      ...(kitCategory && { kitCategory }),
     };
   });
 
@@ -1038,6 +1077,7 @@ export function presetEntries(): Entry[] {
       "velocity-meta",
     ),
     ...list("ease", eases, "camera-meta"),
+    ...faceEntries(),
   ];
 }
 
@@ -1468,7 +1508,14 @@ const line = (x: Entry, lead = "") => {
   const said = heard ? `heard: ${heard}` : !tells(x) ? "" : displayAbout(x.about);
   const about = said.length > 90 ? `${said.slice(0, 89)}…` : said;
   const synth = (x.kind === "sfx" || x.kind === "bgm") && originOfEntry(x) === "synth";
-  const tags = [x.fav && "starred", x.src, synth && "made in code", x.note]
+  const tags = [
+    x.fav && "starred",
+    x.kitCategory && `kit:${x.kitCategory}`,
+    x.kitBanned && "kit:ban",
+    x.src,
+    synth && "made in code",
+    x.note,
+  ]
     .filter(Boolean)
     .join(", ");
   const variantCount = Array.isArray(x.data?.variants) ? x.data.variants.length : 0;
@@ -1505,12 +1552,13 @@ const HELP = `Usage: bun run find <words> [options]     (works from a film folde
        bun run find --show <id[,id]>      files/licence, settings, and timeline placement or source adaptation
 
 Finds what a film can name: vault sounds, mocap clips, native/imported transitions, effects, stickers, templates,
-camera anims and curves, text and shape voices, fonts, adjust sliders, beat effects, camera eases.
+camera anims and curves, text and shape voices, fonts, adjust sliders, beat effects, camera eases, and toon faces.
 One line per hit: kind/category  id-to-write  length  title —
 description  [source], then where that id goes in the film's src/timeline and what to try next.
 
 Options:
   --kind <k[,k]>   sfx, bgm, mc (Minecraft) or sound (all three); mocap; transition anim text shape font adjust look lens shake velocity ease; asset (editable source);
+                   face: actor expressions, intensity ramps, and manga marks (face/anger, face/ramp, face/mark)
                    3D assets (opt-in): block, item, mob, prop or object (all four; alias 3d); each with /<namespace-or-scope> (block/decor, prop/global)
                    transition, text, look/filter and shape/sticker include native and imported visuals;
                    effect and template select imported visuals (asset/<category> also works)
@@ -1522,7 +1570,7 @@ Options:
   --variants       with object kinds: unfold grouped wood/color/tier variants onto separate lines
   --broken         with object kinds: include non-renderable models (.geo.json, .obj, custom loaders, missing parent/texture)
   --source <s[,s]> where it comes from: minecraft and each mod pack by name (alexs-caves, dusty-decorations ...), gohans, global, this-film, earshot,
-                   mixkit, mixamo, openfilm, film-stage or film-kit (every preset) or one preset file; builtin aliases film-stage
+                   mixkit, mixamo, openfilm, film-stage, film-kit or mc-actor, or one preset file; builtin includes film-stage and toon faces
   --group <name>   one native category or imported visual group (e.g. Basic, fade, ambience); alone lists groups
   --offset <N>     skip N entries in offline lists or word results; start at 0 and combine with -n
   --origin <o>     sfx and bgm: real (recordings), synth (made in code), unknown (unverified origin)
@@ -1532,6 +1580,9 @@ Options:
   --fav [list]     only what the creator starred (the studio's star; rows tagged starred): the default list, or a named
                    one (--fav horror). Lists live in favorites/<list>.json, for every film; an answer names the others.
                    When the creator says "use my favourites", add --fav to every search. --favorites, --starred work too
+  --kit [cat]      only approved Core Sound Kit sounds (sound-kit/core.json; rows tagged kit:<cat>): all categories or one
+                   (${KIT_CATEGORY_IDS.join(", ")}). Manage with bun run sound:kit or Studio's Audio Kit tab
+  --include-banned include sounds marked ban in sound-kit/core.json (excluded from normal sound searches by default)
   --star <id[,id]> star for the creator, when asked (--unstar takes it off); into a named list: --star boom --fav horror
                    (a new name makes the list). An id in several kinds needs --kind
   Any filter without a value lists its values with counts: bun run find --source lists every source and mod pack.
@@ -1573,7 +1624,7 @@ Responses are cached for 24 h in MC_FIND_CACHE or .studio/openfilm-search.sqlite
 API/cache errors keep BM25 intact. No prepared embedding index, Gemini, OpenRouter or Jev is used by default.
 MC_FIND_CACHE paths start at the repo root; --offline uses fresh cache entries only. --kind mc never calls OpenFilm.
 The semantic service always returns nearest candidates, even for nonsense: listen/view; no result is a fit guarantee.
-BM25 searches English only (translate first); OpenFilm accepts other languages but cannot search local-only Minecraft.
+BM25 searches English and known Vietnamese face aliases (e.g. giận); OpenFilm accepts other languages but cannot search local-only Minecraft.
 Name the thing for precise keywords ("whoosh"); describe the scene for semantic alternatives. Minecraft sounds also
 match the game's subtitles ("creeper hisses", "door creaks"). A sound
 ask without --kind also meets mocap clips and presets: add --kind sound. No hit: other plain words, then browse the
@@ -1596,6 +1647,8 @@ Examples:
   bun run find --jev --kind transition "a memory slipping away"
   bun run find --kind transition --source openfilm --group fade -n 20 --offset 20
   bun run find --show text/in/fade
+  bun run find mad --kind face --offline
+  bun run find --show face/angry,face/ramp/anger,face/mark/question
   bun run find --jev --kind mocap "he searches the floor for something hidden"
   bun run find sit --from stand --to sitFloor
   bun run find --show dissolve`;
@@ -1656,6 +1709,8 @@ const KIND_NAMED: Record<string, string> = Object.fromEntries(
     transition: "transition",
     font: "font",
     typeface: "font",
+    expression: "face",
+    facial: "face",
     mocap: "mocap",
     minecraft: "mc",
     title: "text",
@@ -1865,6 +1920,8 @@ function detail(x: Entry): string[] {
   ];
 }
 function details(x: Entry): string[] {
+  const face = faceEntry(x);
+  if (face) return faceDetails(x, face);
   const d = x.data ?? {},
     side = x.kind.split("-")[1] ?? "in";
   const info = assetInfo(x);
@@ -2248,7 +2305,8 @@ function star(
   ].join("\n");
 }
 
-function show(ids: string[], pool: Entry[]) {
+async function show(ids: string[], pool: Entry[], preview?: (recipes: FaceResult[]) => Promise<string>) {
+  const faces = new Map<string, FaceResult>();
   const sourceOnly = ids.every((id) =>
     pool.some((x) => x.kind === "asset" && matchesAssetId(x, id)),
   );
@@ -2260,7 +2318,7 @@ function show(ids: string[], pool: Entry[]) {
     ownBy.set(l, x.kind);
     return l;
   };
-  return ids
+  const lines = ids
     .map((id) => {
       let low = id.toLowerCase();
       const name = low.split("/").at(-1)!;
@@ -2308,6 +2366,10 @@ function show(ids: string[], pool: Entry[]) {
         );
       }
       const uniqueKinds = new Set(hits.map((x) => x.kind));
+      for (const x of hits) {
+        const face = faceEntry(x);
+        if (face) faces.set(x.id, face);
+      }
       const firstPack = hits[0]!.data?.pack;
       const firstSource = typeof firstPack === "string" ? firstPack : (hits[0]!.src ?? "");
       const shared =
@@ -2342,6 +2404,8 @@ function show(ids: string[], pool: Entry[]) {
         : ["after pasting it in: bun run check (in the film) says whether the file still fits"],
     )
     .join("\n\n");
+  if (!preview || !faces.size) return lines;
+  return `${lines}\n\n${await preview([...faces.values()])}`;
 }
 
 type Voted = [number, Entry, number?];
@@ -2387,6 +2451,8 @@ const OPTIONS: Record<string, string | null> = {
   "--dimensions": "--dimensions 768",
   "--provider": "--provider auto|gemini|openrouter",
   "--fav": null,
+  "--kit": null,
+  "--include-banned": null,
   "--star": "--star dissolve",
   "--unstar": "--unstar dissolve",
   "--kind": "--kind sfx",
@@ -2477,6 +2543,7 @@ const OPTION_ALIAS: Record<string, string> = {
   "--starred": "--fav",
   "--stars": "--fav",
   "--liked": "--fav",
+  "--core-kit": "--kit",
   "--unrenderable": "--broken",
 };
 const isOption = (a: string) => /^--?[a-z]/i.test(a);
@@ -2529,6 +2596,36 @@ function parse(argv: string[], lists: string[] = []) {
           `--fav given twice (${set.get(name)}, ${v.toLowerCase()}); a search reads one favourites list`,
         );
       set.set(name, v.toLowerCase());
+      continue;
+    }
+    if (name === "--kit") {
+      const next = argv[i + 1]?.toLowerCase();
+      const validCats = new Set<string>(["all", ...KIT_CATEGORY_IDS]);
+      const rawVal =
+        eq > 0
+          ? arg.slice(eq + 1).toLowerCase()
+          : next && validCats.has(next)
+            ? (i++, next)
+            : "all";
+      if (!validCats.has(rawVal)) {
+        throw new FindError(
+          `Unknown --kit category "${rawVal}". Valid: all, ${KIT_CATEGORY_IDS.join(", ")}`,
+        );
+      }
+      if (eq < 0 && rawVal === "all" && next && !isOption(next)) {
+        const closeCat = KIT_CATEGORY_IDS.find(
+          (c) => c.startsWith(next) || c.includes(next) || levenshtein(c, next) <= 2,
+        );
+        if (closeCat) {
+          notes.push(
+            `"${next}" after --kit is not a kit category (${KIT_CATEGORY_IDS.join(", ")}): read as a search word, all kit categories used (did you mean --kit ${closeCat}?)`,
+          );
+        }
+      }
+      if (set.has(name) && set.get(name) !== rawVal) {
+        throw new FindError(`--kit given twice (${set.get(name)}, ${rawVal})`);
+      }
+      set.set(name, rawVal);
       continue;
     }
     const example = OPTIONS[name];
@@ -2726,6 +2823,7 @@ export async function run(
   clips: Catalog = catalog,
   favorites: FavoriteLists = favoriteLists(),
   lookup: OpenFilmLookup = openFilmSearch,
+  soundKit: SoundKitStore = openSoundKit(),
 ): Promise<string> {
   if (
     argv.some((a) => a.toLowerCase() === "--help" || a.toLowerCase() === "-h") ||
@@ -2821,20 +2919,64 @@ export async function run(
     throw new FindError(
       "--variants and --broken apply only to 3D object kinds (block, item, mob, prop, object)",
     );
-  const entriesOf = (fold = false) => markStarred(given ?? allEntries(fold), stars.shown());
-  const poolOf = async (fold = false) => {
-    if (given) return markStarred(given, stars.shown());
-    if (wantsObjects && !wantsNonObjects) return markStarred(await loadObjects(), stars.shown());
+  if ((set.has("--kit") || set.has("--include-banned")) && wantsObjects && !wantsNonObjects)
+    throw new FindError(
+      `${set.has("--kit") ? "--kit" : "--include-banned"} filters sounds only; 3D object kinds (block, item, mob, prop, object) have none`,
+    );
+  const kitState = soundKit.shown();
+  const kitCoreMap = new Map<string, string>();
+  const kitBannedSet = new Set<string>();
+  for (const item of Object.values(kitState.items)) {
+    if (item.status === "core") kitCoreMap.set(item.id, item.category);
+    else if (item.status === "ban") kitBannedSet.add(item.id);
+  }
+  const applySoundKit = (xs: Entry[], includeBanned = set.has("--include-banned")) => {
+    const out: Entry[] = [];
+    for (const x of xs) {
+      if (SOUND.includes(x.kind)) {
+        const banned = kitBannedSet.has(x.id);
+        if (banned && !includeBanned) continue;
+        const kc = kitCoreMap.get(x.id);
+        if ((kc && x.kitCategory !== kc) || (banned && !x.kitBanned)) {
+          out.push({
+            ...x,
+            ...(kc ? { kitCategory: kc } : {}),
+            ...(banned ? { kitBanned: true } : {}),
+          });
+        } else {
+          out.push(x);
+        }
+      } else {
+        out.push(x);
+      }
+    }
+    return out;
+  };
+  const entriesOf = (fold = false, includeBanned = set.has("--include-banned")) =>
+    applySoundKit(markStarred(given ?? allEntries(fold), stars.shown()), includeBanned);
+  const poolOf = async (fold = false, includeBanned = set.has("--include-banned")) => {
+    if (given) return applySoundKit(markStarred(given, stars.shown()), includeBanned);
+    if (wantsObjects && !wantsNonObjects)
+      return applySoundKit(markStarred(await loadObjects(), stars.shown()), includeBanned);
     if (wantsObjects && wantsNonObjects)
-      return markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown());
+      return applySoundKit(
+        markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown()),
+        includeBanned,
+      );
     if (
       set.has("--fav") &&
       !asked &&
       stars.shown().effects.some((id) => /^(?:block|item|mob|prop):/i.test(id))
     )
-      return markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown());
-    return markStarred(allEntries(fold), stars.shown());
+      return applySoundKit(
+        markStarred([...allEntries(fold), ...(await loadObjects())], stars.shown()),
+        includeBanned,
+      );
+    return applySoundKit(markStarred(allEntries(fold), stars.shown()), includeBanned);
   };
+  const useKit = set.has("--kit"),
+    kitCat = set.get("--kit") ?? "all",
+    kitArg = kitCat === "all" ? "--kit" : `--kit ${kitCat}`;
   const fav = set.has("--fav"),
     favArg = listName === "default" ? "--fav" : `--fav ${listName}`;
   const otherLists = lists.filter((l) => l.name !== listName && l.count);
@@ -2880,7 +3022,11 @@ export async function run(
       throw new FindError(
         `--show takes ids, --kind and --source only (a comma list for several: --show dissolve,push; --kind text-in for one kind's of a shared id); drop ${extra.filter(Boolean).join(" ")}`,
       );
-    let all = !given ? (wantsObjects ? await poolOf(false) : entriesOf(false)) : entriesOf(false);
+    let all = !given
+      ? wantsObjects
+        ? await poolOf(false, true)
+        : entriesOf(false, true)
+      : entriesOf(false, true);
     if (!given && !wantsObjects) {
       const anyMissed =
         showIds.some((rawId) => {
@@ -2897,7 +3043,11 @@ export async function run(
     );
     const kf = asked ? kindFilter(asked, scoped) : undefined;
     if (kf?.bad.length) throw new FindError(kf.bad.join("\n"));
-    return asRead(kf?.read, show(showIds, kf ? scoped.filter(kf.test) : scoped));
+    return asRead(kf?.read, await show(
+      showIds,
+      kf ? scoped.filter(kf.test) : scoped,
+      given ? undefined : (faces) => facePreview(faces, filmConfig(process.cwd()).chrome),
+    ));
   }
   if (starring) {
     const extra = [
@@ -2909,7 +3059,7 @@ export async function run(
         `${starring} takes ids, --kind and --fav <list> only (a comma list for several: ${starring} boom,dissolve); drop ${extra.filter(Boolean).join(" ")}`,
       );
     const starIds = commaList(set.get(starring)!);
-    const baseEntries = entriesOf(false);
+    const baseEntries = entriesOf(false, true);
     const needsObjects =
       !given &&
       (wantsObjects ||
@@ -3009,7 +3159,9 @@ export async function run(
           : `--jev over ${clipCats.join(",")} filters mocap clips by the body; ask the other kinds in a call of their own`,
       );
     }
-    const soundOnly = ["--origin", "--license", "--edition"].filter((o) => set.has(o));
+    const soundOnly = ["--origin", "--license", "--edition", "--kit", "--include-banned"].filter(
+      (o) => set.has(o),
+    );
     if (soundOnly.length)
       throw new FindError(
         `${soundOnly.join(" ")} filter${soundOnly.length > 1 ? "" : "s"} sounds; mocap clips have none: drop ${soundOnly.length > 1 ? "them" : "it"} (clips filter by --source and --dur)`,
@@ -3113,7 +3265,9 @@ export async function run(
     !query &&
     !kinds &&
     !sources &&
-    !["--origin", "--edition", "--license", "--dur", "--fav", "--group"].some((o) => set.has(o))
+    !["--origin", "--edition", "--license", "--dur", "--fav", "--kit", "--group"].some((o) =>
+      set.has(o),
+    )
   ) {
     if (argv.length)
       throw new FindError(
@@ -3194,7 +3348,10 @@ export async function run(
       (license === undefined || licensed(x)) &&
       (!dur || inRange(x.secs, dur)),
   );
-  const entries = fav ? unstarred.filter((x) => x.fav) : unstarred;
+  const favFiltered = fav ? unstarred.filter((x) => x.fav) : unstarred;
+  const entries = useKit
+    ? favFiltered.filter((x) => x.kitCategory && (kitCat === "all" || x.kitCategory === kitCat))
+    : favFiltered;
   const filter = [
     group && `--group ${qArg(group)}`,
     sources && `--source ${sources.join(",")}`,
@@ -3203,6 +3360,7 @@ export async function run(
     license && `--license ${license}`,
     dur && `--dur ${set.get("--dur")}`,
     fav && favArg,
+    useKit && kitArg,
   ]
     .filter(Boolean)
     .join(" ");
@@ -3212,6 +3370,39 @@ export async function run(
         ? kf.bad.join("\n")
         : `${filter} keeps ${counts(entries) || "nothing"}: ${kf.bad.join("; ")}`,
     );
+  }
+  const hasKitInPool = pool.some(
+    (x) => x.kitCategory && (kitCat === "all" || x.kitCategory === kitCat),
+  );
+  if (useKit && !hasKitInPool) {
+    const message = [
+      `no approved Core Sound Kit sounds yet${kitCat === "all" ? "" : ` in category "${kitCat}"`} (${relative(ROOT, soundKit.file).replaceAll("\\", "/")}).`,
+      `next: curate in Studio's Audio Kit tab, or stage candidates with: bun run sound:kit seed`,
+      `      without --kit, find searches everything: bun run find ${query ? qArg(query) : "<words>"}`,
+    ].join("\n");
+    if (set.has("--json")) {
+      if (semantic)
+        return JSON.stringify(
+          { mode: "keyword-fallback", query, notes: [...notes, message], results: [] },
+          null,
+          2,
+        );
+      return dualSearchOutput(
+        query,
+        [],
+        { hits: [], categories: [], notes: [] },
+        {
+          limit: n,
+          offset,
+          json: true,
+          notes: [...notes, message],
+          foreign: isForeign(query),
+          line: (entry) => line(entry),
+          where: () => [],
+        },
+      );
+    }
+    return noted(message);
   }
   if (fav && !pool.some((x) => x.fav)) {
     const message = [
@@ -3265,7 +3456,7 @@ export async function run(
   }
   const readAs = (text: string) => asRead(kf?.read, text);
   const kindNames = kinds?.map((k) => k.split("/")[0]!);
-  const narrowing = `${sources ? ` --source ${sources.join(",")}` : ""}${group ? ` --group ${qArg(group)}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}`;
+  const narrowing = `${sources ? ` --source ${sources.join(",")}` : ""}${group ? ` --group ${qArg(group)}` : ""}${origin ? ` --origin ${origin}` : ""}${edition ? ` --edition ${edition}` : ""}${license ? ` --license ${license}` : ""}${dur ? ` --dur ${set.get("--dur")}` : ""}${fav ? ` ${favArg}` : ""}${useKit ? ` ${kitArg}` : ""}${set.has("--include-banned") ? " --include-banned" : ""}`;
   const filters = `${kinds ? ` --kind ${qArg(kinds.join(","))}` : ""}${narrowing}${set.has("--variants") ? " --variants" : ""}${set.has("--broken") ? " --broken" : ""}`;
   const filtersFor = (xs: Entry[], terse = false, familyMembers = candidateSounds) => {
     const members = xs.flatMap((x) =>
@@ -3715,7 +3906,7 @@ export async function run(
     const scene = typed.length >= 8;
     const PLAIN =
       "entries are named plainly: what it is, not the moment (whoosh, impact, riser, glitch, door creak, chime; Minecraft by mob or block: zombie say, chest open; mocap by action: sit, kneel, look around; transitions and anims by motion: wipe, zoom, spin, blur)";
-    if (foreign)
+    if (foreign && best?.kind !== "face")
       next.push(
         `words match English only: say it again in 1-3 plain English words, ${PLAIN}. e.g. bun run find <english words>${filters}`,
         browse(),
@@ -3763,12 +3954,21 @@ export async function run(
       const favMiss = fav
         ? `none of the ${listName} favourites has these words${inLists.length ? `; other lists do: ${inLists.join(", ")} (bun run find ${qArg(query)} --fav ${inLists[0]!.split(" ")[0]})` : ""}; ${rankIn(inKind(unstarred)).length} entries outside the favourites do (bun run find ${qArg(query)}${filters.replace(` ${favArg}`, "")})`
         : "";
+      const kitMiss =
+        useKit && !favMiss
+          ? `none of the Core Sound Kit (${kitCat}) sounds has these words; ${rankIn(inKind(favFiltered)).length} entries outside --kit do (bun run find ${qArg(query)}${filters.replace(` ${kitArg}`, "")})`
+          : "";
       const fights = fightLine();
       if (fights) next.push(fights, ...(other ? [other] : []));
       else if (favMiss)
         next.push(
           favMiss,
           `if the creator asked for favourites only: say none has it and ask which to use, or which to star (bun run find --star <id>${listName === "default" ? "" : ` --fav ${listName}`}). The favourites in full: bun run find ${favArg}`,
+        );
+      else if (kitMiss)
+        next.push(
+          kitMiss,
+          `browse the full Core Sound Kit: bun run find ${kitArg} (or bun run sound:kit recommend${kitCat !== "all" ? ` --category ${kitCat}` : ""} --q ${qArg(query)})`,
         );
       else
         next.push(

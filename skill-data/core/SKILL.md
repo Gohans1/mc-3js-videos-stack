@@ -13,7 +13,7 @@ Run repo commands at the root and film commands in `films/<name>`:
 
 ```bash
 bun run studio --detach             # 1. live preview + timeline + notes (--status / --stop)
-bun run find <words>                # 2. discover sounds, mocap, 2D presets & 3D assets (--kind object)
+bun run find <words>                # 2. discover sounds, mocap, faces (--kind face), 2D or 3D assets
 bun run check                       # 3. validate timelines/assets after any JSON edit
 bun run render stills --at 12,30      # 4. render stills and inspect the printed images
 bun run render clip                 # 5. draft video; then bun run mix renders/draft_video.mp4
@@ -62,7 +62,7 @@ Use the steps that serve the current scene or change. Measurements and presets s
 
 | Task                            | Command or file                                                                                                                                                                                                                                                           |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Find assets and presets         | bun run find <words> searches sounds, mocap and 2D presets (+ OpenFilm); add --kind object (or block, item, mob, prop) for 3D MC assets; --json, --offline supported                                                                                                      |
+| Find assets and presets         | bun run find <words> searches sounds, mocap, toon faces and 2D presets (+ OpenFilm). Use --kind face for actor expressions or --kind object for 3D. --json and --offline are available. |
 | Keep an edit direction          | Film → Versions, or bun run history --film films/<name> --help                                                                                                                                                                                                            |
 | Discover, pick and place assets | bun run find --kind transition\|object; --show <id> inspects recipes/properties/clips; preview 3D picks/blocks/items beside a 1.875m Steve scale figure with bun run asset preview; place, pick/unpick or copy Global props with bun run asset --help; see --ref contract |
 | Build a custom scene or effect  | src/scene.ts; bun run skills get core --ref contract                                                                                                                                                                                                                      |
@@ -77,7 +77,8 @@ Use the steps that serve the current scene or change. Measurements and presets s
 | Choose a review check           | Run bun run skills get core --ref review to choose evidence for picture, sound, pacing, dialogue, or motion.                                                                                                                                                              |
 | Inspect a render                | Run bun run framecheck --json to save visual findings and evidence. Use bun run sheet FILE frames TIMES to extract frames at specific timestamps. bun run sweep ranks a whole draft against the reference: pops, stutters, blur, light, cuts. |
 | Check arbitrary seeking         | bun run render stills --check order; optional sampled comparison of two capture orders                                                                                                                                                                                      |
-| Study a reference video         | bun run reference add <video> puts it in references/ (H.264 copy when needed); timecode <video> adds a bottom timecode strip to a review copy; sidebyside <ref> <draft> tiles both into one synced REF\|OURS video with a shared timecode strip (auto-cropping a draft bar); inspect <video-or-URL> for frames, captions and search; study for cuts, whips and hits; compare <ref> <draft> for how alike the render is; solve <shot.json> matchmoves a shot's camera; pair with scenes, media and earshot; see --ref review |
+| Check scene motion               | bun run render stills --check pops checks the whole film and writes renders/pops.json; pops:20,45 checks a range. Use --check touch for every player or touch:20,45 for a range. See --ref review. |
+| Study a reference video          | bun run reference add <video> puts it in references/ (H.264 copy when needed); timecode, sidebyside and frames make review media; inspect reads frames and captions; study estimates cuts, whips and hits; compare <ref> <draft> measures timing and, after media setup camera, per-shot look; solve <shot.json> matchmoves a shot's camera. See --ref review. |
 | Select, place and edit sound    | bun run skills get core --ref sound; find discovers, asset edits, earshot evaluates sound                                                                                                                                                                                 |
 | Attach sound to the draft       | bun run mix renders/draft_video.mp4; creates renders/draft.mp4                                                                                                                                                                                                            |
 | Measure audio levels            | bun run listen; level measurements cannot identify a sound or decide whether it fits                                                                                                                                                                                      |
@@ -102,7 +103,7 @@ bun run at <heard-second> converts clocks and names the active files and rows. T
 | Report a verified fix            | Capture proof first, then bun run note done 3 "what changed" --after <imgPath> [--cam ... --t ...] (or --no-after "<reason>" when non-visual); custom After framing allowed if moved |
 | Ask about a note                 | bun run note ask 3 "your question"                                                                                                                                                   |
 | Keep a requested lesson          | bun run skills get core --ref notes                                                                                                                                                  |
-| Produce the final when requested | bun run render final; bun run mix renders/final_video.mp4; bun run deliver                                                                                                           |
+| Produce the final when requested | bun run render final checks the whole final scene for pops and foot slides before encoding. After it passes, run bun run mix renders/final_video.mp4 and bun run deliver. |
 
 Never edit notes/notes.jsonl by hand. The final is renders/final.mp4; passing technical checks does not replace viewing/listening or mean it was uploaded.
 

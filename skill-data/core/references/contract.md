@@ -36,6 +36,14 @@ To slow, speed or hold a stretch, change `timing.json` (Speed, Freeze); never sh
 | timing.json | `freezes` use `at`, `duration`, and optional `frame` to hold another source second; `layerKinds` stores `base` and `changes` per `text`, `overlays`, `adjustment`, `audio`, `sfx`, `voice` |
 | text.json   | `items` use `kind`, `from`, `to`, and optional `text`, `track`, `align`, `bold`, `size`, `spacing`, `stroke { color, width }`, `background { color, opacity }`, `shadow`, `in`, `out`      |
 
+## Actor face keys
+
+Declare `"src/timeline/face.json": "face"` in `"live-studio".keyFiles` and load it into `EDIT.face` in `src/edit.ts`. The document is an actor ID map. A row looks like `{"steve":[{"t":0,"face":null},{"t":3.2,"face":"anger","k":0.6,"blend":0.22}]}`.
+
+Keys are sorted by scene seconds. `face` takes a preset, intensity family, a film-defined `custom/<name>`, or null to resume the original look. `k` is optional intensity from 0 to 1. `blend` is the scene seconds the key eases in over (smoothstep) when the previous face is also toon, `FACE_BLEND` (0.2) when left out; set `0` on a key that sits on a cut. A key holds to the next one.
+
+The template draws Steve's row using `toonFaceAt`. For another actor, load its row and pass the film's custom FaceSpecs as the third argument. The resulting Face can be layered with gaze, lips, blink, marks or any custom animation before calling `wear.set`.
+
 ## Optional hooks on draw
 
 Each hook turns on one part of the studio. The template sets all of these:
@@ -85,7 +93,7 @@ The built-ins are a starting kit, not the limit: anything Three.js can draw belo
 
 The creator sees all of the above in the studio's Film tab, view only, under CapCut's kinds (Audio, Text, Stickers, Effects, Transitions, Animation), then 3D, Custom fields, A/B choices, Checks, your own kinds and Other. A `title` and a one-line `tip` on each is what they read there; nothing you hand over is refused or dropped.
 
-`src/scene.ts` is plain JS under `// @ts-nocheck`, and `bun run check` reads only the JSON: a mistake in the code shows as an `ERROR` when a render builds the scene, so look at a still after every code change.
+`src/scene.ts` is plain JS under `// @ts-nocheck`. `bun run check` validates saved film data offline. Inspect a still after scene edits. The automatic `pops` check in `render final` requires `draw.tools.scene` and `draw.tools.camera` on the film's draw function. Use `render stills --check pops` to inspect it during drafting.
 
 ## Objects, placed items, and custom props
 
@@ -129,9 +137,10 @@ Studio scans prop subfolders recursively for images, self-contained GLB models a
 | Never draw a fake waveform for a missing WAV or a silence                                                                                 | The creator would trust a sound that is not there                                                     |
 | Dragging or copying a whole shot, and colour keyframes, are unfinished in the studio                                                      | Do them in the JSON, then `bun run check`                                                             |
 | Blocks and textures from `prepareAssets([...], { cache: true })`, made once; a file of the jar by `readFile(path, assets)`                | A raw zip handed to `createScene` unpacks the 5 MB jar again on every call                            |
+| `readMinecraftArchives()` from `mc-assets/scene-assets` loads `picked.zip` and the vanilla archive together                             | Keep `prepareAssets([pack, picked, jar], { cache: true })` in this order so picks override vanilla    |
 | Mocap through one `loadClips(refs, steve)` in `buildScene`                                                                                | It keeps each bake between loads; `loadClip` bakes every time                                         |
 | A loop over many poses that reads only his bones: `steve.updateBones()` and `steve.soleNow()`, then one `g.updateMatrixWorld(true)` after | A full update or `getWorldPosition` per pose walks his whole tree; this was seconds of a phone's load |
-| A change to how the film loads: `bun run eval:load` at the repo root, before and after                                                    | Desk and phone, first visit and reload; phone runs swing ~30%, so repeat one                          |
+| A change to how the film loads: `bun run eval:load --film <film> --only desk` at the repo root, before and after                           | 1920×1080, first visit and reload; compare requests, bytes, and first picture in the saved samples    |
 
 ## Effects library and custom pages
 

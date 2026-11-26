@@ -33,12 +33,19 @@ function loadRootEnv() {
       cwd: ROOT,
       env: process.env,
       encoding: "utf8",
-      timeout: 5000,
+      timeout: 15_000,
       windowsHide: true,
     },
   );
-  if (loaded.error || loaded.status !== 0)
-    throw new Error("Cannot load repository dotenv defaults with Bun");
+  if (loaded.error || loaded.status !== 0) {
+    const detail =
+      loaded.error?.code === "ETIMEDOUT"
+        ? "Bun did not finish within 15 seconds"
+        : (loaded.error?.code ?? loaded.signal ?? `Bun exited ${loaded.status}`);
+    throw new Error(`Cannot load repository dotenv defaults from ${ROOT}: ${detail}`, {
+      cause: loaded.error,
+    });
+  }
   const defaults = JSON.parse(loaded.stdout);
   for (const [key, value] of Object.entries(defaults))
     if (process.env[key] === undefined) process.env[key] = value;

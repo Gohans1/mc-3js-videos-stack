@@ -81,7 +81,7 @@ Templates add overlays and music; their camera slots guide your own 3D scene, no
 Create freely in src/scene.ts or edit source; this catalog is a starting kit, not a limit.
 HTML/CSS/canvas recipes become Three.js textures; audio/cuts/grades keep their native lanes.
 Imported source: vault/openfilm/library. Reload after HTML edits; restart Studio after _definitions/catalog edits.
-Raw asset bytes are outside render stamps: force affected video chunks with --chunks N after source edits.
+Render checks changes to served picture files on resume. Force affected chunks after external URL or catalog definition changes.
 Studio groups assets under Audio, Text, Transitions, Adjustment, Effects and Objects; OpenFilm is a source filter.
 Pack/restore editable source, WAVs and licenses: bun run pack:sound; bun run setup --sound-zip <zip>.
 Legacy list/info forward to find's text output; plan/pick/unpick/preview/use/timeline/edit/remove/validate return JSON.

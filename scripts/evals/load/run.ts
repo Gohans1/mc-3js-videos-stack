@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url)),
   ROOT = join(HERE, "../../..");
+const DESKTOP = { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false };
 
 const HELP = `Usage: bun run eval:load [--film <name>] [--runs N] [--only desk|phone] [--note "<what changed>"] [--profile] [--panels] [--frames <s,...>] [--audio] [--playback]
 Starts the studio for films/<name> (default cell-break) on port 4391, opens it N times (default 5) per profile in
@@ -23,7 +24,7 @@ headless Chrome, and prints the medians:
   fcp        first paint of the page                 picture   the film's first frame drawn
   ready      every panel's data loaded (__readyAt)   tbt       main thread blocked past 50 ms per task, until ready
   kb         bytes over the wire                     js        JavaScript bytes over the wire     req   requests
-Profiles: desk (1600x900, localhost) and phone (412x915 touch, 4x slower CPU, 20 Mbit/s and 40 ms like Tailscale), each
+Profiles: desk (${DESKTOP.width}x${DESKTOP.height}, localhost) and phone (412x915 touch, 4x slower CPU, 20 Mbit/s and 40 ms like Tailscale), each
 cold and warm. Each finished run adds one line to scripts/evals/load/runs/history.jsonl.
 --profile also samples the CPU through the first measured cold and warm visit of each profile and prints where its main
 thread spent the time, by function (self and total; the page keeps its names, see src/page.mjs), and the libraries' time
@@ -260,11 +261,7 @@ const PROFILES: Profile[] = [
   {
     name: "desk",
     setup: async (cdp, s) => {
-      await cdp.send(
-        "Emulation.setDeviceMetricsOverride",
-        { width: 1600, height: 900, deviceScaleFactor: 1, mobile: false },
-        s,
-      );
+      await cdp.send("Emulation.setDeviceMetricsOverride", DESKTOP, s);
     },
   },
   {
@@ -711,6 +708,7 @@ try {
         browser,
         bun: process.versions.bun,
         resourceSettleMs: 1000,
+        desktop: DESKTOP,
         ...results,
       },
       null,
@@ -740,6 +738,7 @@ try {
         film: FILM,
         runs: RUNS,
         note: NOTE,
+        desktop: DESKTOP,
         ...Object.fromEntries(Object.entries(results).filter(([k]) => !extra(k))),
       }) + "\n",
     );

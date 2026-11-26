@@ -208,7 +208,11 @@ MUTED = {t["id"] for t in _tracks if isinstance(t, dict) and t.get("mute") and i
 if isinstance(A, dict) and _MODE != "measure":
     for _k in ("beds", "sfx"):
         if isinstance(A.get(_k), list):
-            A[_k] = [e for e in A[_k] if not isinstance(e, dict) or not isinstance(e.get("track"), str) or e.get("track") not in MUTED]
+            A[_k] = [
+                e for e in A[_k]
+                if not isinstance(e, dict)
+                or (e.get("muted") is not True and (not isinstance(e.get("track"), str) or e.get("track") not in MUTED))
+            ]
 TRACKS = {t["id"]: t for t in _tracks if isinstance(t, dict) and isinstance(t.get("id"), str)}
 
 
@@ -816,6 +820,8 @@ def unfit():
                 for fk in ("fadeIn", "fadeOut"):
                     if row.get(fk) is not None and (not _is_num(row[fk]) or row[fk] < 0):
                         return f"{SOUND_REL}: sfx[{i}].{fk} must be >= 0"
+            if row.get("muted") is not None and not isinstance(row["muted"], bool):
+                return f"{SOUND_REL}: {kind}[{i}].muted must be boolean"
             if row.get("start") is not None and (not _is_num(row["start"]) or row["start"] < 0):
                 return f"{SOUND_REL}: {kind}[{i}].start must be >= 0"
             if row.get("rate") is not None and (not _is_num(row["rate"]) or row["rate"] <= 0):
@@ -1245,7 +1251,7 @@ def measure_clip(kind, index):
     rows = A.get(kind)
     if not isinstance(rows, list) or index < 0 or index >= len(rows) or not isinstance(rows[index], dict):
         raise ValueError(f"{kind}[{index}] does not exist")
-    c = chosen({**rows[index], "track": None})
+    c = chosen({**rows[index], "track": None, "muted": False})
     if c is None:
         raise ValueError("Choose an audible sound option before normalizing")
     start_key = "from" if kind == "beds" else "at"

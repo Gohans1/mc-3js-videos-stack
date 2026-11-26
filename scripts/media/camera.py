@@ -33,6 +33,46 @@ WHIP_FRAMES = 2
 WHIP_GAP = 3
 
 
+def track(prev, grey, mask, grid=1):
+    import cv2
+    import numpy as np
+
+    h, w = prev.shape
+    ys = np.linspace(0, h, grid + 1, dtype=int)
+    xs = np.linspace(0, w, grid + 1, dtype=int)
+    mask = mask.astype(np.uint8) * 255
+    picked = []
+    for y0, y1 in zip(ys, ys[1:]):
+        for x0, x1 in zip(xs, xs[1:]):
+            area = np.s_[y0:y1, x0:x1]
+            corners = cv2.goodFeaturesToTrack(prev[area], 400 // grid**2, 0.01, 6, mask=mask[area])
+            if corners is not None:
+                picked.append(corners + np.array([x0, y0], dtype=np.float32))
+    if not picked:
+        return None
+    corners = np.concatenate(picked)
+    if len(corners) < 8:
+        return None
+    moved, found, _ = cv2.calcOpticalFlowPyrLK(prev, grey, corners, None, winSize=(21, 21), maxLevel=4)
+    kept = found.ravel() == 1
+    if kept.sum() < 8:
+        return None
+    return corners[kept].reshape(-1, 2), moved[kept].reshape(-1, 2)
+
+
+def follow(prev, grey, mask, grid=1):
+    import cv2
+
+    points = track(prev, grey, mask, grid)
+    if points is None:
+        return None
+    src, dst = points
+    matrix, inliers = cv2.estimateAffinePartial2D(src, dst, method=cv2.RANSAC, ransacReprojThreshold=2.0)
+    if matrix is None:
+        return None
+    return matrix, inliers.ravel() == 1, src, dst
+
+
 def measure(source, start, end):
     import cv2
     import numpy as np
@@ -63,19 +103,12 @@ def measure(source, start, end):
         if moving.mean() < 0.02:
             rows.append({**row, "dx": 0.0, "dy": 0.0, "zoom": 1.0, "turn": 0.0, "inliers": 1.0})
             continue
-        corners = cv2.goodFeaturesToTrack(frames[i - 1], 400, 0.01, 6, mask=moving.astype(np.uint8) * 255)
-        fit = None
-        if corners is not None and len(corners) >= 8:
-            moved, found, _ = cv2.calcOpticalFlowPyrLK(frames[i - 1], frames[i], corners, None, winSize=(21, 21), maxLevel=4)
-            kept = found.ravel() == 1
-            if kept.sum() >= 8:
-                matrix, inliers = cv2.estimateAffinePartial2D(corners[kept], moved[kept], method=cv2.RANSAC, ransacReprojThreshold=2.0)
-                if matrix is not None:
-                    fit = (matrix, float(inliers.mean()))
+        fit = follow(frames[i - 1], frames[i], moving)
         if fit is None:
             row["lost"] = True
         else:
-            m, share = fit
+            m, inliers, _, _ = fit
+            share = float(inliers.mean())
             cx, cy = width / 2, height / 2
             row.update(
                 dx=round((m[0, 0] * cx + m[0, 1] * cy + m[0, 2] - cx) / width, 5),

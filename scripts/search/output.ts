@@ -39,7 +39,9 @@ export const dualSearchOutput = (
     ...options.notes,
     ...semantic.notes,
     ...(options.foreign
-      ? ["BM25 searches English only; translate to include Minecraft and other local-only assets."]
+      ? [words.some((entry) => entry.kind === "face")
+          ? "Local face aliases matched. Use English to search the rest of the local catalog."
+          : "BM25 searches English only; translate to include Minecraft and other local-only assets."]
       : []),
   ];
   const summary = (entry: Entry, rank: number) => {
@@ -49,6 +51,7 @@ export const dualSearchOutput = (
       rank,
       ...fields,
       about: displayAbout(entry.about),
+      aliases: entry.kind === "face" ? data?.aliases : undefined,
       file: assetFile(entry) || undefined,
       license: typeof data?.license === "string" ? data.license : undefined,
     };

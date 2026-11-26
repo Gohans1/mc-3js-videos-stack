@@ -32,18 +32,20 @@ const server = Bun.serve({
               });
   },
 });
-let hungUp = 0;
+let connections = 0;
+const handledSockets = new WeakSet();
 const flaky = Bun.listen({
   hostname: "127.0.0.1",
   port: 0,
   socket: {
-    async data(socket, raw) {
-      if (hungUp++ === 0) return void socket.end();
+    async data(socket) {
+      if (handledSockets.has(socket)) return;
+      handledSockets.add(socket);
+      if (connections++ === 0) return void socket.end();
       const res = await ok().text();
       socket.end(
         `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${res.length}\r\nConnection: close\r\n\r\n${res}`,
       );
-      void raw;
     },
   },
 });
@@ -122,12 +124,14 @@ test("a refused key hands over to the route's next key", async () => {
   expect(r.err).toContain("Jev: Zen key 1 of 2 refused (403)");
 }, 15000);
 
-test("every route spent: it says when, and that more keys on one network do not help", async () => {
-  answers = { z1: "spent", p1: "spent" };
-  const r = await ask(home("z1\n", "p1\n"));
+test("reports each exhausted route's retry time and skips its remaining keys", async () => {
+  answers = { z1: "spent", z2: "ok", p1: "spent", p2: "ok" };
+  asked.length = 0;
+  const r = await ask(home("z1\nz2\n", "p1\np2\n"));
   expect(r.code).not.toBe(0);
-  expect(r.err).toContain("every route has spent its quota");
-  expect(r.err).toContain("per network");
+  expect(r.err).toContain("Zen quota is exhausted. Try again in 1.0 hours.");
+  expect(r.err).toContain("Paid quota is exhausted. Try again in 1.0 hours.");
+  expect(asked).toEqual(["z1", "p1"]);
 }, 15000);
 
 for (const [label, a, after] of [
@@ -149,10 +153,10 @@ for (const [label, a, after] of [
 }
 
 test("a connection dropped before any answer is retried", async () => {
-  hungUp = 0;
+  connections = 0;
   answers = { z1: "ok" };
   const r = await ask(home("z1\n"), `http://127.0.0.1:${flaky.port}/`);
   expect(r.code, r.err).toBe(0);
   expect(JSON.parse(r.out)).toEqual({ q: { noul: 0.9 } });
-  expect(hungUp).toBe(2);
+  expect(connections).toBe(2);
 }, 15000);

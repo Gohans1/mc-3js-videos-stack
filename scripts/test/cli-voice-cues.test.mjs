@@ -273,6 +273,28 @@ test("voice tails remain audible to the final film end when picture and voice cl
   assert.deepEqual(cues.gaps.at(-1), { from: 4.6, to: 6, dur: 1.4, afterLine: 0 });
 });
 
+test("voice:cues reports voiceMuted when the narration clip is disabled via per-clip muted", (t) => {
+  const { dir, put } = makeFilm(t, "clip-muted-narr");
+  put("package.json", {
+    "live-studio": { soundSources: { narr: "sound/narr.wav" } },
+  });
+  writeFileSync(join(dir, "sound/narr.wav"), makeWav(2));
+  put("src/edit.json", { end: 4 });
+  put("renders/live/voice_map.json", {
+    lines: [{ text: "hello", s: 0, e: 1.2, words: [{ w: "hello", s: 0, e: 1.2 }] }],
+  });
+  put("src/timeline/audio.json", {
+    narration: "narr",
+    beds: [],
+    sfx: [{ name: "narr", at: 0, length: 2, gain: 0, muted: true }],
+  });
+  const cues = buildVoiceCues(dir);
+  assert.equal(cues.voiceClipMuted, true);
+  assert.equal(cues.voiceMuted, null);
+  assert.equal(cues.audioFault, null);
+  assert.deepEqual(cues.lines, []);
+});
+
 test("CLI prints help with exit 0, rejects unknown/extra/non-film args with exit 2, warns on env typo, and rejects broken JSON", (t) => {
   const empty = mkdtempSync(join(tmpdir(), "cli-voice-cues-empty-"));
   t.after(() => rmSync(empty, { recursive: true, force: true }));

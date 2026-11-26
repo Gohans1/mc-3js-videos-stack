@@ -15,6 +15,10 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+  listCompareVideos,
+  probeCompareVideo,
+} from "../../packages/live-studio/src/compare-videos.mjs";
 import { mediaPython } from "../media/home.mjs";
 import { FPS, tableShot, testVideo } from "./pinhole.mjs";
 
@@ -27,6 +31,57 @@ const run = (cwd, args, env) =>
     ...(env ? { env } : {}),
   });
 const reportFile = (result) => result.stdout.match(/next: read (.+?) and /)?.[1];
+
+test("reference frames writes reusable batches at 15 fps and keeps earlier runs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-frames-"));
+  try {
+    const video = join(dir, "source clip.mp4");
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=blue:s=160x160:r=30:d=31",
+        "-c:v",
+        "libx264",
+        video,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const out = join(dir, "review batches");
+    const args = ["frames", video, video, "--out", out];
+
+    const scene = run(dir, [...args, "--range", "3,23"]);
+    expect(scene.status, scene.stdout + scene.stderr).toBe(0);
+    const [sceneRun] = readdirSync(out);
+    const sceneList = join(out, sceneRun, "list.txt");
+    const sceneImages = readFileSync(sceneList, "utf8").trim().split("\n");
+    expect(sceneImages).toHaveLength(300);
+    expect(sceneImages[0]).toBe(join(out, sceneRun, "f000001.jpg"));
+    expect(sceneImages.every((file) => existsSync(file))).toBe(true);
+
+    const whole = run(dir, args);
+    expect(whole.status, whole.stdout + whole.stderr).toBe(0);
+    const [wholeRun] = readdirSync(out).filter((name) => name !== sceneRun);
+    const readBatch = (name) =>
+      readFileSync(join(out, wholeRun, name), "utf8")
+        .trim()
+        .split("\n");
+    const first = readBatch("list-001.txt");
+    const second = readBatch("list-002.txt");
+    expect(first).toHaveLength(450);
+    expect(second).toHaveLength(15);
+    expect(second[0]).toBe(join(out, wholeRun, "f000451.jpg"));
+    expect([...first, ...second].every((file) => existsSync(file))).toBe(true);
+    expect(readFileSync(sceneList, "utf8").trim().split("\n")).toEqual(sceneImages);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("reference help and usage failures do no analysis or writes", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-cli-"));
@@ -805,7 +860,7 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
           { encoding: "utf8", timeout: 15000 },
         ).status,
       ).toBe(0);
-    mk(ref, "color=c=#2050d0:s=640x360:r=30", "1.2", 440);
+    mk(ref, "color=c=#2050d0:s=640x360:r=30", "2.2", 440);
     mk(ours, "color=c=#20c040:s=640x360:r=30", "0.5", 880);
     const audioHash = (file) =>
       spawnSync(
@@ -838,10 +893,34 @@ test("reference sidebyside stacks landscape vertically, pads shorter clip with b
     const as = streams.find((s) => s.codec_type === "audio");
     expect(vs.width).toBe(640);
     expect(vs.height).toBeGreaterThan(760);
-    expect(Number(vs.nb_read_frames)).toBe(36);
+    expect(Number(vs.nb_read_frames)).toBe(66);
     expect(as).toBeTruthy();
     expect(audioHash(outV)).toBe(audioHash(ref));
     expect(audioHash(outV)).not.toBe(audioHash(ours));
+    const keyframes = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-skip_frame",
+        "nokey",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "frame=best_effort_timestamp_time",
+        "-of",
+        "json",
+        outV,
+      ],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(keyframes.status, keyframes.stderr).toBe(0);
+    const keyTimes = JSON.parse(keyframes.stdout).frames.map((frame) =>
+      Number(frame.best_effort_timestamp_time),
+    );
+    expect(keyTimes[0]).toBe(0);
+    const gaps = [...keyTimes.slice(1), 2.2].map((time, index) => time - keyTimes[index]);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(1.001);
 
     const decodeFrame = (frameIndex) => {
       const r = spawnSync(
@@ -1072,7 +1151,169 @@ test("reference timecode and sidebyside clean up temp label directories and pres
   }
 }, 30000);
 
-test("reference sidebyside auto-aligns film spans, honors --start with bounded ref audio, and warns on --samples 1", () => {
+test("reference sidebyside keeps the prior video when its metadata cannot be published", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-publication-"));
+  try {
+    const clip = join(dir, "input.mp4");
+    const fixture = spawnSync(
+      "ffmpeg",
+      ["-v", "error", "-f", "lavfi", "-i", "color=red:s=64x64:r=30:d=1", "-c:v", "libx264", clip],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    expect(fixture.status, fixture.stderr).toBe(0);
+    const out = join(dir, "out.mp4");
+    const render = (range) => run(dir, ["sidebyside", clip, clip, "--range", range, "--out", out]);
+    const first = render("0,0.5");
+    expect(first.status, first.stdout + first.stderr).toBe(0);
+    const video = readFileSync(out);
+    const sidecar = `${out}.review.json`;
+    renameSync(sidecar, `${sidecar}.original`);
+    mkdirSync(sidecar);
+    const blocked = render("0.5,1");
+    expect(blocked.status).toBe(1);
+    expect(readFileSync(out).equals(video)).toBe(true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reference sidebyside ranges use the file clock when audio precedes picture", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-clock-"));
+  try {
+    const delayed = join(dir, "delayed.mp4");
+    const fixture = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-itsoffset",
+        "1",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=red:s=64x64:r=24:d=3",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=f=440:d=4",
+        "-fps_mode",
+        "passthrough",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        delayed,
+      ],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    expect(fixture.status, fixture.stderr).toBe(0);
+    const late = join(dir, "late.mp4");
+    const lateRange = run(dir, [
+      "sidebyside",
+      delayed,
+      delayed,
+      "--range",
+      "3.2,3.6",
+      "--audio",
+      "none",
+      "--out",
+      late,
+    ]);
+    expect(lateRange.status, lateRange.stdout + lateRange.stderr).toBe(0);
+    expect(JSON.parse(readFileSync(`${late}.review.json`, "utf8")).start).toBe(3.2);
+    const early = join(dir, "early.mp4");
+    const earlyRange = run(dir, [
+      "sidebyside",
+      delayed,
+      delayed,
+      "--range",
+      "0.25,0.75",
+      "--audio",
+      "none",
+      "--out",
+      early,
+    ]);
+    expect(earlyRange.status).toBe(2);
+    expect(earlyRange.stderr).toContain("outside the shared video window (1.00-4.00s)");
+    expect(existsSync(early)).toBe(false);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
+test.each([
+  { extension: "mp4", start: "0.7", duration: "2.4", range: "2.5,3.1", status: 0 },
+  { extension: "mkv", start: "1", duration: "2", range: "2.5,3.5", status: 2 },
+  { extension: "mkv", start: "0", duration: "2", fps: 24, range: "0,2", status: 0, frames: 48 },
+])("reference sidebyside validates picture-track end in $extension", (sample) => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-sbs-end-"));
+  try {
+    const clip = join(dir, `delayed.${sample.extension}`);
+    const fixture = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-itsoffset",
+        sample.start,
+        "-f",
+        "lavfi",
+        "-i",
+        `color=red:s=64x64:r=${sample.fps ?? 30}:d=${sample.duration}`,
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=f=440:d=4",
+        "-fps_mode",
+        "passthrough",
+        "-c:v",
+        "libx264",
+        "-c:a",
+        "aac",
+        clip,
+      ],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    expect(fixture.status, fixture.stderr).toBe(0);
+    const out = join(dir, "out.mp4");
+    const result = run(dir, [
+      "sidebyside",
+      clip,
+      clip,
+      "--range",
+      sample.range,
+      "--audio",
+      "none",
+      "--out",
+      out,
+    ]);
+    expect(result.status, result.stdout + result.stderr).toBe(sample.status);
+    expect(existsSync(out)).toBe(sample.status === 0);
+    if (sample.frames !== undefined) {
+      const picture = spawnSync(
+        "ffprobe",
+        [
+          "-v",
+          "error",
+          "-select_streams",
+          "V:0",
+          "-show_entries",
+          "stream=nb_frames",
+          "-of",
+          "csv=p=0",
+          out,
+        ],
+        { encoding: "utf8", timeout: 15_000 },
+      );
+      expect(picture.status, picture.stderr).toBe(0);
+      expect(Number(picture.stdout.trim())).toBe(sample.frames);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reference sidebyside auto-aligns film spans, exposes layout and start to Studio, and warns on --samples 1", async () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-sbs-span-"));
   try {
     mkdirSync(join(dir, "references"), { recursive: true });
@@ -1092,11 +1333,11 @@ test("reference sidebyside auto-aligns film spans, honors --start with bounded r
           "-f",
           "lavfi",
           "-i",
-          "color=c=red:s=180x320:r=30:d=2",
+          "color=c=red:s=320x180:r=30:d=2",
           "-f",
           "lavfi",
           "-i",
-          "color=c=blue:s=180x320:r=30:d=2",
+          "color=c=blue:s=320x180:r=30:d=2",
           "-f",
           "lavfi",
           "-i",
@@ -1128,10 +1369,18 @@ test("reference sidebyside auto-aligns film spans, honors --start with bounded r
           "lavfi",
           "-i",
           "color=c=green:s=180x320:r=30:d=1",
+          "-itsoffset",
+          "0.2",
+          "-f",
+          "lavfi",
+          "-i",
+          "sine=f=440:d=0.3",
           "-c:v",
           "libx264",
           "-pix_fmt",
           "yuv420p",
+          "-c:a",
+          "aac",
           span,
         ],
         { encoding: "utf8", timeout: 15000 },
@@ -1143,11 +1392,20 @@ test("reference sidebyside auto-aligns film spans, honors --start with bounded r
       JSON.stringify({ size: st.size, mtimeMs: Math.trunc(st.mtimeMs), samples: 1, start: 2 }),
     );
 
-    const autoOut = join(dir, "auto_span.mp4");
+    const output = "renders/reference/auto_sbs.mp4";
+    const autoOut = join(dir, output);
     const rAuto = run(dir, ["sidebyside", ref, span, "--audio", "ref", "--out", autoOut]);
     expect(rAuto.status, rAuto.stdout + rAuto.stderr).toBe(0);
     expect(rAuto.stdout).toContain("start 2.00s");
     expect(rAuto.stdout).toContain("rendered with --samples 1");
+    expect(listCompareVideos(dir).videos.find((video) => video.path === output)).toMatchObject({
+      startSec: 2,
+      layout: "vstack",
+      referencePath: "references/ref.mp4",
+      studioStartSec: 2,
+      embeddedAudio: "ref",
+    });
+    expect(await probeCompareVideo(dir, output)).toMatchObject({ ok: true, layout: "vstack" });
     const dur = Number(
       spawnSync(
         "ffprobe",
@@ -1182,6 +1440,90 @@ test("reference sidebyside auto-aligns film spans, honors --start with bounded r
     expect(px.status, String(px.stderr)).toBe(0);
     expect(px.stdout[2]).toBeGreaterThan(180);
     expect(px.stdout[0]).toBeLessThan(60);
+
+    const ranged = run(dir, [
+      "sidebyside",
+      ref,
+      ref,
+      "--range",
+      "2.2,2.7",
+      "--layout",
+      "hstack",
+      "--short-edge",
+      "180",
+    ]);
+    expect(ranged.status, ranged.stdout + ranged.stderr).toBe(0);
+    const rangeName = "renders/reference/ref_vs_ref_2.2-2.7.mp4";
+    expect(listCompareVideos(dir).videos.find((video) => video.path === rangeName)).toMatchObject({
+      startSec: 2.2,
+      layout: "hstack",
+    });
+    const pic = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-i",
+        join(dir, rangeName),
+        "-vf",
+        "format=rgb24,crop=325:1:90:80",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+      ],
+      { timeout: 15_000 },
+    );
+    expect(pic.status, String(pic.stderr)).toBe(0);
+    expect(pic.stdout[2]).toBeGreaterThan(180);
+    expect(pic.stdout[324 * 3 + 2]).toBeGreaterThan(180);
+    const rangeDuration = await probeCompareVideo(dir, rangeName);
+    expect(rangeDuration.duration).toBeCloseTo(0.5, 1);
+    const tailPath = join(dir, "empty-tail.mp4");
+    const tail = run(dir, [
+      "sidebyside",
+      ref,
+      span,
+      "--range",
+      "2.98,2.99",
+      "--audio",
+      "none",
+      "--out",
+      tailPath,
+    ]);
+    expect(tail.status, tail.stdout + tail.stderr).toBe(1);
+    expect(existsSync(tailPath)).toBe(false);
+    const pictureOnlyWindow = join(dir, "picture-window.mp4");
+    const beyondAudio = run(dir, [
+      "sidebyside",
+      ref,
+      span,
+      "--range",
+      "2.6,2.9",
+      "--out",
+      pictureOnlyWindow,
+    ]);
+    expect(beyondAudio.status, beyondAudio.stdout + beyondAudio.stderr).toBe(0);
+    expect(existsSync(pictureOnlyWindow)).toBe(true);
+    const beforeAudio = "renders/reference/before-audio.mp4";
+    const subFrame = run(dir, [
+      "sidebyside",
+      ref,
+      span,
+      "--range",
+      "2.16,2.17",
+      "--out",
+      beforeAudio,
+    ]);
+    expect(subFrame.status, subFrame.stdout + subFrame.stderr).toBe(0);
+    expect(await probeCompareVideo(dir, beforeAudio)).toMatchObject({ ok: true, hasAudio: false });
+    expect(run(dir, ["sidebyside", ref, span, "--range", "1,2.5"]).status).toBe(2);
+    expect(run(dir, ["sidebyside", ref, span, "--range", "2.2,2.7", "--start", "2"]).status).toBe(
+      2,
+    );
 
     const badStart = run(dir, [
       "sidebyside",

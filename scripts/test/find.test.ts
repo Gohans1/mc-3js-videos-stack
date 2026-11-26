@@ -436,8 +436,9 @@ test("every preset's source is the file that writes it, so an agent copying one 
     let src = textOf(path);
     if (file === "handheld.ts")
       src += "\n" + textOf(join(import.meta.dir, `../../packages/${pkg}/data/shakify.json`));
+    const id = x.kind === "face" ? x.id.split("/").at(-1)! : x.id;
     return !new RegExp(
-      `["']?${x.id}["']?\\s*[:,}]|id: ["']${x.id}["']|export (?:async )?(?:function|const) ${x.id}\\b`,
+      `["']?${id}["']?\\s*[:,}]|id: ["']${id}["']|export (?:async )?(?:function|const) ${id}\\b`,
     ).test(src);
   });
   expect(away.map((x) => `${x.kind} ${x.id} in ${x.src}`)).toEqual([]);

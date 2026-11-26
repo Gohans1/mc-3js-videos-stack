@@ -13,6 +13,7 @@ export const POSES = {
 };
 
 export const FACES = {};
+export const TOON_FACES = {};
 
 export const { bodyAt, targetAt, moodAt, readLook, blinkAt } = makePerformance({
   poses: POSES,

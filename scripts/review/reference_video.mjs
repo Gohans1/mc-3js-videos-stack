@@ -1,8 +1,10 @@
 import { spawnSync } from "node:child_process";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -10,7 +12,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, extname, join, relative, resolve } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
 import { cliArgs, numberArg, secondArg } from "../../packages/live-studio/src/cli.mjs";
@@ -19,7 +21,10 @@ import {
   filmPicture,
   filmVideo,
   readRenderEvidence,
+  reviewFile,
+  writeRenderEvidence,
 } from "../../packages/live-studio/src/video.mjs";
+import { probeVideoMeta } from "./gemini-video-input.ts";
 
 const TIMECODE_HELP = `Add a black timecode bar below a reference video without covering the picture, for AI video review (e.g. analyze-ref-video).
   bun run reference timecode <video> [--out <file>] [--label <text>] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
@@ -31,24 +36,92 @@ Default output: renders/reference/<video-name>_timecode.mp4 (outside references/
   --full             Keep native source picture resolution (disables --short-edge downscaling).
   --crf <N>          H.264 quality factor 0-51 (default 22 for fast AI uploads; lower is larger).
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
-Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
-next: pass the output to analyze-ref-video (or your video reviewer); keep references/ clean`;
+Exit 0: wrote video; 1: encoding, publishing or timeout failed (prior output untouched); 2: usage error.
+next: use the timecoded copy to extract single-source stills for analyze-ref-video; keep references/ clean`;
 
-const SIDEBYSIDE_HELP = `Tile a reference video and a remake into one synced video with REF/OURS headers and a shared black timecode bar for AI comparison.
-  bun run reference sidebyside <reference> <remake> [--out <file>] [--start <sec>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
-Writes an H.264 .mp4 copy without touching either source; strips a film draft's bottom studio bar before tiling and pads any shorter clip with black to show duration mismatch.
+const SIDEBYSIDE_HELP = `Tile a reference video and a remake into one synced video with REF/OURS headers and a shared black timecode bar for local review.
+  bun run reference sidebyside <reference> <remake> [--out <file>] [--start <sec> | --range <from,to>] [--audio ours|ref|none] [--layout auto|hstack|vstack] [--short-edge 720 | --full] [--crf 22] [--minutes 10]
+Writes an H.264 .mp4 copy without touching either source. Strips a film draft's bottom studio bar before tiling. Full comparisons pad a shorter clip with black to show duration mismatch.
 Auto-aligns film spans (renders/span_<a>-<b>.mp4) and chunks (renders/chunks/cNN.mp4) to their matching window in <reference> with true film timecode; pass --start to override.
 Default output: renders/reference/<ref-name>_vs_<remake-name>.mp4.
   --out <file>       Output .mp4 path (must differ from both inputs).
   --start <sec>      Reference start offset in seconds (e.g. 12, 0:12, 00:12.500) to align a partial/span clip against <reference>.
+  --range <from,to>  Cut both videos to the same film-time window (e.g. 1:45,3:35). The window must fall inside both picture tracks. Appends the range to the default filename.
   --audio <mode>     Audio track to keep: ours (default), ref, or none.
   --layout <mode>    auto (default: hstack for portrait/square, vstack for landscape), hstack, or vstack.
   --short-edge <px>  Cap each panel's shorter side in pixels without upscaling (default 720).
   --full             Keep native panel resolution (disables --short-edge downscaling).
   --crf <N>          H.264 quality factor 0-51 (default 22).
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
-Exit 0: wrote video; 1: encode failed or timed out (prior output untouched); 2: usage error.
-next: pass the output to compare-video (compare-2-video.md); keep sources clean`;
+Exit 0: wrote video and review metadata; 1: encoding, publishing or timeout failed (prior video kept); 2: usage error.
+next: open the video in Studio Compare. For AI review, run reference frames on the two sources.`;
+
+const FRAME_BATCH_LIMIT = 450;
+
+const FRAMES_HELP = `Export synced REF/OURS JPEGs with burned film timecode and ready-to-upload file lists.
+  bun run reference frames <reference> <remake> [--out <folder>] [--start <sec> | --range <from,to>] [--fps 15] [--batch-size ${FRAME_BATCH_LIMIT}] [--layout hstack|vstack|auto] [--short-edge 720 | --full] [--minutes 10]
+Uses the same span/chunk alignment and studio-bar crop as sidebyside. Default layout: hstack (REF left, OURS right).
+  --out <folder>     Parent folder for fresh run-* folders (default renders/reference/<ref>_vs_<remake>_frames).
+  --start <sec>      Offset into REF for a standalone scene render; overrides automatic alignment.
+  --range <from,to>  Select a window on the shared film clock, e.g. 12,32. It must fit within both picture tracks.
+  --fps <N|native>   Sample at up to N fps (integer 1-60, default 15), or keep all frames of the synced composite.
+  --batch-size <N>   Maximum images per list (1-${FRAME_BATCH_LIMIT}, default ${FRAME_BATCH_LIMIT}).
+  --short-edge <px>  Cap each panel's shorter side without upscaling (default 720); --full keeps native panel size.
+  --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
+Prints absolute paths to list.txt (one batch) or list-001.txt, list-002.txt, etc. Each line names one JPEG.
+Exit 0: wrote a new batch folder; 1: export failed or timed out; 2: usage error. Earlier runs and sources stay intact.
+next: pass each list to AI Studio ask --batch --files-from <list>, or reuse it for another visual prompt`;
+
+async function writeFrameBatches({
+  runWorker,
+  outPath,
+  ffmpegArgs,
+  minutes,
+  samplingFps,
+  batchSize,
+}) {
+  mkdirSync(outPath, { recursive: true });
+  const runDir = mkdtempSync(join(outPath, "run-"));
+  let completed = false;
+  try {
+    const { status, stopped } = await runWorker(
+      "ffmpeg",
+      [
+        ...ffmpegArgs,
+        "-an",
+        "-fps_mode",
+        "passthrough",
+        "-q:v",
+        "2",
+        "-start_number",
+        "1",
+        join(runDir.replaceAll("%", "%%"), "f%06d.jpg"),
+      ],
+      minutes,
+    );
+    if (stopped) throw new Error(`stopped after ${minutes} minute(s)`);
+    if (status !== 0) throw new Error(`ffmpeg failed (exit ${status})`);
+    const images = readdirSync(runDir)
+      .filter((file) => file.endsWith(".jpg"))
+      .sort();
+    if (!images.length) throw new Error("no shared video frame in the selected range");
+    const batchCount = Math.ceil(images.length / batchSize);
+    const batchDigits = Math.max(3, String(batchCount).length);
+    const lists = [];
+    for (let i = 0; i < images.length; i += batchSize) {
+      const number = String(lists.length + 1).padStart(batchDigits, "0");
+      const list = join(runDir, batchCount === 1 ? "list.txt" : `list-${number}.txt`);
+      const paths = images.slice(i, i + batchSize).map((file) => join(runDir, file));
+      writeFileSync(list, `${paths.join("\n")}\n`, "utf8");
+      lists.push(list);
+    }
+    completed = true;
+    console.log(`wrote ${images.length} JPEGs at ${samplingFps} fps in ${lists.length} batch(es)`);
+    for (const list of lists) console.log(list);
+  } finally {
+    if (!completed) rmSync(runDir, { recursive: true, force: true });
+  }
+}
 
 const MONO_FONTS = [
   "C:/Windows/Fonts/consolab.ttf",
@@ -102,7 +175,7 @@ const probeVideoMedia = (file) => {
       "-v",
       "error",
       "-show_entries",
-      "stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,start_time,duration:stream_disposition=attached_pic:stream_side_data=rotation:format=start_time,duration",
+      "stream=codec_type,codec_name,width,height,r_frame_rate,avg_frame_rate,start_time,duration,time_base,nb_frames:stream_disposition=attached_pic:stream_side_data=rotation:format=start_time,duration",
       "-of",
       "json",
       file,
@@ -127,8 +200,9 @@ const probeVideoMedia = (file) => {
   const dispH = rotated ? video.width : video.height;
   const fps = parseRate(video.avg_frame_rate) || parseRate(video.r_frame_rate) || 30;
   const duration = Number(video.duration) || Number(info.format?.duration) || 0;
-  const origin = Number(video.start_time ?? info.format?.start_time ?? 0);
-  return { video, audio, dispW, dispH, fps, duration, origin };
+  const fileStart = Number(info.format?.start_time ?? 0);
+  const origin = Number(video.start_time ?? fileStart);
+  return { video, audio, dispW, dispH, fps, duration, origin, fileStart };
 };
 
 const scaleToShortEdge = (dispW, dispH, shortEdge) => {
@@ -201,6 +275,35 @@ const findRemakeContext = (file) => {
   return { meta, picture, evidence, samples };
 };
 
+function publishVideoWithEvidence(tempVideo, outPath, evidence) {
+  const stagedEvidence = reviewFile(tempVideo);
+  const targetEvidence = reviewFile(outPath);
+  const previousEvidence = `${stagedEvidence}.previous`;
+  let retainPrevious = false;
+  try {
+    writeRenderEvidence(tempVideo, evidence);
+    if (existsSync(targetEvidence)) copyFileSync(targetEvidence, previousEvidence);
+    renameSync(stagedEvidence, targetEvidence);
+    try {
+      renameSync(tempVideo, outPath);
+    } catch (error) {
+      try {
+        if (existsSync(previousEvidence)) renameSync(previousEvidence, targetEvidence);
+        else rmSync(targetEvidence, { force: true });
+      } catch (restoreError) {
+        retainPrevious = true;
+        throw new Error(
+          `${error.message}. Could not restore review metadata: ${restoreError.message}${existsSync(previousEvidence) ? `. Previous metadata is at ${previousEvidence}` : ""}`,
+        );
+      }
+      throw error;
+    }
+  } finally {
+    rmSync(stagedEvidence, { force: true });
+    if (!retainPrevious) rmSync(previousEvidence, { force: true });
+  }
+}
+
 async function runAtomicFfmpeg({
   runWorker,
   jobName,
@@ -211,6 +314,8 @@ async function runAtomicFfmpeg({
   ffmpegArgs,
   minutes,
   cleanupDirs,
+  requireVideoFrames,
+  evidence,
 }) {
   const outDir = dirname(outPath);
   mkdirSync(outDir, { recursive: true });
@@ -219,21 +324,34 @@ async function runAtomicFfmpeg({
   let status = 1;
   let stopped = false;
   let ok = false;
+  let outputError;
   try {
     ({ status, stopped } = await runWorker("ffmpeg", [...ffmpegArgs, tmpOut], minutes));
     ok = !stopped && status === 0 && existsSync(tmpOut);
+    if (ok && requireVideoFrames && !(Number(probeVideoMedia(tmpOut).video?.nb_frames) > 0)) {
+      ok = false;
+      outputError = "no shared video frame in the selected range";
+    }
+    if (ok) {
+      try {
+        if (evidence) publishVideoWithEvidence(tmpOut, outPath, evidence);
+        else renameSync(tmpOut, outPath);
+      } catch (error) {
+        ok = false;
+        outputError = `could not publish output (${error.message})`;
+      }
+    }
     await ended({
       say: `${sayDone} ${ok ? "ready" : "failed"}`,
       level: ok ? "ok" : "warn",
     });
-    if (ok) renameSync(tmpOut, outPath);
   } finally {
     rmSync(tmpOut, { force: true });
     for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
   }
   if (!ok) {
     console.error(
-      `${commandLabel}: ${stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`}; ${outPath} unchanged`,
+      `${commandLabel}: ${outputError ?? (stopped ? `stopped after ${minutes} minute(s)` : `ffmpeg failed (exit ${status})`)}; ${outPath} unchanged`,
     );
     process.exit(1);
   }
@@ -366,23 +484,25 @@ export async function runTimecode(rawArgs, { usage, runWorker }) {
     `wrote ${displayOut} (${outW}x${outH}, +${barH}px black timecode bar; source untouched)`,
   );
   console.log(
-    `next: pass ${displayOut} to analyze-ref-video (or your video reviewer); keep references/ clean`,
+    `next: extract single-source stills from ${displayOut} for analyze-ref-video; keep references/ clean`,
   );
   process.exit(0);
 }
 
-export async function runSidebyside(rawArgs, { usage, runWorker }) {
+export async function runComparison(operation, rawArgs, { usage, runWorker }) {
+  const frames = operation === "frames";
+  const commandLabel = `reference ${operation}`;
   const argv = cliArgs(
-    SIDEBYSIDE_HELP,
+    frames ? FRAMES_HELP : SIDEBYSIDE_HELP,
     [
       "--out file",
       "--start sec",
-      "--audio mode",
+      "--range from,to",
       "--layout mode",
       "--short-edge px",
       "--full",
-      "--crf N",
       "--minutes N",
+      ...(frames ? ["--fps N|native", "--batch-size N"] : ["--audio mode", "--crf N"]),
     ],
     2,
     rawArgs,
@@ -393,20 +513,22 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     options: {
       out: { type: "string" },
       start: { type: "string" },
-      audio: { type: "string" },
+      range: { type: "string" },
       layout: { type: "string" },
       "short-edge": { type: "string" },
       full: { type: "boolean" },
-      crf: { type: "string" },
       minutes: { type: "string" },
+      ...(frames
+        ? { fps: { type: "string" }, "batch-size": { type: "string" } }
+        : { audio: { type: "string" }, crf: { type: "string" } }),
     },
   });
-  if (positionals.length !== 2) usage("Choose sidebyside <reference> <remake>");
+  if (positionals.length !== 2) usage(`Choose ${operation} <reference> <remake>`);
   if (values.full && values["short-edge"] !== undefined)
     usage("Use either --full or --short-edge, not both");
-  const audioMode = values.audio ?? "ours";
+  const audioMode = frames ? "none" : (values.audio ?? "ours");
   if (!["ours", "ref", "none"].includes(audioMode)) usage("--audio takes ours, ref, or none");
-  const layoutMode = values.layout ?? "auto";
+  const layoutMode = values.layout ?? (frames ? "hstack" : "auto");
   if (!["auto", "hstack", "vstack"].includes(layoutMode))
     usage("--layout takes auto, hstack, or vstack");
   const shortEdge = values.full
@@ -414,7 +536,27 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     : numberArg("--short-edge", values["short-edge"] ?? "720", { min: 144, max: 4320, int: true });
   const crf = numberArg("--crf", values.crf ?? "22", { min: 0, max: 51, int: true });
   const minutes = numberArg("--minutes", values.minutes ?? "10", { min: 0.01, max: 60 });
+  const samplingLimit =
+    frames && values.fps !== "native"
+      ? numberArg("--fps", values.fps ?? "15", { min: 1, max: 60, int: true })
+      : null;
+  const batchSize = frames
+    ? numberArg("--batch-size", values["batch-size"] ?? String(FRAME_BATCH_LIMIT), {
+        min: 1,
+        max: FRAME_BATCH_LIMIT,
+        int: true,
+      })
+    : null;
   const explicitStart = values.start !== undefined ? secondArg("--start", values.start) : null;
+  let range = null;
+  if (values.range !== undefined) {
+    if (explicitStart !== null) usage("Use either --range or --start, not both");
+    const parts = values.range.split(",");
+    if (parts.length !== 2 || parts.some((part) => !part.trim()))
+      usage("--range takes from,to in film seconds");
+    range = parts.map((part) => secondArg("--range", part.trim()));
+    if (range[0] >= range[1]) usage("--range requires from before to");
+  }
   const refSource = resolve(positionals[0]);
   const remSource = resolve(positionals[1]);
   for (const [raw, file] of [
@@ -425,18 +567,27 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   }
   const refStem = basename(refSource, extname(refSource));
   const remStem = basename(remSource, extname(remSource));
-  const outPath = resolveDistinctMp4Output(
-    values.out,
-    join("renders/reference", `${refStem}_vs_${remStem}.mp4`),
-    [refSource, remSource],
-    "--out must differ from both inputs: keep sources untouched",
-    usage,
-  );
+  const pairName = `${refStem}_vs_${remStem}`;
+  let outPath;
+  if (frames) {
+    if (values.out !== undefined && !values.out.trim()) usage("--out needs a folder path");
+    outPath = resolve(values.out ?? join("renders/reference", `${pairName}_frames`));
+    const output = statSync(outPath, { throwIfNoEntry: false });
+    if (output && !output.isDirectory()) usage("--out must be a folder");
+  } else {
+    outPath = resolveDistinctMp4Output(
+      values.out,
+      join("renders/reference", `${pairName}${range ? `_${range.join("-")}` : ""}.mp4`),
+      [refSource, remSource],
+      "--out must differ from both inputs: keep sources untouched",
+      usage,
+    );
+  }
 
   const refInfo = probeVideoMedia(refSource);
   const remInfo = probeVideoMedia(remSource);
   if (refInfo.error || remInfo.error) {
-    console.error(`reference sidebyside: ${refInfo.error ?? remInfo.error}`);
+    console.error(`${commandLabel}: ${refInfo.error ?? remInfo.error}`);
     process.exit(1);
   }
 
@@ -446,9 +597,37 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     remCtx.meta && (remCtx.meta.kind === "span" || remCtx.meta.kind === "chunk")
       ? remCtx.meta.start
       : null;
-  const startSec = explicitStart ?? autoWindow ?? 0;
+  const remakeOrigin = autoWindow ?? 0;
+  const startSec = range?.[0] ?? explicitStart ?? remakeOrigin;
+  const remakeSeek = range ? startSec - remakeOrigin : 0;
+  if (range) {
+    const pictureSpan = (source, info) => {
+      const durationSec = Number(info.video.duration);
+      return durationSec > 0
+        ? { startSec: info.origin - info.fileStart, durationSec, endTolerance: 0 }
+        : { ...probeVideoMeta(source), endTolerance: parseRate(info.video.time_base) };
+    };
+    const refPicture = pictureSpan(refSource, refInfo);
+    const remPicture = pictureSpan(remSource, remInfo);
+    if (!(refPicture.durationSec > 0 && remPicture.durationSec > 0)) {
+      usage("--range could not establish the picture duration of both sources");
+    }
+    const refPictureStart = refPicture.startSec;
+    const remPictureStart = remakeOrigin + remPicture.startSec;
+    const sharedStart = Math.max(refPictureStart, remPictureStart);
+    const refEnd = refPictureStart + refPicture.durationSec;
+    const remEnd = remPictureStart + remPicture.durationSec;
+    const sharedEnd = Math.min(refEnd, remEnd);
+    const allowedEnd = Math.min(refEnd + refPicture.endTolerance, remEnd + remPicture.endTolerance);
+    const micros = (seconds) => Math.round(seconds * 1_000_000);
+    if (micros(startSec) < micros(sharedStart) || micros(range[1]) > micros(allowedEnd)) {
+      usage(
+        `--range ${range.join(",")} is outside the shared video window (${sharedStart.toFixed(2)}-${sharedEnd.toFixed(2)}s)`,
+      );
+    }
+  }
   const isWindow = explicitStart !== null || autoWindow !== null;
-  if (startSec >= refInfo.duration) {
+  if (!range && startSec >= refInfo.duration) {
     usage(
       `--start ${startSec}s is at or past <reference> duration (${refInfo.duration.toFixed(2)}s)`,
     );
@@ -466,27 +645,40 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   const outH =
     layout === "hstack" ? headH + panelH + barH : headH + panelH + seam + headH + panelH + barH;
   const targetFps = Math.max(1, Math.min(60, Math.round(remInfo.fps || refInfo.fps || 30)));
-  const refWindowDur = isWindow
-    ? Math.min(Math.max(0, refInfo.duration - startSec), remInfo.duration)
-    : refInfo.duration;
-  const maxDur = Math.max(refWindowDur, remInfo.duration);
+  const refWindowDur = range
+    ? range[1] - startSec
+    : isWindow
+      ? Math.min(Math.max(0, refInfo.duration - startSec), remInfo.duration)
+      : refInfo.duration;
+  const remWindowDur = range ? refWindowDur : remInfo.duration;
+  const maxDur = Math.max(refWindowDur, remWindowDur);
   if (!(maxDur > 0)) {
-    console.error("reference sidebyside: inputs report zero duration; nothing was written");
+    console.error(`${commandLabel}: inputs report zero duration; nothing was written`);
     process.exit(1);
   }
   const targetDur = Math.max(maxDur, 1 / targetFps);
   const totalFrames = Math.max(1, Math.round(targetDur * targetFps));
   const startFrame = Math.round(startSec * targetFps);
   const padDur = targetDur + 0.5;
+  const windowAudio = (info, seek) => {
+    const audio = info.audio;
+    const duration = Number(audio?.duration);
+    if (!range || !(duration > 0)) return audio;
+    const start = Number(audio.start_time ?? info.fileStart);
+    const from = info.fileStart + seek;
+    return from < start + duration && from + (range[1] - range[0]) > start ? audio : null;
+  };
+  const remAudio = windowAudio(remInfo, remakeSeek);
+  const refAudio = windowAudio(refInfo, startSec);
 
   const pickedAudio =
     audioMode === "ours"
-      ? remInfo.audio
-        ? { inputIndex: 1, stream: remInfo.audio, tag: "ours" }
+      ? remAudio
+        ? { inputIndex: 1, stream: remAudio, tag: "ours" }
         : { inputIndex: null, stream: null, tag: "none" }
       : audioMode === "ref"
-        ? refInfo.audio
-          ? { inputIndex: 0, stream: refInfo.audio, tag: "ref" }
+        ? refAudio
+          ? { inputIndex: 0, stream: refAudio, tag: "ref" }
           : { inputIndex: null, stream: null, tag: "none" }
         : { inputIndex: null, stream: null, tag: "none" };
 
@@ -509,7 +701,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
       "setsar=1",
       "setpts=PTS-STARTPTS",
       `fps=${targetFps}`,
-      `tpad=stop_mode=add:stop_duration=${padDur.toFixed(3)}:color=black`,
+      ...(range ? [] : [`tpad=stop_mode=add:stop_duration=${padDur.toFixed(3)}:color=black`]),
       `trim=end_frame=${totalFrames}`,
       "setpts=PTS-STARTPTS",
     ];
@@ -538,7 +730,7 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     filterComplex = [
       `${prepPanel("[0:V:0]", null)},pad=${panelW + seam}:${panelH}:0:0:#141414[left]`,
       `${prepPanel("[1:V:0]", remCrop)}[right]`,
-      `[left][right]hstack=inputs=2,pad=${outW}:${outH}:0:${headH}:black,` +
+      `[left][right]hstack=inputs=2${range ? ":shortest=1" : ""},pad=${outW}:${outH}:0:${headH}:black,` +
         `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
         `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=${panelW + seam}+(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
         `drawtext=${font}:text='${ptsExpr}  ${frameExpr}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
@@ -548,32 +740,78 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
     filterComplex = [
       `${prepPanel("[0:V:0]", null)},pad=${panelW}:${headH + panelH + seam}:0:${headH}:black,drawbox=x=0:y=${headH + panelH}:w=${panelW}:h=${seam}:color=#141414:t=fill[top]`,
       `${prepPanel("[1:V:0]", remCrop)},pad=${panelW}:${headH + panelH + barH}:0:${headH}:black[bot]`,
-      `[top][bot]vstack=inputs=2,` +
+      `[top][bot]vstack=inputs=2${range ? ":shortest=1" : ""},` +
         `drawtext=${font}:text='REF':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=(${headH}-text_h)/2,` +
         `drawtext=${font}:text='OURS':fontcolor=#e6e4dc:fontsize=${headFont}:x=(${panelW}-tw)/2:y=${botHeaderY}+(${headH}-text_h)/2,` +
         `drawtext=${font}:text='${ptsExpr}  ${frameExpr}':fontcolor=white:fontsize=${barFont}:x=${margin}:y=${barY}${rightSuffix}[outv]`,
     ].join(";");
   }
 
+  const inputArgs = [
+    "-v",
+    "error",
+    "-nostdin",
+    "-y",
+    ...(startSec > 0 ? ["-ss", startSec.toFixed(6)] : []),
+    "-i",
+    refSource,
+    ...(remakeSeek > 0 ? ["-ss", remakeSeek.toFixed(6)] : []),
+    "-i",
+    remSource,
+  ];
+  if (frames) {
+    const samplingFps = Math.min(samplingLimit ?? targetFps, targetFps);
+    const sampled = samplingFps < targetFps;
+    if (sampled) filterComplex += `;[outv]fps=fps=${samplingFps}:round=up[stills]`;
+    let ok = false;
+    try {
+      await writeFrameBatches({
+        runWorker,
+        outPath,
+        minutes,
+        samplingFps,
+        batchSize,
+        ffmpegArgs: [
+          ...inputArgs,
+          "-filter_complex",
+          filterComplex,
+          "-map",
+          sampled ? "[stills]" : "[outv]",
+        ],
+      });
+      ok = true;
+    } catch (error) {
+      console.error(`${commandLabel}: ${error.message}`);
+    } finally {
+      for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
+    }
+    if (!ok) process.exit(1);
+    return;
+  }
+
+  const relativeRef = relative(process.cwd(), refSource);
   await runAtomicFfmpeg({
     runWorker,
     jobName: "reference sidebyside",
     sayStart: `Tiling ${basename(refSource)} vs ${basename(remSource)}`,
     sayDone: "Side-by-side video",
-    commandLabel: "reference sidebyside",
+    commandLabel,
     outPath,
     minutes,
     cleanupDirs,
+    requireVideoFrames: range !== null,
+    evidence: {
+      start: startSec,
+      compareLayout: layout,
+      compareAudio: pickedAudio.tag,
+      compareStudioStart: remakeOrigin + remakeSeek,
+      compareReference:
+        isAbsolute(relativeRef) || relativeRef.startsWith("..")
+          ? null
+          : relativeRef.replaceAll("\\", "/"),
+    },
     ffmpegArgs: [
-      "-v",
-      "error",
-      "-nostdin",
-      "-y",
-      ...(startSec > 0 ? ["-ss", startSec.toFixed(6)] : []),
-      "-i",
-      refSource,
-      "-i",
-      remSource,
+      ...inputArgs,
       "-filter_complex",
       filterComplex,
       "-map",
@@ -582,11 +820,13 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
         ? [
             "-map",
             `${pickedAudio.inputIndex}:a:0`,
-            ...(isWindow && pickedAudio.inputIndex === 0
-              ? ["-t", targetDur.toFixed(6), "-c:a", "aac", "-b:a", "256k"]
-              : pickedAudio.stream.codec_name === "aac"
-                ? ["-c:a", "copy"]
-                : ["-c:a", "aac", "-b:a", "256k"]),
+            ...(range
+              ? ["-af", `atrim=end=${refWindowDur.toFixed(6)}`, "-c:a", "aac", "-b:a", "256k"]
+              : isWindow && pickedAudio.inputIndex === 0
+                ? ["-t", targetDur.toFixed(6), "-c:a", "aac", "-b:a", "256k"]
+                : pickedAudio.stream.codec_name === "aac"
+                  ? ["-c:a", "copy"]
+                  : ["-c:a", "aac", "-b:a", "256k"]),
           ]
         : ["-an"]),
       "-c:v",
@@ -595,6 +835,8 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
       "veryfast",
       "-crf",
       String(crf),
+      "-g",
+      String(targetFps),
       "-pix_fmt",
       "yuv420p",
       "-movflags",
@@ -609,8 +851,9 @@ export async function runSidebyside(rawArgs, { usage, runWorker }) {
   }
   const displayOut = formatDisplayOut(outPath);
   console.log(
-    `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refWindowDur.toFixed(2)}s vs ours ${remInfo.duration.toFixed(2)}s${startSec > 0 ? `, start ${startSec.toFixed(2)}s` : ""}, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
+    `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refWindowDur.toFixed(2)}s vs ours ${remWindowDur.toFixed(2)}s${startSec > 0 ? `, start ${startSec.toFixed(2)}s` : ""}, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
   );
-  console.log(`next: pass ${displayOut} to compare-video (compare-2-video.md); keep sources clean`);
-  process.exit(0);
+  console.log(
+    `next: open ${displayOut} in Studio Compare. For AI review, run reference frames on the two sources.`,
+  );
 }

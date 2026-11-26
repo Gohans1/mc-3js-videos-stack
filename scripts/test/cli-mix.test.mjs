@@ -1564,3 +1564,36 @@ for (const { label, placements, hasOptions } of [
     if (label === "mixed kinds") assert.equal(trials.tone.to, 0.8);
   });
 }
+
+test("per-clip muted silences only disabled clips on the same track and rejects non-boolean muted", (t) => {
+  const dir = setupFilm(t, "mix-clip-muted-", {
+    edit: { end: 1.4, voice: { lines: [], warp: [] } },
+    audio: {
+      voice: false,
+      tracks: [{ id: "sfx-1", name: "SFX" }],
+      beds: [],
+      sfx: [
+        { name: "tone", at: 0.05, length: 0.4, gain: 0, track: "sfx-1", muted: true },
+        { name: "tone", at: 0.7, length: 0.4, gain: 0, track: "sfx-1" },
+      ],
+    },
+  });
+  makeWav(join(dir, "sound/sfx/tone.wav"), { dur: 0.5 });
+  const mixed = runMix(dir, ["--raw", "renders/live/mix.webm"]);
+  assert.equal(mixed.status, 0, mixed.stderr);
+  const samples = readSamples(join(dir, "renders/live/mix.webm"));
+  assert.ok(sliceRms(samples, 0.1, 0.4) < 0.0001, "muted clip should be silent");
+  assert.ok(sliceRms(samples, 0.75, 1.05) > 0.001, "unmuted clip on same track should play");
+
+  const badDir = setupFilm(t, "mix-clip-muted-bad-", {
+    audio: {
+      voice: false,
+      beds: [],
+      sfx: [{ name: "tone", at: 0.1, gain: 0, muted: "yes" }],
+    },
+  });
+  makeWav(join(badDir, "sound/sfx/tone.wav"), { dur: 0.5 });
+  const bad = runMix(badDir, ["--raw", "renders/live/mix.webm"]);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /muted must be boolean/);
+});

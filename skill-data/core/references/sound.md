@@ -6,7 +6,8 @@ Choose steps for the current change; reuse available sounds instead of searching
 
 | Task | Tool and scope |
 | --- | --- |
-| Find sounds and inspect sources | bun run find; --kind sfx, bgm, mc or sound; --show <id> includes file, license and recipe |
+| Pick from human-curated Core Sound Kit | bun run sound:kit recommend --category <cat> --q "<words>" --top 5; bun run find --kit [cat] restricts search to approved Core Kit sounds |
+| Find sounds and inspect sources | bun run find (excludes banned kit items unless --include-banned); --kind sfx, bgm, mc or sound; --show <id> includes file, license and recipe |
 | Find/download missing CC0 Freesound audio | bun run sfx:get in a film; find searches online, then pin selected IDs in sound/sfx_list.json and download |
 | Place, read, edit or remove cues | bun run asset; use find IDs to place, and the returned target to edit that cue |
 | Judge candidates, clean regions or differences | earshot is a separate CLI; read earshot <command> -h |
@@ -21,7 +22,8 @@ find discovers assets; earshot find locates a region in a selected file. asset e
 
 | Step | Command and result |
 | --- | --- |
-| Find candidates | bun run find rain --kind sfx; --kind sound also includes music and Minecraft sounds |
+| Check Core Kit first | bun run sound:kit recommend --category whoosh --q "short whip" --top 5 (ranks human-approved Core Kit sounds by Elo, taste profile and diversity); fall back to find when Core Kit has no match |
+| Find candidates | bun run find rain --kind sfx; --kind sound also includes music and Minecraft sounds; --kit [cat] scopes to approved Core Kit |
 | Inspect a candidate | bun run find --show <id>; read file, license, placement ID and exampleProps |
 | Choose/trim the source | earshot rank "rain on a metal roof" <file1> <file2> --top 3; earshot find <file> "a clean rain texture" --top 3 for a specific region |
 | Place | bun run asset use <id> --from 12 --to 15 --props-file controls.json; JSON identifies the written file, data and cue target |
@@ -47,6 +49,22 @@ Filters apply to both blocks; similarity is not confidence, so listen/view befor
 
 Ordinary --json uses schemaVersion 2: keyword.results holds full records; semantic hits with alsoKeyword:true reference them by key and keep their own rank and similarity. Other semantic hits hold full records; --semantic keeps its existing schema.
 
+## Core Sound Kit (human-curated go-to pool)
+
+sound-kit/core.json stores the creator's shared go-to sounds across 8 recurring categories (`bgm`, `whoosh`, `pop-ui`, `impact`, `riser`, `ambience`, `foley-core`, `comedy-glitch`) with statuses `inbox` (staged for human triage), `core` (approved go-to kit), `pass` (skipped during triage; pushed to the bottom in Studio while remaining searchable by AI `find`), and `ban` (excluded from default `find` sound searches).
+
+| Goal | Command or Studio surface |
+| --- | --- |
+| Get Top-N approved picks for a cue | bun run sound:kit recommend --category <cat> --q "<words>" --top 5 [--dur min-max] [--ref <id>] [--recent a,b] [--json] |
+| Search approved Core Kit only | bun run find "<words>" --kit [cat]; for non-kit searches add --include-banned only when explicitly auditing banned sounds |
+| Stage candidates for human review | bun run sound:kit add <id...> --category <cat> --status inbox --by ai --skip-existing; never self-approve to core or overwrite human ban |
+| Expand around a sound the creator likes | bun run sound:kit similar <id> --limit 10 --stage (acoustic vector neighbors staged to inbox) |
+| Load A/B options for human audition | bun run sound:kit ab set <id1> <id2> [id3 id4]; creator auditions in Studio Audio -> Core Kit (or Clip Inspector Quick-Swap) and picks a winner |
+| Seed starter inbox on a fresh repo | bun run sound:kit seed --per-category 8 (stages diverse inbox candidates only; leaves core and ban untouched) |
+| Inspect kit coverage and past taste calls | bun run sound:kit stats; bun run sound:kit list --status core; bun run sound:kit decisions --limit 20 |
+
+When placing common beds or accents, query `sound:kit recommend` first and present top options (or attach them to `try` on a clip) so the creator can audition live in video. Only the creator promotes sounds to `core` or marks `pass`/`ban`; AI stages into `inbox` with `--skip-existing`.
+
 ## Clocks and editable data
 
 | Data | Meaning |
@@ -61,6 +79,8 @@ Ordinary --json uses schemaVersion 2: keyword.results holds full records; semant
 | J-Cut and L-Cut | Clip menu J-Cut and L-Cut extend clip edges across picture cuts when source room and track neighbors allow, with full Undo/Redo |
 | Source trim | start is source-file seconds; length is cue playback duration in audio.json. At constant rate without other retiming, an earshot start/end region uses length = (end - start) / rate; rate defaults to 1 |
 | Track gain and EQ | tracks[].gain affects the track; clip filters contain the Inspector's FFmpeg EQ chain |
+| Semantic track lanes | Omitting `tracks`/`track` in `audio.json` lets Studio auto-route clips into canonical lanes (`Voice`, `BGM`, `Whoosh`, `Riser`, `Pop & UI`, `Impact`, `Ambience`, then bottom `Custom` for film-specific SFX, auto-spawning overflow rows on overlap). Custom named `tracks` (with optional `role`) are always preserved and never restrict layering. |
+| Clip mute/disable | Per-clip `muted: true` on `beds[]` or `sfx[]` silences just that clip in Studio, `mix`, `at`, and `listen` without deleting it (Studio shortcut `D` or right-click Disable) |
 | Edit target | Keep the returned target; older index-based rows require rereading timeline after reordering |
 | Duration defined in code | Read asset --help about --duration when edit.end is absent and clock conversion is needed |
 | Film-local pinned sounds | sound/sfx_list.json selects Freesound IDs; sound/sfx holds files/SOURCES.json. Run find inside the film to include them |

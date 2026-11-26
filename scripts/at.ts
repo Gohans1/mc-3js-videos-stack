@@ -388,6 +388,7 @@ export const whatsAt = (dir: string, t: number) => {
   const audio = read(conf.soundTimeline ?? "src/timeline/audio.json", null);
   const sounds: Row[] = [];
   let narrationMuted: string | null = null;
+  let narrationClipMuted = false;
   let narrationOff: string | null = null;
   const rawVoiceOff = Boolean(audio && !audio.narration && audio.voice === false);
   let hasVoiceLines = false;
@@ -467,7 +468,7 @@ export const whatsAt = (dir: string, t: number) => {
     const muted = new Set((audio.tracks ?? []).flatMap((k: Row) => (k.mute ? [k.id] : [])));
     const voices = heard.sfx.flatMap((c: Row, i: number) =>
       audio.narration && c.name === audio.narration && picked(audio.sfx[i]) !== "off"
-        ? [{ c, i, track: audio.sfx[i].track }]
+        ? [{ c, i, track: audio.sfx[i].track, muted: Boolean(audio.sfx[i].muted) }]
         : [],
     );
     const here = voices.filter(
@@ -476,7 +477,10 @@ export const whatsAt = (dir: string, t: number) => {
         (c.length === undefined || (c.length > 0 && t < c.at + c.length)) &&
         playingAt(c, "sfx", c.at),
     );
-    if (here.length && here.every((v: Row) => muted.has(v.track))) narrationMuted = here[0]!.track;
+    if (here.length && here.every((v: Row) => v.muted || muted.has(v.track))) {
+      if (here.every((v: Row) => muted.has(v.track))) narrationMuted = here[0]!.track;
+      else narrationClipMuted = true;
+    }
     heard.beds.forEach((c: Row, i: number) => {
       if (c.from <= t && t < c.to && playingAt(c, "beds", c.from))
         sounds.push({
@@ -486,7 +490,7 @@ export const whatsAt = (dir: string, t: number) => {
           from: c.from,
           to: c.to,
           row: audio.beds[i],
-          muted: muted.has(audio.beds[i].track),
+          muted: Boolean(audio.beds[i].muted || muted.has(audio.beds[i].track)),
           picked: picked(audio.beds[i]),
         });
     });
@@ -501,7 +505,7 @@ export const whatsAt = (dir: string, t: number) => {
           from: c.at,
           to: c.length === undefined ? null : c.at + c.length,
           row: audio.sfx[i],
-          muted: muted.has(audio.sfx[i].track),
+          muted: Boolean(audio.sfx[i].muted || muted.has(audio.sfx[i].track)),
           picked: picked(audio.sfx[i]),
         });
     });
@@ -614,7 +618,12 @@ export const whatsAt = (dir: string, t: number) => {
       })
       .sort((a, b) => a.s0 - b.s0)[0]?.l ?? null;
   const script =
-    narration || narrationMuted || (rawVoiceOff && hasVoiceLines) || narrationOff || blank
+    narration ||
+    narrationMuted ||
+    narrationClipMuted ||
+    (rawVoiceOff && hasVoiceLines) ||
+    narrationOff ||
+    blank
       ? null
       : (scriptLines.find((l) =>
           l.until != null ? l.t <= scene && scene < l.until : Math.abs(l.t - scene) < 0.001,
@@ -669,6 +678,7 @@ export const whatsAt = (dir: string, t: number) => {
     keys,
     narration,
     narrationMuted,
+    narrationClipMuted,
     narrationOff,
     voiceOff: rawVoiceOff || Boolean(narrationOff),
     hasVoiceLines,
@@ -1001,17 +1011,19 @@ if (isMain) {
       ? `narration: off, ${c.soundTimeline} "voice": false and no "narration" clip: the mix leaves the voice out`
       : got.narrationOff
         ? `narration: off (${got.narrationOff} turns the narration clip off): the mix leaves the voice out`
-        : got.narrationMuted
-          ? `narration: muted, its clip sits on track ${got.narrationMuted}, muted in ${c.soundTimeline} tracks[]: the mix leaves the voice out`
-          : got.voiceFault
-            ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
-            : got.narration
-              ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
-              : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)${
-                  got.unlaid
-                    ? "; voice/takes has audio not on the film yet: bun run voice:assemble lays it (no new voice:gen)"
-                    : ""
-                }`,
+        : got.narrationClipMuted
+          ? `narration: muted, its clip is disabled in ${c.soundTimeline}: the mix leaves the voice out`
+          : got.narrationMuted
+            ? `narration: muted, its clip sits on track ${got.narrationMuted}, muted in ${c.soundTimeline} tracks[]: the mix leaves the voice out`
+            : got.voiceFault
+              ? `narration: unknown here, the voice's seconds could not be read (${got.voiceFault}): bun run voice:cues says more`
+              : got.narration
+                ? `narration: ${got.narration.word ? `"${got.narration.word}" in ` : "between words of "}line ${got.narration.line} (${fmt(got.narration.s)}-${fmt(got.narration.e)}): ${got.narration.text}`
+                : `narration: silent here${got.nextLine === null ? "" : `, the next line at ${fmt(got.nextLine)}`} (every line: bun run voice:cues)${
+                    got.unlaid
+                      ? "; voice/takes has audio not on the film yet: bun run voice:assemble lays it (no new voice:gen)"
+                      : ""
+                  }`,
   );
   if (got.unplaced.length)
     out.push(
@@ -1038,7 +1050,7 @@ if (isMain) {
   );
   for (const s of got.sounds)
     out.push(
-      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}${s.muted ? " (muted: not in the mix)" : ""}` : ""}${
+      `  ${s.list}[${s.i}] ${s.name} gain ${s.row.gain ?? 0}${s.row.track ? ` track ${s.row.track}` : ""}${s.muted ? " (muted: not in the mix)" : ""}${
         s.picked === "off"
           ? `, off (${choicesFile ?? "choices.json"}): not in the mix`
           : s.picked

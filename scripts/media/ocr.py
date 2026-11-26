@@ -17,8 +17,9 @@ recognizer language route. Models/default routes follow RapidOCR 3.10.0.
 --crop x,y,w,h (fractions of the picture) reads only that band, as a caption strip: a full 1080x1920
 frame takes about 2.4 s, the band about 1 s. Text boxes stay in the whole picture's pixels.
 --captions (with --crop) reads burnt-in captions: the band every 0.25 s (--frames sets how many), keeping the
-caption's own line (a label on a prop or a watermark is left out); reads alike join, and each change of text is then
-read down to its first frame. captions.json lists {from, to, text, score} in input-file seconds, rewritten after every
+caption's own line (a label on a prop or a watermark is left out). Similar reads join and change times are estimated.
+For frame-accurate cues, verify the boundary on source frames with bun run sheet <video> frames <A-B/N>.
+captions.json lists {from, to, text, score} in input-file seconds, rewritten after every
 read ("complete": false and "readUntil" until the frames are read); a caption shown under 0.25 s can fall between
 reads. About 2 s a read, some 13 minutes for a minute of video: pass --minutes 15 for each minute.
 --dry-run validates and prints the plan without loading OCR or writing files.
@@ -187,8 +188,8 @@ def _alike(a, b):
 
 def captions_from(reads, changes, start, end, read=None):
     """Reads [{at, text: OCR boxes}] in time order into captions: neighbours read alike join, keeping the reading
-    with fewest stray letters, then the surer. Each change of text lands on the first frame showing the next caption, found by read(frame second) ->
-    OCR boxes: the frame where the band changes most, checked with the frame before it, else halving the gap. Without
+    with fewest stray letters, then the surer. Text change times are estimated using read(frame second) -> OCR boxes:
+    try the frame where the band changes most, check the previous frame, then halve the gap if needed. Without
     read, the frame of most change stands (a background brightening under the band can win it)."""
     row = caption_row(reads)
 
@@ -329,7 +330,7 @@ def main():
 
         def write_captions(complete, read=None):
             """After every read, so a run stopped by its deadline keeps the captions read so far; the last pass reads
-            more frames to put each change of text on its frame."""
+            more frames to refine the estimated text change times."""
             reads = [{"at": row["sourceSecond"], "text": row["text"]} for row in result["frames"]]
             until = end if complete else reads[-1]["at"]
             captions = captions_from(reads, changes, args.start, until, read)

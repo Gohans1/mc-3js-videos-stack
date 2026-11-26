@@ -383,6 +383,40 @@ test("a sound on a muted track and a second inside a gap say what is really hear
   assert.equal(after.sounds[0]?.muted, true);
 });
 
+test("per-clip muted silences beds, sfx, and narration distinctly from a muted track named clip", (t) => {
+  const dir = film(t);
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "narr",
+      tracks: [{ id: "clip", name: "Clip Track", mute: true }],
+      beds: [{ name: "hum", from: 0, to: 20, gain: -6, muted: true }],
+      sfx: [
+        { name: "narr", at: 0, length: 10, gain: 0, muted: true },
+        { name: "whoosh", at: 4, length: 2, gain: 0, muted: true },
+      ],
+    }),
+  );
+  const got = whatsAt(dir, 2.5);
+  assert.equal(got.narrationClipMuted, true);
+  assert.equal(got.narrationMuted, null);
+  assert.equal(got.sounds.find((s) => s.name === "hum")?.muted, true);
+  assert.equal(got.sounds.find((s) => s.name === "whoosh")?.muted, true);
+
+  writeFileSync(
+    join(dir, "src/timeline/audio.json"),
+    JSON.stringify({
+      narration: "narr",
+      tracks: [{ id: "clip", name: "Clip Track", mute: true }],
+      beds: [],
+      sfx: [{ name: "narr", at: 0, length: 10, gain: 0, track: "clip" }],
+    }),
+  );
+  const byTrack = whatsAt(dir, 2.5);
+  assert.equal(byTrack.narrationClipMuted, false);
+  assert.equal(byTrack.narrationMuted, "clip");
+});
+
 test("a sound whose file's length cannot be read is still heard, its end unknown", (t) => {
   const dir = film(t);
   const pkg = join(dir, "package.json");

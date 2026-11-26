@@ -20,12 +20,16 @@ Inside a film:
 bun run render stills --at 12,30               # renders/still_<s>s.jpg
 bun run render clip                          # renders/draft_video.mp4 and renders/cuts.json
 bun run mix renders/draft_video.mp4          # renders/draft.mp4, the draft with its sound
-bun run render final                         # renders/final_video.mp4; only when the creator asks
+bun run render final                         # runs the whole-film pops check before encoding renders/final_video.mp4; only when the creator asks
 bun run render poster --at 12                  # renders/poster_12s.png: one frame at the upload's size, lossless (thumbnail, detail)
 bun run mix renders/final_video.mp4          # renders/final.mp4, the file to upload
 bun run deliver                              # project upload profile; exit 0 means its technical checks passed
 bun run deliver --youtube 9-15               # file seconds; retains renders/youtube_*/preview.mp4 and CAMBI images
 ```
+
+Final checks the whole final scene at 30 fps before encoding, including when `--chunks` selects part of the output. Read `renders/pops.json` for findings. A pop, slide, or 10-minute check timeout stops final. Lab pages run through `render stills --entry`; final uses the film scene.
+
+Use `bun run render stills --check pops:20,45` to debug a range, or `--check pops` to scan the full film. `bun run check` validates saved film data offline. See `bun run skills get core --ref review` for contact and reference checks.
 
 ## Fast, never from scratch
 
@@ -40,8 +44,9 @@ bun run deliver --youtube 9-15               # file seconds; retains renders/you
 | Sharp frame right before a cut | Multi-sample shutter blur stops at `cut: true` so motion never smears across a cut. If the last pre-cut keyframe ends early before the cut timestamp, the final pre-cut frame's shutter window sits mostly static and pops sharp — extend the moving keyframe right up to the cut (e.g. `cut - 0.001s`) |
 | White shirts or skin blooming | Bright key + rim + PMREM environment easily push white clothing or hair HDR luminance past `1.5–3.0`. Raise `BloomEffect` `luminanceThreshold` above lit-white irradiance (e.g. `3.8–4.0`) and drive intentional emissives above that threshold so bright clothes stay halo-free while true glows still bloom |
 | Trying a move or a fix     | `bun run render clip --span 40,44` draws just those seconds to `renders/span_40-44.mp4`, in seconds, chunks untouched; `framecheck` and `sheet` read its seconds from its name                                                                                                                                                                     |
-| One stretch changed        | `bun run render clip --chunks 3` redraws that 30 s chunk. A plain `render clip` keeps chunks whose built code, timelines and render settings are unchanged                                                                                                                                                                                         |
-| An asset replaced in place | Files under `assets/public` and `vault/openfilm/library` are not in the render stamp; force affected chunks with `--chunks N` before inspecting the result                                                                                                                                                                                         |
+| One stretch changed        | `bun run render clip --chunks 3` redraws that 30 s chunk. A plain `render clip` keeps chunks whose built code, timelines, render settings and served picture files are unchanged. |
+| Encode fails inside a chunk | Read the chunk number and frame range in the error. Retry the same render flags to resume, or add `--chunks N` to isolate it. Before reviewing a joined draft, check the stale-chunk warning. |
+| An asset replaced in place | Rerun `render clip` or `render final` to redraw chunks that read a changed file under `assets/public` or `vault/openfilm/library`. Force affected chunks after external URL or OpenFilm catalog definition changes. |
 | Editable effect source     | Reload the preview after editing HTML; restart Studio after editing `_definitions` or the catalog. `bun run find --show <id>` gives source paths and creative controls; `asset --help` explains placement                                                                                                                                        |
 | A crash midway             | Run the same command again: it carries on where it stopped. Chrome that draws nothing for 4 minutes is restarted (3 tries)                                                                                                                                                                                                                       |
 | Only the sound changed     | Gains, beds and SFX can reuse the picture with `bun run mix`; narration changes affecting mouths also need a new picture                                                                                                                                                                                                                         |

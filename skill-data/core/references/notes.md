@@ -43,6 +43,10 @@ When Studio is closed, run note writes one at a time. With Studio running, the c
 
 Use Jump to frame on a single-note toast and Back to previous frame in the player. Review can copy a link to that note in the same Studio.
 
+Notes pinned or drawn in Studio's Compare Video mode (`V`, watching `renders/reference/*_vs_*.mp4` / `*_sbs.mp4`, renders, or reference videos) save the video's frame, crop, and strip plus `compareVideo` metadata and panel side (`REF` / `OURS`), surfaced in `bun run notes` and `bun run notes ID`.
+For a partial clip, use Jump to enter the recorded span before adding feedback.
+The note's video badge opens its original file at the recorded time. Review Room can compare against another selected video of the same category and layout.
+
 Studio shows a toast when a note is answered or approved elsewhere. With AI activity on, the note or its tab lights up, and desktop notices have their own row at the bottom of Studio.
 
 Timeline edits light their tab and the affected track or clip where Studio can identify it. Open AI activity history for the file or command. Resolution toasts and activity sound chime default to ON and can be toggled in Settings.

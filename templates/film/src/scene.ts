@@ -39,8 +39,11 @@ import { loadClips } from "mc-actor/clips";
 import { makeFeet } from "mc-actor/feet";
 import { slerpPose } from "mc-actor/mocap";
 import { blendPose, loadRig, makePlayer, mouthAt } from "mc-actor/player";
+import { talk, wearToonFace, withBlink } from "mc-actor/toon-face";
+import { toonFaceAt } from "mc-actor/toon-timeline";
 import { props as pack } from "mc-assets/pack";
 import { makePlaced } from "mc-assets/placed";
+import { readMinecraftArchives } from "mc-assets/scene-assets";
 import { N8AOPostPass } from "n8ao";
 import {
   BloomEffect,
@@ -55,7 +58,8 @@ import {
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";
-import { blinkAt, bodyAt, moodAt, readLook, targetAt } from "./steve";
+import { makeMocapMoves } from "./mocap-moves";
+import { blinkAt, bodyAt, moodAt, readLook, targetAt, TOON_FACES } from "./steve";
 import { buildWorld, ROOM } from "./world";
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -102,13 +106,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   let camera = perspective;
   scene.add(perspective, parallel);
 
-  const jarFile = await fetch("mc/client_assets.zip");
-  if (!jarFile.ok)
-    throw new Error(
-      "mc/client_assets.zip is missing: bun run link at the repo root (bun ../../scripts/mc/slim_jar.mjs if the vault lacks it)",
-    );
-  const jar = new Uint8Array(await jarFile.arrayBuffer());
-  const picked = new Uint8Array(await (await fetch("picked.zip")).arrayBuffer());
+  const { jar, picked } = await readMinecraftArchives();
   const sources = await prepareAssets([pack, picked, jar], { cache: true });
   const blocks = buildWorld();
   const roofLevel = ROOM.top + 1;
@@ -139,13 +137,18 @@ export async function buildScene(canvas, W, H, draft = false) {
     new Blob([unzipSync(jar, { filter: (f) => f.name === SKIN })[SKIN]], { type: "image/png" }),
   );
   const steve = await makePlayer(await loadRig("rig/player.glb"), skinUrl, { glow: 0.03 });
+  let toon = null;
+  const missingFaces = new Set();
+  const warnMissingFace = (id) => {
+    if (missingFaces.has(id)) return;
+    missingFaces.add(id);
+    console.warn(`src/timeline/face.json › steve: custom/${id} is absent from TOON_FACES. Using the original face.`);
+  };
   URL.revokeObjectURL(skinUrl);
   scene.add(steve.g);
   const placed = await makePlaced(scene, sources, EDIT, "placed");
-  const clips = await loadClips(
-    EDIT.steve.moves.filter((m) => m.clip).map((m) => m.clip),
-    steve,
-  );
+  const mocap = await makeMocapMoves(EDIT.steve.moves, (refs) => loadClips(refs, steve));
+  const { clips } = mocap;
 
   const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
   const lightingRig = createLightingRig(scene, {
@@ -225,8 +228,9 @@ export async function buildScene(canvas, W, H, draft = false) {
   const feetAt = makeFeet(steve, () => EDIT.end, bodyAt, clips);
   const perform = (t) => {
     const L = EDIT.steve;
-    const feet = feetAt(L.moves, t);
-    const B = bodyAt(L.moves, t, clips);
+    const moves = mocap.read(L.moves);
+    const feet = feetAt(moves, t);
+    const B = bodyAt(moves, t, clips);
     steve.g.position.set(...B.at);
     steve.g.rotation.y = B.yaw * THREE.MathUtils.DEG2RAD;
     let pose = B.pose;
@@ -472,7 +476,22 @@ export async function buildScene(canvas, W, H, draft = false) {
 
     const mood = moodAt(EDIT.steve.face, t);
     const mouth = mouthAt(mouthCues(EDIT, "steve"), t);
-    steve.face(mood, mouth, blinkAt(t, 0), readLook(EDIT.steve.read, t) ?? [0, -0.15]);
+    const blink = blinkAt(t, 0);
+    const look = readLook(EDIT.steve.read, t);
+    const expression = toonFaceAt(EDIT.face?.steve, t, TOON_FACES, warnMissingFace);
+    if (expression) {
+      if (look) for (const eye of Object.values(expression.eyes)) eye.look = [...look];
+      const face = withBlink(talk(expression, mouth), blink);
+      if (toon) toon.set(face);
+      else toon = wearToonFace(steve, { face, glow: 0.03 });
+    } else {
+      if (toon) {
+        toon.dispose();
+        toon = null;
+        steve.setFace("game");
+      }
+      steve.face(mood, mouth, blink, look ?? [0, -0.15]);
+    }
     now.mood = mood;
 
     const lightKeys = Array.isArray(EDIT.lights) ? EDIT.lights : EDIT.lights?.keys;
@@ -556,8 +575,6 @@ export async function buildScene(canvas, W, H, draft = false) {
       if (!scouting) velocityEffect(clocks?.velocity ?? null, cam.optics);
       if (!scouting) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     }
-    if (!scouting && clocks?.layersVisible !== false)
-      titles(EDIT.text.items, clocks?.layers ?? t, camera, EDIT.text.tracks, clocks?.textTime);
   };
 
   const composite = makeTransitions(
@@ -574,6 +591,8 @@ export async function buildScene(canvas, W, H, draft = false) {
         at,
         false,
       );
+      if (!(free.on && !free.previewEffects) && clocks?.layersVisible !== false)
+        titles(EDIT.text.items, clocks?.layers ?? t, camera, EDIT.text.tracks, clocks?.textTime);
     },
     (cut) => clocks?.transitionVisible?.(cut) ?? true,
   );
@@ -582,13 +601,18 @@ export async function buildScene(canvas, W, H, draft = false) {
     editTime = clocks?.camera ?? t;
     composite(t);
   }, composite);
+  draw.renderFrame = async (t, nextClocks) => {
+    const pending = mocap.prepare(EDIT.steve.moves);
+    if (pending) await pending;
+    draw(t, nextClocks);
+  };
   draw.velocity = true;
   draw.velocityEffects = velocityEffect.effects;
   draw.describe = (t) => {
     const idx = Math.max(0, shotAt(t)),
       s = SHOTS_OUT[idx],
       shotLabel = [s?.size, s?.what ?? s?.name].filter(Boolean).join(" · "),
-      m = now.B?.act ?? EDIT.steve.moves[0],
+      m = now.B?.act ?? mocap.read(EDIT.steve.moves)[0],
       lensFov = now.cam?.fov ?? 60,
       lensMm = Math.round(mmOf(lensFov, W / H)),
       opt = now.optics,
@@ -636,7 +660,7 @@ export async function buildScene(canvas, W, H, draft = false) {
             fresh: t - m.t < 1 && t >= m.t,
           },
           {
-            text: `feet planted (mc-actor/feet.ts) · face ${EDIT.steve.face.filter((f) => f.t <= t).at(-1)?.mood ?? "neutral"}`,
+            text: `feet planted (mc-actor/feet.ts) · face ${EDIT.face?.steve?.findLast((key) => key.t <= t)?.face ?? EDIT.steve.face.filter((f) => f.t <= t).at(-1)?.mood ?? "neutral"}`,
           },
           {
             text: `mouth ${mouthCues(EDIT, "steve").findLast(([s]) => s <= t)?.[1] ?? 'X (no lip sync: takes with "by": "steve", bun run voice:lips)'} (src/timeline/mouth.json)`,
@@ -673,6 +697,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     look: lookAt,
     rig: steve.rig,
     bones: steve.bones,
+    toonFaces: { steve: Object.keys(TOON_FACES) },
     objects: sceneObjects,
     materials: [],
     composer,
