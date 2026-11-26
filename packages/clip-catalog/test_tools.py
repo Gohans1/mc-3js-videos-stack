@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 from pathlib import Path
+import struct
 import sys
 import tempfile
 import unittest
@@ -12,6 +13,23 @@ import catalog_review as review
 
 
 class Tools(unittest.TestCase):
+    def test_batch_lists_glb_clips_without_reading_binary_chunk(self):
+        import batch
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            path = root / batch.LIBRARIES["ual2"]
+            path.parent.mkdir()
+            metadata = b'{"animations":[{"name":"Walk Forward"},{"name":"Idle"},{"name":"Walk Forward"}]}'
+            metadata += b" " * (-len(metadata) % 4)
+            binary = b"\0" * 4096
+            length = 12 + 8 + len(metadata) + 8 + len(binary)
+            path.write_bytes(struct.pack("<4sIIII", b"glTF", 2, length, len(metadata), 0x4E4F534A)
+                             + metadata + struct.pack("<II", len(binary), 0x004E4942) + binary)
+            with path.open("rb") as stream, patch.object(batch, "MOTION", root), \
+                    patch.object(Path, "open", return_value=contextlib.nullcontext(stream)):
+                self.assertEqual(batch.clip_names("ual2"), ["Walk Forward", "Idle"])
+                self.assertEqual(stream.tell(), 20 + len(metadata))
+
     def test_sweep_next_step_keeps_selected_library(self):
         import batch
         with tempfile.TemporaryDirectory() as d:

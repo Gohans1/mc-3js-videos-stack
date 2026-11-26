@@ -16,15 +16,13 @@ const CLIPS = [
 ];
 const JAR = process.env.JAR ?? join(LOCAL, "jar/client_assets.zip"),
   RIG = process.env.RIG ?? join(LOCAL, "mcprep/player.glb");
-const SKIN = "assets/minecraft/textures/entity/player/wide/steve.png";
+const SKINS = ["steve", "alex"].map((n) => `assets/minecraft/textures/entity/player/wide/${n}.png`);
 const out = new URL("./public/vendor/", import.meta.url);
 mkdirSync(out, { recursive: true });
-writeFileSync(
-  new URL("steve.png", out),
-  unzipSync(new Uint8Array(readFileSync(JAR)), { filter: (f) => f.name === SKIN })[SKIN],
-);
+const skins = unzipSync(new Uint8Array(readFileSync(JAR)), { filter: (f) => SKINS.includes(f.name) });
+for (const s of SKINS) writeFileSync(new URL(s.split("/").pop()!, out), skins[s]!);
 copyFileSync(RIG, new URL("player.glb", out));
 const mix = new URL("./public/motion/mixamo/", import.meta.url);
 mkdirSync(mix, { recursive: true });
 for (const c of CLIPS) copyFileSync(`${MOTION}/mixamo/${c}.fbx`, new URL(`${c}.fbx`, mix));
-console.log(`public/vendor: steve.png, player.glb; public/motion/mixamo: ${CLIPS.length} clips`);
+console.log(`public/vendor: steve.png, alex.png, player.glb; public/motion/mixamo: ${CLIPS.length} clips`);

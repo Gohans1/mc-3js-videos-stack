@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Toon faces</title>
+    <style>
+      :root {
+        --bg: #121518;
+        --panel: #1b1f23;
+        --line: #2b3137;
+        --text: #e8ecef;
+        --muted: #8d979f;
+        --accent: #f0a23a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          14px/1.4 system-ui,
+          sans-serif;
+      }
+      body {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 20px;
+        padding: 20px;
+        overflow: hidden;
+      }
+      #stage {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      #stage canvas {
+        display: block;
+        border-radius: 10px;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+      }
+      button {
+        font: inherit;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      #now {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        margin-left: auto;
+      }
+      #side {
+        overflow-y: auto;
+        min-width: 0;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 4px;
+      }
+      p {
+        margin: 0 0 14px;
+        color: var(--muted);
+      }
+      h2 {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 18px 0 8px;
+      }
+      select,
+      input[type="range"] {
+        font: inherit;
+        color: var(--text);
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 4px;
+      }
+      #levelOut {
+        font-variant-numeric: tabular-nums;
+        min-width: 3ch;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 10px;
+      }
+      .tile {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 6px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        text-align: left;
+      }
+      .tile canvas {
+        width: 100%;
+        aspect-ratio: 1;
+        border-radius: 4px;
+        image-rendering: auto;
+      }
+      .tile[aria-pressed="true"] {
+        border-color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <section id="stage">
+      <div class="bar">
+        <button id="auto" aria-pressed="false">Auto cycle</button>
+        <button id="talk" aria-pressed="false">Talk</button>
+        <button id="blink" aria-pressed="true">Blink</button>
+        <button id="sway" aria-pressed="true">Head sway</button>
+        <button id="shot">Shot: close</button>
+        <span id="now"></span>
+      </div>
+    </section>
+    <section id="side">
+      <h1>Toon faces (mc-actor/toon-face)</h1>
+      <p>Click a face to see it on Alex. Every face is data in EXPRESSIONS; the drawing is drawToonFace, the marks around the head drawToonMarks.</p>
+      <div class="bar">
+        <label for="family">Feeling</label>
+        <select id="family"></select>
+        <input id="level" type="range" min="0" max="1" step="0.01" value="0.67" aria-label="Intensity" />
+        <output id="levelOut">0.67</output>
+      </div>
+      <div id="groups"></div>
+    </section>
+    <script type="module" src="./faces.ts"></script>
+  </body>
+</html>

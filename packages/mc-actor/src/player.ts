@@ -287,7 +287,7 @@ export const MOODS = {
 };
 const MOUTH = {
   X: [0, 0, 0, 0],
-  A: [0, 0, 0, 0],
+  A: [1.35, 0, 0, 0],
   B: [2, 0.5, 0.3, 0],
   C: [2.2, 1, 0.3, 0],
   D: [2.6, 1.5, 0.3, 0.4],
@@ -331,7 +331,7 @@ const flat = (color, glow = 0.12) =>
     emissiveIntensity: glow,
   });
 
-const faceFrame = (root, head) => {
+export const faceFrame = (root, head) => {
   root.updateMatrixWorld(true);
   const box = new THREE.Box3(),
     v = new THREE.Vector3(),
@@ -350,23 +350,21 @@ const faceFrame = (root, head) => {
     mid = box.getCenter(new THREE.Vector3());
   head.updateWorldMatrix(true, false);
   const localPx = px / head.getWorldScale(new THREE.Vector3()).x; // the bone is scaled (0.586): offsets are in its own units
-  const toHead = new THREE.Matrix3().setFromMatrix4(
-    new THREE.Matrix4().copy(head.matrixWorld).invert().multiply(root.matrixWorld),
-  );
+  const restToHead = new THREE.Matrix4().copy(head.matrixWorld).invert().multiply(root.matrixWorld);
+  const toHead = new THREE.Matrix3().setFromMatrix4(restToHead);
   const up = new THREE.Vector3(0, 1, 0).applyMatrix3(toHead).normalize(),
     right = new THREE.Vector3(1, 0, 0).applyMatrix3(toHead).normalize();
   const add = (m, x, y, z) => {
     m.position.set(mid.x + x * px, box.max.y - y * px, box.max.z + z * px);
     m.castShadow = false;
-    root.add(m);
-    head.attach(m);
+    m.applyMatrix4(restToHead);
+    head.add(m);
     return m;
   };
   return { px, localPx, up, right, add, box };
 };
 
-const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
-  const { px, localPx, up, right, add } = faceFrame(root, head);
+const makeFace = ({ px, localPx, up, right, add }, skin, glow = 0.08, faceColors = null) => {
   const sampleFaceColors = (skinCtx) => {
     const s = Math.max(1, Math.round(skinCtx.canvas.width / 64));
     const patch = skinCtx.getImageData(8 * s, 8 * s, 8 * s, 8 * s).data;
@@ -432,6 +430,8 @@ const makeFace = (root, head, skin, glow = 0.08, faceColors = null) => {
       3.3,
       0.2,
     );
+    m.name = side < 0 ? "browR" : "browL";
+    m.userData.facePx = localPx;
     return { m, side, base: m.position.clone(), q: m.quaternion.clone() };
   });
   const mouthMat = layer(flat(initCol.mouthCol, 0), 0),
@@ -742,9 +742,10 @@ export async function makePlayer(
   const rootIn = new THREE.Matrix3().setFromMatrix4(
     new THREE.Matrix4().copy(b.root.parent.matrixWorld).invert(),
   );
+  const restFaceFrame = faceFrame(rig, b.head);
   const ensureGameFace = () => {
     if (gameFace) return gameFace;
-    gameFace = makeFace(rig, b.head, ctx, glow, savedFaceColors);
+    gameFace = makeFace(restFaceFrame, ctx, glow, savedFaceColors);
     gameFace.show(!shown || shown.has("head"));
     return gameFace;
   };
@@ -1104,6 +1105,7 @@ export async function makePlayer(
     b[`ll${sd}`].localToWorld(out.copy(LEGS[sd].sole));
   const soleNow = (sd, out = new THREE.Vector3()) =>
     out.copy(LEGS[sd].sole).applyMatrix4(b[`ll${sd}`].matrixWorld);
+  g.soleNow = soleNow;
   const updateBones = updaterTo(g, Object.values(b));
   const baseLegReach = LEGS.L.L1 + LEGS.L.L2;
   const legReachNow = () => {
@@ -1163,6 +1165,7 @@ export async function makePlayer(
     legsSig,
     updateBones,
     face,
+    faceFrame: restFaceFrame,
     hand,
     handR: hand,
     handL,

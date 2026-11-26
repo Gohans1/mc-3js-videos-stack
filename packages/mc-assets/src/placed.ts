@@ -14,6 +14,8 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
   scene.add(root);
   const built = new Map();
   const data = () => EDIT[key] ?? {};
+  const matches = (o, b) =>
+    o && o.what === b.what && JSON.stringify(o.properties ?? null) === b.props;
 
   const buildBlock = async (id, properties) => {
     const s = await createScene(
@@ -27,20 +29,26 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
     s.group.traverse((o) => {
       if (o.isMesh) o.castShadow = o.receiveShadow = true;
     });
-    return s.group;
+    return s;
   };
   const build = async (name, o) => {
     const holder = new THREE.Group();
     holder.name = name;
     holder.userData.placed = name;
     let mob = null;
-    const [kind, ...rest] = o.what.split(":"),
+    let block = null;
+    const { what, properties } = o;
+    const props = JSON.stringify(properties ?? null);
+    const [kind, ...rest] = what.split(":"),
       id = rest.join(":");
     if (kind === "mob") {
       mob = await loadMob(id);
       holder.add(mob.g);
-    } else holder.add(await buildBlock(id, o.properties));
-    return { what: o.what, props: JSON.stringify(o.properties ?? null), holder, mob };
+    } else {
+      block = await buildBlock(id, properties);
+      holder.add(block.group);
+    }
+    return { what, props, holder, mob, resource: mob ?? block };
   };
 
   let running = Promise.resolve(),
@@ -52,19 +60,20 @@ export async function makePlaced(scene, sources, EDIT, key = "placed") {
     running = running.then(async () => {
       const want = data();
       for (const [name, b] of built) {
-        const o = want[name];
-        if (o && o.what === b.what && JSON.stringify(o.properties ?? null) === b.props) continue;
+        if (matches(want[name], b)) continue;
         root.remove(b.holder);
         built.delete(name);
+        b.resource.dispose();
       }
       for (const [name, o] of Object.entries(want)) {
         if (built.has(name) || !o?.what || !o.keys?.length) continue;
         try {
           const b = await build(name, o);
-          if (data()[name]) {
+          const current = data()[name];
+          if (current?.keys?.length && matches(current, b)) {
             built.set(name, b);
             root.add(b.holder);
-          }
+          } else b.resource.dispose();
         } catch (e) {
           console.warn(`placed "${name}": ${e.message}`);
         }

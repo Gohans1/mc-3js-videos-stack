@@ -14,15 +14,19 @@ const GLTF_LIBS = {
   },
   ual2: { file: "motion/ual2/UAL2_Standard.glb", buffers: [] as string[], names: UE },
 };
-const gltfs = new Map();
-const gltfOf = (lib) => {
-  if (!gltfs.has(lib))
-    gltfs.set(
-      lib,
-      libFiles(lib).then((files) => parseGltf(GLTF_LIBS[lib].file, files)),
-    );
-  return gltfs.get(lib);
+const cachedLoad = (cache, key, load) => {
+  if (!cache.has(key)) {
+    const pending = load();
+    cache.set(key, pending);
+    pending.catch(() => cache.delete(key));
+  }
+  return cache.get(key);
 };
+const gltfs = new Map();
+const gltfOf = (lib) =>
+  cachedLoad(gltfs, lib, () =>
+    libFiles(lib).then((files) => parseGltf(GLTF_LIBS[lib].file, files)),
+  );
 
 export async function clipNames(lib) {
   if (lib === "mixamo") return (await fetch("motion/mixamo/_tools/clips.json")).json();
@@ -89,7 +93,7 @@ const fileBytes = async (url) => {
   const manager = THREE.DefaultLoadingManager;
   manager.itemStart(url);
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`${url}: ${res.status}`);
     const tag = bootTagFor(url) ?? stripEtag(res.headers.get("etag"));
     if (tag) fileTags.set(url, tag);
@@ -109,20 +113,14 @@ const clipFiles = (ref) => {
   if (lib !== "mixamo") return libFiles(lib);
   const url = fbxUrl(name);
   clipUrls.set(ref, [url]);
-  if (!mixamoFiles.has(url))
-    mixamoFiles.set(
-      url,
-      fileBytes(url).then((b) => [b]),
-    );
-  return mixamoFiles.get(url);
+  return cachedLoad(mixamoFiles, url, () => fileBytes(url).then((b) => [b]));
 };
 const libFileSets = new Map();
 const libUrls = new Map();
 const libFiles = (lib) => {
   const entry = GLTF_LIBS[lib];
   if (!entry) return Promise.resolve([]);
-  if (!libFileSets.has(lib)) libFileSets.set(lib, gltfFiles(lib, entry.file, entry.buffers));
-  return libFileSets.get(lib);
+  return cachedLoad(libFileSets, lib, () => gltfFiles(lib, entry.file, entry.buffers));
 };
 const gltfFiles = async (lib, file, knownBuffers: string[] = []) => {
   const dir = THREE.LoaderUtils.extractUrlBase(file);

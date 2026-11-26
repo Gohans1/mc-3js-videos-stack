@@ -114,5 +114,10 @@ export async function loadMob(
     mob.stopAnimation();
     playing = null;
   };
-  return { g, mob, clips: Object.keys(clipsByName), draw, where, animate, still };
+  const dispose = () => {
+    mob.dispose();
+    for (const material of lit.values()) material.dispose();
+    lit.clear();
+  };
+  return { g, mob, clips: Object.keys(clipsByName), draw, where, animate, still, dispose };
 }

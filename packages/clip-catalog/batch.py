@@ -47,11 +47,19 @@ def completed(path, mode):
 
 def clip_names(lib):
     path = MOTION / ("mixamo/_tools/clips.json" if lib == "mixamo" else LIBRARIES[lib])
-    raw = path.read_bytes()
     if lib == "mixamo":
-        names = json.loads(raw)
+        names = json.loads(path.read_bytes())
     else:
-        gltf = json.loads(raw[20:20 + struct.unpack("<I", raw[12:16])[0]] if raw[:4] == b"glTF" else raw)
+        with path.open("rb") as stream:
+            header = stream.read(20)
+            if header[:4] == b"glTF":
+                (json_size,) = struct.unpack("<I", header[12:16])
+                available = max(0, os.fstat(stream.fileno()).st_size - 20)
+                raw = stream.read(min(json_size, available))
+            else:
+                stream.seek(0)
+                raw = stream.read()
+        gltf = json.loads(raw)
         names = [a["name"] for a in gltf["animations"]]
     if any(not isinstance(n, str) or not n or "," in n or "/" in n or "\\" in n for n in names):
         raise ValueError(f"{path}: clip names must be nonempty basenames without commas (the --lab clips= separator)")

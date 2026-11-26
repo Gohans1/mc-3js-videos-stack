@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
 import { FACES, makePlayer, PX, SKIN_UV } from "../src/player";
+import { colorsFromSkin, wearToonFace } from "../src/toon-face";
 
 interface PixelCanvas {
   width: number;
@@ -249,9 +250,19 @@ afterEach(() => {
   (globalThis as { document?: unknown }).document = prevDoc;
 });
 
-function installPixelDocument() {
+function installPixelDocument(drawToon = false) {
   (globalThis as { document?: unknown }).document = {
-    createElement: () => makePixelCanvas(64, 64),
+    createElement: () => {
+      const canvas = makePixelCanvas(64, 64);
+      if (!drawToon) return canvas;
+      const ctx = new Proxy(canvas.getContext(), {
+        get: (target, key) => Reflect.has(target, key)
+          ? Reflect.get(target, key)
+          : () => ({ addColorStop() {} }),
+      });
+      canvas.getContext = () => ctx;
+      return canvas;
+    },
   };
 }
 
@@ -343,6 +354,78 @@ describe("mc-actor player rig primitives", () => {
     const atHighGlow = await eyeWhiteEmissive(0.5);
     expect(atHighGlow.white).toBeLessThanOrEqual(0.08);
     expect(atHighGlow.teeth).toBeLessThanOrEqual(0.08);
+  });
+
+  test("gives a posed player the same head-local toon mount as a resting player", async () => {
+    installPixelDocument(true);
+    const template = await loadPlayerTemplate();
+    const base = makePixelCanvas(64, 64);
+    const rest = await makePlayer(template, base, { face: "skin" });
+    const posed = await makePlayer(template, base, { face: "skin" });
+    posed.setPose({ root: { x: 0.5, ry: 20 }, head: [15, 35, -12] });
+    const head = posed.bones.head.quaternion.clone();
+    const root = posed.bones.root.position.clone();
+
+    const reference = wearToonFace(rest, { derive: false, skin: false });
+    const worn = wearToonFace(posed, { derive: false, skin: false });
+    expect(posed.bones.head.quaternion.toArray()).toEqual(head.toArray());
+    expect(posed.bones.root.position.toArray()).toEqual(root.toArray());
+    expect(worn.mesh.position.distanceTo(reference.mesh.position)).toBeLessThan(1e-6);
+    expect(worn.mesh.quaternion.angleTo(reference.mesh.quaternion)).toBeLessThan(1e-6);
+    reference.dispose();
+    worn.dispose();
+  });
+
+  test("leaves the player and its current face intact when a toon preset cannot be drawn", async () => {
+    installPixelDocument(true);
+    const base = makePixelCanvas(64, 64, [210, 170, 140, 255]);
+    const player = await makePlayer(await loadPlayerTemplate(), base);
+    const children = [...player.bones.head.children];
+    const visible = children.map((child) => child.visible);
+    const options = { derive: false, skin: false } as const;
+    const badFace = { extras: { sparkels: 1 } };
+
+    expect(() => wearToonFace(player, { ...options, face: "no-such-face" as never })).toThrow("no-such-face");
+    expect(() => wearToonFace(player, { ...options, face: badFace })).toThrow("sparkels");
+    expect(player.bones.head.children.map((child) => child.uuid)).toEqual(children.map((child) => child.uuid));
+    expect(children.map((child) => child.visible)).toEqual(visible);
+
+    const worn = wearToonFace(player, { ...options, face: "smile" });
+    const before = worn.face;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(() => worn.set(badFace)).toThrow("sparkels");
+      expect(worn.face).toEqual(before);
+    }
+    worn.dispose();
+  });
+
+  test("disposing a toon face with skin disabled preserves the film's overlay", async () => {
+    installPixelDocument(true);
+    const base = makePixelCanvas(64, 64, [210, 170, 140, 255]);
+    const player = await makePlayer(await loadPlayerTemplate(), base, { face: "skin" });
+    player.paintSkinOverlay((ctx) => {
+      ctx.fillStyle = "#ff00ff";
+      ctx.fillRect(8, 8, 1, 1);
+    });
+
+    wearToonFace(player, { derive: false, skin: false }).dispose();
+    expect(readPixel(player.skin, 8, 8)).toEqual([255, 0, 255, 255]);
+  });
+
+  test("skin-derived toon irises retain a dark display color and the source hue", () => {
+    const canvas = makePixelCanvas(64, 64, [170, 114, 89, 255]);
+    const ctx = canvas.getContext();
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(9, 12, 1, 1);
+    ctx.fillRect(14, 12, 1, 1);
+    ctx.fillStyle = "#523d89";
+    ctx.fillRect(10, 12, 1, 1);
+    ctx.fillRect(13, 12, 1, 1);
+    const { iris } = colorsFromSkin(ctx as unknown as CanvasRenderingContext2D);
+    const display = new THREE.Color(iris).getHSL({ h: 0, s: 0, l: 0 }, THREE.SRGBColorSpace);
+    expect(display.l).toBeLessThan(0.45);
+    expect(display.h).toBeGreaterThan(0.62);
+    expect(display.h).toBeLessThan(0.76);
   });
 
   test("exposes handR, handL, and holdProp mounting props inside clean wrist groups and pruning emptied wrists on remount", async () => {

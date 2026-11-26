@@ -6,6 +6,8 @@
   "type": "module",
   "exports": {
     "./player": "./src/player.ts",
+    "./toon-face": "./src/toon-face.ts",
+    "./toon-timeline": "./src/toon-timeline.ts",
     "./skin-paint": "./src/skin-paint.ts",
     "./mocap": "./src/mocap.ts",
     "./clips": "./src/clips.ts",
@@ -27,5 +29,8 @@
   },
   "peerDependencies": {
     "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/three": "catalog:"
   }
 }

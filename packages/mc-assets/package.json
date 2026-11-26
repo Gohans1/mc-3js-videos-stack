@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./pack": "./src/pack.ts",
+    "./scene-assets": "./src/scene-assets.ts",
     "./gamefont": "./src/gamefont.ts",
     "./ink": "./src/ink.ts",
     "./screen": "./src/screen.ts",
