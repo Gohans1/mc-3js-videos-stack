@@ -172,8 +172,9 @@ test("a low AI Studio chip cannot approve a 110-second, 24-fps High window", () 
 
 test("a resumed AI Studio video check retains the higher chip floor and original follow-up baseline", () => {
   expect(resumeVideoVerificationArgs(200_000, 45_000)).toBe(" --min-in-tokens 90000");
-  expect(resumeVideoVerificationArgs(200_000, 45_000, { lastTurnInTokens: null, topTokens: 70_000 }))
-    .toBe(" --min-in-tokens 90000 --previous-tokens none,70000");
+  expect(
+    resumeVideoVerificationArgs(200_000, 45_000, { lastTurnInTokens: null, topTokens: 70_000 }),
+  ).toBe(" --min-in-tokens 90000 --previous-tokens none,70000");
 });
 
 test("verifyDeliveredVideoTokens flags IN-token and legacy topTokens downgrades at the 45% floor", () => {
@@ -374,17 +375,21 @@ test("verifyDeliveredVideoTokens fails closed when a follow-up baseline cannot b
   expect(missingTotalBaseline.ok).toBe(false);
 });
 
-test("ask.ts rejects invalid --min-in-tokens values with exit 2 before opening Chrome", () => {
-  const askScript = resolve(import.meta.dir, "ask.ts");
-  for (const bad of ["0", "-1", "abc", "99999999999999999999"]) {
-    const res = Bun.spawnSync(["bun", askScript, "--collect", `--min-in-tokens=${bad}`], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    expect(res.exitCode).toBe(2);
-    expect(res.stderr.toString()).toContain("--min-in-tokens must be a positive integer");
-  }
-}, CLI_TIMEOUT_MS);
+test(
+  "ask.ts rejects invalid --min-in-tokens values with exit 2 before opening Chrome",
+  () => {
+    const askScript = resolve(import.meta.dir, "ask.ts");
+    for (const bad of ["0", "-1", "abc", "99999999999999999999"]) {
+      const res = Bun.spawnSync(["bun", askScript, "--collect", `--min-in-tokens=${bad}`], {
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(res.exitCode).toBe(2);
+      expect(res.stderr.toString()).toContain("--min-in-tokens must be a positive integer");
+    }
+  },
+  CLI_TIMEOUT_MS,
+);
 
 test("planUploads keeps every file serial and in argument order without --batch", () => {
   const files = ["b.png", "clip.mp4", "a.png"];
@@ -393,7 +398,10 @@ test("planUploads keeps every file serial and in argument order without --batch"
 
 test("planUploads sends every non-video file in one batch and keeps videos serial after it with --batch", () => {
   const files = ["ref.mp4", "b.png", "ours.mp4", "a.jpg"];
-  expect(planUploads(files, true)).toEqual({ batch: ["b.png", "a.jpg"], serial: ["ref.mp4", "ours.mp4"] });
+  expect(planUploads(files, true)).toEqual({
+    batch: ["b.png", "a.jpg"],
+    serial: ["ref.mp4", "ours.mp4"],
+  });
 });
 
 // A batch lands in upload-finish order, so its chips are found by name, and " a.jpg " also sits inside "x a.jpg".
@@ -405,54 +413,76 @@ test("chipNameClashes finds nothing when no name sits inside another as a whole 
   expect(chipNameClashes(["p01.jpg", "p011.jpg", "xa.jpg", "a.jpg"])).toEqual([]);
 });
 
-test("ask.ts rejects --batch without any non-video file with exit 2 before opening Chrome", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ask-batch-"));
-  const clip = join(dir, "clip.mp4");
-  writeFileSync(clip, Buffer.alloc(20_000));
-  const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--batch", clip, "hi"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(res.exitCode).toBe(2);
-  expect(res.stderr.toString()).toContain("--batch needs at least one non-video file");
-}, CLI_TIMEOUT_MS);
+test(
+  "ask.ts rejects --batch without any non-video file with exit 2 before opening Chrome",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "ask-batch-"));
+    const clip = join(dir, "clip.mp4");
+    writeFileSync(clip, new Uint8Array(20_000));
+    const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--batch", clip, "hi"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr.toString()).toContain("--batch needs at least one non-video file");
+  },
+  CLI_TIMEOUT_MS,
+);
 
-test("ask.ts rejects --batch when one file name sits inside another with exit 2 before opening Chrome", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ask-batch-"));
-  const a = join(dir, "a.jpg");
-  const xa = join(dir, "x a.jpg");
-  writeFileSync(a, "x");
-  writeFileSync(xa, "x");
-  const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--batch", a, xa, "hi"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(res.exitCode).toBe(2);
-  expect(res.stderr.toString()).toContain('"a.jpg" also appears inside "x a.jpg"');
-}, CLI_TIMEOUT_MS);
+test(
+  "ask.ts rejects --batch when one file name sits inside another with exit 2 before opening Chrome",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "ask-batch-"));
+    const a = join(dir, "a.jpg");
+    const xa = join(dir, "x a.jpg");
+    writeFileSync(a, "x");
+    writeFileSync(xa, "x");
+    const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--batch", a, xa, "hi"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr.toString()).toContain('"a.jpg" also appears inside "x a.jpg"');
+  },
+  CLI_TIMEOUT_MS,
+);
 
-test("ask.ts rejects a missing --files-from list with exit 2 before opening Chrome", () => {
-  const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--files-from", "no-such-list.txt", "hi"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(res.exitCode).toBe(2);
-  expect(res.stderr.toString()).toContain("--files-from list not found: no-such-list.txt");
-}, CLI_TIMEOUT_MS);
+test(
+  "ask.ts rejects a missing --files-from list with exit 2 before opening Chrome",
+  () => {
+    const res = Bun.spawnSync(
+      ["bun", resolve(import.meta.dir, "ask.ts"), "--files-from", "no-such-list.txt", "hi"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr.toString()).toContain("--files-from list not found: no-such-list.txt");
+  },
+  CLI_TIMEOUT_MS,
+);
 
-test("ask.ts reads attachments from --files-from and validates each listed file", () => {
-  const dir = mkdtempSync(join(tmpdir(), "ask-list-"));
-  const present = join(dir, "a.jpg");
-  writeFileSync(present, "x");
-  const list = join(dir, "list.txt");
-  writeFileSync(list, `${present}\r\n\r\n${join(dir, "gone.jpg")}\n`);
-  const res = Bun.spawnSync(["bun", resolve(import.meta.dir, "ask.ts"), "--batch", "--files-from", list, "hi"], {
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(res.exitCode).toBe(2);
-  expect(res.stderr.toString()).toContain(`file not found: ${join(dir, "gone.jpg")}`);
-}, CLI_TIMEOUT_MS);
+test(
+  "ask.ts reads attachments from --files-from and validates each listed file",
+  () => {
+    const dir = mkdtempSync(join(tmpdir(), "ask-list-"));
+    const present = join(dir, "a.jpg");
+    writeFileSync(present, "x");
+    const list = join(dir, "list.txt");
+    writeFileSync(list, `${present}\r\n\r\n${join(dir, "gone.jpg")}\n`);
+    const res = Bun.spawnSync(
+      ["bun", resolve(import.meta.dir, "ask.ts"), "--batch", "--files-from", list, "hi"],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr.toString()).toContain(`file not found: ${join(dir, "gone.jpg")}`);
+  },
+  CLI_TIMEOUT_MS,
+);
 
 test("offscreen wraps high slot numbers into 2D columns so top never nears Win32's 32767 limit", () => {
   for (let slot = 0; slot < 60; slot++) {
@@ -469,3 +499,16 @@ test("stripBom removes a leading UTF-8 BOM without altering inner text", () => {
   expect(stripBom("\uFEFFhello\nworld")).toBe("hello\nworld");
   expect(stripBom("hello\uFEFFworld")).toBe("hello\uFEFFworld");
 });
+
+test(
+  "studio.ts rejects combining chrome --show and --keepalive with exit 2",
+  () => {
+    const res = Bun.spawnSync(
+      ["bun", resolve(import.meta.dir, "studio.ts"), "chrome", "--show", "--keepalive"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(res.exitCode).toBe(2);
+    expect(res.stderr.toString()).toContain("--show and --keepalive cannot be combined");
+  },
+  CLI_TIMEOUT_MS,
+);

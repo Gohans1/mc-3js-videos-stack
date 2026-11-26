@@ -43,10 +43,48 @@ const SW_SHOWNOACTIVATE = 4;
 const SW_SHOWMINNOACTIVE = 7;
 const LSFW_LOCK = 1;
 const LSFW_UNLOCK = 2;
+const WAIT_OBJECT_0 = 0x0;
+const WAIT_ABANDONED = 0x80;
 const WAIT_TIMEOUT = 0x102;
-const TURN_MUTEX = Uint16Array.from("Local\\aistudio-prepare-tab\0", (c) => c.charCodeAt(0));
-const TURN_WAIT_MS = 15_000;
+const TURN_MUTEX_NAME = "Local\\aistudio-prepare-tab";
+export const CHROME_STATE_MUTEX_NAME = "Local\\aistudio-chrome-state";
+const MUTEX_WAIT_MS = 60_000;
 const CHROME_WINDOW = Uint16Array.from("Chrome_WidgetWin_1\0", (c) => c.charCodeAt(0));
+
+const utf16 = (s: string) => Uint16Array.from(`${s}\0`, (c) => c.charCodeAt(0));
+
+export class MutexTimeoutError extends Error {}
+
+export async function withNamedMutex<T>(
+  name: string,
+  fn: () => Promise<T> | T,
+  timeoutMs = MUTEX_WAIT_MS,
+): Promise<T> {
+  const handle = kernel32.CreateMutexW(null, 0, utf16(name));
+  if (handle === 0n) {
+    throw new MutexTimeoutError(`could not acquire shared Chrome lock (${name})`);
+  }
+  const wait = kernel32.WaitForSingleObject(handle, timeoutMs);
+  const owned = wait === WAIT_OBJECT_0 || wait === WAIT_ABANDONED;
+  if (!owned) {
+    kernel32.CloseHandle(handle);
+    if (wait === WAIT_TIMEOUT) {
+      throw new MutexTimeoutError(
+        `timed out after ${Math.round(timeoutMs / 1000)} s waiting for shared Chrome lock (${name}); another AI Studio command may still be starting or switching tabs`,
+      );
+    }
+    throw new MutexTimeoutError(`failed waiting for shared Chrome lock (${name}, status ${wait})`);
+  }
+  try {
+    return await fn();
+  } finally {
+    kernel32.ReleaseMutex(handle);
+    kernel32.CloseHandle(handle);
+  }
+}
+
+export const withChromeStateLock = <T>(fn: () => Promise<T> | T) =>
+  withNamedMutex(CHROME_STATE_MUTEX_NAME, fn);
 
 export function currentDesktopName(): string {
   const desk = user32.GetThreadDesktop(kernel32.GetCurrentThreadId());
@@ -83,7 +121,6 @@ export function shouldMigrateChromeDesktop(opts: {
   }
   if (currentDesktop === "Default") return false;
   if (knownDesktop === "Default") return true;
-  if (!knownDesktop && !hasVisibleOnCurrentDesktop) return true;
   return false;
 }
 
@@ -126,11 +163,12 @@ export function guardWindows(
     const p = placement(h);
     let hidden = isHidden(p, hiddenLeft);
     if (!hidden && !opts.allowOnScreen) {
+      const keepTop = p[8] !== undefined && p[8] >= 0 && p[8] < 20_000 ? p[8] : 0;
       user32.SetWindowPos(
         h,
         HWND_BOTTOM,
         hiddenLeft,
-        0,
+        keepTop,
         0,
         0,
         SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
@@ -174,15 +212,12 @@ export function guardWindows(
  * change the foreground itself, e.g. while the user has not touched the agent's app; Chrome usually may not either.
  */
 export async function withForegroundLocked<T>(fn: (locked: boolean) => Promise<T>): Promise<T> {
-  const turn = kernel32.CreateMutexW(null, 0, TURN_MUTEX);
-  // WAIT_ABANDONED (a command died holding it) still hands over the turn.
-  const owned = turn !== 0n && kernel32.WaitForSingleObject(turn, TURN_WAIT_MS) !== WAIT_TIMEOUT;
-  const locked = user32.LockSetForegroundWindow(LSFW_LOCK) !== 0;
-  try {
-    return await fn(locked);
-  } finally {
-    if (locked) user32.LockSetForegroundWindow(LSFW_UNLOCK);
-    if (owned) kernel32.ReleaseMutex(turn);
-    if (turn) kernel32.CloseHandle(turn);
-  }
+  return withNamedMutex(TURN_MUTEX_NAME, async () => {
+    const locked = user32.LockSetForegroundWindow(LSFW_LOCK) !== 0;
+    try {
+      return await fn(locked);
+    } finally {
+      if (locked) user32.LockSetForegroundWindow(LSFW_UNLOCK);
+    }
+  });
 }

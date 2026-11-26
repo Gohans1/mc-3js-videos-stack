@@ -1,16 +1,21 @@
 // Shared plumbing for ask.ts and studio.ts: the Chrome on CDP port 9333, agent-browser calls, the
 // in-page element finder driven by page-map.ts, the step runner, and the AI Studio actions both use.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
-import { expectedVideoTokensFloor, pictureDurationInRange } from "../../../../scripts/review/gemini-video-input.ts";
+import {
+  expectedVideoTokensFloor,
+  pictureDurationInRange,
+} from "../../../../scripts/review/gemini-video-input.ts";
 import { type Candidate, dynamic, type Key, MAP, TEXT, URLS, VIDEO_EXT } from "./page-map";
 import {
   currentDesktopName,
   guardWindows,
   hasVisibleFrames,
+  MutexTimeoutError,
   shouldMigrateChromeDesktop,
+  withChromeStateLock,
   withForegroundLocked,
 } from "./win32";
 
@@ -33,6 +38,7 @@ export class TimeoutError extends StepError {}
 export const secs = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
 /** Text boxes store line breaks as \n, so text from a Windows file must match that before it is typed and read back. */
 export const toLF = (s: string) => s.replace(/\r\n?/g, "\n");
+export const stripBom = (s: string) => s.replace(/^\uFEFF/, "");
 
 /** "1h2m3s", "1m30s", "90s", "2m" -> seconds; NaN when it is not such a time. */
 export function toSeconds(time: string): number {
@@ -72,6 +78,19 @@ export const abArgs = () => [
  */
 export type TabInfo = { id: string; slot: number };
 const TABS_FILE = resolve(PROFILE, "..", "aistudio-tabs.json");
+function writeJsonAtomic(path: string, data: unknown) {
+  mkdirSync(dirname(path), { recursive: true });
+  const temp = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+  try {
+    writeFileSync(temp, JSON.stringify(data, null, 2));
+    renameSync(temp, path);
+  } catch (e) {
+    try {
+      unlinkSync(temp);
+    } catch {}
+    throw e;
+  }
+}
 export function readTabs(): Record<string, TabInfo> {
   try {
     return JSON.parse(readFileSync(TABS_FILE, "utf8"));
@@ -79,8 +98,15 @@ export function readTabs(): Record<string, TabInfo> {
     return {};
   }
 }
-export const writeTabs = (tabs: Record<string, TabInfo>) =>
-  writeFileSync(TABS_FILE, JSON.stringify(tabs, null, 2));
+export const writeTabs = (tabs: Record<string, TabInfo>) => writeJsonAtomic(TABS_FILE, tabs);
+export const mutateTabs = (
+  update: (tabs: Record<string, TabInfo>) => Record<string, TabInfo>,
+): Promise<Record<string, TabInfo>> =>
+  withChromeStateLock(() => {
+    const next = update(readTabs());
+    writeTabs(next);
+    return next;
+  });
 
 export async function pageTargets(): Promise<{ id: string; url: string; title: string }[]> {
   const { targetInfos } = await cdp((send) => send("Target.getTargets"));
@@ -143,7 +169,7 @@ export async function pollUntil(
 
 /** One poll interval. Waits can last an hour, and a window Win+D minimizes meanwhile is hidden to the page (AI Studio
  * stalls its answer) and sits as a clickable bar near Start, so the windows are guarded every second. */
-async function pollPause() {
+export async function pollPause() {
   guard();
   await Bun.sleep(1_000);
 }
@@ -318,8 +344,7 @@ function readChromeMeta(): ChromeMeta | null {
     return null;
   }
 }
-const writeChromeMeta = (meta: ChromeMeta) =>
-  writeFileSync(CHROME_META_FILE, JSON.stringify(meta, null, 2));
+const writeChromeMeta = (meta: ChromeMeta) => writeJsonAtomic(CHROME_META_FILE, meta);
 
 const chromeBrowserPid = () =>
   cdp(
@@ -327,6 +352,35 @@ const chromeBrowserPid = () =>
       (await send("SystemInfo.getProcessInfo")).processInfo.find((p: any) => p.type === "browser")
         .id as number,
   );
+
+const TARGET_BUSY_EXPR = `(() => {
+  if (${GENERATING}) return true;
+  if (!/^\\/(?:u\\/\\d+\\/)?generate-speech\\/?$/.test(location.pathname)) return false;
+  const stopBtn = [...document.querySelectorAll('button,[role="button"]')].some(
+    (e) =>
+      e.getClientRects().length > 0 &&
+      !e.closest('[inert],[aria-hidden="true"]') &&
+      /^Stop(?: generating)?$/i.test(AS.nameOf(e)),
+  );
+  if (stopBtn) return true;
+  const panel = document.querySelector("ms-audio-footer .player-container:has(audio)")
+    || document.querySelector(".player-container:has([aria-label='Seek audio position'])");
+  const audio = panel?.querySelector("audio");
+  if (!audio || !(audio.src || audio.currentSrc)) return false;
+  const seek = panel?.querySelector('[aria-label="Seek audio position"]');
+  const timelineEnd = seek?.max ? Number(seek.max) : null;
+  const playing = [...(panel?.querySelectorAll('button,[role="button"]') ?? [])].some(
+    (e) =>
+      e.getClientRects().length > 0 &&
+      !e.closest('[inert],[aria-hidden="true"]') &&
+      AS.nameOf(e) === "Pause",
+  );
+  const settled = Boolean(audio.currentSrc && (!audio.src || audio.src === audio.currentSrc));
+  const duration = Number.isFinite(audio.duration) ? audio.duration : null;
+  const final = duration !== null && duration > 0 && settled && !(playing && audio.paused)
+    && (timelineEnd === null || timelineEnd <= Math.ceil(duration));
+  return !final;
+})()`;
 
 export async function isTargetGeneratingCdp(targetId: string): Promise<boolean> {
   const list = (await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json()) as any[];
@@ -352,7 +406,7 @@ export async function isTargetGeneratingCdp(targetId: string): Promise<boolean> 
           id: 1,
           method: "Runtime.evaluate",
           params: {
-            expression: `(() => { ${RUNTIME}; return ${GENERATING}; })()`,
+            expression: `(() => { ${RUNTIME}; return ${TARGET_BUSY_EXPR}; })()`,
             returnByValue: true,
           },
         }),
@@ -374,6 +428,16 @@ async function anyTabGenerating(): Promise<boolean> {
   return false;
 }
 
+async function hasActiveWorkTabs(): Promise<boolean> {
+  const pages = await pageTargets();
+  const registered = new Set(Object.values(readTabs()).map((t) => t.id));
+  return pages.some(
+    (p) =>
+      registered.has(p.id) ||
+      /aistudio\.google\.com\/(?:u\/\d+\/)?(?:generate-speech|prompts)\b/.test(p.url),
+  );
+}
+
 async function closeChromeGracefully(): Promise<boolean> {
   try {
     await cdp((send) => send("Browser.close"));
@@ -385,65 +449,71 @@ async function closeChromeGracefully(): Promise<boolean> {
   return false;
 }
 
-export const offscreen = (slot: number) => ({ left: -10000, top: slot * 1200 });
+export const offscreen = (slot: number) => ({
+  left: -10000 - Math.floor(slot / 10) * 2200,
+  top: (slot % 10) * 1200,
+});
 
 export async function startChrome(opts: { show?: boolean } = {}): Promise<string> {
-  const myDesktop = currentDesktopName();
-  let migrated = false;
-  if (await chromeUp()) {
-    const livePid = await chromeBrowserPid();
-    chromePid = livePid;
-    const meta = readChromeMeta();
-    const needsMove = shouldMigrateChromeDesktop({
-      livePid,
-      recordedPid: meta?.pid,
-      recordedDesktop: meta?.desktop,
-      currentDesktop: myDesktop,
-      show: !!opts.show,
-      hasVisibleOnCurrentDesktop: hasVisibleFrames(livePid),
-    });
-    if (!needsMove) return `already running on port ${PORT}`;
-    if (await anyTabGenerating()) {
-      return `already running on port ${PORT} (kept on ${meta?.desktop || "other desktop"} while a tab generates)`;
-    }
-    const closed = await closeChromeGracefully();
-    if (!closed) return `already running on port ${PORT} (did not exit for desktop isolation)`;
-    chromePid = undefined;
-    writeTabs({});
-    migrated = true;
-  }
-  mkdirSync(PROFILE, { recursive: true });
-  const args = [
-    `--remote-debugging-port=${PORT}`,
-    `--user-data-dir=${PROFILE}`,
-    "--no-first-run",
-    "--no-startup-window",
-    "--disable-backgrounding-occluded-windows",
-    "--window-position=-10000,0",
-    "--window-size=1920,1080",
-  ];
-  const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
-  const p = Bun.spawnSync(
-    [
-      "powershell",
-      "-NoProfile",
-      "-Command",
-      `Start-Process -FilePath ${psQuote(CHROME)} -ArgumentList ${psQuote(args.map((a) => `"${a}"`).join(" "))}`,
-    ],
-    { stdout: "pipe", stderr: "pipe", windowsHide: true },
-  );
-  if (p.exitCode !== 0)
-    throw new StepError(`could not start Chrome (${CHROME}): ${p.stderr.toString().trim()}`);
-  for (let i = 0; i < 40; i++) {
-    await Bun.sleep(500);
+  return withChromeStateLock(async () => {
+    const myDesktop = currentDesktopName();
+    let migrated = false;
     if (await chromeUp()) {
-      const pid = await chromeBrowserPid();
-      chromePid = pid;
-      if (myDesktop) writeChromeMeta({ pid, desktop: myDesktop });
-      return `${migrated ? "migrated off visible desktop to" : "started"} ${myDesktop || "off-screen"} with profile ${PROFILE}`;
+      const livePid = await chromeBrowserPid();
+      chromePid = livePid;
+      const meta = readChromeMeta();
+      const needsMove = shouldMigrateChromeDesktop({
+        livePid,
+        recordedPid: meta?.pid,
+        recordedDesktop: meta?.desktop,
+        currentDesktop: myDesktop,
+        show: !!opts.show,
+        hasVisibleOnCurrentDesktop: hasVisibleFrames(livePid),
+      });
+      if (!needsMove) return `already running on port ${PORT}`;
+      if ((await anyTabGenerating()) || (!opts.show && (await hasActiveWorkTabs()))) {
+        return `already running on port ${PORT} (kept on ${meta?.desktop || "other desktop"} while active tab(s) exist)`;
+      }
+      const closed = await closeChromeGracefully();
+      if (!closed) return `already running on port ${PORT} (did not exit for desktop isolation)`;
+      chromePid = undefined;
+      writeTabs({});
+      migrated = true;
     }
-  }
-  throw new StepError(`Chrome did not open port ${PORT} within 20 s (${CHROME})`);
+    mkdirSync(PROFILE, { recursive: true });
+    const args = [
+      `--remote-debugging-port=${PORT}`,
+      `--user-data-dir=${PROFILE}`,
+      "--no-first-run",
+      "--no-startup-window",
+      "--disable-backgrounding-occluded-windows",
+      "--window-position=-10000,0",
+      "--window-size=1920,1080",
+    ];
+    const psQuote = (s: string) => `'${s.replaceAll("'", "''")}'`;
+    const p = Bun.spawnSync(
+      [
+        "powershell",
+        "-NoProfile",
+        "-Command",
+        `Start-Process -FilePath ${psQuote(CHROME)} -ArgumentList ${psQuote(args.map((a) => `"${a}"`).join(" "))}`,
+      ],
+      { stdout: "pipe", stderr: "pipe", windowsHide: true },
+    );
+    if (p.exitCode !== 0)
+      throw new StepError(`could not start Chrome (${CHROME}): ${p.stderr.toString().trim()}`);
+    for (let i = 0; i < 40; i++) {
+      await Bun.sleep(500);
+      if (await chromeUp()) {
+        const pid = await chromeBrowserPid();
+        chromePid = pid;
+        writeTabs({});
+        if (myDesktop) writeChromeMeta({ pid, desktop: myDesktop });
+        return `${migrated ? "migrated off visible desktop to" : "started"} ${myDesktop || "off-screen"} with profile ${PROFILE}`;
+      }
+    }
+    throw new StepError(`Chrome did not open port ${PORT} within 20 s (${CHROME})`);
+  });
 }
 
 type Send = (method: string, params?: object) => Promise<any>;
@@ -492,25 +562,54 @@ const guard = () =>
     ? undefined
     : guardWindows(chromePid, offscreen(0).left, { allowOnScreen });
 
-export const prepareTab = (show = false) =>
-  withForegroundLocked((locked) => placeTab(show, locked));
+export const prepareTab = (show = false, opts: { createIfMissing?: boolean } = {}) =>
+  withForegroundLocked((locked) => placeTab(show, locked, opts));
 
-async function placeTab(show: boolean, locked: boolean): Promise<string> {
+async function placeTab(
+  show: boolean,
+  locked: boolean,
+  opts: { createIfMissing?: boolean } = {},
+): Promise<string> {
   allowOnScreen = show;
+  const createIfMissing = opts.createIfMissing ?? true;
   const tabs = readTabs();
-  let info = tabs[tab];
-  const opened = !info || !(await pageTargets()).some((p) => p.id === info!.id);
+  const livePages = await pageTargets();
+  const liveIds = new Set(livePages.map((p) => p.id));
+  const liveTabs = Object.fromEntries(Object.entries(tabs).filter(([, t]) => liveIds.has(t.id)));
+  let info = liveTabs[tab];
+  const opened = !info;
   chromePid ??= await chromeBrowserPid();
   if (opened) {
+    if (!createIfMissing) {
+      if (Object.keys(liveTabs).length !== Object.keys(tabs).length) {
+        await mutateTabs((cur) =>
+          Object.fromEntries(Object.entries(cur).filter(([, t]) => liveIds.has(t.id))),
+        );
+      }
+      throw new StepError(
+        `Tab ${tab} is no longer open in Chrome (Chrome may have restarted). Open it again first.`,
+      );
+    }
     const used = new Set(
-      Object.entries(tabs)
+      Object.entries(liveTabs)
         .filter(([l]) => l !== tab)
         .map(([, t]) => t.slot),
     );
     await cdp(async (send) => {
-      for (const p of await pageTargets()) {
-        const { bounds } = await send("Browser.getWindowForTarget", { targetId: p.id });
-        if (bounds.left === offscreen(0).left) used.add(Math.round(bounds.top / offscreen(1).top));
+      for (const p of livePages) {
+        try {
+          const { bounds } = await send("Browser.getWindowForTarget", { targetId: p.id });
+          if (
+            bounds.left <= -10000 &&
+            (-10000 - bounds.left) % 2200 === 0 &&
+            bounds.top >= 0 &&
+            bounds.top < 12000
+          ) {
+            const col = Math.round((-10000 - bounds.left) / 2200);
+            const row = Math.round(bounds.top / 1200);
+            if (col >= 0 && row >= 0 && row < 10) used.add(col * 10 + row);
+          }
+        } catch {}
       }
     });
     let slot = 0;
@@ -534,7 +633,12 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
       return targetId as string;
     });
     info = { id: createdId, slot };
-    writeTabs({ ...readTabs(), [tab]: info });
+    await mutateTabs((cur) => ({
+      ...Object.fromEntries(
+        Object.entries(cur).filter(([, t]) => liveIds.has(t.id) || t.id === createdId),
+      ),
+      [tab]: info!,
+    }));
     guard();
   }
   const { id, slot } = info!;
@@ -546,10 +650,13 @@ async function placeTab(show: boolean, locked: boolean): Promise<string> {
   if (bound !== id) ab("tab", id);
   const strays = await cdp(async (send) => {
     let blank = 0;
+    const registeredIds = new Set(Object.values(readTabs()).map((t) => t.id));
     for (const p of await pageTargets()) {
-      if (p.url !== "about:blank") continue;
-      await send("Target.closeTarget", { targetId: p.id });
-      blank++;
+      if (p.url !== "about:blank" || registeredIds.has(p.id)) continue;
+      try {
+        await send("Target.closeTarget", { targetId: p.id });
+        blank++;
+      } catch {}
     }
     const { windowId, bounds } = await send("Browser.getWindowForTarget", { targetId: id });
     if (bounds.windowState !== "normal") {
@@ -588,8 +695,10 @@ async function sameWindow(send: Send, targetId: string) {
   const pages: { id: string; url: string }[] = [];
   for (const t of targetInfos as any[]) {
     if (t.type !== "page") continue;
-    const w = await send("Browser.getWindowForTarget", { targetId: t.targetId });
-    if (w.windowId === windowId) pages.push({ id: t.targetId, url: t.url });
+    try {
+      const w = await send("Browser.getWindowForTarget", { targetId: t.targetId });
+      if (w.windowId === windowId) pages.push({ id: t.targetId, url: t.url });
+    } catch {}
   }
   return pages;
 }
@@ -967,12 +1076,7 @@ export function verifyVideoChipTokens(
   }
   const duration = pictureDurationInRange(source, request.start, request.end);
   if (!(duration > 0)) return { floor: 0, reason: "the selected window contains no source video" };
-  const floor = expectedVideoTokensFloor(
-    duration,
-    request.fps,
-    request.media,
-    source.sourceFps,
-  );
+  const floor = expectedVideoTokensFloor(duration, request.fps, request.media, source.sourceFps);
   const reason =
     tokens < floor
       ? `AI Studio estimated ${tokens.toLocaleString("en-US")} video tokens, below the source-based floor ${floor.toLocaleString("en-US")} for ${request.fps} fps. Try uploading the selected window as its own file or use gemini-api.ts.`
@@ -1289,14 +1393,19 @@ export const isVideoFile = (file: string) =>
 /** One upload call per file takes ~15-20 s each; one call for many files takes seconds, but its chips land in
  * upload-finish order. So --batch sends every non-video file at once and keeps videos one by one after it, since
  * each video chip is then found by position to open its own settings dialog. */
-export function planUploads(files: string[], batch: boolean): { batch: string[]; serial: string[] } {
+export function planUploads(
+  files: string[],
+  batch: boolean,
+): { batch: string[]; serial: string[] } {
   if (!batch) return { batch: [], serial: files };
   return { batch: files.filter((f) => !isVideoFile(f)), serial: files.filter(isVideoFile) };
 }
 
 export function chipNameClashes(names: string[]): [string, string][] {
   return names.flatMap((a) =>
-    names.filter((b) => b !== a && ` ${b} `.includes(` ${a} `)).map((b): [string, string] => [a, b]),
+    names
+      .filter((b) => b !== a && ` ${b} `.includes(` ${a} `))
+      .map((b): [string, string] => [a, b]),
   );
 }
 
@@ -1356,10 +1465,15 @@ export type Step = [name: string, run: () => Promise<string> | string];
  * Runs steps in order: "→ [n/N] name" when a step starts, "✓ ... : <evidence read back from the page>" when it is
  * confirmed, "✗ ... failed: <reason>" plus a screenshot when it is not. Exit 0 = all confirmed, 1 = a step failed.
  */
-export async function runSteps(steps: Step[], opts: { onDone?: () => void } = {}) {
+export async function runSteps(
+  steps: Step[],
+  opts: { onDone?: () => void; screenshot?: boolean } = {},
+) {
   const t0 = Date.now();
   let current = "";
   let stepNo = 0;
+  const hasPrepare = steps.some(([name]) => name === "prepare tab" || name === "show window");
+  let tabReady = !hasPrepare;
   try {
     for (const [name, run] of steps) {
       stepNo++;
@@ -1368,15 +1482,19 @@ export async function runSteps(steps: Step[], opts: { onDone?: () => void } = {}
       guard();
       const start = Date.now();
       const confirmed = await run();
+      if (name === "prepare tab" || name === "show window") tabReady = true;
       console.error(`✓ ${current}: ${confirmed} (${secs(Date.now() - start)})`);
     }
     console.error(`✓ done in ${secs(Date.now() - t0)}`);
     opts.onDone?.();
   } catch (e) {
-    const reason = e instanceof StepError ? e.message : ((e as Error).stack ?? String(e));
+    const reason =
+      e instanceof StepError || e instanceof MutexTimeoutError
+        ? e.message
+        : ((e as Error).stack ?? String(e));
     console.error(`✗ ${current} failed: ${reason}`);
-    if (await chromeUp()) {
-      const shot = resolve(tmpdir(), `aistudio-failed-${tab}-step${stepNo}.png`);
+    if (opts.screenshot !== false && tabReady && (await chromeUp())) {
+      const shot = resolve(tmpdir(), `aistudio-failed-${tab}-step${stepNo}-${Date.now()}.png`);
       try {
         ab("screenshot", shot);
         console.error(`  screenshot: ${shot}`);

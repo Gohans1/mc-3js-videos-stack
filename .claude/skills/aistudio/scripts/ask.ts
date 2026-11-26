@@ -51,6 +51,7 @@ import {
   setTool,
   type Step,
   StepError,
+  stripBom,
   systemInstructions,
   TAB_RE,
   tabFlag,
@@ -192,7 +193,7 @@ if (systemFile !== undefined && opts.system !== undefined)
   usage("--system and --system-file both set the system instructions; pick one");
 if (systemFile !== undefined && !existsSync(systemFile))
   usage(`system file not found: ${systemFile}`);
-const system = systemFile === undefined ? opts.system : readFileSync(systemFile, "utf8");
+const system = systemFile === undefined ? opts.system : stripBom(readFileSync(systemFile, "utf8"));
 // An empty file is a template not written yet; clearing the instructions takes --system "".
 if (systemFile !== undefined && !system!.trim()) usage(`system file is empty: ${systemFile}`);
 
@@ -224,7 +225,7 @@ if (opts.collect) {
   const promptFile = opts["prompt-file"];
   if (promptFile !== undefined) {
     if (!existsSync(promptFile)) usage(`prompt file not found: ${promptFile}`);
-    prompt = toLF(readFileSync(promptFile, "utf8"));
+    prompt = toLF(stripBom(readFileSync(promptFile, "utf8")));
     files = args.map((f) => resolve(f));
   } else {
     files = args.slice(0, -1).map((f) => resolve(f));
@@ -238,7 +239,10 @@ if (opts.collect) {
   const filesFrom = opts["files-from"];
   if (filesFrom !== undefined) {
     if (!existsSync(filesFrom)) usage(`--files-from list not found: ${filesFrom}`);
-    const listed = readFileSync(filesFrom, "utf8").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const listed = readFileSync(filesFrom, "utf8")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
     files = [...files, ...listed.map((f) => resolve(f))];
   }
   if (opts.chat && !args.length && promptFile === undefined && filesFrom === undefined) {
@@ -257,10 +261,20 @@ let previousBaseline: { lastTurnInTokens: number | null; topTokens: number | nul
 if (previousTokens !== undefined) {
   const fields = previousTokens.split(",");
   if (
-    mode !== "collect" || minInTokens === undefined || fields.length !== 2 ||
-    fields.some((value) => value !== "none" && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))))
-  ) usage("--previous-tokens takes in,total (numbers or none) in collect mode with --min-in-tokens");
-  previousBaseline = { lastTurnInTokens: decodePrevious(fields[0]!), topTokens: decodePrevious(fields[1]!) };
+    mode !== "collect" ||
+    minInTokens === undefined ||
+    fields.length !== 2 ||
+    fields.some(
+      (value) => value !== "none" && (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value))),
+    )
+  )
+    usage(
+      "--previous-tokens takes in,total (numbers or none) in collect mode with --min-in-tokens",
+    );
+  previousBaseline = {
+    lastTurnInTokens: decodePrevious(fields[0]!),
+    topTokens: decodePrevious(fields[1]!),
+  };
 }
 
 const isVideo = isVideoFile;
@@ -416,7 +430,8 @@ for (const { name, on } of tools) add(`turn ${name} ${on ? "on" : "off"}`, () =>
 const videoChipTokensByIndex = new Map<number, number>();
 let sourceTokenFloor = 0;
 let checkedMedia = media;
-const expectedChipTokens = () => [...videoChipTokensByIndex.values()].reduce((sum, n) => sum + n, 0);
+const expectedChipTokens = () =>
+  [...videoChipTokensByIndex.values()].reduce((sum, n) => sum + n, 0);
 if (plan.batch.length) {
   const batchNames = plan.batch.map((f) => basename(f));
   add(`upload ${plan.batch.length} file(s) at once`, async () => {
@@ -432,7 +447,10 @@ if (plan.batch.length) {
       await pollUntil(
         `${chipCount} === ${plan.batch.length} && ${chipsNamedReady(batchNames)}`,
         uploadTimeoutMs,
-        (ms) => console.error(`  … still uploading, ${js<number>(chipCount)}/${plan.batch.length} chips (${secs(ms)})`),
+        (ms) =>
+          console.error(
+            `  … still uploading, ${js<number>(chipCount)}/${plan.batch.length} chips (${secs(ms)})`,
+          ),
       );
     } catch (e) {
       if (!(e instanceof TimeoutError)) throw e;

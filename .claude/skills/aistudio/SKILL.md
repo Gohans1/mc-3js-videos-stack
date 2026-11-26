@@ -31,7 +31,7 @@ For the Generate Speech playground, use [aistudio-tts](../aistudio-tts/SKILL.md)
 | Ask text or multimodal (video/image/PDF/audio/text) | `ASK [file ...] "prompt" [--model <id>] [--thinking <level>] [--media <level>] [--fps <n>] [--tool search=off] [--system-file <path>] --out answer.md` (prompt goes last; use `--prompt-file <file>` for long prompts, or `-- "-..."` if prompt starts with `-`) |
 | Many images or other non-video files fast | `ASK --batch a.jpg b.jpg ... "prompt"` uploads them in one call. AI Studio lists images in upload-finish order, so burn a label (e.g. timecode) into each image. Videos upload one by one after the batch. For hundreds of files pass `--files-from list.txt` (one path per line) to fit within the Windows command-line limit. For scene review use at most 450 images per prompt. See [measured capacity and browser failures](../compare-video/references/prompt-design.md#batch-capacity-follow-up-2026-11-26). |
 | Continue or collect a chat | `ASK --chat <url-or-id> [file ...] "follow-up"` / `ASK --chat <url-or-id> --out ans.md` / `ASK --collect --out ans.md` (unsaved open chat) |
-| Parallel tasks across windows | Use distinct `--tab <label>` per job (e.g. `--tab work1`, `--tab work2`); never run two commands on the same tab at once. Close temp tabs afterward with `STUDIO tab close <label>`. |
+| Parallel tasks across windows | Use distinct `--tab <label>` per job (e.g. `--tab work1`, `--tab work2`); never run two commands on the same tab at once. Under Windows `exebox-*` job-object shells, start `STUDIO chrome --keepalive` as a background daemon first so Chrome does not exit when a spawning shell ends. Close temp tabs afterward with `STUDIO tab close <label> [--if-open]`. |
 | Search & read saved History | `STUDIO history --search <query>`, then `STUDIO read <url-or-id> [--thoughts] --out chat.md` |
 | Inspect state, settings, or UI health | `STUDIO status`, `STUDIO open new` then `STUDIO models` (requires a chat tab), `STUDIO map`, `STUDIO --tab doctor doctor [--quick]`, `STUDIO --tab smoke smoke` |
 
@@ -53,7 +53,7 @@ Add `--json` to data-printing `STUDIO` commands (`status`, `tabs`, `models`, `hi
 | `✓ [n/N] step: ...` | Step verified by reading back live page state. |
 | `… still ...` | Waiting (heartbeat every 30s). |
 | `⚠ warning: answer may be truncated (...)` | Copied markdown ended inside an unclosed code fence, incomplete markdown table row, unclosed bold span, or trailing mid-clause punctuation (the `copy answer` step also appends `⚠ may be truncated: ...`); send a `--chat` follow-up to retrieve the tail. |
-| `✗ [n/N] step failed: ...` | Failure with reason and screenshot at `%TEMP%\aistudio-failed-<tab>-stepN.png`. |
+| `✗ [n/N] step failed: ...` | Failure with reason and timestamped screenshot at `%TEMP%\aistudio-failed-<tab>-stepN-<ts>.png` (skipped for non-page commands or pre-tab failures). |
 
 Exit `0`: verified success. Exit `1`: step/runtime failure. Exit `2`: invalid CLI input (browser untouched).
 

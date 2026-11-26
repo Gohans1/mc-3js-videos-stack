@@ -30,6 +30,7 @@ import {
   has,
   isTargetGeneratingCdp,
   js,
+  mutateTabs,
   navigate,
   one,
   openChat,
@@ -64,7 +65,6 @@ import {
   upload,
   useTab,
   waitFor,
-  writeTabs,
 } from "./lib";
 import {
   type Candidate,
@@ -89,7 +89,7 @@ different tabs can work in parallel (one command per tab at a time). --json wher
 
 Tabs and chats
   tabs                            every tab: label, url, title  [--json]
-  tab close <label>               close a tab's window (refused while it generates)
+  tab close <label> [--if-open]   close a tab's window (refused while it generates; --if-open succeeds if already closed)
   status                          url, account, chat, title, turns, generating?, settings  [--json]
   open new [--model <id>]         fresh chat (default ${DEFAULT_MODEL})
   open <chat link|id>             a saved chat (not reloaded if already open there)
@@ -110,7 +110,7 @@ Health and low level
   map                             every named element of page-map.ts: page state, purpose, locators (no browser)
   screenshot [file.png]           what the tab shows now
   ab <agent-browser args...>      escape hatch: agent-browser bound to this tab (e.g. ab snapshot -i); close is refused
-  chrome [--show]                 start Chrome (port ${PORT}) and the tab's window off-screen; --show puts it on screen to log in by hand
+  chrome [--show | --keepalive]   start Chrome (port ${PORT}) off-screen; --show puts it on screen for login; --keepalive holds the process open for daemon runs
 Sending prompts and files: ${ASK} --help`;
 
 function usage(msg: string): never {
@@ -181,6 +181,8 @@ function parse() {
         out: { type: "string" },
         quick: { type: "boolean" },
         show: { type: "boolean" },
+        keepalive: { type: "boolean" },
+        "if-open": { type: "boolean" },
         description: { type: "string" },
       },
     });
@@ -195,6 +197,7 @@ let result: { data: unknown; text: () => string } | undefined;
 const emit = (data: unknown, text: () => string) => (result = { data, text });
 /** What runs before the command's own steps: start Chrome and bind the tab, unless the command says otherwise. */
 let prelude: Step[] = browserSteps;
+let allowScreenshot = true;
 const steps: Step[] = [];
 const add = (name: string, run: Step[1]) => steps.push([name, run]);
 
@@ -208,25 +211,38 @@ async function onChat() {
 
 switch (command) {
   case "chrome":
-    if (opt.show)
+    if (opt.show && opt.keepalive) usage("--show and --keepalive cannot be combined");
+    if (opt.show) {
       prelude = [
         ["start Chrome", () => startChrome({ show: true })],
         ["show window", () => prepareTab(true)],
       ];
+    } else if (opt.keepalive) {
+      prelude = [["start Chrome", () => startChrome()]];
+      allowScreenshot = false;
+      add("keep Chrome alive", async () => {
+        console.error(`  Chrome host ready on port ${PORT} (stop this task when all jobs finish).`);
+        await new Promise<void>((resolve) => {
+          process.once("SIGINT", () => resolve());
+          process.once("SIGTERM", () => resolve());
+        });
+        return "stopped";
+      });
+    }
     break;
 
   case "tabs":
     prelude = [];
+    allowScreenshot = false;
     add("list tabs", async () => {
       if (!(await chromeUp())) {
         emit([], () => "");
         return `Chrome is not running on port ${PORT}`;
       }
       const pages = await pageTargets();
-      const tabs = Object.fromEntries(
-        Object.entries(readTabs()).filter(([, t]) => pages.some((p) => p.id === t.id)),
+      const tabs = await mutateTabs((cur) =>
+        Object.fromEntries(Object.entries(cur).filter(([, t]) => pages.some((p) => p.id === t.id))),
       );
-      writeTabs(tabs);
       const labelOf = Object.fromEntries(Object.entries(tabs).map(([l, t]) => [t.id, l]));
       const rows = pages.map((p) => ({ tab: labelOf[p.id] ?? null, url: p.url, title: p.title }));
       emit(rows, () =>
@@ -241,18 +257,29 @@ switch (command) {
     if (args[0] !== "close" || !label)
       usage("tab takes: close <label> (tabs open by themselves on first --tab use)");
     prelude = [];
+    allowScreenshot = false;
     add(`close tab ${label}`, async () => {
       const id = readTabs()[label]?.id;
-      if (!id || !(await chromeUp()) || !(await pageTargets()).some((p) => p.id === id))
+      const pruneIfSame = () =>
+        mutateTabs((cur) => {
+          if (cur[label]?.id !== id) return cur;
+          const { [label]: _, ...others } = cur;
+          return others;
+        });
+      const alive =
+        Boolean(id) && (await chromeUp()) && (await pageTargets()).some((p) => p.id === id);
+      if (!alive) {
+        if (id) await pruneIfSame();
+        if (opt["if-open"]) return `tab "${label}" already closed`;
         throw new StepError(`no open tab "${label}" (see \`${STUDIO} tabs\`)`);
-      if (await isTargetGeneratingCdp(id)) {
+      }
+      if (await isTargetGeneratingCdp(id!)) {
         throw new StepError(
           `tab ${label} is still generating; collect it first (${ASK} --tab ${label} --collect)`,
         );
       }
-      const closed = await closeWindowOf(id);
-      const { [label]: _, ...others } = readTabs();
-      writeTabs(others);
+      const closed = await closeWindowOf(id!);
+      await pruneIfSame();
       return `closed its window (${closed} tab${closed === 1 ? "" : "s"})`;
     });
     break;
@@ -739,6 +766,7 @@ function doctor(quick: boolean) {
 }
 
 await runSteps([...prelude, ...steps], {
+  screenshot: allowScreenshot,
   onDone: () => {
     if (!result) return;
     console.log(opt.json ? JSON.stringify(result.data, null, 2) : result.text());
