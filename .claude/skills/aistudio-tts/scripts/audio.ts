@@ -1,7 +1,7 @@
-import { link, mkdir, mkdtemp, rmdir, unlink, writeFile } from "node:fs/promises";
+import { link, mkdir, mkdtemp, rename, rmdir, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 
-import { js, pageAlerts, secs, StepError } from "../../aistudio/scripts/lib";
+import { js, pageAlerts, pollPause, secs, StepError } from "../../aistudio/scripts/lib";
 import { enabled, exists, item, tap } from "./page-map";
 
 const player = `(${item("player")}?.querySelector('audio'))`;
@@ -71,6 +71,61 @@ export function inspectSpeechAudio(evidence: SpeechAudioEvidence) {
 export const readSpeechAudio = () =>
   inspectSpeechAudio(js<SpeechAudioEvidence>(speechAudioEvidence));
 
+export const clearRunBaseline = () => {
+  js(`delete ${runBaseline}`);
+};
+
+export type AudioWaitDecision =
+  | { action: "ready"; duration: number }
+  | { action: "wait"; idleSince: number }
+  | { action: "fail"; reason: string; clearBaseline: boolean };
+
+export function evaluateAudioWaitTick(input: {
+  phase: "generating" | "streaming" | "ready" | "idle";
+  duration: number | null;
+  awaitingNewAudio: boolean;
+  alert: string;
+  submitted: boolean;
+  idleSince: number;
+  now: number;
+  graceMs?: number;
+}): AudioWaitDecision {
+  const graceMs = input.graceMs ?? 10_000;
+  if (input.phase === "ready" && input.duration !== null) {
+    return { action: "ready", duration: input.duration };
+  }
+  if (input.phase === "generating" || input.phase === "streaming") {
+    return { action: "wait", idleSince: 0 };
+  }
+  if (!input.submitted && !input.awaitingNewAudio) {
+    return {
+      action: "fail",
+      reason: input.alert
+        ? `AI Studio says: ${input.alert}`
+        : "No speech generation or playable audio is present on this tab. Check status before collecting.",
+      clearBaseline: true,
+    };
+  }
+  const since = input.idleSince || input.now;
+  if (input.alert && input.now - since >= 2_000) {
+    return {
+      action: "fail",
+      reason: `AI Studio says: ${input.alert}`,
+      clearBaseline: true,
+    };
+  }
+  if (input.now - since >= graceMs) {
+    return {
+      action: "fail",
+      reason: input.alert
+        ? `AI Studio says: ${input.alert}`
+        : "Speech generation stopped without producing audio. Check status and any AI Studio alert.",
+      clearBaseline: true,
+    };
+  }
+  return { action: "wait", idleSince: since };
+}
+
 export function decodeWav(data: string) {
   const prefix = "data:audio/wav;base64,";
   if (!data.startsWith(prefix))
@@ -124,17 +179,20 @@ function inspectWav(bytes: Buffer) {
   return { duration: dataBytes / bytesPerSecond, correction };
 }
 
-export async function saveNewFile(output: string, bytes: Buffer) {
+export async function saveNewFile(output: string, bytes: Buffer, force = false) {
   const destination = resolve(output);
   await mkdir(dirname(destination), { recursive: true });
   const stage = await mkdtemp(join(dirname(destination), ".aistudio-tts-"));
   const temporary = join(stage, "audio.wav");
   try {
     await writeFile(temporary, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
-    await link(temporary, destination);
+    if (force) await rename(temporary, destination);
+    else await link(temporary, destination);
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new StepError(`Output already exists: ${destination}. Choose a new take path.`);
+      throw new StepError(
+        `Output already exists: ${destination}. Choose a new take path or pass --force.`,
+      );
     }
     throw error;
   } finally {
@@ -162,36 +220,53 @@ export function submitSpeech() {
   try {
     tap("run");
   } catch (error) {
-    js(`delete ${runBaseline}`);
+    clearRunBaseline();
     throw error;
   }
 }
 
-export async function waitForAudio(timeoutMs: number) {
+export async function waitForAudio(timeoutMs: number, opts: { submitted?: boolean } = {}) {
   const start = Date.now();
   let heartbeat = start;
+  let idleSince = 0;
+  const submitted = opts.submitted ?? false;
   while (Date.now() - start < timeoutMs) {
-    const state = readSpeechAudio();
-    if (state.phase === "ready") {
-      js(`delete ${runBaseline}`);
-      return state.duration;
+    const evidence = js<SpeechAudioEvidence>(speechAudioEvidence);
+    const state = inspectSpeechAudio(evidence);
+    const now = Date.now();
+    const alert = state.phase === "idle" ? pageAlerts() : "";
+    const decision = evaluateAudioWaitTick({
+      phase: state.phase,
+      duration: state.duration,
+      awaitingNewAudio: evidence.awaitingNewAudio,
+      alert,
+      submitted,
+      idleSince,
+      now,
+    });
+    if (decision.action === "ready") {
+      clearRunBaseline();
+      return decision.duration;
     }
-    const alert = pageAlerts();
-    if (alert) throw new StepError(`AI Studio says: ${alert}`);
-    if (Date.now() - heartbeat >= 15_000) {
-      heartbeat = Date.now();
+    if (decision.action === "fail") {
+      if (decision.clearBaseline) clearRunBaseline();
+      throw new StepError(decision.reason);
+    }
+    idleSince = decision.idleSince;
+    if (now - heartbeat >= 15_000) {
+      heartbeat = now;
       console.error(`… waiting for speech audio (${state.phase}, ${secs(heartbeat - start)}).`);
     }
-    await Bun.sleep(1_000);
+    await pollPause();
   }
   throw new StepError(
     `No completed audio verified after ${secs(timeoutMs)}. Keep the tab open and run collect on the same tab. Check status before running again.`,
   );
 }
 
-export async function exportAudio(output: string) {
+export async function exportAudio(output: string, force = false) {
   const data = js<string>(source);
   const bytes = decodeWav(data);
-  const path = await saveNewFile(output, bytes);
+  const path = await saveNewFile(output, bytes, force);
   return { path, bytes: bytes.length, duration: inspectWav(bytes).duration };
 }

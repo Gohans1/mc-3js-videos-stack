@@ -2,6 +2,7 @@ import { ab, click, focus, js, StepError, toLF } from "../../aistudio/scripts/li
 import { inspectSpeechAudio, type SpeechAudioEvidence, speechAudioEvidence } from "./audio";
 import {
   DEFAULT_MODEL,
+  matchChoice,
   SPEECH_ORIGIN,
   SPEECH_PATH,
   speechAccountMatches,
@@ -52,11 +53,16 @@ export async function openSpeech(model = DEFAULT_MODEL, account?: string) {
     ab("open", destination);
   }
   await verify(
-    `${exists("block")} || ${exists("welcome")} || location.origin !== ${JSON.stringify(SPEECH_ORIGIN)}`,
+    `(${exists("block")} || ${exists("welcome")}) || location.hostname === "accounts.google.com"`,
     "The speech workspace did not render its start screen or editor. Inspect the live tab with snapshot.",
     35_000,
   );
   const actual = requireSpeechPage(false);
+  await verify(
+    `${exists("block")} || ${exists("welcome")}`,
+    "The speech workspace did not finish hydrating its start screen or editor.",
+    15_000,
+  );
   if (account !== undefined && !speechAccountMatches(actual.pathname, account)) {
     if (!alreadyOnSpeech) bindSlot(account);
     else
@@ -77,6 +83,11 @@ export async function openSpeech(model = DEFAULT_MODEL, account?: string) {
 export const block = (number: number) => item("block", undefined, number - 1);
 
 export async function startEditor() {
+  await verify(
+    `${exists("block")} || ${exists("welcome")}`,
+    "The speech workspace did not render its start screen or editor.",
+    15_000,
+  );
   if (!js<boolean>(exists("block"))) {
     tap("welcome");
     await verify(exists("block"), "Create new dialog did not open the screenplay editor.");
@@ -116,6 +127,15 @@ const styleValue = (trigger: string) => `(e => {
   return e.title === 'Style' && !e.classList.contains('has-style') ? '' : e.title;
 })(${trigger})`;
 
+export async function blockStyle(
+  number: number,
+): Promise<{ current: string; presets: { name: string; label: string }[] }>;
+export async function blockStyle(number: number, text: string, preset?: boolean): Promise<string>;
+export async function blockStyle(
+  number: number,
+  text?: string,
+  preset?: boolean,
+): Promise<string | { current: string; presets: { name: string; label: string }[] }>;
 export async function blockStyle(number: number, text?: string, preset = false) {
   const root = block(number);
   const trigger = item("style", root);
@@ -141,22 +161,44 @@ export async function blockStyle(number: number, text?: string, preset = false) 
     return menu;
   }
   if (preset) {
-    const requested = JSON.stringify(text);
-    const choice = `${choices}.find(e => ${presetName}(e) === ${requested} || AS.nameOf(e) === ${requested})`;
-    const expected = js<string>(
-      `(() => { const e = ${choice}; return e ? ${presetName}(e) : ''; })()`,
+    const presets = js<{ name: string; label: string }[]>(
+      `${choices}.map(e => ({ name: ${presetName}(e), label: AS.nameOf(e) }))`,
     );
-    if (!expected)
-      throw new StepError(`Unknown preset "${text}". Run style ${number} for the live choices.`);
-    click(choice, `style preset ${text}`);
-    await verify(
-      `!(${exists("styleText")}) && ${styleValue(trigger)} === ${JSON.stringify(expected)}`,
-      `AI Studio did not show preset ${expected} on block ${number}.`,
-    );
-    return `block ${number} style preset ${expected} verified`;
+    const matched =
+      matchChoice(
+        presets.map((p) => p.name),
+        text,
+      ) ?? presets.find((p) => p.label.trim().toLowerCase() === text.trim().toLowerCase())?.name;
+    if (!matched) {
+      await close();
+      throw new StepError(
+        `Unknown preset "${text}". Available presets: ${presets.map((p) => p.name).join(", ")}.`,
+      );
+    }
+    const choice = `${choices}.find(e => ${presetName}(e) === ${JSON.stringify(matched)})`;
+    try {
+      click(choice, `style preset ${matched}`);
+      await verify(
+        `!(${exists("styleText")}) && ${styleValue(trigger)} === ${JSON.stringify(matched)}`,
+        `AI Studio did not show preset ${matched} on block ${number}.`,
+      );
+    } catch (error) {
+      try {
+        if (js<boolean>(exists("styleText"))) await close();
+      } catch {}
+      throw error;
+    }
+    return `block ${number} style preset ${matched} verified`;
   }
   const expected = toLF(text);
-  await fillValue(item("styleText"), expected, `block ${number} style`);
+  try {
+    await fillValue(item("styleText"), expected, `block ${number} style`);
+  } catch (error) {
+    try {
+      if (js<boolean>(exists("styleText"))) await close();
+    } catch {}
+    throw error;
+  }
   await close();
   if (js<string>(styleValue(trigger)) !== expected) {
     throw new StepError(`AI Studio did not show the new style on block ${number}.`);
@@ -239,9 +281,7 @@ export async function openLibrary(target: number, source: "block" | "speaker" = 
 }
 
 export async function closeLibrary() {
-  const name = js<string>(label(item("closePanel")));
-  if (!name) throw new StepError("The voice library's close control is missing. Inspect snapshot.");
-  ab("find", "role", "button", "click", "--name", name, "--exact");
+  tap("closePanel");
   await verify(
     `! (${exists("voiceSearch")})`,
     "Voice settings stayed open. Inspect the active overlay.",
@@ -252,20 +292,45 @@ export async function closeLibrary() {
 export async function addExpression(number: number, name?: string) {
   const root = block(number);
   const after = `${list("expressionChoices", root)}.map(AS.nameOf)`;
+  const closePicker = async () => {
+    if (!js<boolean>(`${after}.length > 0`)) return;
+    tap("expressions", root);
+    if (
+      !(await verify(`!(${after}.length > 0)`, "Expression picker stayed open.", 3_000).then(
+        () => true,
+        () => false,
+      ))
+    ) {
+      ab("press", "Escape");
+    }
+  };
   if (!js<boolean>(`${after}.length > 0`)) tap("expressions", root);
   await verify(`${after}.length > 0`, "Expression picker did not expose any choices.");
-  if (name === undefined) return js<string[]>(after);
-  if (!js<string[]>(after).includes(name))
-    throw new StepError(`Unknown expression "${name}". List expressions first.`);
+  const choices = js<string[]>(after);
+  if (name === undefined) {
+    await closePicker();
+    return choices;
+  }
+  const matched = matchChoice(choices, name);
+  if (!matched) {
+    await closePicker();
+    throw new StepError(
+      `Unknown expression "${name}". Available expressions: ${choices.join(", ")}.`,
+    );
+  }
   const field = item("text", root);
   const before = js<string>(value(field));
-  focus(scopedButton(name, root), `expression ${name}`);
-  ab("press", "Enter");
-  const inserted = js<string>(value(field));
-  if (inserted === before || !inserted.includes(`<${name}>`)) {
-    throw new StepError(`AI Studio did not insert <${name}> into block ${number}.`);
+  try {
+    focus(scopedButton(matched, root), `expression ${matched}`);
+    ab("press", "Enter");
+    await verify(
+      `(() => { const v = ${value(field)}; return v !== ${JSON.stringify(before)} && v.includes(${JSON.stringify(`<${matched}>`)}); })()`,
+      `AI Studio did not insert <${matched}> into block ${number}.`,
+    );
+  } finally {
+    await closePicker().catch(() => {});
   }
-  return `<${name}> is in block ${number}`;
+  return `<${matched}> is in block ${number}`;
 }
 
 export async function generatedCode() {

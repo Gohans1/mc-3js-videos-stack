@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 import {
   matchChoice,
@@ -28,6 +29,15 @@ test("invalid screenplay data fails with the exact field before opening Chrome",
   expect(() => validateScene({ blocks: [{ text: "line", speaker: 3 }] })).toThrow(
     "blocks[0].speaker",
   );
+  expect(() => validateScene({ blocks: [{ text: "line", speaker: 2 }] })).toThrow(
+    "alternates speakers",
+  );
+  expect(() => validateScene({ voices: ["Fola", "Rami"], blocks: [{ text: "line" }] })).toThrow(
+    "two speech blocks",
+  );
+  expect(validateScene({ voices: [" Cruz "], blocks: [{ text: "line" }] }).voices).toEqual([
+    "Cruz",
+  ]);
   expect(() => validateScene({ blocks: [{ text: "", typo: true }] })).toThrow("blocks[0].typo");
   expect(() => validateScene({ blocks: [{ text: " " }] })).toThrow("blocks[0].text");
 });
@@ -66,10 +76,39 @@ test("validateBatchManifest validates shared defaults and per-take text or block
     ],
   });
   expect(manifest.takes).toHaveLength(2);
+  const dialogueManifest = validateBatchManifest({
+    voices: ["Fola", "Rami"],
+    takes: [
+      {
+        out: "takes/dialogue.wav",
+        blocks: [
+          { speaker: 1, text: "Hello." },
+          { speaker: 2, text: "Hi there.", style: "Warm" },
+        ],
+      },
+    ],
+  });
+  expect(dialogueManifest.takes[0]?.blocks).toHaveLength(2);
   expect(() => validateBatchManifest({ takes: [] })).toThrow("takes");
+  expect(() => validateBatchManifest({ takes: [{ out: "takes/01.mp3", text: "Line" }] })).toThrow(
+    ".wav",
+  );
   expect(() =>
-    validateBatchManifest({ takes: [{ out: "takes/01.mp3", text: "Line" }] }),
-  ).toThrow(".wav");
+    validateBatchManifest({
+      takes: [{ out: "takes/both.wav", text: "Hi", blocks: [{ text: "Hi" }] }],
+    }),
+  ).toThrow("not both");
+  expect(() =>
+    validateBatchManifest({
+      takes: [{ out: "takes/bad-style.wav", style: "Calm", blocks: [{ text: "Hi" }] }],
+    }),
+  ).toThrow("cannot be combined with blocks");
+  expect(() =>
+    validateBatchManifest({
+      voices: ["Fola", "Rami"],
+      takes: [{ out: "takes/one.wav", text: "Only one block." }],
+    }),
+  ).toThrow("two speech blocks");
   expect(() =>
     validateBatchManifest({
       takes: [
@@ -79,3 +118,37 @@ test("validateBatchManifest validates shared defaults and per-take text or block
     }),
   ).toThrow("duplicate");
 });
+
+test("cli.ts enforces --tab naming rules and returns valid JSON for close on an unregistered tab", () => {
+  const cli = resolve(import.meta.dir, "cli.ts");
+  const badTab = Bun.spawnSync(["bun", cli, "--tab", "tts-bad_name", "status"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(badTab.exitCode).toBe(2);
+  expect(badTab.stderr.toString()).toContain("no underscores");
+  expect(badTab.stderr.toString()).toContain("5–31");
+
+  const closeMissing = Bun.spawnSync(
+    ["bun", cli, "--tab", "tts-never-registered", "--json", "close"],
+    { stdout: "pipe", stderr: "pipe" },
+  );
+  expect(closeMissing.exitCode).toBe(0);
+  expect(JSON.parse(closeMissing.stdout.toString())).toBe("tab already closed");
+
+  const speakNoOut = Bun.spawnSync(["bun", cli, "--tab", "tts-check", "speak", "scene.json"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(speakNoOut.exitCode).toBe(2);
+  expect(speakNoOut.stderr.toString()).toContain("speak requires --out");
+
+  const badKeepOpen = Bun.spawnSync(["bun", cli, "--tab", "tts-check", "--keep-open", "open"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(badKeepOpen.exitCode).toBe(2);
+  expect(badKeepOpen.stderr.toString()).toContain(
+    "--keep-open is only accepted by speak and batch",
+  );
+}, 60_000);

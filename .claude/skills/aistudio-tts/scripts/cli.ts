@@ -3,22 +3,30 @@ import { parseArgs } from "node:util";
 
 import {
   browserSteps,
-  cdp,
+  chromeStep,
+  chromeUp,
+  closeWindowOf,
   currentTab,
+  isTargetGeneratingCdp,
   js,
+  mutateTabs,
+  pageTargets,
+  PORT,
+  prepareTab,
   readTabs,
   runSteps,
   type Step,
   StepError,
+  stripBom,
   TAB_RE,
   useTab,
-  writeTabs,
 } from "../../aistudio/scripts/lib";
-import { exportAudio, readSpeechAudio, submitSpeech, waitForAudio } from "./audio";
+import { clearRunBaseline, exportAudio, submitSpeech, waitForAudio } from "./audio";
 import {
   addBlock,
   addExpression,
   block,
+  blockCount,
   blockStyle,
   blockText,
   closeLibrary,
@@ -31,7 +39,15 @@ import {
   startEditor,
   temperature,
 } from "./editor";
-import { DEFAULT_MODEL, InputError, speechUrl, validateScene } from "./input";
+import {
+  DEFAULT_MODEL,
+  InputError,
+  type Scene,
+  SPEECH_PATH,
+  speechUrl,
+  validateBatchManifest,
+  validateScene,
+} from "./input";
 import { exists, inspectMap, item, label, tap, verify } from "./page-map";
 import { actOnUi, snapshot } from "./ui";
 import {
@@ -50,12 +66,21 @@ const grammar = {
     "[--model ID] [--account SLOT]",
     "Open the TTS model in a dedicated tab, preserving existing speech.",
   ],
+  speak: [
+    "SCENE.json --out TAKE.wav [--model ID] [--account SLOT] [--timeout SECONDS] [--keep-open] [--force]",
+    "Open tab, apply scene, generate audio, export WAV, and close tab in one process.",
+  ],
+  batch: [
+    "MANIFEST.json [--model ID] [--account SLOT] [--timeout SECONDS] [--keep-open] [--force]",
+    "Generate multiple takes sequentially on one reused tab in a single process.",
+  ],
+  tabs: ["", "List open tabs in the shared AI Studio Chrome without starting Chrome."],
   start: ["", "Start the screenplay editor from the landing screen."],
   status: ["", "Read model, blocks, temperature and audio state."],
   apply: ["SCENE.json", "Load a screenplay into a fresh, empty editor."],
   "block-add": ["", "Append a speech block."],
   "block-remove": ["BLOCK", "Delete one draft block by its 1-based number."],
-  text: ["BLOCK FILE", "Fill one block from a UTF-8 transcript file."],
+  text: ["BLOCK FILE|-", "Fill one block from a UTF-8 transcript file (or - for stdin)."],
   style: ["BLOCK [TEXT]", "Inspect or set freeform style. Pass an empty argument to clear."],
   preset: ["BLOCK NAME", "Choose a preset from the live Style menu."],
   expression: [
@@ -74,7 +99,7 @@ const grammar = {
   voice: ["NAME", "Select an exact voice in the open library."],
   favorite: ["NAME on|off", "Set the account's favorite state for a voice."],
   sample: [
-    "[NAME] [--out SAMPLE.wav]",
+    "[NAME] [--out SAMPLE.wav] [--force]",
     "Play a voice sample and optionally export its public catalog WAV.",
   ],
   "voice-create": [
@@ -82,11 +107,11 @@ const grammar = {
     "Open a voice form. Use snapshot/ui for its live controls.",
   ],
   run: [
-    "[--out TAKE.wav] [--timeout SECONDS]",
+    "[--out TAKE.wav] [--timeout SECONDS] [--force]",
     "Submit the screenplay once and wait for new audio.",
   ],
   collect: [
-    "--out TAKE.wav [--timeout SECONDS]",
+    "--out TAKE.wav [--timeout SECONDS] [--force]",
     "Export audio from the visible result without submitting.",
   ],
   stop: ["", "Stop a speech generation in progress."],
@@ -98,7 +123,7 @@ const grammar = {
   ],
   map: ["", "Read which mapped selectors match and how many controls they find."],
   doctor: ["", "Check the controls required in the open speech state."],
-  close: ["", "Close the dedicated tab. Export audio and save drafts first."],
+  close: ["", "Close the dedicated tab. Safe when already closed; refuses while generating."],
 } as const;
 
 type Command = keyof typeof grammar;
@@ -109,8 +134,9 @@ const usage = [
     ([name, [args, detail]]) => `  ${[name, args].filter(Boolean).join(" ")}\n    ${detail}`,
   ),
   "",
-  "Default tab: tts-main. Commands use the logged-in AI Studio Chrome. Use one command per tab at a time.",
-  "JSON results go to stdout. Progress and failures go to stderr. Exit 2 = invalid input; 1 = step failure.",
+  "Default tab: tts-main. Tab labels must start with tts-, use only letters/numbers/hyphens (no underscores), and be <= 31 chars.",
+  "Prefer speak or batch for single-process generation on Windows. JSON results go to stdout; logs go to stderr.",
+  "Exit 2 = invalid input; 1 = step failure.",
 ].join("\n");
 
 let result: unknown;
@@ -139,9 +165,101 @@ function numberArg(raw: string, context: string, integer = true) {
 
 async function textFile(path: string) {
   try {
-    return (await Bun.file(path).text()).replace(/^\uFEFF/, "");
+    if (path === "-") return stripBom(await Bun.stdin.text());
+    return stripBom(await Bun.file(path).text());
   } catch (error) {
     throw new InputError(`Cannot read ${path}: ${(error as Error).message}`);
+  }
+}
+
+async function closeTabByLabel(labelName: string) {
+  const target = readTabs()[labelName];
+  if (!target) return "tab already closed";
+  const pruneIfSame = () =>
+    mutateTabs((cur) => {
+      if (cur[labelName]?.id !== target.id) return cur;
+      const { [labelName]: _, ...rest } = cur;
+      return rest;
+    });
+  if (!(await chromeUp())) {
+    await pruneIfSame();
+    return "tab already closed";
+  }
+  const live = (await pageTargets()).find((p) => p.id === target.id);
+  if (!live) {
+    await pruneIfSame();
+    return "tab already closed";
+  }
+  let onSpeech = false;
+  try {
+    onSpeech = SPEECH_PATH.test(new URL(live.url).pathname);
+  } catch {}
+  if (onSpeech && (await isTargetGeneratingCdp(target.id))) {
+    throw new StepError("This tab is generating or streaming audio. Collect or stop first.");
+  }
+  await closeWindowOf(target.id);
+  await pruneIfSame();
+  return "owned TTS tab closed";
+}
+
+function verifyBlockSpeaker(blockNumber: number, speakerNum: 1 | 2, expectedVoice?: string) {
+  const expectedPrefix = `Speaker ${speakerNum}`;
+  const actual = js<string>(label(item("speaker", block(blockNumber))));
+  if (!actual.startsWith(`${expectedPrefix} - `)) {
+    throw new StepError(`Block ${blockNumber}: expected ${expectedPrefix}, found ${actual}.`);
+  }
+  if (
+    expectedVoice &&
+    actual.toLowerCase() !== `${expectedPrefix} - ${expectedVoice}`.toLowerCase()
+  ) {
+    throw new StepError(
+      `Block ${blockNumber}: expected ${expectedPrefix} - ${expectedVoice}, found ${actual}.`,
+    );
+  }
+  return actual;
+}
+
+function queueSceneApplySteps(scene: Scene) {
+  add("prepare an empty editor", async () => {
+    const status = speechStatus();
+    if (
+      status.running ||
+      status.audio ||
+      status.voiceLibraryOpen ||
+      status.blocks.length > 1 ||
+      status.blocks.some((b) => b.text || b.style || !b.speaker.startsWith("Speaker 1 - "))
+    ) {
+      throw new StepError(
+        "This tab already has a draft or take. Use a new --tab to apply a scene.",
+      );
+    }
+    return startEditor();
+  });
+  for (let i = 1; i < scene.blocks.length; i++) add(`append block ${i + 1}`, addBlock);
+  for (const [i, name] of (scene.voices ?? []).entries()) {
+    if (!name) continue;
+    add(`open speaker ${i + 1} library`, () => openLibrary(i + 1));
+    add(`set voice for speaker ${i + 1}`, () => selectVoice(name, i + 1));
+    add(`leave speaker ${i + 1} library`, async () =>
+      js<boolean>(exists("voiceSearch")) ? closeLibrary() : "voice selection closed the library",
+    );
+  }
+  for (const [i, speech] of scene.blocks.entries()) {
+    add(`verify speaker for block ${i + 1}`, () => {
+      const speakerNum = (speech.speaker ?? (i % 2) + 1) as 1 | 2;
+      return verifyBlockSpeaker(i + 1, speakerNum, scene.voices?.[speakerNum - 1]);
+    });
+    add(`fill block ${i + 1}`, () => blockText(i + 1, speech.text));
+    if (speech.style !== undefined) {
+      const styleText = speech.style;
+      add(`set style of block ${i + 1}`, () => blockStyle(i + 1, styleText));
+    }
+  }
+  if (scene.temperature !== undefined) {
+    add("set temperature", async () => {
+      const t = await temperature(scene.temperature);
+      return `temperature ${t.value}`;
+    });
   }
 }
 
@@ -157,6 +275,8 @@ async function main() {
       block: { type: "boolean" },
       out: { type: "string" },
       timeout: { type: "string" },
+      "keep-open": { type: "boolean" },
+      force: { type: "boolean" },
     },
     strict: true,
     allowPositionals: true,
@@ -171,7 +291,9 @@ async function main() {
   const command = commandName as Command;
   const tab = values.tab!;
   if (!TAB_RE.test(tab) || !tab.startsWith("tts-") || tab.length < 5) {
-    throw new InputError("--tab must use a dedicated tts- label with letters, numbers or hyphens.");
+    throw new InputError(
+      "--tab must start with tts-, use only letters, numbers or hyphens (no underscores), and be 5–31 characters.",
+    );
   }
   useTab(tab);
   const count = (min: number, max = min) => {
@@ -180,35 +302,204 @@ async function main() {
     }
   };
   const index = () => numberArg(args[0]!, "Block number");
-  const { account, model, block: byBlock, out, timeout } = values;
-  if ((account !== undefined || model !== undefined) && command !== "open") {
-    throw new InputError("--account and --model are only accepted by open.");
+  const { account, model, block: byBlock, out, timeout, "keep-open": keepOpen, force } = values;
+  if (
+    (account !== undefined || model !== undefined) &&
+    !["open", "speak", "batch"].includes(command)
+  ) {
+    throw new InputError("--account and --model are only accepted by open, speak and batch.");
   }
   if (byBlock && command !== "library")
     throw new InputError("--block is only accepted by library.");
-  if (out !== undefined && !["run", "collect", "sample"].includes(command))
-    throw new InputError("--out is only accepted by run, collect and sample.");
-  if (timeout !== undefined && !["run", "collect"].includes(command))
-    throw new InputError("--timeout is only accepted by run and collect.");
+  if (keepOpen && !["speak", "batch"].includes(command))
+    throw new InputError("--keep-open is only accepted by speak and batch.");
+  if (force && !["run", "collect", "sample", "speak", "batch"].includes(command))
+    throw new InputError("--force is only accepted by run, collect, sample, speak and batch.");
+  if (out !== undefined && !["run", "collect", "sample", "speak"].includes(command))
+    throw new InputError("--out is only accepted by run, collect, sample and speak.");
+  if (timeout !== undefined && !["run", "collect", "speak", "batch"].includes(command))
+    throw new InputError("--timeout is only accepted by run, collect, speak and batch.");
   if (out !== undefined && extname(out).toLowerCase() !== ".wav")
     throw new InputError("--out must end in .wav.");
   const timeoutMs = timeout === undefined ? 180_000 : numberArg(timeout, "--timeout") * 1_000;
   if (timeoutMs > 900_000) throw new InputError("--timeout must be at most 900 seconds.");
-  if (out !== undefined && (await Bun.file(out).exists()))
-    throw new InputError(`Output already exists: ${out}. Use a new take path.`);
+  if (out !== undefined && !force && (await Bun.file(out).exists()))
+    throw new InputError(`Output already exists: ${out}. Use a new take path or pass --force.`);
 
-  if (command !== "open") {
+  const opensTab = command === "open" || command === "speak" || command === "batch";
+  const noBrowserPrelude = command === "close" || command === "tabs";
+  if (!opensTab && !noBrowserPrelude) {
     add("verify speech workspace", () => {
-      const url = requireSpeechPage(command !== "close");
+      const url = requireSpeechPage(true);
       return url.pathname;
     });
   }
+
   switch (command) {
     case "open":
       count(0);
       speechUrl(model ?? DEFAULT_MODEL, account);
       resultStep("open AI Studio TTS", () => openSpeech(model, account));
       break;
+    case "tabs":
+      count(0);
+      add("list shared Chrome tabs", async () => {
+        if (!(await chromeUp())) {
+          result = [];
+          return `Chrome is not running on port ${PORT}`;
+        }
+        const pages = await pageTargets();
+        const tabs = await mutateTabs((cur) =>
+          Object.fromEntries(
+            Object.entries(cur).filter(([, t]) => pages.some((p) => p.id === t.id)),
+          ),
+        );
+        const labelOf = Object.fromEntries(Object.entries(tabs).map(([l, t]) => [t.id, l]));
+        const rows = pages.map((p) => ({ tab: labelOf[p.id] ?? null, url: p.url, title: p.title }));
+        result = rows;
+        return `${rows.length} windows, ${Object.keys(tabs).length} with a label`;
+      });
+      break;
+    case "speak": {
+      count(1);
+      if (!out) throw new InputError("speak requires --out TAKE.wav.");
+      speechUrl(model ?? DEFAULT_MODEL, account);
+      const raw = await textFile(args[0]!);
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch (error) {
+        throw new InputError(`Invalid scene JSON: ${(error as Error).message}`);
+      }
+      const scene = validateScene(json);
+      add("open AI Studio TTS", () => openSpeech(model, account));
+      queueSceneApplySteps(scene);
+      add("submit screenplay", () => {
+        submitSpeech();
+        return "Run clicked once";
+      });
+      add("wait for playable audio", async () => {
+        const duration = await waitForAudio(timeoutMs, { submitted: true });
+        return `player has ${duration.toFixed(2)} s of audio`;
+      });
+      resultStep("save WAV", () => exportAudio(out, Boolean(force)));
+      if (!keepOpen) add("close TTS tab", () => closeTabByLabel(currentTab()));
+      break;
+    }
+    case "batch": {
+      count(1);
+      speechUrl(model ?? DEFAULT_MODEL, account);
+      const raw = await textFile(args[0]!);
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch (error) {
+        throw new InputError(`Invalid batch manifest JSON: ${(error as Error).message}`);
+      }
+      const manifest = validateBatchManifest(json);
+      if (!force) {
+        for (const take of manifest.takes) {
+          if (await Bun.file(take.out).exists()) {
+            throw new InputError(
+              `Output already exists: ${take.out}. Use new take paths or pass --force.`,
+            );
+          }
+        }
+      }
+      const maxBlocks = Math.max(...manifest.takes.map((t) => t.blocks.length));
+      const initialVoiceSetupBlocks = manifest.voices?.[1]
+        ? Math.max(2, manifest.takes[0]!.blocks.length)
+        : manifest.takes[0]!.blocks.length;
+      add("open AI Studio TTS", () => openSpeech(model, account));
+      add("prepare an empty editor", async () => {
+        const status = speechStatus();
+        if (
+          status.running ||
+          status.audio ||
+          status.voiceLibraryOpen ||
+          status.blocks.length > 1 ||
+          status.blocks.some((b) => b.text || b.style || !b.speaker.startsWith("Speaker 1 - "))
+        ) {
+          throw new StepError(
+            "This tab already has a draft or take. Use a new --tab to run a batch.",
+          );
+        }
+        return startEditor();
+      });
+      for (let i = 1; i < Math.min(maxBlocks, initialVoiceSetupBlocks); i++) {
+        add(`append initial block ${i + 1}`, addBlock);
+      }
+      for (const [i, name] of (manifest.voices ?? []).entries()) {
+        if (!name) continue;
+        add(`open speaker ${i + 1} library`, () => openLibrary(i + 1));
+        add(`set voice for speaker ${i + 1}`, () => selectVoice(name, i + 1));
+        add(`leave speaker ${i + 1} library`, async () =>
+          js<boolean>(exists("voiceSearch"))
+            ? closeLibrary()
+            : "voice selection closed the library",
+        );
+      }
+      const exported: { index: number; path: string; bytes: number; duration: number }[] = [];
+      let baselineTemp: number | undefined;
+      let currentTemp: number | undefined;
+      for (const [idx, take] of manifest.takes.entries()) {
+        const tag = `[take ${idx + 1}/${manifest.takes.length}]`;
+        add(`${tag} update screenplay`, async () => {
+          let countNow = blockCount();
+          while (countNow < take.blocks.length) {
+            await addBlock();
+            countNow++;
+          }
+          while (countNow > take.blocks.length) {
+            await removeBlock(countNow);
+            countNow--;
+          }
+          for (const [bIdx, speech] of take.blocks.entries()) {
+            const speakerNum = (speech.speaker ?? (bIdx % 2) + 1) as 1 | 2;
+            const expectedVoice = manifest.voices?.[speakerNum - 1];
+            const expectedFull = expectedVoice ? `Speaker ${speakerNum} - ${expectedVoice}` : "";
+            const currentLabel = js<string>(label(item("speaker", block(bIdx + 1))));
+            if (expectedVoice && currentLabel.toLowerCase() !== expectedFull.toLowerCase()) {
+              await openLibrary(speakerNum);
+              await selectVoice(expectedVoice, speakerNum);
+              if (js<boolean>(exists("voiceSearch"))) await closeLibrary();
+            }
+            verifyBlockSpeaker(bIdx + 1, speakerNum, expectedVoice);
+            await blockText(bIdx + 1, speech.text);
+            if (speech.style !== undefined) {
+              await blockStyle(bIdx + 1, speech.style);
+            } else if (idx > 0) {
+              const status = speechStatus();
+              if (status.blocks[bIdx]?.style) await blockStyle(bIdx + 1, "");
+            }
+          }
+          if (
+            manifest.temperature === undefined &&
+            take.temperature !== undefined &&
+            baselineTemp === undefined
+          ) {
+            baselineTemp = (await temperature()).value;
+            currentTemp = baselineTemp;
+          }
+          const wantTemp = take.temperature ?? manifest.temperature ?? baselineTemp;
+          if (wantTemp !== undefined && wantTemp !== currentTemp) {
+            await temperature(wantTemp);
+            currentTemp = wantTemp;
+          }
+          return `${take.blocks.length} block(s) ready`;
+        });
+        add(`${tag} generate & save WAV`, async () => {
+          submitSpeech();
+          await waitForAudio(timeoutMs, { submitted: true });
+          const saved = await exportAudio(take.out, Boolean(force));
+          exported.push({ index: idx + 1, ...saved });
+          result = { takes: exported };
+          return `${saved.path} (${saved.duration.toFixed(2)} s)`;
+        });
+      }
+      if (!keepOpen) add("close TTS tab", () => closeTabByLabel(currentTab()));
+      break;
+    }
     case "start":
       count(0);
       resultStep("start editor", startEditor);
@@ -227,55 +518,7 @@ async function main() {
         throw new InputError(`Invalid scene JSON: ${(error as Error).message}`);
       }
       const scene = validateScene(json);
-      if (scene.voices?.[1] && scene.blocks.length < 2)
-        throw new InputError("Voice 2 requires at least two speech blocks.");
-      scene.blocks.forEach(({ speaker }, i) => {
-        if (speaker && speaker !== (i % 2) + 1) {
-          throw new InputError(
-            `Block ${i + 1} must use Speaker ${(i % 2) + 1}. AI Studio alternates speakers when adding blocks.`,
-          );
-        }
-      });
-      add("prepare an empty editor", async () => {
-        const status = speechStatus();
-        if (
-          status.running ||
-          status.audio ||
-          status.voiceLibraryOpen ||
-          status.blocks.length > 1 ||
-          status.blocks.some((b) => b.text || b.style || !b.speaker.startsWith("Speaker 1 - "))
-        ) {
-          throw new StepError(
-            "This tab already has a draft or take. Use a new --tab to apply a scene.",
-          );
-        }
-        return startEditor();
-      });
-      for (let i = 1; i < scene.blocks.length; i++) add(`append block ${i + 1}`, addBlock);
-      for (const [i, name] of (scene.voices ?? []).entries()) {
-        if (!name) continue;
-        add(`open speaker ${i + 1} library`, () => openLibrary(i + 1));
-        add(`set voice for speaker ${i + 1}`, () => selectVoice(name));
-        add(`leave speaker ${i + 1} library`, async () =>
-          js<boolean>(exists("voiceSearch"))
-            ? closeLibrary()
-            : "voice selection closed the library",
-        );
-      }
-      for (const [i, speech] of scene.blocks.entries()) {
-        add(`verify speaker for block ${i + 1}`, () => {
-          const expected = `Speaker ${speech.speaker ?? (i % 2) + 1}`;
-          const actual = js<string>(label(item("speaker", block(i + 1))));
-          if (!actual.startsWith(expected + " - "))
-            throw new StepError(`Block ${i + 1}: expected ${expected}, found ${actual}.`);
-          return actual;
-        });
-        add(`fill block ${i + 1}`, () => blockText(i + 1, speech.text));
-        if (speech.style !== undefined)
-          resultStep(`set style of block ${i + 1}`, () => blockStyle(i + 1, speech.style));
-      }
-      if (scene.temperature !== undefined)
-        resultStep("set temperature", () => temperature(scene.temperature));
+      queueSceneApplySteps(scene);
       resultStep("read applied screenplay", speechStatus);
       break;
     }
@@ -358,7 +601,7 @@ async function main() {
       break;
     case "sample":
       count(0, 1);
-      resultStep("play sample", () => sampleVoice(args[0], out));
+      resultStep("play sample", () => sampleVoice(args[0], out, Boolean(force)));
       break;
     case "voice-create":
       count(0, 2);
@@ -382,11 +625,11 @@ async function main() {
           return "Run clicked once";
         });
       add("wait for playable audio", async () => {
-        duration = await waitForAudio(timeoutMs);
+        duration = await waitForAudio(timeoutMs, { submitted: command === "run" });
         result = { duration };
         return `player has ${duration.toFixed(2)} s of audio`;
       });
-      if (out) resultStep("save WAV", () => exportAudio(out));
+      if (out) resultStep("save WAV", () => exportAudio(out, Boolean(force)));
       break;
     }
     case "stop":
@@ -394,6 +637,7 @@ async function main() {
       resultStep("stop generation", async () => {
         tap("stop");
         await verify(`! (${exists("stop")})`, "AI Studio still shows an active generation.");
+        clearRunBaseline();
         return "generation stopped";
       });
       break;
@@ -455,31 +699,20 @@ async function main() {
     }
     case "close":
       count(0);
-      add("close TTS tab", async () => {
-        const { phase } = readSpeechAudio();
-        if (phase === "generating" || phase === "streaming")
-          throw new StepError("This tab is generating or streaming audio. Collect or stop first.");
-        const label = currentTab();
-        const target = readTabs()[label];
-        if (!target) return "tab already closed";
-        const { success } = await cdp((send) =>
-          send("Target.closeTarget", { targetId: target.id }),
-        );
-        if (!success) throw new StepError("Chrome did not close the TTS target.");
-        const tabs = readTabs();
-        if (tabs[label]?.id === target.id) {
-          delete tabs[label];
-          writeTabs(tabs);
-        }
-        return "owned TTS tab closed";
-      });
+      resultStep("close TTS tab", () => closeTabByLabel(currentTab()));
       break;
   }
-  if (command !== "open" && !readTabs()[tab]) {
-    if (command === "close") return;
-    throw new InputError(`Tab ${tab} has no registered window. Run open --tab ${tab} first.`);
+
+  if (!opensTab && !noBrowserPrelude && !readTabs()[tab]) {
+    throw new InputError(`Tab ${tab} has no registered window. Run --tab ${tab} open first.`);
   }
-  await runSteps([...browserSteps, ...steps], {
+  const prelude: Step[] = noBrowserPrelude
+    ? []
+    : opensTab
+      ? browserSteps
+      : [chromeStep, ["prepare tab", () => prepareTab(false, { createIfMissing: false })]];
+  await runSteps([...prelude, ...steps], {
+    screenshot: !noBrowserPrelude,
     onDone() {
       if (result === undefined) return;
       console.log(

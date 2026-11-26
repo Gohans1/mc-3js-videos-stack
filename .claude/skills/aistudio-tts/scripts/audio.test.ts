@@ -139,6 +139,18 @@ test("evaluateAudioWaitTick fails fast on idle past grace instead of hanging unt
   });
   expect(firstIdle).toEqual({ action: "wait", idleSince: 1_000 });
 
+  const earlyAlert = evaluateAudioWaitTick({
+    phase: "idle",
+    duration: null,
+    awaitingNewAudio: true,
+    alert: "Added to favorites",
+    submitted: true,
+    idleSince: 1_000,
+    now: 2_500,
+    graceMs: 10_000,
+  });
+  expect(earlyAlert).toEqual({ action: "wait", idleSince: 1_000 });
+
   const alertWhileIdle = evaluateAudioWaitTick({
     phase: "idle",
     duration: null,
@@ -154,6 +166,18 @@ test("evaluateAudioWaitTick fails fast on idle past grace instead of hanging unt
     expect(alertWhileIdle.reason).toContain("AI Studio says: Quota exceeded");
     expect(alertWhileIdle.clearBaseline).toBe(true);
   }
+
+  const collectAwaitingIdle = evaluateAudioWaitTick({
+    phase: "idle",
+    duration: null,
+    awaitingNewAudio: true,
+    alert: "",
+    submitted: false,
+    idleSince: 0,
+    now: 1_000,
+    graceMs: 10_000,
+  });
+  expect(collectAwaitingIdle).toEqual({ action: "wait", idleSince: 1_000 });
 
   const silentFail = evaluateAudioWaitTick({
     phase: "idle",
