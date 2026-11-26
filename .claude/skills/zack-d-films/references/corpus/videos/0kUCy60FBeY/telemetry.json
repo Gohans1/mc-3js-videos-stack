@@ -1,0 +1,142 @@
+{
+  "schema_version": 2,
+  "duration_sec": 44.75,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "other",
+  "topic_sublabel": "anger_management_parable",
+  "emotional_driver": "empathy_wholesome",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 2.37,
+  "opening_spoken_line": "He hammered the nail into the fence because every time he lost his temper, his father made him add another nail.",
+  "hook_visual_trigger": "Close-up hand holding glowing green nail hammered into wooden fence",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 71,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    7.8,
+    15.9,
+    31.8,
+    39.5
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.37,
+      "pct_runtime": 5
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.37,
+      "end_sec": 10.31,
+      "pct_runtime": 18
+    },
+    {
+      "role": "escalation",
+      "start_sec": 10.31,
+      "end_sec": 15.88,
+      "pct_runtime": 12
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 15.88,
+      "end_sec": 28.73,
+      "pct_runtime": 29
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 28.73,
+      "end_sec": 39.44,
+      "pct_runtime": 24
+    },
+    {
+      "role": "twist",
+      "start_sec": 39.44,
+      "end_sec": 44.75,
+      "pct_runtime": 12
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 2,
+    "transition": 4,
+    "continuous": 18
+  },
+  "transition_types": [
+    "portal_wipe",
+    "cross_dissolve",
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "push_in",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "tilt_pan",
+    "roll_dutch"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 9,
+    "MCU": 6,
+    "CU": 8,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 22,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[PROTAGONIST] performs [REPETITIVE PUNISHMENT] for [BAD HABIT] -> BUT learns [SELF-CONTROL] -> SO undoes [VISIBLE MARKER] -> TWIST [PERMANENT SCARS REMAIN DESPITE APOLOGY].",
+  "secret_sauce_cues": [
+    "Doorway-portal pull-back with invisible character teleport across scenes",
+    "Color-coded emissive highlights (green/yellow object cues, red/blue aura, cracked heart)",
+    "Diegetic channel branding embedded on shirts and snack props"
+  ],
+  "weaknesses_or_drag": [
+    "Slight facial rigidity and minor snack-bag clipping at bully's foot (f1301-f1308)"
+  ]
+}

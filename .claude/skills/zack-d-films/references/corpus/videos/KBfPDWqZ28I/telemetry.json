@@ -1,0 +1,132 @@
+{
+  "schema_version": 2,
+  "duration_sec": 30.4,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "crime_disaster_accident",
+  "topic_sublabel": "bizarre_aquarium_shark_heist",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 1.502,
+  "opening_spoken_line": "They reached into the aquarium, scooped up the shark, and wrapped it in a wet blanket.",
+  "hook_visual_trigger": "Human hands plunge into underwater tank to scoop up small spotted shark",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "chronological_and_then",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 67,
+  "outro_hold_sec": 0.4,
+  "rehook_timestamps_sec": [
+    8.8,
+    12.1,
+    18.2,
+    20.4
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.1,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.1,
+      "end_sec": 8.8,
+      "pct_runtime": 19
+    },
+    {
+      "role": "escalation",
+      "start_sec": 8.8,
+      "end_sec": 18.2,
+      "pct_runtime": 31
+    },
+    {
+      "role": "twist",
+      "start_sec": 18.2,
+      "end_sec": 26.3,
+      "pct_runtime": 27
+    },
+    {
+      "role": "resolution",
+      "start_sec": 26.3,
+      "end_sec": 30.4,
+      "pct_runtime": 13
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 4,
+    "continuous": 8
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "crane_boom",
+    "whip_pan",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "push_in",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 8,
+    "MCU": 3,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 5,
+    "eye": 8,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "cool_moody_teal",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[ABSURD THEFT/CRIME] unfolds step-by-step via [IMPROVISED PROP], CONFRONTS [WITNESS/OBSTACLE] and escapes, UNTIL [INVESTIGATION] reveals [SHOCKING TWIST AT HOME] -> [SWIFT RESOLUTION & JUSTICE].",
+  "secret_sauce_cues": [
+    "Graphic-matched cross-dissolves keeping key subject/prop (stroller, shark) anchored in frame across scenes",
+    "Yellow emissive silhouette highlights pulsing onto props and animals synced to spoken nouns",
+    "Diegetic channel branding printed onto key heist prop ('ZACK D FILMS' bucket)"
+  ],
+  "weaknesses_or_drag": []
+}

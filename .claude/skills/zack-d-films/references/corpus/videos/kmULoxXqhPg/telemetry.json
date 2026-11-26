@@ -1,0 +1,141 @@
+{
+  "schema_version": 2,
+  "duration_sec": 33.7,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "fake_emergency_drain_cleanup",
+  "emotional_driver": "irony_schadenfreude",
+  "hook_archetype": "cold_open_crisis",
+  "opening_shot_sec": 4.5,
+  "opening_spoken_line": "Her child accidentally fell right into the storm drain is what she told the police.",
+  "hook_visual_trigger": "Green-shirt boy slips backward off concrete ledge into trash-filled drain",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "problem_solution_irony",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 46,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    3.2,
+    12.9,
+    15.5,
+    24.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.2,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.2,
+      "end_sec": 6.3,
+      "pct_runtime": 9
+    },
+    {
+      "role": "escalation",
+      "start_sec": 6.3,
+      "end_sec": 12.6,
+      "pct_runtime": 19
+    },
+    {
+      "role": "escalation",
+      "start_sec": 12.6,
+      "end_sec": 15.5,
+      "pct_runtime": 9
+    },
+    {
+      "role": "twist",
+      "start_sec": 15.5,
+      "end_sec": 24.6,
+      "pct_runtime": 27
+    },
+    {
+      "role": "resolution",
+      "start_sec": 24.6,
+      "end_sec": 33.7,
+      "pct_runtime": 27
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 3,
+    "transition": 5,
+    "continuous": 10
+  },
+  "transition_types": [
+    "iris_wipe",
+    "push_up",
+    "card_flip",
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "crane_boom",
+    "orbit_arc",
+    "whip_pan",
+    "push_in",
+    "tilt_pan",
+    "dolly_track"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 4,
+    "M": 5,
+    "MCU": 3,
+    "CU": 4,
+    "ECU": 0,
+    "INSERT": 2
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 7,
+    "eye": 10,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[PANIC EVENT] appears true, BUT [AUTHORITY CLAIM / TWIST] -> SO [COSTLY SEARCH FAILS] -> TWIST [REAL SELFISH MOTIVE + BUREAUCRATIC NEGLECT] -> SO [CLEVER FAKE SCHEME] -> PAYOFF [IRONIC CLEAN OUTCOME]",
+  "secret_sauce_cues": [
+    "False-crisis 3s hook instantly reframed by deadpan clause ('is what she told the police')",
+    "Whip-pan smears concealing temporal flashbacks and location swaps alongside a diegetic spinning clock",
+    "Diegetic 'ZACK D FILMS' branding embedded onto clothing, clock face, and garbage truck"
+  ],
+  "weaknesses_or_drag": []
+}

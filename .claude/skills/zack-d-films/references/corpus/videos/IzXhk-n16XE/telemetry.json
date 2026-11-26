@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "duration_sec": 61.6,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "philosophy_platos_cave_allegory",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 3.1,
+  "opening_spoken_line": "The prisoners have been sitting in front of a blank wall their entire lives.",
+  "hook_visual_trigger": "Three loincloth-clad babies sitting chained in a warm cave while camera orbits behind them",
+  "narration_pov": "omniscient_explainer",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 81,
+  "outro_hold_sec": 0.6,
+  "rehook_timestamps_sec": [
+    24.5,
+    35.2,
+    50
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 5.5,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 5.5,
+      "end_sec": 9.4,
+      "pct_runtime": 6
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 9.4,
+      "end_sec": 24.5,
+      "pct_runtime": 25
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 24.5,
+      "end_sec": 35.2,
+      "pct_runtime": 17
+    },
+    {
+      "role": "escalation",
+      "start_sec": 35.2,
+      "end_sec": 50,
+      "pct_runtime": 24
+    },
+    {
+      "role": "twist",
+      "start_sec": 50,
+      "end_sec": 57.1,
+      "pct_runtime": 12
+    },
+    {
+      "role": "resolution",
+      "start_sec": 57.1,
+      "end_sec": 61.6,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 5,
+    "continuous": 14
+  },
+  "transition_types": [
+    "cross_dissolve",
+    "card_flip"
+  ],
+  "camera_moves_used": [
+    "orbit_arc",
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "crane_boom",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 8,
+    "M": 7,
+    "MCU": 4,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 17,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "warm_cinematic",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "warm_cinematic",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "dark_ominous_drone",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[CONFINED SUBJECTS] believe [ILLUSION] is reality, SO [STEP-BY-STEP MECHANISM] shows how it's staged, BUT WHAT IF [ONE ESCAPES & DISCOVERS TRUTH] -> TWIST [OTHERS MOCK HIM & CLING TO ILLUSION]",
+  "secret_sauce_cues": [
+    "Color-coded emissive flashes (yellow construction, blue perception, red rejection) guide eye-trace inside long unbroken 3D camera moves",
+    "Continuous spatial camera fly-throughs physically connect hidden backstage cause to perceived frontstage illusion",
+    "3D thought/speech bubbles and vision cones externalize abstract philosophical realization"
+  ],
+  "weaknesses_or_drag": [
+    "Slightly stiff character walk/idle animation and instant guard/log pop-ins during the construction sweep"
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "duration_sec": 38.4,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "faceless_objects_diagrams",
+  "topic_category": "food_diy_and_hacks",
+  "topic_sublabel": "origami_tutorial_comedy_twist",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "imperative_how_to_step",
+  "opening_shot_sec": 2.367,
+  "opening_spoken_line": "Make two folds on one corner,",
+  "hook_visual_trigger": "Centered red origami sheet on radial blue studio backdrop with green 3D fold arrow",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "chronological_and_then",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 90,
+  "outro_hold_sec": 0.3,
+  "rehook_timestamps_sec": [
+    4.7,
+    19,
+    34.7
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.367,
+      "pct_runtime": 6
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 2.367,
+      "end_sec": 19.467,
+      "pct_runtime": 45
+    },
+    {
+      "role": "escalation",
+      "start_sec": 19.467,
+      "end_sec": 30.7,
+      "pct_runtime": 29
+    },
+    {
+      "role": "resolution",
+      "start_sec": 30.7,
+      "end_sec": 34.709,
+      "pct_runtime": 10
+    },
+    {
+      "role": "twist",
+      "start_sec": 34.709,
+      "end_sec": 38.333,
+      "pct_runtime": 10
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 1,
+    "continuous": 10
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "orbit_arc",
+    "pull_back",
+    "crane_boom"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 4,
+    "MCU": 5,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 7,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": false,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "Follow [CALM STEP-BY-STEP IMPERATIVE GUIDE] to craft [CHARMING OBJECT], THEN [3D ROOM REVEAL] -> TWIST [BRANDED ROBOT INSTANTLY DESTROYS IT AS 'MESS' WITH DEADPAN LINE].",
+  "secret_sauce_cues": [
+    "Unbroken 34s continuous 3D camera orbit lulls viewer before background cross-dissolves into a full room reveal",
+    "Emissive warm yellow-orange flap glows + 3D green arrows make complex paper folds instantly legible",
+    "Diegetic D4 robot mascot destroys the viewer's 34-second emotional investment in 1 second for viral replay/comment bait"
+  ],
+  "weaknesses_or_drag": [
+    "Brief pale alpha-halo artifact around the red elephant edges during the f1043–f1045 environment cross-dissolve"
+  ]
+}

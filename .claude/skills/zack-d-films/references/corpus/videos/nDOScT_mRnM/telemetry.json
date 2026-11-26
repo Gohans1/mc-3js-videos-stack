@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "duration_sec": 39.14,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "first_person_pov",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "hair_recycling_invention",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 1.368,
+  "opening_spoken_line": "As you shower, a tiny vacuum inside the drain sucks up every loose hair.",
+  "hook_visual_trigger": "Loose hairs slide down bather back into glowing cutaway drain vacuum",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "word_by_word_kinetic",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "causal_chain",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 90,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    17.2,
+    27.8
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.4,
+      "pct_runtime": 11
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 4.4,
+      "end_sec": 16.3,
+      "pct_runtime": 30
+    },
+    {
+      "role": "escalation",
+      "start_sec": 16.3,
+      "end_sec": 27.8,
+      "pct_runtime": 29
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 27.8,
+      "end_sec": 35,
+      "pct_runtime": 18
+    },
+    {
+      "role": "twist",
+      "start_sec": 35,
+      "end_sec": 39.14,
+      "pct_runtime": 12
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 1,
+    "transition": 2,
+    "continuous": 6
+  },
+  "transition_types": [
+    "card_flip",
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "crane_boom",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 2,
+    "M": 5,
+    "MCU": 1,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 7,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "As you do [EVERYDAY ROUTINE], a hidden [SCI-FI SYSTEM] processes [GROSS WASTE] into [ESCALATING PRODUCTS], until [ABSURD TWIST] involves your whole family.",
+  "secret_sauce_cues": [
+    "Cutaway industrial pipelines with neon stage labels",
+    "Yellow silhouette highlight pulses guiding viewer focus across shots",
+    "Diegetic channel branding embedded inside 3D smartphone UI"
+  ],
+  "weaknesses_or_drag": [
+    "Minor 3D signage typos (Hair Harverst System, WOVING)"
+  ]
+}

@@ -1,0 +1,147 @@
+{
+  "schema_version": 2,
+  "duration_sec": 45.75,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "zombie_apocalypse_treadmill_defense",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1.635,
+  "opening_spoken_line": "If the zombies are approaching, quickly get a treadmill and line up 500 of them around your house.",
+  "hook_visual_trigger": "Rapid radial zoom-in to approaching zombies snapping back into bedroom window",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "urgent_suspenseful",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 68,
+  "outro_hold_sec": 1.75,
+  "rehook_timestamps_sec": [
+    14.9,
+    30.2,
+    39.4
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.469,
+      "pct_runtime": 5
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.469,
+      "end_sec": 9.109,
+      "pct_runtime": 15
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 9.109,
+      "end_sec": 14.848,
+      "pct_runtime": 13
+    },
+    {
+      "role": "escalation",
+      "start_sec": 14.848,
+      "end_sec": 26.026,
+      "pct_runtime": 24
+    },
+    {
+      "role": "twist",
+      "start_sec": 26.026,
+      "end_sec": 34.101,
+      "pct_runtime": 18
+    },
+    {
+      "role": "resolution",
+      "start_sec": 34.101,
+      "end_sec": 41.542,
+      "pct_runtime": 16
+    },
+    {
+      "role": "cta",
+      "start_sec": 41.542,
+      "end_sec": 45.75,
+      "pct_runtime": 9
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 3,
+    "transition": 4,
+    "continuous": 15
+  },
+  "transition_types": [
+    "card_flip",
+    "cross_dissolve",
+    "pip_shrink",
+    "spin_blur"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "whip_pan",
+    "orbit_arc",
+    "crane_boom",
+    "dolly_track",
+    "roll_dutch",
+    "impact_shake"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 1,
+    "M": 13,
+    "MCU": 5,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 2
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 9,
+    "eye": 12,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "dense_kinetic_whoosh_pop",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "If [THREAT] happens, quickly [ABSURD CONTRAPTION] -> it works for days, BUT [ADAPTIVE FLAW] -> UNTIL [IRONIC BACKFIRE] -> NOW [ABSURD WORSE DOOM]",
+  "secret_sauce_cues": [
+    "Emissive warm-orange highlight pulses on key props/characters synced to spoken nouns",
+    "Zero hard cuts using whip-zoom and sky-spin smear portals across rooms and locations",
+    "Ironic training-montage reversal escalating into a Breaking News PiP gag and arrow-guided CTA reel"
+  ],
+  "weaknesses_or_drag": []
+}

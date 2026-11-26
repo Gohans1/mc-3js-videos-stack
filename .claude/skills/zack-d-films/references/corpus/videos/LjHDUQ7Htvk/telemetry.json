@@ -1,47 +1,65 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "duration_sec": 49,
+  "visual_medium": "mixed_hybrid",
+  "protagonist_format": "on_camera_host",
   "topic_category": "hypothetical_what_if",
-  "topic_sublabel": "short_time_rewind_thought_experiment",
+  "topic_sublabel": "time_rewind_power_consequences",
+  "emotional_driver": "curiosity_mystery",
   "hook_archetype": "hypothetical_premise",
-  "opening_shot_sec": 1,
+  "opening_shot_sec": 1.6,
   "opening_spoken_line": "Imagine you find this weird, ancient-looking device.",
-  "hook_visual_trigger": "Dusty construction worker in blue hard hat stares intently at a strange oval object before camera cranes over shoulder to reveal glowing brass dial",
+  "hook_visual_trigger": "Close-up of a dusty construction worker brushing dirt off a mysterious glowing rune device",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "none",
   "story_structure": "what_if_chain_reaction",
   "narrative_connector": "but_therefore",
   "ending_type": "question_cta",
-  "twist_at_pct": 56,
+  "twist_at_pct": 55,
+  "outro_hold_sec": 4,
   "rehook_timestamps_sec": [
-    10,
-    17.5,
-    27.6,
-    34.1,
-    41.6
+    6.7,
+    16.5,
+    26.9,
+    34.1
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 9.96,
-      "pct_runtime": 20
+      "end_sec": 3.5,
+      "pct_runtime": 7
     },
     {
       "role": "setup",
-      "start_sec": 10,
-      "end_sec": 12.24,
-      "pct_runtime": 5
+      "start_sec": 3.5,
+      "end_sec": 12.3,
+      "pct_runtime": 18
     },
     {
-      "role": "escalation",
-      "start_sec": 12.28,
-      "end_sec": 27.56,
-      "pct_runtime": 31
+      "role": "visual_proof",
+      "start_sec": 12.3,
+      "end_sec": 20.1,
+      "pct_runtime": 16
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 20.1,
+      "end_sec": 26.8,
+      "pct_runtime": 14
     },
     {
       "role": "twist",
-      "start_sec": 27.6,
-      "end_sec": 41.56,
-      "pct_runtime": 29
+      "start_sec": 26.8,
+      "end_sec": 34.1,
+      "pct_runtime": 15
+    },
+    {
+      "role": "escalation",
+      "start_sec": 34.1,
+      "end_sec": 41.6,
+      "pct_runtime": 15
     },
     {
       "role": "cta",
@@ -57,32 +75,42 @@
     "continuous": 5
   },
   "transition_types": [
-    "flash_bloom",
-    "flash_whip",
-    "flash_white"
+    "flash_whip"
+  ],
+  "camera_moves_used": [
+    "crane_boom",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "push_in",
+    "static_locked"
   ],
   "shot_scale_counts": {
     "EW": 0,
     "W": 3,
-    "M": 6,
-    "MCU": 6,
-    "CU": 1,
+    "M": 3,
+    "MCU": 10,
+    "CU": 2,
     "ECU": 0,
-    "INSERT": 10
+    "INSERT": 8
   },
   "camera_angle_counts": {
     "aerial": 0,
-    "overhead": 1,
-    "high": 9,
-    "eye": 12,
+    "overhead": 2,
+    "high": 8,
+    "eye": 11,
     "low": 2,
-    "ground": 2
+    "ground": 3
   },
   "camera_energy": "mixed",
-  "dominant_lens_feel": "mixed",
+  "dominant_lens_feel": "normal",
   "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "mixed",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": false,
@@ -90,20 +118,29 @@
     "has_emissive_highlight_pulse": true,
     "has_pre_impact_silence": false,
     "has_jl_cut": true,
-    "has_time_remap_or_hit_stop": false,
+    "has_time_remap_or_hit_stop": true,
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "Imagine you find [POWERFUL OBJECT], SO at first you use it for [RELATABLE/FUNNY FIXES], BUT once you realize [PSYCHOLOGICAL CONSEQUENCE], you escalate to [CRIME/DANGER] -> click below to see what happens next.",
+  "reusable_script_template": "Imagine you find [MYSTERIOUS OBJECT] that lets you [MINOR SUPERPOWER] -> At first [HARMLESS EVERYDAY RESETS] -> BUT how does it change you? -> BECAUSE once you lose fear of consequences -> [MORAL/DANGEROUS ESCALATION] -> Click to watch the full story.",
   "secret_sauce_cues": [
-    "Hybrid live-action presenter + high-detail 3D CGI dramatization using a punch-in crop and 0.6s silent stare right before the climax",
-    "Consistent cyan flash-whip optical transitions anchored to the hero prop for every time-rewind jump",
-    "Graphic-anchored cut keeping a spinning 3D white curved arrow locked across shots directly onto the blurred end-screen YouTube video card"
+    "Diegetic cyan energy flash-whip transitions triggered directly by the character pressing the device",
+    "Color-temperature and BGM shift from warm amber curiosity to cold teal ominous drone right at the 55% moral twist",
+    "Hybrid live-action host + CGI trailer funneling Shorts viewers into a 6:08 full video via a 3D animated arrow and blurred-BG YouTube card overlay"
   ],
   "weaknesses_or_drag": [
-    "Minor 3D continuity/settle flaws (victim shirt gains a white lower stripe mid-shot at f454; 4f blurry focus-settle at f488)",
-    "~3s of silent/ambient hold on the static YouTube card at the very end (00:46.0–00:49.0) after narration finishes"
+    "Protagonist appearance/wardrobe changes across vignettes (construction worker to plaid bar patron to white-shirt crane climber)",
+    "4.0s static end-card hold after final spoken word risks late-swipe drop-off"
   ]
 }

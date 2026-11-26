@@ -1,0 +1,140 @@
+{
+  "schema_version": 2,
+  "duration_sec": 57.6,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "other",
+  "topic_sublabel": "dark_fantasy_curse_fable",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 1,
+  "opening_spoken_line": "He walked back to the village carrying the head of the dragon that he had slayed.",
+  "hook_visual_trigger": "Armored knight carrying glowing severed dragon head down path",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 71,
+  "outro_hold_sec": 0,
+  "rehook_timestamps_sec": [
+    11,
+    17,
+    23,
+    33
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.9,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.9,
+      "end_sec": 11,
+      "pct_runtime": 11
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11,
+      "end_sec": 32,
+      "pct_runtime": 36
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 32,
+      "end_sec": 41,
+      "pct_runtime": 16
+    },
+    {
+      "role": "twist",
+      "start_sec": 41,
+      "end_sec": 54,
+      "pct_runtime": 22
+    },
+    {
+      "role": "resolution",
+      "start_sec": 54,
+      "end_sec": 57.6,
+      "pct_runtime": 6
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 22,
+    "hidden_cut": 0,
+    "transition": 1,
+    "continuous": 5
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "dolly_track",
+    "orbit_arc",
+    "push_in",
+    "tilt_pan",
+    "crane_boom",
+    "whip_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 4,
+    "M": 12,
+    "MCU": 4,
+    "CU": 6,
+    "ECU": 2,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 1,
+    "overhead": 0,
+    "high": 5,
+    "eye": 22,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "mixed",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "dark_ominous_drone",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[HERO] achieves [VICTORY], BUT refuses [SIMPLE NORMAL ACT] -> SO [SUSPICIOUS CLUES] escalate -> UNTIL [FORCED REVEAL] exposes [MONSTROUS CURSE].",
+  "secret_sauce_cues": [
+    "2D thought-bubble PiP overlay inside 3D village scenes to visualize false villager assumption",
+    "Escalating behavioral clues before macro ECU monster-anatomy reveal (scales, steaming fangs, slit eye)",
+    "Saving heavy red smoke, dragon fire, and camera lunge for final 3-second payoff"
+  ],
+  "weaknesses_or_drag": [
+    "Slightly stiff 3D facial rigs during dialogue/scream beats",
+    "Abrupt whip-blurred cuts into seated feast and bedroom ambush"
+  ]
+}

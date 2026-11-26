@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "duration_sec": 40.5,
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "wwii_ocean_raft_survival",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 4.24,
+  "opening_spoken_line": "He pulled the spring from his flashlight and bent it into a hook.",
+  "hook_visual_trigger": "Grimy bearded castaway pulls an emissive-glowing spring from a blue flashlight and bends it bare-handed into a hook",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 66,
+  "rehook_timestamps_sec": [
+    7.4,
+    14,
+    18.7,
+    26.7,
+    32.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.24,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.24,
+      "end_sec": 12.25,
+      "pct_runtime": 20
+    },
+    {
+      "role": "escalation",
+      "start_sec": 12.25,
+      "end_sec": 26.73,
+      "pct_runtime": 36
+    },
+    {
+      "role": "twist",
+      "start_sec": 26.73,
+      "end_sec": 31.6,
+      "pct_runtime": 12
+    },
+    {
+      "role": "resolution",
+      "start_sec": 31.6,
+      "end_sec": 40.51,
+      "pct_runtime": 22
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 3,
+    "transition": 1,
+    "continuous": 13
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 6,
+    "MCU": 6,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 11,
+    "low": 2,
+    "ground": 1
+  },
+  "camera_energy": "mixed",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "natural_daylight",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false
+  },
+  "reusable_script_template": "[PROTAGONIST] improvises [UNLIKELY TOOL] to trigger [ESCALATING CHAIN OF SURVIVAL/CAUSALITY], BUT [DANGEROUS COMPLICATION] forces [BRUTAL COUNTER], TWIST [DELAYED ORIGIN/TIME REVEAL] -> [RESOURCEFUL PAYOFF & MILESTONE].",
+  "secret_sauce_cues": [
+    "Color-coded emissive highlights (yellow = key tool or catch, red = lethal impact) communicate action states without UI clutter",
+    "Zero-hard-cut kinetic bridges (whip-pans, radial-zoom blurs, and water-surface plunges) disguise pose/time skips inside continuous camera motion"
+  ],
+  "weaknesses_or_drag": [
+    "Minor clipping between the shark's snout and the man's sleeve during the deck bite (`f603–f615`) and a brief static pose linger after the shark dies (`f723–f739`)",
+    "Slight trailing animation hold at the rescue end frame (`f1175–f1214`) after narration finishes"
+  ]
+}

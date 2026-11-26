@@ -1,62 +1,59 @@
 {
-  "schema_version": 1,
-  "duration_sec": 36.9,
-  "topic_category": "crime_disaster_accident",
-  "topic_sublabel": "thin_ice_rescue_incident",
+  "schema_version": 2,
+  "duration_sec": 36.867,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "thin_ice_jump_rope_rescue",
+  "emotional_driver": "visceral_shock_danger",
   "hook_archetype": "cold_open_crisis",
-  "opening_shot_sec": 3.033,
+  "opening_shot_sec": 3.1,
   "opening_spoken_line": "The ice started to break as the dog chased the geese.",
-  "hook_visual_trigger": "Wide-eyed husky splayed in panic on cracking pond ice as geese burst past and it plunges through",
+  "hook_visual_trigger": "Panicked husky splayed on cracking ice before breaking through",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "chronological_escalation_twist",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 68,
+  "twist_at_pct": 47,
+  "outro_hold_sec": 0.8,
   "rehook_timestamps_sec": [
-    7.1,
+    3.1,
+    7.3,
     17.2,
-    25
+    25.5,
+    29
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 3.033,
+      "end_sec": 3.1,
       "pct_runtime": 8
     },
     {
-      "role": "escalation",
-      "start_sec": 3.033,
-      "end_sec": 7.1,
-      "pct_runtime": 11
-    },
-    {
       "role": "setup",
-      "start_sec": 7.1,
+      "start_sec": 3.133,
       "end_sec": 13.367,
-      "pct_runtime": 17
+      "pct_runtime": 28
     },
     {
       "role": "escalation",
-      "start_sec": 13.367,
-      "end_sec": 20.767,
+      "start_sec": 13.433,
+      "end_sec": 20.933,
       "pct_runtime": 20
     },
     {
-      "role": "escalation",
-      "start_sec": 20.767,
-      "end_sec": 25,
-      "pct_runtime": 11
-    },
-    {
       "role": "twist",
-      "start_sec": 25,
+      "start_sec": 20.967,
       "end_sec": 29,
-      "pct_runtime": 11
+      "pct_runtime": 22
     },
     {
       "role": "resolution",
-      "start_sec": 29,
-      "end_sec": 36.9,
+      "start_sec": 29.033,
+      "end_sec": 36.867,
       "pct_runtime": 22
     }
   ],
@@ -64,33 +61,45 @@
     "hard_cut": 0,
     "hidden_cut": 1,
     "transition": 1,
-    "continuous": 12
+    "continuous": 13
   },
   "transition_types": [
     "card_flip"
   ],
+  "camera_moves_used": [
+    "pull_back",
+    "push_in",
+    "dolly_track",
+    "whip_pan",
+    "crane_boom",
+    "tilt_pan"
+  ],
   "shot_scale_counts": {
     "EW": 0,
-    "W": 2,
-    "M": 8,
-    "MCU": 2,
-    "CU": 1,
+    "W": 1,
+    "M": 7,
+    "MCU": 4,
+    "CU": 3,
     "ECU": 0,
-    "INSERT": 2
+    "INSERT": 1
   },
   "camera_angle_counts": {
     "aerial": 0,
     "overhead": 0,
-    "high": 5,
-    "eye": 8,
+    "high": 4,
+    "eye": 10,
     "low": 0,
     "ground": 2
   },
-  "camera_energy": "snappy_whip_kinetic",
-  "dominant_lens_feel": "wide",
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
   "lighting_style": "natural_daylight",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "cool_moody_teal",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": false,
@@ -98,18 +107,26 @@
     "has_emissive_highlight_pulse": true,
     "has_pre_impact_silence": false,
     "has_jl_cut": false,
-    "has_time_remap_or_hit_stop": true,
+    "has_time_remap_or_hit_stop": false,
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[VICTIM] triggers [ESCALATING HAZARD], SO [SECOND PERSON] rushes in and gets trapped too -> ACROSS THE SCENE [UNLIKELY HERO] grabs [EVERYDAY PROP] -> FIRST ATTEMPT fails due to [PHYSICAL SETBACK], SO [HERO] adapts [SURVIVAL TECHNIQUE] to pull everyone out alive",
+  "reusable_script_template": "[VICTIM] enters sudden peril as [CHAIN REACTION] traps them, BUT [BYSTANDER] uses [UNEXPECTED EVERYDAY TOOL] -> [FIRST ATTEMPT FAILS] -> SO [TECHNIQUE ADJUSTMENT] saves them.",
   "secret_sauce_cues": [
-    "Unbroken 3D dolly/whip bridges across suburban geography paired with a character torso lens-wipe Hidden Cut",
-    "Brief emissive neon-yellow highlight pulse on the everyday rescue tool before action, plus ZACK D FILMS pickup decal Easter egg"
+    "Full-frame body-occlusion hidden cut teleporting across street onto frozen pond",
+    "Brief neon-yellow emissive highlight pulse on hero prop (jump rope) at pickup",
+    "Diegetic channel branding painted on background vehicle door ('ZACK D FILMS')"
   ],
-  "weaknesses_or_drag": [
-    "Slow-motion water splash hang at 00:27.0-00:29.0 lingers slightly on static mid-air droplets before the card flip"
-  ]
+  "weaknesses_or_drag": []
 }

@@ -1,0 +1,126 @@
+{
+  "schema_version": 2,
+  "duration_sec": 28.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "card_spring_tutorial",
+  "emotional_driver": "awe_wonder",
+  "hook_archetype": "imperative_how_to_step",
+  "opening_shot_sec": 1.702,
+  "opening_spoken_line": "Keep your hands close together.",
+  "hook_visual_trigger": "3D hands holding 3 of Clubs deck pull back into two-handed grip on blue studio backdrop",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    7.8,
+    16.7,
+    24.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 1.7,
+      "pct_runtime": 6
+    },
+    {
+      "role": "setup",
+      "start_sec": 1.7,
+      "end_sec": 7.8,
+      "pct_runtime": 21
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 7.8,
+      "end_sec": 16.7,
+      "pct_runtime": 31
+    },
+    {
+      "role": "escalation",
+      "start_sec": 16.7,
+      "end_sec": 24.5,
+      "pct_runtime": 28
+    },
+    {
+      "role": "resolution",
+      "start_sec": 24.5,
+      "end_sec": 28.5,
+      "pct_runtime": 14
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 9
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "pull_back",
+    "push_in",
+    "dolly_track",
+    "orbit_arc"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 1,
+    "MCU": 2,
+    "CU": 5,
+    "ECU": 2,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 0,
+    "eye": 10,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[IMPERATIVE FIRST STEP] -> THEN [PRECISE GRIP & PRESSURE] -> CREATING [MACRO SLOW-MO PHYSICS] -> CATCH WITH [ANCHOR STEP] -> PAYOFF [FULL-SPEED MASTERY]",
+  "secret_sauce_cues": [
+    "Continuous single-take orbital camera glides eliminating all hard cuts",
+    "Diegetic emissive body/prop glow pulses replacing 2D callout arrows",
+    "Slow-motion macro physics contrasted against real-time full-deck payoff"
+  ],
+  "weaknesses_or_drag": []
+}

@@ -1,9 +1,10 @@
-### 1. Hook, Packaging & Channel DNA Summary
-- **Topic & Premise:** `food_diy_and_hacks` — A deadpan 3D recipe demonstrating how to turn a McDonald's Big Mac meal (fries, burger patties, cheese, sauce, and toppings) into an edible Push-Pop popsicle; driven by absurd culinary novelty and comedic contrast between fast food and sushi/candy mechanics.
-- **Hook Anatomy (`0–3s`):** `imperative_how_to_step` — Opens verbatim with *"Lay the cheese down on a bamboo mat."* (`00:00.000–00:01.468`, `f0–f44`) as two hands lay a glossy American cheese slice onto a green sushi mat while an overturned McDonald's fry sleeve and foreground Big Mac bottle plant immediate incongruous curiosity (*why make fast food like sushi?*).
-- **Storytelling & Retention Engine:** `mechanism_step_by_step` propelled by `chronological_and_then` imperative commands (*"Lay... Then... Now... Add... Finish... Then..."*); re-hooks land at `6.3s` (Big Mac sauce reveal), `17.0s` (dramatic ground-level mat-rolling tunnel), and `20.8s` (3D tube cutaway showing the Push-Pop plunger mechanism) before paying off with a comedic bite and deadpan lip-licking grin (`ending_type`: `satisfying_resolution`).
-- **Visual, Camera & Motion Signature:** A 100% continuous one-take 3D camera choreography (`0` cuts; `10` smooth damped continuous sub-beats) dominated by `MCU` (`8/11`) and `high` angles (`8/11`), normal studio perspective, clean soft studio lighting against a radial-vignetted cyan backdrop, shallow DOF, crisp knife motion blur, and an on-the-fly 3D side-cutaway reveal (`f625–f654`).
-- **Soundscape, Voice & Secret-Sauce:** Continuous upbeat, quirky rhythmic instrumental bed under brisk, instructional narration with a brief bite-crunch speech gap (`~22.4s`). Reusable signature cues: (1) zero-cut tracking choreography bridging prep board, assembly mat, and character POV; (2) branded prop foreshadowing (`"PUSH POP Big Mac"` & `"ZACK D FILMS"` diegetic packaging/shirt); (3) uncanny-cheerful facial micro-acting + cutaway engineering explainers applied to absurd food hacks.
+### 1. Hook, Packaging & Channel Soul Summary
+- **Medium, Topic & Emotional Premise:** `3d_stylized_cgi` (`third_person_characters`) in `food_diy_and_hacks`, demonstrating how to turn a McDonald's Big Mac meal into a cheese-wrapped "Push-Pop" snack driven by `humor_absurdity`.
+- **Hook Anatomy (`0–3s`):** `imperative_how_to_step` opens with *"Lay the cheese down on a bamboo mat."* (`opening_shot_sec`: `1.468`), visually triggered by hands slapping processed cheese onto a sushi mat beside fast-food fries (`f0–f44`).
+- **Storytelling, Retention & Linguistics:** `mechanism_step_by_step` using `chronological_and_then` connectors (*"Then..."*, *"Now..."*, *"Finish it off..."*) in `second_person_you` POV with `calm_matter_of_fact` delivery, re-hooking via rack-focus prep shifts (`8.0s`), table-level rolling (`17.0s`), and a cutaway tube reveal (`20.8s`) before a `0.5s` `satisfying_resolution` hold.
+- **Camera, Framing & Editing Grammar:** Single unbroken 3D continuous take (`Continuous [NO CUT]`: 9 sub-beats, 0 cuts/transitions) driven by `smooth_damped_continuous` `normal`-lens moves (`pull_back`, `dolly_track`, `orbit_arc`, `crane_boom`, `tilt_pan`, `push_in`), anchored on `MCU` (`5`) and `CU` (`3`) across `high` (`5`), `eye` (`4`), and `ground` (`1`) angles.
+- **Optics, Motion, Look-Dev & VFX:** Clean `clean_studio_soft` lighting with `soft_diffuse` shadows, `clean_bright_saturated` cyan/wood palette, `uses_backdrop_vignette`, `uses_shallow_dof`, `uses_rack_focus`, `uses_object_motion_blur`, `smooth_damped` easing, `phrase_chunked_static` captions, fluid sauce simulation, a dynamic tube cutaway (`f625–f652`), and diegetic `"ZACK D FILMS"` branding on shirt and packaging.
+- **Soundscape & Secret-Sauce:** `continuous_bgm_plus_vo` featuring a `playful_quirky` beat and `moderate_punctuated` foley (chops, drizzle, bite). Signature tricks: unbroken one-take spatial choreography via rack-focus, clean mechanical cutaway inside props, and deadpan VO paired with an exaggerated facial eating gag.
 
 ---
 
@@ -11,11 +12,11 @@
 
 | Beat | Time & Frames | Pct | Narrative & Script Function | Directorial Intent (Why this visual/edit/audio choice?) |
 | --- | --- | --- | --- | --- |
-| hook | 00:00.000–00:03.003 (f0–f90) | 12% | Imperative opening (*"Lay the cheese down on a bamboo mat"*) transitions straight into chopping McDonald's fries | Immediate hands-in-motion framing (`MCU / high`) plus absurd pairing of American cheese, sushi mat, and McDonald's fries creates instant visual curiosity |
-| setup | 00:03.003–00:06.139 (f90–f184) | 12% | Finishes chopping fries and slides them onto the cheese slice as the base layer | Continuous camera tracking follows the knife directly between board and mat, eliminating edit friction and pacing the assembly smoothly |
-| escalation | 00:06.139–00:16.884 (f184–f506) | 42% | Drizzles Big Mac sauce, chops burger patties on the board, transfers meat, and piles on pickles, onions, lettuce, and sesame seeds | Tightening to `CU` with slow orbital drift and shallow DOF foreground/background separation keeps rising stack tactile while building visual excess |
-| twist | 00:16.884–00:21.755 (f506–f652) | 19% | Rolls stack in bamboo mat, inserts roll into a cardboard tube, reveals host inserting stick, and slices open a 3D tube cutaway | Sudden crane-drop to `ground` tunnel view signals transformation (`75%` twist into Push-Pop), then cutaway cross-section gamifies the mechanical push-up |
-| resolution | 00:21.755–00:25.459 (f652–f763) | 15% | Protruding roll is bitten, chewed, and finished with a slow lip-lick and held grin (*"to enjoy your Big Mac Push-Pop"*) | Eye-level `MCU` focuses on exaggerated facial micro-acting and an isolated bite crunch in a VO gap to lock in the comedic payoff |
+| hook | 00:00.000–00:01.468 (f0–f44) | 6% | Direct recipe command places cheese on a sushi mat | Unexpected fast-food/sushi juxtaposition locks immediate curiosity |
+| setup | 00:01.468–00:07.875 (f44–f236) | 25% | Chops fries into a base and drizzles Big Mac sauce | Continuous dolly-to-board motion maintains momentum without cutting |
+| escalation | 00:07.875–00:16.950 (f236–f508) | 36% | Dices patties and stacks pickles, onions, lettuce, sesame | Rack-focus shift connects stations while rapid topping builds height |
+| explanation_value | 00:16.950–00:21.755 (f508–f652) | 19% | Rolls stack, inserts into tube, pushes plunger up | Ground-level angle and tube cutaway clarify mechanical payoff |
+| resolution | 00:21.755–00:25.459 (f652–f763) | 14% | Host bites, chews, licks lips, and smiles at camera | Deadpan VO contrasts with uncanny comic facial reaction |
 
 ---
 
@@ -23,17 +24,16 @@
 
 | ID | Time & Frames | Boundary | Scale / Angle | Camera, Motion & Dominant Craft `[Category]` | Conf |
 | --- | --- | --- | --- | --- | --- |
-| S01 | 00:00.000–00:01.468 (f0–f44) | Opening | MCU / high | Damped push-in then crane-back as two hands lay yellow cheese onto green bamboo mat; soft studio shadows, foreground bottle shallow DOF `[Camera, Framing & Staging]` | High |
-| S01a | 00:01.468–00:04.471 (f44–f134) | Continuous [NO CUT] (crane-track up to board) | M / high | Smooth track up-forward onto cutting board as fries tumble from red carton; rapid knife chops with directional object motion blur `[Optics: Blur, DOF & Temporal]` | High |
-| S01b | 00:04.471–00:06.139 (f134–f184) | Continuous [NO CUT] (damped tracking follow down) | MCU / high | Camera tracks chopped fries balanced on knife blade back down-left onto cheese base, settling into a gentle counter-clockwise orbit `[Camera, Framing & Staging]` | High |
-| S01c | 00:06.139–00:07.875 (f184–f236) | Continuous [NO CUT] (gentle orbital drift) | MCU / high | Branded Big Mac squeeze bottle extrudes chunky glossy sauce onto fries (`f199–f224`) while camera orbits slightly clockwise and tilts up `[Motion, Acting & Prop State]` | High |
-| S01d | 00:07.875–00:10.177 (f236–f305) | Continuous [NO CUT] (damped tilt-push up to board) | MCU / high | Camera tilts up past blurred foreground stack onto stacked burger patties; knife slices crosswise, hand rotates stack 90°, and blade cubes meat `[Motion, Acting & Prop State]` | High |
-| S01e | 00:10.177–00:11.144 (f305–f334) | Continuous [NO CUT] (damped tracking tilt down) | MCU / high | Smooth downward tracking follow as knife slides cubed burger patties onto sauced fries and clears frame `[Camera, Framing & Staging]` | High |
-| S01f | 00:11.144–00:16.884 (f334–f506) | Continuous [NO CUT] (slow orbital drift) | CU / high | Tight close-up with slow right-to-left orbit as hand layers translucent pickle chips, blocky purple onion cubes, lettuce, and falling sesame seeds `[Motion, Acting & Prop State]` | High |
-| S01g | 00:16.884–00:18.352 (f506–f550) | Continuous [NO CUT] (crane-drop to tabletop) | CU / ground | Rapid crane-drop to table-level tunnel view with heavy foreground DOF blur as hands roll cheese cylinder and peel bamboo mat off `[Camera, Framing & Staging]` | High |
-| S01h | 00:18.352–00:20.087 (f550–f602) | Continuous [NO CUT] (orbital pedestal rise) | MCU / high | Hand lifts cheese roll vertically as camera rises over rim of diegetic `"PUSH POP"` tube (`f565–f595`) and tracks roll dropping inside `[Camera, Framing & Staging]` | High |
-| S01i | 00:20.087–00:21.755 (f602–f652) | Continuous [NO CUT] (pull-back & push-in to tube) | MCU / eye | Tilts up revealing `"ZACK D FILMS"` host inserting stick into tube base, then opens pill-shaped 3D cutaway window (`f625–f652`) showing piston pushing roll up `[VFX, Cutaways & Graphics]` | High |
-| S01j | 00:21.755–00:25.459 (f652–f763) | Continuous [NO CUT] (pedestal hold on face & pop) | MCU / eye | Camera centers on host biting protruding cheese roll during brief VO pause + bite crunch (`f673–f681`), chewing, licking lips, and holding unblinking grin `[Motion, Acting & Prop State]` | High |
+| S01 | 00:00.000–00:01.468 (f0–f44) | Opening | M / high | Hands lay cheese on mat as camera pulls back to reveal props; shallow DOF `[Camera, Framing & Staging]` | High |
+| S01b | 00:01.468–00:04.404 (f44–f132) | Continuous [NO CUT] (dolly/tilt up) | MCU / high | Camera tracks to cutting board; knife chops fries with blade motion blur `[Optics: Blur, DOF & Temporal]` | High |
+| S01c | 00:04.404–00:07.875 (f132–f236) | Continuous [NO CUT] (dolly back/orbit) | MCU / high | Knife deposits fries onto cheese; viscous sauce squeezes onto pile `[VFX, Cutaways & Graphics]` | High |
+| S01d | 00:07.875–00:10.177 (f236–f305) | Continuous [NO CUT] (tilt + rack focus) | MCU / eye | Camera tilts up and racks focus to patties; two-axis dicing `[Optics: Blur, DOF & Temporal]` | High |
+| S01e | 00:10.177–00:11.011 (f305–f330) | Continuous [NO CUT] (tilt + rack focus) | MCU / high | Camera tilts down and racks focus back onto cheese base for meat drop `[Camera, Framing & Staging]` | High |
+| S01f | 00:11.011–00:16.950 (f330–f508) | Continuous [NO CUT] (push/orbit settle) | CU / high | Subtle orbit while hands sequentially drop pickles, onions, lettuce, seeds `[Motion, Acting & Prop State]` | High |
+| S01g | 00:16.950–00:18.452 (f508–f553) | Continuous [NO CUT] (pedestal drop) | CU / ground | Camera drops to table level to inspect roll seam as bamboo mat peels off `[Camera, Framing & Staging]` | High |
+| S01h | 00:18.452–00:20.521 (f553–f615) | Continuous [NO CUT] (crane/pull-back) | M / eye | Hand slots roll into branded tube; pull-back reveals host inserting plunger `[Motion, Acting & Prop State]` | High |
+| S01i | 00:20.521–00:21.755 (f615–f652) | Continuous [NO CUT] (push-in) | CU / eye | Side cutaway window slices open on tube, showing plunger lifting roll `[VFX, Cutaways & Graphics]` | High |
+| S01j | 00:21.755–00:25.459 (f652–f763) | Continuous [NO CUT] (tilt up/hold) | MCU / eye | Camera frames host biting, chewing, licking lips, and holding wide-eyed grin `[Motion, Acting & Prop State]` | High |
 
 ---
 
@@ -41,40 +41,52 @@
 
 ```json
 {
-  "schema_version": 1,
-  "duration_sec": 25.5,
+  "schema_version": 2,
+  "duration_sec": 25.46,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "food_diy_and_hacks",
-  "topic_sublabel": "fast_food_push_pop_recipe",
+  "topic_sublabel": "fast_food_push_pop_hack",
+  "emotional_driver": "humor_absurdity",
   "hook_archetype": "imperative_how_to_step",
   "opening_shot_sec": 1.468,
   "opening_spoken_line": "Lay the cheese down on a bamboo mat.",
-  "hook_visual_trigger": "Square yellow American cheese placed onto a green sushi mat beside an overturned McDonald's fry carton",
+  "hook_visual_trigger": "Hands lay processed cheese onto a green bamboo mat beside fries",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "mechanism_step_by_step",
   "narrative_connector": "chronological_and_then",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 75,
-  "rehook_timestamps_sec": [6.3, 17.0, 20.8],
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [8.0, 17.0, 20.8],
   "story_beats": [
-    { "role": "hook", "start_sec": 0.0, "end_sec": 3.0, "pct_runtime": 12 },
-    { "role": "setup", "start_sec": 3.0, "end_sec": 6.1, "pct_runtime": 12 },
-    { "role": "escalation", "start_sec": 6.1, "end_sec": 16.9, "pct_runtime": 42 },
-    { "role": "twist", "start_sec": 16.9, "end_sec": 21.8, "pct_runtime": 19 },
-    { "role": "resolution", "start_sec": 21.8, "end_sec": 25.5, "pct_runtime": 15 }
+    { "role": "hook", "start_sec": 0.0, "end_sec": 1.468, "pct_runtime": 6 },
+    { "role": "setup", "start_sec": 1.468, "end_sec": 7.875, "pct_runtime": 25 },
+    { "role": "escalation", "start_sec": 7.875, "end_sec": 16.95, "pct_runtime": 36 },
+    { "role": "explanation_value", "start_sec": 16.95, "end_sec": 21.755, "pct_runtime": 19 },
+    { "role": "resolution", "start_sec": 21.755, "end_sec": 25.459, "pct_runtime": 14 }
   ],
   "boundary_counts": {
     "hard_cut": 0,
     "hidden_cut": 0,
     "transition": 0,
-    "continuous": 10
+    "continuous": 9
   },
   "transition_types": [],
-  "shot_scale_counts": { "EW": 0, "W": 0, "M": 1, "MCU": 8, "CU": 2, "ECU": 0, "INSERT": 0 },
-  "camera_angle_counts": { "aerial": 0, "overhead": 0, "high": 8, "eye": 2, "low": 0, "ground": 1 },
+  "camera_moves_used": ["pull_back", "dolly_track", "orbit_arc", "tilt_pan", "crane_boom", "push_in"],
+  "shot_scale_counts": { "EW": 0, "W": 0, "M": 2, "MCU": 5, "CU": 3, "ECU": 0, "INSERT": 0 },
+  "camera_angle_counts": { "aerial": 0, "overhead": 0, "high": 5, "eye": 4, "low": 0, "ground": 1 },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "normal",
   "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
@@ -86,17 +98,23 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": false
   },
-  "reusable_script_template": "Take [ICONIC FAST FOOD ITEM] and assemble it using [UNEXPECTED PREP TOOL/FORMAT], layer [RECOGNIZABLE INGREDIENTS], THEN seal it inside [NOVELTY CONTAINER/MECHANISM] so you can eat it as [ABSURD RESULT].",
+  "reusable_script_template": "Lay [WRAPPER] on [TOOL], THEN chop/stack [FAMOUS FAST FOOD INGREDIENTS], THEN roll and pack into [NOVEL DISPENSER] to enjoy your [ABSURD HYBRID SNACK].",
   "secret_sauce_cues": [
-    "Zero-cut continuous damped camera choreography linking cutting board, prep mat, ground-level roll, and host reaction",
-    "Diegetic packaging & apparel branding ('PUSH POP Big Mac', 'ZACK D FILMS') paired with an on-the-fly 3D side cutaway of internal plunger mechanics",
-    "Uncanny-cheerful facial micro-acting (wide eyes, bite crunch in VO pause, slow lip-lick, held grin)"
+    "Unbroken one-take workbench camera linked by rack-focus pulls",
+    "Seamless mid-action cutaway window revealing internal prop mechanics",
+    "Diegetic channel branding embedded on character shirt and custom prop packaging"
   ],
-  "weaknesses_or_drag": [
-    "Blocky low-poly onion cube geometry contrasts noticeably with detailed meat/fry textures",
-    "Slight teeth-to-cheese clipping during bite (`f674-f679`) and brief dark meat cube slip outside rolled end (`f545`)"
-  ]
+  "weaknesses_or_drag": []
 }
 ```

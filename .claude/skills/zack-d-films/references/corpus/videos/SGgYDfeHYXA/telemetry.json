@@ -1,97 +1,122 @@
 {
-  "schema_version": 1,
-  "duration_sec": 73.24,
+  "schema_version": 2,
+  "duration_sec": 73.2,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "first_person_pov",
   "topic_category": "hypothetical_what_if",
-  "topic_sublabel": "unconscious_pilots_plane_survival",
+  "topic_sublabel": "emergency_plane_landing_pov",
+  "emotional_driver": "visceral_shock_danger",
   "hook_archetype": "hypothetical_premise",
-  "opening_shot_sec": 2.035,
-  "opening_spoken_line": "Imagine you wake up and everyone on your flight is unconscious.",
-  "hook_visual_trigger": "Blurred wake-up POV lifting off tray table, whipping left onto a slumped passenger highlighted in red.",
+  "opening_shot_sec": 2.068,
+  "opening_spoken_line": "Imagine you wake up, and everyone on your flight is unconscious.",
+  "hook_visual_trigger": "Eyelid vignette opens POV arms on tray table looking up at empty cabin",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "what_if_chain_reaction",
   "narrative_connector": "but_therefore",
   "ending_type": "question_cta",
-  "twist_at_pct": 68,
+  "twist_at_pct": null,
+  "outro_hold_sec": 1.1,
   "rehook_timestamps_sec": [
-    12.01,
-    28.4,
-    50.02,
-    64.5
+    12,
+    29.8,
+    50.9
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 5.71,
+      "end_sec": 5.75,
       "pct_runtime": 8
     },
     {
       "role": "setup",
-      "start_sec": 5.71,
-      "end_sec": 11.98,
+      "start_sec": 5.75,
+      "end_sec": 12.01,
       "pct_runtime": 9
     },
     {
       "role": "escalation",
-      "start_sec": 11.98,
-      "end_sec": 28.33,
-      "pct_runtime": 22
+      "start_sec": 12.01,
+      "end_sec": 26.06,
+      "pct_runtime": 19
     },
     {
       "role": "escalation",
-      "start_sec": 28.33,
-      "end_sec": 49.95,
-      "pct_runtime": 29
+      "start_sec": 26.06,
+      "end_sec": 38.54,
+      "pct_runtime": 17
     },
     {
-      "role": "twist",
-      "start_sec": 49.95,
-      "end_sec": 53.29,
-      "pct_runtime": 5
+      "role": "explanation_value",
+      "start_sec": 38.54,
+      "end_sec": 50.02,
+      "pct_runtime": 16
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 50.02,
+      "end_sec": 64.5,
+      "pct_runtime": 20
     },
     {
       "role": "escalation",
-      "start_sec": 53.29,
-      "end_sec": 71.74,
-      "pct_runtime": 25
+      "start_sec": 64.5,
+      "end_sec": 71.6,
+      "pct_runtime": 9
     },
     {
       "role": "cta",
-      "start_sec": 71.74,
+      "start_sec": 71.6,
       "end_sec": 73.24,
       "pct_runtime": 2
     }
   ],
   "boundary_counts": {
-    "hard_cut": 0,
+    "hard_cut": 1,
     "hidden_cut": 0,
     "transition": 1,
-    "continuous": 23
+    "continuous": 20
   },
   "transition_types": [
     "cross_dissolve"
   ],
+  "camera_moves_used": [
+    "whip_pan",
+    "push_in",
+    "pull_back",
+    "tilt_pan",
+    "handheld_follow",
+    "impact_shake",
+    "fpv_dive"
+  ],
   "shot_scale_counts": {
-    "EW": 3,
-    "W": 3,
-    "M": 7,
-    "MCU": 3,
-    "CU": 5,
+    "EW": 2,
+    "W": 2,
+    "M": 8,
+    "MCU": 4,
+    "CU": 3,
     "ECU": 0,
     "INSERT": 4
   },
   "camera_angle_counts": {
     "aerial": 2,
-    "overhead": 1,
-    "high": 4,
-    "eye": 18,
-    "low": 0,
+    "overhead": 0,
+    "high": 6,
+    "eye": 14,
+    "low": 1,
     "ground": 0
   },
   "camera_energy": "snappy_whip_kinetic",
   "dominant_lens_feel": "wide",
   "lighting_style": "clean_studio_soft",
-  "easing_energy": "smooth_damped",
-  "audio_bed_style": "vo_only_dry",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
@@ -103,17 +128,24 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[IMAGINE SCENARIO] looks safe at first, SO [FALSE REASSURANCE] -> BUT [CRISIS DISCOVERY] -> you try [OBVIOUS FIX], BUT [ACCIDENTAL ESCALATION] -> after [TIME-LAPSE STRUGGLE] you reach [FALSE VICTORY], BUT [FINAL REVERSAL] -> ending on [SURVIVAL DILEMMA + 'WHAT DO YOU DO?']",
+  "reusable_script_template": "Imagine [NORMAL SCENARIO], BUT [UNEXPECTED CRISIS] -> SO [ATTEMPTED FIX] -> UNTIL [ACCIDENTAL ESCALATION] -> [STABILIZE & NEW DILEMMA] -> What do you do?",
   "secret_sauce_cues": [
-    "Near-unbroken 1st-person POV ride (only 1 cross-dissolve in 73.2s) stitched by directional-blur whip pans and windshield zoom-outs",
-    "Color-coded emissive body/prop outline pulses (red = threat/incapacitation, yellow-green = interactables) paired with X-ray silhouettes and diegetic cockpit HUD callouts",
-    "Relentless 'But/Therefore' false-victory reversals peaking with a 180-degree whip-around to the protagonist's blinking face for comment engagement"
+    "Continuous 1st-person POV linked by whip-pans and windshield pass-through zooms",
+    "Color-coded emissive limb/prop outlines (red danger, orange snag, green control)",
+    "180-degree whip reveal onto protagonist's branded shirt and worried face for CTA"
   ],
   "weaknesses_or_drag": [
-    "Cockpit display continuity errors: altitude readout jumps abruptly from 11303 FT to 619 FT (f1599->f1600) and dual screens briefly conflict (2555 FT vs 9000 FT at f1742)",
-    "Repeated passenger 3D character asset visible in adjacent cabin rows (f71-f74)",
-    "Brief mid-clip pacing slowdown during the 00:57-01:04 landing control options hover"
+    "Cockpit altimeter displays jump inconsistently (619 FT to 9000 FT) around the 00:53 hard cut"
   ]
 }

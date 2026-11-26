@@ -1,101 +1,114 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "duration_sec": 55.1,
-  "topic_category": "pop_culture_media_tech",
-  "topic_sublabel": "gaming_ghost_car_tribute",
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "gaming_and_challenges",
+  "topic_sublabel": "wholesome_gaming_ghost_story",
+  "emotional_driver": "empathy_wholesome",
   "hook_archetype": "character_story_setup",
-  "opening_shot_sec": 2.436,
+  "opening_shot_sec": 1.034,
   "opening_spoken_line": "He played the racing game with his dad over and over again, but he could never beat him.",
-  "hook_visual_trigger": "Pull-back from scanlined CRT racing game to father and son gaming on couch with fast pass-by time skips",
+  "hook_visual_trigger": "CRT racing game pull-back into couch orbit and hidden-cut birthday montage",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "chronological_escalation_twist",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 88,
+  "twist_at_pct": 53,
+  "outro_hold_sec": 1.2,
   "rehook_timestamps_sec": [
     6.9,
-    22.1,
-    29.4,
-    46
+    25.8,
+    48.5
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 6.91,
-      "pct_runtime": 13
+      "end_sec": 6.1,
+      "pct_runtime": 11
     },
     {
       "role": "setup",
-      "start_sec": 6.91,
-      "end_sec": 13.68,
-      "pct_runtime": 12
+      "start_sec": 6.1,
+      "end_sec": 13.6,
+      "pct_runtime": 14
     },
     {
       "role": "escalation",
-      "start_sec": 13.68,
-      "end_sec": 28.13,
-      "pct_runtime": 26
-    },
-    {
-      "role": "explanation_value",
-      "start_sec": 28.13,
-      "end_sec": 40.81,
-      "pct_runtime": 23
-    },
-    {
-      "role": "visual_proof",
-      "start_sec": 40.81,
-      "end_sec": 45.98,
-      "pct_runtime": 9
+      "start_sec": 13.6,
+      "end_sec": 25.1,
+      "pct_runtime": 21
     },
     {
       "role": "twist",
-      "start_sec": 45.98,
-      "end_sec": 51.08,
-      "pct_runtime": 9
+      "start_sec": 25.1,
+      "end_sec": 40.8,
+      "pct_runtime": 28
+    },
+    {
+      "role": "escalation",
+      "start_sec": 40.8,
+      "end_sec": 48.9,
+      "pct_runtime": 15
     },
     {
       "role": "resolution",
-      "start_sec": 51.08,
-      "end_sec": 55.09,
-      "pct_runtime": 8
+      "start_sec": 48.9,
+      "end_sec": 55.1,
+      "pct_runtime": 11
     }
   ],
   "boundary_counts": {
-    "hard_cut": 0,
+    "hard_cut": 1,
     "hidden_cut": 2,
-    "transition": 6,
-    "continuous": 10
+    "transition": 5,
+    "continuous": 13
   },
   "transition_types": [
     "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "orbit_arc",
+    "push_in",
+    "crane_boom",
+    "tilt_pan",
+    "dolly_track",
+    "static_locked"
   ],
   "shot_scale_counts": {
     "EW": 0,
     "W": 4,
     "M": 8,
-    "MCU": 4,
+    "MCU": 6,
     "CU": 3,
     "ECU": 0,
-    "INSERT": 0
+    "INSERT": 1
   },
   "camera_angle_counts": {
     "aerial": 0,
     "overhead": 2,
-    "high": 4,
-    "eye": 8,
+    "high": 3,
+    "eye": 14,
     "low": 3,
-    "ground": 2
+    "ground": 0
   },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "normal",
-  "lighting_style": "clean_studio_soft",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
-    "has_cutaway_or_xray": true,
+    "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": true,
-    "has_motion_graphics_or_arrows": true,
+    "has_motion_graphics_or_arrows": false,
     "has_emissive_highlight_pulse": true,
     "has_pre_impact_silence": false,
     "has_jl_cut": false,
@@ -103,13 +116,24 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[SHARED RITUAL] seemed endless, BUT [TRAGEDY] forced it away -> UNTIL [TIME-LAPSE REDISCOVERY] revealed [PRESERVED MEMORY] -> SO [PROTAGONIST] nearly overcame it, TWIST [INTENTIONAL SACRIFICE] keeps [EMOTIONAL BOND] alive.",
+  "reusable_script_template": "[PROTAGONIST] shares [BONDED RITUAL] over and over, BUT [SUDDEN TRAGEDY] forces them apart -> UNTIL [TIME PASSES] and they revisit [RELIC], REVEALING [UNEXPECTED DIGITAL TRACE] -> SO they finish what they started with [HEARTWARMING SACRIFICE].",
   "secret_sauce_cues": [
-    "In-camera off-frame prop aging: pans down onto lower shelf for procedural cobweb/dust time-lapse while swapping CRT to flatscreen TV off-frame before booming up",
-    "Foreground pass-by occlusion hidden cuts (TV cabinet and couch backrest) paired with pose/UI graphic-matched cross-dissolves between reality and game world",
-    "Diegetic channel branding easter-eggs (ZACK D FILMS on dad's t-shirt and race finish gantry) and emotional ghost/hologram shader overlays"
+    "Foreground furniture and sofa-back whip occlusions concealing instant wardrobe/prop time-jumps",
+    "Pose match-dissolves bridging living-room collapse to open coffin and funeral suit back to casual wear",
+    "Diegetic branding baked seamlessly onto shirts, raceway billboards, and finish banners plus memory PiP overlays"
   ],
-  "weaknesses_or_drag": []
+  "weaknesses_or_drag": [
+    "Slight stiffness in character facial muscles during intense crying and shocked reaction holds"
+  ]
 }

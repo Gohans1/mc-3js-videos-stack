@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "duration_sec": 28,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "faceless_objects_diagrams",
+  "topic_category": "science_physics_mechanics",
+  "topic_sublabel": "biomimetic_micro_3d_printing",
+  "emotional_driver": "awe_wonder",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 2.8,
+  "opening_spoken_line": "When they removed the feeding tube from the mosquito, it was hollow and straight, but it was too fragile to use directly.",
+  "hook_visual_trigger": "Macro tweezers snip and pull the proboscis out of a mosquito",
+  "narration_pov": "omniscient_explainer",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.8,
+  "rehook_timestamps_sec": [
+    4.8,
+    12.8,
+    20
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.8,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.8,
+      "end_sec": 7.6,
+      "pct_runtime": 17
+    },
+    {
+      "role": "escalation",
+      "start_sec": 7.6,
+      "end_sec": 15.8,
+      "pct_runtime": 29
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 15.8,
+      "end_sec": 17.9,
+      "pct_runtime": 8
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 17.9,
+      "end_sec": 25.9,
+      "pct_runtime": 29
+    },
+    {
+      "role": "resolution",
+      "start_sec": 25.9,
+      "end_sec": 28,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 5,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 5
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "push_in",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 2,
+    "MCU": 1,
+    "CU": 5,
+    "ECU": 2,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 7,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "macro",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[UNUSUAL BIOLOGICAL OBJECT] has a useful trait, BUT [PHYSICAL FLAW] -> SO [ENGINEERED MODIFICATION] -> AND [PROOF AT MICRO SCALE] -> all thanks to [ORIGIN].",
+  "secret_sauce_cues": [
+    "Macro everyday scale anchors (sand grain, US penny) visualizing micron precision",
+    "Continuous single-studio camera run chaining multiple engineering transforms without cuts",
+    "Instant orthographic X-ray cutaway to prove internal fluid mechanics"
+  ],
+  "weaknesses_or_drag": []
+}

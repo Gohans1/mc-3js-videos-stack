@@ -1,18 +1,25 @@
 {
-  "schema_version": 1,
-  "duration_sec": 25.5,
+  "schema_version": 2,
+  "duration_sec": 25.46,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "food_diy_and_hacks",
-  "topic_sublabel": "fast_food_push_pop_recipe",
+  "topic_sublabel": "fast_food_push_pop_hack",
+  "emotional_driver": "humor_absurdity",
   "hook_archetype": "imperative_how_to_step",
   "opening_shot_sec": 1.468,
   "opening_spoken_line": "Lay the cheese down on a bamboo mat.",
-  "hook_visual_trigger": "Square yellow American cheese placed onto a green sushi mat beside an overturned McDonald's fry carton",
+  "hook_visual_trigger": "Hands lay processed cheese onto a green bamboo mat beside fries",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "mechanism_step_by_step",
   "narrative_connector": "chronological_and_then",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 75,
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
   "rehook_timestamps_sec": [
-    6.3,
+    8,
     17,
     20.8
   ],
@@ -20,63 +27,75 @@
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 3,
-      "pct_runtime": 12
+      "end_sec": 1.468,
+      "pct_runtime": 6
     },
     {
       "role": "setup",
-      "start_sec": 3,
-      "end_sec": 6.1,
-      "pct_runtime": 12
+      "start_sec": 1.468,
+      "end_sec": 7.875,
+      "pct_runtime": 25
     },
     {
       "role": "escalation",
-      "start_sec": 6.1,
-      "end_sec": 16.9,
-      "pct_runtime": 42
+      "start_sec": 7.875,
+      "end_sec": 16.95,
+      "pct_runtime": 36
     },
     {
-      "role": "twist",
-      "start_sec": 16.9,
-      "end_sec": 21.8,
+      "role": "explanation_value",
+      "start_sec": 16.95,
+      "end_sec": 21.755,
       "pct_runtime": 19
     },
     {
       "role": "resolution",
-      "start_sec": 21.8,
-      "end_sec": 25.5,
-      "pct_runtime": 15
+      "start_sec": 21.755,
+      "end_sec": 25.459,
+      "pct_runtime": 14
     }
   ],
   "boundary_counts": {
     "hard_cut": 0,
     "hidden_cut": 0,
     "transition": 0,
-    "continuous": 10
+    "continuous": 9
   },
   "transition_types": [],
+  "camera_moves_used": [
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "tilt_pan",
+    "crane_boom",
+    "push_in"
+  ],
   "shot_scale_counts": {
     "EW": 0,
     "W": 0,
-    "M": 1,
-    "MCU": 8,
-    "CU": 2,
+    "M": 2,
+    "MCU": 5,
+    "CU": 3,
     "ECU": 0,
     "INSERT": 0
   },
   "camera_angle_counts": {
     "aerial": 0,
     "overhead": 0,
-    "high": 8,
-    "eye": 2,
+    "high": 5,
+    "eye": 4,
     "low": 0,
     "ground": 1
   },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "normal",
   "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
@@ -88,16 +107,22 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": false
   },
-  "reusable_script_template": "Take [ICONIC FAST FOOD ITEM] and assemble it using [UNEXPECTED PREP TOOL/FORMAT], layer [RECOGNIZABLE INGREDIENTS], THEN seal it inside [NOVELTY CONTAINER/MECHANISM] so you can eat it as [ABSURD RESULT].",
+  "reusable_script_template": "Lay [WRAPPER] on [TOOL], THEN chop/stack [FAMOUS FAST FOOD INGREDIENTS], THEN roll and pack into [NOVEL DISPENSER] to enjoy your [ABSURD HYBRID SNACK].",
   "secret_sauce_cues": [
-    "Zero-cut continuous damped camera choreography linking cutting board, prep mat, ground-level roll, and host reaction",
-    "Diegetic packaging & apparel branding ('PUSH POP Big Mac', 'ZACK D FILMS') paired with an on-the-fly 3D side cutaway of internal plunger mechanics",
-    "Uncanny-cheerful facial micro-acting (wide eyes, bite crunch in VO pause, slow lip-lick, held grin)"
+    "Unbroken one-take workbench camera linked by rack-focus pulls",
+    "Seamless mid-action cutaway window revealing internal prop mechanics",
+    "Diegetic channel branding embedded on character shirt and custom prop packaging"
   ],
-  "weaknesses_or_drag": [
-    "Blocky low-poly onion cube geometry contrasts noticeably with detailed meat/fry textures",
-    "Slight teeth-to-cheese clipping during bite (`f674-f679`) and brief dark meat cube slip outside rolled end (`f545`)"
-  ]
+  "weaknesses_or_drag": []
 }

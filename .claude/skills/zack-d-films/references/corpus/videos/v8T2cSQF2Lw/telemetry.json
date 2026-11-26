@@ -1,0 +1,157 @@
+{
+  "schema_version": 2,
+  "duration_sec": 41.4,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "indestructible_physics_thought_experiment",
+  "emotional_driver": "awe_wonder",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 1.27,
+  "opening_spoken_line": "Right as you swing, the board suddenly becomes indestructible, meaning the nail bends.",
+  "hook_visual_trigger": "Hand turns semi-transparent as glowing cyan energy wave converts wooden board into green faceted metal",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 90,
+  "outro_hold_sec": 0.4,
+  "rehook_timestamps_sec": [
+    5.9,
+    11.5,
+    18,
+    32.9
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.1,
+      "pct_runtime": 7
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.1,
+      "end_sec": 5.9,
+      "pct_runtime": 7
+    },
+    {
+      "role": "escalation",
+      "start_sec": 5.9,
+      "end_sec": 11.467,
+      "pct_runtime": 14
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11.467,
+      "end_sec": 18,
+      "pct_runtime": 16
+    },
+    {
+      "role": "escalation",
+      "start_sec": 18,
+      "end_sec": 26.2,
+      "pct_runtime": 20
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 26.2,
+      "end_sec": 32.867,
+      "pct_runtime": 16
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 32.867,
+      "end_sec": 37.467,
+      "pct_runtime": 11
+    },
+    {
+      "role": "twist",
+      "start_sec": 37.467,
+      "end_sec": 39.967,
+      "pct_runtime": 6
+    },
+    {
+      "role": "resolution",
+      "start_sec": 39.967,
+      "end_sec": 41.367,
+      "pct_runtime": 3
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 3,
+    "continuous": 10
+  },
+  "transition_types": [
+    "vhs_rewind",
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "crane_boom",
+    "fpv_dive",
+    "whip_pan",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 2,
+    "W": 0,
+    "M": 6,
+    "MCU": 3,
+    "CU": 4,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 4,
+    "eye": 10,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": true,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[NORMAL ACTION] faces [IMPOSSIBLE CONSTRAINT], BUT fixing one piece escalates to [NEXT FAILURE] -> SO [EVERYTHING HARDENS + EXTREME PHYSICS] -> TWIST [CATASTROPHIC BLAST + SURVIVOR PUNCHLINE]",
+  "secret_sauce_cues": [
+    "VHS rewind resets reuse the exact 3D stage while stacking impossible material upgrades",
+    "Glowing faceted wireframe shaders distinguish indestructible materials at a glance",
+    "Continuous crane pull-back scales a single close-up impact into a town-destroying blast"
+  ],
+  "weaknesses_or_drag": []
+}

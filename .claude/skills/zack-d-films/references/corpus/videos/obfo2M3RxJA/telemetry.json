@@ -1,0 +1,126 @@
+{
+  "schema_version": 2,
+  "duration_sec": 25.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "electric_salt_spoon_mechanism",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 1.602,
+  "opening_spoken_line": "As the spoon touches your tongue, metal contacts complete a circuit to the food, and a tiny battery inside the handle sends a weak electric current running through the food and into your tastebuds.",
+  "hook_visual_trigger": "Push-in on spoon touching tongue, yellow contact glow, and blue x-ray reveal",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    5.4,
+    16,
+    21.1
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.103,
+      "pct_runtime": 12
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.103,
+      "end_sec": 7.474,
+      "pct_runtime": 17
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 7.474,
+      "end_sec": 16.016,
+      "pct_runtime": 33
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 16.016,
+      "end_sec": 19.953,
+      "pct_runtime": 16
+    },
+    {
+      "role": "resolution",
+      "start_sec": 19.953,
+      "end_sec": 25.492,
+      "pct_runtime": 22
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 9
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "whip_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 1,
+    "MCU": 3,
+    "CU": 1,
+    "ECU": 5,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 7,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "As [EVERYDAY OBJECT] touches you, [HIDDEN MECHANISM] sends [SIGNAL] to [BODY PART], making you experience [SENSORY EFFECT] even though [REALITY].",
+  "secret_sauce_cues": [
+    "Unbroken one-take macro-to-anatomical camera choreography",
+    "Dual x-ray shell and sagittal anatomy cutaways with emissive nerve pulses",
+    "Diegetic channel branding embedded on character wardrobe"
+  ],
+  "weaknesses_or_drag": []
+}

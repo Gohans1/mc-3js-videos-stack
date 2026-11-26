@@ -1,11 +1,10 @@
-*Note: Timecodes and `f<n>` are read verbatim from the bottom black reference strip (`30fps` native sampled at `~24fps`, so unseen single-frame transitions are bracketed as `fA→fB`).*
-
-### 1. Hook, Packaging & Channel DNA Summary
-- **Topic & Premise:** `explainer_how_it_works` (`forced_perspective_castle`) — Explains how Cinderella Castle uses architectural forced perspective to look towering while staying under the 200-foot aviation beacon threshold (`189 Feet`), driven by curiosity and architectural satisfaction.
-- **Hook Anatomy (`0–3s`):** `hypothetical_premise` — Opens on `"If they built the castle over 200 feet,"` paired with a `1.335s` opening beat where a crane drops the golden spire onto the castle as the camera pulls wide (`f0–f40`), immediately pivoting into a rapid `"270 Feet"` upward measurement (`f40–f103`) that plants the curiosity gap of why the real castle avoids needing a giant red warning light.
-- **Storytelling & Retention Engine:** `problem_solution_irony` driven by tight `but_therefore` causality, re-hooking viewers with distinct visual resets at `6.3s` (night cockpit near-miss), `13.8s` (architect lightbulb + construction timelapse), `20.5s` (sky forced-perspective proof), and `26.5s` (skull/brain X-ray cutaway), resolving into a `189 Feet` measurement payoff (`satisfying_resolution`).
-- **Visual, Camera & Motion Signature:** Medium-to-wide (`M` / `W`) eye-level framing anchored by `smooth_damped_continuous` camera splines (`15` continuous sub-beats across `6` cross-dissolves and `1` match `Hard Cut`), clean CGI daylight/night/studio lighting, shallow rack-focus pulls (`S03a–S03b`), and bold 3D diegetic arrows/counters.
-- **Soundscape, Voice & Secret-Sauce:** Crisp, rhythmic male VO layered over a steady, curious electronic underscore (`continuous_bgm_plus_vo`) with clause breaks synced tightly to dissolves; signature tricks include **screen-locked measurement bars during vertical camera pedestals** (`6 Feet → 4 Feet` window comparison, `f573–f600`), **translucent ghost-silhouette height comparisons** (`f754–f794`), and **continuous camera escapes** out through cockpit glass (`f227–f246`).
+### 1. Hook, Packaging & Channel Soul Summary
+- **Medium, Topic & Emotional Premise:** `3d_stylized_cgi` explainer (`third_person_characters`) in `explainer_how_it_works` detailing why Cinderella Castle uses forced perspective instead of exceeding 200 feet (`curiosity_mystery`).
+- **Hook Anatomy (`0–3s`):** `hypothetical_premise` opening with `"If they built the castle over 200 feet, it would need a giant flashing red light on top to stop airplanes from crashing into it."`; `f0–f90` stops viewers as a yellow crane seats the castle spire (`opening_shot_sec`: `1.368s`), pulls back, and runs a red `0→270 Feet` arrow up the facade.
+- **Storytelling, Retention & Linguistics:** `problem_solution_irony` driven by `but_therefore` causality (`second_person_you` + `calm_matter_of_fact` VO), pivoting via *"So instead"* (`8.9s`, `13.8s`, `20.5s` re-hooks) and landing on an `abrupt_fact_or_snap` (`189 Feet`, `outro_hold_sec`: `0.3s`).
+- **Camera, Framing & Editing Grammar:** `normal` lens feel dominated by `M`/`W` eye-level framing (`camera_energy`: `smooth_damped_continuous`) using `push_in`, `pull_back`, `crane_boom`, `orbit_arc`, `tilt_pan`, and one cockpit `whip_pan`; stitched via `13` continuous moves, `6` cross-dissolves, `1` action-matched hard cut, and `0` hidden cuts.
+- **Optics, Motion, Look-Dev & VFX:** Visible `camera_turn_blur` (cockpit whip) and `translation_or_radial_blur` (fast push/pull moves), `shallow_dof` with A→B `rack_focus` (`00:09.3–00:10.3`), subtle bloom on beacons/lamps (no film grain or lens flare), `soft_diffuse` studio/daylight + night lighting (`clean_bright_saturated`), `phrase_chunked_static` lower-third captions, brain x-ray cutaway, ghost silhouette overlay, and `"ZACK D FILMS"` sky branding.
+- **Soundscape & Secret-Sauce:** `continuous_bgm_plus_vo` (`lofi_ambient`) with `moderate_punctuated` SFX (jet pass, lightbulb pop, UI measurement chimes, subtle whooshes; no pre-impact silence or J/L-cuts). Signature tricks: (1) animated `Feet`/`Miles` ruler bars anchored directly to 3D geometry, (2) forced-perspective finger-pinch proof, and (3) brain cutaway projecting internal mental assumptions.
 
 ---
 
@@ -13,12 +12,12 @@
 
 | Beat | Time & Frames | Pct | Narrative & Script Function | Directorial Intent (Why this visual/edit/audio choice?) |
 | --- | --- | --- | --- | --- |
-| hook | 00:00.000–00:03.003 (f0–f90) | 8% | Poses `"If they built the castle over 200 feet,"` while a crane installs the spire and a red `"270 Feet"` counter scales the facade | Instant visual spectacle (crane-dropped spire) plus climbing red arrow establishes scale stakes before explaining the rule (`hypothetical_premise`) |
-| escalation | 00:03.003–00:08.976 (f90–f269) | 17% | Shows the ugly twin red aviation beacon needed above 200ft and an airplane nearly colliding with it at night | Graphic-matched dissolve on the pulsing red beacon shifts seamlessly from castle top into a panicked pilot's cockpit POV (`f189–f267`) to dramatize the safety hazard |
-| setup | 00:08.976–00:13.847 (f269–f415) | 14% | Explains how a giant red beacon would ruin the castle's look and the whole park's vibe | Shallow rack-focus from souvenir book to thumbs-down hand match-cuts (`f332→f334`) to a crying child and disapproving crowd to visualize aesthetic/emotional fallout |
-| explanation_value | 00:13.847–00:20.521 (f415–f615) | 19% | Introduces the architect's solution: shrinking every upper level as the castle rises | Lightbulb pop triggers a wide bottom-up timelapse build (`f463–f502`), then locks a `"6 Feet"` graphic during a vertical tower pedestal (`f573–f600`) so viewers watch the bar shrink to `"4 Feet"` |
-| visual_proof | 00:20.521–00:29.496 (f615–f884) | 25% | Proves why distant objects appear smaller (`7 Miles` jet) and how the brain assumes smaller spires sit higher up | Pairs everyday forced-perspective pinching (`f661–f722`), a translucent ghost castle (`f754–f794`), and a circular skull X-ray projecting the castle inside firing synapses (`f804–f883`) |
-| resolution | 00:29.496–00:35.536 (f884–f1065) | 17% | Returns to the happy child admiring a castle that looks towering yet stands under 200ft | Over-the-shoulder orbit glides into a dramatic low-angle upward tilt (`f905–f1018`) before a crisp blue `"189 Feet"` arrow resolves the opening constraint |
+| hook | 00:00.000–00:03.504 (f0–f105) | 10% | Plants hypothetical premise of building the castle over 200 feet | Crane spire assembly and rising red `0→270 Feet` bar visualize the height threshold immediately |
+| escalation | 00:03.504–00:08.909 (f105–f267) | 15% | Shows FAA warning beacon requirement and near-miss jet danger | Pushes onto blooming red lights, dissolves to cockpit POV, and whip-pans to shocked pilot before jet banks away |
+| escalation | 00:08.942–00:13.780 (f268–f413) | 14% | Illustrates how beacons ruin castle aesthetics and park atmosphere | Racks focus from castle to brochure, cuts on thumbs-down match to crying child, cranes up over disappointed crowd |
+| explanation_value | 00:13.847–00:20.454 (f415–f613) | 19% | Reveals architectural fix: shrinking upper floors proportionally | Lightbulb pop cues idea; timelapse construction and `6→4 Feet` balcony bars concretize scale reduction |
+| visual_proof | 00:20.521–00:29.463 (f615–f883) | 25% | Explains optical perspective and brain distance bias | Jet pinch-scale (`0→7 Miles`), ghost-castle silhouette, and skull cutaway with pulsing synapses prove illusion |
+| resolution | 00:29.496–00:35.536 (f884–f1065) | 17% | Delivers payoff: looks towering while staying under 200 feet | Orbits behind happy girl into low-angle bridge POV as `0→189 Feet` arrow settles on spire tip |
 
 ---
 
@@ -26,29 +25,27 @@
 
 | ID | Time & Frames | Boundary | Scale / Angle | Camera, Motion & Dominant Craft `[Category]` | Conf |
 | --- | --- | --- | --- | --- | --- |
-| S01a | 00:00.000–00:01.335 (f0–f40) | Opening | W / eye | Crane drops golden spire onto tower (`f0–f15`) while camera smoothly pulls back to reveal full castle, plaza, and crane (`f15–f40`) `[Camera, Framing & Staging]` | High |
-| S01b | 00:01.335–00:03.437 (f40–f103) | Continuous [NO CUT] (push-in + crane-up + pull-back) | M / eye | Camera pushes to archway (`f40–f55`), cranes up facade alongside growing red `"270 Feet"` arrow (`f53–f86`), and pulls wide (`f88–f103`) `[VFX, Cutaways & Graphics]` | High |
-| S01c | 00:03.437–00:05.372 (f103–f161) | Continuous [NO CUT] (fast upward push-in) | CU / eye | Rapid boom-in to spire tip (`f103–f118`) as twin yellow-piped red beacons telescope out and pulse with soft red bloom (`f113–f161`) `[Lighting, Color & Materials]` | High |
-| S01d | 00:05.372–00:06.306 (f161–f189) | Continuous [NO CUT] (smooth pull-back) | W / eye | Camera pulls steadily back down (`CU → W`) revealing glowing red beacons atop the sunlit castle with golden roof bloom `[Camera, Framing & Staging]` | High |
-| S02a | 00:06.306–00:07.207 (f189–f216) | Transition (cross_dissolve, f187→f189–f192) | M / eye | Graphic-matched dissolve anchored on the pulsing red beacon moves inside a dark night cockpit, slowly pulling back over avionics `[Transitions & Continuity]` | High |
-| S02b | 00:07.207–00:07.941 (f216–f238) | Continuous [NO CUT] (cockpit pan + exterior pull-out) | MCU / eye | Fast pan right across cockpit pillar (visible camera-turn blur `f219–f221`) lands on gasping pilot before drifting seamlessly out the windshield `[Optics: Blur, DOF & Temporal]` | High |
-| S02c | 00:07.941–00:08.976 (f238–f269) | Continuous [NO CUT] (pull-back + aerial pan) | W / high | Pulls outside jet nose (`f239–f246`) and tracks left overhead as the jet banks steeply over the flashing red beacon and exits screen-left `[Motion, Acting & Prop State]` | High |
-| S03a | 00:08.976–00:10.077 (f269–f302) | Transition (cross_dissolve, f267→f269–f271) | INSERT / eye | Cross-dissolves to ground plaza as foreground hands hold a blurred `"Cinderella Castle"` book, then rack-focuses (`f282`) onto crisp cover while finger points `[Optics: Blur, DOF & Temporal]` | High |
-| S03b | 00:10.077–00:11.144 (f302–f334) | Continuous [NO CUT] (rack-focus + gesture reveal) | MCU / eye | Book drops below frame (`f304–f310`) as focus racks back to the night castle (beacon pulsing ON/OFF) and foreground right hand curls into a thumbs-down `[Motion, Acting & Prop State]` | High |
-| S04a | 00:11.144–00:12.045 (f334–f361) | Hard Cut | MCU / eye | Match-cut on thumbs-down (`f332→f334`) switches to girl's raised left arm as camera orbits rapidly (`f334–f344`, subtle motion blur) to her crying face `[Transitions & Continuity]` | High |
-| S04b | 00:12.045–00:13.847 (f361–f415) | Continuous [NO CUT] (crane-up + pull-back) | W / high | Cranes high over stone plaza revealing comforting mother, thumbs-down father, and surrounding park guests under warm lamp pools `[Camera, Framing & Staging]` | High |
-| S05a | 00:13.847–00:14.915 (f415–f447) | Transition (cross_dissolve, f413→f415–f418) | M / eye | Cross-dissolves to daytime `"Architect"` character zipping vest and raising finger as a 2D rayed lightbulb icon pops above his head (`f418–f426`) `[VFX, Cutaways & Graphics]` | High |
-| S05b | 00:14.915–00:16.516 (f447–f495) | Continuous [NO CUT] (fast pull-back + timelapse wide hold) | EW / high | Rapid pull-back (`f448–f457` blur) reveals construction lot (`EW`), holding wide as castle builds bottom-up in stepped timelapse layers (`f463–f495`) `[Motion, Acting & Prop State]` | High |
-| S05c | 00:16.516–00:17.117 (f495–f513) | Continuous [NO CUT] (fast push-in + crane-up) | M / eye | Smoothly zooms and cranes upward from full build site onto a high golden spire balcony worker positioning an arched window (`f496–f513`) `[Camera, Framing & Staging]` | High |
-| S05d | 00:17.117–00:19.119 (f513–f573) | Continuous [NO CUT] (locked balcony hold) | MCU / eye | Holds `MCU` while worker seats the window (`f513–f548`) and a yellow-blue `"6 Feet"` measurement bar counts upward (`f555–f563`) `[VFX, Cutaways & Graphics]` | High |
-| S05e | 00:19.119–00:20.521 (f573–f615) | Continuous [NO CUT] (vertical tower pedestal-up) | MCU / eye | Camera pedestals straight up tower keeping `"6 Feet"` graphic screen-locked (`f573–f585`), then shrinks counter to `"4 Feet"` against smaller upper window `[Other]` | High |
-| S06a | 00:20.521–00:21.655 (f615–f649) | Transition (cross_dissolve, f613→f615–f617) | M / eye | Cross-dissolves to white/gold private jet flying screen-left across crisp blue sky while clouds drift smoothly behind (`f617–f649`) `[Camera, Framing & Staging]` | High |
-| S06b | 00:21.655–00:24.124 (f649–f723) | Continuous [NO CUT] (pull-back to forced-perspective hold) | M / low | Pulls back (`f649–f699`) as girl's hand enters lower-left pinching the distant tiny jet, then animates blue `"7 Miles"` vertical counter (`f699–f722`) `[VFX, Cutaways & Graphics]` | High |
-| S07a | 00:24.124–00:26.526 (f723–f795) | Transition (cross_dissolve, f722→f723–f726) | W / eye | Cross-dissolves to studio castle on vignetted blue gradient (`ZACK D FILMS` watermark top) while translucent tall ghost castle rises behind (`f754–f794`) `[Lighting, Color & Materials]` | High |
-| S07b | 00:26.526–00:29.496 (f795–f884) | Continuous [NO CUT] (fg head entry + push-in + brain X-ray) | ECU / eye | Boy enters lower foreground (`f796`), circular skull cutaway exposes firing blue brain synapses (`f804–f816`) projecting castle plus upward arrow inside (`f816–f883`) `[VFX, Cutaways & Graphics]` | High |
-| S08a | 00:29.496–00:30.898 (f884–f926) | Transition (cross_dissolve, f883→f884–f887) | M / eye | Cross-dissolves to smiling girl hugging book at railing; she points toward castle as camera smoothly orbits over her right shoulder (`f902–f926`, turn blur) `[Transitions & Continuity]` | High |
-| S08b | 00:30.898–00:33.267 (f926–f997) | Continuous [NO CUT] (OTS bridge dolly + tilt-up) | W / low | Glides down castle bridge in over-the-shoulder POV behind her pointing arm (`f926–f995`), tilting steeply upward as arm exits screen-right (`f997`) `[Camera, Framing & Staging]` | High |
-| S08c | 00:33.267–00:35.536 (f997–f1065) | Continuous [NO CUT] (upward tilt settle + graphic arrow hold) | M / low | Tilts smoothly onto upper pink/gold spires against deep blue sky while dark blue 3D arrow climbs to `"189 Feet"` (`f1018–f1045`) and holds `[VFX, Cutaways & Graphics]` | High |
+| S01a | 00:00.000–00:01.368 (f0–f41) | Opening | M / eye | Crane lowers gold spire onto castle tower (`f15`), then fast pull-back with ground blur reveals full facade `[Camera, Framing & Staging]` | High |
+| S01b | 00:01.401–00:03.470 (f42–f104) | Continuous [NO CUT] (push-in & pedestal up) | W / eye | Pushes into archway, then tracks rising red `0→270 Feet` arrow to spire top with radial cloud/crane blur `[VFX, Cutaways & Graphics]` | High |
+| S01c | 00:03.504–00:05.372 (f105–f161) | Continuous [NO CUT] (push-in to spire) | CU / eye | Pushes tightly onto tip as twin red aviation lights mount (`f113`) and pulse with strong radial red bloom `[Lighting, Color & Materials]` | High |
+| S01d | 00:05.405–00:06.273 (f162–f188) | Continuous [NO CUT] (pull-back reveal) | W / eye | Pulls smoothly back to show glowing red beacon atop entire castle `[Camera, Framing & Staging]` | High |
+| S02a | 00:06.306–00:07.207 (f189–f216) | Transition (cross_dissolve, f189–f194) | M / eye | Dissolves into cockpit POV pulling back over controls toward flashing castle beacon above storm clouds `[Transitions & Continuity]` | High |
+| S02b | 00:07.241–00:07.908 (f217–f237) | Continuous [NO CUT] (whip-pan to pilot) | MCU / eye | Fast pan right with clear camera-turn blur (`f219–f222`) lands on pilot gasping with wide eyes (`f230–f235`) `[Optics: Blur, DOF & Temporal]` | High |
+| S02c | 00:07.941–00:08.909 (f238–f267) | Continuous [NO CUT] (pull-through windshield) | W / high | Pulls out through cockpit glass as white jet banks steeply past glowing beacon above clouds `[Motion, Acting & Prop State]` | High |
+| S03a | 00:08.942–00:11.078 (f268–f332) | Transition (cross_dissolve, f268–f270) | M / low | Night park; shallow-DOF focus racks from castle to `"Cinderella Castle"` book (`f279–f282`) and back (`f305–f309`) with foreground thumbs-down `[Optics: Blur, DOF & Temporal]` | High |
+| S03b | 00:11.144–00:12.079 (f334–f362) | Hard Cut | MCU / eye | Action match on thumbs-down pulls back and orbits around crying girl rubbing eyes in shallow-DOF plaza `[Transitions & Continuity]` | High |
+| S03c | 00:12.112–00:13.780 (f363–f413) | Continuous [NO CUT] (crane-up pull-back) | W / high | Smooth crane-up reveals kneeling mother and surrounding crowd reacting negatively under warm night lamps `[Camera, Framing & Staging]` | High |
+| S04a | 00:13.847–00:14.915 (f415–f447) | Transition (cross_dissolve, f414–f417) | MCU / eye | Dissolves to `"Architect"` in safety vest raising finger as radiant lightbulb graphic pops on (`f420–f425`) `[VFX, Cutaways & Graphics]` | High |
+| S04b | 00:14.948–00:16.650 (f448–f499) | Continuous [NO CUT] (pull-back to timelapse) | W / eye | Rapid pull-back frames construction lot (`f448–f460`) as castle builds floor-by-floor in stepped timelapse with light dust `[Transitions & Continuity]` | High |
+| S04c | 00:16.683–00:19.052 (f500–f571) | Continuous [NO CUT] (push-in & crane-up) | M / eye | Pushes onto balcony worker placing arch window as blue-yellow bar counts `1→6 Feet` (`f555–f565`) `[VFX, Cutaways & Graphics]` | High |
+| S04d | 00:19.086–00:20.454 (f572–f613) | Continuous [NO CUT] (vertical climb) | M / eye | Climbs smoothly to higher balcony worker installing smaller arch while measurement bar drops `6→4 Feet` `[Camera, Framing & Staging]` | High |
+| S05a | 00:20.488–00:21.655 (f614–f649) | Transition (cross_dissolve, f614–f617) | M / eye | Dissolves onto white jet flying left in side profile against bright sky and drifting clouds `[Transitions & Continuity]` | High |
+| S05b | 00:21.689–00:24.091 (f650–f722) | Continuous [NO CUT] (distance shrink & pull) | W / eye | Jet shrinks into distance; child's hand enters (`f661`) pinching plane scale while `0→7 Miles` arrow rises `[Camera, Framing & Staging]` | High |
+| S06a | 00:24.124–00:26.526 (f723–f795) | Transition (cross_dissolve, f723–f726) | M / eye | Studio blue backdrop with fading `"ZACK D FILMS"` watermark (`f725–f746`); white ghost castle overlay compares taller height (`f754–f795`) `[VFX, Cutaways & Graphics]` | High |
+| S06b | 00:26.560–00:29.463 (f796–f883) | Continuous [NO CUT] (push-in & x-ray) | MCU / eye | Head rises in FG; camera pushes into skull cutaway with electric neural flashes and castle height-assumption graphic `[VFX, Cutaways & Graphics]` | High |
+| S07a | 00:29.496–00:30.364 (f884–f910) | Transition (cross_dissolve, f884–f887) | M / eye | Dissolves to smiling girl hugging book outdoors (`f892`), camera orbiting smoothly past her right shoulder `[Motion, Acting & Prop State]` | High |
+| S07b | 00:30.397–00:33.234 (f911–f996) | Continuous [NO CUT] (orbit to POV & push) | W / low | Orbits into over-shoulder POV pointing down bridge toward gate, approaching and tilting up toward imposing facade `[Camera, Framing & Staging]` | High |
+| S07c | 00:33.267–00:35.536 (f997–f1065) | Continuous [NO CUT] (tilt-up push-in) | M / low | Pointing arm exits (`f997`); camera tilts up onto spire as blue `0→189 Feet` arrow animates and holds to end `[VFX, Cutaways & Graphics]` | High |
 
 ---
 
@@ -56,41 +53,53 @@
 
 ```json
 {
-  "schema_version": 1,
-  "duration_sec": 35.536,
+  "schema_version": 2,
+  "duration_sec": 35.54,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "explainer_how_it_works",
-  "topic_sublabel": "forced_perspective_castle",
+  "topic_sublabel": "theme_park_architecture_forced_perspective",
+  "emotional_driver": "curiosity_mystery",
   "hook_archetype": "hypothetical_premise",
-  "opening_shot_sec": 1.335,
-  "opening_spoken_line": "If they built the castle over 200 feet,",
-  "hook_visual_trigger": "Tower crane lowers golden spire onto pink castle while camera pulls wide",
+  "opening_shot_sec": 1.368,
+  "opening_spoken_line": "If they built the castle over 200 feet, it would need a giant flashing red light on top to stop airplanes from crashing into it.",
+  "hook_visual_trigger": "Tower crane drops golden spire onto pink-blue castle as camera pulls back",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "problem_solution_irony",
   "narrative_connector": "but_therefore",
-  "ending_type": "satisfying_resolution",
+  "ending_type": "abrupt_fact_or_snap",
   "twist_at_pct": null,
-  "rehook_timestamps_sec": [6.306, 13.847, 20.521, 26.526],
+  "outro_hold_sec": 0.3,
+  "rehook_timestamps_sec": [8.9, 13.8, 20.5],
   "story_beats": [
-    { "role": "hook", "start_sec": 0.0, "end_sec": 3.003, "pct_runtime": 8 },
-    { "role": "escalation", "start_sec": 3.003, "end_sec": 8.976, "pct_runtime": 17 },
-    { "role": "setup", "start_sec": 8.976, "end_sec": 13.847, "pct_runtime": 14 },
-    { "role": "explanation_value", "start_sec": 13.847, "end_sec": 20.521, "pct_runtime": 19 },
-    { "role": "visual_proof", "start_sec": 20.521, "end_sec": 29.496, "pct_runtime": 25 },
+    { "role": "hook", "start_sec": 0.0, "end_sec": 3.504, "pct_runtime": 10 },
+    { "role": "escalation", "start_sec": 3.504, "end_sec": 8.909, "pct_runtime": 15 },
+    { "role": "escalation", "start_sec": 8.942, "end_sec": 13.78, "pct_runtime": 14 },
+    { "role": "explanation_value", "start_sec": 13.847, "end_sec": 20.454, "pct_runtime": 19 },
+    { "role": "visual_proof", "start_sec": 20.521, "end_sec": 29.463, "pct_runtime": 25 },
     { "role": "resolution", "start_sec": 29.496, "end_sec": 35.536, "pct_runtime": 17 }
   ],
   "boundary_counts": {
     "hard_cut": 1,
     "hidden_cut": 0,
     "transition": 6,
-    "continuous": 15
+    "continuous": 13
   },
   "transition_types": ["cross_dissolve"],
-  "shot_scale_counts": { "EW": 1, "W": 6, "M": 8, "MCU": 5, "CU": 1, "ECU": 1, "INSERT": 1 },
-  "camera_angle_counts": { "aerial": 0, "overhead": 0, "high": 3, "eye": 17, "low": 3, "ground": 0 },
+  "camera_moves_used": ["push_in", "pull_back", "crane_boom", "whip_pan", "orbit_arc", "tilt_pan"],
+  "shot_scale_counts": { "EW": 0, "W": 7, "M": 9, "MCU": 4, "CU": 1, "ECU": 0, "INSERT": 0 },
+  "camera_angle_counts": { "aerial": 0, "overhead": 0, "high": 2, "eye": 16, "low": 3, "ground": 0 },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "normal",
   "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
@@ -102,16 +111,23 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "If [ICONIC LANDMARK] crossed [REGULATORY THRESHOLD], it would need [UGLY SAFETY FEATURE] that ruins [EXPERIENCE] -> SO [ARCHITECT] used [PERCEPTUAL TRICK] -> WHICH MAKES IT LOOK [IMPRESSIVE TRAIT] WHILE STAYING UNDER [LIMIT].",
+  "reusable_script_template": "If [ICONIC STRUCTURE] exceeded [REGULATORY LIMIT], it would require [UGLY SAFETY FEATURE], ruining [USER EXPERIENCE] — SO instead, builders used [CLEVER OPTICAL TRICK] because [PSYCHOLOGICAL RULE], achieving [DESIRED ILLUSION] under the limit.",
   "secret_sauce_cues": [
-    "Screen-locked 3D measurement bar carried vertically up the tower shaft (6 Feet -> 4 Feet window shrinkage, f573-f600)",
-    "Translucent ghost-silhouette height overlay followed by skull X-ray thought projection inside firing synapses (f754-f883)"
+    "Animated 3D-space measurement ruler arrows (0-270 Feet, 6-4 Feet, 0-7 Miles, 0-189 Feet) locked to subject geometry",
+    "Forced-perspective pinch test and ghost silhouette overlay translating abstract geometry into instant visual proof",
+    "Skull circular x-ray cutaway projecting mental assumptions inside a pulsing brain"
   ],
-  "weaknesses_or_drag": [
-    "Background park extras freeze into slightly stiff idle poses during wide night pull-back (f365-f413)",
-    "Lower-balcony worker holds static kneel for ~0.7s while waiting for the 6 Feet counter animation (f546-f572)"
-  ]
+  "weaknesses_or_drag": []
 }
 ```

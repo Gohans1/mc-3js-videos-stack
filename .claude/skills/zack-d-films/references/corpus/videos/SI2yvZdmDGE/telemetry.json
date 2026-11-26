@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "duration_sec": 25.1,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "faceless_objects_diagrams",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "zipper_snag_fix_mechanics",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1.201,
+  "opening_spoken_line": "If the fabric gets pinched between its jaws, it can also block the teeth from meshing.",
+  "hook_visual_trigger": "Macro overhead view of pink cloth pinching into red zipper jaws",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 1,
+  "rehook_timestamps_sec": [
+    7.1,
+    17
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.7,
+      "pct_runtime": 11
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.7,
+      "end_sec": 4.74,
+      "pct_runtime": 8
+    },
+    {
+      "role": "escalation",
+      "start_sec": 4.74,
+      "end_sec": 10.58,
+      "pct_runtime": 23
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 10.58,
+      "end_sec": 17.02,
+      "pct_runtime": 26
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 17.02,
+      "end_sec": 21.82,
+      "pct_runtime": 19
+    },
+    {
+      "role": "resolution",
+      "start_sec": 21.82,
+      "end_sec": 25.13,
+      "pct_runtime": 13
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 0,
+    "continuous": 8
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "whip_pan",
+    "roll_dutch",
+    "dolly_track"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 1,
+    "MCU": 2,
+    "CU": 1,
+    "ECU": 5,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 2,
+    "high": 7,
+    "eye": 1,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_hard",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": false,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "If [COMMON OBJECT FAILS], [HIDDEN MECHANISM CAUSES ISSUE], SO [BAD HABIT] worsens it, INSTEAD [STEP-BY-STEP FIX] + [CLEVER HOUSEHOLD HACK] restores it.",
+  "secret_sauce_cues": [
+    "X-ray alpha transparency on metal casing to reveal internal mechanical snags",
+    "Red emissive outline pulses on active tools and deformed parts instead of 2D arrows",
+    "Single-rig orbital whips and cloth occlusions bridging macro states without hard cuts"
+  ],
+  "weaknesses_or_drag": []
+}

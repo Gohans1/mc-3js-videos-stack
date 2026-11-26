@@ -1,94 +1,118 @@
 {
-  "schema_version": 1,
-  "duration_sec": 53.854,
+  "schema_version": 2,
+  "duration_sec": 53.9,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "history_weird_true_story",
-  "topic_sublabel": "loyal_dog_historical_story",
+  "topic_sublabel": "loyal_dog_grave_vigil",
+  "emotional_driver": "empathy_wholesome",
   "hook_archetype": "character_story_setup",
-  "opening_shot_sec": 0.801,
+  "opening_shot_sec": 1.702,
   "opening_spoken_line": "He got a puppy so he wouldn't be alone.",
-  "hook_visual_trigger": "Man opens pet carrier door revealing shaggy puppy, then camera pulls back into empty room",
-  "story_structure": "chronological_escalation_twist",
+  "hook_visual_trigger": "Man unlatches crate door revealing panting puppy before radial pull-back reveals room",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "warm_conversational",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "other",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 68,
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
   "rehook_timestamps_sec": [
-    8.1,
-    10.9,
-    22.1,
-    36.7,
-    44
+    10.8,
+    26.6,
+    36.7
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 3.036,
+      "end_sec": 3.003,
       "pct_runtime": 6
     },
     {
       "role": "setup",
-      "start_sec": 3.036,
-      "end_sec": 10.878,
-      "pct_runtime": 15
+      "start_sec": 3.003,
+      "end_sec": 10.844,
+      "pct_runtime": 14
     },
     {
       "role": "escalation",
-      "start_sec": 10.878,
+      "start_sec": 10.844,
+      "end_sec": 21.989,
+      "pct_runtime": 21
+    },
+    {
+      "role": "escalation",
+      "start_sec": 21.989,
       "end_sec": 31.932,
-      "pct_runtime": 39
+      "pct_runtime": 18
     },
     {
       "role": "visual_proof",
       "start_sec": 31.932,
-      "end_sec": 36.67,
+      "end_sec": 36.703,
       "pct_runtime": 9
     },
     {
-      "role": "twist",
-      "start_sec": 36.67,
-      "end_sec": 44.044,
-      "pct_runtime": 13
+      "role": "escalation",
+      "start_sec": 36.703,
+      "end_sec": 42.409,
+      "pct_runtime": 11
     },
     {
       "role": "resolution",
-      "start_sec": 44.044,
+      "start_sec": 42.409,
       "end_sec": 53.854,
-      "pct_runtime": 18
+      "pct_runtime": 21
     }
   ],
   "boundary_counts": {
     "hard_cut": 0,
-    "hidden_cut": 5,
-    "transition": 11,
+    "hidden_cut": 3,
+    "transition": 12,
     "continuous": 10
   },
   "transition_types": [
     "cross_dissolve",
     "card_flip",
-    "vertical_push"
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "crane_boom",
+    "tilt_pan"
   ],
   "shot_scale_counts": {
     "EW": 0,
-    "W": 7,
-    "M": 15,
-    "MCU": 3,
+    "W": 9,
+    "M": 10,
+    "MCU": 4,
     "CU": 1,
     "ECU": 0,
-    "INSERT": 1
+    "INSERT": 2
   },
   "camera_angle_counts": {
     "aerial": 0,
-    "overhead": 1,
-    "high": 4,
-    "eye": 12,
-    "low": 4,
-    "ground": 6
+    "overhead": 2,
+    "high": 3,
+    "eye": 10,
+    "low": 7,
+    "ground": 4
   },
-  "camera_energy": "snappy_whip_kinetic",
+  "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "mixed",
   "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "mixed",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": true,
@@ -100,15 +124,22 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[PROTAGONIST] adopts/starts [HUMBLE COMPANION/ROUTINE] so [EMOTIONAL NEED], BUT [SUDDEN LOSS/CRISIS] -> SO [UNWAVERING DEVOTION DESPITE HARDSHIP] -> TWIST [NEW EXTERNAL THREAT/LAW] -> RESOLUTION [UNEXPECTED RESCUE & ETERNAL LEGACY]",
+  "reusable_script_template": "[CHARACTER] starts [ORDINARY BOND], BUT [SUDDEN LOSS] triggers [RELENTLESS HABIT] -> [OBSTACLE THREATENS HABIT] -> [ALLY INTERVENES] -> [BITTERSWEET FOREVER PAYOFF].",
   "secret_sauce_cues": [
-    "Zero-hard-cut spatial storytelling: chains scenes via whip-tilts/whip-pans inside one unified 3D environment and motion-blur pose/prop Hidden Cuts",
-    "Accelerated environmental sun/cloud/rain time-lapses over static characters paired with diegetic 3D time props (floating spiral calendars, newspaper print, glowing cage placard)"
+    "Whip-pan and muzzle-zoom smear Hidden Cuts that maintain kinetic flow across time/location jumps",
+    "Extended 12.5s single-take camera choreo chaining rack focuses, ground-to-high cranes, and weather time-lapses",
+    "Diegetic creator cameo portrait printed on the $100 bill foreground prop"
   ],
-  "weaknesses_or_drag": [
-    "Historical prop continuity mismatch: gravestone reads John Traill (1835-1897, Dunfermline) while newspaper reads May 17, 1896 (Sergeant John C. Whitman, Oak Hill) and the Mayor hands modern-style US $100 bills with a creator portrait",
-    "Visible walk-cycle treadmill cropping before pull-back in S05a and hard-edged triangular lantern beam geometry"
-  ]
+  "weaknesses_or_drag": []
 }

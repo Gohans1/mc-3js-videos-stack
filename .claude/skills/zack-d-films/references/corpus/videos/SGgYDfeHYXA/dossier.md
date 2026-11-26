@@ -1,9 +1,12 @@
-### 1. Hook, Packaging & Channel DNA Summary
-- **Topic & Premise:** `hypothetical_what_if` (`unconscious_pilots_plane_survival`) — places the viewer in a first-person emergency scenario where everyone aboard a passenger jet is unconscious and the viewer must somehow land the plane, driven by claustrophobic dread, escalating urgency, and interactive survival problem-solving.
-- **Hook Anatomy (`0–3s`):** `hypothetical_premise` opening with `"Imagine you wake up and everyone on your flight is unconscious."` (`f1–f159`). Visually opens (`00:00.000–00:02.035`, `f0–f61`) through a heavy black radial sleep-wake blur that racks sharp (`f8–f10`) onto crossed forearms lifting off a tray table before whipping left onto a slumped passenger highlighted by a red emissive outline (`f86`), immediately planting the survival curiosity gap.
-- **Storytelling & Retention Engine:** `what_if_chain_reaction` chained exclusively by `but_therefore` reversals (`flying straight -> SO pilots must be fine -> BUT both pilots collapsed -> push pilot -> BUT arm catches yoke -> level out to STABLE -> BUT still descending -> field spotted -> "What do you do?"`). Re-hooks fire every `12–21s` (`12.01s`, `28.40s`, `50.02s`, `64.50s`), peaking with a false-safety reversal at `68%` (`50.02s`) and resolving in a `question_cta` cliffhanger.
-- **Visual, Camera & Motion Signature:** Defined by a near-unbroken first-person `wide` POV illusion—only **1** composited edit (`cross_dissolve` at `f360–f367`) across `73.24s`, stitching **23** kinetic `Continuous [NO CUT]` beats via directional-blurred whip pans, rapid windshield push-ins, smooth damped mocap acting, clean soft studio cabin lighting (`clean_studio_soft`) interrupted by red emergency strobes, X-ray pilot silhouettes (`f269–f357`), color-coded emissive highlights (red = danger, yellow-green = interactables), and diegetic cockpit HUD callouts.
-- **Soundscape, Voice & Secret-Sauce:** *Calibration disclosure: No audio stream was attached to this frame-sampled input (visual frames + burnt-in captions only), so BGM shifts, SFX, pre-impact silence, and J/L-cuts cannot be aurally verified (`visual cue only` for `"HELP!"` kinetic text and flashing `"ALERT"` alarms); `vo_only_dry` is set strictly as an unverified fallback enum for the captioned voiceover.* Reusable channel tricks: (1) stitching distinct spatial beats into one continuous kinetic POV ride using whip-pan blur and windshield zooms, and (2) ending with a 180-degree whip-around to the protagonist's blinking face (`ZACK D FILMS` shirt) to drive comment replies (`"What do you do?"`).
+*Note: Timecodes and frame numbers (`f<n>`) are read from the bottom black metadata strip (24fps sampling over 30fps native; skipped frames are bracketed where needed).*
+
+### 1. Hook, Packaging & Channel Soul Summary
+- **Medium, Topic & Emotional Premise:** `3d_stylized_cgi` in `first_person_pov` (`hypothetical_what_if`), placing the viewer inside a sudden mid-flight aviation crisis where every crew member is unconscious (`visceral_shock_danger`).
+- **Hook Anatomy (`0–3s`):** `hypothetical_premise` (*"Imagine you wake up, and everyone on your flight is unconscious."*) paired with blinking eyelid vignettes opening onto POV arms on a tray table before whipping across slumped passengers (`opening_shot_sec: 2.068`).
+- **Storytelling, Retention & Linguistics:** `what_if_chain_reaction` driven by `but_therefore` pivots (*"But"*, *"so"*, *"but"*, *"Now"*, *"Or"*), delivered in `second_person_you` with `calm_matter_of_fact` clinical pacing; re-hooks strike at `12.0s` (collapsed crew), `29.8s` (yoke catch dive), and `50.9s` (continued descent), ending on a direct `question_cta` (`outro_hold_sec: 1.1`).
+- **Camera, Framing & Editing Grammar:** Wide first-person POV dominated by `M` (`8`) and `eye` (`14`) framing mixed with `INSERT` (`4`) instrument close-ups and `EW / aerial` (`2`) glass-pass-throughs (`snappy_whip_kinetic`); relies almost entirely on `Continuous [NO CUT]` camera whips (`20`) with just `1` `Transition` (`cross_dissolve`) and `1` `Hard Cut`.
+- **Optics, Motion, Look-Dev & VFX:** Features `camera_turn`, `translation_or_radial`, and `object` motion blur plus `shallow_dof`, `rack_focus`, and opening `vignette` (no fabricated film grain or halation); `clean_studio_soft` lighting and `clean_bright_saturated` cyan-blue palette shift to pulsing red alarms, accented by `phrase_chunked_static` white captions, X-ray silhouettes, glowing highlight outlines, HUD overlays, and `"ZACK D FILMS"` t-shirt branding.
+- **Soundscape & Secret-Sauce:** `continuous_bgm_plus_vo` with `tense_pulse_synth` drone and `moderate_punctuated` SFX (pan whooshes, HUD blips, cockpit alarms); signature channel tricks include **continuous POV whip-bridging**, **pass-through windshield exterior zooms**, and **color-coded emissive state glows**.
 
 ---
 
@@ -11,13 +14,14 @@
 
 | Beat | Time & Frames | Pct | Narrative & Script Function | Directorial Intent (Why this visual/edit/audio choice?) |
 | --- | --- | --- | --- | --- |
-| hook | 00:00.000–00:05.706 (f0–f171) | 8% | Opens mid-scenario waking up to find passengers and cabin crew unconscious | Heavy vignette rack-focus pulls viewer directly into protagonist's eyes before whip-panning onto red-highlighted bodies (`hypothetical_premise`) |
-| setup | 00:05.739–00:11.979 (f172–f359) | 9% | Shows straight level flight and implies the pilots must be fine | Window HUD pitch ladder proves stability while translucent X-ray pilot silhouettes plant false reassurance right before the first flip |
-| escalation | 00:12.012–00:28.328 (f360–f849) | 22% | Reveals both pilots unconscious, confirms it is no dream, radio fails (`LOST SIGNAL`), prepares to take seat | Brief cross-dissolve skips aisle walk to doorway reveal; wrist pinch + kinetic `"HELP!"` + tight `"LOST SIGNAL"` insert escalate helplessness |
-| escalation | 00:28.395–00:49.950 (f851–f1497) | 29% | Shoving pilot hooks yoke and triggers a city-bound dive before a tense recovery levels the plane (`STABLE`) | Loose headset/pencil tumbling, red alarm strobes, stadium dive zoom, and digital clock time-lapse (`3:19→3:30 PM`) compress survival panic into a false win |
-| twist | 00:50.017–00:53.287 (f1499–f1597) | 5% | Shatters relief: plane is level (`STABLE`) *but* still slowly descending | Tight altimeter insert with animated red downward arrow flips false safety at `68%` runtime (`but_therefore` pivot) |
-| escalation | 00:53.353–01:11.738 (f1599–f2150) | 25% | Spots distant green field, weighs landing controls vs keeping aloft (`TERRAIN PULL UP`), overlays runway target | Rapid windshield zooms frame the distant clearing while green emissive cues highlight yoke/throttle options and white runway lines visualize the gamble |
-| cta | 01:11.805–01:13.240 (f2152–f2195) | 2% | Poses final survival dilemma directly to the viewer (`"What do you do?"`) | 180-degree whip-around reveals protagonist's worried expression and eye blink, breaking POV immersion to maximize comment engagement |
+| hook | 00:00.000–00:05.750 (f0–f172) | 8% | Viewer wakes up mid-flight surrounded by unconscious passengers and crew | Eyelid vignette + whip-pans with red emissive outlines establish immediate 1st-person panic |
+| setup | 00:05.750–00:12.012 (f172–f360) | 9% | Level flight and upright cockpit silhouettes suggest pilots are fine | Window HUD pitch ladder and X-ray bulkhead silhouettes build false reassurance before the reveal |
+| escalation | 00:12.012–00:26.059 (f360–f781) | 19% | Walk to cockpit reveals collapsed crew; radio call gets `"LOST SIGNAL"` | Cross-dissolve advances space cleanly; wrist pinch + kinetic `"HELP!"` text heighten isolation |
+| escalation | 00:26.059–00:38.538 (f781–f1155) | 17% | Moving pilot accidentally snags yoke, triggering a violent nosedive | Orange grip highlight telegraphs mistake; shaking camera + red strobes amplify alarm urgency |
+| explanation_value | 00:38.538–00:50.017 (f1155–f1499) | 16% | Viewer wrestles heavy yoke over minutes to achieve `"STABLE"` flight | Timelapse cockpit clock compresses struggle; green `"STABLE"` indicator delivers brief relief |
+| explanation_value | 00:50.017–01:04.500 (f1499–f1933) | 20% | Descent persists; viewer spots clearing and learns gear and throttle | Hard cut jumps to low altitude; pass-through windshield zoom + green limb glows clarify controls |
+| escalation | 01:04.500–01:11.600 (f1933–f2146) | 9% | Terrain warning flashes while viewer fails to wake pilot and eyes clearing | Shaking pilot underscores helplessness; clearing morphs into runway markings to frame choice |
+| cta | 01:11.600–01:13.240 (f2146–f2195) | 2% | Final dilemma posed directly to viewer (`"What do you do?"`) | 180° whip-back reveals protagonist's terrified face with channel branding, locking comment engagement |
 
 ---
 
@@ -25,31 +29,29 @@
 
 | ID | Time & Frames | Boundary | Scale / Angle | Camera, Motion & Dominant Craft `[Category]` | Conf |
 | --- | --- | --- | --- | --- | --- |
-| S01a | 00:00.000–00:02.035 (f0–f61) | Opening | W / eye | Sleep-wake radial vignette and defocus rack sharply onto hands (`f8–f10`) uncrossing off tray table as wide POV tilts up to cabin rows `[Optics: Blur, DOF & Temporal]` | High |
-| S01b | 00:02.102–00:03.337 (f63–f100) | Continuous [NO CUT] (whip pan left) | MCU / eye | Kinetic camera-turn blur whips left across aisle and pushes smoothly onto slumped passenger as red emissive outline activates (`f86–f100`) `[Lighting, Color & Materials]` | High |
-| S01c | 00:03.370–00:04.338 (f101–f130) | Continuous [NO CUT] (whip pan right) | MCU / eye | Fast horizontal whip pan right with directional turn blur settles on slumped flight attendant #1 with red emissive highlight ON→OFF (`f118–f127`) `[Lighting, Color & Materials]` | High |
-| S01d | 00:04.371–00:05.706 (f131–f171) | Continuous [NO CUT] (whip pan right & return) | M / high | Whip pan right frames attendant #2 over galley cart with shallow FG seat blur and red outline pulse (`f141–f151`), then whips back behind seat `[Camera, Framing & Staging]` | High |
-| S01e | 00:05.739–00:08.508 (f172–f255) | Continuous [NO CUT] (pan right & push-in) | CU / eye | Camera pans right as hands grip oval window frame; diegetic yellow/white HUD pitch ladder (`10–30`) fades ON→OFF (`f219–f254`) on glass `[VFX, Cutaways & Graphics]` | High |
-| S01f | 00:08.542–00:11.979 (f256–f359) | Continuous [NO CUT] (pull-back & pan left) | W / eye | Pull-back/pan restores wide aisle view as X-ray pilot silhouettes with glowing cyan-to-green outlines (`f269–f357`) and red cockpit tag project ahead `[VFX, Cutaways & Graphics]` | High |
-| S02a | 00:12.012–00:13.947 (f360–f418) | Transition (cross_dissolve, f360–f367) | W / eye | 7-frame cross-dissolve advances POV down LED-lit aisle to push open metal `COCKPIT` door (`f390–f415`) with subtle plaque glow `[Transitions & Continuity]` | High |
-| S02b | 00:14.014–00:16.116 (f420–f483) | Continuous [NO CUT] (tilt down) | M / overhead | Steep overhead tilt past FG white collar looks down on collapsed pilot and attendant as red emissive highlight pulses ON→OFF (`f452–f470`) `[Lighting, Color & Materials]` | High |
-| S02c | 00:16.183–00:18.952 (f485–f568) | Continuous [NO CUT] (tilt up & step inside) | M / eye | Continuous POV steps through doorway into sunlit cockpit, pulsing red highlight ON→OFF (`f507–f522`) on slumped right-seat pilot `[Motion, Acting & Prop State]` | High |
-| S02d | 00:19.019–00:21.555 (f570–f646) | Continuous [NO CUT] (pan left & tilt up) | CU / eye | Shallow DOF isolates articulated finger pinch on left inner wrist (`f601–f608`) with localized red pinch glow, then hand reaches up to grab mic `[Motion, Acting & Prop State]` | High |
-| S02e | 00:21.588–00:24.558 (f647–f736) | Continuous [NO CUT] (hold on mic) | CU / eye | Yellow-green pulse highlights gripped mic (`f656–f670`); kinetic yellow `"HELP!"` pops letter-by-letter (`f697–f704`) and smears away (`f729–f732`) `[VFX, Cutaways & Graphics]` | High |
-| S02f | 00:24.591–00:26.159 (f737–f784) | Continuous [NO CUT] (push-in & pull-back) | INSERT / eye | Snappy push-in and pull-back isolates crisp `LOST SIGNAL` radio readout (`f749–f771`) with strong background bokeh `[Optics: Blur, DOF & Temporal]` | High |
-| S02g | 00:26.226–00:32.499 (f786–f974) | Continuous [NO CUT] (hold & roll) | M / eye | Two-handed shove pushes pilot right (`f851–f875`), his forearm hooks yoke with orange pulse (`f895–f964`), and loose headset/pencil fly off console (`f937–f950`) `[Motion, Acting & Prop State]` | High |
-| S02h | 00:32.532–00:35.002 (f975–f1049) | Continuous [NO CUT] (shake & push-in) | CU / eye | Dive vibration escalates as `ALERT` flashes (`f1009`), red warning lights strobe on, and altimeter digits spin rapidly down (`33000→18523 FT`) `[Lighting, Color & Materials]` | High |
-| S02i | 00:35.035–00:38.538 (f1050–f1155) | Continuous [NO CUT] (tilt up & zoom out windshield) | EW / high | Pulsing red emergency wash fills blurred cockpit FG as camera zooms toward CenturyLink Field stadium (`f1073–f1148`), then pulls back down `[Camera, Framing & Staging]` | High |
-| S02j | 00:38.572–00:42.643 (f1156–f1278) | Continuous [NO CUT] (pull-back to pilot POV) | M / high | Protagonist drops into seat under fading red strobes (`f1160–f1269`), wrestles heavy oscillating yoke, and pushes to tight hand grip (`f1250–f1273`) `[Motion, Acting & Prop State]` | High |
-| S02k | 00:42.676–00:44.978 (f1279–f1348) | Continuous [NO CUT] (pull-back & push left) | INSERT / eye | Tight push onto orange digital cockpit clock runs accelerated time-lapse (`3:19→3:30 PM`, `f1285–f1348`) while blurred exterior horizon levels `[Transitions & Continuity]` | High |
-| S02l | 00:45.012–00:47.125 (f1349–f1411) | Continuous [NO CUT] (pull-back) | M / eye | Smooth pull-back reveals leveled daylight flight over city; right hand lifts and taps yoke hub (`f1370–f1380`) in micro-acting relief `[Motion, Acting & Prop State]` | High |
-| S02m | 00:47.158–00:49.950 (f1412–f1497) | Continuous [NO CUT] (whip pan left) | INSERT / eye | Whip pan left across console lands on center attitude indicator leveling out, flashing green `"STABLE"` confirmation (`f1482–f1497`) `[VFX, Cutaways & Graphics]` | High |
-| S02n | 00:50.017–00:53.287 (f1499–f1597) | Continuous [NO CUT] (pan right & push-in) | INSERT / eye | Pan right isolates altimeter ticking steadily downward (`14916→11303 FT`) while glowing red downward arrow graphic (`f1554–f1597`) appears `[VFX, Cutaways & Graphics]` | High |
-| S02o | 00:53.353–00:57.124 (f1599–f1712) | Continuous [NO CUT] (pull-back & windshield push) | EW / aerial | Pull-back passes continuity-jump altimeter (`11303→619 FT` at `f1599→f1600`) and zooms out windshield to yellow-highlighted distant field (`f1680–f1705`) `[VFX, Cutaways & Graphics]` | High |
-| S02p | 00:57.157–01:04.464 (f1713–f1932) | Continuous [NO CUT] (pull-back & pan tour) | M / high | Pull-back hovers hand by `LANDING GEAR` lever (`f1741–f1798`), pulses yellow-green glow on yoke forearms (`f1805–f1828`) and throttle (`f1903–f1929`) `[Lighting, Color & Materials]` | High |
-| S02q | 01:04.498–01:08.368 (f1933–f2049) | Continuous [NO CUT] (hold & pan down-right) | MCU / eye | Display flashes yellow `"TERRAIN PULL UP"` with red upward arrow (`f1958–f2009`), then camera pans down-right as hand shakes slumped pilot's arm `[Motion, Acting & Prop State]` | High |
-| S02r | 01:08.435–01:11.738 (f2051–f2150) | Continuous [NO CUT] (whip up-left through windshield) | EW / aerial | Whip out windshield highlights grassy clearing in yellow (`f2076–f2099`), morphing into white graphic runway lines (`f2108–f2134`) before fast pull-back `[VFX, Cutaways & Graphics]` | High |
-| S02s | 01:11.805–01:13.240 (f2152–f2195) | Continuous [NO CUT] (180° whip-around reveal) | CU / eye | 180-degree whip-around past windshield strut reveals panicked protagonist (`ZACK D FILMS` shirt), holding on eye blink (`f2177–f2180`) and stare (`audio unverified: no stream`) `[Motion, Acting & Prop State]` | Med |
+| S01a | 00:00.000–00:02.068 (f0–f62) | Opening | M / eye | Blinking eyelid vignette opens onto tray table as hands lift over blue seatback `[Camera, Framing & Staging]` | High |
+| S01b | 00:02.068–00:03.337 (f62–f100) | Continuous [NO CUT] (whip pan left) | M / eye | Camera-turn blur whips left onto unconscious passengers with red outline glow `[Optics: Blur, DOF & Temporal]` | High |
+| S01c | 00:03.337–00:05.405 (f100–f162) | Continuous [NO CUT] (whip pan right) | MCU / eye | Whip pan right reveals two collapsed flight attendants highlighted with red rim pulses `[Lighting, Color & Materials]` | High |
+| S01d | 00:05.405–00:08.508 (f162–f255) | Continuous [NO CUT] (pan left & turn right) | M / eye | Hands brace window as rack-focus shifts outside and yellow/white HUD ladder overlays sky `[VFX, Cutaways & Graphics]` | High |
+| S01e | 00:08.508–00:12.012 (f255–f360) | Continuous [NO CUT] (whip pan left) | W / eye | Whip pan frames aisle while X-ray pilot silhouettes glow behind red `"COCKPIT"` label `[VFX, Cutaways & Graphics]` | High |
+| S02a | 00:12.012–00:14.014 (f360–f420) | Transition (cross_dissolve, f360–f365) | W / high | Cross-dissolve advances POV toward open cockpit door and two collapsed crew on floor `[Transitions & Continuity]` | High |
+| S02b | 00:14.014–00:16.717 (f420–f501) | Continuous [NO CUT] (POV walk-in) | M / high | POV steps past glowing collapsed crew and `"ZACK D FILMS"` collar through doorway `[Camera, Framing & Staging]` | High |
+| S02c | 00:16.717–00:18.952 (f501–f568) | Continuous [NO CUT] (push-in behind seat) | MCU / high | Camera glides behind captain's seat as red outline pulses on slumped pilot `[Lighting, Color & Materials]` | High |
+| S02d | 00:18.952–00:21.588 (f568–f647) | Continuous [NO CUT] (tilt down & reach up) | CU / eye | Hands pinch wrist with red glow, then right hand reaches up to grab overhead radio mic `[Motion, Acting & Prop State]` | High |
+| S02e | 00:21.588–00:24.825 (f647–f744) | Continuous [NO CUT] (hold & push-in) | CU / eye | Mic edges glow yellow while kinetic `"HELP!"` text pops letter-by-letter against shallow DOF `[VFX, Cutaways & Graphics]` | High |
+| S02f | 00:24.825–00:26.059 (f744–f781) | Continuous [NO CUT] (snap zoom-in & pull-back) | INSERT / eye | Radial-blurred zoom isolates `"LOST SIGNAL"` screen before pulling back to cockpit `[Camera, Framing & Staging]` | High |
+| S02g | 00:26.059–00:32.266 (f781–f967) | Continuous [NO CUT] (pan & follow action) | M / high | Hands shove pilot aside; orange-glowing grip snags yoke and headphones tumble past seat `[Motion, Acting & Prop State]` | High |
+| S02h | 00:32.266–00:34.935 (f967–f1047) | Continuous [NO CUT] (camera shake & push-in) | CU / eye | Impact shake tracks steep dive as altimeter plummets and red `"ALERT"` lights strobe `[Lighting, Color & Materials]` | High |
+| S02i | 00:34.935–00:38.538 (f1047–f1155) | Continuous [NO CUT] (tilt up & zoom through glass) | MCU / low | Tilt up frames red-lit switches before zooming through windshield onto stadium below `[Lighting, Color & Materials]` | High |
+| S02j | 00:38.538–00:42.543 (f1155–f1275) | Continuous [NO CUT] (pull-back into seat) | M / high | Camera pulls into pilot seat as both hands fight heavy yoke over skyline, pushing to CU grip `[Motion, Acting & Prop State]` | High |
+| S02k | 00:42.543–00:44.945 (f1275–f1347) | Continuous [NO CUT] (pull-back & zoom-in) | INSERT / eye | Pull-back levels horizon, then tight zoom captures digital clock timelapse (`3:21`–`3:29 PM`) `[Transitions & Continuity]` | High |
+| S02l | 00:44.945–00:50.017 (f1347–f1499) | Continuous [NO CUT] (pull-back, pan & push-in) | INSERT / eye | Right hand gives thumbs-up; pan left pushes onto attitude gauge turning green `"STABLE"` `[VFX, Cutaways & Graphics]` | High |
+| S02m | 00:50.017–00:53.353 (f1499–f1599) | Continuous [NO CUT] (pan right & push-in) | INSERT / eye | Pan right isolates dropping altitude gauge with animated red downward arrow `[VFX, Cutaways & Graphics]` | High |
+| S03a | 00:53.353–00:54.555 (f1599–f1635) | Hard Cut (f1597→f1599) | M / eye | Hard cut snaps back to low-altitude cockpit POV facing city skyline `[Transitions & Continuity]` | High |
+| S03b | 00:54.555–00:57.124 (f1635–f1712) | Continuous [NO CUT] (zoom through glass & pull-back) | EW / aerial | Camera flies through windshield over city toward yellow-highlighted field, then whips back `[Camera, Framing & Staging]` | High |
+| S03c | 00:57.124–01:08.435 (f1712–f2051) | Continuous [NO CUT] (cockpit POV) | M / high | Hand hovers at landing gear, green-lit forearms/throttle activate under `"TERRAIN PULL UP"`, shakes pilot `[Motion, Acting & Prop State]` | High |
+| S03d | 01:08.435–01:11.600 (f2051–f2146) | Continuous [NO CUT] (whip & zoom through glass) | EW / aerial | Whip through windshield frames field as yellow highlight morphs into white runway lines `[VFX, Cutaways & Graphics]` | High |
+| S03e | 01:11.600–01:13.240 (f2146–f2195) | Continuous [NO CUT] (whip pull-back 180°) | MCU / eye | Fast 180° whip lands on protagonist's sweating, blinking face and `"ZACK D FILMS"` tee `[Camera, Framing & Staging]` | High |
 
 ---
 
@@ -57,42 +59,55 @@
 
 ```json
 {
-  "schema_version": 1,
-  "duration_sec": 73.24,
+  "schema_version": 2,
+  "duration_sec": 73.2,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "first_person_pov",
   "topic_category": "hypothetical_what_if",
-  "topic_sublabel": "unconscious_pilots_plane_survival",
+  "topic_sublabel": "emergency_plane_landing_pov",
+  "emotional_driver": "visceral_shock_danger",
   "hook_archetype": "hypothetical_premise",
-  "opening_shot_sec": 2.035,
-  "opening_spoken_line": "Imagine you wake up and everyone on your flight is unconscious.",
-  "hook_visual_trigger": "Blurred wake-up POV lifting off tray table, whipping left onto a slumped passenger highlighted in red.",
+  "opening_shot_sec": 2.068,
+  "opening_spoken_line": "Imagine you wake up, and everyone on your flight is unconscious.",
+  "hook_visual_trigger": "Eyelid vignette opens POV arms on tray table looking up at empty cabin",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "what_if_chain_reaction",
   "narrative_connector": "but_therefore",
   "ending_type": "question_cta",
-  "twist_at_pct": 68,
-  "rehook_timestamps_sec": [12.01, 28.4, 50.02, 64.5],
+  "twist_at_pct": null,
+  "outro_hold_sec": 1.1,
+  "rehook_timestamps_sec": [12.0, 29.8, 50.9],
   "story_beats": [
-    { "role": "hook", "start_sec": 0.0, "end_sec": 5.71, "pct_runtime": 8 },
-    { "role": "setup", "start_sec": 5.71, "end_sec": 11.98, "pct_runtime": 9 },
-    { "role": "escalation", "start_sec": 11.98, "end_sec": 28.33, "pct_runtime": 22 },
-    { "role": "escalation", "start_sec": 28.33, "end_sec": 49.95, "pct_runtime": 29 },
-    { "role": "twist", "start_sec": 49.95, "end_sec": 53.29, "pct_runtime": 5 },
-    { "role": "escalation", "start_sec": 53.29, "end_sec": 71.74, "pct_runtime": 25 },
-    { "role": "cta", "start_sec": 71.74, "end_sec": 73.24, "pct_runtime": 2 }
+    { "role": "hook", "start_sec": 0.0, "end_sec": 5.75, "pct_runtime": 8 },
+    { "role": "setup", "start_sec": 5.75, "end_sec": 12.01, "pct_runtime": 9 },
+    { "role": "escalation", "start_sec": 12.01, "end_sec": 26.06, "pct_runtime": 19 },
+    { "role": "escalation", "start_sec": 26.06, "end_sec": 38.54, "pct_runtime": 17 },
+    { "role": "explanation_value", "start_sec": 38.54, "end_sec": 50.02, "pct_runtime": 16 },
+    { "role": "explanation_value", "start_sec": 50.02, "end_sec": 64.5, "pct_runtime": 20 },
+    { "role": "escalation", "start_sec": 64.5, "end_sec": 71.6, "pct_runtime": 9 },
+    { "role": "cta", "start_sec": 71.6, "end_sec": 73.24, "pct_runtime": 2 }
   ],
   "boundary_counts": {
-    "hard_cut": 0,
+    "hard_cut": 1,
     "hidden_cut": 0,
     "transition": 1,
-    "continuous": 23
+    "continuous": 20
   },
   "transition_types": ["cross_dissolve"],
-  "shot_scale_counts": { "EW": 3, "W": 3, "M": 7, "MCU": 3, "CU": 5, "ECU": 0, "INSERT": 4 },
-  "camera_angle_counts": { "aerial": 2, "overhead": 1, "high": 4, "eye": 18, "low": 0, "ground": 0 },
+  "camera_moves_used": ["whip_pan", "push_in", "pull_back", "tilt_pan", "handheld_follow", "impact_shake", "fpv_dive"],
+  "shot_scale_counts": { "EW": 2, "W": 2, "M": 8, "MCU": 4, "CU": 3, "ECU": 0, "INSERT": 4 },
+  "camera_angle_counts": { "aerial": 2, "overhead": 0, "high": 6, "eye": 14, "low": 1, "ground": 0 },
   "camera_energy": "snappy_whip_kinetic",
   "dominant_lens_feel": "wide",
   "lighting_style": "clean_studio_soft",
-  "easing_energy": "smooth_damped",
-  "audio_bed_style": "vo_only_dry",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
@@ -104,18 +119,25 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[IMAGINE SCENARIO] looks safe at first, SO [FALSE REASSURANCE] -> BUT [CRISIS DISCOVERY] -> you try [OBVIOUS FIX], BUT [ACCIDENTAL ESCALATION] -> after [TIME-LAPSE STRUGGLE] you reach [FALSE VICTORY], BUT [FINAL REVERSAL] -> ending on [SURVIVAL DILEMMA + 'WHAT DO YOU DO?']",
+  "reusable_script_template": "Imagine [NORMAL SCENARIO], BUT [UNEXPECTED CRISIS] -> SO [ATTEMPTED FIX] -> UNTIL [ACCIDENTAL ESCALATION] -> [STABILIZE & NEW DILEMMA] -> What do you do?",
   "secret_sauce_cues": [
-    "Near-unbroken 1st-person POV ride (only 1 cross-dissolve in 73.2s) stitched by directional-blur whip pans and windshield zoom-outs",
-    "Color-coded emissive body/prop outline pulses (red = threat/incapacitation, yellow-green = interactables) paired with X-ray silhouettes and diegetic cockpit HUD callouts",
-    "Relentless 'But/Therefore' false-victory reversals peaking with a 180-degree whip-around to the protagonist's blinking face for comment engagement"
+    "Continuous 1st-person POV linked by whip-pans and windshield pass-through zooms",
+    "Color-coded emissive limb/prop outlines (red danger, orange snag, green control)",
+    "180-degree whip reveal onto protagonist's branded shirt and worried face for CTA"
   ],
   "weaknesses_or_drag": [
-    "Cockpit display continuity errors: altitude readout jumps abruptly from 11303 FT to 619 FT (f1599->f1600) and dual screens briefly conflict (2555 FT vs 9000 FT at f1742)",
-    "Repeated passenger 3D character asset visible in adjacent cabin rows (f71-f74)",
-    "Brief mid-clip pacing slowdown during the 00:57-01:04 landing control options hover"
+    "Cockpit altimeter displays jump inconsistently (619 FT to 9000 FT) around the 00:53 hard cut"
   ]
 }
 ```

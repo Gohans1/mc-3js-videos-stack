@@ -1,0 +1,137 @@
+{
+  "schema_version": 2,
+  "duration_sec": 34.4,
+  "visual_medium": "3d_photoreal_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "animals_nature_survival",
+  "topic_sublabel": "cuckoo_catfish_brood_parasitism",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 1.533,
+  "opening_spoken_line": "When the fish lays an egg, a catfish will come to eat it and replace it with her own egg in the process.",
+  "hook_visual_trigger": "Mother fish lays a glowing yellow-highlighted egg onto a nest right as a catfish glides in",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "causal_chain",
+  "ending_type": "seamless_loop",
+  "twist_at_pct": 47,
+  "outro_hold_sec": 0.6,
+  "rehook_timestamps_sec": [
+    11.9,
+    15.6,
+    23.8
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.7,
+      "pct_runtime": 11
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.7,
+      "end_sec": 11.5,
+      "pct_runtime": 23
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11.5,
+      "end_sec": 15.6,
+      "pct_runtime": 12
+    },
+    {
+      "role": "twist",
+      "start_sec": 15.6,
+      "end_sec": 23.767,
+      "pct_runtime": 24
+    },
+    {
+      "role": "resolution",
+      "start_sec": 23.767,
+      "end_sec": 31,
+      "pct_runtime": 21
+    },
+    {
+      "role": "loop_bridge",
+      "start_sec": 31,
+      "end_sec": 34.367,
+      "pct_runtime": 9
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 2,
+    "continuous": 7
+  },
+  "transition_types": [
+    "card_flip",
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "tilt_pan",
+    "crane_boom"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 1,
+    "MCU": 2,
+    "CU": 5,
+    "ECU": 1,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 2,
+    "eye": 8,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "macro",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "cool_moody_teal",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": true,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "When [SUBJECT] performs [NORMAL ACTION], [INTRUDER] secretly swaps [TARGET], SO [SUBJECT] unintentionally nurtures the threat inside -> TWIST [INTRUDER] destroys the host's brood from within and grows up cared for by its victim until [SEAMLESS CYCLE].",
+  "secret_sauce_cues": [
+    "Emissive yellow pulse spotlights small translucent props during key story moments",
+    "Diegetic channel watermark embossed directly into 3D seabed sand",
+    "3D card flip and vertical push-up bridge macro interior and exterior worlds into a seamless loop"
+  ],
+  "weaknesses_or_drag": []
+}

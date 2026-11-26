@@ -1,0 +1,141 @@
+{
+  "schema_version": 2,
+  "duration_sec": 63.3,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "first_person_pov",
+  "topic_category": "business_finance_career",
+  "topic_sublabel": "compound_interest_vs_spending",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 3,
+  "opening_spoken_line": "You and your brother are each handed $50.",
+  "hook_visual_trigger": "Pull-back reveals two brothers handed fanned $10 bills under glowing $50 labels",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "word_by_word_kinetic",
+  "story_structure": "comparison_contrast",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.4,
+  "rehook_timestamps_sec": [
+    13.9,
+    22,
+    42.3,
+    54.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3,
+      "pct_runtime": 5
+    },
+    {
+      "role": "setup",
+      "start_sec": 3,
+      "end_sec": 12.7,
+      "pct_runtime": 15
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 12.7,
+      "end_sec": 22,
+      "pct_runtime": 15
+    },
+    {
+      "role": "escalation",
+      "start_sec": 22,
+      "end_sec": 54.6,
+      "pct_runtime": 51
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 54.6,
+      "end_sec": 59.2,
+      "pct_runtime": 7
+    },
+    {
+      "role": "resolution",
+      "start_sec": 59.2,
+      "end_sec": 63.3,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 8,
+    "continuous": 15
+  },
+  "transition_types": [
+    "zoom_dissolve",
+    "card_flip",
+    "push_up",
+    "cross_dissolve",
+    "whip_dissolve"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "dolly_track",
+    "push_in",
+    "orbit_arc",
+    "whip_pan",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 4,
+    "MCU": 10,
+    "CU": 0,
+    "ECU": 1,
+    "INSERT": 9
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 6,
+    "eye": 19,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "Two characters receive [FIXED RESOURCE]; [FOIL] spends it for instant pleasure, BUT [PROTAGONIST] compounds it -> SO after [TIME MONTAGE], [FOIL] suffers [VISCERAL CONSEQUENCE] while [PROTAGONIST] holds [MASSIVE PAYOFF].",
+  "secret_sauce_cues": [
+    "Environment set-dissolve behind a continuously walking character to compress travel into 1.5s",
+    "Spatial glass wall bridging parallel timelines in a single lateral camera truck",
+    "Growing 3D copper coin towers over cash bills as a diegetic compound-interest chart"
+  ],
+  "weaknesses_or_drag": []
+}

@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "duration_sec": 25.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "cold_war_hollow_nickel_espionage",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "character_story_setup",
+  "opening_shot_sec": 3.103,
+  "opening_spoken_line": "When he dropped the nickel, it split in two, revealing a hidden compartment.",
+  "hook_visual_trigger": "Boy drops nickel in slow-mo as it splits open mid-air revealing secret code",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "seamless_loop",
+  "twist_at_pct": 78,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    8.8,
+    16,
+    20
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.103,
+      "pct_runtime": 12
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.103,
+      "end_sec": 8.809,
+      "pct_runtime": 22
+    },
+    {
+      "role": "escalation",
+      "start_sec": 8.809,
+      "end_sec": 15.782,
+      "pct_runtime": 27
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 15.782,
+      "end_sec": 19.953,
+      "pct_runtime": 17
+    },
+    {
+      "role": "twist",
+      "start_sec": 19.953,
+      "end_sec": 23.957,
+      "pct_runtime": 15
+    },
+    {
+      "role": "loop_bridge",
+      "start_sec": 23.957,
+      "end_sec": 25.492,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 2,
+    "continuous": 8
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "tilt_pan",
+    "dolly_track"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 7,
+    "MCU": 1,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 3
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 8,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": true,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[ORDINARY PERSON] interacts with [EVERYDAY OBJECT] that reveals [SECRET MYSTERY], SO [AUTHORITIES] investigate BUT fail, UNTIL [TIME-JUMP OWNER] confesses YET lost it via [IRONIC MISTAKE], looping back to [ORIGIN].",
+  "secret_sauce_cues": [
+    "Calendar-anchored radial zoom hidden cut swapping sets while displaying diegetic channel brand",
+    "Object-locked 180-degree camera orbit ending in rack-focus to exact f0 seamless-loop frame",
+    "Sequential gold emissive highlight pulse guiding viewer eye across cipher lines"
+  ],
+  "weaknesses_or_drag": []
+}

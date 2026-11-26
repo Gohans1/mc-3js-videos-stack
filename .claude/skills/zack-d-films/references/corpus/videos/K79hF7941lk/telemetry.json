@@ -1,0 +1,138 @@
+{
+  "schema_version": 2,
+  "duration_sec": 36.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "faceless_objects_diagrams",
+  "topic_category": "food_diy_and_hacks",
+  "topic_sublabel": "fried_ice_cream_cooking_physics",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "imperative_how_to_step",
+  "opening_shot_sec": 1.802,
+  "opening_spoken_line": "Blend up the cornflakes before scooping out a ball of ice cream and rolling it in the crumbs.",
+  "hook_visual_trigger": "Cornflakes pour from a box into an open spinning food processor on a bright cyan backdrop",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    12.6,
+    21.1,
+    27.2
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.1,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.1,
+      "end_sec": 12.6,
+      "pct_runtime": 26
+    },
+    {
+      "role": "escalation",
+      "start_sec": 12.6,
+      "end_sec": 21.1,
+      "pct_runtime": 23
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 21.1,
+      "end_sec": 27.2,
+      "pct_runtime": 17
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 27.2,
+      "end_sec": 31.4,
+      "pct_runtime": 11
+    },
+    {
+      "role": "resolution",
+      "start_sec": 31.4,
+      "end_sec": 36.5,
+      "pct_runtime": 14
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 1,
+    "continuous": 10
+  },
+  "transition_types": [
+    "card_flip"
+  ],
+  "camera_moves_used": [
+    "dolly_track",
+    "crane_boom",
+    "push_in",
+    "pull_back",
+    "whip_pan",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 7,
+    "MCU": 2,
+    "CU": 2,
+    "ECU": 1,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 6,
+    "eye": 6,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[ACTION STEP 1] before [ACTION STEP 2], THEN [PREP/FREEZE STEP] -> ONCE [STATE CHANGE], [COATING STEP] before [THERMAL REACTION] -> [MECHANISM INSIGHT] so when you [REVEAL ACTION], you get [CONTRASTING RESULT].",
+  "secret_sauce_cues": [
+    "Continuous 3D studio spatial chaining linking multiple kitchen stations via camera pans and a single blurred whip-tilt instead of hard cuts",
+    "Nested dual-layer cutaway slicing both the opaque cooking pot and the food shell simultaneously to prove thermal insulation visually",
+    "Diegetic channel name watermark ('ZACK D FILMS') printed directly onto the translucent cooking glove"
+  ],
+  "weaknesses_or_drag": [
+    "Knife positioning resets slightly between initial downward stab and final bisect slice (f942–f966)"
+  ]
+}

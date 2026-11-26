@@ -1,0 +1,126 @@
+{
+  "schema_version": 2,
+  "duration_sec": 31,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "underwater_glass_coffin_survival",
+  "emotional_driver": "visceral_shock_danger",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 1,
+  "opening_spoken_line": null,
+  "hook_visual_trigger": "Giant 2D pixel cursor yanks protagonist from bleachers into ocean glass coffin",
+  "narration_pov": "unvoiced",
+  "voice_delivery": "unvoiced",
+  "caption_style": "none",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "causal_chain",
+  "ending_type": "question_cta",
+  "twist_at_pct": 71,
+  "outro_hold_sec": 4,
+  "rehook_timestamps_sec": [
+    11,
+    15,
+    22
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 3,
+      "end_sec": 11,
+      "pct_runtime": 26
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11,
+      "end_sec": 22,
+      "pct_runtime": 35
+    },
+    {
+      "role": "twist",
+      "start_sec": 22,
+      "end_sec": 27,
+      "pct_runtime": 16
+    },
+    {
+      "role": "cta",
+      "start_sec": 27,
+      "end_sec": 31,
+      "pct_runtime": 13
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 12,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 3
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "dolly_track"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 1,
+    "M": 6,
+    "MCU": 3,
+    "CU": 1,
+    "ECU": 1,
+    "INSERT": 3
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 4,
+    "high": 5,
+    "eye": 2,
+    "low": 3,
+    "ground": 2
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "dramatic_low_key",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "cool_moody_teal",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "silent",
+  "bgm_mood": "none",
+  "sfx_density": "none",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": false
+  },
+  "reusable_script_template": "[ABSURD 2D CURSOR PLACES SUBJECT IN TRAP] -> [DREAD ESCALATES WITH PREDATOR] -> [TOOL OFFERS FALSE HOPE] -> TWIST [WIDEST SCALE + GAUGE PROVE ESCAPE IMPOSSIBLE] -> CTA [FULL VIDEO]",
+  "secret_sauce_cues": [
+    "Surreal 2D pixel cursor dragging glowing 3D victim in first 1s",
+    "FG-to-BG rack focus introducing escape tool inside cramped enclosure",
+    "Diegetic DK shirt logo plus 3D arrow Shorts end-card funnel"
+  ],
+  "weaknesses_or_drag": [
+    "Audio track absent in 1fps sampled input so audio cues remain unverified"
+  ]
+}

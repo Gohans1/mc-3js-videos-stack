@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "duration_sec": 36.8,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "duo_or_ensemble",
+  "topic_category": "pop_culture_media_tech",
+  "topic_sublabel": "custom_robotics_mobility_aid",
+  "emotional_driver": "empathy_wholesome",
+  "hook_archetype": "dramatic_reveal_first",
+  "opening_shot_sec": 0.7,
+  "opening_spoken_line": "He bolted a racing chair to a 4 legged robot,",
+  "hook_visual_trigger": "Macro bolt pulses neon green before pulling back to reveal racing chair on quadruped robot",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "other",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.9,
+  "rehook_timestamps_sec": [
+    11.6,
+    26.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3,
+      "pct_runtime": 8
+    },
+    {
+      "role": "setup",
+      "start_sec": 3,
+      "end_sec": 11.6,
+      "pct_runtime": 23
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11.6,
+      "end_sec": 22.2,
+      "pct_runtime": 29
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 22.2,
+      "end_sec": 26.6,
+      "pct_runtime": 12
+    },
+    {
+      "role": "resolution",
+      "start_sec": 26.6,
+      "end_sec": 36.8,
+      "pct_runtime": 28
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 5,
+    "continuous": 11
+  },
+  "transition_types": [
+    "cross_dissolve",
+    "morph"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "crane_boom",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 9,
+    "MCU": 3,
+    "CU": 2,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 14,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[SON] built [UNUSUAL CONTRAPTION] and placed [LOVED ONE] inside — YOU SEE, [LOVED ONE] lost [ABILITY] UNTIL [OBSTACLE], SO [SON] engineered [CUSTOM SOLUTION] allowing them to [EMOTIONAL PAYOFF].",
+  "secret_sauce_cues": [
+    "Color-coded emissive material highlights synced to every spoken prop/obstacle noun",
+    "Eye-aligned age-morph dissolve transitioning directly into backstory flashback",
+    "Thought-bubble code UI and WiFi waves integrated directly into continuous 3D camera sweeps"
+  ],
+  "weaknesses_or_drag": []
+}

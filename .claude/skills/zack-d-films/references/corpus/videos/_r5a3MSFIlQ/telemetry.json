@@ -1,0 +1,131 @@
+{
+  "schema_version": 2,
+  "duration_sec": 32.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "science_physics_mechanics",
+  "topic_sublabel": "ice_cream_surface_adhesion",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 3.2,
+  "opening_spoken_line": "If you press chocolate ice cream against vanilla ice cream, for some reason, it's like they perfectly transfer over without mixing.",
+  "hook_visual_trigger": "Stylized 3D man pushes glowing chocolate and vanilla ice cream cones together against a bright cyan studio backdrop",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "warm_conversational",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.8,
+  "rehook_timestamps_sec": [
+    8.9,
+    14.2
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.2,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.2,
+      "end_sec": 8.9,
+      "pct_runtime": 17
+    },
+    {
+      "role": "escalation",
+      "start_sec": 8.9,
+      "end_sec": 14.2,
+      "pct_runtime": 16
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 14.2,
+      "end_sec": 23.3,
+      "pct_runtime": 28
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 23.3,
+      "end_sec": 27.1,
+      "pct_runtime": 12
+    },
+    {
+      "role": "resolution",
+      "start_sec": 27.1,
+      "end_sec": 32.5,
+      "pct_runtime": 17
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 7
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "static_locked"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 1,
+    "MCU": 2,
+    "CU": 2,
+    "ECU": 3,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 2,
+    "high": 0,
+    "eye": 6,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "If you [DO EVERYDAY PHYSICAL ACTION], [SURPRISING RESULT] happens, BECAUSE [HIDDEN MICRO-MECHANISM] causes [STEP-BY-STEP DEFORMATION] leaving [FINAL VISUAL PROOF].",
+  "secret_sauce_cues": [
+    "Single unbroken 3D camera take orbiting around central props to bridge macro physics and host reactions without cuts",
+    "Mid-video VHS rewind time-remap with diegetic << icons to pivot smoothly from anomaly reveal to causal explanation",
+    "ON-to-OFF emissive material pulses directly synced to spoken noun phrases"
+  ],
+  "weaknesses_or_drag": []
+}

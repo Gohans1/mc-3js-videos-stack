@@ -1,65 +1,79 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "duration_sec": 27.63,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "animals_nature_survival",
-  "topic_sublabel": "cookiecutter_shark_feeding",
+  "topic_sublabel": "cookiecutter_shark_feeding_mechanics",
+  "emotional_driver": "curiosity_mystery",
   "hook_archetype": "cold_open_crisis",
   "opening_shot_sec": 1.502,
   "opening_spoken_line": "As it bites the whale, small upper teeth sink into the flesh, while huge lower teeth drive in like a curved blade.",
-  "hook_visual_trigger": "Tiny green-eyed shark opens jaws mid-lunge against massive whale flank, snapping into macro teeth-sinking ECU",
+  "hook_visual_trigger": "Tiny shark biting a massive whale mid-frame before diving macro onto teeth piercing skin",
+  "narration_pov": "omniscient_explainer",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "mechanism_step_by_step",
   "narrative_connector": "causal_chain",
   "ending_type": "satisfying_resolution",
   "twist_at_pct": null,
+  "outro_hold_sec": 0.6,
   "rehook_timestamps_sec": [
-    8,
-    18.2
+    8.1,
+    18.1
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 3.871,
+      "end_sec": 3.97,
       "pct_runtime": 14
     },
     {
       "role": "escalation",
-      "start_sec": 3.871,
-      "end_sec": 14.281,
-      "pct_runtime": 38
+      "start_sec": 3.97,
+      "end_sec": 14.25,
+      "pct_runtime": 37
     },
     {
       "role": "visual_proof",
-      "start_sec": 14.281,
-      "end_sec": 18.185,
+      "start_sec": 14.25,
+      "end_sec": 18.19,
       "pct_runtime": 14
     },
     {
       "role": "explanation_value",
-      "start_sec": 18.185,
-      "end_sec": 24.992,
-      "pct_runtime": 25
+      "start_sec": 18.19,
+      "end_sec": 25.49,
+      "pct_runtime": 27
     },
     {
       "role": "resolution",
-      "start_sec": 24.992,
-      "end_sec": 27.628,
-      "pct_runtime": 9
+      "start_sec": 25.49,
+      "end_sec": 27.63,
+      "pct_runtime": 8
     }
   ],
   "boundary_counts": {
     "hard_cut": 0,
     "hidden_cut": 0,
-    "transition": 1,
-    "continuous": 9
+    "transition": 2,
+    "continuous": 8
   },
   "transition_types": [
     "cross_dissolve"
   ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "tilt_pan",
+    "dolly_track"
+  ],
   "shot_scale_counts": {
     "EW": 0,
-    "W": 3,
-    "M": 3,
+    "W": 2,
+    "M": 4,
     "MCU": 1,
     "CU": 1,
     "ECU": 2,
@@ -75,9 +89,13 @@
   },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "mixed",
-  "lighting_style": "natural_daylight",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "mixed",
   "easing_energy": "smooth_damped",
-  "audio_bed_style": "minimal_ambient_plus_vo",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": false,
@@ -89,16 +107,22 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "Mid-action cold open on [CREATURE/MECHANISM ACTION] -> step-by-step macro breakdown ([PART 1] -> [PART 2] -> [TWIST/RESULT]) -> visual proof of [SURVIVAL/OUTCOME] -> causal 'WHY' ([SIZE/CONSTRAINT LIMITATION], SO [CLEVER EVOLUTIONARY ADAPTATION])",
+  "reusable_script_template": "As [CREATURE] performs [VISCERAL MICRO-ACTION] -> [STEP-BY-STEP MECHANISM] -> SO [PROOF OF AFTERMATH] -> YOU SEE, [BIOLOGICAL LIMITATION] -> SO IT EVOLVED [SURPRISING STRATEGY] for another day.",
   "secret_sauce_cues": [
-    "Continuous [NO CUT] macro-to-wide 3D camera choreography spanning 9 seamless reframes before a single graphic cross-dissolve",
-    "Brief 0.4-0.6s golden emissive outline pulses synced to spoken anatomical nouns (teeth, flesh plug) to guide focus without text clutter",
-    "Graphic cross-dissolve anchoring the round wound crater onto the full-body size reveal, plus foreground-masked alpha stage clearing"
+    "Macro-to-wide elastic spline camera rubber-banding inside continuous takes (ECU teeth -> W whale -> INSERT crater)",
+    "Wound-as-portal graphic-match cross-dissolve launching the next subject straight out of a circular scar",
+    "Momentary golden emissive rim outline pulses synced to exact narration anatomy keywords (teeth, flesh plug, scar)"
   ],
-  "weaknesses_or_drag": [
-    "Brief white specular/alpha shimmer glitch pulsing near the shark's tail fin during solo swimming (f560-f591)",
-    "Noticeable background alpha fade-out of the squid and extra sharks behind the foreground pass (f764-f768) feels slightly game-engine-like"
-  ]
+  "weaknesses_or_drag": []
 }

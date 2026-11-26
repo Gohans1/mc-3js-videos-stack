@@ -1,0 +1,137 @@
+{
+  "schema_version": 2,
+  "duration_sec": 30,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "anatomy_health_body",
+  "topic_sublabel": "rcpd_no_burp_botox_treatment",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 2.736,
+  "opening_spoken_line": "A scope is passed through your mouth and next to a muscle in your throat.",
+  "hook_visual_trigger": "Glowing cyan-outlined endoscope snaking down into a supine patient's wide-open mouth before plunging inside",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.4,
+  "rehook_timestamps_sec": [
+    5.1,
+    12,
+    20,
+    23
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.736,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.736,
+      "end_sec": 5.072,
+      "pct_runtime": 8
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 5.072,
+      "end_sec": 11.945,
+      "pct_runtime": 23
+    },
+    {
+      "role": "escalation",
+      "start_sec": 11.945,
+      "end_sec": 22.923,
+      "pct_runtime": 37
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 22.923,
+      "end_sec": 27.694,
+      "pct_runtime": 16
+    },
+    {
+      "role": "resolution",
+      "start_sec": 27.694,
+      "end_sec": 30,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 7,
+    "transition": 1,
+    "continuous": 5
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "whip_pan",
+    "tilt_pan",
+    "orbit_arc",
+    "roll_dutch"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 1,
+    "MCU": 4,
+    "CU": 1,
+    "ECU": 8,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 3,
+    "eye": 10,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[STRANGE PROCEDURE] goes into [BODY PART] to [DIRECT ACTION] -> YOU SEE, [ORGAN] normally lets [INBOUND THING] pass, BUT stays tight against [BLOCKED THING], SO [CHRONIC SYMPTOM] -> BUT [TREATMENT] restores [BLOCKED FUNCTION], letting you finally [COMEDIC/RELIEVING PAYOFF].",
+  "secret_sauce_cues": [
+    "Solution-first hook inversion: opens mid-surgery on throat Botox injection (0-12s) before revealing it treats an inability to burp",
+    "Same-axis whip-tilt + rack-focus linkage connecting the macro muscle cutaway directly up to the BOTOX vial on the scope handle (00:06-00:08)",
+    "Color-coded emissive anatomy grammar: yellow-orange marks focus, violet marks Botox fluid, green marks healthy relaxation/opening, and red + bold X marks air blockage"
+  ],
+  "weaknesses_or_drag": []
+}

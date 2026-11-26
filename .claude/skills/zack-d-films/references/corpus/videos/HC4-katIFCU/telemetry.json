@@ -1,0 +1,135 @@
+{
+  "schema_version": 2,
+  "duration_sec": 32.53,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "animals_nature_survival",
+  "topic_sublabel": "trap_jaw_ant_vs_antlion",
+  "emotional_driver": "visceral_shock_danger",
+  "hook_archetype": "cold_open_crisis",
+  "opening_shot_sec": 1.502,
+  "opening_spoken_line": "When the ant falls into the sandpit, a hidden ant lion is usually waiting underneath the loose sand, and as the ant tries to climb out, the walls collapse beneath its feet, sliding it closer and closer to the predator.",
+  "hook_visual_trigger": "Ant slips over sandpit rim into subterranean cutaway revealing lurking antlion",
+  "narration_pov": "omniscient_explainer",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 42,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    13.8,
+    20.5,
+    27.7
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.84,
+      "pct_runtime": 12
+    },
+    {
+      "role": "escalation",
+      "start_sec": 3.84,
+      "end_sec": 13.75,
+      "pct_runtime": 30
+    },
+    {
+      "role": "twist",
+      "start_sec": 13.75,
+      "end_sec": 20.42,
+      "pct_runtime": 21
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 20.42,
+      "end_sec": 27.33,
+      "pct_runtime": 21
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 27.33,
+      "end_sec": 29.66,
+      "pct_runtime": 7
+    },
+    {
+      "role": "resolution",
+      "start_sec": 29.66,
+      "end_sec": 32.53,
+      "pct_runtime": 9
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 13
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "orbit_arc",
+    "pull_back",
+    "push_in",
+    "crane_boom",
+    "whip_pan",
+    "tilt_pan",
+    "roll_dutch"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 5,
+    "M": 4,
+    "MCU": 0,
+    "CU": 3,
+    "ECU": 3,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 7,
+    "low": 2,
+    "ground": 2
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[PREY] gets trapped in [PREDATOR MECHANISM], sliding closer to danger, BUT [HIDDEN BIOLOGICAL COUNTER-TOOL] loads up -> SO [SLOW-MO IMPACT] blasts it to safety while [PREDATOR] loses.",
+  "secret_sauce_cues": [
+    "Continuous 3D subterranean cutaway dives with diegetic channel logo embedded directly into the cross-section earth",
+    "Emissive biomechanics highlights (pink feet, glowing red jaws) paired with 3D coil springs and parabolic dotted jump graphs",
+    "Subject-locked rotational whip leading straight into slow-motion particle impact"
+  ],
+  "weaknesses_or_drag": []
+}

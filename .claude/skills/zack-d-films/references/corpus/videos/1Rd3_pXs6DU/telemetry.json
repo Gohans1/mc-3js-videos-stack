@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "duration_sec": 44.7,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "satirical_drone_toilet_service",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1.835,
+  "opening_spoken_line": "If you really have to go, but the bathroom line is impossible, just open the app and request a Puber.",
+  "hook_visual_trigger": "Close-up of squirming man clutching crotch before rapid pull-back reveals huge queue",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 92,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    7.1,
+    20.8,
+    36.5,
+    41.1
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.4,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.4,
+      "end_sec": 7,
+      "pct_runtime": 6
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 7,
+      "end_sec": 20.5,
+      "pct_runtime": 30
+    },
+    {
+      "role": "escalation",
+      "start_sec": 20.5,
+      "end_sec": 31.4,
+      "pct_runtime": 24
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 31.4,
+      "end_sec": 38.4,
+      "pct_runtime": 16
+    },
+    {
+      "role": "twist",
+      "start_sec": 38.4,
+      "end_sec": 44,
+      "pct_runtime": 13
+    },
+    {
+      "role": "resolution",
+      "start_sec": 44,
+      "end_sec": 44.7,
+      "pct_runtime": 1
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 1,
+    "transition": 0,
+    "continuous": 18
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "pull_back",
+    "crane_boom",
+    "fpv_dive",
+    "push_in",
+    "orbit_arc",
+    "dolly_track",
+    "tilt_pan",
+    "whip_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 1,
+    "W": 4,
+    "M": 3,
+    "MCU": 6,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 4
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 5,
+    "eye": 11,
+    "low": 3,
+    "ground": 1
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "If [COMMON URGENT PROBLEM] is blocked by [ABSURD OBSTACLE], just use [NOVEL TECH SOLUTION] -> [STEP-BY-STEP MECHANISM] -> BUT if [SOCIAL/SAFETY FAILURE], [GROSS/SLAPSTICK CONSEQUENCE] -> TWIST [IRONIC ROLE REVERSAL].",
+  "secret_sauce_cues": [
+    "34-second unbroken 3D camera flight linking macro phone UI to aerial overview and ground X-ray",
+    "Diegetic channel branding embedded seamlessly into world props (festival arch and app header)",
+    "Deadpan matter-of-fact narration contrasting with escalating gross-out and slapstick accidents"
+  ],
+  "weaknesses_or_drag": [
+    "Noticeable video compression blocking during ultra-fast whip-pan and crane pull-up ground blurs"
+  ]
+}

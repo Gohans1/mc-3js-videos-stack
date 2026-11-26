@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "duration_sec": 46.07,
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "victorian_heroic_sacrifice_tragedy",
+  "hook_archetype": "cold_open_crisis",
+  "opening_shot_sec": 1.43,
+  "opening_spoken_line": "She knocked over the lamp, spilling oil that burst into flames and spread to her dress.",
+  "hook_visual_trigger": "Girl on chair knocks lit oil lamp off mantel, crashing onto floor and erupting in flames",
+  "story_structure": "chronological_escalation_twist",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 91,
+  "rehook_timestamps_sec": [
+    8.2,
+    16.4,
+    25.7,
+    37.3,
+    41.9
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.3,
+      "pct_runtime": 9
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.3,
+      "end_sec": 9.3,
+      "pct_runtime": 11
+    },
+    {
+      "role": "escalation",
+      "start_sec": 9.3,
+      "end_sec": 23.5,
+      "pct_runtime": 31
+    },
+    {
+      "role": "twist",
+      "start_sec": 23.5,
+      "end_sec": 37.3,
+      "pct_runtime": 30
+    },
+    {
+      "role": "resolution",
+      "start_sec": 37.3,
+      "end_sec": 46.07,
+      "pct_runtime": 19
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 0,
+    "transition": 1,
+    "continuous": 10
+  },
+  "transition_types": [
+    "card_flip"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 5,
+    "MCU": 6,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 8,
+    "low": 1,
+    "ground": 1
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "dramatic_low_key",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true
+  },
+  "reusable_script_template": "[SUDDEN ACCIDENT] puts [VULNERABLE VICTIM] in danger -> [HERO] intervenes, BUT ignores [SAFETY OPTION] -> [HERO] saves victim, BUT [LETHAL COST] overtakes hero -> TWIST [REAL HISTORICAL ARTIFACT PROVES SURVIVOR'S DEBT]",
+  "secret_sauce_cues": [
+    "37-second unbroken 3D virtual oner chaining 10 spatial beats via 270-degree character orbits and background doorway staging",
+    "Semantic color-coded highlight pulses (green scream rings, green survivor outline, red X-ray body silhouette under blanket) plus selective blur censorship",
+    "Diegetic 'ZACK D. FILMS' logo engraved on shattered prop lamp base paired with authentic 1890 gravestone inscription payoff"
+  ],
+  "weaknesses_or_drag": [
+    "Boy's burning shirt stays uncharred beneath floating fire sprites while sister's clothes tear via stepped mesh swaps",
+    "Slightly stiff facial holds on boy's distress (15.1s-16.1s) and sister's rigid direct-to-camera stare (42.8s-44.0s)"
+  ]
+}

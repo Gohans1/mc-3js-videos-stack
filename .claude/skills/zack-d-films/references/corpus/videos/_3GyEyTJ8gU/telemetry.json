@@ -1,0 +1,145 @@
+{
+  "schema_version": 2,
+  "duration_sec": 32.532,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "science_physics_mechanics",
+  "topic_sublabel": "thermal_expansion_eiffel_tower",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 0.601,
+  "opening_spoken_line": "If you flew towards the Eiffel Tower at exactly 1,083 feet high, you could touch the top as you flew past.",
+  "hook_visual_trigger": "Cockpit FPV through spinning propeller aimed straight at snow-covered Eiffel Tower",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "but_therefore",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 46,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    8.4,
+    19.6,
+    27.1
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.504,
+      "pct_runtime": 11
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.504,
+      "end_sec": 8.408,
+      "pct_runtime": 15
+    },
+    {
+      "role": "escalation",
+      "start_sec": 8.408,
+      "end_sec": 15.115,
+      "pct_runtime": 21
+    },
+    {
+      "role": "twist",
+      "start_sec": 15.115,
+      "end_sec": 19.62,
+      "pct_runtime": 14
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 19.62,
+      "end_sec": 27.06,
+      "pct_runtime": 23
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 27.06,
+      "end_sec": 30.13,
+      "pct_runtime": 9
+    },
+    {
+      "role": "resolution",
+      "start_sec": 30.13,
+      "end_sec": 32.532,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 2,
+    "transition": 3,
+    "continuous": 10
+  },
+  "transition_types": [
+    "split_wipe",
+    "wipe_left"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "push_in",
+    "crane_boom",
+    "whip_pan",
+    "tilt_pan",
+    "static_locked"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 4,
+    "MCU": 6,
+    "CU": 2,
+    "ECU": 1,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 10,
+    "low": 2,
+    "ground": 0
+  },
+  "camera_energy": "mixed",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "If you did [EXACT PHYSICAL ACTION] under [CONDITION A], you'd get [SAFE/EXPECTED OUTCOME] -> BUT repeat the exact same thing under [CONDITION B] -> [SHOCKING CATASTROPHIC TWIST] -> This is because [HIDDEN SCIENTIFIC MECHANISM + VISUAL MEASUREMENT PROOF] -> Meaning [CONDITION A vs B IRONIC PUNCHLINE].",
+  "secret_sauce_cues": [
+    "Same-altitude A/B experiment framing (safe winter touch vs fatal summer collision at identical 1,083 ft caliper height)",
+    "Continuous 3D camera pass-throughs out of cockpit glass and through floating 3D world-space text instead of hard cuts",
+    "Mid-video 50/50 seasonal split-screen wipe with live inch-counter caliper proving invisible thermal expansion"
+  ],
+  "weaknesses_or_drag": []
+}

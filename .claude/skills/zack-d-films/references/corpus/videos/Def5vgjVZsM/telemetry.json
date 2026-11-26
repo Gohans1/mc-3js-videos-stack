@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "duration_sec": 31.6,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "absurd_car_finder_features",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 1.17,
+  "opening_spoken_line": "If you forgot where you parked, you would hit a button on your car key, and an LED light would shoot out of your car roof while a mini siren started blasting.",
+  "hook_visual_trigger": "Confused 3D man scratches head before violent radial pull-back reveals vast parking lot",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "causal_chain",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 90,
+  "outro_hold_sec": 0.4,
+  "rehook_timestamps_sec": [
+    9.14,
+    17.95
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3,
+      "pct_runtime": 10
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.04,
+      "end_sec": 9.11,
+      "pct_runtime": 19
+    },
+    {
+      "role": "escalation",
+      "start_sec": 9.14,
+      "end_sec": 17.92,
+      "pct_runtime": 28
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 17.95,
+      "end_sec": 28.4,
+      "pct_runtime": 33
+    },
+    {
+      "role": "twist",
+      "start_sec": 28.43,
+      "end_sec": 31.53,
+      "pct_runtime": 10
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 4,
+    "continuous": 12
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "pull_back",
+    "push_in",
+    "whip_pan",
+    "tilt_pan",
+    "dolly_track",
+    "orbit_arc",
+    "crane_boom"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 3,
+    "M": 5,
+    "MCU": 5,
+    "CU": 1,
+    "ECU": 1,
+    "INSERT": 2
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 5,
+    "eye": 8,
+    "low": 3,
+    "ground": 1
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "mixed",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "IF [COMMON ANNOYANCE] happened, [SIMPLE GADGET] would do [ABSURD FEATURE 1], IF [PAID UPGRADE] then [ESCALATING GADGET 2], AND IF [STILL FAILS] then [EXTREME FEATURE 3] causing [UNINTENDED CONSEQUENCE TWIST].",
+  "secret_sauce_cues": [
+    "Continuous 3D whip-and-dive camera choreography bridging wide lot to macro props without hard cuts",
+    "Radial cyan-to-white sky dome with diegetic channel name hidden on vehicle license plates and shirts",
+    "Three-tier conditional escalation capped by an abrupt grounded consequence (police swarm)"
+  ],
+  "weaknesses_or_drag": []
+}

@@ -1,77 +1,90 @@
 {
-  "schema_version": 1,
-  "duration_sec": 36.87,
+  "schema_version": 2,
+  "duration_sec": 36.9,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "other",
-  "topic_sublabel": "social_experiment_moral_parable",
+  "topic_sublabel": "social_experiment_parable",
+  "emotional_driver": "empathy_wholesome",
   "hook_archetype": "character_story_setup",
-  "opening_shot_sec": 4.504,
-  "opening_spoken_line": "She handed them balloons and told them to write their name on it before throwing it into the hallway.",
-  "hook_visual_trigger": "Wide classroom push-in to OTS MCU of student writing Zack D. on glowing balloon",
-  "story_structure": "problem_solution_irony",
+  "opening_shot_sec": 1,
+  "opening_spoken_line": "She handed them balloons and told them to write their name on it, before throwing it into the hallway.",
+  "hook_visual_trigger": "High classroom push-in to a student writing 'Zack D.' on a blue balloon",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "challenge_experiment_arc",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
   "twist_at_pct": 49,
+  "outro_hold_sec": 0.9,
   "rehook_timestamps_sec": [
-    4.504,
-    10.744,
-    18.018,
-    26.827,
-    31.131
+    12.5,
+    18,
+    26.8
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 4.504,
+      "end_sec": 4.5,
       "pct_runtime": 12
     },
     {
       "role": "setup",
-      "start_sec": 4.504,
-      "end_sec": 10.744,
-      "pct_runtime": 17
+      "start_sec": 4.5,
+      "end_sec": 10.9,
+      "pct_runtime": 18
     },
     {
       "role": "escalation",
-      "start_sec": 10.744,
-      "end_sec": 18.018,
-      "pct_runtime": 20
+      "start_sec": 10.9,
+      "end_sec": 18,
+      "pct_runtime": 19
     },
     {
       "role": "twist",
-      "start_sec": 18.018,
-      "end_sec": 26.827,
+      "start_sec": 18,
+      "end_sec": 26.8,
       "pct_runtime": 24
     },
     {
       "role": "visual_proof",
-      "start_sec": 26.827,
-      "end_sec": 31.131,
+      "start_sec": 26.8,
+      "end_sec": 31.1,
       "pct_runtime": 12
     },
     {
       "role": "resolution",
-      "start_sec": 31.131,
-      "end_sec": 36.87,
+      "start_sec": 31.1,
+      "end_sec": 36.9,
       "pct_runtime": 15
     }
   ],
   "boundary_counts": {
     "hard_cut": 0,
-    "hidden_cut": 0,
+    "hidden_cut": 1,
     "transition": 3,
-    "continuous": 7
+    "continuous": 9
   },
   "transition_types": [
     "card_flip",
-    "wipe_up",
+    "push_up",
     "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "tilt_pan"
   ],
   "shot_scale_counts": {
     "EW": 0,
-    "W": 3,
-    "M": 6,
-    "MCU": 2,
+    "W": 4,
+    "M": 5,
+    "MCU": 5,
     "CU": 0,
     "ECU": 0,
     "INSERT": 0
@@ -80,15 +93,19 @@
     "aerial": 0,
     "overhead": 0,
     "high": 4,
-    "eye": 6,
-    "low": 1,
+    "eye": 10,
+    "low": 0,
     "ground": 0
   },
-  "camera_energy": "mixed",
+  "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "wide",
   "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
   "easing_energy": "smooth_damped",
-  "audio_bed_style": "shifting_bgm_plus_vo",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": true,
@@ -100,16 +117,22 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": true
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[PROTAGONIST] tries to achieve [PERSONAL GOAL] alone, BUT [CHAOS/FAILURE] proves self-focus fails -> SO [MENTOR/TWIST] changes the rule to helping [OTHERS] first -> THEREFORE [PROTAGONIST] effortlessly gets [OWN GOAL] in half the time.",
+  "reusable_script_template": "[GROUP] tries [SELFISH TASK] under a deadline, BUT fails completely -> SO [GUIDE] changes rule to [HELP ONE OTHER PERSON FIRST] -> RESULT [EVERYONE SUCCEEDS FASTER]",
   "secret_sauce_cues": [
-    "Meta-branding Easter eggs woven organically into 3D props and wardrobe (Zack D. Films shirt/clock, Zack D. balloon)",
-    "Emissive prop glow sweeps and text flashes synced directly to spoken keywords (balloons, name, own balloon)",
-    "Floating 3D spatial timers paired with motion-blurred timelapses to contrast 5-minute failure vs 2-minute cooperation"
+    "Triple diegetic channel branding (shirt logo, clock face, and protagonist's named balloon)",
+    "Floating 3D in-world timers and transparent prop-like clock overlays instead of flat 2D HUDs",
+    "Whip-pan smears concealing crowd re-blocking and time-lapse transitions"
   ],
-  "weaknesses_or_drag": [
-    "Minor CG hand-to-balloon spacing/clipping during exchanges (f760-f802, f1030-f1060) and stiff crowd idle poses (f847-f930)",
-    "Slight pop-in transition snapping from rapid timelapse motion into static lined-up crowd pose (f844-f847)"
-  ]
+  "weaknesses_or_drag": []
 }

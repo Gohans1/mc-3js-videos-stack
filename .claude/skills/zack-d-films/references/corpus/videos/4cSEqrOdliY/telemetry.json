@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "duration_sec": 35.502,
+  "visual_medium": "3d_photoreal_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "food_diy_and_hacks",
+  "topic_sublabel": "onion_chopping_tear_prevention",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "shock_fact_stat",
+  "opening_shot_sec": 3.203,
+  "opening_spoken_line": "When you cut off the root of an onion, it releases chemicals that hit your eyes and turn into acid, which makes you cry as you chop.",
+  "hook_visual_trigger": "Knife slices onion root as orange rim-glow pulses and green chemical rods sprout from cut face",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    8.5,
+    16.4,
+    28
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.203,
+      "pct_runtime": 9
+    },
+    {
+      "role": "escalation",
+      "start_sec": 3.203,
+      "end_sec": 8.508,
+      "pct_runtime": 15
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 8.508,
+      "end_sec": 17.451,
+      "pct_runtime": 25
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 17.451,
+      "end_sec": 28.028,
+      "pct_runtime": 30
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 28.028,
+      "end_sec": 31.598,
+      "pct_runtime": 10
+    },
+    {
+      "role": "resolution",
+      "start_sec": 31.598,
+      "end_sec": 35.502,
+      "pct_runtime": 11
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 1,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 9
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "tilt_pan",
+    "orbit_arc",
+    "crane_boom",
+    "dolly_track"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 1,
+    "MCU": 1,
+    "CU": 6,
+    "ECU": 3,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 1,
+    "high": 1,
+    "eye": 6,
+    "low": 2,
+    "ground": 1
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": false,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "When you [COMMON MISTAKE], [VISIBLE CHEMICAL/PHYSICAL MECHANISM] causes [VISCERAL CONSEQUENCE]; INSTEAD [REVERSE RESET], follow [STEP 1-4 WITH GRAPHIC GUIDES] so [CLEAN RESULT] while [PROBLEM AVOIDED].",
+  "secret_sauce_cues": [
+    "Literalizing invisible chemical reactions as glowing 3D vapor and bubbling eye acid",
+    "In-frame reverse-time prop reassembly at the 'Instead' script pivot instead of cutting away",
+    "Morphing opaque cutting board into glass so camera can crane underneath without breaking flow"
+  ],
+  "weaknesses_or_drag": []
+}

@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "duration_sec": 26.9,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "magic_trick_card_illusion",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 2.6,
+  "opening_spoken_line": "He slid out the card from the dollar bill, and it pierced straight through the paper, even though the dollar was totally intact.",
+  "hook_visual_trigger": "Card visibly piercing straight through folded dollar bill held in hands",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "seamless_loop",
+  "twist_at_pct": 38,
+  "outro_hold_sec": 0.7,
+  "rehook_timestamps_sec": [
+    7.1,
+    10.1,
+    17.3
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.8,
+      "pct_runtime": 18
+    },
+    {
+      "role": "setup",
+      "start_sec": 4.8,
+      "end_sec": 10.7,
+      "pct_runtime": 22
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 10.7,
+      "end_sec": 18.2,
+      "pct_runtime": 28
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 18.2,
+      "end_sec": 24.1,
+      "pct_runtime": 21
+    },
+    {
+      "role": "loop_bridge",
+      "start_sec": 24.1,
+      "end_sec": 26.9,
+      "pct_runtime": 11
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 4,
+    "continuous": 6
+  },
+  "transition_types": [
+    "cross_dissolve"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "roll_dutch",
+    "static_locked"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 4,
+    "MCU": 2,
+    "CU": 4,
+    "ECU": 1,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 2,
+    "eye": 9,
+    "low": 0,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": true,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": false,
+    "uses_translation_or_radial_blur": false,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[IMPOSSIBLE ACTION] appears to break physics, EVEN THOUGH [OBJECT IS INTACT] -> BECAUSE [HIDDEN DUPLICATE/MODIFICATION] -> SO WHEN [STEP-BY-STEP ASSEMBLY], IT HOOKS INVISIBLY LIKE [OPENING ILLUSION].",
+  "secret_sauce_cues": [
+    "Foreground-locked environment cross-dissolves toggling between 3D room context and isolated teal diagram backdrop",
+    "Color-coded emissive object glows (green/red/yellow) and dashed X-line guides replacing verbal spatial descriptors",
+    "Diegetic channel branding embedded natively on 3D glue bottles and playing-card backs"
+  ],
+  "weaknesses_or_drag": []
+}

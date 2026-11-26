@@ -1,0 +1,153 @@
+{
+  "schema_version": 2,
+  "duration_sec": 53,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "first_person_pov",
+  "topic_category": "hypothetical_what_if",
+  "topic_sublabel": "submerged_car_escape_physics",
+  "emotional_driver": "visceral_shock_danger",
+  "hook_archetype": "hypothetical_premise",
+  "opening_shot_sec": 2,
+  "opening_spoken_line": "Imagine you drive into a lake, and you try to push the door open, but the water pressure outside pins it shut.",
+  "hook_visual_trigger": "First-person POV drives off grassy shore directly into lake and pulls glowing door latch",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "urgent_suspenseful",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "what_if_chain_reaction",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": 64,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [
+    14.2,
+    24.5,
+    34,
+    44
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 3.5,
+      "pct_runtime": 7
+    },
+    {
+      "role": "setup",
+      "start_sec": 3.5,
+      "end_sec": 7,
+      "pct_runtime": 7
+    },
+    {
+      "role": "escalation",
+      "start_sec": 7,
+      "end_sec": 14.2,
+      "pct_runtime": 13
+    },
+    {
+      "role": "escalation",
+      "start_sec": 14.2,
+      "end_sec": 22.2,
+      "pct_runtime": 15
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 22.2,
+      "end_sec": 32,
+      "pct_runtime": 18
+    },
+    {
+      "role": "escalation",
+      "start_sec": 32,
+      "end_sec": 34,
+      "pct_runtime": 4
+    },
+    {
+      "role": "twist",
+      "start_sec": 34,
+      "end_sec": 44,
+      "pct_runtime": 19
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 44,
+      "end_sec": 48,
+      "pct_runtime": 8
+    },
+    {
+      "role": "resolution",
+      "start_sec": 48,
+      "end_sec": 53,
+      "pct_runtime": 9
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 7,
+    "hidden_cut": 2,
+    "transition": 0,
+    "continuous": 11
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "whip_pan",
+    "tilt_pan",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 4,
+    "M": 2,
+    "MCU": 8,
+    "CU": 5,
+    "ECU": 2,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 3,
+    "eye": 14,
+    "low": 4,
+    "ground": 0
+  },
+  "camera_energy": "snappy_whip_kinetic",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "mixed",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "cool_moody_teal",
+  "easing_energy": "snappy_overshoot",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "dense_kinetic_whoosh_pop",
+  "craft_signals": {
+    "has_cutaway_or_xray": true,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "Imagine [LIFE-THREATENING TRAP], SO you try [OBVIOUS ESCAPE 1], BUT [PHYSICS FAILURE 1] -> SO you try [TOOL ESCAPE 2], BUT [HIDDEN MATERIAL PROOF] -> TWIST [COUNTERINTUITIVE SURVIVAL WAIT] -> [PRESSURE/PHYSICS PAYOFF & ESCAPE].",
+  "secret_sauce_cues": [
+    "Green vs red emissive outlines to visually decode affordances, failures, and pressure parity without UI clutter",
+    "Whip-pan radial smear hidden cut snapping back from false-hope swim-out into an instant cabin PCB cutaway",
+    "Diegetic channel branding embedded subtly in wet glass reflections and final surfacing shot"
+  ],
+  "weaknesses_or_drag": []
+}

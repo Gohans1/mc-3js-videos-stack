@@ -1,0 +1,127 @@
+{
+  "schema_version": 2,
+  "duration_sec": 40.14,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "faceless_objects_diagrams",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "multiplane_camera_parallax",
+  "emotional_driver": "curiosity_mystery",
+  "hook_archetype": "visual_pattern_interrupt",
+  "opening_shot_sec": 0.801,
+  "opening_spoken_line": "The image is split into separate layers on sheets of glass.",
+  "hook_visual_trigger": "Framed night scene pulls back and splits into stacked glass planes",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "but_therefore",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 1,
+  "rehook_timestamps_sec": [
+    16.4,
+    28.2
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 4.004,
+      "pct_runtime": 10
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 4.004,
+      "end_sec": 16.416,
+      "pct_runtime": 31
+    },
+    {
+      "role": "escalation",
+      "start_sec": 16.416,
+      "end_sec": 28.161,
+      "pct_runtime": 29
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 28.161,
+      "end_sec": 37.538,
+      "pct_runtime": 23
+    },
+    {
+      "role": "resolution",
+      "start_sec": 37.538,
+      "end_sec": 40.14,
+      "pct_runtime": 7
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 2,
+    "transition": 0,
+    "continuous": 10
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "pull_back",
+    "orbit_arc",
+    "push_in",
+    "crane_boom",
+    "dolly_track",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 6,
+    "M": 6,
+    "MCU": 0,
+    "CU": 1,
+    "ECU": 0,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 8,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "lofi_ambient",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": false,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": false,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[CONCEPT/DEVICE] separates [PARTS] into [STRUCTURE], BUT [COMMON ALTERNATIVE] fails because [FLAW], SO [DEVICE MECHANISM] creates [DESIRED EFFECT].",
+  "secret_sauce_cues": [
+    "Sweeping neon emissive color washes synced to VO nouns replace 2D arrows",
+    "Radial-zoom hidden cuts bridge macro 3D apparatus and human-scale gallery proof",
+    "Reusable channel character assets and D-logo embedded inside the diagrammed painting"
+  ],
+  "weaknesses_or_drag": []
+}

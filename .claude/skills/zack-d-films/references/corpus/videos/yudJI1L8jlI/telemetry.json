@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "duration_sec": 35.369,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "animals_nature_survival",
+  "topic_sublabel": "eagle_prosthetic_beak_rescue",
+  "emotional_driver": "empathy_wholesome",
+  "hook_archetype": "cold_open_crisis",
+  "opening_shot_sec": 3.103,
+  "opening_spoken_line": "The bullet flew straight into the eagle's upper beak, shattering the front of it off.",
+  "hook_visual_trigger": "Over-the-shoulder rifle shot launches into bullet-chase POV smashing an eagle's upper beak",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "satisfying_resolution",
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.9,
+  "rehook_timestamps_sec": [
+    5.5,
+    10.1,
+    22.8,
+    30.6
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 5.506,
+      "pct_runtime": 16
+    },
+    {
+      "role": "setup",
+      "start_sec": 5.506,
+      "end_sec": 10.143,
+      "pct_runtime": 13
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 10.143,
+      "end_sec": 22.823,
+      "pct_runtime": 36
+    },
+    {
+      "role": "escalation",
+      "start_sec": 22.823,
+      "end_sec": 30.664,
+      "pct_runtime": 22
+    },
+    {
+      "role": "resolution",
+      "start_sec": 30.664,
+      "end_sec": 35.369,
+      "pct_runtime": 13
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 1,
+    "transition": 2,
+    "continuous": 10
+  },
+  "transition_types": [
+    "card_flip",
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "dolly_track",
+    "orbit_arc",
+    "whip_pan",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 0,
+    "M": 3,
+    "MCU": 1,
+    "CU": 7,
+    "ECU": 3,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 1,
+    "eye": 12,
+    "low": 1,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
+  "lighting_style": "clean_studio_soft",
+  "shadow_quality": "soft_diffuse",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": true,
+    "has_motion_graphics_or_arrows": false,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": true,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "[COLD-OPEN INJURY] ruins [CHARACTER'S ABILITY], SO [RESCUERS/EXPERTS] step through [MOLDING -> CAD/3D PRINT -> PIN/GLUE ASSEMBLY], UNTIL [HERO POSE & FUNCTIONAL PROOF]",
+  "secret_sauce_cues": [
+    "Continuous 3D spline linking foreground exam table, background CAD monitor, and 3D printer with rack-focus handoffs",
+    "Full-frame yellow-beak camera-dive occlusion concealing pose/prop swap into triumphant wing-spread reveal",
+    "Diegetic channel branding embedded natively on workshop hardware and glue props (ZACK D FILMS / Glue ZDF)"
+  ],
+  "weaknesses_or_drag": [
+    "Brief 0.9s outro hold offers minimal loop transition runway"
+  ]
+}

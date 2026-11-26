@@ -1,88 +1,111 @@
-### 1. Hook, Packaging & Channel DNA Summary
-- **Topic & Premise:** `crime_disaster_accident` (`thin_ice_rescue_incident`) — A teenager plunges into a frozen pond trying to save his dog, forcing a neighbor across the street to improvise a rescue using a jump rope and weight-distribution technique; driven by escalating physical peril and false-victory tension.
-- **Hook Anatomy (`0–3s`):** `cold_open_crisis` — Opens on `"The ice started to break as the dog chased the geese."` over `00:00.000–00:03.033 (f0–f91)` with a panicked husky splayed wide on cracking ice (`f0`) before geese burst past the foreground (`f48`) and the dog plunges into freezing water (`f56`), planting immediate survival stakes.
-- **Storytelling & Retention Engine:** `chronological_escalation_twist` propelled by `but_therefore` causality, deploying three sharp re-hooks (`7.1s` camera surge introducing the jump-roper hero, `17.2s` ironic reversal where the dog escapes but the teen stays trapped, and `25.0s` false-victory collapse at `68%`) before resolving cleanly with a practical survival takeaway (`satisfying_resolution`: stay flat to spread weight).
-- **Visual, Camera & Motion Signature:** Long unbroken 3D kinetic camera choreography (`12` continuous beats, `1` foreground torso-occlusion `Hidden Cut`, `1` Y-axis `card_flip` transition, `0` hard cuts) dominated by wide-angle `M` (`8`) and `eye`/`high` staging, crisp natural winter daylight shadows, shallow-DOF rack focuses (`f714–f725`), directional motion blur, an emissive neon-yellow tool pulse (`f369–f381`), and a dramatic slow-motion splash hang (`f810–f870`).
-- **Soundscape, Voice & Secret-Sauce:** Urgent deadpan male VO paired with a shifting underscore (`shifting_bgm_plus_vo`: tense rhythmic suspense shifting to relieved warmth at the rescue, punctuated by ice-groan, crack, and splash SFX). Reusable tricks (`secret_sauce_cues`): chaining whole scenes via continuous spatial camera bridges across distant geography, hiding a 180-degree spatial reverse inside a character torso lens-wipe, pulsing key props bright neon yellow (`f369–f381`), and slipping channel branding (`"ZACK D FILMS"`) onto a background pickup door.
-
----
+### 1. Hook, Packaging & Channel Soul Summary
+- **Medium, Topic & Emotional Premise:** Stylized 3D CGI (`3d_stylized_cgi`) featuring third-person characters (`third_person_characters`) in a real-life-style frozen-lake survival rescue (`history_weird_true_story` / `thin_ice_jump_rope_rescue`) driven by `visceral_shock_danger`.
+- **Hook Anatomy (`0–3s`):** `cold_open_crisis` opens at `f0` with a panicked husky splayed on cracking ice (`hook_visual_trigger`) while narration states `"The ice started to break as the dog chased the geese."` (`opening_shot_sec: 3.1`), immediately planting survival stakes.
+- **Storytelling, Retention & Linguistics:** `chronological_escalation_twist` chained via `but_therefore` logic in `third_person_story` POV with a `calm_matter_of_fact` delivery; continuous micro-escalations (`3.1s`, `7.3s`, `17.2s`, `25.5s`, `29.0s`) include a reversal at `47%` (dog escapes while teen remains trapped) and a setback at `69%` before resolving cleanly with a `0.8s` `outro_hold_sec`.
+- **Camera, Framing & Editing Grammar:** Long `smooth_damped_continuous` spline camera fly-throughs (`normal` lens feel, heavy `M`/`MCU` & `eye` framing) bridge nearly the entire runtime using only 1 `Hidden Cut` (jacket occlusion wipe), 1 `Transition` (`card_flip`), 0 hard cuts, and 13 `Continuous [NO CUT]` trajectory/scale pivots.
+- **Optics, Motion, Look-Dev & VFX:** Clean `natural_daylight` CGI with `crisp_hard` directional shadows and a `cool_moody_teal` ice palette accented by bright yellow/orange hero props; features 4-way motion blur (`camera_turn`, `translation_radial`, `object_motion`, `subject_tracking` on flying rope handles), strong `shallow_dof`, 3 `rack_focus` pulls, shattering ice/water fluid sims, `phrase_chunked_static` captions, an emissive yellow prop highlight (`12.3s`), and diegetic `"ZACK D FILMS"` truck branding (`5.4–13.0s`).
+- **Soundscape & Secret-Sauce:** `shifting_bgm_plus_vo` (tense rhythmic synth pulse lifting to a warm resolution chord at `~31s`) paired with `moderate_punctuated` ice-crack, splash, and whoosh SFX; signature channel tricks are invisible body-occlusion scene teleports, hero-prop emissive flashes, and diegetic truck logos, with zero pacing drag.
 
 ### 2. Narrative Arc, Retention Beats & Directorial Intent
-
 | Beat | Time & Frames | Pct | Narrative & Script Function | Directorial Intent (Why this visual/edit/audio choice?) |
 | --- | --- | --- | --- | --- |
-| hook | 00:00.000–00:03.033 (f0–f91) | 8% | Cold open on splayed dog as ice fractures, geese burst past, and dog falls through | Pulls back from tight `M` panic pose to `W` chaos, letting foreground geese create kinetic depth before the plunge (`cold_open_crisis`) |
-| escalation | 00:03.033–00:07.100 (f91–f213) | 11% | Teen owner sprints from shore and crashes through the ice right behind his dog | Continuous push-in to teen followed by rising pullback frames both victims while covertly revealing the driveway hero in BG (`but_therefore`) |
-| setup | 00:07.100–00:13.367 (f213–f401) | 17% | Introduces professional jump-roper across street; he grabs spare rope and charges toward pond | High-speed dolly bridge maintains spatial geography (`ZACK D FILMS` truck Easter egg); neon-yellow rope pulse (`f369–f381`) spotlights the unlikely tool before a dark torso lens-wipe |
-| escalation | 00:13.367–00:20.767 (f401–f623) | 20% | Ice groans under rescuer's boots; dog shakes dry and escapes while teen remains hypothermic and trapped | Hidden cut flips perspective behind rescuer, dropping to shallow-DOF boots over radiating cracks before whipping to the dog and pushing onto the teen |
-| escalation | 00:20.767–00:25.000 (f623–f750) | 11% | Rescuer hurls one jump rope; teen reaches up and grabs the orange handle | Radial pullback reveals throw, then subject-locked tracking rides the handle to rest before rack-focusing onto the desperate grab |
-| twist | 00:25.000–00:29.000 (f750–f870) | 11% | Ice ledge shatters under teen's grip, plunging him back underwater in slow motion | Crisp polygonal ice collapse and slow-mo suspended splash droplets maximize false-victory shock right before the `card_flip` reset |
-| resolution | 00:29.000–00:36.867 (f870–f1106) | 22% | Second throw succeeds with bystander help; teen stays flat, slides out, and survives | High-energy `card_flip` restarts momentum; pull-back reveals teamwork, then push-in along taut rope and final crane-up deliver physical relief as BGM warms |
-
----
+| hook | 00:00.000–00:03.100 (f0–f93) | 8% | Dog chases geese and breaks through thin ice | Pull-back widens from splayed dog to pond peril (`cold_open_crisis`) |
+| setup | 00:03.133–00:13.367 (f94–f401) | 28% | Owner falls in; jump-roper hears and charges over | Continuous cross-street glide links crisis to hero with emissive rope cue |
+| escalation | 00:13.433–00:20.933 (f403–f628) | 20% | Ice cracks under rescuer; dog escapes, teen remains trapped | Occlusion wipe teleports onto pond; rack focus reveals dog survived, raising stakes |
+| twist | 00:20.967–00:29.000 (f629–f870) | 22% | First rope throw fails as ice crumbles under teen | Projectile-locked camera + rack focus build hope right before ice collapses |
+| resolution | 00:29.033–00:36.867 (f871–f1106) | 22% | Card flip to second throw; teen stays flat and escapes | 3D card flip resets momentum; smooth tow-out and warm BGM resolve danger |
 
 ### 3. Macro Shot, Boundary & Craft Pattern Spine
-
 | ID | Time & Frames | Boundary | Scale / Angle | Camera, Motion & Dominant Craft `[Category]` | Conf |
 | --- | --- | --- | --- | --- | --- |
-| S01 | 00:00.000–00:03.033 (f0–f91) | Opening | W / high | Smooth dolly pull-back (`M→W`) from panicked dog on crisp sunlit ice as blurred geese cross FG and dog plunges in `[Camera, Framing & Staging]` | High |
-| S01b | 00:03.033–00:07.100 (f91–f213) | Continuous [NO CUT] (dolly reversal) | M / high | Pushes forward past ice hole onto sprinting teen, then pulls up as cyan ice fractures under his feet and he crashes in `[Motion, Acting & Prop State]` | High |
-| S01c | 00:07.100–00:08.200 (f213–f246) | Continuous [NO CUT] (rapid dolly surge) | M / eye | High-speed forward dolly surges over teen's flailing hand across pond and street onto seated jump roper by branded truck `[Transitions & Continuity]` | High |
-| S01d | 00:08.200–00:13.367 (f246–f401) | Continuous [NO CUT] (slow push-in) | MCU / eye | Push-in (`M→MCU`) as man stands, coiled rope pulses bright emissive yellow (`f369–f381`), and he runs into lens for dark torso wipe `[VFX, Cutaways & Graphics]` | High |
-| S02 | 00:13.367–00:17.167 (f401–f515) | Hidden Cut (torso occlusion wipe, f401→f403) | INSERT / ground | 180-degree reverse behind rescuer; camera drops onto orange boots in shallow DOF as sharp ice cracks spiderweb and blurred dog escapes BG `[Optics: Blur, DOF & Temporal]` | High |
-| S02b | 00:17.167–00:19.167 (f515–f575) | Continuous [NO CUT] (fast whip-pan) | M / eye | Camera-pan motion blur (`f516–f521`) whips past boots onto wet husky shaking radial white water streaks and trotting past screen-left `[Optics: Blur, DOF & Temporal]` | High |
-| S02c | 00:19.167–00:20.767 (f575–f623) | Continuous [NO CUT] (push-in past dog) | MCU / eye | Camera glides past dog's tail to isolate pale, shivering teen gripping icy ledge in deep cold water `[Lighting, Color & Materials]` | High |
-| S02d | 00:20.767–00:21.533 (f623–f646) | Continuous [NO CUT] (radial pull-back) | M / eye | Fast backward dolly with radial ice motion blur pulls behind rescuer winding up and hurling the jump rope `[Camera, Framing & Staging]` | High |
-| S02e | 00:21.533–00:25.000 (f646–f750) | Continuous [NO CUT] (tracking & rack focus) | INSERT / ground | Tracks sliding orange handle to stop (`f675`), then pulls sharp rack focus (`f714–f725`) onto teen's face and reaching hand grabbing handle `[Optics: Blur, DOF & Temporal]` | High |
-| S02f | 00:25.000–00:29.000 (f750–f870) | Continuous [NO CUT] (crane-up on collapse) | M / high | Polygonal ice slabs fracture and fluid splash erupts as camera rises and droplet spray hangs in slow-mo (`f810–f870`) `[VFX, Cutaways & Graphics]` | High |
-| S03 | 00:29.000–00:29.667 (f870–f890) | Transition (card_flip, f871–f876) | M / eye | Y-axis 3D card flip across black margin pivots into rescuer spinning and flinging second rope handle toward pond `[Transitions & Continuity]` | High |
-| S03b | 00:29.667–00:31.500 (f890–f945) | Continuous [NO CUT] (push-in to handle) | CU / eye | Camera pushes forward onto suspended orange handle as teen's hand bursts through splash to lock a two-handed grip `[Motion, Acting & Prop State]` | High |
-| S03c | 00:31.500–00:32.833 (f945–f985) | Continuous [NO CUT] (rapid pull-back) | M / high | Pulls back along taut rope as bystander enters screen-left (`f953`) and braces beside rescuer to haul together `[Camera, Framing & Staging]` | High |
-| S03d | 00:32.833–00:35.167 (f985–f1055) | Continuous [NO CUT] (push-in along rope) | M / eye | Pushes between rescuers' shoulders down taut rope line, framing teen sliding smoothly belly-flat out of water onto solid ice `[Motion, Acting & Prop State]` | High |
-| S03e | 00:35.167–00:36.867 (f1055–f1106) | Continuous [NO CUT] (crane-up resolution) | W / high | Smoothly cranes up as both men and husky gather around rescued teen over hard sunlight shadows, resolving to warm BGM tone `[Audio-Visual Sync & Soundscape]` | High |
-
----
+| S01a | 00:00.000–00:03.100 (f0–f93) | Opening | W / eye | Smooth pull-back widens past FG geese as dog falls in `[Camera, Framing & Staging]` | High |
+| S01b | 00:03.133–00:07.333 (f94–f220) | Continuous [NO CUT] (pivot to push-in) | M / eye | Push-in tracks running teen plunging through ice while branded truck enters BG `[Motion, Acting & Prop State]` | High |
+| S01c | 00:07.367–00:11.467 (f221–f344) | Continuous [NO CUT] (glide across street) | MCU / eye | Camera sweeps over splash across road onto seated jump-roper reacting `[Camera, Framing & Staging]` | High |
+| S01d | 00:11.500–00:13.367 (f345–f401) | Continuous [NO CUT] (tilt & charge) | CU / eye | Hero grabs rope (brief neon-yellow emissive pulse) and runs straight into lens `[Lighting, Color & Materials]` | High |
+| S02a | 00:13.433–00:14.000 (f403–f420) | Hidden Cut (jacket occlusion wipe, f401→f403) | M / eye | Emerges behind hero running across pond before booming down to boots `[Transitions & Continuity]` | High |
+| S02b | 00:14.033–00:17.133 (f421–f514) | Continuous [NO CUT] (boom settle on boots) | CU / ground | Side-track on orange boots as polygonal ice cracks beneath, BG dog blurred `[Optics: Blur, DOF & Temporal]` | High |
+| S02c | 00:17.167–00:19.267 (f515–f578) | Continuous [NO CUT] (fly-in & rack focus) | M / eye | Fast truck past boot racks focus onto dog shaking off radial water spray `[Optics: Blur, DOF & Temporal]` | High |
+| S02d | 00:19.300–00:20.767 (f579–f623) | Continuous [NO CUT] (dog exit reveal) | MCU / eye | Dog clears screen-left revealing shivering teen clinging to ice ledge `[Camera, Framing & Staging]` | High |
+| S02e | 00:20.800–00:21.533 (f624–f646) | Continuous [NO CUT] (whip pull-back) | M / eye | Fast directional-blur pull-back reveals hero behind hurling jump rope `[Optics: Blur, DOF & Temporal]` | High |
+| S02f | 00:21.567–00:24.967 (f647–f749) | Continuous [NO CUT] (projectile lock) | INSERT / ground | Tracks sharp airborne orange handle over blurred ice, then racks focus to teen reaching `[Optics: Blur, DOF & Temporal]` | High |
+| S02g | 00:25.000–00:29.000 (f750–f870) | Continuous [NO CUT] (tilt down on collapse) | MCU / high | Ice ledge fractures and teen plunges back into dynamic fluid splash `[VFX, Cutaways & Graphics]` | High |
+| S03a | 00:29.033–00:29.633 (f871–f889) | Transition (card_flip, f871–f876) | M / eye | Vertical 3D card flip with whoosh lands on hero whipping second rope `[Transitions & Continuity]` | High |
+| S03b | 00:29.667–00:31.533 (f890–f946) | Continuous [NO CUT] (projectile lock) | CU / high | Tracks second orange handle into splashing hole as teen catches it two-handed `[Camera, Framing & Staging]` | High |
+| S03c | 00:31.567–00:32.833 (f947–f985) | Continuous [NO CUT] (pull-back along rope) | M / high | Pull-back up taut rope reveals hero and second helper bracing to haul `[Camera, Framing & Staging]` | High |
+| S03d | 00:32.867–00:35.033 (f986–f1051) | Continuous [NO CUT] (fly-through to teen) | MCU / eye | Glides between rescuers' shoulders down rope onto teen sliding flat on ice `[Motion, Acting & Prop State]` | High |
+| S03e | 00:35.067–00:36.867 (f1052–f1106) | Continuous [NO CUT] (crane pull-back) | M / high | Pull-back crane frames both rescuers and dog huddling over saved teen with 0.8s hold `[Audio-Visual Sync & Soundscape]` | High |
 
 ### 4. Structured Telemetry JSON
-
 ```json
 {
-  "schema_version": 1,
-  "duration_sec": 36.9,
-  "topic_category": "crime_disaster_accident",
-  "topic_sublabel": "thin_ice_rescue_incident",
+  "schema_version": 2,
+  "duration_sec": 36.867,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "history_weird_true_story",
+  "topic_sublabel": "thin_ice_jump_rope_rescue",
+  "emotional_driver": "visceral_shock_danger",
   "hook_archetype": "cold_open_crisis",
-  "opening_shot_sec": 3.033,
+  "opening_shot_sec": 3.1,
   "opening_spoken_line": "The ice started to break as the dog chased the geese.",
-  "hook_visual_trigger": "Wide-eyed husky splayed in panic on cracking pond ice as geese burst past and it plunges through",
+  "hook_visual_trigger": "Panicked husky splayed on cracking ice before breaking through",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
   "story_structure": "chronological_escalation_twist",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 68,
-  "rehook_timestamps_sec": [7.1, 17.2, 25.0],
+  "twist_at_pct": 47,
+  "outro_hold_sec": 0.8,
+  "rehook_timestamps_sec": [3.1, 7.3, 17.2, 25.5, 29.0],
   "story_beats": [
-    { "role": "hook", "start_sec": 0.0, "end_sec": 3.033, "pct_runtime": 8 },
-    { "role": "escalation", "start_sec": 3.033, "end_sec": 7.1, "pct_runtime": 11 },
-    { "role": "setup", "start_sec": 7.1, "end_sec": 13.367, "pct_runtime": 17 },
-    { "role": "escalation", "start_sec": 13.367, "end_sec": 20.767, "pct_runtime": 20 },
-    { "role": "escalation", "start_sec": 20.767, "end_sec": 25.0, "pct_runtime": 11 },
-    { "role": "twist", "start_sec": 25.0, "end_sec": 29.0, "pct_runtime": 11 },
-    { "role": "resolution", "start_sec": 29.0, "end_sec": 36.9, "pct_runtime": 22 }
+    { "role": "hook", "start_sec": 0.0, "end_sec": 3.1, "pct_runtime": 8 },
+    { "role": "setup", "start_sec": 3.133, "end_sec": 13.367, "pct_runtime": 28 },
+    { "role": "escalation", "start_sec": 13.433, "end_sec": 20.933, "pct_runtime": 20 },
+    { "role": "twist", "start_sec": 20.967, "end_sec": 29.0, "pct_runtime": 22 },
+    { "role": "resolution", "start_sec": 29.033, "end_sec": 36.867, "pct_runtime": 22 }
   ],
   "boundary_counts": {
     "hard_cut": 0,
     "hidden_cut": 1,
     "transition": 1,
-    "continuous": 12
+    "continuous": 13
   },
   "transition_types": ["card_flip"],
-  "shot_scale_counts": { "EW": 0, "W": 2, "M": 8, "MCU": 2, "CU": 1, "ECU": 0, "INSERT": 2 },
-  "camera_angle_counts": { "aerial": 0, "overhead": 0, "high": 5, "eye": 8, "low": 0, "ground": 2 },
-  "camera_energy": "snappy_whip_kinetic",
-  "dominant_lens_feel": "wide",
+  "camera_moves_used": [
+    "pull_back",
+    "push_in",
+    "dolly_track",
+    "whip_pan",
+    "crane_boom",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 1,
+    "M": 7,
+    "MCU": 4,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 1
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 4,
+    "eye": 10,
+    "low": 0,
+    "ground": 2
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "normal",
   "lighting_style": "natural_daylight",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "cool_moody_teal",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": false,
@@ -90,19 +113,27 @@
     "has_emissive_highlight_pulse": true,
     "has_pre_impact_silence": false,
     "has_jl_cut": false,
-    "has_time_remap_or_hit_stop": true,
+    "has_time_remap_or_hit_stop": false,
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[VICTIM] triggers [ESCALATING HAZARD], SO [SECOND PERSON] rushes in and gets trapped too -> ACROSS THE SCENE [UNLIKELY HERO] grabs [EVERYDAY PROP] -> FIRST ATTEMPT fails due to [PHYSICAL SETBACK], SO [HERO] adapts [SURVIVAL TECHNIQUE] to pull everyone out alive",
+  "reusable_script_template": "[VICTIM] enters sudden peril as [CHAIN REACTION] traps them, BUT [BYSTANDER] uses [UNEXPECTED EVERYDAY TOOL] -> [FIRST ATTEMPT FAILS] -> SO [TECHNIQUE ADJUSTMENT] saves them.",
   "secret_sauce_cues": [
-    "Unbroken 3D dolly/whip bridges across suburban geography paired with a character torso lens-wipe Hidden Cut",
-    "Brief emissive neon-yellow highlight pulse on the everyday rescue tool before action, plus ZACK D FILMS pickup decal Easter egg"
+    "Full-frame body-occlusion hidden cut teleporting across street onto frozen pond",
+    "Brief neon-yellow emissive highlight pulse on hero prop (jump rope) at pickup",
+    "Diegetic channel branding painted on background vehicle door ('ZACK D FILMS')"
   ],
-  "weaknesses_or_drag": [
-    "Slow-motion water splash hang at 00:27.0-00:29.0 lingers slightly on static mid-air droplets before the card flip"
-  ]
+  "weaknesses_or_drag": []
 }
 ```

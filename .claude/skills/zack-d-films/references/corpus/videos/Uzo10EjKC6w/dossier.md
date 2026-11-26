@@ -1,9 +1,10 @@
-### 1. Hook, Packaging & Channel DNA Summary
-- **Topic & Premise:** `history_weird_true_story` — A historical loyalty story (inspired by Greyfriars Bobby) about a terrier who refuses to leave his deceased owner's graveside for 14 years until his own death, driven by warmth, tragic loss, devotion, and heartwarming catharsis.
-- **Hook Anatomy (`0–3s`):** `character_story_setup` — Opens with the verbatim line *"He got a puppy so he wouldn't be alone"* over a `0.801s` (`f0–f24`) push-in onto a smiling man unlatching a pet carrier to reveal a shaggy puppy, immediately followed by a two-stage pull-back (`0.801–3.036s`) into a wide room to plant the emotional contrast of companionship versus isolation.
-- **Storytelling & Retention Engine:** `chronological_escalation_twist` propelled by a tight `but_therefore` causal chain (*got a puppy so... -> BUT one day passed away -> remained despite weather/coaxing -> SO news spread -> WHEN a new law banned unlicensed dogs -> SO the mayor paid -> SO he stayed forever*). Major visual/emotional re-hooks hit at `8.1s` (3D card-flip calendar skip), `10.9s` (sudden heart attack), `22.1s` (graveyard weather time-lapse), `36.7s` (dog caged under `"UNLICENSED DOG"` ban), and `44.0s` (`1901–1909` final calendar whip), culminating in a `satisfying_resolution` ghost reunion on the gravestone.
-- **Visual, Camera & Motion Signature:** Medium and wide 3D framing (`15` `M`, `7` `W`) anchored by dog-height `ground`/`low` angles (`10/27` rows) and `snappy_whip_kinetic` camera grammar (`0` hard cuts across 27 rows: `11` composited transitions, `10` continuous camera whips/racks/tracks, and `5` motion-blur `Hidden Cut` swaps). Uses `smooth_damped` easing, shallow DOF rack focuses, natural-to-moody dynamic lighting shifts, and diegetic 3D storytelling props (flipping calendars, newspaper front page, glowing `"UNLICENSED DOG"` cage sign, engraved headstone).
-- **Soundscape, Voice & Secret-Sauce:** `shifting_bgm_plus_vo` pairs steady, empathetic male narration (leading into transitions via mild `J-cut` phrasing) with background piano/strings that shift from warm (`0–10.8s`) to melancholic (`10.8–39.3s`) to poignant resolution (`39.3–53.9s`). Signature channel tricks (`secret_sauce_cues`): **same-room motion-blur snap cuts paired with accelerated solar/weather time-lapses** (`S02–S04`, `S08`) and **zero-hard-cut 3D camera spatial linking** (whip-tilting straight from sky calendars or cages onto characters in the same 3D environment).
+### 1. Hook, Packaging & Channel Soul Summary
+- **Medium, Topic & Emotional Premise:** `3d_stylized_cgi`, `third_person_characters`, `history_weird_true_story` — A lonely man adopts a puppy who refuses to leave his grave for 14 years after his death (`empathy_wholesome`).
+- **Hook Anatomy (`0–3s`):** `character_story_setup`; VO opens *"He got a puppy so he wouldn't be alone."* over `f0–f90`, latching onto a crate door opening to reveal a panting puppy (`f0–f51`), then snapping back via a radial pull-back (`f51–f90`) to establish the room.
+- **Storytelling, Retention & Linguistics:** Chronological biography (`other`) driven by `but_therefore` causality (*"But one day..."*, *"When a new law..."*, *"So he could stay..."*), delivered in a `warm_conversational` 3rd-person voice (`third_person_story`); re-hooks hit at `10.8s` (collapse), `26.6s` (rainstorm), and `36.7s` (capture), ending with a `satisfying_resolution` (`0.5s` outro hold, no twist).
+- **Camera, Framing & Editing Grammar:** Heavy `W` (`9`) and `M` (`10`) framing with low/eye angles and 4 `ground` shots; `smooth_damped_continuous` splines (`10` continuous camera moves including a 12.5s multi-beat cemetery oner) joined by `12` composited `Transition`s (`cross_dissolve`, `card_flip`, `push_up`), `3` `Hidden Cut`s inside whip/zoom smears, and `0` hard cuts.
+- **Optics, Motion, Look-Dev & VFX:** Full motion-blur suite (camera-turn whips, radial pull-backs, and object blur on crate door/calendar pages/cash), strong `shallow_dof` with 3 deliberate rack-focus pulls, `smooth_damped` easing, mixed warm daylight vs. cool blue night/rain lighting (`mixed` shadows/palette), static centered `phrase_chunked_static` captions, plus an emissive text pulse (`UNLICENSED DOG`), rain/fountain fluids, ghost alpha compositing, and a creator-portrait $100 bill cameo (`has_diegetic_channel_branding`).
+- **Soundscape & Secret-Sauce:** `shifting_bgm_plus_vo` (`mixed_shifting` mood: gentle piano → somber strings/drone → uplifting swell) with `moderate_punctuated` SFX (whooshes, page flips, latch/rain ambience) and VO `J-cuts` leading transitions; signature tricks are **whip/zoom-smear hidden cuts**, **long multi-beat continuous camera choreos with time-lapse lighting sweeps**, and **creator-cameo props**.
 
 ---
 
@@ -11,12 +12,13 @@
 
 | Beat | Time & Frames | Pct | Narrative & Script Function | Directorial Intent (Why this visual/edit/audio choice?) |
 | --- | --- | --- | --- | --- |
-| hook | 00:00.000–00:03.036 (f0–f91) | 6% | Establishes the premise: *"He got a puppy so he wouldn't be alone."* | Intimate push-in onto carrier reveal (`f0–f24`) builds instant affection, then fast pull-back to empty wide room (`f24–f91`) visualizes loneliness. |
-| setup | 00:03.036–00:10.878 (f91–f326) | 15% | Compresses years of daily companionship and night street patrols (`1890–1896`). | Window solar time-lapses + motion-blur `Hidden Cut` montage (`f150`, `f197`) and a 3D `card_flip` calendar (`f242–f272`) establish deep routine fast without drag. |
-| escalation | 00:10.878–00:31.932 (f326–f957) | 39% | *But* pivot: owner suddenly dies; dog refuses to leave his grave through weather, coaxing, and hunger. | BGM turns somber (`10.8s`) as dramatic crane-up (`f330–f422`), departing mourners rack-focus (`f585–f659`), rapid grave weather time-lapse (`f666–f722`), and crash-zoom food reveal (`f881–f884`) sustain momentum. |
-| visual_proof | 00:31.932–00:36.670 (f957–f1099) | 9% | Newspaper spreads the story (*"Loyal Dog Waits"*) and visitors gather to photograph him. | Overhead newspaper `INSERT` (`f959–f1012`) grounds the legend as factual history before racking focus from onlookers onto the steadfast dog (`f1039–f1060`). |
-| twist | 00:36.670–00:44.044 (f1099–f1320) | 13% | Sudden obstacle (`68%` mark): law bans unlicensed dogs and cages him, *until* the Mayor pays his fee. | Policeman latching cage + warm orange emissive pulse on `"UNLICENSED DOG"` (`f1143–f1178`) sparks outrage; whip-tilt up to Mayor fanning `$100`s (`f1179–f1271`) delivers immediate relief. |
-| resolution | 00:44.044–00:53.854 (f1320–f1614) | 18% | After 14 years (`1901–1909`), the dog passes away; a statue honors him, reuniting him in spirit. | Whip-tilt down from calendar directly onto the frail dog collapsing (`f1376–f1442`), then pans from memorial statue (`f1476–f1494`) to a translucent ghost reunion over the headstone (`f1509–f1614`). |
+| hook | 00:00.000–00:03.003 (f0–f90) | 6% | Introduces lonely owner adopting a puppy (`character_story_setup`) | Opens close on crate reveal (`f0–f51`), then radial-whips out to `W` (`f51–f90`) to establish living space before time jumps |
+| setup | 00:03.003–00:10.844 (f90–f325) | 14% | Shows inseparable daily companionship and years of night patrols (`1890–1896`) | Uses rapid time-lapse lighting, `card_flip` (`f242`), and floating 3D year calendar to compress years into 8 seconds |
+| escalation | 00:10.844–00:21.989 (f325–f659) | 21% | Owner collapses and dies; after funeral, dog stays by grave alone | Music drops somber at *"But one day"*; unbroken 12.5s continuous camera crane/rack-focus tracks from deathbed to lone vigil |
+| escalation | 00:21.989–00:31.932 (f659–f958) | 18% | Endures rain and weather, leaving only once daily to eat | High-angle weather time-lapse + muzzle-zoom `Hidden Cut` (`f882`) visually proves relentless multi-year devotion |
+| visual_proof | 00:31.932–00:36.703 (f958–f1101) | 9% | Newspaper prints the story and crowds visit to photograph him | `push_up` newspaper insert and smiling onlookers with camera validate historical fame |
+| escalation | 00:36.703–00:42.409 (f1101–f1272) | 11% | New law cages unlicensed dog until mayor pays his license | Emissive red/amber pulse on `"UNLICENSED DOG"` spikes stakes before whip-tilt reveals rescuing mayor (`$100` Easter egg) |
+| resolution | 00:42.409–00:53.854 (f1272–f1614) | 21% | Freed for 14 years until `1909` death; statue erected and ghostly reunion | Rapid calendar whip (`f1319→f1378`) resolves death, bronze statue pan (`f1476`), and translucent spirit reunion on grave |
 
 ---
 
@@ -24,35 +26,32 @@
 
 | ID | Time & Frames | Boundary | Scale / Angle | Camera, Motion & Dominant Craft `[Category]` | Conf |
 | --- | --- | --- | --- | --- | --- |
-| S01a | 00:00.000–00:00.801 (f0–f24) | Opening | M / eye | Damped push-in as smiling man swings wire pet carrier door `screen-right` to `screen-left`, revealing panting puppy `[Motion, Acting & Prop State]` | High |
-| S01b | 00:00.801–00:03.036 (f24–f91) | Continuous [NO CUT] (two-stage pull-back) | W / eye | Smooth pull-back (`f25–f51`) accelerates into fast radial pull-back with motion blur (`f53–f60`), settling wide on spacious sunny room `[Camera, Framing & Staging]` | High |
-| S02 | 00:03.036–00:05.005 (f91–f150) | Transition (cross_dissolve, f91–f95) | M / ground | Cross-dissolve to ground-level view of man lying beside walking dog while background window cycles rapidly from night to daylight `[Lighting, Color & Materials]` | High |
-| S03 | 00:05.005–00:06.573 (f150–f197) | Hidden Cut (motion-blur pose/prop swap) | W / eye | Directional motion smear (`f150`) swaps lying man for cross-legged pose petting dog at blue bowl as sunlight beam sweeps floor `[Transitions & Continuity]` | High |
-| S04 | 00:06.573–00:08.075 (f197–f242) | Hidden Cut (motion-blur pose/prop swap) | W / eye | Horizontal blur (`f197→f199`, `f198` unseen) swaps floor bowl shot onto man lounging on Chesterfield sofa with dog as sky cycles dusk-to-sunset `[Lighting, Color & Materials]` | Med |
-| S05a | 00:08.075–00:09.076 (f242–f272) | Transition (card_flip, f242–f247→f249) | M / eye | 3D vertical card flip opens to blue night street walk; man holds glowing lantern (translucent beam cone) beneath flipping `1890→1896` calendar `[VFX, Cutaways & Graphics]` | High |
-| S05b | 00:09.076–00:10.878 (f272–f326) | Continuous [NO CUT] (pull-back & orbit track) | M / eye | Calendar exits (`f272→f274`) as dog joins; camera pulls back and orbits with brief motion blur (`f304–f307`) to 3/4 front tracking patrol under full moon `[Camera, Framing & Staging]` | High |
-| S06a | 00:10.878–00:12.012 (f326–f360) | Transition (cross_dissolve, f326–f329) | M / eye | Cross-dissolve (`J-cut` VO lead `"But one day"`) into blue-lit room as man clutches chest, knees buckling backward as camera begins rising `[Audio-Visual Sync & Soundscape]` | High |
-| S06b | 00:12.012–00:14.081 (f360–f422) | Continuous [NO CUT] (crane-up tilt-down) | M / high | Smooth crane-up pitches to steep high angle over blue spotlight pool as man lies motionless and dog enters from `screen-right` to sniff his shoulder `[Camera, Framing & Staging]` | High |
-| S07a | 00:14.081–00:15.115 (f422–f453) | Transition (cross_dissolve, f422–f423→f425) | W / eye | Zoom-blurred cross-dissolve into bright churchyard funeral; pull-back reveals pastor reading Bible flanked by stone chapel `screen-left` and seated mourners `[Optics: Blur, DOF & Temporal]` | High |
-| S07b | 00:15.115–00:18.118 (f453–f543) | Continuous [NO CUT] (pull-back, rack focus & truck left) | M / ground | Low pull-back introduces dog and headstone in foreground (`f453–f458`), racks focus forward (`f458–f462`), and trucks left to frame `"JOHN TRAILL 1835–1897"` `[Optics: Blur, DOF & Temporal]` | High |
-| S07c | 00:18.118–00:19.520 (f543–f585) | Continuous [NO CUT] (fast push-in) | MCU / ground | Radial-blurred push-in (`f545–f555`) crops past headstone onto dog resting chin on paws while background pastor/mourners clear out `[Camera, Framing & Staging]` | Med |
-| S07d | 00:19.520–00:22.055 (f585–f661) | Continuous [NO CUT] (pan-right & rack focus) | W / ground | Subtle pan right (`f586–f592`) and focus rack (`f593–f600`) shift sharpness past blurred foreground dog onto four mourners departing `screen-left` to `screen-right` `[Optics: Blur, DOF & Temporal]` | High |
-| S08 | 00:22.055–00:24.258 (f661–f727) | Transition (vertical_push, f661–f664) | W / high | Vertical whip-push reveals high-angle grave slab; accelerated time-lapse cycles sun, cloud shadows, rain frost, and fast-moving legs (`f708–f711`) before whip-orbit starts (`f721`) `[Lighting, Color & Materials]` | High |
-| S09 | 00:24.258–00:26.593 (f727–f797) | Hidden Cut (rotational whip-smear swap) | CU / ground | Rotational whip blur (`f727–f729`) swaps dusk weather into golden sunset ground-level close-up of dog ignoring two blurred men coaxing behind `[Transitions & Continuity]` | High |
-| S10 | 00:26.593–00:29.429 (f797–f882) | Transition (cross_dissolve, f797–f799→f801) | M / ground | Cross-dissolve to misty rainy graveyard; smooth low dolly arc right frames dog sheltered beneath four-pillar stone tomb before radial crash-zoom (`f881–f882`) `[Camera, Framing & Staging]` | High |
-| S11 | 00:29.429–00:31.932 (f882–f957) | Hidden Cut (radial crash-zoom smear swap) | M / high | Peak muzzle smear (`f882`) reverses into rapid pull-back (`f883–f884`) into bright sunlit path as dog trots out from tomb to eat from clay bowl `[Transitions & Continuity]` | High |
-| S12 | 00:31.932–00:33.800 (f957–f1013) | Transition (cross_dissolve, f956→f958) | INSERT / overhead | Cross-dissolve (`J-cut` VO lead `"The news"`) onto aged `"Loyal Dog Waits."` newspaper front page resting on rustic wood, with slow overhead push-in `[Audio-Visual Sync & Soundscape]` | High |
-| S13 | 00:33.800–00:36.670 (f1013–f1099) | Transition (cross_dissolve, f1013–f1015→f1017) | M / low | Cross-dissolve to low angle behind sitting dog looking up at three visitors (camera photographer `screen-left`); focus racks from visitors to dog (`f1039–f1060`) `[Optics: Blur, DOF & Temporal]` | High |
-| S14a | 00:36.670–00:39.339 (f1099–f1179) | Transition (cross_dissolve, f1099–f1104) | MCU / eye | Cross-dissolve to policeman latching wire cage; `"UNLICENSED DOG"` plaque illuminates with warm orange emissive glow (`f1143–f1178`) as cash enters `screen-right` `[Lighting, Color & Materials]` | High |
-| S14b | 00:39.339–00:42.476 (f1179–f1273) | Continuous [NO CUT] (vertical whip-tilt up & rack focus) | MCU / low | Vertical whip-tilt up (`f1179–f1186`) reveals Mayor holding stack of `$100` bills, blinking thoughtfully (`f1203–f1208`) and pushing cash to lens (`f1230–f1239` rack focus) `[Optics: Blur, DOF & Temporal]` | High |
-| S15 | 00:42.476–00:44.044 (f1273–f1320) | Transition (cross_dissolve, f1272→f1274) | W / low | Cross-dissolve to Mayor unlatching cage (`f1275–f1281`), followed by fast radial pull-back (`f1283–f1298`) revealing headstone `screen-left` and departing bobby `screen-right` `[Camera, Framing & Staging]` | High |
-| S16a | 00:44.044–00:45.913 (f1320–f1376) | Hidden Cut (rotational whip-smear swap) | M / low | Rotational tan whip-smear (`f1318–f1321`) lands on giant floating spiral calendar flipping `1901→1909` against blue sky and white hills `[VFX, Cutaways & Graphics]` | High |
-| S16b | 00:45.913–00:48.181 (f1376–f1444) | Continuous [NO CUT] (vertical whip-tilt down) | M / high | Vertical whip-tilt straight down from sky (`f1376–f1384`) locks onto grave slab as aged dog stiffly collapses onto its side (`f1399–f1410`) and lies still `[Motion, Acting & Prop State]` | High |
-| S17a | 00:48.181–00:49.249 (f1444–f1476) | Transition (cross_dissolve, f1443→f1445) | M / eye | Cross-dissolve to bright churchyard fountain where a smiling woman pets the bronze dog memorial statue behind soft-focus candles `[Lighting, Color & Materials]` | High |
-| S17b | 00:49.249–00:50.350 (f1476–f1509) | Continuous [NO CUT] (horizontal whip-pan left) | M / eye | Fast horizontal whip-pan left (`f1476–f1492`, directional camera-turn blur) sweeps across churchyard fence to center directly on John Traill's headstone `[Camera, Framing & Staging]` | High |
-| S17c | 00:50.350–00:53.854 (f1509–f1614) | Continuous [NO CUT] (ghost overlay fade-in) | M / eye | Translucent cyan-white glowing spirit figures of John Traill (`f1509–f1535`) and the dog (`f1535–f1560`) fade in over the headstone, smiling and petting forever `[VFX, Cutaways & Graphics]` | High |
-
-*(Note: Subtle foley such as door latches, footsteps, and paper flips are masked by continuous narration and music at 1Kbps mono and are treated as visual cues only.)*
+| S01a | 00:00.000–00:01.702 (f0–f51) | Opening | M / eye | Slight push-in then hold as man unlatches crate door (object blur) to reveal panting puppy `[Motion, Acting & Prop State]` | High |
+| S01b | 00:01.702–00:03.003 (f51–f90) | Continuous [NO CUT] (fast radial pull-back) | W / eye | Rapid pull-back with radial motion blur (`f53–f63`) revealing full sunlit living room `[Camera, Framing & Staging]` | High |
+| S02 | 00:03.003–00:04.972 (f90–f149) | Transition (cross_dissolve, f90–f95) | W / low | Gentle push-in under cool blue moonlight as man lies on floor with puppy `[Lighting, Color & Materials]` | High |
+| S03 | 00:04.972–00:06.540 (f149–f196) | Transition (cross_dissolve, f149–f152) | W / low | Low locked-drift framing as man sits petting eating dog while time-lapse sunlight sweeps floor `[Lighting, Color & Materials]` | High |
+| S04 | 00:06.540–00:08.075 (f196–f242) | Transition (cross_dissolve, f196–f199) | W / eye | Slow push-in on sofa nap as time-lapse sunset shifts window from blue to orange `[Lighting, Color & Materials]` | High |
+| S05 | 00:08.075–00:10.844 (f242–f325) | Transition (card_flip, f242–f246) | W / low | Tracking walk beside lantern-lit night patrol beneath 3D flipping `1890–1896` calendar (`f302–f307` speed ramp) `[Transitions & Continuity]` | High |
+| S06a | 00:10.844–00:12.012 (f325–f360) | Transition (cross_dissolve, f325–f330) | M / eye | Camera cranes up and tilts down as man clutches chest and collapses backward in moonlight `[Motion, Acting & Prop State]` | High |
+| S06b | 00:12.012–00:14.114 (f360–f423) | Continuous [NO CUT] (crane-up to top-down) | M / overhead | Top-down settle holding on motionless body as dog noses his shoulder `[Camera, Framing & Staging]` | High |
+| S07a | 00:14.114–00:15.182 (f423–f455) | Transition (cross_dissolve, f422–f425) | W / eye | Smooth pull-back left across sunlit cemetery showing priest reading and seated mourners `[Camera, Framing & Staging]` | High |
+| S07b | 00:15.182–00:18.185 (f455–f545) | Continuous [NO CUT] (pull-back & rack focus) | MCU / ground | Pull-back drops to ground level behind tombstone and dog; shallow-DOF focus racks BG→FG `[Optics: Blur, DOF & Temporal]` | High |
+| S07c | 00:18.185–00:19.553 (f545–f586) | Continuous [NO CUT] (truck-right push-in) | CU / ground | Quick blurred slide tightens directly onto dog resting chin on paws `[Camera, Framing & Staging]` | High |
+| S07d | 00:19.553–00:21.989 (f586–f659) | Continuous [NO CUT] (truck-right & rack focus) | W / ground | Lateral slide racks focus FG→BG onto mourners departing past wooden lychgate `[Optics: Blur, DOF & Temporal]` | High |
+| S07e | 00:21.989–00:24.057 (f659–f721) | Continuous [NO CUT] (crane-up & timelapse) | W / high | Blurred crane-up over stone wall; high orbit holds through night/rain/sun time-lapse `[Lighting, Color & Materials]` | High |
+| S07f | 00:24.057–00:26.593 (f721–f797) | Continuous [NO CUT] (swoop-down orbit) | MCU / ground | Diving clockwise orbit lands in golden sunset backlight as two men coax dog `[Camera, Framing & Staging]` | High |
+| S08 | 00:26.593–00:29.396 (f797–f881) | Transition (cross_dissolve, f797–f801) | M / low | Subtle push-in on dog sheltering under stone table-tomb in heavy rain and puddles `[VFX, Cutaways & Graphics]` | High |
+| S09 | 00:29.396–00:31.932 (f881–f958) | Hidden Cut (zoom-in muzzle smear swap, f882) | M / high | Radial zoom into muzzle swaps from rainy shelter to sunny walk toward food bowl `[Transitions & Continuity]` | High |
+| S10 | 00:31.932–00:33.800 (f958–f1014) | Transition (push_up, f957–f959) | INSERT / overhead | Newspaper headline `"Loyal Dog Waits."` slides upward onto wooden desk with subtle push-in `[VFX, Cutaways & Graphics]` | High |
+| S11 | 00:33.800–00:36.703 (f1014–f1101) | Transition (cross_dissolve, f1013–f1017) | M / low | Slow hold as cemetery visitors stand admiring and photographing seated dog `[Camera, Framing & Staging]` | High |
+| S12a | 00:36.703–00:39.339 (f1101–f1180) | Transition (cross_dissolve, f1099–f1104) | M / eye | Officer latches wire cage; `"UNLICENSED DOG"` label glows amber-orange (`f1139–f1148`) `[Lighting, Color & Materials]` | High |
+| S12b | 00:39.339–00:42.409 (f1180–f1272) | Continuous [NO CUT] (fast tilt-up whip) | MCU / low | Fast whip-tilt up to mayor extending $100 bills (creator face cameo); focus racks face→cash `[Optics: Blur, DOF & Temporal]` | High |
+| S13 | 00:42.409–00:44.011 (f1272–f1319) | Transition (cross_dissolve, f1271–f1276) | W / eye | Mayor unlatches cage as radial pull-back reveals freed dog and departing officer `[Camera, Framing & Staging]` | High |
+| S14 | 00:44.011–00:45.979 (f1319–f1378) | Hidden Cut (whip-pan smear swap, f1319–f1320) | INSERT / low | Diagonal whip-pan lands on sky-bound calendar rapidly flipping `1901–1909` `[Transitions & Continuity]` | High |
+| S15 | 00:45.979–00:48.115 (f1378–f1442) | Hidden Cut (vertical whip-down smear swap, f1379–f1383) | M / high | Vertical whip-down swaps to high angle over grave showing lifeless dog `[Transitions & Continuity]` | High |
+| S16a | 00:48.115–00:49.249 (f1442–f1476) | Transition (cross_dissolve, f1442–f1446) | M / eye | Girl pets bronze dog statue beside candle-lit fountain in crisp daylight `[Camera, Framing & Staging]` | High |
+| S16b | 00:49.249–00:50.350 (f1476–f1509) | Continuous [NO CUT] (whip-pan left) | MCU / eye | Fast rotational whip-pan left across graveyard settles squarely on John Traill's headstone `[Camera, Framing & Staging]` | High |
+| S16c | 00:50.350–00:53.854 (f1509–f1614) | Continuous [NO CUT] (pull-back & ghost alpha fade-in) | M / eye | Slight pull-back as cyan translucent ghosts of owner and dog fade in sitting together `[VFX, Cutaways & Graphics]` | High |
 
 ---
 
@@ -60,41 +59,54 @@
 
 ```json
 {
-  "schema_version": 1,
-  "duration_sec": 53.854,
+  "schema_version": 2,
+  "duration_sec": 53.9,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "history_weird_true_story",
-  "topic_sublabel": "loyal_dog_historical_story",
+  "topic_sublabel": "loyal_dog_grave_vigil",
+  "emotional_driver": "empathy_wholesome",
   "hook_archetype": "character_story_setup",
-  "opening_shot_sec": 0.801,
+  "opening_shot_sec": 1.702,
   "opening_spoken_line": "He got a puppy so he wouldn't be alone.",
-  "hook_visual_trigger": "Man opens pet carrier door revealing shaggy puppy, then camera pulls back into empty room",
-  "story_structure": "chronological_escalation_twist",
+  "hook_visual_trigger": "Man unlatches crate door revealing panting puppy before radial pull-back reveals room",
+  "narration_pov": "third_person_story",
+  "voice_delivery": "warm_conversational",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "other",
   "narrative_connector": "but_therefore",
   "ending_type": "satisfying_resolution",
-  "twist_at_pct": 68,
-  "rehook_timestamps_sec": [8.1, 10.9, 22.1, 36.7, 44.0],
+  "twist_at_pct": null,
+  "outro_hold_sec": 0.5,
+  "rehook_timestamps_sec": [10.8, 26.6, 36.7],
   "story_beats": [
-    { "role": "hook", "start_sec": 0.0, "end_sec": 3.036, "pct_runtime": 6 },
-    { "role": "setup", "start_sec": 3.036, "end_sec": 10.878, "pct_runtime": 15 },
-    { "role": "escalation", "start_sec": 10.878, "end_sec": 31.932, "pct_runtime": 39 },
-    { "role": "visual_proof", "start_sec": 31.932, "end_sec": 36.67, "pct_runtime": 9 },
-    { "role": "twist", "start_sec": 36.67, "end_sec": 44.044, "pct_runtime": 13 },
-    { "role": "resolution", "start_sec": 44.044, "end_sec": 53.854, "pct_runtime": 18 }
+    { "role": "hook", "start_sec": 0.0, "end_sec": 3.003, "pct_runtime": 6 },
+    { "role": "setup", "start_sec": 3.003, "end_sec": 10.844, "pct_runtime": 14 },
+    { "role": "escalation", "start_sec": 10.844, "end_sec": 21.989, "pct_runtime": 21 },
+    { "role": "escalation", "start_sec": 21.989, "end_sec": 31.932, "pct_runtime": 18 },
+    { "role": "visual_proof", "start_sec": 31.932, "end_sec": 36.703, "pct_runtime": 9 },
+    { "role": "escalation", "start_sec": 36.703, "end_sec": 42.409, "pct_runtime": 11 },
+    { "role": "resolution", "start_sec": 42.409, "end_sec": 53.854, "pct_runtime": 21 }
   ],
   "boundary_counts": {
     "hard_cut": 0,
-    "hidden_cut": 5,
-    "transition": 11,
+    "hidden_cut": 3,
+    "transition": 12,
     "continuous": 10
   },
-  "transition_types": ["cross_dissolve", "card_flip", "vertical_push"],
-  "shot_scale_counts": { "EW": 0, "W": 7, "M": 15, "MCU": 3, "CU": 1, "ECU": 0, "INSERT": 1 },
-  "camera_angle_counts": { "aerial": 0, "overhead": 1, "high": 4, "eye": 12, "low": 4, "ground": 6 },
-  "camera_energy": "snappy_whip_kinetic",
+  "transition_types": ["cross_dissolve", "card_flip", "push_up"],
+  "camera_moves_used": ["push_in", "pull_back", "dolly_track", "orbit_arc", "whip_pan", "crane_boom", "tilt_pan"],
+  "shot_scale_counts": { "EW": 0, "W": 9, "M": 10, "MCU": 4, "CU": 1, "ECU": 0, "INSERT": 2 },
+  "camera_angle_counts": { "aerial": 0, "overhead": 2, "high": 3, "eye": 10, "low": 7, "ground": 4 },
+  "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "mixed",
   "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "mixed",
   "easing_energy": "smooth_damped",
   "audio_bed_style": "shifting_bgm_plus_vo",
+  "bgm_mood": "mixed_shifting",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": false,
     "has_diegetic_text_or_labels": true,
@@ -106,16 +118,23 @@
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": true,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[PROTAGONIST] adopts/starts [HUMBLE COMPANION/ROUTINE] so [EMOTIONAL NEED], BUT [SUDDEN LOSS/CRISIS] -> SO [UNWAVERING DEVOTION DESPITE HARDSHIP] -> TWIST [NEW EXTERNAL THREAT/LAW] -> RESOLUTION [UNEXPECTED RESCUE & ETERNAL LEGACY]",
+  "reusable_script_template": "[CHARACTER] starts [ORDINARY BOND], BUT [SUDDEN LOSS] triggers [RELENTLESS HABIT] -> [OBSTACLE THREATENS HABIT] -> [ALLY INTERVENES] -> [BITTERSWEET FOREVER PAYOFF].",
   "secret_sauce_cues": [
-    "Zero-hard-cut spatial storytelling: chains scenes via whip-tilts/whip-pans inside one unified 3D environment and motion-blur pose/prop Hidden Cuts",
-    "Accelerated environmental sun/cloud/rain time-lapses over static characters paired with diegetic 3D time props (floating spiral calendars, newspaper print, glowing cage placard)"
+    "Whip-pan and muzzle-zoom smear Hidden Cuts that maintain kinetic flow across time/location jumps",
+    "Extended 12.5s single-take camera choreo chaining rack focuses, ground-to-high cranes, and weather time-lapses",
+    "Diegetic creator cameo portrait printed on the $100 bill foreground prop"
   ],
-  "weaknesses_or_drag": [
-    "Historical prop continuity mismatch: gravestone reads John Traill (1835-1897, Dunfermline) while newspaper reads May 17, 1896 (Sergeant John C. Whitman, Oak Hill) and the Mayor hands modern-style US $100 bills with a creator portrait",
-    "Visible walk-cycle treadmill cropping before pull-back in S05a and hard-edged triangular lantern beam geometry"
-  ]
+  "weaknesses_or_drag": []
 }
 ```

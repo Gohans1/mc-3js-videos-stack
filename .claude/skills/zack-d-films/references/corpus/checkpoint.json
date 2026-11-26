@@ -1,129 +1,390 @@
 {
   "channel": "zack-d-films",
-  "updatedAt": "2026-11-22T21:41:54.996Z",
-  "completedCount": 17,
-  "failedCount": 3,
+  "updatedAt": "2026-11-24T04:09:42.262Z",
+  "completedCount": 64,
+  "failedCount": 0,
   "entries": {
     "lEXSVWGubLo": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:18:36.631Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1oRfwnxniI9f3_L-UP9UOMq85n5qHF_Dp",
+      "updatedAt": "2026-11-23T15:49:13.336Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1c550XjQ2KA9srGL-3uewf8hXglzJ7PIa",
       "attempts": 1
     },
     "0BZ1C83I2R4": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:18:38.384Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1bHc6zimJg8Svc2Z17rc-EkOd91vQjUHk",
+      "updatedAt": "2026-11-23T15:39:58.538Z",
+      "chatUrl": "https://aistudio.google.com/prompts/18wnWlYMt2JJBmQs70hHpcR_l_3rn5XIj",
       "attempts": 1
     },
     "rPWvvcttpmk": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:24:49.644Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1RjIbGmKyHY7Y1E3JeUmhLrWmM0CFZ3GU",
+      "updatedAt": "2026-11-23T15:44:58.076Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1MN5nAMczm5EGZ5eOutJZAQUbDlHBycrp",
       "attempts": 1
     },
     "CRGWDiIgMZ4": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:24:16.661Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1HsZs54soVqehmrK3nP36NV8OJ7_0qB_t",
+      "updatedAt": "2026-11-23T15:40:35.078Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1luLlIwluKcCAR057fgSUatizETEn8eyU",
       "attempts": 1
     },
     "fUmofQCc_4s": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:29:06.324Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1GzJJ7sKvWjcTb1Xo3IpOYFozqf1zJ4R9",
+      "updatedAt": "2026-11-23T15:45:22.099Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1ODV-53VeWLLTnK-dazcYaMBbFKvakfwM",
       "attempts": 1
     },
     "5puZlZQNArc": {
       "status": "done",
-      "updatedAt": "2026-11-22T19:28:42.922Z",
-      "chatUrl": "https://aistudio.google.com/prompts/12w__JiMSR8dQpimed6neL-3djifk6rGu",
+      "updatedAt": "2026-11-23T15:49:30.722Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1qcvbJ5Q802QuLMeWAUwU2MOjTkiMcklW",
       "attempts": 1
     },
     "7i6ok0llYUc": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:14:04.036Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1C4cCSXw8TTmyFlGh12ozyWBbW5lVU9yD",
+      "updatedAt": "2026-11-23T16:09:47.282Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1pnPCCc-TGn1elXJ4Q3na9HA-MJ5QAlFq",
       "attempts": 1
     },
     "SGgYDfeHYXA": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:15:20.663Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1T08TXZAztGMx25eX37YF2Jsdfi5iUvhY",
+      "updatedAt": "2026-11-23T15:57:26.932Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1ZqUyfohlq1hjW77GH_DZ4hAGgZcy6IM2",
       "attempts": 1
     },
     "320fjAdEboQ": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:19:46.991Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1iv_iPX1mUwFqLxRptX6sFAhACmP1UMGH",
+      "updatedAt": "2026-11-23T16:16:51.572Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1Bz5uq6ZcSO1KqVb28Zgrxj1JDjc7M96w",
       "attempts": 1
     },
     "UgP7_6_i1J4": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:20:07.357Z",
-      "chatUrl": "https://aistudio.google.com/prompts/157Nr74srQjx5Mkjc8nDeMzMEtmpFVWFd",
+      "updatedAt": "2026-11-23T16:21:00.008Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1XmJno0fbV6Md9e2yL1t5Cxys9nXTbT1Z",
       "attempts": 1
     },
     "NdKRD1j9juE": {
-      "status": "failed",
-      "updatedAt": "2026-11-22T21:22:45.565Z",
-      "chatUrl": null,
-      "attempts": 2,
-      "error": "✗ [14/15] copy answer failed: \"Copy as markdown\" of turn -1 copied nothing |   screenshot: C:\\Users\\ADMIN\\AppData\\Local\\Temp\\aistudio-failed-cdna2-step14.png"
+      "status": "done",
+      "updatedAt": "2026-11-23T13:43:29.326Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1KMy7cYkXXpJhzmvfJWKIx9vV-woSrCCo",
+      "attempts": 2
     },
     "OXRzmyOMKVw": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:25:11.413Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1ioKMzyvv1zG66YWUlXHxwphFs8v5-2yn",
+      "updatedAt": "2026-11-23T16:39:27.228Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1-sWLpu9zWYBqgoEPxZPw7dvcs2NRv6Fd",
       "attempts": 1
     },
     "Uzo10EjKC6w": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:27:53.366Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1volSR9bSHTfpcriKPtmEGM4WIFtjhbxU",
+      "updatedAt": "2026-11-23T16:50:16.280Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1qgD2gbESUpD262ORmI2AuXMt1fs7-_Ma",
       "attempts": 1
     },
     "epP7TB8n3ZU": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:28:40.513Z",
-      "chatUrl": "https://aistudio.google.com/prompts/10lswqfCqFDg0rKdIz-dk9kviibH2vZBD",
+      "updatedAt": "2026-11-23T16:46:04.231Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1uBDfrxKyA3rps_pLNBbwn0UXWfqQmt_i",
       "attempts": 1
     },
     "HF1K91wSTTc": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:31:46.108Z",
-      "chatUrl": "https://aistudio.google.com/prompts/1D18HaXjp-ME6JF17o-b7TWGl29YzfetA",
+      "updatedAt": "2026-11-23T16:42:54.148Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1JyqrmnIruwhWyMlZe0ADfEoNqV9_Iinb",
       "attempts": 1
     },
     "tFbYLBxBB00": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:34:52.712Z",
-      "chatUrl": null,
+      "updatedAt": "2026-11-23T16:20:00.647Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1z-YWIzsjMfI-Z9HAGepeU69IyOsPDsl5",
       "attempts": 1
     },
     "LjHDUQ7Htvk": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:38:33.341Z",
-      "chatUrl": null,
+      "updatedAt": "2026-11-23T16:47:34.053Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1PXhg5CxrzmhQGyYXBW0NblUWaTdfVk-N",
       "attempts": 1
     },
     "KBfPDWqZ28I": {
-      "status": "failed",
-      "updatedAt": "2026-11-22T21:38:36.239Z",
-      "chatUrl": null,
-      "attempts": 0,
-      "error": "yt-dlp download failed: ERROR: [youtube] KBfPDWqZ28I: Sign in to confirm you�re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+      "status": "done",
+      "updatedAt": "2026-11-23T16:33:09.754Z",
+      "chatUrl": "https://aistudio.google.com/prompts/10-cIpFfR5gwNp0KXgzWgvto3FdVkkk7P",
+      "attempts": 2
     },
     "vhxGX3kQMXQ": {
-      "status": "failed",
-      "updatedAt": "2026-11-22T21:38:39.074Z",
-      "chatUrl": null,
-      "attempts": 0,
-      "error": "yt-dlp download failed: ERROR: [youtube] vhxGX3kQMXQ: Sign in to confirm you�re not a bot. Use --cookies-from-browser or --cookies for the authentication. See  https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp  for how to manually pass cookies. Also see  https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies  for tips on effectively exporting YouTube cookies"
+      "status": "done",
+      "updatedAt": "2026-11-23T16:37:12.239Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1PNsujrv_snE3xeHXx2YJ-6AGykJuGpS2",
+      "attempts": 1
     },
     "QXEr924US38": {
       "status": "done",
-      "updatedAt": "2026-11-22T21:41:54.993Z",
+      "updatedAt": "2026-11-23T16:40:40.777Z",
+      "chatUrl": "https://aistudio.google.com/prompts/140OvbAS2eTu18X9pt4N7VA93AkrAqbIX",
+      "attempts": 1
+    },
+    "5ZujVDQGBkg": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:51:38.336Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1XEzO3OUVjRmumma3CxHbqy79URZLFsbP",
+      "attempts": 1
+    },
+    "HRKMEASZSo8": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:53:33.688Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1EfHN4_MT0XCIMp44Sb6WCLKRz1xq5Ymq",
+      "attempts": 1
+    },
+    "SI2yvZdmDGE": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:55:34.112Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1YsUoVb76zBY7MrkddG5MOL7AlZd2sDxl",
+      "attempts": 1
+    },
+    "9h2K1ny5REg": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:06:04.894Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1NZTBBp7-DZh76qxXj79lpkeR5WJR2JnV",
+      "attempts": 1
+    },
+    "_3GyEyTJ8gU": {
+      "status": "done",
+      "updatedAt": "2026-11-23T15:58:10.962Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1-Jw98GRGI25G6C1WNKRwJ30BMuG6R1Qp",
+      "attempts": 1
+    },
+    "O_wejh9d1C8": {
+      "status": "done",
+      "updatedAt": "2026-11-23T14:01:08.988Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1cBlPREpoLv8GKvzQPQ2x79y5-b69xKK8",
+      "attempts": 1
+    },
+    "JuMFPaEQUDk": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:11:11.708Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1qFlGMqaFpetN6rKF5x4PwKBVvBnOy8Qy",
+      "attempts": 1
+    },
+    "yHde9ujHa_A": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:25:39.543Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1Jzw7uIHV7G94Q9N0QF6MV_qQZ0y3YWXu",
+      "attempts": 1
+    },
+    "g9WiIyYQFmI": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:05:00.440Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1uSOh9EGMtf1mW6odytfVsBUGNid0zAON",
+      "attempts": 1
+    },
+    "nDOScT_mRnM": {
+      "status": "done",
+      "updatedAt": "2026-11-23T16:14:47.085Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1jgM3meaZm5xp9OEzjY_-mYdRgt5swfwA",
+      "attempts": 1
+    },
+    "-U4RDElDcgA": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:02:20.669Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1DG1hWSS4aJp_2lNKNlmRUms3RohqEE2H",
+      "attempts": 2
+    },
+    "WceU5A63tdI": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:04:06.796Z",
+      "chatUrl": "https://aistudio.google.com/prompts/14K04UrypIP_a9-efvFf5avMRqiPZHZAc",
+      "attempts": 2
+    },
+    "K79hF7941lk": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:06:10.606Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1PkZyCCS6M2tLXwMpC5nL5OcPzAj-i9H9",
+      "attempts": 1
+    },
+    "ckXySOvPBTc": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:07:09.765Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1rGVjKZfl5VgigARE06EhgdpJe0VJCVLa",
+      "attempts": 1
+    },
+    "obfo2M3RxJA": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:08:42.605Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1y1b95MWo7CWXv9_O4T6pvuJhltEzckyk",
+      "attempts": 1
+    },
+    "q36EyQkxBzo": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:10:52.866Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1mAPV38wL8NrBM1S2PMQfAxtVu7tKeXTG",
+      "attempts": 1
+    },
+    "yudJI1L8jlI": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:12:40.955Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1_CIBodcgr4rhTdLp3OhFbjnQZ6YPMrIC",
+      "attempts": 1
+    },
+    "yVBepFa4_HA": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:15:43.762Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1gYIEwT6g1gZyTqEuhoAN15KuzYxxbS2e",
+      "attempts": 1
+    },
+    "xAM65OuHgXE": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:16:20.417Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1vwdfAPLZjX2T_SwrdQH0jvzfNRo6Upfv",
+      "attempts": 1
+    },
+    "8JK19FOaDNM": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:18:55.204Z",
+      "chatUrl": "https://aistudio.google.com/prompts/16plhMyzwp2wC1-PZOE_K3cZb34dznuZW",
+      "attempts": 1
+    },
+    "4cSEqrOdliY": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:23:01.702Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1C0pIr_jtGDw6Y48Kgsez5zFh3Npdu_u1",
+      "attempts": 1
+    },
+    "IzXhk-n16XE": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:23:49.339Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1_PW2JgAqtNT1Y9_E-VrftoTsJ1KZMmJs",
+      "attempts": 2
+    },
+    "1Rd3_pXs6DU": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:28:50.669Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1LIs9Ur1XweVgq04qSLapPuWK69pcg3Tg",
+      "attempts": 1
+    },
+    "MrscoQtABJ8": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:29:32.024Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1u-bq4jRVFDP6rcgq0RZHrufWv3Qz-kbg",
+      "attempts": 1
+    },
+    "aCtYP_okkww": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:08:20.981Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "Def5vgjVZsM": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:33:25.183Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1Y2zefjTOolqI5kTAq0aTzucyuE11lrgG",
+      "attempts": 1
+    },
+    "cY_YfDaYrOc": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:34:03.655Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1CzhQRXo3Zl76ekWGhIc2IfuUgdC_WSd-",
+      "attempts": 2
+    },
+    "HP-jnxm-gAE": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:36:13.802Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1LrgXWnVldwdVnVh_n9E_E-vIc6Jy_vs7",
+      "attempts": 1
+    },
+    "kmULoxXqhPg": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:37:42.326Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1Qs5mLAU5-ZPt2dUa_Yncq9HnPXYYKOuo",
+      "attempts": 1
+    },
+    "JJm6-F7CJus": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:39:35.484Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1vfTr3hyf0TC2n54cCi_X33GALUvSeLF4",
+      "attempts": 1
+    },
+    "tUbCYZhhXJs": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:42:25.916Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1qzYrYA5scDD-kpjoEm7D4E4WflVU5ngd",
+      "attempts": 1
+    },
+    "v8T2cSQF2Lw": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:43:18.582Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1M4YEHytXTaHwNeTJbIKVpG16IoM5CbgI",
+      "attempts": 1
+    },
+    "QmKa42DgAgw": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:47:55.194Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "XXdlABQgLMk": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:49:01.997Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1e71lrmFL4JOCUjQHHDlOn_v3coVkQzye",
+      "attempts": 2
+    },
+    "lsTjYvoUZ_Q": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:52:29.349Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "FOgGw9BVQV8": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:55:00.382Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "dC8bcgTqenk": {
+      "status": "done",
+      "updatedAt": "2026-11-23T17:58:01.795Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "baY4ytRqW2g": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:03:40.256Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "MSPVq-5sbCg": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:03:45.540Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "0kUCy60FBeY": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:09:07.495Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "_r5a3MSFIlQ": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:11:07.517Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1_uznbiBMpjKlnjat7iVo-z5TwY_QiUvt",
+      "attempts": 1
+    },
+    "CN1mw2c0w4c": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:13:42.488Z",
+      "chatUrl": null,
+      "attempts": 1
+    },
+    "HC4-katIFCU": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:14:54.362Z",
+      "chatUrl": "https://aistudio.google.com/prompts/1y5MzEGvEUmRsU3J-w7YDP6M0BVLszoQP",
+      "attempts": 1
+    },
+    "EvvV1AYQxEk": {
+      "status": "done",
+      "updatedAt": "2026-11-23T18:19:42.643Z",
       "chatUrl": null,
       "attempts": 1
     }

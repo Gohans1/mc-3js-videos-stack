@@ -1,58 +1,63 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "duration_sec": 38.6,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
   "topic_category": "history_weird_true_story",
-  "topic_sublabel": "phoebus_lightbulb_cartel",
+  "topic_sublabel": "planned_obsolescence_history",
+  "emotional_driver": "curiosity_mystery",
   "hook_archetype": "shock_fact_stat",
-  "opening_shot_sec": 0.9,
-  "opening_spoken_line": "They built a light bulb that lasted 2,000 hours,",
-  "hook_visual_trigger": "Hand screws bulb into workbench socket, snapping on a bright yellow glow before match-cutting to a room time-lapse.",
-  "story_structure": "problem_solution_irony",
+  "opening_shot_sec": 0.92,
+  "opening_spoken_line": "They built a light bulb that lasted 2,000 hours.",
+  "hook_visual_trigger": "Hand screws in bulb that blooms yellow then match-cuts into 2000-hour flip-counter timelapse",
+  "narration_pov": "omniscient_explainer",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "chronological_escalation_twist",
   "narrative_connector": "but_therefore",
-  "ending_type": "ironic_twist_punchline",
-  "twist_at_pct": 43,
+  "ending_type": "abrupt_fact_or_snap",
+  "twist_at_pct": 69,
+  "outro_hold_sec": 0.6,
   "rehook_timestamps_sec": [
     3.9,
     10,
-    20.2,
-    26.6,
-    33
+    26.5
   ],
   "story_beats": [
     {
       "role": "hook",
       "start_sec": 0,
-      "end_sec": 3.87,
-      "pct_runtime": 10
+      "end_sec": 3.29,
+      "pct_runtime": 9
     },
     {
       "role": "setup",
-      "start_sec": 3.87,
-      "end_sec": 9.91,
-      "pct_runtime": 16
-    },
-    {
-      "role": "twist",
-      "start_sec": 9.91,
-      "end_sec": 20.12,
-      "pct_runtime": 26
-    },
-    {
-      "role": "visual_proof",
-      "start_sec": 20.12,
-      "end_sec": 26.49,
+      "start_sec": 3.29,
+      "end_sec": 9.98,
       "pct_runtime": 17
     },
     {
       "role": "escalation",
-      "start_sec": 26.49,
-      "end_sec": 32.93,
+      "start_sec": 9.98,
+      "end_sec": 20.19,
+      "pct_runtime": 26
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 20.19,
+      "end_sec": 26.56,
+      "pct_runtime": 17
+    },
+    {
+      "role": "twist",
+      "start_sec": 26.56,
+      "end_sec": 33,
       "pct_runtime": 17
     },
     {
       "role": "resolution",
-      "start_sec": 32.93,
-      "end_sec": 38.6,
+      "start_sec": 33,
+      "end_sec": 38.57,
       "pct_runtime": 14
     }
   ],
@@ -60,54 +65,73 @@
     "hard_cut": 2,
     "hidden_cut": 0,
     "transition": 6,
-    "continuous": 10
+    "continuous": 12
   },
   "transition_types": [
     "cross_dissolve",
     "card_flip",
-    "wipe_up"
+    "push_up"
+  ],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "crane_boom",
+    "whip_pan"
   ],
   "shot_scale_counts": {
-    "EW": 1,
-    "W": 2,
+    "EW": 0,
+    "W": 4,
     "M": 8,
-    "MCU": 3,
-    "CU": 4,
-    "ECU": 1,
-    "INSERT": 0
+    "MCU": 4,
+    "CU": 3,
+    "ECU": 0,
+    "INSERT": 2
   },
   "camera_angle_counts": {
-    "aerial": 1,
+    "aerial": 0,
     "overhead": 1,
-    "high": 8,
-    "eye": 7,
-    "low": 2,
+    "high": 9,
+    "eye": 10,
+    "low": 1,
     "ground": 0
   },
   "camera_energy": "smooth_damped_continuous",
   "dominant_lens_feel": "wide",
   "lighting_style": "mixed",
+  "shadow_quality": "mixed",
+  "color_palette_mood": "mixed",
   "easing_energy": "smooth_damped",
-  "audio_bed_style": "shifting_bgm_plus_vo",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "tense_pulse_synth",
+  "sfx_density": "moderate_punctuated",
   "craft_signals": {
     "has_cutaway_or_xray": true,
     "has_diegetic_text_or_labels": true,
     "has_motion_graphics_or_arrows": true,
     "has_emissive_highlight_pulse": true,
     "has_pre_impact_silence": false,
-    "has_jl_cut": true,
+    "has_jl_cut": false,
     "has_time_remap_or_hit_stop": true,
     "has_seamless_loop": false,
     "uses_motion_blur": true,
     "uses_shallow_dof": false,
-    "uses_backdrop_vignette": false
+    "uses_backdrop_vignette": false,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": false,
+    "uses_rack_focus": false,
+    "has_particles_or_fluid": false,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
   },
-  "reusable_script_template": "[BREAKTHROUGH INVENTION] solved [NEED] for [IMPRESSIVE STAT], BUT [PERVERSE ECONOMIC INCENTIVE] -> SO [POWERFUL GROUP] secretly rigged [PRODUCT] to [SABOTAGE] -> AND when [REBEL] tried [BETTER ALTERNATIVE], [GROUP] crushed them to protect [IRONIC PROFIT MOTIVE].",
+  "reusable_script_template": "[IMPRESSIVE HISTORICAL INVENTION] lasted [STAT], BUT [ECONOMIC PROBLEM] -> SO [INDUSTRY SECRET DEAL] -> NOW [DEFIANT COMPETITOR] tried [BETTER VERSION], BUT [CARTEL PRESSURE] -> ALL TO PROTECT [GREEDY PACT].",
   "secret_sauce_cues": [
-    "Unbroken 3D spline camera journeys bridge multiple story beats via orbits, window pull-outs, and 1-frame snap-appearances (f427) paired with crisp action/graphic match cuts (f26->f28, f836->f837).",
-    "Translucent cyan X-ray cutaway (f741-f793) layers internal mechanical failure directly over the character's shocked facial reaction in a single deep-focus frame."
+    "Seamless single-take camera glides passing through architectural glass and across room scales",
+    "Diegetic environmental storytelling props (flip-counter, PLANNED OBSOLESCENCE plaque, legible TOP SECRET pact, lawn sign branding)",
+    "Cyan x-ray cutaway sweep exposing internal mechanical failure mid-reaction"
   ],
-  "weaknesses_or_drag": [
-    "Stiff character locomotion and mannequin-like pointing/walking cycles during store confrontation (f837-f987)."
-  ]
+  "weaknesses_or_drag": []
 }

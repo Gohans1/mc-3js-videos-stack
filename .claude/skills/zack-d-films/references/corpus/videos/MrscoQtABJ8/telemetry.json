@@ -1,0 +1,133 @@
+{
+  "schema_version": 2,
+  "duration_sec": 33.5,
+  "visual_medium": "3d_stylized_cgi",
+  "protagonist_format": "third_person_characters",
+  "topic_category": "explainer_how_it_works",
+  "topic_sublabel": "football_spiral_throwing_technique",
+  "emotional_driver": "humor_absurdity",
+  "hook_archetype": "imperative_how_to_step",
+  "opening_shot_sec": 0.701,
+  "opening_spoken_line": "Grip the ball near the back half, with your ring finger and pinky resting across the laces.",
+  "hook_visual_trigger": "High-angle 3D hand descending onto a football on sunlit grass and lifting it upright into a glowing guide",
+  "narration_pov": "second_person_you",
+  "voice_delivery": "calm_matter_of_fact",
+  "caption_style": "phrase_chunked_static",
+  "story_structure": "mechanism_step_by_step",
+  "narrative_connector": "causal_chain",
+  "ending_type": "ironic_twist_punchline",
+  "twist_at_pct": 96,
+  "outro_hold_sec": 0.8,
+  "rehook_timestamps_sec": [
+    12.9,
+    17,
+    26.2
+  ],
+  "story_beats": [
+    {
+      "role": "hook",
+      "start_sec": 0,
+      "end_sec": 2.002,
+      "pct_runtime": 6
+    },
+    {
+      "role": "setup",
+      "start_sec": 2.002,
+      "end_sec": 12.412,
+      "pct_runtime": 31
+    },
+    {
+      "role": "escalation",
+      "start_sec": 12.412,
+      "end_sec": 17.284,
+      "pct_runtime": 15
+    },
+    {
+      "role": "explanation_value",
+      "start_sec": 17.284,
+      "end_sec": 26.059,
+      "pct_runtime": 26
+    },
+    {
+      "role": "visual_proof",
+      "start_sec": 26.059,
+      "end_sec": 31.765,
+      "pct_runtime": 17
+    },
+    {
+      "role": "twist",
+      "start_sec": 31.765,
+      "end_sec": 33.467,
+      "pct_runtime": 5
+    }
+  ],
+  "boundary_counts": {
+    "hard_cut": 0,
+    "hidden_cut": 0,
+    "transition": 0,
+    "continuous": 13
+  },
+  "transition_types": [],
+  "camera_moves_used": [
+    "push_in",
+    "pull_back",
+    "orbit_arc",
+    "dolly_track",
+    "tilt_pan"
+  ],
+  "shot_scale_counts": {
+    "EW": 0,
+    "W": 2,
+    "M": 3,
+    "MCU": 3,
+    "CU": 4,
+    "ECU": 2,
+    "INSERT": 0
+  },
+  "camera_angle_counts": {
+    "aerial": 0,
+    "overhead": 0,
+    "high": 6,
+    "eye": 6,
+    "low": 2,
+    "ground": 0
+  },
+  "camera_energy": "smooth_damped_continuous",
+  "dominant_lens_feel": "wide",
+  "lighting_style": "natural_daylight",
+  "shadow_quality": "crisp_hard",
+  "color_palette_mood": "clean_bright_saturated",
+  "easing_energy": "smooth_damped",
+  "audio_bed_style": "continuous_bgm_plus_vo",
+  "bgm_mood": "playful_quirky",
+  "sfx_density": "moderate_punctuated",
+  "craft_signals": {
+    "has_cutaway_or_xray": false,
+    "has_diegetic_text_or_labels": false,
+    "has_motion_graphics_or_arrows": true,
+    "has_emissive_highlight_pulse": true,
+    "has_pre_impact_silence": false,
+    "has_jl_cut": false,
+    "has_time_remap_or_hit_stop": true,
+    "has_seamless_loop": false,
+    "uses_motion_blur": true,
+    "uses_shallow_dof": true,
+    "uses_backdrop_vignette": true,
+    "uses_camera_turn_blur": true,
+    "uses_translation_or_radial_blur": true,
+    "uses_object_motion_blur": true,
+    "uses_subject_tracking_blur": true,
+    "uses_rack_focus": true,
+    "has_particles_or_fluid": true,
+    "has_pip_or_split_screen": false,
+    "has_diegetic_channel_branding": true,
+    "has_sfx_whoosh_or_riser": true
+  },
+  "reusable_script_template": "Do [EXACT STEP 1–3] + BUT avoid [ABSURD EXAGGERATED MISTAKE] -> execute [SLOW-MO MECHANIC] -> payoff [PERFECT RESULT SUBVERTED BY BACKGROUND COLLISION]",
+  "secret_sauce_cues": [
+    "Uninterrupted one-take 3D camera choreography bridging macro finger grip to full-field flight without cuts",
+    "Direct yellow emissive skin/object shaders highlighting anatomical cues instead of cluttered text callouts",
+    "Deep-background foreshadowing of the slapstick target (cyclist) 15 seconds before impact"
+  ],
+  "weaknesses_or_drag": []
+}
