@@ -2,13 +2,13 @@ import type { Tools } from "film/scene";
 import type { Object3D } from "three";
 
 import type { CameraPose, Vec3 } from "../app/sound/spatial";
-import { findTarget } from "./target";
+import { findTarget, pairOf } from "./target";
 
 type TargetTools = Partial<Pick<Tools, "scene" | "camera" | "bones" | "objects" | "targets">>;
 
 const registeredNames = (tools: TargetTools | null | undefined): string[] => [
   ...(tools?.targets ?? []).map((target) => target.id),
-  ...(tools?.objects ?? []).map(([, label]) => label),
+  ...(tools?.objects ?? []).map((entry) => pairOf(entry)[1]),
   ...Object.keys(tools?.bones ?? {}),
 ];
 

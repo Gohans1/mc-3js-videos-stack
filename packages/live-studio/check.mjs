@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 import { ANIMS } from "film-stage/animate";
 import { SHAKES } from "film-stage/camera";
 import { LOOK_IDS } from "film-stage/looks";
-import { KINDS as TITLE_KINDS, TEXT_ITEM_KEYS } from "film-stage/titles";
+import {
+  bridgeSeamlessGaps,
+  FONTS as TITLE_FONTS,
+  KINDS as TITLE_KINDS,
+  resolveTextItem,
+  TEXT_ITEM_KEYS,
+  TEXT_PRESET_IDS,
+} from "film-stage/titles";
 import { TONE_MAPS } from "film-stage/tone";
 import { TRANSITIONS } from "film-stage/transitions";
 
@@ -44,11 +51,13 @@ import {
   SHOT_SLOT_KEYS,
   SOUND_KEYS,
   StudioConfig,
+  TEXT_DOC_KEYS,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
   TIMING_KEYS,
 } from "./src/contract.ts";
-import { contractFiles, heardLength } from "./src/film.mjs";
+import { contractFiles, heardLength, transitionCutSeconds } from "./src/film.mjs";
+import { lookdevWarnings } from "./src/lookdev-guard.mjs";
 import { MOUTH_MAP, mouthFaults } from "./src/mouth-map.mjs";
 import { noteNudge } from "./src/note-cli.mjs";
 import { ownToolsWarning } from "./src/own-tools.mjs";
@@ -72,11 +81,22 @@ every "look" and "handheld" preset name and misspelt keys, every sound name in t
 options) against the sounds the studio can play (with the nearest names or the other film whose own sound it is), and that
 every take said on screen ("by") has its mouth shapes (bun run voice:lips). Warns (⚠, still exit 0) of camera keys setting
 both "mm" and "fov", shot "hits[].t" outside its shot, unpicked mod blocks, invalid blockstate property values, stale picked.zip,
-and on-screen text too brief to read or too small for a phone, plus keyFiles arrays hiding nested {t} rows that Studio cannot load; where text sits and how it reads over the picture: bun run render stills --check text.
+and on-screen text too brief to read or too small for a phone, keyFiles arrays hiding nested {t} rows that Studio cannot load,
+and lookdev source-hygiene hazards (deprecated PCFSoftShadowMap, shadow.radius > 4, un-disposed PMREMGenerator, per-frame Fog, shader tone-map/colorspace includes under EffectComposer, unwired lights.json, ad-hoc EffectComposer+N8AO); where text sits and how it reads over the picture: bun run render stills --check text.
 For rendered motion, run bun run render stills --check pops (or pops:20,45 for a range). Render final checks it automatically.
 Scene code and draw(t) are evaluated by Studio and render commands.
 Exit 0 ok, 1 problems found. Find a sound, 3D object or preset: bun run find <words>.`;
 
+const RENDER_CHECKS = new Set(["pops", "text", "motion", "seen", "touch", "probe", "order"]);
+const badCheckArg = process.argv
+  .slice(2)
+  .find((a) => !a.startsWith("-") && RENDER_CHECKS.has(a.split(":")[0]));
+if (badCheckArg) {
+  console.error(
+    `bun run check validates offline timeline JSON and assets; "${badCheckArg}" runs on rendered frames: bun run render stills --check ${badCheckArg}`,
+  );
+  process.exit(2);
+}
 const json = cliArgs(HELP, ["--json"], 0).includes("--json");
 envTypos(["LIVE_PROJECT"]);
 const PROJECT = needFilm(process.env.LIVE_PROJECT);
@@ -552,6 +572,7 @@ if (Array.isArray(adjRead?.items))
 for (const [rel, keys] of [
   ["src/edit.json", EDIT_KEYS],
   [conf.timingTimeline, TIMING_KEYS],
+  [conf.textTimeline, TEXT_DOC_KEYS],
 ]) {
   const doc = readJson(rel);
   if (doc && typeof doc === "object" && !Array.isArray(doc))
@@ -561,6 +582,25 @@ for (const [rel, keys] of [
         ([k, near]) => `"${k}": no key the studio reads; did you mean "${near}"?`,
       ),
     );
+}
+const textDefaultsDoc = readJson(conf.textTimeline)?.defaults;
+if (textDefaultsDoc && typeof textDefaultsDoc === "object" && !Array.isArray(textDefaultsDoc)) {
+  const allowedDefaults = [...TEXT_KEYS, ...TEXT_ITEM_KEYS];
+  keyTypos(conf.textTimeline, [
+    ...nearKeys(textDefaultsDoc, allowedDefaults).map(
+      ([k, near]) => `defaults "${k}": no key the studio reads; did you mean "${near}"?`,
+    ),
+    ...["in", "out"].flatMap((slot) => {
+      const sub = textDefaultsDoc[slot];
+      if (!sub || typeof sub !== "object" || Array.isArray(sub)) return [];
+      const subKeys = TEXT_SLOT_KEYS.filter((k) => k.startsWith(`${slot}.`)).map((k) =>
+        k.slice(slot.length + 1),
+      );
+      return nearKeys(sub, subKeys).map(
+        ([k, near]) => `defaults.${slot} "${k}": no key the studio reads; did you mean "${near}"?`,
+      );
+    }),
+  ]);
 }
 const shotsRead = readJson(conf.shotsTimeline);
 if (Array.isArray(shotsRead)) {
@@ -754,7 +794,37 @@ if (textBroken)
   textBroken.issue += `\n  on-screen text (too brief, too small) is checked once this is fixed`;
 const textRead = textPath && !textBroken && readJson(conf.textTimeline);
 if (Array.isArray(textRead?.items)) {
-  textRead.items.forEach((it, i) => {
+  const BUILTIN_FONT_IDS = new Set(TITLE_FONTS.map((f) => f.id));
+  const sceneSrc = existsSync(join(PROJECT, "src/scene.ts"))
+    ? readFileSync(join(PROJECT, "src/scene.ts"), "utf8")
+    : "";
+  const hasCustomFonts = /\bfonts\s*:/.test(sceneSrc);
+  const hasCustomPresets = /\bpresets\s*:/.test(sceneSrc);
+  if (!hasCustomPresets)
+    checkPreset(conf.textTimeline, "preset", textRead.preset, TEXT_PRESET_IDS, "text");
+  const warnedFonts = new Set();
+  const warnUnknownFont = (slot, fontId) => {
+    if (
+      typeof fontId !== "string" ||
+      !fontId ||
+      BUILTIN_FONT_IDS.has(fontId) ||
+      hasCustomFonts ||
+      warnedFonts.has(fontId)
+    )
+      return;
+    warnedFonts.add(fontId);
+    const near = nearName(fontId, [...BUILTIN_FONT_IDS]);
+    warnings.push(
+      `⚠ ${conf.textTimeline} ${slot} "${fontId}": unknown built-in font (renders as Inter unless registered via makeTitles(..., { fonts }))${near ? `; did you mean "${near}"?` : ""}`,
+    );
+  };
+  warnUnknownFont("defaults.font", textRead.defaults?.font);
+  const resolvedItems = textRead.items.map((rawIt) => resolveTextItem(rawIt, textRead));
+  textRead.items.forEach((rawIt, i) => {
+    if (!hasCustomPresets)
+      checkPreset(conf.textTimeline, `items[${i}].preset`, rawIt?.preset, TEXT_PRESET_IDS, "text");
+    const it = resolvedItems[i];
+    warnUnknownFont(`items[${i}].font`, it?.font);
     const to = typeof it?.kind === "string" && nearName(it.kind, TITLE_KINDS);
     if (to)
       warnings.push(
@@ -764,12 +834,15 @@ if (Array.isArray(textRead?.items)) {
   const ends = filmEnds();
   const textClock = ends ? clockForTimeline("text") : null;
   const textEnd = textClock ? Math.min(ends.layers, textClock.duration) : ends?.layers;
-  const heard = textClock ? mapTimeline("text", textRead, textClock, false, null, {}) : null;
+  const bridgedItems = bridgeSeamlessGaps(resolvedItems, textRead.tracks);
+  const heard = textClock
+    ? mapTimeline("text", { ...textRead, items: bridgedItems }, textClock, false, null, {})
+    : null;
   const said = [],
     late = [],
     brief = [],
     placed = [];
-  textRead.items.forEach((it, i) => {
+  bridgedItems.forEach((it, i) => {
     const h = heard?.items?.[i];
     if (heard && (!h || h.to <= h.from)) return;
     if (h && !it.hidden && !textRead.tracks?.[it.track ?? 0]?.hidden && h.from >= textEnd) {
@@ -785,7 +858,17 @@ if (Array.isArray(textRead?.items)) {
     const from = h ? h.from : +it.from;
     const to = h ? Math.min(h.to, textEnd) : +it.to;
     if (Number.isFinite(from) && Number.isFinite(to) && to > from && !it.at)
-      placed.push({ i, name, from, to, track: it.track ?? 0, x: it.x ?? 0.5, y: it.y ?? 0.5 });
+      placed.push({
+        i,
+        name,
+        from,
+        to,
+        track: it.track ?? 0,
+        x: it.x ?? 0.5,
+        y: it.y ?? 0.5,
+        hasOut: Boolean(it.out?.fx),
+        noBridge: it.seamlessGap === 0,
+      });
     const cut = h && h.to > textEnd;
     const pace = h && readPace(it, h, textEnd, textClock);
     (h ? readFaults(it, h, conf.ratio, textEnd, textClock) : sizeFaults(it, conf.ratio)).forEach(
@@ -808,8 +891,37 @@ if (Array.isArray(textRead?.items)) {
         overlap = end - start;
       if (overlap > 1e-4)
         said.push(
-          `⚠ ${conf.textTimeline} items[${p.i}] "${p.name}" and items[${q.i}] "${q.name}" overlap by ${overlap.toFixed(3)} s at ${start.toFixed(2)}-${end.toFixed(2)}${heard ? " heard" : ""} (same position): double-rendered captions; trim items[${p.i}].to <= items[${q.i}].from`,
+          `⚠ ${conf.textTimeline} items[${p.i}] "${p.name}" and items[${q.i}] "${q.name}" overlap by ${overlap.toFixed(3)} s at ${start.toFixed(2)}-${end.toFixed(2)}${heard ? " heard" : ""} (same position): double-rendered captions; set items[${p.i}].to = items[${q.i}].from (half-open [from, to), zero gap)`,
         );
+    }
+  }
+  const byTrackPlaced = new Map();
+  for (const p of placed) {
+    const arr = byTrackPlaced.get(p.track);
+    if (arr) arr.push(p);
+    else byTrackPlaced.set(p.track, [p]);
+  }
+  for (const arr of byTrackPlaced.values()) {
+    arr.sort((a, b) => a.from - b.from || a.to - b.to);
+    for (let k = 0; k < arr.length - 1; k++) {
+      const p = arr[k];
+      if (p.hasOut || p.noBridge) continue;
+      for (let m = k + 1; m < arr.length; m++) {
+        const q = arr[m];
+        const gap = q.from - p.to;
+        if (gap > 0.06) break;
+        if (Math.abs(p.x - q.x) >= 0.08 || Math.abs(p.y - q.y) >= 0.08) continue;
+        if (gap <= 1e-4) {
+          if (q.to > p.to + 1e-4) break;
+          continue;
+        }
+        const presetHint =
+          textRead.preset === "zack-d-films" ? "" : ' or set "preset": "zack-d-films"';
+        said.push(
+          `⚠ ${conf.textTimeline} items[${p.i}] "${p.name}" and items[${q.i}] "${q.name}" have a ${gap.toFixed(3)} s blank gap at ${p.to.toFixed(2)}-${q.from.toFixed(2)}${heard ? " heard" : ""}: captions blink off for ~1 frame; set items[${p.i}].to = items[${q.i}].from (half-open [from, to))${presetHint}`,
+        );
+        break;
+      }
     }
   }
   const folded = new Set(brief.length > 3 && !json ? brief.map((b) => b.line) : []);
@@ -1203,6 +1315,7 @@ const camKeys = (Array.isArray(camRead) ? camRead : camRead?.keys)?.filter((k) =
 if (camKeys?.length && filmEnds()) {
   const camClock = clockForTimeline("cam");
   const heard = (t) => camClock?.outputAt?.(t, "after") ?? t;
+  const transitionTimes = transitionCutSeconds(PROJECT, conf);
   covered.cameraCuts = cameraCutSeconds(camKeys);
   covered.cameraUntil = heard(Math.max(...camKeys.map((k) => k.t)));
   const [first, ...rest] = refCutsWarning(
@@ -1210,6 +1323,7 @@ if (camKeys?.length && filmEnds()) {
     conf.camTimeline,
     covered.cameraCuts,
     covered.cameraUntil,
+    transitionTimes,
   ).split("\n");
   if (first) warnings.push(first);
   hints.push(...rest);
@@ -1268,6 +1382,7 @@ const unstudied = unstudiedWarning(PROJECT);
 if (unstudied) warnings.push(unstudied);
 const toolsWarning = ownToolsWarning(PROJECT);
 if (toolsWarning) warnings.push(toolsWarning);
+warnings.push(...lookdevWarnings(PROJECT, conf));
 
 const problems = [...Map.groupBy(found, (p) => p.where)].map(([where, ps]) => ({
   where,

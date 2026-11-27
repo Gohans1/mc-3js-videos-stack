@@ -4,6 +4,7 @@ import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { cliArgs, needFilm } from "./src/cli.mjs";
+import { transitionCutSeconds } from "./src/film.mjs";
 import { cutItems, latestStudy, referenceVideo } from "./src/ref-cuts.mjs";
 import { mean, median, sharpness, since, stretches, when } from "./src/sweep.mjs";
 import { drawnCuts, filmPicture, probeVideo } from "./src/video.mjs";
@@ -216,7 +217,12 @@ else if (reference && !cuts.times)
     `the render recorded no cuts (${cuts.reason ?? cuts.status}): bun run render clip records them`,
   );
 else if (reference)
-  items.push(...cutItems(study, cuts.times, seconds).map((x) => ({ ...x, size: 0 })));
+  items.push(
+    ...cutItems(study, cuts.times, seconds, transitionCutSeconds(PROJECT)).map((x) => ({
+      ...x,
+      size: 0,
+    })),
+  );
 
 items.sort((a, b) => b.weight - a.weight || b.size - a.size || a.from - b.from);
 const look = (x) => {

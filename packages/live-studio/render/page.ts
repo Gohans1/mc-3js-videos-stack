@@ -133,15 +133,17 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
       log("ERROR --inspect requires draw.tools.free on the film");
       return;
     }
-    const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
-    Object.assign(render.tools.free, { on: true, fov });
+    const [px, py, pz, lx, ly, lz, fov, roll] = cfg.inspect;
+    Object.assign(render.tools.free, { on: true, fov, ...(roll !== undefined ? { roll } : {}) });
     render.tools.free.p.set(px, py, pz);
     render.tools.free.l.set(lx, ly, lz);
   }
   if (cfg.finalPops) {
-    await log("final: checking the whole film for pops and foot slides (up to 10 minutes)");
+    const tPops = performance.now();
+    await log("final: checking the whole film for pops and foot slides");
     const lines = await builtin.pops("", 0, DURATION);
     for (const line of lines) await log(line);
+    await log(`final: pops check done in ${((performance.now() - tPops) / 1000).toFixed(1)}s`);
     if (lines.some((line) => line.startsWith("ERROR"))) return;
   }
   const hasViewCams = (cfg.stills ?? []).some((s) => s.cam);
@@ -398,14 +400,26 @@ const shotAt = (t) => SHOTS.filter((s) => t >= s.t).length;
     : null;
   const restoreFree = () => {
     if (!free || !savedFree) return;
+    for (const k of Object.keys(free)) {
+      if (k !== "p" && k !== "l" && !(k in savedFree.scalars)) delete free[k];
+    }
     Object.assign(free, savedFree.scalars);
     free.p.set(...savedFree.p);
     free.l.set(...savedFree.l);
   };
   for (const s of cfg.stills ?? []) {
     if (s.cam && free) {
-      const [px, py, pz, lx, ly, lz, fov] = s.cam;
-      Object.assign(free, { on: true, fov });
+      const [px, py, pz, lx, ly, lz, fov, roll] = s.cam;
+      if (roll === undefined && savedFree && !("roll" in savedFree.scalars)) delete free.roll;
+      Object.assign(free, {
+        on: true,
+        fov,
+        ...(roll !== undefined
+          ? { roll }
+          : savedFree && "roll" in savedFree.scalars
+            ? { roll: savedFree.scalars.roll }
+            : {}),
+      });
       free.p.set(px, py, pz);
       free.l.set(lx, ly, lz);
     }

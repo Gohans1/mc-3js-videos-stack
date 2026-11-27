@@ -1,20 +1,52 @@
 // @ts-nocheck
 
+export const pairOf = (entry) => (Array.isArray(entry) ? entry : entry ? [entry, entry.name ?? ""] : [null, ""]);
+
+const findBoneOn = (node, seg) => {
+  const map = node?.userData?.bones;
+  if (!map || typeof map !== "object") return null;
+  if (map[seg]) return map[seg];
+  const lower = seg.toLowerCase();
+  for (const [k, v] of Object.entries(map)) {
+    if (k.toLowerCase() === lower && v) return v;
+  }
+  return null;
+};
+
+const findChildByNameInsensitive = (parent, lower) => {
+  let hit = null;
+  const walk = (node) => {
+    for (const child of node?.children ?? []) {
+      if (hit) return;
+      if (child.name?.toLowerCase() === lower) {
+        hit = child;
+        return;
+      }
+      walk(child);
+    }
+  };
+  walk(parent);
+  return hit;
+};
+
 const findChild = (parent, seg) => {
   if (!parent) return null;
   for (const child of parent.children ?? []) {
     const hit = child.getObjectByName?.(seg) ?? (child.name === seg ? child : null);
     if (hit) return hit;
   }
-  return parent.children?.length ? null : (parent.getObjectByName?.(seg) ?? null);
+  const own = parent.children?.length ? null : (parent.getObjectByName?.(seg) ?? null);
+  if (own) return own;
+  return findBoneOn(parent, seg) ?? findChildByNameInsensitive(parent, seg.toLowerCase());
 };
 
 export const findTarget = ({ scene, camera, bones, objects } = {}, name) => {
   if (name === "cam") return camera;
+  const pairs = (objects ?? []).map(pairOf).filter(([obj]) => obj);
   const direct =
     bones?.[name] ??
     scene?.getObjectByName?.(name) ??
-    objects?.find(([, label]) => label === name)?.[0] ??
+    pairs.find(([, label]) => label === name)?.[0] ??
     null;
   if (direct || !name?.includes(".")) return direct;
 
@@ -24,7 +56,7 @@ export const findTarget = ({ scene, camera, bones, objects } = {}, name) => {
     const prefix = parts.slice(0, rootLength).join(".");
     let cur =
       bones?.[prefix] ??
-      objects?.find(([, label]) => label === prefix)?.[0] ??
+      pairs.find(([, label]) => label === prefix)?.[0] ??
       scene?.getObjectByName?.(prefix) ??
       null;
     const rest = parts.slice(rootLength);
@@ -68,9 +100,14 @@ const dotNames = (bones, objects) => {
       walk(child, next);
     }
   };
-  for (const [obj, label] of objects ?? []) {
+  for (const entry of objects ?? []) {
+    const [obj, label] = pairOf(entry);
+    if (!obj || !label) continue;
     for (const [bName, bObj] of Object.entries(bones ?? {})) {
       if (inside(obj, bObj)) out.push(`${label}.${bName}`);
+    }
+    for (const bName of Object.keys(obj.userData?.bones ?? {})) {
+      out.push(`${label}.${bName}`);
     }
     walk(obj, label);
   }
@@ -78,12 +115,13 @@ const dotNames = (bones, objects) => {
 };
 
 export const targetHelp = ({ bones, objects } = {}, name, { camera = true } = {}) => {
+  const pairs = (objects ?? []).map(pairOf).filter(([obj]) => obj);
   const names = [
     ...new Set([
       ...(camera ? ["cam"] : []),
       ...Object.keys(bones ?? {}),
-      ...(objects ?? []).map(([, l]) => l),
-      ...(name?.includes(".") ? dotNames(bones, objects) : []),
+      ...pairs.map(([, l]) => l).filter(Boolean),
+      ...(name?.includes(".") ? dotNames(bones, pairs) : []),
     ]),
   ];
   const near = names
@@ -100,12 +138,13 @@ export const targetHelp = ({ bones, objects } = {}, name, { camera = true } = {}
                 .join(" or ")}? (names match case)`
             : ""
         }`;
-  return `ERROR ${why}. Targets: ${camera ? "the camera: cam; " : ""}bones: ${Object.keys(bones ?? {}).join(", ") || "none"}; objects: ${(objects ?? []).map(([, l]) => l).join(", ") || "none"}; or any object's .name`;
+  return `ERROR ${why}. Targets: ${camera ? "the camera: cam; " : ""}bones: ${Object.keys(bones ?? {}).join(", ") || "none"}; objects: ${pairs.map(([, l]) => l).filter(Boolean).join(", ") || "none"}; or any object's .name`;
 };
 
 export const labelOf = (objects, o) => {
+  const pairs = (objects ?? []).map(pairOf).filter(([obj]) => obj);
   for (let p = o; p; p = p.parent) {
-    const hit = objects?.find(([x]) => x === p);
+    const hit = pairs.find(([x]) => x === p);
     if (hit) return hit[1];
   }
   return o.name || o.type;

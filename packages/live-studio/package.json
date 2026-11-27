@@ -7,7 +7,8 @@
     "./lips": "./src/lips.ts",
     "./lab": "./render/lab.ts",
     "./targets": "./render/target.ts",
-    "./src/live.mjs": "./src/live.mjs"
+    "./src/live.mjs": "./src/live.mjs",
+    "./src/lite.mjs": "./src/lite.mjs"
   },
   "scripts": {
     "demo": "cd demo && bun ../src/live.mjs",

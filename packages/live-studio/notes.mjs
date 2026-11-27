@@ -197,7 +197,20 @@ for (let i = 0; i < args.length; i++) {
       `unknown option ${a}: bun run notes [ID ... | --shot N] [--sort MODE] [--limit N] [--done] [--cam] [--json] [--no-lessons] [--deleted] (--help for more)`,
     );
     process.exit(2);
-  } else ids.push(a);
+  } else {
+    for (const part of a.split(",").map((s) => s.trim()).filter(Boolean)) {
+      const range = /^#?(\d+)\s*-\s*#?(\d+)$/.exec(part);
+      if (range) {
+        const lo = Number(range[1]),
+          hi = Number(range[2]);
+        if (lo > hi || hi - lo > 500) {
+          console.error(`invalid note range ${part}: expected low-high (e.g. 7-11)`);
+          process.exit(2);
+        }
+        for (let k = lo; k <= hi; k++) ids.push({ id: String(k), range: part });
+      } else ids.push({ id: part, range: null });
+    }
+  }
 }
 if (ids.length && (shot !== null || limitArg !== undefined)) {
   console.error(
@@ -222,13 +235,44 @@ if (ids.length) {
     ]),
   );
   if (archived) for (const n of notes) byKey.set(n.id, n);
-  const unknown = ids.filter((id) => !byKey.has(id));
-  if (unknown.length) {
+  const resolveId = (raw) => {
+    if (byKey.has(raw)) return { note: byKey.get(raw) };
+    if (raw.length >= 4 && !/^#?\d+$/.test(raw)) {
+      const matches = notes.filter((n) => n.id.startsWith(raw));
+      if (matches.length === 1) return { note: matches[0] };
+      if (matches.length > 1) return { ambiguous: matches.map((n) => n.id) };
+    }
+    return { missing: true };
+  };
+  const resolved = ids.map(({ id, range }) => ({ id, range, ...resolveId(id) }));
+  const rangeHits = new Set(resolved.filter((r) => r.range && r.note).map((r) => r.range));
+  const emptyRanges = new Set();
+  const bad = resolved.filter((r) => {
+    if (r.note) return false;
+    if (r.range) {
+      if (rangeHits.has(r.range)) return false;
+      if (emptyRanges.has(r.range)) return false;
+      emptyRanges.add(r.range);
+      return true;
+    }
+    return true;
+  });
+  if (bad.length) {
     const none = [];
-    for (const id of unknown) {
-      const x = findNote(ROOT, id);
+    for (const r of bad) {
+      if (r.range) {
+        none.push(r.range);
+        continue;
+      }
+      if (r.ambiguous) {
+        console.error(
+          `ambiguous note prefix "${r.id}": matches ${r.ambiguous.slice(0, 6).join(", ")}${r.ambiguous.length > 6 ? ` (+${r.ambiguous.length - 6} more)` : ""}`,
+        );
+        continue;
+      }
+      const x = findNote(ROOT, r.id);
       if (x?.gone && !archived) console.error(deletedSaid(x));
-      else none.push(id);
+      else none.push(r.id);
     }
     if (none.length)
       console.error(
@@ -236,7 +280,7 @@ if (ids.length) {
       );
     process.exit(2);
   }
-  const want = new Set(ids.map((id) => byKey.get(id)));
+  const want = new Set(resolved.filter((r) => r.note).map((r) => r.note));
   pick = notes.filter((n) => want.has(n));
 } else {
   pick = notes.filter((n) => archived || done || isOpen(n));

@@ -3,6 +3,7 @@ import * as THREE from "three";
 
 import { type Ratio, sizeOf } from "../src/frame.ts";
 import { cameraTimesAt, timingClock } from "../src/timing-state.mjs";
+import { pairOf } from "./target.ts";
 
 export type Vec3Tuple = [number, number, number];
 
@@ -10,6 +11,7 @@ export interface ProbeBounds {
   min: Vec3Tuple;
   max: Vec3Tuple;
   size: Vec3Tuple;
+  center: Vec3Tuple;
 }
 
 export interface ProbeScreen {
@@ -39,6 +41,8 @@ export interface ProbeReport {
   camera: {
     p: Vec3Tuple;
     l: Vec3Tuple;
+    up?: Vec3Tuple;
+    roll?: number;
     fov: number | null;
     mode: "inspect" | "film";
     focus?: { m: number; target: string | null; fstop: number; mm: number };
@@ -57,7 +61,7 @@ export interface ProbeTools {
     [key: string]: unknown;
   };
   look?: THREE.Vector3 | { x: number; y: number; z: number };
-  objects?: [THREE.Object3D, string][];
+  objects?: ([THREE.Object3D, string] | THREE.Object3D)[];
   bones?: Record<string, THREE.Object3D>;
   optics?: { mm?: number; fstop?: number; focusM?: number; focusTarget?: string };
 }
@@ -68,7 +72,10 @@ type ProbeRender = ((t: number) => void | Promise<void>) & {
 };
 
 interface ProbeConfig {
-  inspect?: [number, number, number, number, number, number, number] | null;
+  inspect?:
+    | [number, number, number, number, number, number, number]
+    | [number, number, number, number, number, number, number, number]
+    | null;
   ratio?: Ratio;
 }
 
@@ -193,23 +200,34 @@ export function collectProbeTargets(
   tools: ProbeTools,
   filter = "",
 ): { obj: THREE.Object3D; name: string }[] {
+  const objectEntries = (tools.objects ?? []).map(pairOf) as [THREE.Object3D, string][];
   const objectLabels = new Map<THREE.Object3D, string>();
-  for (const [obj, label] of tools.objects ?? []) {
+  for (const [obj, label] of objectEntries) {
     if (obj && !objectLabels.has(obj)) objectLabels.set(obj, label);
   }
   const boneNames = new Map<THREE.Object3D, string[]>();
-  for (const [key, obj] of Object.entries(tools.bones ?? {})) {
-    if (!obj) continue;
+  const addBone = (key: string, obj: THREE.Object3D | undefined) => {
+    if (!obj || typeof obj !== "object") return;
     const list = boneNames.get(obj);
-    if (list) list.push(key);
-    else boneNames.set(obj, [key]);
-  }
+    if (list) {
+      if (!list.includes(key)) list.push(key);
+    } else boneNames.set(obj, [key]);
+  };
+  for (const [key, obj] of Object.entries(tools.bones ?? {})) addBone(key, obj);
+  const indexUserBones = (owner: THREE.Object3D) => {
+    const map = owner.userData?.bones;
+    if (!map || typeof map !== "object") return;
+    for (const [key, bone] of Object.entries(map as Record<string, THREE.Object3D>)) {
+      if (bone && typeof bone === "object" && "isObject3D" in bone) addBone(key, bone);
+    }
+  };
+  for (const [obj] of objectEntries) indexUserBones(obj);
 
   const trimmed = filter.trim();
   if (!trimmed) {
     const out: { obj: THREE.Object3D; name: string }[] = [];
     const seen = new Set<THREE.Object3D>();
-    for (const [obj, label] of tools.objects ?? []) {
+    for (const [obj, label] of objectEntries) {
       if (!obj || seen.has(obj)) continue;
       seen.add(obj);
       out.push({ obj, name: label || obj.name || obj.type });
@@ -232,15 +250,18 @@ export function collectProbeTargets(
     return ids;
   };
 
-  const matchesTerm = (obj: THREE.Object3D, term: string): boolean => {
+  const matchId = (id: string, seg: string, exact: boolean): boolean =>
+    exact ? id === seg : id.includes(seg);
+
+  const matchesTerm = (obj: THREE.Object3D, term: string, exact: boolean): boolean => {
     const ids = ownIds(obj);
     if (!ids.length) return false;
-    if (ids.some((id) => id.includes(term))) return true;
+    if (ids.some((id) => matchId(id, term, exact))) return true;
     if (!term.includes(".")) return false;
     const segs = term.split(".");
     if (segs.some((s) => !s)) return false;
     const leafSeg = segs[segs.length - 1];
-    if (!ids.some((id) => id.includes(leafSeg))) return false;
+    if (!ids.some((id) => matchId(id, leafSeg, exact))) return false;
     const ancestors: string[][] = [];
     for (let p = obj.parent; p; p = p.parent) {
       const pIds = ownIds(p);
@@ -254,7 +275,11 @@ export function collectProbeTargets(
       for (const start of matched) {
         for (let next = start + 1; next <= end; next++) {
           const prefix = segs.slice(start, next).join(".");
-          if (!ancestor.some((id) => (next === start + 1 ? id.includes(prefix) : id === prefix)))
+          if (
+            !ancestor.some((id) =>
+              next === start + 1 ? matchId(id, prefix, exact) : id === prefix,
+            )
+          )
             continue;
           if (next === end) return true;
           nextMatches.add(next);
@@ -272,20 +297,34 @@ export function collectProbeTargets(
     seen.add(obj);
     ordered.push(obj);
   };
-  for (const [obj] of tools.objects ?? []) add(obj);
-  for (const obj of Object.values(tools.bones ?? {})) add(obj);
+  for (const [obj] of objectEntries) add(obj);
+  for (const obj of boneNames.keys()) add(obj);
   tools.scene?.traverse((obj) => {
     if (obj === tools.scene) return;
+    indexUserBones(obj);
     if (objectLabels.has(obj) || boneNames.has(obj) || obj.name) add(obj);
   });
+  for (const obj of boneNames.keys()) add(obj);
+
+  const matchedObjs = new Set<THREE.Object3D>();
+  if (wildcard) {
+    for (const obj of ordered) {
+      const isCamera = Boolean((obj as THREE.Camera).isCamera);
+      if (!isCamera || objectLabels.has(obj)) matchedObjs.add(obj);
+    }
+  } else {
+    for (const term of terms) {
+      const exactHits = ordered.filter((obj) => matchesTerm(obj, term, true));
+      const hits = exactHits.length
+        ? exactHits
+        : ordered.filter((obj) => matchesTerm(obj, term, false));
+      for (const obj of hits) matchedObjs.add(obj);
+    }
+  }
 
   const out: { obj: THREE.Object3D; name: string }[] = [];
   for (const obj of ordered) {
-    const isCamera = Boolean((obj as THREE.Camera).isCamera);
-    const matched = wildcard
-      ? !isCamera || objectLabels.has(obj)
-      : terms.some((term) => matchesTerm(obj, term));
-    if (!matched) continue;
+    if (!matchedObjs.has(obj)) continue;
     const name = objectLabels.get(obj) ?? (obj.name || boneNames.get(obj)?.[0] || obj.type);
     out.push({ obj, name });
   }
@@ -421,14 +460,15 @@ export function measureProbeTarget(
   const box = computeVisibleBounds(obj);
   const worldPos = obj.getWorldPosition(new THREE.Vector3());
   const empty = box.isEmpty();
+  const center = empty ? worldPos : box.getCenter(new THREE.Vector3());
   const bounds: ProbeBounds | null = empty
     ? null
     : {
         min: vec3(box.min),
         max: vec3(box.max),
         size: vec3(box.getSize(new THREE.Vector3())),
+        center: vec3(center),
       };
-  const center = empty ? worldPos : box.getCenter(new THREE.Vector3());
   const isBone = Boolean((obj as THREE.Bone).isBone);
   let axes: { y: Vec3Tuple; z: Vec3Tuple } | undefined;
   if (empty || isBone) {
@@ -463,19 +503,30 @@ const formatTargetLine = (item: ProbeTarget): string => {
     .join("");
   const blur = item.blurPx !== undefined ? ` blur ${item.blurPx.toFixed(1)} px` : "";
   if (item.bounds) {
-    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}] size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m${blur} screen=${scr}${past}`;
+    const [cx, cy, cz] = item.bounds.center;
+    const [px, py, pz] = item.worldPos;
+    const centerText =
+      Math.hypot(cx - px, cy - py, cz - pz) > 0.01 ? ` center=[${fmt3(item.bounds.center)}]` : "";
+    return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${centerText} size=[${fmt3(item.bounds.size)}] dist=${item.cameraDist.toFixed(2)}m${blur} screen=${scr}${past}`;
   }
   const axesText = item.axes ? ` +Y=[${fmt3(item.axes.y)}] +Z=[${fmt3(item.axes.z)}]` : "";
   return `  ${item.name}${vis} pos=[${fmt3(item.worldPos)}]${axesText} dist=${item.cameraDist.toFixed(2)}m${blur} screen=${scr}${past}`;
 };
 
-export const probeCheck =
-  (
-    render: ProbeRender,
-    cfg: ProbeConfig,
-    postFn: (url: string, body: string) => Promise<unknown>,
-  ) =>
-  async (filter = "", t = NaN): Promise<string[]> => {
+export const probeCheck = (
+  render: ProbeRender,
+  cfg: ProbeConfig,
+  postFn: (url: string, body: string) => Promise<unknown>,
+) => {
+  type SavedEntry = {
+    obj: THREE.Object3D;
+    baseName: string;
+    ownerLabel: string | null;
+    parentName: string | null;
+    target: ProbeTarget;
+  };
+  const written = new Map<string, { report: ProbeReport; entries: SavedEntry[] }>();
+  return async (filter = "", t = NaN): Promise<string[]> => {
     if (typeof filter !== "string" || !Number.isFinite(t) || t < 0) {
       return ["ERROR usage: --check probe:<t> or --check probe:<filter>,<t>"];
     }
@@ -497,10 +548,11 @@ export const probeCheck =
       : null;
 
     let report: ProbeReport;
+    let measuredEntries: SavedEntry[] = [];
     try {
       if (cfg.inspect && free) {
-        const [px, py, pz, lx, ly, lz, fov] = cfg.inspect;
-        Object.assign(free, { on: true, fov });
+        const [px, py, pz, lx, ly, lz, fov, roll] = cfg.inspect;
+        Object.assign(free, { on: true, fov, ...(roll !== undefined ? { roll } : {}) });
         free.p.set(px, py, pz);
         free.l.set(lx, ly, lz);
       }
@@ -534,20 +586,59 @@ export const probeCheck =
       const focus =
         fstop > 0 && focusM > 0 ? { m: focusM, target: focusTarget ?? null, fstop, mm } : undefined;
       const [width] = sizeOf(cfg.ratio ?? "16:9", 1920);
-      const targets = collectProbeTargets(tools, filter).map(({ obj, name }) => {
+      const objectLabels = new Map<THREE.Object3D, string>();
+      for (const entry of tools.objects ?? []) {
+        const [obj, label] = pairOf(entry);
+        if (obj && label && !objectLabels.has(obj)) objectLabels.set(obj, label);
+      }
+      const ownerOf = (obj: THREE.Object3D): { obj: THREE.Object3D; label: string } | null => {
+        for (let p = obj.parent; p; p = p.parent) {
+          const label = objectLabels.get(p);
+          if (label) return { obj: p, label };
+        }
+        return null;
+      };
+      const parentNameOf = (obj: THREE.Object3D, stopAt: THREE.Object3D | null): string | null => {
+        for (let p = obj.parent; p && p !== stopAt; p = p.parent) {
+          if (p.name) return p.name;
+        }
+        return null;
+      };
+      measuredEntries = collectProbeTargets(tools, filter).map(({ obj, name }) => {
         const target = measureProbeTarget(obj, name, camera);
         if (focus)
           target.blurPx = round4(
             blurPx({ mm, fstop, focus: focusM, dist: target.cameraDist, width }),
           );
-        return target;
+        const owner = ownerOf(obj);
+        return {
+          obj,
+          baseName: name,
+          ownerLabel: owner?.label ?? null,
+          parentName: parentNameOf(obj, owner?.obj ?? null),
+          target,
+        };
       });
+      const camUp = new THREE.Vector3(0, 1, 0).applyQuaternion(
+        camera.getWorldQuaternion(new THREE.Quaternion()),
+      );
+      const camFwd = camera.getWorldDirection(new THREE.Vector3()).normalize();
+      const refRight = new THREE.Vector3().crossVectors(camFwd, new THREE.Vector3(0, 1, 0));
+      let camRoll = 0;
+      if (refRight.lengthSq() >= 1e-8) {
+        refRight.normalize();
+        const refUp = new THREE.Vector3().crossVectors(refRight, camFwd).normalize();
+        camRoll = round4(Math.atan2(-camUp.dot(refRight), camUp.dot(refUp)));
+      }
+      const targets = measuredEntries.map((e) => e.target);
       report = {
         t: round4(t),
         sceneT,
         camera: {
           p: vec3(camPos),
           l: camLook,
+          up: vec3(camUp),
+          roll: camRoll,
           fov,
           mode: cfg.inspect ? "inspect" : "film",
           ...(focus && { focus }),
@@ -556,6 +647,9 @@ export const probeCheck =
       };
     } finally {
       if (free && savedFree) {
+        for (const k of Object.keys(free)) {
+          if (k !== "p" && k !== "l" && !(k in savedFree.scalars)) delete free[k];
+        }
         Object.assign(free, savedFree.scalars);
         free.p.set(...savedFree.p);
         free.l.set(...savedFree.l);
@@ -563,13 +657,66 @@ export const probeCheck =
     }
 
     const fileName = `probe_${t}s.json`;
-    await postFn(`/still/${fileName}`, JSON.stringify(report, null, 2));
+    const prev = written.get(fileName);
+    const sameCamera =
+      prev &&
+      prev.report.camera.mode === report.camera.mode &&
+      prev.report.camera.fov === report.camera.fov &&
+      prev.report.camera.roll === report.camera.roll &&
+      prev.report.camera.p.every((v, i) => v === report.camera.p[i]) &&
+      prev.report.camera.l.every((v, i) => v === report.camera.l[i]) &&
+      (prev.report.camera.up ?? []).every((v, i) => v === report.camera.up?.[i]);
+    const mergedEntries: SavedEntry[] = sameCamera
+      ? [
+          ...prev.entries.filter((old) => !measuredEntries.some((cur) => cur.obj === old.obj)),
+          ...measuredEntries,
+        ]
+      : measuredEntries;
+    const baseCounts = new Map<string, number>();
+    for (const e of mergedEntries) baseCounts.set(e.baseName, (baseCounts.get(e.baseName) ?? 0) + 1);
+    const disambiguated = mergedEntries.map((e) => {
+      if ((baseCounts.get(e.baseName) ?? 0) <= 1) return { ...e.target, name: e.baseName };
+      if (e.ownerLabel && !e.baseName.startsWith(`${e.ownerLabel}.`)) {
+        return { ...e.target, name: `${e.ownerLabel}.${e.baseName}` };
+      }
+      if (e.parentName && !e.baseName.startsWith(`${e.parentName}.`)) {
+        return { ...e.target, name: `${e.parentName}.${e.baseName}` };
+      }
+      return { ...e.target, name: e.baseName };
+    });
+    const afterCounts = new Map<string, number>();
+    for (const item of disambiguated)
+      afterCounts.set(item.name, (afterCounts.get(item.name) ?? 0) + 1);
+    const savedTargets = disambiguated.map((item, i) => {
+      if ((afterCounts.get(item.name) ?? 0) <= 1) return item;
+      const e = mergedEntries[i]!;
+      if (e.ownerLabel && e.parentName) {
+        const prefix = e.baseName.startsWith(`${e.ownerLabel}.`)
+          ? e.parentName
+          : `${e.ownerLabel}.${e.parentName}`;
+        return { ...item, name: `${prefix}.${e.baseName}` };
+      }
+      return item;
+    });
+    const savedReport: ProbeReport = { ...report, targets: savedTargets };
+    written.set(fileName, { report: savedReport, entries: mergedEntries });
+    await postFn(`/still/${fileName}`, JSON.stringify(savedReport, null, 2));
 
+    const savedByObj = new Map<THREE.Object3D, ProbeTarget>();
+    for (let i = 0; i < mergedEntries.length; i++) {
+      savedByObj.set(mergedEntries[i]!.obj, savedTargets[i]!);
+    }
+    const displayTargets = measuredEntries.map((e) => savedByObj.get(e.obj) ?? e.target);
     const lens = report.camera.focus;
-    const header = `probe t=${t}s (scene ${report.sceneT}s) cam=${report.camera.mode} p=[${fmt3(report.camera.p)}] l=[${fmt3(report.camera.l)}] fov=${report.camera.fov ?? "ortho"}${lens ? ` focus ${lens.m.toFixed(2)} m${lens.target ? ` on ${lens.target}` : ""}, f/${lens.fstop}, ${lens.mm} mm` : ""} (${report.targets.length} target${report.targets.length === 1 ? "" : "s"})`;
-    const lines = [header, ...report.targets.map(formatTargetLine)];
+    const rollStr =
+      typeof report.camera.roll === "number" && Math.abs(report.camera.roll) > 1e-4
+        ? ` roll=${report.camera.roll.toFixed(3)}`
+        : "";
+    const header = `probe t=${t}s (scene ${report.sceneT}s) cam=${report.camera.mode} p=[${fmt3(report.camera.p)}] l=[${fmt3(report.camera.l)}] fov=${report.camera.fov ?? "ortho"}${rollStr}${lens ? ` focus ${lens.m.toFixed(2)} m${lens.target ? ` on ${lens.target}` : ""}, f/${lens.fstop}, ${lens.mm} mm` : ""} (${displayTargets.length} target${displayTargets.length === 1 ? "" : "s"})`;
+    const lines = [header, ...displayTargets.map(formatTargetLine)];
     if (!report.targets.length && filter.trim()) {
-      const available = (tools.objects ?? []).map(([, label]) => label).join(", ") || "none";
+      const available =
+        (tools.objects ?? []).map((entry) => pairOf(entry)[1]).join(", ") || "none";
       lines.push(
         `  no targets matched "${filter.trim()}" (draw.tools.objects: ${available}; use * for all named scene nodes)`,
       );
@@ -577,3 +724,4 @@ export const probeCheck =
     lines.push(`wrote renders/${fileName}`);
     return lines;
   };
+};

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" class="dark" data-phone="true">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="theme-color" content="#100F0F" />
+    <title>Studio Lite</title>
+    <link rel="icon" href="data:," />
+    <style>
+      @layer base {
+        html,
+        body {
+          margin: 0;
+          background: #100f0f;
+          color: #cecdc3;
+          color-scheme: dark;
+        }
+      }
+      .studio-start-error {
+        margin: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      #studio-boot {
+        box-sizing: border-box;
+        display: grid;
+        min-height: 100vh;
+        min-height: 100dvh;
+        place-items: center;
+        padding: 24px;
+        color: #cecdc3;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+      #studio-boot > div {
+        width: min(100%, 280px);
+      }
+      #studio-boot h1 {
+        margin: 0;
+        color: #fffcf0;
+        font-size: 20px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      #studio-boot-message {
+        margin: 6px 0 14px;
+      }
+      .studio-boot-progress {
+        height: 2px;
+        overflow: hidden;
+        border-radius: 2px;
+        background: #343331;
+      }
+      .studio-boot-progress::after {
+        display: block;
+        width: 50%;
+        height: 100%;
+        background: #4385be;
+        content: "";
+      }
+      #studio-boot[data-error] .studio-boot-progress {
+        display: none;
+      }
+      body:has(#root + pre) #studio-boot {
+        display: none;
+      }
+    </style>
+    <script>
+      addEventListener(
+        "error",
+        (e) => {
+          if (!(e.target instanceof HTMLScriptElement) || e.target.type !== "module") return;
+          const status = document.getElementById("studio-boot-message");
+          if (!status) return;
+          document.getElementById("studio-boot").dataset.error = "";
+          status.textContent = "Couldn’t load Studio Lite. Check your connection, then reload.";
+        },
+        true,
+      );
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <main id="studio-boot">
+        <div>
+          <h1 id="studio-boot-title">Studio Lite</h1>
+          <p id="studio-boot-message" role="status">Starting Studio Lite…</p>
+          <div class="studio-boot-progress" aria-hidden="true"></div>
+          <noscript>Enable JavaScript to open Studio Lite.</noscript>
+        </div>
+      </main>
+    </div>
+    <script>
+      {
+        const name = window.__LITE_BOOT?.film?.name;
+        if (name) document.getElementById("studio-boot-title").textContent = name + " · Studio Lite";
+      }
+    </script>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>

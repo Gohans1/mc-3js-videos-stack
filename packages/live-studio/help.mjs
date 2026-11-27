@@ -19,7 +19,9 @@ const GROUPS = [
     "Make the film",
     {
       studio:
-        "the live studio: preview, timeline, notes (bun run studio --detach to start in background; --status, --stop, --lan)",
+        "the live studio: preview, timeline, notes, Compare mode (press V; auto-loads renders/reference/*_vs_*.mp4) (bun run studio --detach; --status, --stop, --lan)",
+      "studio:lite":
+        "lightweight desktop & mobile video review & notes (MP4 playback, zero watchers, zero 3D; bun run studio:lite [port] [--detach|--status|--stop|--lan])",
       collab:
         "read protected Studio edits; write or write-many intentional AI changes with an explicit current base (--help)",
       history:
@@ -64,7 +66,7 @@ const GROUPS = [
     "Look and review",
     {
       render:
-        "draft stills, clips, captions and posters; render final automatically checks for pops and foot slides before encoding; render stills --check pops:20,45 checks a range; --check touch scans all actors; see --help for more checks and render options",
+        "draft stills, clips, captions and posters; render final automatically checks for pops and foot slides before encoding; render stills --check pops:20,45 checks a range; prefer targeted 30 fps --check touch:<part>,20,45 over slow 10 fps whole-film --check touch; see --help for more checks and render options",
       sheet:
         "contact sheets; bare stills, vs (all renders/vs_still_*.jpg), overview [A-B[/N]] for a bounded picture map, frames TIMES for native evidence (--vs references/ref.mp4), or explicit image/glob grids; each new run has index.json",
       scenes:

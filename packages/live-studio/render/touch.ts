@@ -4,7 +4,7 @@ import * as THREE from "three";
 import { gap, surface } from "../checks/contact.mjs";
 import { summarize } from "../checks/touch.mjs";
 import { canvas } from "./lab";
-import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
+import { chart, findTarget, inside, label, labelOf, mark, pairOf, targetHelp } from "./target";
 
 const MAX_PROBES = 6000;
 const WHOLE_STEP = 0.1;
@@ -90,7 +90,7 @@ export const touchCheck = (render) => {
     return true;
   };
   const ownerOf = (obj, objects) => {
-    for (let p = obj; p; p = p.parent) if (objects?.some(([o]) => o === p)) return p;
+    for (let p = obj; p; p = p.parent) if (objects?.some((entry) => pairOf(entry)[0] === p)) return p;
     return obj;
   };
   const partsOf = (owner, bones, fallback) => {

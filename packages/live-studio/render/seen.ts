@@ -5,7 +5,7 @@ import * as THREE from "three";
 import { summarize } from "../checks/seen.mjs";
 import { sizeOf } from "../src/frame.ts";
 import { canvas } from "./lab";
-import { chart, findTarget, inside, label, labelOf, mark, targetHelp } from "./target";
+import { chart, findTarget, inside, label, labelOf, mark, pairOf, targetHelp } from "./target";
 
 const camPos = new THREE.Vector3(),
   targetPos = new THREE.Vector3(),
@@ -67,7 +67,7 @@ export const seenCheck = (render, cfg) => {
     camera.matrixWorld.decompose(wide.position, wide.quaternion, wide.scale);
     wide.fov = (2 * Math.atan(WIDE * Math.tan((camera.fov * Math.PI) / 360)) * 180) / Math.PI;
     wide.updateProjectionMatrix();
-    const ids = new Map((objects ?? []).map(([, l], i) => [l, i + 2])),
+    const ids = new Map((objects ?? []).map((entry, i) => [pairOf(entry)[1], i + 2])),
       names = new Map([...ids].map(([l, i]) => [i, l]));
     const meshes = [],
       off = [],

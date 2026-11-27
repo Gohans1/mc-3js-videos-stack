@@ -108,6 +108,7 @@ const SCRIPTS = {
   history: "bun node_modules/live-studio/history.mjs",
   collab: "bun node_modules/live-studio/collab.mjs",
   studio: "bun node_modules/live-studio/src/live.mjs",
+  "studio:lite": "bun node_modules/live-studio/src/lite.mjs",
   notes: "bun node_modules/live-studio/notes.mjs",
   note: "bun node_modules/live-studio/note.mjs",
   render: "bun node_modules/live-studio/render.mjs",

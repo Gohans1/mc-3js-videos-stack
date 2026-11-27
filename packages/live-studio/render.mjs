@@ -4,6 +4,7 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -14,6 +15,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, join, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
 
+import { resolveTextItem } from "film-stage/titles-catalog";
 import { build } from "vite";
 
 import { cues, srt } from "./src/captions.mjs";
@@ -71,7 +73,8 @@ when the page goes quiet for 4 minutes mid-video. A clip or final run ends with 
 stretch between cuts (its median frame), naming one over twice the median of the others and 33 ms (a heavy set to look into).
 Builds the film with the studio's own bundler, opens it in headless Chrome on the GPU and writes what the page sends back.
 Nothing is written outside the film. Options come after the target:
-  --at 40,41.5               stills at these heard seconds, or as notes print them: --at 0:40,0:41.5 (default 1)
+  --at 40,41.5               stills at these heard seconds, or as notes print them: --at 0:40,0:41.5 (repeatable; default 1; omit --at with --check to run checks alone without drawing or clearing existing renders/still_*.jpg)
+  --keep                     stills only: keep existing renders/still_*.jpg from previous runs instead of clearing them first
   --list                     with the list of what is going on (draw.describe) over the picture; off, the picture is clean.
                              A draft frame has a strip under the picture: the heard time mm:ss.sss and the shot. The
                              picture is the frame's top at the film's ratio (720x1280 of a 9:16 draft's 720x1352):
@@ -83,35 +86,39 @@ Nothing is written outside the film. Options come after the target:
   --samples 16               temporal shutter samples a frame for stills, clip, final or poster (1-64; stills and clip 1, final and
                              poster 8): more is smoother blur, slower; above 1, a frame whose camera turns fast (a whip) takes more by
                              itself, up to 64. --samples 8 on stills (render all's too) gives a moving moment the final's
-                             motion blur at the draft's size; leave stills at 1 to check a pose, a contact or where things are
+                             motion blur at the draft's size; leave stills at 1 to check a pose, a contact or where things are.
+                             Draft mode forces apertureSamples = 1 (poster and final run draft = false for true aperture blur);
+                             --samples 1 does not turn off post-DOF when cam.json has fstop > 0. Omitting --samples on clip resets to 1
   --res 2160                 final and poster: 1440 (default), 2160 or 1080 lines (the short side).
                              A Shorts film defaults to 1080 (1080x1920); inspect the output at the chosen size.
-  --inspect px,py,pz,lx,ly,lz,fov  every still from this one fixed camera (the studio's free camera) instead of the film's
-  --views "a:px,py,pz,lx,ly,lz,fov;b:..."  stills/poster only: batch multiple named cameras in one Chrome boot to
+  --inspect px,py,pz,lx,ly,lz,fov[,roll]  every still from this one fixed camera (the studio's free camera; optional 8th roll in radians) instead of the film's
+  --views "a:px,py,pz,lx,ly,lz,fov[,roll];b:..."  stills/poster only: batch multiple named cameras in one Chrome boot (repeatable) to
                              renders/view_<name>_<s>s.jpg (.png for poster), keeping existing still_*.jpg and other
-                             view_*.jpg; also accepts --views "@views.json" ({ name: [7 nums] } or [{ name, cam }])
+                             view_*.jpg; also accepts --views "@views.json" ({ name: [7 or 8 nums] } or [{ name, cam }])
   --crop x,y,w,h             stills/poster only: native-resolution region crop in 0..1 via camera.setViewOffset
-  --ref references/ref.mp4   stills/poster only: each picture beside the reference's frame at the same second (its exact
+  --ref references/ref.mp4   stills/poster only (also pairs with --inspect and --views): each picture beside the reference's frame at the same second (its exact
                              frame index) to renders/vs_<still>.jpg (reference | ours | diff), with luma, saturation and
                              sharpness ours/reference (under 0.6: SOFTER, a blur and not the draft's size when poster
                              says it too); --ref-region x,y,w,h (0..1) measures the subject there as well, with its mean rgb and
-                             brightness ours/reference. The reference is filmed with motion blur: on a moving moment give the
+                             brightness ours/reference (and isolates subject sharpness from burnt-in reference captions).
+                             The reference is filmed with motion blur: on a moving moment give the
                              stills --samples 8 too, or ours reads sharper than it is
   --compare                  stills/poster only: keep previous still in renders/.prev/ and write Before/After diff sheet
-  --check "slide:0,108;trace:50,51,0.1"  with stills or all, run the film's draw.checks.slide(0, 108) etc.
-                             and print the lines they return. Final runs its built-in pops check automatically.
+  --check "slide:0,108;trace:50,51,0.1"  with stills or all, run the film's draw.checks.slide(0, 108) etc. (repeatable: --check a --check b)
+                             and print the lines they return (omit --at to keep existing renders/still_*.jpg). Final runs its built-in pops check automatically.
   --check motion:handR,81,83 built in for every film (target: cam, a bone, an object's .name or draw.tools.objects label),
                              between two HEARD seconds as --at takes them, not the scene seconds of src/timeline rows
                              (bun run at <s> converts and names the shot; the result says which shots it spans):
                              motion  speed graph, onion skin + speed-coloured path, pops, dead stops (render/motion.ts);
                                      cam also: turn and zoom in °/s, a frame width in how many seconds (7-second rule), impulse spans
                              seen    how much of the frame it fills, hidden behind what, cut off, too dark, BLURRED (render/seen.ts)
-                             touch   sinking into things, hanging just off them (render/touch.ts): for one shot or move in
-                                     question; over a whole film it lists every small limb clip (a walk's feet, 6-10 cm)
-  --check touch, --check touch:20,45  the same for every actor (mc-actor makePlayer) at once, every 0.1 s, an actor off
-                             screen or hidden the whole span named but not judged; renders/touch_actors_<from>-<to>_worst.jpg
-                             circles the worst moments.
-                             Slow: about a minute per actor per film minute
+                             touch   sinking into things, hanging just off them (render/touch.ts, 30 fps when targeted):
+                                     uses SINK = 6.25 cm, skips isSkinnedMesh and props inside their owner, and cannot report
+                                     SINK on DoubleSide/PlaneGeometry (best for thick >=13 cm solids; inspect thin/held props or actor carries via probe/visuals)
+  --check touch, --check touch:20,45  the same for every actor (mc-actor makePlayer) at once, every 0.1 s (10 fps), keeping
+                             1 worst vertex per actor per frame, an actor off screen or hidden the whole span named but not judged;
+                             renders/touch_actors_<from>-<to>_worst.jpg circles the worst moments.
+                             Slow (~1 min per actor per film min) with no watchdog heartbeat; prefer targeted touch:<part>,<from>,<to>
   --check text, --check text:20,45  every line of on-screen text (or those between two heard seconds), at the second it is
                              fully shown: OUTSIDE the safe area (5% in; a Short's clears YouTube's buttons and title),
                              LOW contrast around its letters; renders/text_<i>.jpg
@@ -123,8 +130,9 @@ Nothing is written outside the film. Options come after the target:
   --check pops, --check pops:20,45  every joint, brow, actor root and draw.tools.objects label at 30 fps: one- or two-frame
                              jumps a viewer reads as a teleport (POP; cuts and transitions excepted, a joint turning 90°
                              between eligible frames counts) and planted soles sliding relative to the surface underfoot
-                             (SLIDE). Requires draw.tools.scene and draw.tools.camera. Writes renders/pops.json with
-                             each pop's neighbouring steps and fails the run on findings (render/pops.ts).
+                             (SLIDE). Requires draw.tools.scene and draw.tools.camera. Does not catch .visible = false -> true
+                             pop-ins, 3+ frame snaps, unregistered prop moves or prop rotation/scale pops (pair with framecheck).
+                             Writes renders/pops.json with each pop's neighbouring steps and fails the run on findings (render/pops.ts).
   --check probe:<t>, --check "probe:<filter>,<t>"  single-frame 3D spatial snapshot at heard second t (all draw.tools.objects,
                              or |-separated case-insensitive names/dot-paths like "probe:dish|elon.head,4" or "probe:*,4" —
                              quote | and * in shell); honors --inspect, logs 1-line summaries and writes renders/probe_<t>s.json (render/probe.ts);
@@ -157,7 +165,13 @@ const VALUE_FLAGS = {
   "--ref": "ref",
   "--ref-region": "refRegion",
 };
-const SWITCHES = { "--list": "list", "--compare": "compare", "--fresh-cache": "freshCache" };
+const SWITCHES = {
+  "--list": "list",
+  "--compare": "compare",
+  "--fresh-cache": "freshCache",
+  "--keep": "keep",
+};
+const REPEAT_JOIN = { "--at": ",", "--check": ";" };
 const TARGETS = ["stills", "clip", "captions", "all", "final", "poster"];
 const rawArgs = cliArgs(
   HELP,
@@ -186,18 +200,24 @@ for (let i = 0; i < rawArgs.length; i++) {
     }
     opt.lab[key.toLowerCase()] = rest.join("=");
   } else if (VALUE_FLAGS[a]) {
-    if (opt[VALUE_FLAGS[a]] !== undefined) {
-      const all = {
-        "--at": "--at 12,30.5",
-        "--chunks": "--chunks 3,4",
-        "--check": '--check "text;order"',
-      }[a];
+    const key = VALUE_FLAGS[a];
+    const nextVal = rawArgs[++i];
+    if (a === "--views") {
+      (opt.views ??= []).push(nextVal);
+      continue;
+    }
+    if (opt[key] !== undefined) {
+      if (REPEAT_JOIN[a]) {
+        opt[key] = `${opt[key]}${REPEAT_JOIN[a]}${nextVal}`;
+        continue;
+      }
+      const all = { "--chunks": "--chunks 3,4" }[a];
       console.error(
         `${a} is given twice: ${all ? `once, with every value in it (${all})` : "once is all it takes"}`,
       );
       process.exit(2);
     }
-    opt[VALUE_FLAGS[a]] = rawArgs[++i];
+    opt[key] = nextVal;
   }
 }
 const compare = Boolean(opt.compare);
@@ -239,26 +259,31 @@ const misplaced =
                           ? "--lab reaches only an --entry page (cfg.lab.<key>): bun run render stills --entry lab/prop.ts --lab view=desk"
                           : (video || what === "captions") && compare
                             ? "--compare is for render stills or poster"
-                            : what === "captions"
-                              ? Object.entries({
-                                  at: "--at",
-                                  list: "--list",
-                                  check: "--check",
-                                  inspect: "--inspect",
-                                  views: "--views",
-                                  entry: "--entry",
-                                  crop: "--crop",
-                                  samples: "--samples",
-                                })
-                                  .filter(([k]) => opt[k] !== undefined)
-                                  .map(([, flag]) => `${flag} does nothing for render captions`)[0]
-                              : null;
+                            : what !== "stills" && opt.keep
+                              ? "--keep is for render stills"
+                              : what === "captions"
+                                ? Object.entries({
+                                    at: "--at",
+                                    list: "--list",
+                                    check: "--check",
+                                    inspect: "--inspect",
+                                    views: "--views",
+                                    entry: "--entry",
+                                    crop: "--crop",
+                                    samples: "--samples",
+                                    keep: "--keep",
+                                  })
+                                    .filter(([k]) => opt[k] !== undefined)
+                                    .map(([, flag]) => `${flag} does nothing for render captions`)[0]
+                                : null;
 if (misplaced) {
   console.error(`${misplaced} (--help for which option goes with which)`);
   process.exit(2);
 }
 if (what === "final" && opt.entry) {
-  console.error("render final uses the film's scene so it can check the actual output for pops; use --entry with stills");
+  console.error(
+    "render final uses the film's scene so it can check the actual output for pops; use --entry with stills",
+  );
   process.exit(2);
 }
 
@@ -284,8 +309,6 @@ if (opt.entry && !statSync(resolve(PROJECT, opt.entry), { throwIfNoEntry: false 
 const vsVideo = opt.ref ? resolve(PROJECT, opt.ref) : null;
 if (opt.ref !== undefined) {
   const other = Object.entries({
-    inspect: "--inspect",
-    views: "--views",
     crop: "--crop",
     entry: "--entry",
     list: "--list",
@@ -384,21 +407,38 @@ const CHECKS = (opt.check ?? "")
       return { c, name, args: ["", ...(span.length ? span : [0, Infinity])] };
     }
     if (name === "probe") {
-      if (args.length !== 1 && args.length !== 2) {
+      if (args.length < 1) {
         console.error(
           `--check ${c}: probe takes <t> or <filter>,<t> (heard second); got ${args.length} values (bun run render --help)`,
         );
         process.exit(2);
       }
-      if (args.length === 2) {
-        const filter = args[0];
-        if (!filter || filter.split("|").some((part) => !part.trim())) {
+      if (args.length >= 2) {
+        const rawTargets = args.slice(0, -1);
+        if (
+          rawTargets.length > 1 &&
+          rawTargets.some((part) => /^-?\d+(?:\.\d+)?$|^\d+:\d/.test(part))
+        ) {
+          console.error(
+            `--check ${c}: probe takes one heard second (<filter>,<t>), not a range; got ${args.length} values (bun run render --help)`,
+          );
+          process.exit(2);
+        }
+        const filterParts = rawTargets.flatMap((part) => part.split("|"));
+        if (!filterParts.length || filterParts.some((part) => !part.trim())) {
           console.error(
             `--check ${c}: probe filter cannot be empty (use --check probe:<t>, --check probe:*,<t>, or |-separated names)`,
           );
           process.exit(2);
         }
-        return { c, name, args: [filter, secondArg(`--check ${c}: time`, args[1])] };
+        return {
+          c,
+          name,
+          args: [
+            filterParts.map((part) => part.trim()).join("|"),
+            secondArg(`--check ${c}: time`, args[args.length - 1]),
+          ],
+        };
       }
       return { c, name, args: ["", secondArg(`--check ${c}: time`, args[0])] };
     }
@@ -414,8 +454,8 @@ const CHECKS = (opt.check ?? "")
     return { c, name, args: [args[0], sec("from", args[1]), sec("to", args[2])] };
   });
 const inspect = opt.inspect ? numbers("--inspect", opt.inspect) : null;
-if (inspect && inspect.length !== 7) {
-  console.error(`--inspect takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${inspect.length}`);
+if (inspect && inspect.length !== 7 && inspect.length !== 8) {
+  console.error(`--inspect takes 7 or 8 numbers px,py,pz,lx,ly,lz,fov[,roll], got ${inspect.length}`);
   process.exit(2);
 }
 let views = null;
@@ -583,7 +623,8 @@ const preservePrev = (fileName) => {
   mkdirSync(prevDir, { recursive: true });
   copyFileSync(src, join(prevDir, fileName));
 };
-if (at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS)) {
+const clearPreviousStills = () => {
+  if (!(at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS))) return;
   for (const f of readdirSync(RENDERS)) {
     if (/^still_.*\.jpg$/.test(f)) {
       preservePrev(f);
@@ -598,7 +639,7 @@ if (at.length && what !== "poster" && !views && !opt.entry && existsSync(RENDERS
     console.log(
       `moved the last run's ${moved.length === 1 ? "still" : `${moved.length} stills`} to renders/.prev/ (${moved.slice(0, 8).join(", ")}${moved.length > 8 ? `, ${moved.length - 8} more` : ""}): renders/ keeps only this run's`,
     );
-}
+};
 const choicesFile = ["choices.json", "sound_choices.json"]
   .map((f) => join(PROJECT, f))
   .find(existsSync);
@@ -627,7 +668,8 @@ if (textCheck) {
     ? mapTimeline("text", file, textClock, false, null, {})
     : { items: [] };
   const [, from, to] = textCheck.args;
-  file.items?.forEach((it, i) => {
+  file.items?.forEach((rawIt, i) => {
+    const it = resolveTextItem(rawIt, file);
     const h = heard.items?.[i];
     if (!isRead(it, file.tracks) || !h) return;
     const at = textCheckSample(h, heardInOut(it, h, textClock), from, to, FPS, textClock);
@@ -639,6 +681,8 @@ if (textCheck) {
       at,
       px: pxOf(it),
       ink: it.color ?? "#FFFFFF",
+      safeArea: it.safeArea,
+      strokeWidth: it.stroke ? (it.stroke.width ?? 6) * (it.scale ?? 1) : 0,
     });
   });
   if (existsSync(RENDERS))
@@ -772,6 +816,7 @@ const styles = (Array.isArray(built) ? built : [built])
   .map((f) => `<link rel="stylesheet" href="/${f.fileName}">`)
   .join("");
 console.log(`built in ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+if (!opt.keep) clearPreviousStills();
 const stamp = (() => {
   const h = createHash("sha256");
   const walk = (dir) =>
@@ -865,6 +910,7 @@ const close = () => {
 const server = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
+  idleTimeout: 120,
   async fetch(req) {
     const openfilm = openFilmResource(req, cfg.clip ? observeAsset : undefined);
     if (openfilm) return openfilm;
@@ -952,16 +998,16 @@ const server = Bun.serve({
         "<!doctype html>" +
           styles +
           '<canvas id="gl"></canvas><script>onerror = (m, s, l, c, e) => { fetch("/log", { method: "POST", body: "ERROR " + (e && e.stack || m) }); }; onunhandledrejection = (e) => { fetch("/log", { method: "POST", body: "ERROR " + (e.reason && e.reason.stack || e.reason) }); };</script><script type="module" src="/page.js"></script>',
-        { headers: { "content-type": "text/html" } },
+        { headers: { "content-type": "text/html", "cache-control": "no-store" } },
       );
     if (url === "/config")
       return new Response(JSON.stringify(pageConfig()), {
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
       });
     if (url === "/_preview_overlay.zip") {
       if (!previewOverlayZip) return new Response(null, { status: 404 });
       return new Response(Bun.file(previewOverlayZip), {
-        headers: { "content-type": "application/zip" },
+        headers: { "content-type": "application/zip", "cache-control": "no-store" },
       });
     }
     const builtFile = url === "/page.js" || url.startsWith("/_render/");
@@ -973,7 +1019,10 @@ const server = Bun.serve({
       if (!assetInputs.get(url)) return new Response(null, { status: 404 });
     } else if (!(await f.exists())) return new Response(null, { status: 404 });
     return new Response(f, {
-      headers: { "content-type": MIME[extname(file)] ?? "application/octet-stream" },
+      headers: {
+        "content-type": MIME[extname(file)] ?? "application/octet-stream",
+        "cache-control": "no-store",
+      },
     });
   },
 });
@@ -1028,6 +1077,7 @@ const launch = () => {
       "--disable-gpu-vsync",
       "--disable-frame-rate-limit",
       "--no-first-run",
+      "--disk-cache-size=1",
       "--disable-background-timer-throttling",
       "--disable-renderer-backgrounding",
       `--user-data-dir=${profile.dir}`,
@@ -1069,10 +1119,13 @@ const stuck = (why) => {
   }
 };
 let quietSince = Date.now();
-const finalPopsDeadline = quietSince + 600_000;
+const finalPopsBudgetMs = Math.max(600_000, Math.ceil((ends?.picture ?? 0) * 6_000));
+const finalPopsDeadline = quietSince + finalPopsBudgetMs;
 const watchdog = setInterval(() => {
   if (finalPopsPending && Date.now() > finalPopsDeadline) {
-    console.error("ERROR final: the pops check exceeded 10 minutes before encoding");
+    console.error(
+      `ERROR final: the pops check exceeded ${Math.round(finalPopsBudgetMs / 60_000)} minutes before encoding`,
+    );
     failed = true;
     close();
     return;
@@ -1187,63 +1240,70 @@ if (!failed && vsVideo && stillsWritten.length) {
       return second ? { rel, second, out: `renders/vs_${basename(rel, extname(rel))}.jpg` } : null;
     })
     .filter(Boolean);
-  const runVs = (job) =>
-    new Promise((done) => {
-      const proc = spawn(
-        process.execPath,
-        [
-          qcCli,
-          "vs",
-          vsVideo,
-          join(PROJECT, job.rel),
-          "--at",
-          job.second,
-          "--picture-height",
-          String(H),
-          "--out",
-          join(PROJECT, job.out),
-          ...(opt.refRegion ? ["--region", opt.refRegion] : []),
-        ],
-        { stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+  if (jobs.length) {
+    const manifestDir = mkdtempSync(join(tmpdir(), "render-vs-"));
+    const manifestPath = join(manifestDir, "jobs.json");
+    let result;
+    try {
+      writeFileSync(
+        manifestPath,
+        JSON.stringify({
+          video: vsVideo,
+          pictureHeight: H,
+          ...(opt.refRegion ? { region: opt.refRegion } : {}),
+          jobs: jobs.map((job) => ({
+            image: join(PROJECT, job.rel),
+            at: Number(job.second),
+            out: join(PROJECT, job.out),
+          })),
+        }),
       );
-      let stdout = "";
-      let stderr = "";
-      let settled = false;
-      const finish = (status, errMsg = "") => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        done({ job, status, stdout, stderr: errMsg || stderr });
-      };
-      const timer = setTimeout(() => {
-        killProcessTree(proc);
-        finish(1, "qc vs timed out");
-      }, 180_000);
-      proc.stdout.setEncoding("utf8");
-      proc.stderr.setEncoding("utf8");
-      proc.stdout.on("data", (d) => {
-        stdout += d;
+      result = await new Promise((done) => {
+        const proc = spawn(process.execPath, [qcCli, "vs", "--batch", manifestPath], {
+          stdio: ["ignore", "pipe", "pipe"],
+          windowsHide: true,
+        });
+        let stdout = "";
+        let stderr = "";
+        let settled = false;
+        const finish = (status, errMsg = "") => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          done({ status, stdout, stderr: errMsg || stderr });
+        };
+        const timer = setTimeout(
+          () => {
+            if (proc.pid) killProcessTree(proc.pid, () => proc.kill());
+            else {
+              try {
+                proc.kill();
+              } catch {}
+            }
+            finish(1, "qc vs timed out");
+          },
+          Math.max(180_000, jobs.length * 15_000),
+        );
+        proc.stdout.setEncoding("utf8");
+        proc.stderr.setEncoding("utf8");
+        proc.stdout.on("data", (d) => {
+          stdout += d;
+        });
+        proc.stderr.on("data", (d) => {
+          stderr += d;
+        });
+        proc.on("error", (err) => finish(1, err.message));
+        proc.on("close", (code) => finish(code ?? 1));
       });
-      proc.stderr.on("data", (d) => {
-        stderr += d;
-      });
-      proc.on("error", (err) => finish(1, err.message));
-      proc.on("close", (code) => finish(code ?? 1));
-    });
-  const results = Array.from({ length: jobs.length });
-  let cursor = 0;
-  const workers = Array.from({ length: Math.min(4, jobs.length) }, async () => {
-    while (cursor < jobs.length) {
-      const idx = cursor++;
-      results[idx] = await runVs(jobs[idx]);
+    } finally {
+      rmSync(manifestDir, { recursive: true, force: true });
     }
-  });
-  await Promise.all(workers);
-  for (const r of results) {
-    if (r.status === 0)
-      console.log(r.stdout.trimEnd().replace(join(PROJECT, r.job.out), r.job.out));
-    else {
-      console.log(`ERROR vs ${r.job.rel}: ${(r.stderr || "qc vs failed").trim()}`);
+    if (result.status === 0) {
+      let printed = result.stdout.trimEnd();
+      for (const job of jobs) printed = printed.replace(join(PROJECT, job.out), job.out);
+      if (printed) console.log(printed);
+    } else {
+      console.log(`ERROR vs: ${(result.stderr || "qc vs failed").trim()}`);
       failed = true;
     }
   }
@@ -1251,7 +1311,7 @@ if (!failed && vsVideo && stillsWritten.length) {
     views && jobs.length > 1
       ? `; contact sheet: bun run sheet ${jobs.map((j) => j.out).join(" ")}`
       : jobs.filter((j) => j.rel.includes("/still_")).length > 1
-        ? "; many stills at once: bun run sheet vs (6 to a picture)"
+        ? "; many stills at once: bun run sheet vs --pairs (2-panel REF|OURS) or bun run sheet vs (6 to a picture)"
         : "";
   if (!failed && !chunks && !span)
     console.log(

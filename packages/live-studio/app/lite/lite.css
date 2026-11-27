@@ -1,0 +1,9 @@
+@import "../index.css";
+
+@source "../components/ui/button.tsx";
+@source "../components/ui/badge.tsx";
+@source "../components/ui/dialog.tsx";
+@source "../components/ui/select.tsx";
+@source "../components/ui/textarea.tsx";
+@source "../components/ui/toast.tsx";
+@source "../components/ui/empty.tsx";

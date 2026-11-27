@@ -4,7 +4,7 @@ export const POP = {
   face: { min: 0.35, ratio: 4, floor: 0.02, unit: " face px" },
   landmarks: { min: 0.35, ratio: 4, floor: 0.02, unit: " face px" },
 };
-export const SLIDE = { lift: 0.02, rise: 0.15, far: 0.04, window: 0.5, merge: 0.5 };
+export const SLIDE = { lift: 0.02, rise: 0.15, far: 0.04, window: 0.5, merge: 0.5, minFrames: 4 };
 
 const angle = (a, b) => {
   const dot = Math.abs(a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3]);
@@ -133,7 +133,7 @@ export function findSlides(soles, cuts) {
             ),
           );
         }
-        if (far > SLIDE.far)
+        if (i - start >= SLIDE.minFrames && far > SLIDE.far)
           runs.push({ owner: sole.owner, part: sole.part, from: t[start], to: t[i - 1], far });
       }
       start = i < t.length && planted[i] ? i : -1;

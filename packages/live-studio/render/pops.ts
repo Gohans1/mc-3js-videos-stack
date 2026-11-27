@@ -9,6 +9,18 @@ import { inside } from "./target";
 const FPS = 30;
 const SIDES = ["L", "R"];
 const SOLE_CLEARANCE = 0.03;
+const AABB_PAD = 1e-4;
+const POSE_ONLY = Object.freeze({
+  pictureVisible: false,
+  layersVisible: false,
+  adjustmentsVisible: false,
+});
+
+const hasOpaqueMaterial = (material) => {
+  if (!material) return false;
+  if (Array.isArray(material)) return material.some(hasOpaqueMaterial);
+  return Boolean(material.visible && (!material.transparent || material.opacity >= 0.5));
+};
 
 const supportSampler = (scene) => {
   const ray = new THREE.Raycaster(undefined, new THREE.Vector3(0, -1, 0), 0, SOLE_CLEARANCE * 2);
@@ -28,12 +40,39 @@ const supportSampler = (scene) => {
       if (!meshes) {
         meshes = [];
         scene.traverseVisible((object) => {
-          if (object.isMesh && !object.isSkinnedMesh) meshes.push(object);
+          if (!object.isMesh || object.isSkinnedMesh || !hasOpaqueMaterial(object.material)) return;
+          let box = null;
+          if (!object.isInstancedMesh && !object.isBatchedMesh && object.geometry) {
+            if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+            if (object.geometry.boundingBox && !object.geometry.boundingBox.isEmpty())
+              box = object.geometry.boundingBox.clone().applyMatrix4(object.matrixWorld);
+          }
+          meshes.push({ object, box });
         });
       }
+      const x = sole.x;
+      const yMin = sole.y - SOLE_CLEARANCE - AABB_PAD;
+      const yMax = sole.y + SOLE_CLEARANCE + AABB_PAD;
+      const z = sole.z;
+      const candidates = [];
+      for (const entry of meshes) {
+        const { box, object } = entry;
+        if (
+          box &&
+          (x < box.min.x - AABB_PAD ||
+            x > box.max.x + AABB_PAD ||
+            z < box.min.z - AABB_PAD ||
+            z > box.max.z + AABB_PAD ||
+            yMax < box.min.y ||
+            yMin > box.max.y)
+        )
+          continue;
+        candidates.push(object);
+      }
+      if (!candidates.length) return null;
       ray.ray.origin.copy(sole);
       ray.ray.origin.y += SOLE_CLEARANCE;
-      for (const hit of ray.intersectObjects(meshes, false)) {
+      for (const hit of ray.intersectObjects(candidates, false)) {
         const { object, face, instanceId, batchId, point } = hit;
         const itemId = instanceId ?? batchId;
         const material = Array.isArray(object.material)
@@ -65,9 +104,13 @@ const supportSampler = (scene) => {
   };
 };
 
-const worldVisible = (o) => {
-  for (let p = o; p; p = p.parent) if (!p.visible) return false;
-  return true;
+const updateVisibleWorldMatrices = (object, parentMatrixWorld = null) => {
+  if (!object.visible) return;
+  object.updateMatrix();
+  if (parentMatrixWorld) object.matrixWorld.multiplyMatrices(parentMatrixWorld, object.matrix);
+  else object.matrixWorld.copy(object.matrix);
+  const children = object.children;
+  for (let k = 0; k < children.length; k++) updateVisibleWorldMatrices(children[k], object.matrixWorld);
 };
 
 export const popsCheck =
@@ -118,17 +161,22 @@ export const popsCheck =
     const wp = new THREE.Vector3(),
       sole = new THREE.Vector3(),
       rotation = new THREE.Quaternion();
+    let lastHeartbeat = performance.now();
     for (let frame = first; frame <= last; frame++) {
       const i = frame - first;
       const t = frame / FPS;
-      await draw(t);
-      scene.updateMatrixWorld(true);
+      await draw(t, POSE_ONLY);
+      updateVisibleWorldMatrices(scene);
       camera.updateMatrixWorld(true);
+      if (performance.now() - lastHeartbeat >= 2000) {
+        lastHeartbeat = performance.now();
+        await post("/alive", "").catch(() => {});
+      }
       support.nextFrame();
-      scene.traverse((o) => {
+      scene.traverseVisible((o) => {
         if (o.isBone) {
           o.getWorldPosition(wp);
-          const seen = worldVisible(o) && inView(wp);
+          const seen = inView(wp);
           sample(
             `${o.uuid}|turn`,
             () => ({ owner: ownerOf(o), part: o.name || "bone", kind: "turn" }),
@@ -150,7 +198,7 @@ export const popsCheck =
         }
         if (o.userData?.facePx) {
           o.getWorldPosition(wp);
-          const seen = worldVisible(o) && inView(wp);
+          const seen = inView(wp);
           const px = o.userData.facePx;
           sample(
             `${o.uuid}|face`,
@@ -172,7 +220,7 @@ export const popsCheck =
         }
         if (o.userData?.landmarks) {
           o.getWorldPosition(wp);
-          const seen = worldVisible(o) && inView(wp);
+          const seen = inView(wp);
           sample(
             `${o.uuid}|landmarks`,
             () => ({ owner: ownerOf(o), part: "face", kind: "landmarks" }),
@@ -184,7 +232,6 @@ export const popsCheck =
           return;
         }
         if (o.soleNow) {
-          const seen = worldVisible(o);
           o.getWorldPosition(wp);
           sample(
             `${o.uuid}|root-turn`,
@@ -192,11 +239,11 @@ export const popsCheck =
             i,
             t,
             o.getWorldQuaternion(rotation).toArray(),
-            seen && inView(wp),
+            inView(wp),
           );
           for (const sd of SIDES) {
             o.soleNow(sd, sole);
-            const visible = seen && inView(sole);
+            const visible = inView(sole);
             const track = sample(
               `${o.uuid}|sole${sd}`,
               () => ({ owner: ownerOf(o), part: sd, kind: "sole", support: [] }),
@@ -216,7 +263,7 @@ export const popsCheck =
             i,
             t,
             wp.toArray(),
-            worldVisible(o) && inView(wp),
+            inView(wp),
           );
         }
       });

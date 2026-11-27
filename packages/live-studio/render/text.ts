@@ -33,7 +33,16 @@ export const textCheck = (render, cfg) => async () => {
       const A = await grab(line.at);
       EDIT.text.items = [];
       const B = await grab(line.at);
-      const m = measure(A, B, W, H, line.ink, (line.px * Math.min(W, H)) / 1080);
+      const scale = Math.min(W, H) / 1080;
+      const m = measure(
+        A,
+        B,
+        W,
+        H,
+        line.ink,
+        line.px * scale,
+        (line.strokeWidth ?? 0) * scale,
+      );
       const v = verdict(line, m, ratio);
       out.push(...v.lines);
       if (!v.faults.length) continue;
@@ -43,15 +52,23 @@ export const textCheck = (render, cfg) => async () => {
       pic.height = H;
       const p = pic.getContext("2d");
       p.putImageData(new ImageData(new Uint8ClampedArray(A), W, H), 0, 0);
-      p.lineWidth = 2;
-      p.setLineDash([8, 6]);
-      p.strokeStyle = "rgba(255,255,255,0.8)";
-      p.strokeRect(
-        W * safe.left,
-        H * safe.top,
-        W * (1 - safe.left - safe.right),
-        H * (1 - safe.top - safe.bottom),
-      );
+      const itemSafe =
+        line.safeArea === false
+          ? null
+          : line.safeArea && typeof line.safeArea === "object"
+            ? { ...safe, ...line.safeArea }
+            : safe;
+      if (itemSafe) {
+        p.lineWidth = 2;
+        p.setLineDash([8, 6]);
+        p.strokeStyle = "rgba(255,255,255,0.8)";
+        p.strokeRect(
+          W * itemSafe.left,
+          H * itemSafe.top,
+          W * (1 - itemSafe.left - itemSafe.right),
+          H * (1 - itemSafe.top - itemSafe.bottom),
+        );
+      }
       if (m) {
         p.setLineDash([]);
         p.strokeStyle = "#ffd60a";

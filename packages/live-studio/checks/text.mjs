@@ -16,7 +16,7 @@ const hex = (s) => {
   return [n >> 16, (n >> 8) & 255, n & 255];
 };
 
-export function measure(A, B, w, h, ink, glyphPx) {
+export function measure(A, B, w, h, ink, glyphPx, strokePx = 0) {
   const changed = new Uint8Array(w * h);
   let x0 = w,
     y0 = h,
@@ -43,7 +43,8 @@ export function measure(A, B, w, h, ink, glyphPx) {
   if (x1 < 0) return null;
   const [r, g, b] = hex(ink),
     inkL = lum(r, g, b);
-  const R = Math.max(3, Math.round(glyphPx * 0.15));
+  const baseR = Math.max(3, Math.round(glyphPx * 0.15));
+  const R = strokePx > 0 ? Math.max(2, Math.min(baseR, Math.ceil(strokePx / 2))) : baseR;
   const ax = Math.max(0, x0 - R),
     bx = Math.min(w - 1, x1 + R),
     ay = Math.max(0, y0 - R),
@@ -91,7 +92,7 @@ export function measure(A, B, w, h, ink, glyphPx) {
 }
 
 const pc = (x) => `${(x * 100).toFixed(1)}%`;
-export function verdict({ i, text, at, px }, m, ratio = "16:9") {
+export function verdict({ i, text, at, px, safeArea }, m, ratio = "16:9") {
   const name = `items[${i}] "${text}" at ${at.toFixed(2)}`;
   if (!m)
     return {
@@ -103,13 +104,21 @@ export function verdict({ i, text, at, px }, m, ratio = "16:9") {
   const faults = [],
     lines = [];
   const [x0, y0, x1, y1] = m.box;
-  const safe = SAFE_AREA[ratio] ?? SAFE_AREA["16:9"];
-  const edges = [
-    ["left", x0],
-    ["right", 1 - x1],
-    ["top", y0],
-    ["bottom", 1 - y1],
-  ].filter(([e, d]) => d < safe[e] - 1e-9);
+  const baseSafe = SAFE_AREA[ratio] ?? SAFE_AREA["16:9"];
+  const safe =
+    safeArea === false
+      ? null
+      : safeArea && typeof safeArea === "object"
+        ? { ...baseSafe, ...safeArea }
+        : baseSafe;
+  const edges = safe
+    ? [
+        ["left", x0],
+        ["right", 1 - x1],
+        ["top", y0],
+        ["bottom", 1 - y1],
+      ].filter(([e, d]) => d < safe[e] - 1e-9)
+    : [];
   if (edges.length) {
     faults.push("OUTSIDE");
     lines.push(
