@@ -1,0 +1,11 @@
+{
+  "temperature": 0.65,
+  "voices": ["Rasalgethi"],
+  "blocks": [
+    {
+      "speaker": 1,
+      "style": "calm, matter-of-fact storytelling, unhurried steady pace, falling endings",
+      "text": "Replace this with your clean spoken Zack-style script (90 to 110 words for a 30 to 36 second Short). Spell numbers and years out in words, use plain commas and periods instead of pause tags, and anchor causal pivots with You see, Instead, or But."
+    }
+  ]
+}

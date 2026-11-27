@@ -1,0 +1,11 @@
+{
+  "temperature": 0.7,
+  "voices": ["Zeno"],
+  "blocks": [
+    {
+      "speaker": 1,
+      "style": "Fast, crisp, close-mic American male storyteller, dry fascinated urgency, sharp vocal pops on key nouns, tight jump-cut pacing, zero breathiness, firm falling sentence ends",
+      "text": "Replace this with your clean spoken Zack-style script (95 to 115 words for a 30 to 36 second Short at Zeno's brisk pace). Spell numbers and years out in words, use plain commas and periods instead of pause tags, and anchor causal pivots with You see, Instead, or But."
+    }
+  ]
+}

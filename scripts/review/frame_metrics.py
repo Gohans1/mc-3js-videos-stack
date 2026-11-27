@@ -299,15 +299,30 @@ def main() -> int:
   p_vs.add_argument("--picture-height", type=int, help="Lines of picture in ours, above a draft's strip")
   p_vs.add_argument("--region", help="x,y,w,h in 0..1: sharpness, mean colour and brightness there too")
 
+  p_vs_batch = sub.add_parser("vs-batch", help="Run multiple vs comparisons from a JSON manifest in one Python process")
+  p_vs_batch.add_argument("manifest", help="Path to JSON array of {reference, ours, out?, pictureHeight?, region?}")
+
   args = parser.parse_args()
   try:
     if args.cmd == "box":
       out = cmd_box(args.image, args.rect, args.norm)
     elif args.cmd == "vs":
       out = cmd_vs(args.reference, args.ours, args.out, args.picture_height, args.region)
+    elif args.cmd == "vs-batch":
+      jobs = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+      out = [
+        cmd_vs(
+          j["reference"],
+          j["ours"],
+          j.get("out"),
+          j.get("pictureHeight"),
+          j.get("region"),
+        )
+        for j in jobs
+      ]
     else:
       out = cmd_compare(args.before, args.after, args.out, args.threshold)
-  except (FileNotFoundError, ValueError, OSError) as exc:
+  except (FileNotFoundError, ValueError, OSError, KeyError, TypeError) as exc:
     print(f"error: {exc}", file=sys.stderr)
     return 2
 

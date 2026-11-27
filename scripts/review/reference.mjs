@@ -119,7 +119,7 @@ const HELP = `Optional reference analysis; never required to author a film.
   bun run reference add <video> [--name ref]  Copy a downloaded reference into the film's references/; add --help
   bun run reference timecode <video> [--out <file>] [--label <text>]  Burn a black timecode bar below a copy for AI review; timecode --help
   bun run reference sidebyside <reference> <remake> [--range <from,to>] [--out <file>]  Tile the two videos into one synced video with shared film timecode; sidebyside --help
-  bun run reference frames <reference> <remake> [--range <from,to>] [--fps 15]  Export synced, timecoded JPEG batches for AI review; frames --help
+  bun run reference frames <video> [<remake>] [--range <from,to>] [--fps 15]  Export timecoded JPEG batches (1 video for breakdown, or REF+OURS synced); frames --help
   bun run reference inspect <video-or-URL>  Retained visual/transcript evidence; inspect --help for controls
   bun run reference study <video>
   bun run reference compare <reference> <remake>
@@ -336,7 +336,7 @@ if (process.argv[2] === "add") {
         "-c:v",
         "libx264",
         "-preset",
-        "medium",
+        "fast",
         "-crf",
         "18",
         "-pix_fmt",

@@ -40,11 +40,19 @@ import {
   temperature,
 } from "./editor";
 import {
+  batchGeminiApi,
+  buildInteractionsPayload,
+  listGeminiApiVoices,
+  speakGeminiApi,
+} from "./gemini-api";
+import {
+  assertAllowedModel,
   DEFAULT_MODEL,
   InputError,
   type Scene,
   SPEECH_PATH,
   speechUrl,
+  validateBackend,
   validateBatchManifest,
   validateScene,
 } from "./input";
@@ -128,11 +136,16 @@ const grammar = {
 
 type Command = keyof typeof grammar;
 const usage = [
-  "Usage: bun .claude/skills/aistudio-tts/scripts/cli.ts [--tab tts-LABEL] [--json] COMMAND",
+  "Usage: bun .claude/skills/aistudio-tts/scripts/cli.ts [--backend web|api] [--tab tts-LABEL] [--json] COMMAND",
   "",
   ...Object.entries(grammar).map(
     ([name, [args, detail]]) => `  ${[name, args].filter(Boolean).join(" ")}\n    ${detail}`,
   ),
+  "",
+  "Backends:",
+  "  --backend web (default)  AI Studio Chrome playground (port 9333).",
+  "  --backend api            Gemini API (/v1beta/interactions & /v1beta/voices) with automatic ~/.config/gmn key-pool rotation (fallback: GEMINI_API_KEY).",
+  "                           Supports speak, batch, and voices (default gemini-3.8-flash-tts; flash-lite-tts is banned). Optional: --key-pool-dir DIR, --rounds N, --timeout SECONDS.",
   "",
   "Default tab: tts-main. Tab labels must start with tts-, use only letters/numbers/hyphens (no underscores), and be <= 31 chars.",
   "Prefer speak or batch for single-process generation on Windows. JSON results go to stdout; logs go to stderr.",
@@ -269,6 +282,7 @@ async function main() {
     options: {
       help: { short: "h", type: "boolean" },
       json: { type: "boolean" },
+      backend: { type: "string" },
       tab: { type: "string", default: "tts-main" },
       model: { type: "string" },
       account: { type: "string" },
@@ -277,6 +291,8 @@ async function main() {
       timeout: { type: "string" },
       "keep-open": { type: "boolean" },
       force: { type: "boolean" },
+      "key-pool-dir": { type: "string" },
+      rounds: { type: "string" },
     },
     strict: true,
     allowPositionals: true,
@@ -289,20 +305,53 @@ async function main() {
   if (!Object.hasOwn(grammar, commandName))
     throw new InputError(`Unknown command "${commandName}". See --help.`);
   const command = commandName as Command;
-  const tab = values.tab!;
-  if (!TAB_RE.test(tab) || !tab.startsWith("tts-") || tab.length < 5) {
-    throw new InputError(
-      "--tab must start with tts-, use only letters, numbers or hyphens (no underscores), and be 5–31 characters.",
-    );
+  const backend = validateBackend(values.backend);
+  const {
+    account,
+    model: rawModel,
+    block: byBlock,
+    out,
+    timeout,
+    "keep-open": keepOpen,
+    force,
+    "key-pool-dir": keyPoolDir,
+    rounds: rawRounds,
+  } = values;
+  const model = rawModel !== undefined ? assertAllowedModel(rawModel) : undefined;
+  if (backend === "web" && (keyPoolDir !== undefined || rawRounds !== undefined)) {
+    throw new InputError("--key-pool-dir and --rounds are only accepted with --backend api.");
   }
-  useTab(tab);
+  if (keyPoolDir !== undefined && !keyPoolDir.trim()) {
+    throw new InputError("--key-pool-dir must be a nonempty directory path.");
+  }
+  if (backend === "api") {
+    if (!["speak", "batch", "voices"].includes(command)) {
+      throw new InputError(
+        `--backend api only supports speak, batch, and voices (got "${command}").`,
+      );
+    }
+    if (account !== undefined)
+      throw new InputError("--account is only supported by --backend web.");
+    if (keepOpen) throw new InputError("--keep-open is only supported by --backend web.");
+  } else {
+    const tab = values.tab!;
+    if (!TAB_RE.test(tab) || !tab.startsWith("tts-") || tab.length < 5) {
+      throw new InputError(
+        "--tab must start with tts-, use only letters, numbers or hyphens (no underscores), and be 5–31 characters.",
+      );
+    }
+    useTab(tab);
+  }
   const count = (min: number, max = min) => {
     if (args.length < min || args.length > max) {
       throw new InputError(`Usage: ${command} ${grammar[command][0]}`);
     }
   };
   const index = () => numberArg(args[0]!, "Block number");
-  const { account, model, block: byBlock, out, timeout, "keep-open": keepOpen, force } = values;
+  const rounds = rawRounds === undefined ? undefined : numberArg(rawRounds, "--rounds");
+  if (rounds !== undefined && rounds > 10) {
+    throw new InputError("--rounds must be between 1 and 10.");
+  }
   if (
     (account !== undefined || model !== undefined) &&
     !["open", "speak", "batch"].includes(command)
@@ -317,14 +366,101 @@ async function main() {
     throw new InputError("--force is only accepted by run, collect, sample, speak and batch.");
   if (out !== undefined && !["run", "collect", "sample", "speak"].includes(command))
     throw new InputError("--out is only accepted by run, collect, sample and speak.");
-  if (timeout !== undefined && !["run", "collect", "speak", "batch"].includes(command))
-    throw new InputError("--timeout is only accepted by run, collect, speak and batch.");
+  if (
+    timeout !== undefined &&
+    !["run", "collect", "speak", "batch"].includes(command) &&
+    !(backend === "api" && command === "voices")
+  )
+    throw new InputError(
+      "--timeout is only accepted by run, collect, speak and batch (and voices with --backend api).",
+    );
   if (out !== undefined && extname(out).toLowerCase() !== ".wav")
     throw new InputError("--out must end in .wav.");
   const timeoutMs = timeout === undefined ? 180_000 : numberArg(timeout, "--timeout") * 1_000;
   if (timeoutMs > 900_000) throw new InputError("--timeout must be at most 900 seconds.");
   if (out !== undefined && !force && (await Bun.file(out).exists()))
     throw new InputError(`Output already exists: ${out}. Use a new take path or pass --force.`);
+
+  if (backend === "api") {
+    const resolvedModel = model ?? DEFAULT_MODEL;
+    const apiOpts = {
+      model: resolvedModel,
+      timeoutMs,
+      ...(keyPoolDir !== undefined ? { keyPoolDir } : {}),
+      ...(rounds !== undefined ? { rounds } : {}),
+    };
+    if (command === "speak") {
+      count(1);
+      if (!out) throw new InputError("speak requires --out TAKE.wav.");
+      const raw = await textFile(args[0]!);
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch (error) {
+        throw new InputError(`Invalid scene JSON: ${(error as Error).message}`);
+      }
+      const scene = validateScene(json);
+      buildInteractionsPayload(scene, resolvedModel);
+      add("generate & save WAV via Gemini API", async () => {
+        const saved = await speakGeminiApi(scene, { ...apiOpts, out, force: Boolean(force) });
+        result = saved;
+        const usageNote = saved.usage
+          ? `, ${saved.usage.inputTokens} in / ${saved.usage.outputTokens} out tok`
+          : "";
+        return `${saved.path} (${saved.duration.toFixed(2)} s, key=${saved.keyLabel ?? "env"}${usageNote})`;
+      });
+    } else if (command === "batch") {
+      count(1);
+      const raw = await textFile(args[0]!);
+      let json: unknown;
+      try {
+        json = JSON.parse(raw);
+      } catch (error) {
+        throw new InputError(`Invalid batch manifest JSON: ${(error as Error).message}`);
+      }
+      const manifest = validateBatchManifest(json);
+      for (const take of manifest.takes) {
+        if (!force && (await Bun.file(take.out).exists())) {
+          throw new InputError(
+            `Output already exists: ${take.out}. Use new take paths or pass --force.`,
+          );
+        }
+        const temp = take.temperature ?? manifest.temperature;
+        buildInteractionsPayload(
+          {
+            ...(temp !== undefined ? { temperature: temp } : {}),
+            ...(manifest.voices ? { voices: manifest.voices } : {}),
+            blocks: take.blocks,
+          },
+          resolvedModel,
+        );
+      }
+      add("generate batch via Gemini API", async () => {
+        const batchResult = await batchGeminiApi(manifest, { ...apiOpts, force: Boolean(force) });
+        result = batchResult;
+        return `${batchResult.takes.length} take(s) saved via ${batchResult.model}`;
+      });
+    } else if (command === "voices") {
+      count(0, 1);
+      add("list voices via Gemini API", async () => {
+        const voiceResult = await listGeminiApiVoices({ ...apiOpts, search: args[0] });
+        result = voiceResult;
+        return `${voiceResult.voices.length} voice(s) returned (key=${voiceResult.keyLabel ?? "env"})`;
+      });
+    }
+    await runSteps(steps, {
+      screenshot: false,
+      onDone() {
+        if (result === undefined) return;
+        console.log(
+          !values.json && typeof result === "string" ? result : JSON.stringify(result, null, 2),
+        );
+      },
+    });
+    return;
+  }
+
+  const tab = values.tab!;
 
   const opensTab = command === "open" || command === "speak" || command === "batch";
   const noBrowserPrelude = command === "close" || command === "tabs";

@@ -78,7 +78,10 @@ export function faceEntries(): Entry[] {
     title: info.name.replaceAll("-", " "),
     about: info.description,
     src: "mc-actor/toon-expressions.ts",
-    data: { aliases: [...info.aliases, ...(aliases[info.name] ?? [])] },
+    data: {
+      aliases: [...info.aliases, ...(aliases[info.name] ?? [])],
+      ...(info.extras.length && { extras: [...info.extras] }),
+    },
   }));
   const ramps = Object.entries(FEELINGS).map(([name, stops]) => ({
     kind: "face",
@@ -127,6 +130,11 @@ export function faceDetails(entry: Entry, recipe: FaceResult): string[] {
       stops.flatMap((stop, i) => stop === name ? [`${family} (${levels[i]})`] : []),
     );
     if (ramps.length) lines.push(`ramp: ${ramps.join(", ")}`);
+    const extras = Array.isArray(entry.data?.extras) ? (entry.data.extras as string[]) : [];
+    if (extras.length)
+      lines.push(
+        `marks: ${extras.join(", ")} (disable with wearToonFace(player, { marks: false }))`,
+      );
     lines.push(
       `use: wear.set(${quote})`,
       `timeline: face.json actor[] { "t": 3.2, "face": ${quote} }`,

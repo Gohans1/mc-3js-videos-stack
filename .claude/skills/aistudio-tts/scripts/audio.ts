@@ -141,14 +141,14 @@ export function requireWav(bytes: Buffer) {
   return corrected;
 }
 
-function inspectWav(bytes: Buffer) {
+export function inspectWav(bytes: Buffer) {
   if (
     bytes.length <= 44 ||
     bytes.toString("ascii", 0, 4) !== "RIFF" ||
     bytes.toString("ascii", 8, 12) !== "WAVE" ||
     bytes.readUInt32LE(4) + 8 !== bytes.length
   ) {
-    throw new StepError("AI Studio audio is truncated or is not a valid RIFF WAVE file.");
+    throw new StepError("TTS audio is truncated or is not a valid RIFF WAVE file.");
   }
   let bytesPerSecond = 0;
   let frameBytes = 0;
@@ -158,8 +158,7 @@ function inspectWav(bytes: Buffer) {
     const chunk = bytes.toString("ascii", offset, offset + 4);
     const size = bytes.readUInt32LE(offset + 4);
     const content = offset + 8;
-    if (content + size > bytes.length)
-      throw new StepError("AI Studio audio has a truncated WAV chunk.");
+    if (content + size > bytes.length) throw new StepError("TTS audio has a truncated WAV chunk.");
     if (chunk === "fmt " && size >= 16) {
       const offset = content + 8;
       bytesPerSecond = bytes.readUInt32LE(offset);

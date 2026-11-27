@@ -4,20 +4,26 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import {
+  batchProgressExpr,
   chipNameClashes,
+  currentTab,
   detectPossibleTruncation,
   formatCopyFailureError,
   formatStoppedRunError,
+  mergeTabEntry,
   offscreen,
   parseTokenCount,
   planUploads,
+  reachedNavigationTarget,
   resumeVideoVerificationArgs,
   stripBom,
+  summarizeAttachments,
   toSeconds,
+  useTab,
   verifyDeliveredVideoTokens,
   verifyVideoChipTokens,
 } from "./lib";
-import { TEXT } from "./page-map";
+import { TEXT, URLS } from "./page-map";
 import { shouldMigrateChromeDesktop } from "./win32";
 
 // Each case spawns a fresh `bun ask.ts`; on a loaded Windows machine one cold start alone can take ~5 s.
@@ -512,3 +518,67 @@ test(
   },
   CLI_TIMEOUT_MS,
 );
+
+test(
+  "studio.ts accepts --help after a subcommand and exits 0",
+  () => {
+    const res = Bun.spawnSync(
+      ["bun", resolve(import.meta.dir, "studio.ts"), "chrome", "--help"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(res.exitCode).toBe(0);
+    expect(res.stderr.toString()).toContain("chrome [--show | --keepalive]");
+  },
+  CLI_TIMEOUT_MS,
+);
+
+test("useTab normalizes mixed-case labels to lowercase and mergeTabEntry preserves concurrent peer tabs", () => {
+  const prev = currentTab();
+  try {
+    useTab("Sky-BD-A");
+    expect(currentTab()).toBe("sky-bd-a");
+  } finally {
+    useTab(prev);
+  }
+  const merged = mergeTabEntry(
+    { "peer-tab": { id: "new-concurrent-id", slot: 1 }, dead: { id: "gone", slot: 2 } },
+    "my-tab",
+    { id: "my-id", slot: 0 },
+  );
+  expect(merged["peer-tab"]).toEqual({ id: "new-concurrent-id", slot: 1 });
+  expect(merged["my-tab"]).toEqual({ id: "my-id", slot: 0 });
+});
+
+test("summarizeAttachments collapses large file lists instead of dumping hundreds of names on one line", () => {
+  const files = Array.from({ length: 120 }, (_, i) => `/tmp/f${String(i + 1).padStart(6, "0")}.jpg`);
+  const bytes = new Map(files.map((f) => [f, 100_000]));
+  const summary = summarizeAttachments(files, bytes);
+  expect(summary).toContain("120 file(s)");
+  expect(summary).toContain("f000001.jpg");
+  expect(summary).toContain("f000120.jpg");
+  expect(summary.length).toBeLessThan(200);
+});
+
+test("reachedNavigationTarget refuses stale AI Studio pages and accepts exact destinations", () => {
+  const chatA = URLS.chat("1abcdefghij");
+  const chatB = URLS.chat("2klmnopqrst");
+  const newPro = URLS.newChat("gemini-3.1-pro-preview");
+  const newHyd = URLS.newChat("gemini-4-hydrogen");
+
+  expect(reachedNavigationTarget(URLS.library, newPro)).toBe(false);
+  expect(reachedNavigationTarget(chatA, newPro)).toBe(false);
+  expect(reachedNavigationTarget(chatA, chatB)).toBe(false);
+  expect(reachedNavigationTarget(newHyd, newPro)).toBe(false);
+  expect(reachedNavigationTarget("https://accounts.google.com/v3/signin", newPro)).toBe(false);
+
+  expect(reachedNavigationTarget(URLS.library, URLS.library)).toBe(true);
+  expect(reachedNavigationTarget(`${chatB}?foo=1`, chatB)).toBe(true);
+  expect(reachedNavigationTarget(newPro, newPro)).toBe(true);
+  expect(reachedNavigationTarget("https://aistudio.google.com/prompts/new_chat", newPro)).toBe(true);
+});
+
+test("batchProgressExpr preserves TEXT.chipReady case-insensitive flags", () => {
+  const expr = batchProgressExpr(["f000001.jpg"]);
+  expect(expr).toContain(JSON.stringify(TEXT.chipReady.source));
+  expect(expr).toContain(JSON.stringify(TEXT.chipReady.flags));
+});

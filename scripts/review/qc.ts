@@ -1,6 +1,14 @@
 #!/usr/bin/env bun
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +19,7 @@ import {
   analyzeKeyFileMotion,
   type CamTimelineKey,
 } from "../../packages/live-studio/src/camera-speed.mjs";
+import { resolveTextItem } from "../../packages/film-stage/src/titles-catalog.ts";
 import { TextTimeline } from "../../packages/live-studio/src/contract.ts";
 import { heardLength } from "../../packages/live-studio/src/film.mjs";
 import { ratioOf } from "../../packages/live-studio/src/frame.ts";
@@ -58,6 +67,7 @@ Usage:
   bun run qc box <image> <x,y,w,h> [--norm] [--json]
   bun run qc compare <before> <after> [--out <path>] [--threshold <n>] [--json]
   bun run qc vs <reference-video> <image> --at <s> [--region x,y,w,h] [--picture-height px] [--out <path>] [--json]
+  bun run qc vs --batch <manifest.json> [--json]
   bun run qc motion [--cam <file>] [--from <s>] [--to <s>] [--json]
 
 Subcommands:
@@ -208,6 +218,8 @@ function candidatePythons(): string[][] {
   return out;
 }
 
+let lastPyProbeTimedOut = false;
+
 function probePythonCandidate(cmd: string[]): PyEnv | null {
   const key = process.platform === "win32" ? cmd.join("\0").toLowerCase() : cmd.join("\0");
   if (pyProbeCache.has(key)) return pyProbeCache.get(key) ?? null;
@@ -220,9 +232,13 @@ function probePythonCandidate(cmd: string[]): PyEnv | null {
   const r = spawnSync(cmd[0], [...cmd.slice(1), "-c", code], {
     encoding: "utf8",
     windowsHide: true,
-    timeout: 10_000,
+    timeout: 30_000,
   });
   if (r.status !== 0) {
+    if ((r.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT") {
+      lastPyProbeTimedOut = true;
+      return null;
+    }
     pyProbeCache.set(key, null);
     return null;
   }
@@ -257,12 +273,19 @@ function probePythonCandidate(cmd: string[]): PyEnv | null {
 }
 
 function selectPython(required: readonly PyPkg[] = []): PyEnv | null {
+  lastPyProbeTimedOut = false;
   for (const cmd of candidatePythons()) {
     const env = probePythonCandidate(cmd);
     if (!env) continue;
     if (required.every((p) => env.caps[p])) return env;
   }
   return null;
+}
+
+function pythonMissingError(command: string): string {
+  return lastPyProbeTimedOut
+    ? `error: Python capability probe timed out after 30s while starting ${command} (system busy); retry`
+    : `error: Python with numpy + Pillow is required for ${command}`;
 }
 
 function runBox(argv: string[]): number {
@@ -286,7 +309,7 @@ function runBox(argv: string[]): number {
 
   const py = selectPython(["numpy", "pil"]);
   if (!py) {
-    console.error("error: Python with numpy + Pillow is required for qc box");
+    console.error(pythonMissingError("qc box"));
     return 2;
   }
   const pyArgs = [
@@ -353,7 +376,7 @@ function runCompare(argv: string[]): number {
 
   const py = selectPython(["numpy", "pil"]);
   if (!py) {
-    console.error("error: Python with numpy + Pillow is required for qc compare");
+    console.error(pythonMissingError("qc compare"));
     return 2;
   }
   const pyArgs = [
@@ -383,60 +406,219 @@ function runCompare(argv: string[]): number {
   return 0;
 }
 
-function referenceFrame(
-  video: string,
-  at: number,
-  out: string,
-): { frame: number; fps: number } | string {
-  const probe = spawnSync(
+function probeVideoStream(video: string): { fps: number; frames: number } | string {
+  const fast = spawnSync(
     "ffprobe",
     [
       "-v",
       "error",
       "-select_streams",
       "v:0",
-      "-count_packets",
       "-show_entries",
-      "stream=r_frame_rate,nb_read_packets",
+      "stream=r_frame_rate,nb_frames",
       "-of",
       "json",
       video,
     ],
-    { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+    { encoding: "utf8", windowsHide: true, timeout: 30_000 },
   );
-  let stream: { r_frame_rate?: string; nb_read_packets?: string } | undefined;
+  let stream: { r_frame_rate?: string; nb_frames?: string; nb_read_packets?: string } | undefined;
   try {
-    stream = JSON.parse(probe.stdout || "{}").streams?.[0];
+    stream = JSON.parse(fast.stdout || "{}").streams?.[0];
   } catch {}
+  let frames = Number(stream?.nb_frames);
+  let probeStderr = fast.stderr || fast.error?.message || "";
+  if (fast.status !== 0 || !Number.isFinite(frames) || frames <= 0) {
+    const slow = spawnSync(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-count_packets",
+        "-show_entries",
+        "stream=r_frame_rate,nb_read_packets",
+        "-of",
+        "json",
+        video,
+      ],
+      { encoding: "utf8", windowsHide: true, timeout: 60_000 },
+    );
+    probeStderr = slow.stderr || slow.error?.message || probeStderr;
+    try {
+      stream = JSON.parse(slow.stdout || "{}").streams?.[0];
+    } catch {}
+    frames = Number(stream?.nb_read_packets);
+    if (slow.status !== 0) {
+      return `cannot read the frame rate of ${video}${probeStderr ? `: ${probeStderr.trim()}` : ""}`;
+    }
+  }
   const [num, den] = (stream?.r_frame_rate ?? "").split("/").map(Number);
   const fps = num / (den || 1);
-  if (probe.status !== 0 || !Number.isFinite(fps) || fps <= 0)
-    return `cannot read the frame rate of ${video}${probe.stderr ? `: ${probe.stderr.trim()}` : ""}`;
-  const frame = Math.round(at * fps);
-  const frames = Number(stream?.nb_read_packets);
-  if (Number.isFinite(frames) && frame >= frames)
-    return `${at} s is frame ${frame}, past the reference's last frame (${frames - 1}, ${((frames - 1) / fps).toFixed(3)} s)`;
+  if (!Number.isFinite(fps) || fps <= 0)
+    return `cannot read the frame rate of ${video}${probeStderr ? `: ${probeStderr.trim()}` : ""}`;
+  return { fps, frames };
+}
+
+function extractReferenceFrames(
+  video: string,
+  ats: number[],
+  tmpDir: string,
+): { fps: number; frameByAt: Map<number, { frame: number; png: string }> } | string {
+  const meta = probeVideoStream(video);
+  if (typeof meta === "string") return meta;
+  const { fps, frames } = meta;
+  const uniqueFrames = new Set<number>();
+  const atToFrame = new Map<number, number>();
+  for (const at of ats) {
+    const frame = Math.round(at * fps);
+    if (Number.isFinite(frames) && frames > 0 && frame >= frames)
+      return `${at} s is frame ${frame}, past the reference's last frame (${frames - 1}, ${((frames - 1) / fps).toFixed(3)} s)`;
+    uniqueFrames.add(frame);
+    atToFrame.set(at, frame);
+  }
+  const sorted = [...uniqueFrames].sort((a, b) => a - b);
+  const selectExpr = sorted.map((f) => `eq(n\\,${f})`).join("+");
+  const pattern = join(tmpDir, "ref_%04d.png");
   const r = spawnSync(
     "ffmpeg",
     [
       "-v",
       "error",
+      "-nostdin",
       "-y",
       "-i",
       video,
       "-vf",
-      `select=eq(n\\,${frame})`,
+      `select='${selectExpr}'`,
       "-frames:v",
-      "1",
+      String(sorted.length),
       "-fps_mode",
       "passthrough",
-      out,
+      pattern,
     ],
-    { encoding: "utf8", windowsHide: true, timeout: 120_000 },
+    { encoding: "utf8", windowsHide: true, timeout: Math.max(120_000, sorted.length * 10_000) },
   );
-  if (r.status !== 0 || !existsSync(out))
-    return `ffmpeg could not read frame ${frame} of ${video}${r.stderr ? `: ${r.stderr.trim()}` : ""}`;
-  return { frame, fps };
+  const frameToPng = new Map<number, string>();
+  const ffDetail = (r.stderr || r.error?.message || "").trim();
+  for (let i = 0; i < sorted.length; i++) {
+    const png = join(tmpDir, `ref_${String(i + 1).padStart(4, "0")}.png`);
+    if (r.status !== 0 || !existsSync(png))
+      return `ffmpeg could not read frame ${sorted[i]} of ${video}${ffDetail ? `: ${ffDetail}` : ""}`;
+    frameToPng.set(sorted[i]!, png);
+  }
+  const frameByAt = new Map<number, { frame: number; png: string }>();
+  for (const [at, frame] of atToFrame) {
+    frameByAt.set(at, { frame, png: frameToPng.get(frame)! });
+  }
+  return { fps, frameByAt };
+}
+
+function runVsBatch(manifestPath: string, asJson: boolean): number {
+  const absManifest = resolve(manifestPath);
+  if (!existsSync(absManifest)) failUsage(`Batch manifest not found: ${manifestPath}`);
+  let manifest: {
+    video?: string;
+    pictureHeight?: number | null;
+    region?: string | null;
+    jobs?: Array<{ image: string; at: number; out?: string; label?: string }>;
+  };
+  try {
+    manifest = JSON.parse(readFileSync(absManifest, "utf8"));
+  } catch (err) {
+    failUsage(`Invalid batch manifest JSON: ${(err as Error).message}`);
+  }
+  if (
+    typeof manifest?.video !== "string" ||
+    !manifest.video.trim() ||
+    !Array.isArray(manifest.jobs) ||
+    manifest.jobs.length === 0
+  ) {
+    failUsage("Batch manifest must specify video and a non-empty jobs array");
+  }
+  if (
+    manifest.pictureHeight !== undefined &&
+    manifest.pictureHeight !== null &&
+    (!Number.isInteger(manifest.pictureHeight) || manifest.pictureHeight <= 0)
+  ) {
+    failUsage(`Invalid batch manifest pictureHeight: ${String(manifest.pictureHeight)}`);
+  }
+  const video = resolve(manifest.video);
+  if (!existsSync(video)) failUsage(`Reference not found: ${manifest.video}`);
+  for (const job of manifest.jobs) {
+    if (
+      typeof job?.image !== "string" ||
+      !job.image.trim() ||
+      !Number.isFinite(job.at) ||
+      job.at < 0 ||
+      (job.out !== undefined && (typeof job.out !== "string" || !job.out.trim()))
+    ) {
+      failUsage(`Invalid batch job entry: ${JSON.stringify(job)}`);
+    }
+    if (!existsSync(resolve(job.image))) failUsage(`Image not found: ${job.image}`);
+  }
+  const py = selectPython(["numpy", "pil"]);
+  if (!py) {
+    console.error(pythonMissingError("qc vs"));
+    return 2;
+  }
+  const tmp = mkdtempSync(join(tmpdir(), "qc-vs-batch-"));
+  try {
+    const extracted = extractReferenceFrames(
+      video,
+      manifest.jobs.map((j) => j.at),
+      tmp,
+    );
+    if (typeof extracted === "string") {
+      console.error(`error: ${extracted}`);
+      return 2;
+    }
+    const pyManifest = join(tmp, "py-jobs.json");
+    writeFileSync(
+      pyManifest,
+      JSON.stringify(
+        manifest.jobs.map((job) => ({
+          reference: extracted.frameByAt.get(job.at)!.png,
+          ours: resolve(job.image),
+          ...(job.out ? { out: resolve(job.out) } : {}),
+          ...(manifest.pictureHeight ? { pictureHeight: manifest.pictureHeight } : {}),
+          ...(manifest.region ? { region: manifest.region } : {}),
+        })),
+      ),
+    );
+    const r = spawnSync(py.cmd[0], [...py.cmd.slice(1), FRAME_METRICS, "vs-batch", pyManifest], {
+      encoding: "utf8",
+      windowsHide: true,
+      timeout: Math.max(90_000, manifest.jobs.length * 10_000),
+    });
+    if (r.status !== 0) {
+      if (r.stderr) process.stderr.write(r.stderr);
+      else if (r.error) console.error(`error: ${r.error.message}`);
+      return 2;
+    }
+    const metrics = JSON.parse(r.stdout) as Array<Parameters<typeof formatVs>[0]>;
+    const reports = manifest.jobs.map((job, idx) => {
+      const m = metrics[idx]!;
+      const got = extracted.frameByAt.get(job.at)!;
+      return {
+        ...m,
+        reference: {
+          ...m.reference,
+          file: manifest.video!,
+          at: job.at,
+          frame: got.frame,
+          fps: extracted.fps,
+        },
+        ours: { ...m.ours, file: job.image },
+      };
+    });
+    if (asJson) console.log(JSON.stringify(reports));
+    else for (const report of reports) console.log(formatVs(report));
+    return 0;
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
 }
 
 function runVs(argv: string[]): number {
@@ -444,12 +626,14 @@ function runVs(argv: string[]): number {
   let at: number | null = null;
   let region: string | null = null;
   let pictureHeight: number | null = null;
+  let batchPath: string | null = null;
   let asJson = false;
   const pos: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--out") outPath = takeFlagValue(argv, i++, "--out");
     else if (a === "--region") region = takeFlagValue(argv, i++, "--region");
+    else if (a === "--batch") batchPath = takeFlagValue(argv, i++, "--batch");
     else if (a === "--at") {
       const raw = takeFlagValue(argv, i++, "--at");
       at = Number(raw);
@@ -466,6 +650,11 @@ function runVs(argv: string[]): number {
     } else if (a.startsWith("-")) failUsage(`Unknown flag for vs: ${a}`);
     else pos.push(a);
   }
+  if (batchPath !== null) {
+    if (pos.length || at !== null || outPath !== null || region !== null || pictureHeight !== null)
+      failUsage("Usage: qc vs --batch <manifest.json> [--json]");
+    return runVsBatch(batchPath, asJson);
+  }
   if (pos.length !== 2 || at === null)
     failUsage(
       "Usage: qc vs <reference-video> <image> --at <s> [--region x,y,w,h] [--picture-height px] [--out <path>] [--json]",
@@ -475,24 +664,24 @@ function runVs(argv: string[]): number {
   if (!existsSync(image)) failUsage(`Image not found: ${pos[1]}`);
   const py = selectPython(["numpy", "pil"]);
   if (!py) {
-    console.error("error: Python with numpy + Pillow is required for qc vs");
+    console.error(pythonMissingError("qc vs"));
     return 2;
   }
   const tmp = mkdtempSync(join(tmpdir(), "qc-vs-"));
   try {
-    const refPng = join(tmp, "reference.png");
-    const got = referenceFrame(video, at, refPng);
-    if (typeof got === "string") {
-      console.error(`error: ${got}`);
+    const extracted = extractReferenceFrames(video, [at], tmp);
+    if (typeof extracted === "string") {
+      console.error(`error: ${extracted}`);
       return 2;
     }
+    const got = extracted.frameByAt.get(at)!;
     const r = spawnSync(
       py.cmd[0],
       [
         ...py.cmd.slice(1),
         FRAME_METRICS,
         "vs",
-        refPng,
+        got.png,
         image,
         ...(outPath ? ["--out", resolve(outPath)] : []),
         ...(pictureHeight ? ["--picture-height", String(pictureHeight)] : []),
@@ -502,12 +691,13 @@ function runVs(argv: string[]): number {
     );
     if (r.status !== 0) {
       if (r.stderr) process.stderr.write(r.stderr);
+      else if (r.error) console.error(`error: ${r.error.message}`);
       return 2;
     }
     const m = JSON.parse(r.stdout);
     const report = {
       ...m,
-      reference: { file: pos[0], at, frame: got.frame, fps: got.fps, ...m.reference },
+      reference: { file: pos[0], at, frame: got.frame, fps: extracted.fps, ...m.reference },
       ours: { file: pos[1], ...m.ours },
     };
     console.log(asJson ? JSON.stringify(report) : formatVs(report));
@@ -951,7 +1141,8 @@ function runTextCheck(film: ReturnType<typeof discoverFilm>): CheckResult {
   const end = ends && clock ? Math.min(ends.layers, clock.duration) : Infinity;
   const ratio = ratioOf(film.pkg);
   let checked = 0;
-  const faults = text.items.flatMap((item, row) => {
+  const faults = text.items.flatMap((rawItem, row) => {
+    const item = resolveTextItem(rawItem, text);
     if (!isRead(item, text.tracks)) return [];
     const mapped = heard?.items?.[row];
     if (heard && (!mapped || mapped.to <= mapped.from || mapped.from >= end)) return [];

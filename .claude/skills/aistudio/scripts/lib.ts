@@ -2,7 +2,7 @@
 // in-page element finder driven by page-map.ts, the step runner, and the AI Studio actions both use.
 import { mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 
 import {
   expectedVideoTokensFloor,
@@ -54,7 +54,32 @@ export function toSeconds(time: string): number {
 export const TAB_RE = /^[a-z][a-z0-9-]{0,30}$/i;
 let tab = "main";
 export const currentTab = () => tab;
-export const useTab = (label: string) => void (tab = label);
+export const useTab = (label: string) => void (tab = label.toLowerCase());
+
+export function mergeTabEntry(
+  cur: Record<string, TabInfo>,
+  label: string,
+  info: TabInfo,
+): Record<string, TabInfo> {
+  const key = label.toLowerCase();
+  const next: Record<string, TabInfo> = {};
+  for (const [k, v] of Object.entries(cur)) {
+    if (k.toLowerCase() === key) continue;
+    next[k] = v;
+  }
+  next[key] = info;
+  return next;
+}
+
+export function summarizeAttachments(files: string[], bytes: Map<string, number>): string {
+  if (!files.length) return "";
+  if (files.length <= 8) {
+    const list = files.map((f) => `${basename(f)} ${((bytes.get(f) ?? 0) / 1e6).toFixed(1)} MB`);
+    return `${files.length} file(s): ${list.join(", ")}`;
+  }
+  const totalMb = (files.reduce((sum, f) => sum + (bytes.get(f) ?? 0), 0) / 1e6).toFixed(1);
+  return `${files.length} file(s) (${totalMb} MB total: ${basename(files[0]!)} .. ${basename(files.at(-1)!)})`;
+}
 /** Appended to printed commands so a hint resumes in the same tab. */
 export const tabFlag = () => (tab === "main" ? "" : ` --tab ${tab}`);
 export const abArgs = () => [
@@ -576,23 +601,26 @@ async function placeTab(
   const livePages = await pageTargets();
   const liveIds = new Set(livePages.map((p) => p.id));
   const liveTabs = Object.fromEntries(Object.entries(tabs).filter(([, t]) => liveIds.has(t.id)));
-  let info = liveTabs[tab];
+  const liveKey = Object.keys(liveTabs).find((k) => k.toLowerCase() === tab);
+  let info = liveKey ? liveTabs[liveKey] : undefined;
   const opened = !info;
   chromePid ??= await chromeBrowserPid();
   if (opened) {
     if (!createIfMissing) {
-      if (Object.keys(liveTabs).length !== Object.keys(tabs).length) {
-        await mutateTabs((cur) =>
-          Object.fromEntries(Object.entries(cur).filter(([, t]) => liveIds.has(t.id))),
-        );
-      }
+      await mutateTabs((cur) => {
+        const next = { ...cur };
+        for (const [k, v] of Object.entries(cur)) {
+          if (k.toLowerCase() === tab && !liveIds.has(v.id)) delete next[k];
+        }
+        return next;
+      });
       throw new StepError(
         `Tab ${tab} is no longer open in Chrome (Chrome may have restarted). Open it again first.`,
       );
     }
     const used = new Set(
       Object.entries(liveTabs)
-        .filter(([l]) => l !== tab)
+        .filter(([l]) => l.toLowerCase() !== tab)
         .map(([, t]) => t.slot),
     );
     await cdp(async (send) => {
@@ -633,12 +661,7 @@ async function placeTab(
       return targetId as string;
     });
     info = { id: createdId, slot };
-    await mutateTabs((cur) => ({
-      ...Object.fromEntries(
-        Object.entries(cur).filter(([, t]) => liveIds.has(t.id) || t.id === createdId),
-      ),
-      [tab]: info!,
-    }));
+    await mutateTabs((cur) => mergeTabEntry(cur, tab, info!));
     guard();
   }
   const { id, slot } = info!;
@@ -678,9 +701,18 @@ async function placeTab(
     js<[number, number, string, string]>(
       `[innerWidth, innerHeight, document.visibilityState, document.documentElement.lang]`,
     );
+  const activateTab = () => {
+    try {
+      ab("tab", id);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/timed out|10060|failed to read/i.test(msg)) throw e;
+      ab("tab", id);
+    }
+  };
   let [w, h, vis, lang] = page();
   if (vis !== "visible" && bound === id) {
-    ab("tab", id);
+    activateTab();
     [w, h, vis, lang] = page();
   }
   if (vis !== "visible") throw new StepError(`page is "${vis}" after restoring the window`);
@@ -713,6 +745,26 @@ export const closeWindowOf = (targetId: string) =>
 
 // ---------- navigation ----------
 
+export function reachedNavigationTarget(currentHref: string, targetUrl: string): boolean {
+  try {
+    const cur = new URL(currentHref);
+    const want = new URL(targetUrl);
+    if (cur.origin !== want.origin) return false;
+    if (want.pathname.startsWith("/library")) return cur.pathname.startsWith("/library");
+    const wantChat = chatUrlFrom(targetUrl);
+    if (wantChat) return chatUrlFrom(currentHref) === wantChat;
+    if (want.pathname.startsWith("/prompts/new_chat")) {
+      if (!cur.pathname.startsWith("/prompts/new_chat")) return false;
+      const wantModel = want.searchParams.get("model");
+      const curModel = cur.searchParams.get("model");
+      return !wantModel || !curModel || curModel === wantModel;
+    }
+    return cur.pathname === want.pathname;
+  } catch {
+    return false;
+  }
+}
+
 /** Loads url in the tab. Leaving a chat that is generating loses its answer, so that is refused. */
 export function navigate(url: string) {
   if (js<boolean>(GENERATING)) {
@@ -720,7 +772,36 @@ export function navigate(url: string) {
       `the tab is still generating in ${currentChatUrl() || "an unsaved chat"}; collect it first (${ASK}${tabFlag()} --collect) or use another --tab`,
     );
   }
-  ab("open", url);
+  let before = "";
+  try {
+    before = js<string>("location.href");
+  } catch {}
+  try {
+    ab("open", url);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!/waiting for load state|timed out|10060/i.test(msg)) throw e;
+    try {
+      const here = js<string>("location.href");
+      const want = new URL(url);
+      const wantModel = want.searchParams.get("model");
+      const sameUnchangedNewChat =
+        here === before && want.pathname.startsWith("/prompts/new_chat");
+      const modelOk =
+        !sameUnchangedNewChat ||
+        !wantModel ||
+        new URL(here).searchParams.get("model") === wantModel ||
+        currentModel() === wantModel;
+      if (
+        reachedNavigationTarget(here, url) &&
+        (!sameUnchangedNewChat ||
+          (js<number>(TURN_COUNT) === 0 && js<number>(chipCount) === 0 && modelOk))
+      ) {
+        return;
+      }
+    } catch {}
+    ab("open", url);
+  }
 }
 
 export async function waitForPromptBox(where: string) {
@@ -755,6 +836,7 @@ export function accountName(): string {
 export async function openNewChat(model: string): Promise<string> {
   navigate(URLS.newChat(model));
   await waitForPromptBox("new chat");
+  await waitFor(`AS.norm(${one("modelName")}?.textContent) === ${JSON.stringify(model)}`, 15_000);
   const now = currentModel();
   if (now !== model) {
     throw new StepError(
@@ -1428,6 +1510,15 @@ export const chipTextsByName = (names: string[]) => `(() => {
 })()`;
 export const chipsNamedReady = (names: string[]) =>
   `(${chipTextsByName(names)}).every((t) => t !== null && new RegExp(${JSON.stringify(TEXT.chipReady.source)}, ${JSON.stringify(TEXT.chipReady.flags)}).test(t))`;
+export const batchProgressExpr = (names: string[]) => `(() => {
+  const list = ${chipTextsByName(names)};
+  const readyRe = new RegExp(${JSON.stringify(TEXT.chipReady.source)}, ${JSON.stringify(TEXT.chipReady.flags)});
+  return {
+    total: ${chipCount},
+    ready: list.filter((t) => typeof t === 'string' && readyRe.test(t)).length,
+  };
+})()`;
+
 export const chipReady = (n: number, name: string) =>
   `new RegExp(${JSON.stringify(TEXT.chipReady.source)}, ${JSON.stringify(TEXT.chipReady.flags)}).test(${chipText(n, name)})`;
 /** "41,851 tokens" or "Agentic" (that mode shows no count). */

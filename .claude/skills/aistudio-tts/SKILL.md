@@ -1,21 +1,30 @@
 ---
 name: aistudio-tts
-description: Direct and export speech in Google AI Studio's Generate Speech playground. Use for Gemini 3.8 Flash TTS or Flash-Lite TTS, narration and two-speaker dialogue for video, speech blocks, delivery styles, expressions, browsing and auditioning voices, favorites, voice design, remix and replication controls. Use aistudio for chat and History.
+description: Direct and export speech in Google AI Studio's Generate Speech playground. Use for Gemini 3.8 Flash TTS narration and two-speaker dialogue for video, speech blocks, delivery styles, expressions, browsing and auditioning voices, favorites, voice design, remix and replication controls. Use aistudio for chat and History.
 ---
 
 # aistudio-tts
 
 Run `bun .claude/skills/aistudio-tts/scripts/cli.ts --help` from the repo root. In the examples, `TTS` stands for `bun .claude/skills/aistudio-tts/scripts/cli.ts`.
 
-For the audited voice roster, `style`/pace levers, `<tag>`/`|backchannel|`/`/IPA/` rules, and production pitfalls, read [the voice casting and direction guide](references/voice-casting-and-direction.md).
+For the audited voice roster, `style`/pace levers, `<tag>`/`|backchannel|`/`/IPA/` rules, long-form documentary blueprint (`Cruz`), and production pitfalls, read [the voice casting and direction guide](references/voice-casting-and-direction.md). For the empirically benchmarked Zack D. Films Shorts voice recipes, templates, and broadcast post-processing chain, read [the Zack D. Films voice system](references/zack-d-films/README.md).
 
-Use a distinct `--tab tts-<job>` per job and the same label for every step on that job. Tab labels must start with `tts-`, use only letters, numbers, and hyphens (no underscores), and be 5–31 characters total. The CLI reuses the existing [AI Studio Chrome profile](../aistudio/SKILL.md). Default model is `gemini-3.8-flash-tts`. `--model <id>` selects another TTS model on a fresh tab. An explicit `--account <slot>` is checked against the browser's actual destination. Omit the slot to use the profile's default account.
+Use a distinct `--tab tts-<job>` per job and the same label for every step on that job. Tab labels must start with `tts-`, use only letters, numbers, and hyphens (no underscores), and be 5–31 characters total. The CLI reuses the existing [AI Studio Chrome profile](../aistudio/SKILL.md). Default model is `gemini-3.8-flash-tts`. **`gemini-3.8-flash-lite-tts` is banned and rejected by the CLI** (noticeably flatter inflection/acting); never use or fall back to it. If the AI Studio web playground hits its daily free-tier RPD quota, switch to **`--backend api`** (uses Gemini API `/v1beta/interactions` and `/v1beta/voices` with automatic `~/.config/gmn` key-pool rotation, falling back to `GEMINI_API_KEY` / `GOOGLE_API_KEY`, with no Chrome needed); if all API keys are also exhausted, **STOP and report the quota limit to the user**. `--model <id>` selects another allowed TTS model only when explicitly requested. An explicit `--account <slot>` (`--backend web` only) is checked against the browser's actual destination. Omit the slot to use the profile's default account.
+
+## Gemini API key-pool backend (`--backend api`)
+
+Add `--backend api` to `speak`, `batch`, or `voices` to run the exact same `scene.json` / `manifest.json` files directly against `generativelanguage.googleapis.com/v1beta` with automatic `~/.config/gmn/config.json` key rotation (handling 3 RPM free-tier limits via per-key cooldowns and dead-key marking; falls back to `GEMINI_API_KEY` / `GOOGLE_API_KEY` if no pool exists). Optional flags: `--key-pool-dir <dir>` (or `GMN_CONFIG_DIR`) and `--rounds <1-10>` (default `2`).
+
+- `TTS --backend api speak scene.json --out voice/takes/take-01.wav [--force]`
+- `TTS --backend api batch manifest.json [--force]`
+- `TTS --backend api --json voices [query]`
+- Requires explicit `voices` in `scene.json` / `manifest.json` (for single-narrator multi-block scenes, repeat the same voice: `"voices": ["Cruz", "Cruz"]`). `--account` and `--keep-open` are web-only. To audition a voice over `--backend api`, run a short `speak` take (`/v1beta/voices` does not expose prebuilt preview WAV URLs).
 
 ## Windows lifetime & concurrency
 
 - Under Windows job-object sandboxes (`exebox-*`), Chrome terminates when the shell that spawned it exits. Prefer `speak` or `batch` so the entire run executes in one Bun process, OR run `bun .claude/skills/aistudio/scripts/studio.ts chrome --keepalive` as a background daemon before running separate commands.
 - When chaining commands in PowerShell 5.1, never use `&&` (syntax error); use `; if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }` or put loops in a Bun script.
-- Port `9333` is shared across sessions. Check `TTS tabs` before opening parallel jobs and keep total active tabs at `<= 3` across all sessions.
+- Port `9333` is shared across sessions. Check `TTS tabs` before opening parallel jobs, keep total active Chrome tabs at `<= 2` across all sessions, and run **one `batch`/`speak` tab at a time** (concurrent TTS batches serialize over CDP and degrade step latency from `~2s` to `400s+`).
 
 ## Make a take
 
@@ -39,11 +48,11 @@ Use a distinct `--tab tts-<job>` per job and the same label for every step on th
 
 ## Work with voices
 
-- `gemini-3.8-flash-tts` has its own catalog (e.g., `Fola`, `Rami`, `Cruz`, `Enzo`, `Koda`, `Riko`, `Ludo`, `Bodi`) rather than legacy Gemini 2.5/3.1 voice names (`Puck`, `Charon`, `Orus`).
+- `gemini-3.8-flash-tts` exposes **both** its new 3.8 catalog (`Fola`, `Rami`, `Cruz`, `Enzo`, `Koda`, `Zeno`, `Riko`, `Ludo`, `Bodi`, etc.) **and** the classic Gemini studio voices (`Rasalgethi`, `Achird`, `Puck`, `Orus`, `Schedar`, `Iapetus`, `Fenrir`, `Charon`, etc. — e.g., `filter "Language" "English (US)"` reveals 70 US voices: 40 new 3.8 + 30 classic).
 - Open `library 1` or `library 2` for a speaker, or `library 3 --block` for the voice used by block 3. The second speaker appears after adding a second block.
-- Use `voices` to inspect visible groups and `collapsedGroups` (by default each Use case group shows 3 preview voices behind `View all N`; filter by `Use case` or search with `voices "Fola"` to inspect all voices in a group).
-- Always list facet choices first before filtering: `filter "Use case"` lists live options (do not guess `"Male"` or `"English"`), and `filter "Use case" "Storyteller"` picks one (case-insensitive; mismatches print the live options). The same syntax applies to Language, Gender, Pitch, and Style. Use the live `All …` option to clear a filter.
-- Use `sample "Fola"` to play a catalog sample in the browser, `favorite "Fola" on` to save a favorite, and `voice "Fola"` to assign it. Add `--out fola-sample.wav` (and `--force` to overwrite) to save a public catalog sample locally for listening. Use `library-close` to return to the editor.
+- Use `voices` to inspect visible groups and `collapsedGroups` (by default each Use case group shows 3 preview voices behind `View all N`; filter by a facet or search with `voices "Fola"` to inspect all matching voices — `voices` has no `--all` flag).
+- Always list facet choices first before filtering: `filter "Use case"` lists live options (do not guess `"Male"` or `"English"` — live labels are `"Masculine"`/`"Feminine"`/`"Neutral"` and `"English (US)"`), and `filter "Use case" "Storyteller"` picks one (case-insensitive; mismatches print the live options). The same syntax applies to Language, Gender, Pitch, and Style. Use the live `All …` option to clear a filter.
+- Use `sample "Fola"` to play a catalog sample in the browser, `favorite "Fola" on` to save a favorite, and `voice "Fola"` to assign it. Add `--out fola-sample.wav` (and `--force` to overwrite) to save a public catalog sample locally for listening. Note: `--out` works on new 3.8 catalog voices, whereas classic voices play in the browser without exposing a downloadable catalog WAV — audition classic voices via a short `speak` take instead. Use `library-close` to return to the editor.
 - Use `voice-create design`, `voice-create replication` or `voice-create remix "Fola"` to enter the available forms. A paid-key gate is reported as a failed step and stays open for inspection. Use `snapshot` and `ui` for controls the account exposes. Replicate a voice only with the rights and consent to do so. Complete Google's microphone and consent prompts in the browser.
 
 ## Inspect and recover

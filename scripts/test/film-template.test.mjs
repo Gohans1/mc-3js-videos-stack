@@ -472,13 +472,25 @@ test("CAPABILITIES.md references only active film CLI scripts, valid subcommands
   }
 });
 
-test("templates/film/src/scene.ts wires createEnvironment, localClippingEnabled, and dynamic THREE.REVISION in executable code", () => {
-  const code = stripTsComments(readFileSync(SCENE_PATH, "utf8"));
-  expect(code).toMatch(/createEnvironment\s*\(/);
-  expect(code).toMatch(/scene\.environment\s*=/);
-  expect(code).toContain("renderer.localClippingEnabled = true");
-  expect(code).toContain("THREE.REVISION");
-  expect(code).not.toMatch(/three\.js r\d+/);
+test("templates/film/src/scene.ts wires setupLookdev and dynamic THREE.REVISION while lookdev.ts and film-stage/post wire createEnvironment and localClippingEnabled", () => {
+  const sceneCode = stripTsComments(readFileSync(SCENE_PATH, "utf8"));
+  expect(sceneCode).toMatch(/setupLookdev\s*\(/);
+  expect(sceneCode).toContain("THREE.REVISION");
+  expect(sceneCode).not.toMatch(/three\.js r\d+/);
+
+  const lookdevCode = stripTsComments(
+    readFileSync(join(ROOT, "templates/film/src/lookdev.ts"), "utf8"),
+  );
+  expect(lookdevCode).toMatch(/createFilmRenderer\s*\(/);
+  expect(lookdevCode).toMatch(/createEnvironment\s*\(/);
+  expect(lookdevCode).toMatch(/scene\.environment\s*=/);
+
+  const postCode = stripTsComments(
+    readFileSync(join(ROOT, "packages/film-stage/src/post.ts"), "utf8"),
+  );
+  expect(postCode).toMatch(
+    /renderer\.localClippingEnabled\s*=\s*(?:true|opts\.localClippingEnabled\s*\?\?\s*true)/,
+  );
 });
 
 test("shouldCopyTemplateEntry keeps CAPABILITIES.md and sources while skipping generated caches", () => {

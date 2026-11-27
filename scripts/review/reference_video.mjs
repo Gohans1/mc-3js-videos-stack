@@ -54,21 +54,25 @@ Default output: renders/reference/<ref-name>_vs_<remake-name>.mp4.
   --crf <N>          H.264 quality factor 0-51 (default 22).
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Exit 0: wrote video and review metadata; 1: encoding, publishing or timeout failed (prior video kept); 2: usage error.
-next: open the video in Studio Compare. For AI review, run reference frames on the two sources.`;
+next: press V (or click Compare) in Studio — auto-loads renders/reference/*_vs_*.mp4. For AI review, run reference frames on the two sources.`;
 
 const FRAME_BATCH_LIMIT = 450;
 
-const FRAMES_HELP = `Export synced REF/OURS JPEGs with burned film timecode and ready-to-upload file lists.
+const FRAMES_HELP = `Export timecoded JPEGs and ready-to-upload absolute-path file lists for AI review.
+  bun run reference frames <video> [--range <from,to>] [--fps 15] [--label REFERENCE] [--batch-size ${FRAME_BATCH_LIMIT}] [--short-edge 720 | --full] [--out <folder>] [--minutes 10]
   bun run reference frames <reference> <remake> [--out <folder>] [--start <sec> | --range <from,to>] [--fps 15] [--batch-size ${FRAME_BATCH_LIMIT}] [--layout hstack|vstack|auto] [--short-edge 720 | --full] [--minutes 10]
-Uses the same span/chunk alignment and studio-bar crop as sidebyside. Default layout: hstack (REF left, OURS right).
-  --out <folder>     Parent folder for fresh run-* folders (default renders/reference/<ref>_vs_<remake>_frames).
-  --start <sec>      Offset into REF for a standalone scene render; overrides automatic alignment.
-  --range <from,to>  Select a window on the shared film clock, e.g. 12,32. It must fit within both picture tracks.
-  --fps <N|native>   Sample at up to N fps (integer 1-60, default 15), or keep all frames of the synced composite.
+Single-video mode burns a black timecode bar below the picture (ideal for analyze-ref-video or original renders): it auto-strips the studio draft bottom bar on canonical draft renders (renders/draft.mp4, renders/draft_video.mp4, renders/chunks/c<N>.mp4, renders/span_<from>-<to>.mp4) and auto-aligns canonical spans/chunks (including renders/final_chunks/c<N>.mp4) to their film-time start (--range takes film seconds; external, copied/renamed, and full-film videos start at 0, and non-canonical copies like renders/draft_v2.mp4 are not auto-cropped). Two-video mode uses the same span/chunk alignment and studio-bar crop as sidebyside (default layout: hstack, REF left, OURS right). Both modes warn on stderr if the rendered film input used --samples 1.
+  --out <folder>     Parent folder for fresh run-* folders (default renders/reference/<name>_frames or <ref>_vs_<remake>_frames).
+  --label <text>     Single-video mode: right-side bar label (default REFERENCE; pass "" to omit).
+  --start <sec>      Two-video mode: offset into REF for a standalone scene render; overrides automatic alignment.
+  --range <from,to>  Select a window on the film clock, e.g. 12,32. It must fit within the picture track(s).
+                     Omit --range on span_*.mp4 (auto-aligns without 30 fps 2-decimal rounding errors); floor the end to min(refEnd, remEnd).
+  --fps <N|native>   Sample at up to N fps (integer 1-60, default 15), or keep all frames of the source/composite.
   --batch-size <N>   Maximum images per list (1-${FRAME_BATCH_LIMIT}, default ${FRAME_BATCH_LIMIT}).
-  --short-edge <px>  Cap each panel's shorter side without upscaling (default 720); --full keeps native panel size.
+  --short-edge <px>  Cap each panel's shorter side without upscaling (default 720); --full keeps native size.
   --minutes <N>      Stop FFmpeg after N minutes (default 10, maximum 60).
 Prints absolute paths to list.txt (one batch) or list-001.txt, list-002.txt, etc. Each line names one JPEG.
+Do not merge list.txt files across separate runs: every run writes f000001.jpg... and duplicate basenames fail upload.
 Exit 0: wrote a new batch folder; 1: export failed or timed out; 2: usage error. Earlier runs and sources stay intact.
 next: pass each list to AI Studio ask --batch --files-from <list>, or reuse it for another visual prompt`;
 
@@ -502,7 +506,9 @@ export async function runComparison(operation, rawArgs, { usage, runWorker }) {
       "--short-edge px",
       "--full",
       "--minutes N",
-      ...(frames ? ["--fps N|native", "--batch-size N"] : ["--audio mode", "--crf N"]),
+      ...(frames
+        ? ["--fps N|native", "--batch-size N", "--label text"]
+        : ["--audio mode", "--crf N"]),
     ],
     2,
     rawArgs,
@@ -519,11 +525,27 @@ export async function runComparison(operation, rawArgs, { usage, runWorker }) {
       full: { type: "boolean" },
       minutes: { type: "string" },
       ...(frames
-        ? { fps: { type: "string" }, "batch-size": { type: "string" } }
+        ? { fps: { type: "string" }, "batch-size": { type: "string" }, label: { type: "string" } }
         : { audio: { type: "string" }, crf: { type: "string" } }),
     },
   });
-  if (positionals.length !== 2) usage(`Choose ${operation} <reference> <remake>`);
+  const singleSource = frames && positionals.length === 1;
+  if (!singleSource && positionals.length !== 2) {
+    usage(
+      frames
+        ? "Choose frames <video> or frames <reference> <remake>"
+        : `Choose ${operation} <reference> <remake>`,
+    );
+  }
+  if (!singleSource && values.label !== undefined) {
+    usage("--label applies only to single-video reference frames <video>");
+  }
+  if (singleSource && values.layout !== undefined) {
+    usage("--layout applies only to two-video reference frames <reference> <remake>");
+  }
+  if (singleSource && values.start !== undefined) {
+    usage("Use --range <from,to> for single-video reference frames <video>");
+  }
   if (values.full && values["short-edge"] !== undefined)
     usage("Use either --full or --short-edge, not both");
   const audioMode = frames ? "none" : (values.audio ?? "ours");
@@ -556,6 +578,124 @@ export async function runComparison(operation, rawArgs, { usage, runWorker }) {
       usage("--range takes from,to in film seconds");
     range = parts.map((part) => secondArg("--range", part.trim()));
     if (range[0] >= range[1]) usage("--range requires from before to");
+  }
+  if (singleSource) {
+    const source = resolve(positionals[0]);
+    if (!statSync(source, { throwIfNoEntry: false })?.isFile())
+      usage(`No local file: ${positionals[0]}`);
+    const stem = basename(source, extname(source));
+    if (values.out !== undefined && !values.out.trim()) usage("--out needs a folder path");
+    const outPath = resolve(values.out ?? join("renders/reference", `${stem}_frames`));
+    const output = statSync(outPath, { throwIfNoEntry: false });
+    if (output && !output.isDirectory()) usage("--out must be a folder");
+    const info = probeVideoMedia(source);
+    if (info.error) {
+      console.error(`${commandLabel}: ${info.error}`);
+      process.exit(1);
+    }
+    const srcCtx = findRemakeContext(source);
+    const srcPicture = srcCtx.picture;
+    const autoOrigin =
+      srcCtx.meta && (srcCtx.meta.kind === "span" || srcCtx.meta.kind === "chunk")
+        ? srcCtx.meta.start
+        : 0;
+    const startSec = range?.[0] ?? autoOrigin;
+    const fileSeek = range ? range[0] - autoOrigin : 0;
+    const durationSec = Number(info.video.duration) || info.duration;
+    if (range) {
+      if (!(durationSec > 0)) usage("--range could not establish the video duration");
+      const allowedEnd = autoOrigin + durationSec + parseRate(info.video.time_base);
+      if (startSec < autoOrigin - 1e-6 || range[1] > allowedEnd + 1e-6) {
+        usage(
+          `--range ${range.join(",")} is outside the video window (${autoOrigin.toFixed(2)}-${(autoOrigin + durationSec).toFixed(2)}s)`,
+        );
+      }
+    }
+    const windowDur = range ? range[1] - startSec : durationSec;
+    if (!(windowDur > 0)) {
+      console.error(`${commandLabel}: input reports zero duration; nothing was written`);
+      process.exit(1);
+    }
+    const srcW = srcPicture ? srcPicture.width : info.dispW;
+    const srcH = srcPicture ? srcPicture.height : info.dispH;
+    const { scale, width: outW, height: picH } = scaleToShortEdge(srcW, srcH, shortEdge);
+    const barH = Math.max(28, 2 * Math.round(picH * 0.028));
+    const outH = picH + barH;
+    const targetFps = Math.max(1, Math.min(60, Math.round(info.fps || 30)));
+    const samplingFps = Math.min(samplingLimit ?? targetFps, targetFps);
+    const startFrame = Math.round(startSec * targetFps);
+    const totalFrames = Math.max(1, Math.round(windowDur * targetFps));
+    const rawLabel = (values.label ?? "REFERENCE").replace(/\s+/g, " ").trim();
+    const leftChars = 15 + String(startFrame + totalFrames).length;
+    const {
+      margin,
+      fontSize,
+      rightFontSize,
+      rightText: label,
+    } = computeBarTypography(outW, barH, leftChars, rawLabel);
+    const ptsExpr = startSec > 0 ? `%{pts\\:hms\\:${startSec.toFixed(6)}}` : "%{pts\\:hms}";
+    const frameExpr = startFrame > 0 ? `f%{eif\\:n+${startFrame}\\:d}` : "f%{n}";
+    const font = fontOption();
+    const yExpr = `h-${barH}+(${barH}-text_h)/2`;
+    const filters = [
+      ...(srcPicture ? [`crop=${srcPicture.width}:${srcPicture.height}:0:0`] : []),
+      ...(scale < 1 ? [`scale=${outW}:${picH}:flags=lanczos`] : []),
+      "setsar=1",
+      "setpts=PTS-STARTPTS",
+      `fps=${targetFps}`,
+      `trim=end_frame=${totalFrames}`,
+      "setpts=PTS-STARTPTS",
+      `pad=${outW}:${outH}:0:0:black`,
+      `drawtext=${font}:text='${ptsExpr}  ${frameExpr}':fontcolor=white:fontsize=${fontSize}:x=${margin}:y=${yExpr}`,
+    ];
+    const cleanupDirs = [];
+    if (label) {
+      const tmpLabelDir = mkdtempSync(join(tmpdir(), "ref-sf-"));
+      cleanupDirs.push(tmpLabelDir);
+      const labelFile = join(tmpLabelDir, "label.txt");
+      writeFileSync(labelFile, label, "utf8");
+      filters.push(
+        `drawtext=${font}:expansion=none:textfile='${escapeFilterPath(labelFile)}':fontcolor=#b8b6ad:fontsize=${rightFontSize}:x=w-tw-${margin}:y=${yExpr}`,
+      );
+    }
+    if (samplingFps < targetFps) {
+      filters.push(`fps=fps=${samplingFps}:round=up`);
+    }
+    let ok = false;
+    try {
+      await writeFrameBatches({
+        runWorker,
+        outPath,
+        minutes,
+        samplingFps,
+        batchSize,
+        ffmpegArgs: [
+          "-v",
+          "error",
+          "-nostdin",
+          "-y",
+          ...(fileSeek > 0 ? ["-ss", fileSeek.toFixed(6)] : []),
+          "-i",
+          source,
+          "-map",
+          "0:V:0",
+          "-vf",
+          filters.join(","),
+        ],
+      });
+      ok = true;
+    } catch (error) {
+      console.error(`${commandLabel}: ${error.message}`);
+    } finally {
+      for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
+    }
+    if (!ok) process.exit(1);
+    if (srcCtx.samples === 1) {
+      console.error(
+        `warning: ${basename(source)} was rendered with --samples 1 (no shutter motion blur); for motion-blur/whip review render with --samples 8`,
+      );
+    }
+    return;
   }
   const refSource = resolve(positionals[0]);
   const remSource = resolve(positionals[1]);
@@ -786,6 +926,11 @@ export async function runComparison(operation, rawArgs, { usage, runWorker }) {
       for (const dir of cleanupDirs) rmSync(dir, { recursive: true, force: true });
     }
     if (!ok) process.exit(1);
+    if (remCtx.samples === 1) {
+      console.error(
+        `warning: ${basename(remSource)} was rendered with --samples 1 (no shutter motion blur); for motion-blur/whip review render with --samples 8`,
+      );
+    }
     return;
   }
 
@@ -854,6 +999,6 @@ export async function runComparison(operation, rawArgs, { usage, runWorker }) {
     `wrote ${displayOut} (${outW}x${outH}, ${layout} ${layoutLabel}, ${targetFps}fps, ref ${refWindowDur.toFixed(2)}s vs ours ${remWindowDur.toFixed(2)}s${startSec > 0 ? `, start ${startSec.toFixed(2)}s` : ""}, audio:${pickedAudio.tag}${remPicture ? ", stripped draft bar" : ""}; sources untouched)`,
   );
   console.log(
-    `next: open ${displayOut} in Studio Compare. For AI review, run reference frames on the two sources.`,
+    `next: press V (or click Compare) in Studio — auto-loads ${displayOut}. For AI review, run reference frames on the two sources.`,
   );
 }

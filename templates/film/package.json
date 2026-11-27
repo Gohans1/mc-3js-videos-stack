@@ -15,6 +15,7 @@
     "gap": "bun ../../scripts/gap.ts",
     "postinstall": "bun ../../packages/mc-assets/vendor.mjs",
     "studio": "bun node_modules/live-studio/src/live.mjs __PORT__",
+    "studio:lite": "bun node_modules/live-studio/src/lite.mjs",
     "notes": "bun node_modules/live-studio/notes.mjs",
     "at": "bun ../../scripts/at.ts",
     "note": "bun node_modules/live-studio/note.mjs",

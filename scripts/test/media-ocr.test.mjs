@@ -239,3 +239,175 @@ test("text shown in every frame (a handle, a title) is not taken for the caption
     "so good",
   ]);
 });
+
+test("extract_span_frames aligns extracted frames to frame_times midpoints and read_frame fallback overwrites with -y", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-ocr-batch-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const video = join(dir, "quad.mp4");
+  const make = spawnSync(
+    "ffmpeg",
+    [
+      "-v",
+      "error",
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=red:s=64x64:d=0.5:r=20",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=lime:s=64x64:d=0.5:r=20",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=blue:s=64x64:d=0.5:r=20",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=yellow:s=64x64:d=0.5:r=20",
+      "-filter_complex",
+      "[0:v][1:v][2:v][3:v]concat=n=4:v=1:a=0",
+      "-c:v",
+      "libx264",
+      "-pix_fmt",
+      "yuv420p",
+      video,
+    ],
+    { encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(make.status, 0, make.stderr);
+  const fullDir = join(dir, "full");
+  const subDir = join(dir, "sub");
+  const r = python([
+    "-c",
+    [
+      "import runpy, sys, json",
+      "from pathlib import Path",
+      "from PIL import Image",
+      "def label(path):",
+      "    r, g, b = Image.open(path).convert('RGB').getpixel((32, 32))",
+      "    if r > 180 and g > 180 and b < 80: return 'yellow'",
+      "    if r > 180 and g < 80: return 'red'",
+      "    if g > 180 and r < 80: return 'green'",
+      "    if b > 180 and r < 80: return 'blue'",
+      "    return f'{r},{g},{b}'",
+      "m = runpy.run_path(sys.argv[1])",
+      "p1 = Path(sys.argv[3]); p1.mkdir(parents=True, exist_ok=True)",
+      "t1 = m['frame_times'](0.0, 2.0, 4, [], 2.0)",
+      "m1 = m['extract_span_frames'](Path(sys.argv[2]), p1, 0.0, 2.0, t1)",
+      "p2 = Path(sys.argv[4]); p2.mkdir(parents=True, exist_ok=True)",
+      "t2 = m['frame_times'](0.5, 2.0, 3, [], 2.0)",
+      "m2 = m['extract_span_frames'](Path(sys.argv[2]), p2, 0.5, 2.0, t2)",
+      "stale = p2 / 'overwrite.png'; stale.write_bytes(b'corrupt')",
+      "m['extract_single_frame'](Path(sys.argv[2]), stale, 0.25)",
+      "print(json.dumps({'full': [label(m1[i]) for i in range(4)], 'sub': [label(m2[i]) for i in range(3)], 'overwritten': label(stale)}))",
+    ].join("\n"),
+    SCRIPT,
+    video,
+    fullDir,
+    subDir,
+  ]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout), {
+    full: ["red", "green", "blue", "yellow"],
+    sub: ["green", "blue", "yellow"],
+    overwritten: "red",
+  });
+});
+
+test("OCR --snap-fps snaps caption timestamps to frame grid and --text-out writes preset text.json", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "media-ocr-snap-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const video = captionVideo(dir);
+  const textOut = join(dir, "src/timeline/text.json");
+
+  const dry = python([
+    SCRIPT,
+    video,
+    "--captions",
+    "--crop",
+    "0,0.7,1,0.17",
+    "--snap-fps",
+    "30",
+    "--text-out",
+    textOut,
+    "--dry-run",
+  ]);
+  assert.equal(dry.status, 0, dry.stderr);
+  const plan = JSON.parse(dry.stdout);
+  assert.equal(plan.snapFps, 30);
+  assert.equal(plan.closeGap, 0.07);
+  assert.equal(plan.preset, "zack-d-films");
+  assert.equal(plan.textOut, textOut);
+
+  const dryZero = python([
+    SCRIPT,
+    video,
+    "--captions",
+    "--crop",
+    "0,0.7,1,0.17",
+    "--snap-fps",
+    "30",
+    "--close-gap",
+    "0",
+    "--dry-run",
+  ]);
+  assert.equal(dryZero.status, 0, dryZero.stderr);
+  assert.equal(JSON.parse(dryZero.stdout).closeGap, 0);
+
+  const dryPlain = python([SCRIPT, video, "--captions", "--crop", "0,0.7,1,0.17", "--dry-run"]);
+  assert.equal(dryPlain.status, 0, dryPlain.stderr);
+  assert.equal(JSON.parse(dryPlain.stdout).closeGap, 0);
+
+  for (const bad of [
+    [video, "--snap-fps", "30"],
+    [video, "--captions", "--crop", "0,0.7,1,0.17", "--snap-fps", "0"],
+    [video, "--close-gap", "0.05"],
+    [video, "--captions", "--crop", "0,0.7,1,0.17", "--close-gap", "-0.1"],
+    [video, "--text-out", textOut],
+  ]) {
+    const r = python([SCRIPT, ...bad, "--dry-run"]);
+    assert.equal(r.status, 2, r.stderr);
+  }
+
+  const snapRun = python([
+    "-c",
+    [
+      "import runpy, sys, json",
+      "from pathlib import Path",
+      "m = runpy.run_path(sys.argv[1])",
+      "caps = [{'from': 0.01, 'to': 0.012, 'text': 'tiny', 'score': 0.9}, {'from': 0.04, 'to': 0.51, 'text': 'it was strange', 'score': 0.99}, {'from': 0.54, 'to': 1.0, 'text': 'under the bed', 'score': 0.99}, {'from': 1.25, 'to': 1.8, 'text': 'after pause', 'score': 0.99}]",
+      "snapped = m['close_caption_gaps'](m['snap_captions'](caps, 30), 0.07)",
+      "out = Path(sys.argv[2])",
+      "out_plain = Path(sys.argv[3])",
+      "m['write_text_timeline'](out, snapped, 'zack-d-films')",
+      "m['write_text_timeline'](out_plain, snapped, '')",
+      "print(json.dumps({'snapped': snapped, 'doc': json.loads(out.read_text(encoding='utf-8')), 'plain': json.loads(out_plain.read_text(encoding='utf-8'))}))",
+    ].join("\n"),
+    SCRIPT,
+    textOut,
+    join(dir, "plain.json"),
+  ]);
+  assert.equal(snapRun.status, 0, snapRun.stderr);
+  const res = JSON.parse(snapRun.stdout);
+  assert.equal(res.snapped.length, 3);
+  assert.equal(Math.round(res.snapped[0].from * 30), 1);
+  assert.equal(res.snapped[0].to, res.snapped[1].from);
+  assert.ok(res.snapped[2].from - res.snapped[1].to > 0.2);
+  assert.deepEqual(res.doc, {
+    preset: "zack-d-films",
+    items: [
+      { from: res.snapped[0].from, to: res.snapped[0].to, text: "it was strange" },
+      { from: res.snapped[1].from, to: res.snapped[1].to, text: "under the bed" },
+      { from: res.snapped[2].from, to: res.snapped[2].to, text: "after pause" },
+    ],
+  });
+  assert.deepEqual(res.plain, {
+    items: [
+      { kind: "text", from: res.snapped[0].from, to: res.snapped[0].to, text: "it was strange" },
+      { kind: "text", from: res.snapped[1].from, to: res.snapped[1].to, text: "under the bed" },
+      { kind: "text", from: res.snapped[2].from, to: res.snapped[2].to, text: "after pause" },
+    ],
+  });
+});

@@ -320,3 +320,128 @@ test("bare bun run sheet without renders/still_*.jpg exits 2 with a clear hint",
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stderr, /no renders\/still_\*\.jpg/);
 });
+
+test("sheet vs --pairs crops off the DIFF x3 third and lays out wider 2-panel REF | OURS tiles", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-vs-pairs-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  mkdirSync(join(dir, "renders"));
+  for (const name of ["vs_still_1s.jpg", "vs_still_2s.jpg"]) {
+    const made = spawnSync(
+      "python",
+      [
+        "-c",
+        [
+          "from PIL import Image, ImageDraw; import sys",
+          "im = Image.new('RGB', (294, 196), (24, 24, 28))",
+          "d = ImageDraw.Draw(im)",
+          "d.rectangle([0, 36, 89, 195], fill=(220, 40, 40))",
+          "d.rectangle([102, 36, 191, 195], fill=(40, 40, 220))",
+          "d.rectangle([204, 36, 293, 195], fill=(40, 220, 40))",
+          "im.save(sys.argv[1], quality=95)",
+        ].join("\n"),
+        join(dir, "renders", name),
+      ],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    assert.equal(made.status, 0, made.stderr);
+  }
+  const r = spawnSync("python", [SHEET, "vs", "--pairs"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 30_000,
+  });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const out = join(dir, "renders/sheet_vs_0.jpg");
+  const check = spawnSync(
+    "python",
+    [
+      "-c",
+      [
+        "from PIL import Image; import numpy as np, json, sys",
+        "im = Image.open(sys.argv[1]).convert('RGB')",
+        "arr = np.asarray(im)",
+        "green_pixels = int(((arr[:,:,1] > 170) & (arr[:,:,0] < 90) & (arr[:,:,2] < 90)).sum())",
+        "print(json.dumps({'w': im.width, 'h': im.height, 'green': green_pixels}))",
+      ].join("\n"),
+      out,
+    ],
+    { encoding: "utf8", timeout: 15_000 },
+  );
+  assert.equal(check.status, 0, check.stderr);
+  const info = JSON.parse(check.stdout);
+  assert.equal(info.green, 0, "DIFF x3 green panel must be cropped out");
+  assert.ok(info.h > info.w / 3 * 0.8, `2-panel aspect should be taller than 3-panel: ${info.w}x${info.h}`);
+});
+
+test("sheet image list auto-appends .jpg on extensionless --out and --ref pairs existing stills beside a reference video", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "sheet-ref-"));
+  t.after(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+  mkdirSync(join(dir, "renders"));
+  mkdirSync(join(dir, "references"));
+  media(join(dir, "references/ref.mp4"), [
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=red:s=180x320:r=30:d=3",
+    "-pix_fmt",
+    "yuv420p",
+  ]);
+  for (const name of ["still_0.5s.jpg", "still_1.5s.jpg"]) {
+    const made = spawnSync(
+      "python",
+      [
+        "-c",
+        [
+          "from PIL import Image, ImageDraw; import sys",
+          "im = Image.new('RGB', (180, 340), (30, 80, 220))",
+          "ImageDraw.Draw(im).rectangle([0, 320, 179, 339], fill=(10, 10, 10))",
+          "im.save(sys.argv[1], quality=95)",
+        ].join("\n"),
+        join(dir, "renders", name),
+      ],
+      { encoding: "utf8", timeout: 15_000 },
+    );
+    assert.equal(made.status, 0, made.stderr);
+  }
+
+  const extless = "renders/temp_grid";
+  const r1 = spawnSync(
+    "python",
+    [SHEET, "renders/still_0.5s.jpg", "renders/still_1.5s.jpg", "--out", extless],
+    { cwd: dir, encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(r1.status, 0, r1.stdout + r1.stderr);
+  assert.equal(
+    spawnSync("python", ["-c", "from PIL import Image; import sys; Image.open(sys.argv[1]).verify()", join(dir, `${extless}.jpg`)]).status,
+    0,
+  );
+
+  const refOut = join(dir, "renders/paired_vs.jpg");
+  const r2 = spawnSync(
+    "python",
+    [SHEET, "--ref", "references/ref.mp4", "--out", "renders/paired_vs.jpg"],
+    { cwd: dir, encoding: "utf8", timeout: 30_000 },
+  );
+  assert.equal(r2.status, 0, r2.stdout + r2.stderr);
+  const check = spawnSync(
+    "python",
+    [
+      "-c",
+      [
+        "from PIL import Image; import numpy as np, json, sys",
+        "arr = np.asarray(Image.open(sys.argv[1]).convert('RGB'))",
+        "red = int(((arr[:,:,0] > 180) & (arr[:,:,1] < 80) & (arr[:,:,2] < 80)).sum())",
+        "blue = int(((arr[:,:,2] > 180) & (arr[:,:,0] < 80)).sum())",
+        "print(json.dumps({'red': red, 'blue': blue}))",
+      ].join("\n"),
+      refOut,
+    ],
+    { encoding: "utf8", timeout: 15_000 },
+  );
+  assert.equal(check.status, 0, check.stderr);
+  const counts = JSON.parse(check.stdout);
+  assert.ok(counts.red > 5000, `expected REF red panel pixels, got ${counts.red}`);
+  assert.ok(counts.blue > 5000, `expected OURS blue panel pixels, got ${counts.blue}`);
+});

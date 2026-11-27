@@ -1,0 +1,16 @@
+{
+  "temperature": 0.65,
+  "voices": ["Rasalgethi"],
+  "takes": [
+    {
+      "out": "voice/raw/take_01.wav",
+      "style": "calm, matter-of-fact storytelling, unhurried steady pace, falling endings",
+      "text": "Take one spoken script here."
+    },
+    {
+      "out": "voice/raw/take_02.wav",
+      "style": "calm, matter-of-fact storytelling, unhurried steady pace, falling endings",
+      "text": "Take two spoken script here."
+    }
+  ]
+}

@@ -83,6 +83,210 @@ test("reference frames writes reusable batches at 15 fps and keeps earlier runs"
   }
 });
 
+test("reference frames accepts a single video to export timecoded single-source JPEG batches and list.txt", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-single-frames-"));
+  try {
+    const video = join(dir, "ref.mp4");
+    const made = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=navy:s=180x320:r=30:d=4",
+        "-c:v",
+        "libx264",
+        video,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(made.status, made.stderr).toBe(0);
+    const out = join(dir, "single-batches");
+    const res = run(dir, [
+      "frames",
+      video,
+      "--range",
+      "1,3",
+      "--fps",
+      "5",
+      "--label",
+      "REFERENCE",
+      "--out",
+      out,
+    ]);
+    expect(res.status, res.stdout + res.stderr).toBe(0);
+    const [runName] = readdirSync(out);
+    const listFile = join(out, runName, "list.txt");
+    const images = readFileSync(listFile, "utf8").trim().split("\n");
+    expect(images).toHaveLength(10);
+    expect(images.every((f) => existsSync(f))).toBe(true);
+
+    mkdirSync(join(dir, "renders"), { recursive: true });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "single-draft", "live-studio": { ratio: "16:9" } }),
+    );
+    const draft = join(dir, "renders/draft_video.mp4");
+    const draftMade = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=navy:s=320x220:r=30:d=2",
+        "-c:v",
+        "libx264",
+        draft,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(draftMade.status, draftMade.stderr).toBe(0);
+    const draftOut = join(dir, "draft-batches");
+    const draftRes = run(dir, [
+      "frames",
+      draft,
+      "--fps",
+      "5",
+      "--label",
+      "OURS",
+      "--out",
+      draftOut,
+    ]);
+    expect(draftRes.status, draftRes.stdout + draftRes.stderr).toBe(0);
+    const [draftRun] = readdirSync(draftOut);
+    const draftImages = readFileSync(join(draftOut, draftRun, "list.txt"), "utf8")
+      .trim()
+      .split("\n");
+    const dims = spawnSync(
+      "ffprobe",
+      ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0:s=x", draftImages[0]],
+      { encoding: "utf8", timeout: 10000 },
+    );
+    expect(dims.stdout.trim()).toBe("320x208");
+
+    const span = join(dir, "renders/span_10-12.mp4");
+    const spanMade = spawnSync(
+      "ffmpeg",
+      [
+        "-v",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=navy:s=320x220:r=30:d=2",
+        "-c:v",
+        "libx264",
+        span,
+      ],
+      { encoding: "utf8", timeout: 15000 },
+    );
+    expect(spanMade.status, spanMade.stderr).toBe(0);
+    const spanOut = join(dir, "span-batches");
+    const spanRes = run(dir, [
+      "frames",
+      span,
+      "--range",
+      "10.5,11.5",
+      "--fps",
+      "5",
+      "--label",
+      "OURS",
+      "--out",
+      spanOut,
+    ]);
+    expect(spanRes.status, spanRes.stdout + spanRes.stderr).toBe(0);
+    const [spanRun] = readdirSync(spanOut);
+    const spanImages = readFileSync(join(spanOut, spanRun, "list.txt"), "utf8").trim().split("\n");
+    expect(spanImages).toHaveLength(5);
+    const spanBadRange = run(dir, ["frames", span, "--range", "0,1", "--fps", "5", "--out", spanOut]);
+    expect(spanBadRange.status).toBe(2);
+    expect(spanBadRange.stderr).toContain("outside the video window (10.00-12.00s)");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("reference frames warns on stderr when a remake used --samples 1 without polluting stdout", () => {
+  const dir = mkdtempSync(join(tmpdir(), "reference-frames-samples-"));
+  try {
+    mkdirSync(join(dir, "references"), { recursive: true });
+    mkdirSync(join(dir, "renders"), { recursive: true });
+    writeFileSync(
+      join(dir, "package.json"),
+      JSON.stringify({ name: "frames-samples-test", "live-studio": { ratio: "9:16" } }),
+    );
+    const ref = join(dir, "references/ref.mp4");
+    const remake = join(dir, "renders/draft_video.mp4");
+    for (const [file, color] of [
+      [ref, "navy"],
+      [remake, "green"],
+    ]) {
+      expect(
+        spawnSync(
+          "ffmpeg",
+          [
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            `color=c=${color}:s=180x320:r=30:d=1`,
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            file,
+          ],
+          { encoding: "utf8", timeout: 15000 },
+        ).status,
+      ).toBe(0);
+    }
+    const st = statSync(remake);
+    const metaPath = `${remake}.review.json`;
+    writeFileSync(
+      metaPath,
+      JSON.stringify({ size: st.size, mtimeMs: Math.trunc(st.mtimeMs), samples: 1, start: 0 }),
+    );
+    const out1 = join(dir, "renders/reference/s1");
+    const r1 = run(dir, ["frames", ref, remake, "--fps", "5", "--out", out1]);
+    expect(r1.status, r1.stdout + r1.stderr).toBe(0);
+    expect(r1.stderr).toContain("rendered with --samples 1");
+    expect(r1.stdout).not.toContain("rendered with --samples 1");
+    const [run1] = readdirSync(out1);
+    const list1 = join(out1, run1, "list.txt");
+    expect(existsSync(list1)).toBe(true);
+    expect(r1.stdout.trim().split(/\r?\n/).at(-1)).toBe(list1);
+
+    const outSingle1 = join(dir, "renders/reference/single_s1");
+    const rs1 = run(dir, ["frames", remake, "--fps", "5", "--label", "OURS", "--out", outSingle1]);
+    expect(rs1.status, rs1.stdout + rs1.stderr).toBe(0);
+    expect(rs1.stderr).toContain("rendered with --samples 1");
+    expect(rs1.stdout).not.toContain("rendered with --samples 1");
+    const [runSingle1] = readdirSync(outSingle1);
+    expect(rs1.stdout.trim().split(/\r?\n/).at(-1)).toBe(join(outSingle1, runSingle1, "list.txt"));
+
+    writeFileSync(
+      metaPath,
+      JSON.stringify({ size: st.size, mtimeMs: Math.trunc(st.mtimeMs), samples: 8, start: 0 }),
+    );
+    const out8 = join(dir, "renders/reference/s8");
+    const r8 = run(dir, ["frames", ref, remake, "--fps", "5", "--out", out8]);
+    expect(r8.status, r8.stdout + r8.stderr).toBe(0);
+    expect(r8.stderr).not.toContain("rendered with --samples 1");
+
+    const outSingle8 = join(dir, "renders/reference/single_s8");
+    const rs8 = run(dir, ["frames", remake, "--fps", "5", "--label", "OURS", "--out", outSingle8]);
+    expect(rs8.status, rs8.stdout + rs8.stderr).toBe(0);
+    expect(rs8.stderr).not.toContain("rendered with --samples 1");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("reference help and usage failures do no analysis or writes", () => {
   const dir = mkdtempSync(join(tmpdir(), "reference-cli-"));
   try {

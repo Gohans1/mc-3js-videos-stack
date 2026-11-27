@@ -4,10 +4,10 @@ Use timecoded JPEGs for scene dailies and full-film visual review. Hydrogen High
 
 ## Recipe
 
-1. Package the scene from the film directory: `bun run reference frames references/ref.mp4 renders/draft.mp4 --range 12,32`. For a standalone scene starting at film time 12 s, pass `--start 12` instead. Studio `span` and `chunk` exports auto-align to the reference. The command burns film timecode into each REF-left/OURS-right JPEG and prints `list.txt` or numbered lists in a fresh run folder. Outside this repo, generate the same labeled composite and absolute-path lists with your local tools.
+1. Package the scene from the film directory: `bun run reference frames references/ref.mp4 renders/draft.mp4 --range 12,32`. For a standalone scene starting at film time 12 s, pass `--start 12` instead. Studio `span` and `chunk` exports auto-align to the reference: omit `--range` on a `span_*.mp4` to avoid 30 fps 2-decimal rounding errors, and floor `--range` end to `min(refEnd, remEnd)` on full-video slices. The command burns film timecode into each REF-left/OURS-right JPEG, prints `list.txt` or numbered lists in a fresh run folder, and warns on stderr if the remake was rendered with `--samples 1`. Do not concatenate `list.txt` files from separate runs: every run writes `f000001.jpg...` and `ask.ts` rejects duplicate basenames. Outside this repo, generate the same labeled composite and absolute-path lists with your local tools.
 2. Use 15 fps for scene dailies (up to 300 images in 20 s). Keep each prompt to one list of at most 450 images (30 s at 15 fps). Keep the numbered lists separate for longer scenes. Use `--fps native` over a short range around a cut or motion pop. The [550-image stress test](prompt-design.md#batch-capacity-follow-up-2026-11-26) used a short frame-count response.
-3. Submit each list in order with Hydrogen High, High media, and Search off. Start a fresh chat for each pass and save its report beside the list. Use the example below for a quick scan (`review-001.md`). For a detailed audit, reuse the same images with one [field prompt](#prompt-template) per requested field (`review-001-acting.md`, etc.).
-4. Merge findings on the burned film clock and verify them on the reviewed render at source FPS ([Step 5](../SKILL.md#review-gate--iterative-qa-loop)). Check audio locally. Keep completed reports and mark missing windows or fields pending. Recover an already-started chat before resending. For overload or truncation, retry a shorter window on Hydrogen High. For a daily quota error, resume pending passes after quota recovers. See [AI Studio error recovery](../../aistudio/SKILL.md#common-errors--recovery).
+3. Submit each list in order (serially in one tab — concurrent tabs trigger CDP upload timeouts) with Hydrogen High, High media, and Search off. Start a fresh chat for each pass and save its report beside the list. `--upload-timeout-min` defaults to `15` (`ask.ts`). Use the example below for a quick scan (`review-001.md`). For a detailed audit, reuse the same `list.txt` ONLY across prompts auditing the exact same frozen render (`review-001-acting.md`, etc.) — re-run `bun run reference frames` after any re-render.
+4. Merge findings on the burned film clock and verify them on the reviewed render at source FPS ([Step 5](../SKILL.md#review-gate--iterative-qa-loop)). Check audio locally. Keep completed reports and mark missing windows or fields pending. Recover an already-started chat before resending. For overload or truncation, retry a shorter window on Hydrogen High. On failures at the `copy answer` step, inspect the saved failure screenshot to distinguish a daily quota card from a transient CDP error, and resume pending passes after quota recovers. See [AI Studio error recovery](../../aistudio/SKILL.md#common-errors--recovery).
 
 ```bash
 ASK --tab scene-review --batch --files-from <absolute-list-path> --model gemini-4-hydrogen --thinking High --media High --tool search=off --out <run-dir>/review-001.md "Review the visual differences in this scene window. REF is on the left and OURS is on the right. Read the burned timecodes in chronological order regardless of attachment order. Return a concise list of visible issues with timecode, REF evidence, and OURS evidence. Mark uncertain timing for local verification."
@@ -17,22 +17,15 @@ ASK --tab scene-review --batch --files-from <absolute-list-path> --model gemini-
 
 ## Single-Source Stills
 
-For a reference-only breakdown or an original film, use a single panel. From the film directory, run `bun run reference timecode <source>` and keep the generated MP4 as a local intermediate. Use its burned film clock across windows.
+For a reference-only breakdown or an original film, use a single panel directly with `bun run reference frames`:
 
-Example in PowerShell for the first 30 seconds. Replace `$timecoded` with the output of `reference timecode`. For later windows, set `$start` to the window's beginning and repeat with a fresh folder. Choose window boundaries on cuts where practical, and keep each window at most 30 seconds.
-
-```powershell
-$timecoded = 'renders/reference/ref_timecode.mp4'
-$start = 0
-$run = New-Item -ItemType Directory -Path (Join-Path 'renders/reference' "stills-$([guid]::NewGuid())")
-ffmpeg -nostdin -v error -n -ss $start -i $timecoded -t 30 -vf 'fps=15:round=up' -q:v 2 (Join-Path $run.FullName 'f%06d.jpg')
-if ($LASTEXITCODE -ne 0) { throw 'Frame extraction failed' }
-$images = @(Get-ChildItem -LiteralPath $run.FullName -Filter '*.jpg' -File | Sort-Object Name)
-if ($images.Count -lt 1 -or $images.Count -gt 450) { throw 'Expected 1–450 images per window' }
-[IO.File]::WriteAllLines((Join-Path $run.FullName 'list.txt'), [string[]]$images.FullName)
+```bash
+bun run reference frames references/ref.mp4 --range 0,30 --fps 15 --label REF
 ```
 
-Upload that list with the same Hydrogen High settings and use the single-source prompt from the calling skill. The render stays local. Check visual events at source FPS and listen to audio locally.
+Repeat with `--range 30,60` (etc.) or omit `--range` to auto-split into <=450-image `list-001.txt`, `list-002.txt` batches in a fresh run folder with burned timecode and frame counter (`--label OURS` for original renders). Single-source mode auto-strips the studio draft bottom bar on canonical draft renders (`renders/draft.mp4`, `renders/draft_video.mp4`, `renders/chunks/c<N>.mp4`, `renders/span_<from>-<to>.mp4`), auto-aligns canonical spans/chunks (including `renders/final_chunks/c<N>.mp4`) to their film-time start (`--range` takes film seconds; omit `--range` on `span_*.mp4` to avoid 30 fps 2-decimal rounding errors; external, copied/renamed, and full-film videos start at `0`, and non-canonical copies like `renders/draft_v2.mp4` are not auto-cropped), and warns on stderr if the rendered film input used `--samples 1`. Outside this repo, burn film timecode and extract `fps=15:round=up` JPEGs into `list.txt` (1-450 images per window) with your local tools.
+
+Upload each list with the same Hydrogen High settings and use the single-source prompt from the calling skill. Check visual events at source FPS and listen to audio locally.
 
 ## Prompt Template
 

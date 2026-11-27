@@ -1116,3 +1116,76 @@ test("syncSoundVaultPeaks invalidates cached peaks when WAV content changes at i
   const secondPeak = JSON.parse(readFileSync(join(dir, "PEAKS.json"), "utf8")).punch.peaks[0];
   assert.ok(secondPeak > 0.7);
 });
+
+test("vault.mjs loads root .env defaults in-process from film subdirectories without spawning bun", (t) => {
+  const { root } = fixture(t);
+  writeFileSync(
+    join(root, ".env"),
+    [
+      "# comment",
+      "MC_BASE=from-base",
+      "MC_QUOTED='single $MC_BASE'",
+      'MC_EXPAND="hello ${MC_BASE}"',
+      'MC_ESCAPED="literal \\$MC_BASE"',
+      'MC_SLASH="\\\\$MC_BASE"',
+      'MC_WIN_PATH="C:\\Users\\ADMIN\\vault"',
+      "MC_SHELL_REF=$MC_EXISTING",
+      "MC_CROSS_REF=$MC_DEV_ONLY",
+      "MC_OVERRIDE=base-val",
+      "MC_DEV_ONLY=base-dev",
+      "MC_EMPTY_COMMENT= # inline comment",
+      "MC_EXISTING=from-base-file",
+    ].join("\n"),
+  );
+  writeFileSync(
+    join(root, ".env.development"),
+    "MC_OVERRIDE=dev-val\nMC_DEV_ONLY=dev-val\n",
+  );
+  writeFileSync(join(root, ".env.local"), "MC_OVERRIDE=local-val\nMC_EXISTING=from-file\n");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "-e",
+      `import { parseDotEnv } from "../../scripts/vault.mjs";
+console.log(JSON.stringify({
+  parsed: typeof parseDotEnv,
+  base: process.env.MC_BASE,
+  quoted: process.env.MC_QUOTED,
+  expand: process.env.MC_EXPAND,
+  escaped: process.env.MC_ESCAPED,
+  slash: process.env.MC_SLASH,
+  winPath: process.env.MC_WIN_PATH,
+  shellRef: process.env.MC_SHELL_REF,
+  crossRef: process.env.MC_CROSS_REF,
+  override: process.env.MC_OVERRIDE,
+  devOnly: process.env.MC_DEV_ONLY,
+  emptyComment: process.env.MC_EMPTY_COMMENT,
+  existing: process.env.MC_EXISTING,
+  loaded: process.env.MC_ROOT_ENV_LOADED,
+}));`,
+    ],
+    {
+      cwd: join(root, "films/demo"),
+      encoding: "utf8",
+      timeout: 10_000,
+      env: { ...process.env, NODE_ENV: "development", MC_EXISTING: "already-set", PATH: "" },
+    },
+  );
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.stdout.trim()), {
+    parsed: "function",
+    base: "from-base",
+    quoted: "single $MC_BASE",
+    expand: "hello from-base",
+    escaped: "literal $MC_BASE",
+    slash: "\\from-base",
+    winPath: "C:\\Users\\ADMIN\\vault",
+    shellRef: "already-set",
+    crossRef: "dev-val",
+    override: "local-val",
+    devOnly: "dev-val",
+    emptyComment: "",
+    existing: "already-set",
+    loaded: root,
+  });
+});

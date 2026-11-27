@@ -1,4 +1,3 @@
-import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
@@ -16,39 +15,134 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+const ESCAPED_DOLLAR = "\uE000";
+
+function parseDotEnvRaw(text) {
+  const entries = [];
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const match = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/.exec(trimmed);
+    if (!match) continue;
+    const key = match[1];
+    const raw = match[2].trim();
+    if (!raw) {
+      entries.push([key, { val: "", expand: false, allowBackslashDollar: false }]);
+      continue;
+    }
+    const quote = raw[0];
+    if (quote === "'" || quote === '"' || quote === "`") {
+      let body = raw.slice(1);
+      let closed = false;
+      let val = "";
+      while (true) {
+        for (let j = 0; j < body.length; j++) {
+          const ch = body[j];
+          if (ch === "\\" && quote === '"' && j + 1 < body.length) {
+            const next = body[++j];
+            val +=
+              next === "n"
+                ? "\n"
+                : next === "r"
+                  ? "\r"
+                  : next === "t"
+                    ? "\t"
+                    : next === '"'
+                      ? '"'
+                      : next === "\\"
+                        ? "\\"
+                        : next === "$"
+                          ? ESCAPED_DOLLAR
+                          : `\\${next}`;
+            continue;
+          }
+          if (ch === quote) {
+            closed = true;
+            break;
+          }
+          val += ch;
+        }
+        if (closed || i + 1 >= lines.length) break;
+        val += "\n";
+        body = lines[++i];
+      }
+      entries.push([key, { val, expand: quote !== "'", allowBackslashDollar: quote !== '"' }]);
+    } else {
+      const noComment = raw.startsWith("#") ? "" : raw.replace(/\s+#.*$/, "").trim();
+      entries.push([key, { val: noComment, expand: true, allowBackslashDollar: true }]);
+    }
+  }
+  return entries;
+}
+
+function expandEnvEntries(rawMap, seed = {}, overrides = {}) {
+  const resolved = {};
+  const resolving = new Set();
+  const resolveKey = (name) => {
+    if (overrides[name] !== undefined) return overrides[name];
+    if (name in resolved) return resolved[name];
+    const entry = rawMap.get(name);
+    if (!entry) return seed[name] ?? "";
+    if (resolving.has(name)) return seed[name] ?? "";
+    resolving.add(name);
+    let value;
+    if (!entry.expand) {
+      value = entry.val;
+    } else {
+      const pattern = entry.allowBackslashDollar
+        ? /\\\$|\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g
+        : /\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)/g;
+      value = entry.val
+        .replace(pattern, (m, a, b) => (m === "\\$" ? "$" : resolveKey(a ?? b)))
+        .replaceAll(ESCAPED_DOLLAR, "$");
+    }
+    resolving.delete(name);
+    resolved[name] = value;
+    return value;
+  };
+  for (const key of rawMap.keys()) resolveKey(key);
+  return resolved;
+}
+
+export function parseDotEnv(text, seed = {}, overrides = {}) {
+  const rawMap = new Map(parseDotEnvRaw(text));
+  return expandEnvEntries(rawMap, seed, overrides);
+}
+
 function loadRootEnv() {
+  const cwd = resolve(process.cwd());
+  const sameRoot =
+    process.platform === "win32" ? cwd.toLowerCase() === ROOT.toLowerCase() : cwd === ROOT;
   if (
-    resolve(process.cwd()) === ROOT ||
+    sameRoot ||
+    process.env.MC_ROOT_ENV_LOADED === ROOT ||
     process.execArgv.some(
       (arg) => arg === "--no-env-file" || arg === "--env-file" || arg.startsWith("--env-file="),
     )
   )
     return;
-  if (!readdirSync(ROOT).some((name) => name === ".env" || name.startsWith(".env."))) return;
-  // Bun's dotenv parser preserves expansion/precedence for commands launched inside films.
-  const loaded = spawnSync(
-    process.versions.bun ? process.execPath : "bun",
-    ["--print", "JSON.stringify(process.env)"],
-    {
-      cwd: ROOT,
-      env: process.env,
-      encoding: "utf8",
-      timeout: 15_000,
-      windowsHide: true,
-    },
-  );
-  if (loaded.error || loaded.status !== 0) {
-    const detail =
-      loaded.error?.code === "ETIMEDOUT"
-        ? "Bun did not finish within 15 seconds"
-        : (loaded.error?.code ?? loaded.signal ?? `Bun exited ${loaded.status}`);
-    throw new Error(`Cannot load repository dotenv defaults from ${ROOT}: ${detail}`, {
-      cause: loaded.error,
-    });
+  const nodeEnv = process.env.NODE_ENV || "development";
+  const files =
+    nodeEnv === "test"
+      ? [".env", `.env.${nodeEnv}`, `.env.${nodeEnv}.local`]
+      : [".env", `.env.${nodeEnv}`, ".env.local", `.env.${nodeEnv}.local`];
+  const rawMap = new Map();
+  let loadedAny = false;
+  for (const name of files) {
+    const filePath = join(ROOT, name);
+    if (!existsSync(filePath)) continue;
+    loadedAny = true;
+    for (const [key, entry] of parseDotEnvRaw(readFileSync(filePath, "utf8"))) {
+      rawMap.set(key, entry);
+    }
   }
-  const defaults = JSON.parse(loaded.stdout);
-  for (const [key, value] of Object.entries(defaults))
+  if (!loadedAny) return;
+  const merged = expandEnvEntries(rawMap, {}, process.env);
+  for (const [key, value] of Object.entries(merged))
     if (process.env[key] === undefined) process.env[key] = value;
+  process.env.MC_ROOT_ENV_LOADED = ROOT;
 }
 loadRootEnv();
 export const config = JSON.parse(readFileSync(resolve(ROOT, "vault.json"), "utf8"));

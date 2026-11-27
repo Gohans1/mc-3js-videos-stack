@@ -1,10 +1,14 @@
 """Contact sheets for self-review, 6 pictures each (3 x 2, 640 wide), in time order.
   bun run sheet                                  every renders/still_*.jpg (make them: bun run render stills --at 1,4),
                                                  to renders/sheet_<n>.jpg; a draft still carries its time and shot under it
-  bun run sheet vs                               every renders/vs_still_*.jpg (from render stills --ref), to renders/sheet_vs_<n>.jpg
+  bun run sheet vs [--pairs]                     every renders/vs_still_*.jpg (from render stills --ref), to renders/sheet_vs_<n>.jpg
+                                                 (--pairs / --no-diff crops off DIFF x3 for wider 2-panel REF | OURS tiles)
+  bun run sheet [renders/still_*.jpg ...] --ref references/ref.mp4 [--out renders/sheet_vs.jpg] [--per-sheet 6]
+                                                 pair existing stills (default renders/still_*.jpg) beside matching frames of a
+                                                 reference video into 2-panel REF | OURS sheets without re-rendering
   bun run sheet renders/view_a_4s.jpg renders/view_b_4s.jpg [--out renders/grid.jpg] [--per-sheet 6]
                                                  explicit images or globs (.jpg, .jpeg, .png, .webp) into captioned grid(s)
-                                                 (default renders/sheet_custom.jpg; --per-sheet paginates into <stem>_0.<ext>, ...; --out stays inside the film folder)
+                                                 (default renders/sheet_custom.jpg; --per-sheet paginates into <stem>_0.<ext>, ...; --out stays inside the film folder, auto-appends .jpg if omitted)
   bun run sheet renders/draft_video.mp4 10,20,30  only those seconds of a video, to renders/sheet_<video>_<n>.jpg
   bun run sheet renders/chunks/c02.mp4 62,70     film seconds, as framecheck prints them: a chunk or a span starts at its
                                                  film second by itself (c02: 60 s, span_40-44: 40 s), --start 60 for any other
@@ -32,6 +36,9 @@ overview: 16-96 evenly spaced samples (16 per sheet, one sheet per 160 s rounded
   Optional A-B[/N] scans one heard-time range: 16 samples by default, N from 1 to 96.
 frames TIMES: comma-separated heard seconds and A-B[/N] ranges (4 per range by default, N from 1 to 40).
   At most 96 samples per run; range endpoints must be inside the source (B may equal its end).
+  For span_*.mp4 (whose filename/log rounds 30 fps bounds to 2 decimals), run overview omitting A-B first,
+  then use each entry's commands.frames (single cell) or exact source.pictureFrom/source.pictureTo from
+  index.json (or inset both endpoints by >= 0.02 s) when calling frames A-B/N.
 New modes keep their outputs in a fresh renders/review_<name>_<id>/ with index.json: source, requestedTime,
   decoded frame time/sourceTime, sheet/cell (1-16, left to right then down) or native JPEG, and timeline context.
 Follow-up commands are argv, --start included: run them as given, even in a new shell.
@@ -107,9 +114,23 @@ def caption_labels(paths):
     return labels
 
 
-def build_image_sheet(paths, out_arg, per_sheet=None):
-    cwd_root = Path.cwd().resolve()
-    raw_out = out_arg if out_arg is not None else "renders/sheet_custom.jpg"
+def _allowed_out_roots(cwd_root):
+    roots = [cwd_root]
+    for parent in (cwd_root, *cwd_root.parents):
+        pkg = parent / "package.json"
+        if pkg.is_file():
+            try:
+                data = json.loads(pkg.read_text(encoding="utf8"))
+                if isinstance(data, dict) and isinstance(data.get("live-studio"), dict):
+                    roots.append(parent.resolve())
+                    break
+            except (OSError, ValueError):
+                pass
+    return roots
+
+
+def _resolve_out_path(out_arg, default_rel, cwd_root):
+    raw_out = out_arg if out_arg is not None else default_rel
     if not raw_out.strip():
         usage("--out path cannot be empty")
     out_path = Path(raw_out)
@@ -119,16 +140,26 @@ def build_image_sheet(paths, out_arg, per_sheet=None):
         resolved_out = out_path.resolve()
     except OSError as e:
         usage(f"invalid --out path {raw_out!r}: {e}")
-    try:
-        rel_out = resolved_out.relative_to(cwd_root)
-    except ValueError:
+    roots = _allowed_out_roots(cwd_root)
+    if not any(resolved_out.is_relative_to(root) for root in roots):
         usage(f"--out must stay inside the current folder ({cwd_root}), got {raw_out!r}")
-    if resolved_out == cwd_root or resolved_out.is_dir():
-        usage(f"--out must name a file inside the current folder, got {raw_out!r}")
+    if any(resolved_out == root for root in roots) or resolved_out.is_dir():
+        usage(f"--out must name a file, got {raw_out!r}")
+    if not resolved_out.suffix:
+        resolved_out = resolved_out.with_suffix(".jpg")
     out_ext = resolved_out.suffix.lower()
     if out_ext not in IMAGE_EXTS:
         usage(f"--out must end in .jpg, .jpeg, .png, or .webp, got {raw_out!r}")
+    return resolved_out, out_ext
 
+
+def _display_out(target, cwd_root):
+    if target.is_relative_to(cwd_root):
+        return target.relative_to(cwd_root).as_posix()
+    return target.as_posix()
+
+
+def _expand_image_paths(paths):
     def sort_key(p):
         m = re.search(r"_(-?\d+(?:\.\d+)?)s$", p.stem)
         return (0, float(m.group(1)), p.as_posix()) if m else (1, 0.0, p.as_posix())
@@ -151,6 +182,13 @@ def build_image_sheet(paths, out_arg, per_sheet=None):
         if not p.is_file():
             usage(f"no image file {raw}")
         img_paths.append(p)
+    return img_paths
+
+
+def build_image_sheet(paths, out_arg, per_sheet=None, tile_w=640, default_out="renders/sheet_custom.jpg", labels_override=None):
+    cwd_root = Path.cwd().resolve()
+    resolved_out, out_ext = _resolve_out_path(out_arg, default_out, cwd_root)
+    img_paths = _expand_image_paths(paths)
 
     try:
         from PIL import Image, ImageDraw, ImageFont, ImageOps
@@ -158,14 +196,13 @@ def build_image_sheet(paths, out_arg, per_sheet=None):
         usage(f"Pillow (PIL) is required for image contact sheets: {e}", 1)
 
     total = len(img_paths)
-    all_labels = caption_labels(img_paths)
+    all_labels = labels_override if labels_override is not None else caption_labels(img_paths)
     page_size = per_sheet if per_sheet is not None else total
     pages = [
         (img_paths[k : k + page_size], all_labels[k : k + page_size])
         for k in range(0, total, page_size)
     ]
 
-    tile_w = 640
     caption_h = 34
     gap = 4
     font = load_caption_font(ImageFont, 18)
@@ -240,7 +277,7 @@ def build_image_sheet(paths, out_arg, per_sheet=None):
             if len(pages) == 1
             else resolved_out.with_name(f"{resolved_out.stem}_{page_idx}{resolved_out.suffix}")
         )
-        rel_display = target.relative_to(cwd_root).as_posix()
+        rel_display = _display_out(target, cwd_root)
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             if out_ext in (".jpg", ".jpeg"):
@@ -264,6 +301,85 @@ def build_image_sheet(paths, out_arg, per_sheet=None):
         print("next: open them to look")
 
 
+def build_ref_stills_sheet(paths, ref_video, out_arg, per_sheet=None):
+    _resolve_out_path(out_arg, "renders/sheet_vs.jpg", Path.cwd().resolve())
+    if not Path(ref_video).is_file():
+        usage(f"no {ref_video}: --ref takes a reference video, as references/ref.mp4")
+    if paths:
+        img_paths = _expand_image_paths(paths)
+    else:
+        rx = re.compile(r"still_(-?\d+(?:\.\d+)?)s\.jpg")
+        found = [(f, rx.fullmatch(f.name)) for f in R.glob("still_*.jpg")]
+        img_paths = [f for f, m in sorted(((f, m) for f, m in found if m), key=lambda pair: float(pair[1].group(1)))]
+        if not img_paths:
+            usage("no renders/still_*.jpg to pair with --ref: bun run render stills --at 1,4,8 first, or pass explicit image paths")
+    entries = []
+    for p in img_paths:
+        m = re.search(r"_(-?\d+(?:\.\d+)?)s$", p.stem)
+        if not m:
+            usage(f"{p} has no _<sec>s timestamp in its filename; --ref pairs timestamped stills like still_4s.jpg")
+        entries.append((p, float(m.group(1))))
+    try:
+        from PIL import Image, ImageDraw, ImageFont, ImageOps
+    except ImportError as e:
+        usage(f"Pillow (PIL) is required for --ref contact sheets: {e}", 1)
+    try:
+        first, stop, origin, _ = video_bounds(ref_video)
+        timestamps = presentation_times(ref_video, origin)
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError, IndexError) as e:
+        usage(f"{ref_video} is no video ffprobe can read: {e}")
+    end = math.nextafter(stop, -math.inf)
+    seeks = [displayed_time(timestamps, min(max(sec, first), end)) for _, sec in entries]
+    aspects = sample_aspects(ref_video, origin, max(seeks))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="sheet-ref-"))
+    try:
+        pair_paths = []
+        pair_labels = []
+        badge_font = load_caption_font(ImageFont, 16)
+        panel_w = 400
+        divider = 4
+        for idx, ((still_path, sec), seek) in enumerate(zip(entries, seeks)):
+            ref_jpg = tmp_dir / f"ref_{idx:03d}.jpg"
+            extract_displayed_frame(ref_video, ref_jpg, seek, origin=origin, aspect=aspects.get(round(seek, 9)))
+            with Image.open(ref_jpg) as ref_open, Image.open(still_path) as our_open:
+                ref_im = ImageOps.exif_transpose(ref_open).convert("RGB")
+                our_im = ImageOps.exif_transpose(our_open).convert("RGB")
+                rw, rh = ref_im.size
+                ow, oh = our_im.size
+                expected_oh = round(ow * rh / max(1, rw))
+                if oh > expected_oh + 8:
+                    our_im = our_im.crop((0, 0, ow, expected_oh))
+                    ow, oh = our_im.size
+                panel_h = max(120, min(960, round(panel_w * rh / max(1, rw) / 2) * 2))
+                ref_scaled = ref_im.resize((panel_w, panel_h), Image.Resampling.LANCZOS)
+                our_scaled = our_im.resize((panel_w, panel_h), Image.Resampling.LANCZOS)
+                pair_im = Image.new("RGB", (panel_w * 2 + divider, panel_h), (10, 10, 12))
+                pair_im.paste(ref_scaled, (0, 0))
+                pair_im.paste(our_scaled, (panel_w + divider, 0))
+                draw = ImageDraw.Draw(pair_im)
+                for bx, tag in ((6, "REF"), (panel_w + divider + 6, "OURS")):
+                    bbox = draw.textbbox((0, 0), tag, font=badge_font)
+                    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                    draw.rectangle([bx - 3, 6, bx + tw + 5, 6 + th + 6], fill=(12, 12, 16))
+                    draw.text((bx + 1, 9 - bbox[1]), tag, fill=(240, 240, 240), font=badge_font)
+                pair_file = tmp_dir / f"pair_{idx:03d}.jpg"
+                pair_im.save(pair_file, format="JPEG", quality=94)
+                pair_paths.append(str(pair_file))
+                pair_labels.append(f"{still_path.stem} ({seconds(sec)}s)")
+        build_image_sheet(
+            pair_paths,
+            out_arg,
+            per_sheet=per_sheet if per_sheet is not None else 6,
+            tile_w=804,
+            default_out="renders/sheet_vs.jpg",
+            labels_override=pair_labels,
+        )
+    except (subprocess.SubprocessError, OSError, ValueError) as e:
+        usage(f"could not build --ref contact sheet from {ref_video}: {e}", 1)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 def cuts_of(context):
     cuts = context["cuts"] or {}
     if "times" not in cuts:
@@ -271,17 +387,31 @@ def cuts_of(context):
     return sorted(set(cuts["times"]))
 
 
-USE = "bun run sheet [vs], bun run sheet <img1> [<img2> ...] [--out <path>] [--per-sheet <N>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
+USE = "bun run sheet [vs] [--ref <video>], bun run sheet <img1> [<img2> ...] [--ref <video>] [--out <path>] [--per-sheet <N>], or bun run sheet <video> 10,20.5,30 | shots | cut <n> | overview [A-B[/N]] | frames TIMES (--help for more)"
 pos = []
 out_arg = None
 per_sheet_arg = None
 vs_arg = None
+ref_arg = None
 grid_arg = None
 crop_arg = None
 start_arg = None
+pairs_mode = False
 i = 0
 while i < len(args):
     a = args[i]
+    if a in ("--pairs", "--no-diff"):
+        pairs_mode = True
+        i += 1
+        continue
+    if a == "--ref" or a.startswith("--ref="):
+        if ref_arg is not None:
+            usage("--ref may only be passed once")
+        ref_arg = a.split("=", 1)[1] if "=" in a else args[i + 1] if i + 1 < len(args) and not args[i + 1].startswith("-") else ""
+        if not ref_arg:
+            usage("--ref needs the reference video: bun run sheet --ref references/ref.mp4")
+        i += 1 if "=" in a else 2
+        continue
     if a == "--vs" or a.startswith("--vs="):
         if vs_arg is not None:
             usage("--vs may only be passed once")
@@ -348,6 +478,20 @@ while i < len(args):
 
 is_image_list = any(Path(a).suffix.lower() in IMAGE_EXTS for a in pos)
 vs_stills = len(pos) == 1 and pos[0] == "vs"
+if pairs_mode and not vs_stills:
+    usage("--pairs goes with bun run sheet vs: bun run sheet vs --pairs")
+if ref_arg is not None:
+    if vs_stills or (pos and not is_image_list):
+        usage("--ref pairs stills (or explicit timestamped images) with a reference video: bun run sheet --ref references/ref.mp4")
+    if vs_arg is not None or grid_arg is not None or crop_arg is not None or start_arg is not None:
+        usage("--ref cannot be combined with --vs, --grid, --crop, or --start")
+    per_sheet = None
+    if per_sheet_arg is not None:
+        if not re.fullmatch(r"[1-9]\d*", per_sheet_arg) or int(per_sheet_arg) > 36:
+            usage(f"--per-sheet must be an integer from 1 to 36, got {per_sheet_arg!r}")
+        per_sheet = int(per_sheet_arg)
+    build_ref_stills_sheet(pos, ref_arg, out_arg, per_sheet)
+    raise SystemExit
 if start_arg is not None and (is_image_list or not pos or vs_stills):
     usage("--start goes with a video: bun run sheet renders/clip.mp4 frames 62 --start 60")
 if is_image_list:
@@ -528,8 +672,15 @@ try:
         if re.fullmatch(re.escape(name) + r"\d+\.jpg", old.name):
             old.unlink()
     w, h = image_dimensions(files[0])
-    TH = max(2, round(640 * h / w / 2) * 2)
-    fit = compact_filter(640, TH, pad=True)
+    crop_prefix = ""
+    tile_w = 640
+    if vs_stills and pairs_mode:
+        cropped_w = max(2, (2 * w - 12) // 3)
+        crop_prefix = "crop=trunc((2*iw-12)/3):ih:0:0,"
+        w = cropped_w
+        tile_w = 800
+    TH = max(2, round(tile_w * h / w / 2) * 2)
+    fit = crop_prefix + compact_filter(tile_w, TH, pad=True)
     for i in range(0, len(files), 6):
         grp = files[i:i + 6]
         inp, filt = [], ""
@@ -538,10 +689,10 @@ try:
             filt += f"[{k}:v]{fit}[v{k}];"
         n = len(grp)
         while n % 3:
-            inp += ["-f", "lavfi", "-i", f"color=black:s=640x{TH}"]
+            inp += ["-f", "lavfi", "-i", f"color=black:s={tile_w}x{TH}"]
             filt += f"[{n}:v]null[v{n}];"
             n += 1
-        filt += "".join(f"[v{k}]" for k in range(n)) + f"xstack=inputs={n}:layout=" + "|".join(f"{(k % 3) * 640}_{(k // 3) * TH}" for k in range(n))
+        filt += "".join(f"[v{k}]" for k in range(n)) + f"xstack=inputs={n}:layout=" + "|".join(f"{(k % 3) * tile_w}_{(k // 3) * TH}" for k in range(n))
         subprocess.run(["ffmpeg", "-v", "error", "-y", *inp, "-filter_complex", filt, "-frames:v", "1", str(R / f"{name}{i // 6}.jpg")], check=True)
         print(f"renders/{name}{i // 6}.jpg  {', '.join(f.stem.removeprefix(stem_prefix) for f in grp)}")
 except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:

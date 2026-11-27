@@ -129,7 +129,7 @@ if (tabAt >= 0) {
   argv.splice(tabAt, inline ? 1 : 2);
 }
 const [command, ...rest] = argv;
-if (!command || command === "help" || command === "--help") {
+if (!command || command === "help" || command === "--help" || command === "-h") {
   console.error(USAGE);
   process.exit(command ? 0 : 2);
 }
@@ -143,6 +143,23 @@ if (command === "ab") {
   await prepareTab();
   const p = Bun.spawnSync([...abArgs(), ...rest], { stdio: ["inherit", "inherit", "inherit"] });
   process.exit(p.exitCode ?? 1);
+}
+const VALUE_FLAGS = new Set(["--model", "--search", "--limit", "--out", "--description", "--tab"]);
+const hasHelpFlag = (args: string[]) => {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--") return false;
+    if (VALUE_FLAGS.has(a)) {
+      i++;
+      continue;
+    }
+    if (a === "--help" || a === "-h") return true;
+  }
+  return false;
+};
+if (hasHelpFlag(rest)) {
+  console.error(USAGE);
+  process.exit(0);
 }
 // The page map without opening a browser: every named element, the page state it lives in, and its locators.
 if (command === "map") {
@@ -253,17 +270,20 @@ switch (command) {
     break;
 
   case "tab": {
-    const label = args[1];
-    if (args[0] !== "close" || !label)
+    const rawLabel = args[1];
+    if (args[0] !== "close" || !rawLabel)
       usage("tab takes: close <label> (tabs open by themselves on first --tab use)");
+    const label = rawLabel.toLowerCase();
     prelude = [];
     allowScreenshot = false;
     add(`close tab ${label}`, async () => {
-      const id = readTabs()[label]?.id;
+      const tabs = readTabs();
+      const key = Object.keys(tabs).find((k) => k.toLowerCase() === label);
+      const id = key ? tabs[key]?.id : undefined;
       const pruneIfSame = () =>
         mutateTabs((cur) => {
-          if (cur[label]?.id !== id) return cur;
-          const { [label]: _, ...others } = cur;
+          if (!key || cur[key]?.id !== id) return cur;
+          const { [key]: _, ...others } = cur;
           return others;
         });
       const alive =

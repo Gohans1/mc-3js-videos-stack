@@ -233,6 +233,43 @@ test("qc vs reads the reference frame at the exact index of the second and sets 
   }
 }, 30_000);
 
+test("qc vs --batch compares multiple stills against one reference video in a single pass", () => {
+  const dir = mkdtempSync(join(tmpdir(), "qc-vs-batch-"));
+  try {
+    const video = greyReference(dir);
+    const oursA = join(dir, "still_0.2s.jpg");
+    const oursB = join(dir, "still_0.5s.jpg");
+    makePng(oursA, "img = Image.new('RGB', (90, 160), (48, 48, 48))");
+    makePng(oursB, "img = Image.new('RGB', (90, 160), (120, 120, 120))");
+    const outA = join(dir, "vs_a.jpg");
+    const outB = join(dir, "vs_b.jpg");
+    const manifest = join(dir, "jobs.json");
+    writeFileSync(
+      manifest,
+      JSON.stringify({
+        video,
+        pictureHeight: 160,
+        jobs: [
+          { image: oursA, at: 0.2, out: outA },
+          { image: oursB, at: 0.5, out: outB },
+        ],
+      }),
+    );
+    const res = runQc(["vs", "--batch", manifest, "--json"]);
+    expect(res.status, res.stderr).toBe(0);
+    const reports = JSON.parse(res.stdout);
+    expect(reports).toHaveLength(2);
+    expect(reports[0].reference.frame).toBe(6);
+    expect(reports[0].reference.metrics.lumaP50).toBe(48);
+    expect(reports[1].reference.frame).toBe(15);
+    expect(reports[1].reference.metrics.lumaP50).toBe(120);
+    expect(existsSync(outA)).toBe(true);
+    expect(existsSync(outB)).toBe(true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 30_000);
+
 test("qc vs measures sharpness on both at the same size, over the whole frame and a region", () => {
   const dir = mkdtempSync(join(tmpdir(), "qc-vs-"));
   try {

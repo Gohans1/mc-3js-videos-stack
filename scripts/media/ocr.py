@@ -6,6 +6,7 @@
   bun run media ocr image.png --language vi --config config.yaml
   bun run media ocr reference.mp4 --from 0 --to 60 --frames 120 --crop 0,0.7,1,0.2
   bun run media ocr reference.mp4 --captions --crop 0,0.7,1,0.17 --minutes 15
+  bun run media ocr reference.mp4 --captions --crop 0,0.7,1,0.17 --snap-fps 30 --text-out src/timeline/text.json --preset zack-d-films
 
 --at, --from and --to use input-file seconds, without film offsets or speed changes.
 Default: 12 evenly spaced video frames; images have no timestamp. Source frames,
@@ -16,8 +17,13 @@ First inference may download official model files; later runs use the kept cache
 recognizer language route. Models/default routes follow RapidOCR 3.10.0.
 --crop x,y,w,h (fractions of the picture) reads only that band, as a caption strip: a full 1080x1920
 frame takes about 2.4 s, the band about 1 s. Text boxes stay in the whole picture's pixels.
+Omit --to to scan to the exact probed duration. Studio draft MP4s carry a bottom metadata strip
+(not auto-stripped): pass --crop 0,0,1,0.946 for 9:16 (720x1352) or 0,0,1,<picH/totalH> for other ratios.
 --captions (with --crop) reads burnt-in captions: the band every 0.25 s (--frames sets how many), keeping the
 caption's own line (a label on a prop or a watermark is left out). Similar reads join and change times are estimated.
+--snap-fps <fps> snaps caption from/to boundaries to the nearest frame grid (e.g. 30) and drops zero-length spans.
+--close-gap <sec> closes accidental 1-2 frame blank gaps between consecutive captions (default 0.07 with --snap-fps/--text-out; 0 to disable).
+--text-out <path> writes a ready-to-use film text.json ({ preset, items }) directly from --captions (--preset defaults to zack-d-films; pass "" to omit).
 For frame-accurate cues, verify the boundary on source frames with bun run sheet <video> frames <A-B/N>.
 captions.json lists {from, to, text, score} in input-file seconds, rewritten after every
 read ("complete": false and "readUntil" until the frames are read); a caption shown under 0.25 s can fall between
@@ -80,6 +86,48 @@ def frame_times(start, end, count, pins, duration):
             raise ValueError("more --at times than --frames; raise --frames")
         return sorted(set(pins))
     return [start + (end - start) * (i + 0.5) / count for i in range(count)]
+
+
+def extract_single_frame(source, out_file, seek, image=False, band=()):
+    cmd = ["ffmpeg", "-v", "error", "-nostdin", "-y", *([] if image else ["-ss", str(seek)]),
+           "-i", str(source), *band, "-frames:v", "1", "-update", "1", out_file.name]
+    try:
+        subprocess.run(cmd, cwd=out_file.parent, check=True, timeout=90)
+    except subprocess.TimeoutExpired:
+        subprocess.run(cmd, cwd=out_file.parent, check=True, timeout=120)
+
+
+def extract_span_frames(source, frames_dir, start, end, times, crop=None):
+    """Extract all evenly spaced frames for a video span in one ffmpeg pass instead of spawning per frame."""
+    if len(times) < 2 or end <= start:
+        return {}
+    fps = len(times) / (end - start)
+    first = start + 0.5 / fps
+    span = max(0.001, end - first)
+    filters = ["setpts=PTS-STARTPTS"]
+    if crop:
+        filters.append("crop=w=trunc(iw*{2}):h=trunc(ih*{3}):x=trunc(iw*{0}):y=trunc(ih*{1})".format(*crop))
+    filters.append(f"fps={fps:.12g}")
+    timeout = max(120, min(600, int((end - start) * 4) + 60))
+    for stale in frames_dir.glob("frame-*.png"):
+        stale.unlink(missing_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg", "-v", "error", "-nostdin", "-y",
+            "-ss", str(first), "-i", str(source), "-t", str(span),
+            "-vf", ",".join(filters),
+            "-frames:v", str(len(times)), "-start_number", "0", "frame-%04d.png",
+        ],
+        cwd=frames_dir,
+        check=True,
+        timeout=timeout,
+    )
+    extracted = {}
+    for index in range(len(times)):
+        candidate = frames_dir / f"frame-{index:04d}.png"
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            extracted[index] = candidate
+    return extracted
 
 
 def band_changes(source, crop, start, end):
@@ -240,6 +288,41 @@ def captions_from(reads, changes, start, end, read=None):
             for i, r in enumerate(runs) if r["text"]]
 
 
+def snap_captions(captions, fps):
+    snapped = []
+    for c in captions:
+        start = round(round(c["from"] * fps) / fps, 4)
+        stop = round(round(c["to"] * fps) / fps, 4)
+        if stop <= start:
+            continue
+        snapped.append({**c, "from": start, "to": stop})
+    return snapped
+
+
+def close_caption_gaps(captions, max_gap):
+    if not captions or max_gap <= 0:
+        return list(captions)
+    closed = [dict(c) for c in captions]
+    for i in range(len(closed) - 1):
+        gap = closed[i + 1]["from"] - closed[i]["to"]
+        if 0 < gap <= max_gap:
+            closed[i]["to"] = closed[i + 1]["from"]
+    return closed
+
+
+def write_text_timeline(path, captions, preset):
+    doc = {}
+    if preset:
+        doc["preset"] = preset
+        doc["items"] = [{"from": c["from"], "to": c["to"], "text": c["text"]} for c in captions]
+    else:
+        doc["items"] = [{"kind": "text", "from": c["from"], "to": c["to"], "text": c["text"]} for c in captions]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    pending = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    pending.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    pending.replace(path)
+
+
 def main():
     parser = argparse.ArgumentParser(prog="bun run media ocr", description=__doc__, allow_abbrev=False,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -249,6 +332,10 @@ def main():
     parser.add_argument("--to", dest="end", type=second)
     parser.add_argument("--frames", type=int)
     parser.add_argument("--captions", action="store_true")
+    parser.add_argument("--snap-fps", type=float)
+    parser.add_argument("--close-gap", type=float)
+    parser.add_argument("--text-out", type=Path)
+    parser.add_argument("--preset", default="zack-d-films")
     parser.add_argument("--score", type=float)
     parser.add_argument("--language")
     parser.add_argument("--config", type=Path)
@@ -261,6 +348,18 @@ def main():
         parser.error(f"not a local file: {source}")
     if args.captions and (args.at or not args.crop):
         parser.error("--captions reads a --crop band (the caption strip) over a span, not --at seconds")
+    if args.snap_fps is not None:
+        if not args.captions:
+            parser.error("--snap-fps requires --captions")
+        if not math.isfinite(args.snap_fps) or args.snap_fps <= 0:
+            parser.error("--snap-fps must be a positive finite number")
+    if args.close_gap is not None:
+        if not args.captions:
+            parser.error("--close-gap requires --captions")
+        if not math.isfinite(args.close_gap) or args.close_gap < 0:
+            parser.error("--close-gap must be a non-negative finite number")
+    if args.text_out is not None and not args.captions:
+        parser.error("--text-out requires --captions")
     args.frames_given = args.frames
     if args.frames is None:
         args.frames = 12
@@ -289,9 +388,18 @@ def main():
             times = [round(t, 3) for t in frame_times(args.start, args.end, args.frames, pins, duration)]
     except (argparse.ArgumentTypeError, OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         parser.error(str(error))
+    eff_close_gap = (
+        args.close_gap
+        if args.close_gap is not None
+        else (0.07 if (args.snap_fps is not None or args.text_out is not None) else 0.0)
+    )
     plan = {"source": str(source), "clock": "input-file seconds; images have null time", "times": times,
             "language": args.language, "config": str(args.config.resolve()) if args.config else None,
-            "scoreThreshold": args.score, "crop": args.crop}
+            "scoreThreshold": args.score, "crop": args.crop,
+            "snapFps": args.snap_fps,
+            "closeGap": eff_close_gap if args.captions else None,
+            "textOut": str(args.text_out.resolve()) if args.text_out else None,
+            "preset": (args.preset or None) if args.text_out else None}
     if args.dry_run:
         print(json.dumps(plan, ensure_ascii=False))
         return 0
@@ -334,26 +442,41 @@ def main():
             reads = [{"at": row["sourceSecond"], "text": row["text"]} for row in result["frames"]]
             until = end if complete else reads[-1]["at"]
             captions = captions_from(reads, changes, args.start, until, read)
+            if args.snap_fps is not None:
+                captions = snap_captions(captions, args.snap_fps)
+            if eff_close_gap > 0:
+                captions = close_caption_gaps(captions, eff_close_gap)
             pending = out / "captions.json.tmp"
             pending.write_text(json.dumps({"source": str(source), "clock": "input-file seconds", "crop": args.crop,
                                            "complete": complete, "readUntil": until, "captions": captions},
                                           indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
             pending.replace(out / "captions.json")
+            if complete and args.text_out is not None:
+                write_text_timeline(args.text_out.resolve(), captions, args.preset)
             return captions
 
         origin = None
         band = (["-vf", "crop=w=trunc(iw*{2}):h=trunc(ih*{3}):x=trunc(iw*{0}):y=trunc(ih*{1})".format(*args.crop)]
                 if args.crop else [])
+        pre_extracted = {}
+        if not image and not pins and len(times) > 1:
+            try:
+                pre_extracted = extract_span_frames(source, frames, args.start, end, times, args.crop)
+            except subprocess.SubprocessError:
+                for partial in frames.glob("frame-*.png"):
+                    partial.unlink(missing_ok=True)
+                pre_extracted = {}
         evidence = (out / "frames.jsonl").open("a", encoding="utf-8")
 
         def read_frame(index, at, seek):
             nonlocal origin
             file = frames / f"frame-{index:04d}{source.suffix.lower() if image else '.png'}"
-            if image and not band:
+            if index in pre_extracted and pre_extracted[index].is_file():
+                file = pre_extracted[index]
+            elif image and not band:
                 shutil.copyfile(source, file)
             else:
-                subprocess.run(["ffmpeg", "-v", "error", "-nostdin", *([] if image else ["-ss", str(seek)]), "-i", str(source),
-                                *band, "-frames:v", "1", "-update", "1", file.name], cwd=frames, check=True, timeout=30)
+                extract_single_frame(source, file, seek, image=image, band=band)
             if band and origin is None:
                 origin = crop_origin(source, args.crop)
             started = time.monotonic()
@@ -390,6 +513,8 @@ def main():
             for c in captions:
                 print(f'{c["from"]:.3f}-{c["to"]:.3f} {c["text"]}')
             print(out / "captions.json")
+            if args.text_out is not None:
+                print(args.text_out.resolve())
         result["status"] = "completed"
         model_root = Path(engine.cfg.Global.model_root_dir)
         result["backend"]["cachedModelSha256"] = {}

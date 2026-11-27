@@ -13,6 +13,9 @@ test("find distinguishes stock faces, intensity ramps, and procedural manga mark
   expect(show).toContain('wear.set("angry")');
   expect(show).toContain("anger");
   expect(show).toContain("medium");
+  const deadpan = await run(["--show", "face/deadpan", "--offline"], faces);
+  expect(deadpan).toContain("marks:");
+  expect(deadpan).toContain("wearToonFace(player, { marks: false })");
 });
 
 test("intent and alias searches put native expressions and marks above emoji lookalikes", () => {

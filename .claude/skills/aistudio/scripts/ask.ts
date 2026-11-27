@@ -13,6 +13,7 @@ import { parseArgs } from "node:util";
 import { probeVideoMeta } from "../../../../scripts/review/gemini-video-input.ts";
 import {
   ASK,
+  batchProgressExpr,
   browserSteps,
   CHAT_ID,
   chatUrlFrom,
@@ -52,6 +53,7 @@ import {
   type Step,
   StepError,
   stripBom,
+  summarizeAttachments,
   systemInstructions,
   TAB_RE,
   tabFlag,
@@ -372,9 +374,9 @@ add("check input", () => {
   const settings = [thinking && `thinking ${thinking}`, media && `media ${media}`]
     .filter(Boolean)
     .join(", ");
-  const list = files.map((f) => `${basename(f)} ${(bytes.get(f)! / 1e6).toFixed(1)} MB`);
-  const attached = files.length
-    ? `; ${files.length} file(s): ${list.join(", ")}${videos.length ? (agentic ? "; videos agentic" : `; videos ${fps} fps`) : ""}`
+  const summary = summarizeAttachments(files, bytes);
+  const attached = summary
+    ? `; ${summary}${videos.length ? (agentic ? "; videos agentic" : `; videos ${fps} fps`) : ""}`
     : "";
   if (mode === "new") return `new chat, tab ${currentTab()}, ${model}, ${settings}${attached}`;
   if (mode === "follow-up")
@@ -442,20 +444,42 @@ if (plan.batch.length) {
       );
     }
     const t0 = Date.now();
+    let lastReady = -1;
+    let lastTotal = -1;
+    let lastProgressAt = t0;
+    const batchProgress = () =>
+      js<{ total: number; ready: number }>(batchProgressExpr(batchNames));
     upload(one("fileInput"), "file input", ...plan.batch);
     try {
       await pollUntil(
         `${chipCount} === ${plan.batch.length} && ${chipsNamedReady(batchNames)}`,
         uploadTimeoutMs,
-        (ms) =>
+        (ms) => {
+          const { total, ready } = batchProgress();
           console.error(
-            `  … still uploading, ${js<number>(chipCount)}/${plan.batch.length} chips (${secs(ms)})`,
-          ),
+            `  … still uploading, ${ready}/${plan.batch.length} ready (${total} chips) (${secs(ms)})`,
+          );
+          const now = Date.now();
+          if (ready > lastReady || total > lastTotal) {
+            lastReady = ready;
+            lastTotal = total;
+            lastProgressAt = now;
+          } else if (
+            total === plan.batch.length &&
+            ready < plan.batch.length &&
+            now - lastProgressAt >= 180_000
+          ) {
+            throw new StepError(
+              `the batch upload stalled at ${ready}/${plan.batch.length} ready for 3 min; retry with a smaller batch or a fresh --tab. AI Studio alerts: ${pageAlerts() || "none"}`,
+            );
+          }
+        },
       );
     } catch (e) {
       if (!(e instanceof TimeoutError)) throw e;
+      const { total, ready } = batchProgress();
       throw new StepError(
-        `the batch is still uploading after ${secs(uploadTimeoutMs)} (${js<number>(chipCount)}/${plan.batch.length} chips); raise --upload-timeout-min. AI Studio alerts: ${pageAlerts() || "none"}`,
+        `the batch is still uploading after ${secs(uploadTimeoutMs)} (${ready}/${plan.batch.length} ready, ${total} chips); raise --upload-timeout-min. AI Studio alerts: ${pageAlerts() || "none"}`,
       );
     }
     const tokens = js<(string | null)[]>(chipTextsByName(batchNames))

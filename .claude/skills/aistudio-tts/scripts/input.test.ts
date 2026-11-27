@@ -2,9 +2,11 @@ import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
 import {
+  assertAllowedModel,
   matchChoice,
   speechAccountMatches,
   speechUrl,
+  validateBackend,
   validateBatchManifest,
   validateScene,
   voiceSampleUrl,
@@ -14,8 +16,14 @@ test("TTS URLs are limited to the AI Studio speech workspace and selected speech
   expect(speechUrl("gemini-3.8-flash-tts", "5")).toBe(
     "https://aistudio.google.com/u/5/generate-speech?model=gemini-3.8-flash-tts",
   );
+  expect(() => speechUrl("gemini-3.8-flash-lite-tts")).toThrow(/flash-lite/i);
+  expect(() => assertAllowedModel("gemini-3.8-flash-lite-tts")).toThrow(/flash-lite/i);
+  expect(assertAllowedModel("gemini-3.8-flash-tts")).toBe("gemini-3.8-flash-tts");
   expect(() => speechUrl("gemini-4-neon")).toThrow("TTS model");
   expect(() => speechUrl("gemini-3.8-flash-tts", "../library")).toThrow("account");
+  expect(validateBackend(undefined)).toBe("web");
+  expect(validateBackend("api")).toBe("api");
+  expect(() => validateBackend("other")).toThrow(/web or api/i);
 });
 
 test("a screenplay preserves inline expressions, Vietnamese text, and an empty optional style", () => {

@@ -7,9 +7,9 @@ Reviewed November 18, 2026. The review used official documentation found through
 | Area | Status |
 | --- | --- |
 | GenVoice | Studio supports voice generation, dubbing, Voice Changer, MiniMax cloning, and Scribe. Some job types still have limited Cloud controls. |
-| ElevenLabs and Gemini | Both have credential setup, model and account voice discovery, Speech, archive, and retry. A live Gemini Flash-Lite request produced Vietnamese WAV audio. Direct ElevenLabs was verified with a mock API. |
+| ElevenLabs and Gemini | Both have credential setup, model and account voice discovery, Speech, archive, and retry. Direct ElevenLabs was verified with a mock API. Gemini exposes `gemini-3.8-flash-tts` only (`flash-lite-tts` is banned). |
 | Dialogue | All three share the script, cast, templates, and take history. A live Gemini request produced a two-voice Vietnamese scene. Direct ElevenLabs was verified with a mock API. |
-| Current priority | Focus on TTS and the GenVoice library. Further ElevenLabs and Gemini API integration is paused; for free Gemini 3.8 Flash TTS via the AI Studio web playground, use `.claude/skills/aistudio-tts/SKILL.md`. |
+| Current priority | Focus on TTS and the GenVoice library. Further ElevenLabs and Gemini Live Studio UI integration is paused; for Gemini 3.8 Flash TTS via AI Studio web or rotating `~/.config/gmn` API keys (`--backend api`), use `.claude/skills/aistudio-tts/SKILL.md`. |
 | Remaining workflows | The tables below describe provider contracts and integration decisions. Track unimplemented workflows separately. |
 | CLI | Run bun run voice:playground schema generate tts for connection and speechStyle. Use status or catalog with connection to inspect configuration and capabilities. |
 
@@ -26,7 +26,7 @@ Reviewed November 18, 2026. The review used official documentation found through
 
 | Workflow | GenVoice | Direct ElevenLabs | Google Gemini |
 | --- | --- | --- | --- |
-| Speech and multiple takes | Submit asynchronous TTS and store the charge reported by the task. | Use Text to Dialogue for v4 and Text to Speech for earlier models. Keep word timings and character cost when returned. | Flash and Flash-Lite 3.8 accept delivery directions and return WAV audio and token counts. |
+| Speech and multiple takes | Submit asynchronous TTS and store the charge reported by the task. | Use Text to Dialogue for v4 and Text to Speech for earlier models. Keep word timings and character cost when returned. | Gemini 3.8 Flash TTS (`gemini-3.8-flash-tts` only; `flash-lite-tts` banned) accepts delivery directions and returns WAV audio and token counts. |
 | Voice selection | Browse default, shared, MiniMax, and CapCut voices. | List models and account voices via v2/voices. Adding a public voice requires access to the shared library. | Use the 30 default voices or extended catalog. Accent, locale, and context filters differ from ElevenLabs. |
 | Dialogue | Assign a separate engine to each role. | Use one model per request and up to 10 voice IDs over REST. v4 Turbo favors one voice over WebSocket. | Use one request with two built-in voices and per-turn direction. Split requests for more voices, custom voices, or separate tracks. |
 | Transcribe | Submit asynchronous Scribe v2 jobs and export transcripts. | Scribe v3/v2 provides word timing, diarization, and model-specific options. Use Forced Alignment separately. | Gemini 3.5 Transcribe returns word offsets and speaker labels. Check the 30-minute limit for timestamps and diarization to avoid truncation. |

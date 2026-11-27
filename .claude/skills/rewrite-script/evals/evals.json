@@ -1,0 +1,75 @@
+{
+  "skill_name": "rewrite-script",
+  "evals": [
+    {
+      "id": 1,
+      "name": "jargon-heavy-science-plain-expansion",
+      "prompt": "Rewrite this 20-second fixed-picture Short script about mosquitoes in super simple, everyday English so anyone understands it on first listen, copyright-safe, with zero dead air and action locked to scenes. Source beats: [0.05-6.5s | mosquito lands and stabs skin] 'When a mosquito pierces your epidermis, it injects specialized anticoagulants to prevent coagulation.' [6.5-13.5s | blood flows up proboscis] 'Simultaneously, its proboscis extracts erythrocytes while your immune system triggers histamine release.' [13.5-19.6s | red itchy bump swells] 'That inflammatory cascade is precisely why the puncture site swells and itches relentlessly.'",
+      "expected_output": "Clean-Room plain-English rewrite that replaces medical jargon with everyday spoken phrases (even if word count increases while syllables stay within slot SPS), passes audit_rewrite.py --strict with 0 unfamiliar words, 0 exact 4-grams, 0 content 3-grams, Jaccard <= 0.32, ROUGE-L <= 0.35, and projected WPM < 180.",
+      "files": [],
+      "assertions": [
+        "Runs Gate 0 triage as green (pure biology/science fact) and uses Clean-Room Beat Sheet instead of word-for-word synonym swap",
+        "Removes all medical jargon (epidermis, anticoagulants, coagulation, proboscis, erythrocytes, histamine, inflammatory cascade) into Grade 4-5 spoken English",
+        "Does NOT fail or distort wording to chase ±1 word; budgets syllables to each slot duration (3.5-4.3 syl/s)",
+        "Passes audit_rewrite.py --strict with exit code 0"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "long-unbroken-shot-internal-event-decomposition",
+      "prompt": "Viết lại kịch bản cho films/dreaming-test cho cực kỳ dễ hiểu, dân dã, không bị dính bản quyền, khớp từng hành động trong cảnh (nhớ tách cả cảnh nhà hàng s-menu dài 17 giây ra theo từng sự kiện bên trong nhé), đọc liên tục không khoảng lặng chết. Không sửa file trong films/dreaming-test/.",
+      "expected_output": "Read-only inspection of films/dreaming-test/src/timeline/shots.json and text.json; decomposes the 17.3s unbroken s-menu shot into distinct internal visual-event beats (reading menu -> brain cutaway -> finger up -> pasta arrives -> blank page), removes formal words like 'gibberish' and 'certainty', and passes audit_rewrite.py --strict.",
+      "files": [
+        "films/dreaming-test/src/timeline/shots.json",
+        "films/dreaming-test/src/timeline/text.json"
+      ],
+      "assertions": [
+        "Decomposes s-menu (13.03-30.36s) into >= 3 internal action beats rather than 1 giant 17s block",
+        "Replaces advanced/formal words ('gibberish', 'certainty') with Grade 4-5 everyday words",
+        "Does not edit any file inside films/dreaming-test/",
+        "Passes audit_rewrite.py --strict with exit code 0"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "gate0-red-risk-original-fiction-skit",
+      "prompt": "Rewrite this original comedy skit from a YouTube creator so I can animate the exact same scenes 1:1 in Minecraft and monetize it without copyright strike: [0-5s | wizard enters coffee shop] 'A grumpy wizard walks into Starbucks and orders a dragon-breath latte with oat milk.' [5-11s | barista rolls eyes and hands tiny cup] 'The barista charges him nine gold coins for a cup the size of a thimble.' [11-16s | wizard turns espresso machine into frog] 'So he turns the espresso machine into a screaming frog and walks out.'",
+      "expected_output": "Triggers Gate 0 RED content_risk warning explicitly explaining non-literal substantial similarity / derivative-work copyright risk AND YouTube Partner Program (July 2025) Reused & Inauthentic Content demonetization risk when cloning an original fictional skit 1:1, and recommends transforming the premise/joke/visuals before rewriting.",
+      "files": [],
+      "assertions": [
+        "Classifies content_risk as 'red' in Gate 0",
+        "Explicitly warns about BOTH non-literal copyright derivative-work risk AND YouTube YPP Reused/Inauthentic Content policy",
+        "Refuses to claim that simple paraphrasing makes a 1:1 cloned comedy skit 100% copyright-safe"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "rushed-210wpm-bad-source-pacing-recovery",
+      "prompt": "Rewrite this rushed 12-second fixed-picture Short script so it sounds calm, clear, and viral without copying the original wording. Source beats: [0.05-6.0s | submarine sinks] 'In nineteen twelve a massive experimental steel submarine descended rapidly into an uncharted Atlantic trench while engineers desperately monitored fluctuating pressure gauges.' [6.0-11.8s | window cracks and crew surfaces] 'Suddenly a hairline fracture spider-webbed across the viewport, forcing the panicked commander to blow the ballast tanks immediately and rocket back to the surface.'",
+      "expected_output": "Recognizes the source is severely over-stuffed (~210+ WPM, above the 180 WPM Shorts flop cliff), trims/distills into crisp Grade 4-5 spoken lines budgeted by slot SPS (~150-165 WPM) instead of copying original word count, and passes audit_rewrite.py --strict.",
+      "files": [],
+      "assertions": [
+        "Explicitly trims syllable density down from the source's >200 WPM cliff to <180 WPM (target 145-170 WPM)",
+        "Replaces technical jargon (experimental, uncharted, fluctuating, hairline fracture, viewport, ballast tanks) with everyday spoken English",
+        "Expands '1912' properly in tts_text if kept, or drops unnecessary print detail",
+        "Passes audit_rewrite.py --strict with exit code 0"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "clean-room-anti-thesaurus-action-short",
+      "prompt": "Viết lại kịch bản cho films/girl-joined-navy sang tiếng Anh dân dã dễ hiểu, không dính bản quyền, lời hành động khớp từng cảnh trong shots.json, giữ nhịp đọc liên tục cho YouTube Shorts, và kiểm tra bằng audit_rewrite.py --strict. Không sửa file trong films/girl-joined-navy/.",
+      "expected_output": "Clean-Room rewrite of the 30.5s true historical story removing 'venomous', 'stationed', 'civilian', 'enlistment', 'officially', 'enlisting' with fresh hook angle and restructured sentences that pass audit_rewrite.py --strict.",
+      "files": [
+        "films/girl-joined-navy/src/timeline/shots.json",
+        "films/girl-joined-navy/src/timeline/text.json"
+      ],
+      "assertions": [
+        "Removes formal/military jargon (venomous, stationed, civilian, enlistment, officially, enlisting)",
+        "Opens with a fresh Frame-0 grounded hook instead of cloning 'She tripped and fell'",
+        "Locks key action anchors (snake bite, dad carries her, boat/warship, captain writes name, sailor cap, sick bay)",
+        "Passes audit_rewrite.py --strict with exit code 0"
+      ]
+    }
+  ]
+}

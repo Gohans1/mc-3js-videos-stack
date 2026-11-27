@@ -3,21 +3,42 @@ import { extname, resolve } from "node:path";
 export const DEFAULT_MODEL = "gemini-3.8-flash-tts";
 export const SPEECH_ORIGIN = "https://aistudio.google.com";
 export const SPEECH_PATH = /^\/(?:u\/\d+\/)?generate-speech\/?$/;
+const BANNED_TTS_MODEL_RE = /flash-lite/i;
+
+export type TtsBackend = "web" | "api";
 
 export class InputError extends Error {}
+
+export function assertAllowedModel(model: string): string {
+  const trimmed = model.trim();
+  if (BANNED_TTS_MODEL_RE.test(trimmed)) {
+    throw new InputError(
+      `${trimmed} is banned (flatter inflection). Use ${DEFAULT_MODEL} instead.`,
+    );
+  }
+  if (!/^gemini-[a-z0-9.-]+-tts(?:-[a-z0-9.-]+)?$/.test(trimmed)) {
+    throw new InputError("Expected a Gemini TTS model ID.");
+  }
+  return trimmed;
+}
+
+export function validateBackend(raw?: string): TtsBackend {
+  if (raw === undefined) return "web";
+  const norm = raw.trim().toLowerCase();
+  if (norm === "web" || norm === "api") return norm;
+  throw new InputError(`--backend must be web or api, got "${raw}".`);
+}
 
 export const speechAccountMatches = (pathname: string, account: string) =>
   pathname.startsWith(`/u/${account}/`);
 
 export function speechUrl(model: string, account?: string) {
-  if (!/^gemini-[a-z0-9.-]+-tts(?:-[a-z0-9.-]+)?$/.test(model)) {
-    throw new InputError("Expected a Gemini TTS model ID.");
-  }
+  const safeModel = assertAllowedModel(model);
   if (account !== undefined && !/^\d+$/.test(account)) {
     throw new InputError("--account must be a Google account slot number.");
   }
   const prefix = account === undefined ? "" : `/u/${account}`;
-  return `${SPEECH_ORIGIN}${prefix}/generate-speech?model=${model}`;
+  return `${SPEECH_ORIGIN}${prefix}/generate-speech?model=${safeModel}`;
 }
 
 export function voiceSampleUrl(input: string) {

@@ -16,20 +16,9 @@ import {
   projectCamera,
   resolveFocusDistance,
 } from "film-stage/camera";
-import { makeDof } from "film-stage/dof";
 import { blackAt, makeFade } from "film-stage/fade";
-import { makeAdjustments, makeLayerAdjustments } from "film-stage/grade";
 import { activeAdjustments } from "film-stage/grade-layers";
-import {
-  applyLightingRig,
-  createEnvironment,
-  createGodraysPass,
-  createLightingRig,
-  DEFAULT_LIGHTS,
-  lightsAt,
-} from "film-stage/lights";
 import { makeTitles } from "film-stage/titles";
-import { toneMappingMode } from "film-stage/tone";
 import { makeTransitions, viewTime } from "film-stage/transitions";
 import { makeVelocity } from "film-stage/velocity";
 import { mouthCues } from "live-studio/lips";
@@ -44,20 +33,10 @@ import { toonFaceAt } from "mc-actor/toon-timeline";
 import { props as pack } from "mc-assets/pack";
 import { makePlaced } from "mc-assets/placed";
 import { readMinecraftArchives } from "mc-assets/scene-assets";
-import { N8AOPostPass } from "n8ao";
-import {
-  BloomEffect,
-  EffectComposer,
-  EffectPass,
-  HueSaturationEffect,
-  RenderPass,
-  SMAAEffect,
-  ToneMappingEffect,
-  VignetteEffect,
-} from "postprocessing";
 import * as THREE from "three";
 
 import { EDIT, fromSource } from "./edit";
+import { setupLookdev } from "./lookdev";
 import { makeMocapMoves } from "./mocap-moves";
 import { blinkAt, bodyAt, moodAt, readLook, targetAt, TOON_FACES } from "./steve";
 import { buildWorld, ROOM } from "./world";
@@ -85,26 +64,30 @@ const shotAt = (t) => SHOTS_OUT.filter((s) => t >= s.t).length - 1;
 
 export async function buildScene(canvas, W, H, draft = false) {
   configure({ THREE, assetsUrl: "vendor/bmr_assets.zip" });
-  const renderer = new THREE.WebGLRenderer({
-    canvas,
-    alpha: false,
-    antialias: false,
-    powerPreference: "high-performance",
-    preserveDrawingBuffer: true,
-  });
-  renderer.setSize(W, H, false);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFShadowMap;
-  renderer.localClippingEnabled = true;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
-  const environment = createEnvironment(renderer, { preset: "studio" });
-  scene.environment = environment.texture;
-  scene.environmentIntensity = 0.35;
   const perspective = new THREE.PerspectiveCamera(60, W / H, 0.02, 100);
   const parallel = orthographicCamera(60, W / H);
   let camera = perspective;
   scene.add(perspective, parallel);
+
+  const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
+  const lookdev = setupLookdev({
+    canvas,
+    width: W,
+    height: H,
+    scene,
+    camera: perspective,
+    draft,
+    environment: { preset: "studio" },
+    lighting: { target: roomTarget, distance: 18, shadowExtent: 10 },
+    roomFallback: { target: roomTarget, ceilingY: ROOM.top + 0.6 },
+    profile: "cinematic",
+    toneMapping: EDIT.look?.toneMapping,
+    saturation: EDIT.look?.saturation,
+  });
+  const { renderer, environment, post } = lookdev;
+  const { composer } = post;
 
   const { jar, picked } = await readMinecraftArchives();
   const sources = await prepareAssets([pack, picked, jar], { cache: true });
@@ -150,77 +133,13 @@ export async function buildScene(canvas, W, H, draft = false) {
   const mocap = await makeMocapMoves(EDIT.steve.moves, (refs) => loadClips(refs, steve));
   const { clips } = mocap;
 
-  const roomTarget = [ROOM.x1 / 2 + 0.5, 1.5, ROOM.z1 / 2 + 0.5];
-  const lightingRig = createLightingRig(scene, {
-    target: roomTarget,
-    distance: 18,
-    shadowExtent: 10,
-  });
-  const inactiveRig = {
-    ...DEFAULT_LIGHTS,
-    key: { ...DEFAULT_LIGHTS.key, enabled: false },
-    fill: { ...DEFAULT_LIGHTS.fill, enabled: false },
-    rim: { ...DEFAULT_LIGHTS.rim, enabled: false },
-    world: { ...DEFAULT_LIGHTS.world, ambientIntensity: 0, background: null },
-    fog: { ...DEFAULT_LIGHTS.fog, mode: "none" },
-    practicals: [],
-    godrays: { ...DEFAULT_LIGHTS.godrays, enabled: false },
-  };
-  const hemi = new THREE.HemisphereLight(0xdfe6f0, 0x3a3026);
-  const roomKey = new THREE.SpotLight(0xfff0dc, 28, 14, THREE.MathUtils.degToRad(70), 0.7, 1.2);
-  roomKey.position.set(roomTarget[0], ROOM.top + 0.6, roomTarget[2]);
-  roomKey.target.position.set(roomTarget[0], 0, roomTarget[2]);
-  roomKey.castShadow = true;
-  roomKey.shadow.mapSize.set(2048, 2048);
-  roomKey.shadow.bias = -0.0008;
-  roomKey.shadow.radius = 3;
-  scene.add(hemi, roomKey, roomKey.target);
-  let timelineLighting = true;
-
-  const composer = new EffectComposer(renderer, {
-    frameBufferType: THREE.HalfFloatType,
-    multisampling: 4,
-  });
   const fade = makeFade(renderer);
-  const titles = makeTitles(renderer, W, H, { items: EDIT.text.items });
+  const titles = makeTitles(renderer, W, H, { doc: EDIT.text });
   const anims = ANIMS;
   await titles.ready;
-  composer.addPass(new RenderPass(scene, camera));
-  const ambientOcclusion = (view) => {
-    const ao = new N8AOPostPass(scene, view, W, H);
-    Object.assign(ao.configuration, {
-      aoRadius: 1.0,
-      distanceFalloff: 1.0,
-      intensity: 2.0,
-      halfRes: draft,
-    });
-    ao.outputTargetInternal.texture.type = THREE.HalfFloatType;
-    return ao;
-  };
-  const ao = ambientOcclusion(perspective);
-  composer.addPass(ao);
-  let parallelAO,
-    composerCamera = perspective,
-    passCount = -1;
-  composer.addPass(new EffectPass(camera, new SMAAEffect()));
-  const dof = makeDof(composer, camera, { draft });
-  const godrays = createGodraysPass(lightingRig.key, camera, { enabled: false });
-  if (godrays.pass) composer.addPass(godrays.pass);
-  const tone = new HueSaturationEffect({ saturation: EDIT.look.saturation });
-  composer.addPass(
-    new EffectPass(
-      camera,
-      new BloomEffect({ intensity: 0.4, luminanceThreshold: 1.0, mipmapBlur: true }),
-      tone,
-      new VignetteEffect({ offset: 0.3, darkness: 0.45 }),
-      new ToneMappingEffect({ mode: toneMappingMode(EDIT.look.toneMapping) }),
-    ),
-  );
-  const adjust = makeAdjustments(composer, camera),
-    layerAdjust = makeLayerAdjustments(renderer);
   await Promise.all([
-    adjust.prepare(SHOTS_OUT.map((s) => s.adjust)),
-    layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade)),
+    post.adjust.prepare(SHOTS_OUT.map((s) => s.adjust)),
+    post.layerAdjust.prepare((EDIT.adjustments?.items ?? []).map((it) => it.grade)),
   ]);
 
   const anchor = (a) => V(...a);
@@ -494,30 +413,8 @@ export async function buildScene(canvas, W, H, draft = false) {
     }
     now.mood = mood;
 
-    const lightKeys = Array.isArray(EDIT.lights) ? EDIT.lights : EDIT.lights?.keys;
-    if (lightKeys?.length) {
-      hemi.visible = roomKey.visible = false;
-      const lightsSample = lightsAt(EDIT.lights, t);
-      applyLightingRig(lightingRig, lightsSample, t);
-      godrays.update(lightsSample.godrays, lightsSample.key.color);
-      scene.environmentIntensity = Math.min(
-        0.85,
-        Math.max(0, (lightsSample.world.ambientIntensity ?? 0) * 1.4),
-      );
-      timelineLighting = true;
-    } else {
-      if (timelineLighting) {
-        applyLightingRig(lightingRig, inactiveRig);
-        godrays.update(inactiveRig.godrays);
-        timelineLighting = false;
-      }
-      // Fallback when src/timeline/lights.json is empty; roomKey is a SpotLight (candela, not DirectionalLight ~2-3).
-      hemi.visible = roomKey.visible = true;
-      hemi.intensity = EDIT.light?.fill ?? 0.6;
-      roomKey.intensity = EDIT.light?.spot ?? EDIT.light?.key ?? 28;
-      scene.environmentIntensity = EDIT.light?.env ?? 0.35;
-    }
-    tone.saturation = EDIT.look.saturation;
+    lookdev.updateLighting(EDIT.lights, t, EDIT.light);
+    lookdev.syncLook(EDIT.look);
     const adjAt = clocks?.adjustments ?? clocks?.layers ?? t;
     const adjVisible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
     const activeLayerLook = adjVisible
@@ -540,6 +437,7 @@ export async function buildScene(canvas, W, H, draft = false) {
       freeActive ? false : scouting,
     );
     Object.assign(now, { optics: opticsTelemetry });
+    // Clear before pictureVisible guard so timeline gaps stay pure (0,0,0) black under post.render({ clear: false }).
     renderer.clear();
     if (clocks?.pictureVisible !== false || scouting) {
       const pupil = camera === perspective && clocks?.aperture;
@@ -553,25 +451,15 @@ export async function buildScene(canvas, W, H, draft = false) {
         );
         projectCamera(camera, W, H, freeActive ? undefined : rig, offset);
       }
-      dof.update({
+      post.syncCamera(camera);
+      post.dof?.update({
         fstop: pupil ? 0 : effectiveFstop,
         focusDistance: focusM ?? fallbackFocus,
         mm: renderedMm,
         widthPx: W * renderer.getPixelRatio(),
       });
-      adjust(shot, shotEntry?.adjust, t, false);
-      if (camera === parallel && !parallelAO) {
-        parallelAO = ambientOcclusion(parallel);
-        composer.addPass(parallelAO, composer.passes.indexOf(ao) + 1);
-      }
-      ao.enabled = camera === perspective;
-      if (parallelAO) parallelAO.enabled = camera === parallel;
-      if (composerCamera !== camera || passCount !== composer.passes.length) {
-        composer.setMainCamera(camera);
-        composerCamera = camera;
-        passCount = composer.passes.length;
-      }
-      composer.render(0);
+      post.adjust(shot, shotEntry?.adjust, t, false);
+      post.render(camera, { clear: false });
       if (!scouting) velocityEffect(clocks?.velocity ?? null, cam.optics);
       if (!scouting) fade(Math.max(blackAt(EDIT.fx.black, t), animBlack));
     }
@@ -586,13 +474,13 @@ export async function buildScene(canvas, W, H, draft = false) {
     (t) => {
       const at = clocks?.adjustments ?? clocks?.layers ?? t;
       const visible = clocks?.adjustmentsVisible ?? clocks?.layersVisible ?? true;
-      layerAdjust(
+      post.layerAdjust(
         visible ? activeAdjustments(EDIT.adjustments, at, clocks?.adjustmentTime) : [],
         at,
         false,
       );
       if (!(free.on && !free.previewEffects) && clocks?.layersVisible !== false)
-        titles(EDIT.text.items, clocks?.layers ?? t, camera, EDIT.text.tracks, clocks?.textTime);
+        titles(EDIT.text, clocks?.layers ?? t, camera, EDIT.text.tracks, clocks?.textTime);
     },
     (cut) => clocks?.transitionVisible?.(cut) ?? true,
   );
@@ -671,7 +559,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "IN FRAME / STACK",
         lines: [
           {
-            text: `three.js r${THREE.REVISION} · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · N8AO · postprocessing tone map ${EDIT.look.toneMapping ?? "agx"} (src/edit.json look.toneMapping)`,
+            text: `three.js r${THREE.REVISION} · block-model-renderer (room, mc-assets props) · MCprep player.glb (CC-BY) · film-stage/post (N8AO · tone map ${post.config.toneMapping} · TPDF dither)`,
           },
         ],
       },
@@ -679,7 +567,7 @@ export async function buildScene(canvas, W, H, draft = false) {
         head: "EDIT HERE",
         lines: [
           {
-            text: "src/timeline/steve.json · cam.json · lights.json · src/edit.json light/look · src/world.ts",
+            text: "src/lookdev.ts · src/timeline/steve.json · cam.json · lights.json · src/edit.json light/look · src/world.ts",
           },
         ],
       },
@@ -707,7 +595,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     cameraOpticsSample,
     resizePreview(scale) {
       renderer.setPixelRatio(scale);
-      composer.setSize(W, H, false);
+      post.setSize(W, H);
     },
     sampleCameraPath,
     sampleCameraTrack,
@@ -726,6 +614,7 @@ export async function buildScene(canvas, W, H, draft = false) {
     ],
     placed,
     environment,
+    lookdev,
     targets: [
       {
         id: "steve",
@@ -748,7 +637,7 @@ export async function buildScene(canvas, W, H, draft = false) {
   draw.keyEases = [{ edit: "steve", path: ["moves"], names: Object.keys(EASES) }];
   draw.anims = anims;
   draw.adjustments = {
-    prepare: (grades) => Promise.all([adjust.prepare(grades), layerAdjust.prepare(grades)]),
+    prepare: (grades) => Promise.all([post.adjust.prepare(grades), post.layerAdjust.prepare(grades)]),
   };
   const initCam = EDIT.cam?.length
     ? sampleTrack(0)

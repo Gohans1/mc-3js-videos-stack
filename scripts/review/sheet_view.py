@@ -282,17 +282,19 @@ def presentation_times(video, origin):
     return presentation_bounds(video, origin, "V:0")[0]
 
 
-def extract_frame(video, dest, seek, *, origin, compact=False, canvas=None, aspect=None, sequential=False, deadline=None):
+def extract_frame(video, dest, seek, *, origin, compact=False, canvas=None, aspect=None, sequential=False, preroll=None, deadline=None):
     filters = compact_filter(*(canvas or (320, 320)), pad=canvas is not None) + "," if compact else ""
     if aspect is not None:
         filters = f"setsar={aspect}:max=1000000," + filters
     seek_args = ["-ss", f"{max(0, seek - 0.000002):.9f}"]
+    default_timeout = 60
     if sequential:
-        # Some demuxers seek to the following GOP. Decode to the proven PTS from the beginning if needed.
-        seek_args = []
+        # Some demuxers seek to the following GOP. Try a nearby pre-roll before decoding from the beginning.
+        seek_args = ["-ss", f"{preroll:.9f}"] if preroll is not None and preroll > 0 else []
         absolute = seek + origin
         filters = f"select=between(t\\,{absolute - 0.000005:.9f}\\,{absolute + 0.000005:.9f})," + filters
-    timeout = 30 if deadline is None else min(30, deadline - time.monotonic())
+        default_timeout = 90 if seek_args else 120
+    timeout = default_timeout if deadline is None else min(default_timeout, deadline - time.monotonic())
     if timeout <= 0:
         raise subprocess.TimeoutExpired("FFmpeg frame extraction", timeout)
     result = command(["ffmpeg", "-nostdin", "-xerror", "-v", "info", "-y", *seek_args,
@@ -325,6 +327,15 @@ def extract_displayed_frame(video, dest, seek, *, origin=0, compact=False, canva
     except (subprocess.SubprocessError, ValueError):
         pass
     Path(dest).unlink(missing_ok=True)
+    if seek > 6.0:
+        try:
+            actual = extract_frame(video, dest, seek, origin=origin, compact=compact, canvas=canvas,
+                                   aspect=aspect, sequential=True, preroll=max(0.0, seek - 5.0), deadline=deadline)
+            if abs(actual - seek) <= 0.000001:
+                return actual
+        except (subprocess.SubprocessError, ValueError):
+            pass
+        Path(dest).unlink(missing_ok=True)
     actual = extract_frame(video, dest, seek, origin=origin, compact=compact, canvas=canvas,
                            aspect=aspect, sequential=True, deadline=deadline)
     if abs(actual - seek) > 0.000001:
