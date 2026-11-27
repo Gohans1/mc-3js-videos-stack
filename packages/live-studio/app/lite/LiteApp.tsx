@@ -9,7 +9,14 @@ import { jumpToNote } from "./NoteCardParts.tsx";
 import { NoteList } from "./NoteList.tsx";
 import { playback } from "./playback.ts";
 import { ScrubBar } from "./ScrubBar.tsx";
-import { lite, useLite } from "./store.ts";
+import {
+  lite,
+  liteInkToolOf,
+  liteNoteSavingOf,
+  liteVideoPathOf,
+  liteVideoReadyOf,
+  useLite,
+} from "./store.ts";
 import { VideoBar } from "./VideoBar.tsx";
 import { VideoStage } from "./VideoStage.tsx";
 
@@ -38,23 +45,23 @@ export function LiteApp() {
 
     const unbindHotkeys = bindLiteHotkeys({
       togglePlay: () => {
-        if (lite.store.getState().videoReady) playback.togglePlay();
+        if (liteVideoReadyOf(lite.store.getState())) playback.togglePlay();
       },
       step: (dt) => {
-        if (!lite.store.getState().videoReady) return;
+        if (!liteVideoReadyOf(lite.store.getState())) return;
         playback.pause();
         playback.seek(playback.t + dt);
       },
       seekBy: (dt) => {
-        if (!lite.store.getState().videoReady) return;
+        if (!liteVideoReadyOf(lite.store.getState())) return;
         playback.seek(playback.t + dt);
       },
       seekStart: () => {
-        if (!lite.store.getState().videoReady) return;
+        if (!liteVideoReadyOf(lite.store.getState())) return;
         playback.seekLocal(0);
       },
       seekEnd: () => {
-        if (!lite.store.getState().videoReady) return;
+        if (!liteVideoReadyOf(lite.store.getState())) return;
         playback.seekLocal(playback.duration);
       },
       toggleMute: () => {
@@ -62,21 +69,33 @@ export function LiteApp() {
       },
       openNewNote: () => {
         const s = lite.store.getState();
-        if (!s.selectedPath || s.noteSaving || s.compose?.kind === "edit") return;
+        if (
+          !liteVideoPathOf(s) ||
+          s.composeState.status === "create-saving" ||
+          s.composeState.status === "edit"
+        ) {
+          return;
+        }
         const wasPlaying = playback.isPlaying;
         if (wasPlaying) playback.pause();
         lite.openCreateNote(null, playback.t, wasPlaying, { autoFocus: true });
       },
       toggleDraw: () => {
         const s = lite.store.getState();
-        if (!s.selectedPath || s.noteSaving || s.compose?.kind === "edit") return;
-        if (s.inkTool) {
+        if (
+          !liteVideoPathOf(s) ||
+          s.composeState.status === "create-saving" ||
+          s.composeState.status === "edit"
+        ) {
+          return;
+        }
+        if (liteInkToolOf(s)) {
           lite.setInkTool(null);
           return;
         }
         const wasPlaying = playback.isPlaying;
         if (wasPlaying) playback.pause();
-        if (!s.compose) {
+        if (s.composeState.status === "closed") {
           lite.openCreateNote(null, playback.t, wasPlaying, { autoFocus: false });
         }
         lite.setInkTool("pen");
@@ -86,7 +105,7 @@ export function LiteApp() {
       },
       jumpNote: (dir) => {
         const s = lite.store.getState();
-        if (s.noteSaving) return;
+        if (liteNoteSavingOf(s)) return;
         const list = s.notes
           .filter((n) => noteState(n) !== "done")
           .toSorted((a, b) => a.t - b.t || a.id.localeCompare(b.id));
@@ -98,16 +117,16 @@ export function LiteApp() {
             : (list.findLast((n) => n.t < now - 0.05) ?? list.at(-1)!);
         jumpToNote(target, false);
       },
-      hasCompose: () => lite.store.getState().compose !== null,
+      hasCompose: () => lite.store.getState().composeState.status !== "closed",
       cancelCompose: () => {
         const resume = lite.cancelCompose();
         if (resume) playback.play();
       },
-      hasInkTool: () => lite.store.getState().inkTool !== null,
+      hasInkTool: () => liteInkToolOf(lite.store.getState()) !== null,
       stopDraw: () => lite.setInkTool(null),
       canUndoInk: () => {
-        const s = lite.store.getState();
-        return s.compose?.kind === "create" && !s.noteSaving && s.inkMarks.length > 0;
+        const cs = lite.store.getState().composeState;
+        return cs.status === "create-editing" && cs.inkMarks.length > 0;
       },
       undoInk: () => {
         lite.undoInk();
@@ -124,6 +143,7 @@ export function LiteApp() {
       unbindHotkeys();
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
+      lite.dispose();
     };
   }, []);
 

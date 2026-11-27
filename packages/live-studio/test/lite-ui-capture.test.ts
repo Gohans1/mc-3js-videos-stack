@@ -131,4 +131,88 @@ describe("captureNoteMedia offscreen t=0 capture", () => {
       Object.defineProperty(globalThis, "window", { configurable: true, value: prevWin });
     }
   });
+
+  it("waits for seeked before capturing when canplay fires ahead of seeked on a non-zero timestamp", async () => {
+    const prevDoc = globalThis.document;
+    const prevWin = globalThis.window;
+    let drewBeforeSeeked = false;
+    let seekedDispatched = false;
+
+    class OutOfOrderSeekVideo extends FakeVideo {
+      private t = 0;
+      override set currentTime(val: number) {
+        this.t = val;
+        this.seeking = false;
+        this.readyState = 4;
+        queueMicrotask(() => {
+          this.dispatchEvent(new Event("canplay"));
+          queueMicrotask(() => {
+            this.readyState = 1;
+            this.dispatchEvent(new Event("seeked"));
+            queueMicrotask(() => {
+              this.readyState = 4;
+              seekedDispatched = true;
+              this.dispatchEvent(new Event("canplay"));
+            });
+          });
+        });
+      }
+      override get currentTime() {
+        return this.t;
+      }
+    }
+
+    const fakeCanvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({
+        drawImage() {
+          if (!seekedDispatched) drewBeforeSeeked = true;
+        },
+        beginPath() {},
+        arc() {},
+        stroke() {},
+        fillRect() {},
+        moveTo() {},
+        lineTo() {},
+        strokeRect() {},
+      }),
+      toDataURL: () => "data:image/jpeg;base64,/9j/seeked",
+    };
+
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: {
+        createElement(tag: string) {
+          if (tag === "video") return new OutOfOrderSeekVideo();
+          return { ...fakeCanvas };
+        },
+        documentElement: null,
+      },
+    });
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        setTimeout: globalThis.setTimeout.bind(globalThis),
+        clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      },
+    });
+
+    try {
+      const media = await captureNoteMedia({
+        video: null,
+        videoSrc: "/api/compare-videos/file?path=renders/draft.mp4",
+        startSec: 0,
+        at: 3.5,
+        pin: null,
+        marks: [],
+      });
+
+      expect(media.img).toBe("data:image/jpeg;base64,/9j/seeked");
+      expect(drewBeforeSeeked).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, "document", { configurable: true, value: prevDoc });
+      Object.defineProperty(globalThis, "window", { configurable: true, value: prevWin });
+    }
+  });
 });

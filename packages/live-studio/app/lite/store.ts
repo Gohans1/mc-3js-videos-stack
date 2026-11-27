@@ -76,17 +76,57 @@ export interface LiteNotice {
   undo?: () => void;
 }
 
+export type CreateCompose = Extract<Compose, { kind: "create" }>;
+export type EditCompose = Extract<Compose, { kind: "edit" }>;
+
+export type LiteCatalogState =
+  | { status: "loading"; videos: CompareVideoItem[]; canBuild: { ref: string | null; ours: string | null } }
+  | { status: "ready"; videos: CompareVideoItem[]; canBuild: { ref: string | null; ours: string | null } }
+  | {
+      status: "error";
+      videos: CompareVideoItem[];
+      canBuild: { ref: string | null; ours: string | null };
+      error: string;
+    };
+
+export type LiteVideoState =
+  | { status: "none"; reloadSeq: number }
+  | { status: "loading"; path: string; reloadSeq: number }
+  | { status: "ready"; path: string; meta: CompareVideoMeta; reloadSeq: number }
+  | { status: "error"; path: string; error: string; reloadSeq: number };
+
+export type LiteFlushStatus = "idle" | "flushing" | "backoff";
+
+export type LiteComposeState =
+  | { status: "closed" }
+  | {
+      status: "create-editing";
+      compose: CreateCompose;
+      draft: string;
+      refs: RefPic[];
+      inkTool: InkKind | null;
+      inkMarks: Mark[];
+      inkSaid: string;
+    }
+  | {
+      status: "create-saving";
+      compose: CreateCompose;
+      draft: string;
+      refs: RefPic[];
+      inkTool: InkKind | null;
+      inkMarks: Mark[];
+      inkSaid: string;
+    }
+  | {
+      status: "edit";
+      compose: EditCompose;
+      draft: string;
+    };
+
 export interface LiteState {
   film: LiteFilmMeta;
-  videos: CompareVideoItem[];
-  videosLoaded: boolean;
-  canBuild: { ref: string | null; ours: string | null };
-  selectedPath: string | null;
-  videoMeta: CompareVideoMeta | null;
-  videoReady: boolean;
-  videoError: string | null;
-  videoReloadSeq: number;
-  catalogError: string | null;
+  catalog: LiteCatalogState;
+  video: LiteVideoState;
   refreshing: boolean;
   muted: boolean;
   rate: number;
@@ -95,19 +135,53 @@ export interface LiteState {
   noteNumbers: Record<string, number>;
   notesLoaded: boolean;
   noteStatus: NoteStatusFilter;
-  saved: "busy" | "fail" | null;
+  flushStatus: LiteFlushStatus;
   replyDrafts: ReadonlyMap<string, string>;
 
-  compose: Compose | null;
-  noteSaving: boolean;
-  draft: string;
-  refs: RefPic[];
-  inkTool: InkKind | null;
-  inkMarks: Mark[];
-  inkSaid: string;
+  composeState: LiteComposeState;
   inkRev: number;
   statusPill: string | null;
 }
+
+const EMPTY_REFS: readonly RefPic[] = [];
+const EMPTY_MARKS: readonly Mark[] = [];
+
+export const liteCatalogVideosOf = (s: LiteState): CompareVideoItem[] => s.catalog.videos;
+export const liteCatalogLoadedOf = (s: LiteState): boolean => s.catalog.status !== "loading";
+export const liteCatalogErrorOf = (s: LiteState): string | null =>
+  s.catalog.status === "error" ? s.catalog.error : null;
+
+export const liteVideoPathOf = (s: LiteState): string | null =>
+  s.video.status === "none" ? null : s.video.path;
+export const liteVideoMetaOf = (s: LiteState): CompareVideoMeta | null =>
+  s.video.status === "ready" ? s.video.meta : null;
+export const liteVideoReadyOf = (s: LiteState): boolean => s.video.status === "ready";
+export const liteVideoErrorOf = (s: LiteState): string | null =>
+  s.video.status === "error" ? s.video.error : null;
+export const liteVideoReloadSeqOf = (s: LiteState): number => s.video.reloadSeq;
+
+export const liteComposeOf = (s: LiteState): Compose | null =>
+  s.composeState.status === "closed" ? null : s.composeState.compose;
+export const liteNoteSavingOf = (s: LiteState): boolean =>
+  s.composeState.status === "create-saving";
+export const liteDraftOf = (s: LiteState): string =>
+  s.composeState.status === "closed" ? "" : s.composeState.draft;
+export const liteRefsOf = (s: LiteState): readonly RefPic[] =>
+  s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+    ? s.composeState.refs
+    : EMPTY_REFS;
+export const liteInkToolOf = (s: LiteState): InkKind | null =>
+  s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+    ? s.composeState.inkTool
+    : null;
+export const liteInkMarksOf = (s: LiteState): readonly Mark[] =>
+  s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+    ? s.composeState.inkMarks
+    : EMPTY_MARKS;
+export const liteInkSaidOf = (s: LiteState): string =>
+  s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+    ? s.composeState.inkSaid
+    : "";
 
 const DEFAULT_FILM: LiteFilmMeta = {
   name: "Studio Lite",
@@ -129,6 +203,16 @@ export interface CreateLiteControllerOptions {
   onSeek?: (t: number, clipChanged: boolean) => void;
 }
 
+type FlushRunner =
+  | { status: "idle" }
+  | { status: "flushing"; token: number; promise: Promise<void> }
+  | {
+      status: "backoff";
+      token: number;
+      promise: Promise<void>;
+      wake: (abort?: boolean) => void;
+    };
+
 export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   const fetchFn = opts.fetchFn ?? ((...args: Parameters<typeof fetch>) => fetch(...args));
   const storage = opts.storage ?? createBrowserStorage();
@@ -146,15 +230,8 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
 
   const store = createStore<LiteState>(() => ({
     film: bootFilm,
-    videos: [],
-    videosLoaded: false,
-    canBuild: { ref: null, ours: null },
-    selectedPath: null,
-    videoMeta: null,
-    videoReady: false,
-    videoError: null,
-    videoReloadSeq: 0,
-    catalogError: null,
+    catalog: { status: "loading", videos: [], canBuild: { ref: null, ours: null } },
+    video: { status: "none", reloadSeq: 0 },
     refreshing: false,
     muted: false,
     rate: 1,
@@ -163,16 +240,10 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     noteNumbers: {},
     notesLoaded: false,
     noteStatus: "all",
-    saved: null,
+    flushStatus: "idle",
     replyDrafts: new Map(),
 
-    compose: null,
-    noteSaving: false,
-    draft: "",
-    refs: [],
-    inkTool: null,
-    inkMarks: [],
-    inkSaid: "",
+    composeState: { status: "closed" },
     inkRev: 0,
     statusPill: null,
   }));
@@ -187,38 +258,44 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   };
 
   const restoreCreateDraft = (
-    was: Extract<Compose, { kind: "create" }>,
+    was: CreateCompose,
     words: string,
     strokes: Mark[],
     refs: RefPic[],
     prevPath: string | null,
   ) => {
-    const targetPath = was.compareVideo?.path ?? prevPath;
     const cur = store.getState();
-    const canSwitch = Boolean(targetPath && cur.videos.some((v) => v.path === targetPath));
-    const clipChanged = Boolean(canSwitch && cur.selectedPath !== targetPath);
+    if (cur.composeState.status === "create-saving") return;
+    const targetPath = was.compareVideo?.path ?? prevPath;
+    const currentPath = liteVideoPathOf(cur);
+    const canSwitch = Boolean(targetPath && cur.catalog.videos.some((v) => v.path === targetPath));
+    const clipChanged = Boolean(canSwitch && targetPath && currentPath !== targetPath);
     store.setState((s) => ({
-      ...(clipChanged
+      ...(clipChanged && targetPath
         ? {
-            selectedPath: targetPath,
-            videoReady: false,
-            videoError: null,
-            videoMeta: null,
+            video: { status: "loading" as const, path: targetPath, reloadSeq: s.video.reloadSeq },
           }
         : {}),
-      compose: { ...was, resume: false },
-      draft: words,
-      inkMarks: strokes,
-      inkSaid: inkSummary(strokes),
+      composeState: {
+        status: "create-editing",
+        compose: { ...was, resume: false },
+        draft: words,
+        refs,
+        inkTool: null,
+        inkMarks: strokes,
+        inkSaid: inkSummary(strokes),
+      },
       inkRev: s.inkRev + 1,
-      refs,
     }));
     seekHandler(was.t, clipChanged);
   };
 
   let cachedUnsentNotes: OutgoingNote[] | null = null;
   let cachedUnsentOps: Record<string, NoteOp[]> | null = null;
-  let flushPromise: Promise<void> | null = null;
+  let flushRunner: FlushRunner = { status: "idle" };
+  let refreshPromise: Promise<void> | null = null;
+  let catalogSeq = 0;
+  let appliedCatalogSeq = 0;
   let notesSeq = 0;
   let appliedNotesSeq = 0;
 
@@ -288,8 +365,9 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
 
   const activeVideo = (): CompareVideoItem | null => {
     const s = store.getState();
-    if (!s.selectedPath) return null;
-    return s.videos.find((v) => v.path === s.selectedPath) ?? null;
+    const path = liteVideoPathOf(s);
+    if (!path) return null;
+    return s.catalog.videos.find((v) => v.path === path) ?? null;
   };
 
   const activeLayout = (): CompareVideoLayout => {
@@ -297,7 +375,7 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     const item = activeVideo();
     if (!item) return "single";
     if (item.layoutExact) return item.layout;
-    if (s.videoMeta?.path === item.path) return s.videoMeta.layout;
+    if (s.video.status === "ready" && s.video.meta.path === item.path) return s.video.meta.layout;
     return item.layout;
   };
 
@@ -336,20 +414,30 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   };
 
   const loadVideos = async (selectPath?: string): Promise<CompareVideoCatalog | null> => {
+    const seq = ++catalogSeq;
     try {
       const res = await fetchFn("/api/compare-videos", { cache: "no-store" });
       if (!res.ok) {
-        store.setState({
-          videosLoaded: true,
-          catalogError: `Studio returned HTTP ${res.status}. Tap refresh to retry.`,
-        });
+        if (seq < appliedCatalogSeq) return null;
+        appliedCatalogSeq = seq;
+        store.setState((prev) => ({
+          catalog: {
+            status: "error",
+            videos: prev.catalog.videos,
+            canBuild: prev.catalog.canBuild,
+            error: `Studio returned HTTP ${res.status}. Tap refresh to retry.`,
+          },
+        }));
         return null;
       }
       const data = (await res.json()) as CompareVideoCatalog;
+      if (seq < appliedCatalogSeq) return null;
+      appliedCatalogSeq = seq;
+
       const prev = store.getState();
-      const prevByPath = new Map(prev.videos.map((v) => [v.path, v]));
+      const prevByPath = new Map(prev.catalog.videos.map((v) => [v.path, v]));
       const nextByPath = new Map(data.videos.map((v) => [v.path, v]));
-      const currentPath = prev.selectedPath;
+      const currentPath = liteVideoPathOf(prev);
       const keepCurrent = Boolean(currentPath && nextByPath.has(currentPath));
       const nextPath =
         selectPath && nextByPath.has(selectPath)
@@ -367,29 +455,33 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
             (prevItem.size !== nextItem.size || prevItem.mtimeMs !== nextItem.mtimeMs),
         );
 
-      const needsReload = fileChanged || prev.videoError !== null;
+      const needsReload = fileChanged || prev.video.status === "error";
+      const nextVideo: LiteVideoState = !nextPath
+        ? { status: "none", reloadSeq: needsReload ? prev.video.reloadSeq + 1 : prev.video.reloadSeq }
+        : needsReload
+          ? { status: "loading", path: nextPath, reloadSeq: prev.video.reloadSeq + 1 }
+          : prev.video;
 
       store.setState({
-        videos: data.videos,
-        videosLoaded: true,
-        canBuild: data.canBuild ?? { ref: null, ours: null },
-        selectedPath: nextPath,
-        catalogError: null,
-        ...(needsReload
-          ? {
-              videoReady: false,
-              videoError: null,
-              videoMeta: null,
-              videoReloadSeq: prev.videoReloadSeq + 1,
-            }
-          : {}),
+        catalog: {
+          status: "ready",
+          videos: data.videos,
+          canBuild: data.canBuild ?? { ref: null, ours: null },
+        },
+        video: nextVideo,
       });
       return data;
     } catch {
-      store.setState({
-        videosLoaded: true,
-        catalogError: "Could not load video catalog. Check connection and tap refresh.",
-      });
+      if (seq < appliedCatalogSeq) return null;
+      appliedCatalogSeq = seq;
+      store.setState((prev) => ({
+        catalog: {
+          status: "error",
+          videos: prev.catalog.videos,
+          canBuild: prev.catalog.canBuild,
+          error: "Could not load video catalog. Check connection and tap refresh.",
+        },
+      }));
       return null;
     }
   };
@@ -441,185 +533,256 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   const isPermanentClientError = (status: number) =>
     status >= 400 && status < 500 && status !== 408 && status !== 429;
 
+  let flushToken = 0;
+
   const flushNotes = (): Promise<void> => {
-    if (flushPromise) return flushPromise;
-    flushPromise = (async () => {
-      for (
-        let list = getUnsentNotes(), ops = Object.entries(getUnsentOps());
-        list.length > 0 || ops.length > 0;
-        list = getUnsentNotes(), ops = Object.entries(getUnsentOps())
-      ) {
-        store.setState({ saved: "busy" });
-        try {
-          if (list.length > 0) {
-            const item = list[0]!;
-            const res = await fetchFn("/api/notes", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(item),
-            });
-            if (res.status === 413 && (item.strip || item.frames?.length || item.crop)) {
-              const slimItem: OutgoingNote = {
-                note: item.note,
-                ...(item.img ? { img: item.img } : {}),
-                ...(item.refs?.length ? { refs: item.refs } : {}),
-              };
-              setUnsentNotes([slimItem, ...getUnsentNotes().slice(1)]);
-              continue;
-            }
-            if (isPermanentClientError(res.status)) {
+    if (flushRunner.status === "flushing") return flushRunner.promise;
+    if (flushRunner.status === "backoff") {
+      const { token, promise, wake } = flushRunner;
+      flushRunner = { status: "flushing", token, promise };
+      store.setState({ flushStatus: "flushing" });
+      wake(false);
+      return promise;
+    }
+    if (getUnsentNotes().length === 0 && Object.keys(getUnsentOps()).length === 0) {
+      return Promise.resolve();
+    }
+
+    const token = ++flushToken;
+    const isStale = () => flushToken !== token;
+    const promise: Promise<void> = Promise.resolve()
+      .then(async () => {
+        for (
+          let list = getUnsentNotes(), ops = Object.entries(getUnsentOps());
+          list.length > 0 || ops.length > 0;
+          list = getUnsentNotes(), ops = Object.entries(getUnsentOps())
+        ) {
+          if (isStale()) return;
+          store.setState({ flushStatus: "flushing" });
+          try {
+            if (list.length > 0) {
+              const item = list[0]!;
+              const res = await fetchFn("/api/notes", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(item),
+              });
+              if (isStale()) return;
+              if (res.status === 413 && (item.strip || item.frames?.length || item.crop)) {
+                const slimItem: OutgoingNote = {
+                  note: item.note,
+                  ...(item.img ? { img: item.img } : {}),
+                  ...(item.refs?.length ? { refs: item.refs } : {}),
+                };
+                setUnsentNotes(
+                  getUnsentNotes().map((x) => (x.note.id === item.note.id ? slimItem : x)),
+                );
+                continue;
+              }
+              if (isPermanentClientError(res.status)) {
+                setUnsentNotes(getUnsentNotes().filter((x) => x.note.id !== item.note.id));
+                store.setState((s) => ({
+                  notes: s.notes.filter((x) => x.id !== item.note.id),
+                }));
+                noticeHandler({
+                  title:
+                    res.status === 413
+                      ? "Note was too large to upload. Copy your text before closing."
+                      : "Couldn’t save note. Copy your text before closing.",
+                  description: item.note.text || undefined,
+                  type: "error",
+                });
+                continue;
+              }
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
               setUnsentNotes(getUnsentNotes().filter((x) => x.note.id !== item.note.id));
-              store.setState((s) => ({
-                notes: s.notes.filter((x) => x.id !== item.note.id),
-              }));
-              noticeHandler({
-                title:
-                  res.status === 413
-                    ? "Note was too large to upload. Copy your text before closing."
-                    : "Couldn’t save note. Copy your text before closing.",
-                description: item.note.text || undefined,
-                type: "error",
+              if (item.img || item.crop || item.refs?.length) {
+                store.setState((s) => ({
+                  notes: s.notes.map((x) =>
+                    x.id === item.note.id
+                      ? {
+                          ...x,
+                          ...(item.img ? { img: `notes/img/${x.id}.jpg` } : {}),
+                          ...(item.crop ? { crop: `notes/img/${x.id}_crop.jpg` } : {}),
+                          ...(item.refs?.length
+                            ? { refs: item.refs.map((_, i) => `notes/img/${x.id}_r${i}.jpg`) }
+                            : {}),
+                        }
+                      : x,
+                  ),
+                }));
+              }
+            } else {
+              const [id, opList] = ops[0]!;
+              const op = opList[0]!;
+              const res = await fetchFn(`/api/notes/${id}`, {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify(op),
               });
-              continue;
-            }
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            setUnsentNotes(getUnsentNotes().filter((x) => x.note.id !== item.note.id));
-            if (item.img || item.crop || item.refs?.length) {
-              store.setState((s) => ({
-                notes: s.notes.map((x) =>
-                  x.id === item.note.id
-                    ? {
-                        ...x,
-                        ...(item.img ? { img: `notes/img/${x.id}.jpg` } : {}),
-                        ...(item.crop ? { crop: `notes/img/${x.id}_crop.jpg` } : {}),
-                        ...(item.refs?.length
-                          ? { refs: item.refs.map((_, i) => `notes/img/${x.id}_r${i}.jpg`) }
-                          : {}),
-                      }
-                    : x,
-                ),
-              }));
-            }
-          } else {
-            const [id, opList] = ops[0]!;
-            const op = opList[0]!;
-            const res = await fetchFn(`/api/notes/${id}`, {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify(op),
-            });
-            if (isPermanentClientError(res.status)) {
+              if (isStale()) return;
+              if (isPermanentClientError(res.status)) {
+                dropOp(id, op);
+                const words = "again" in op ? op.again : "text" in op ? op.text : undefined;
+                noticeHandler({
+                  title: words
+                    ? "Note update wasn’t sent. Copy your text before closing."
+                    : res.status === 409
+                      ? "Note changed on disk. Refreshed latest version."
+                      : "Couldn’t apply note update. Refreshed latest version.",
+                  description: words,
+                  type: "error",
+                });
+                await loadNotes().catch(() => {});
+                if (isStale()) return;
+                continue;
+              }
+              if (!res.ok) throw new Error(`HTTP ${res.status}`);
               dropOp(id, op);
-              const words = "again" in op ? op.again : "text" in op ? op.text : undefined;
-              noticeHandler({
-                title: words
-                  ? "Note update wasn’t sent. Copy your text before closing."
-                  : res.status === 409
-                    ? "Note changed on disk. Refreshed latest version."
-                    : "Couldn’t apply note update. Refreshed latest version.",
-                description: words,
-                type: "error",
-              });
-              await loadNotes().catch(() => {});
-              continue;
             }
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            dropOp(id, op);
+          } catch {
+            if (isStale()) return;
+            const aborted = await new Promise<boolean>((resolve) => {
+              let settled = false;
+              let timer: ReturnType<typeof setTimeout> | undefined;
+              const wake = (abort = false) => {
+                if (settled) return;
+                settled = true;
+                if (timer !== undefined) clearTimeout(timer);
+                resolve(abort);
+              };
+              timer = setTimeout(() => wake(false), retryDelayMs);
+              flushRunner = { status: "backoff", token, promise, wake };
+              store.setState({ flushStatus: "backoff" });
+            });
+            if (aborted || isStale()) return;
+            flushRunner = { status: "flushing", token, promise };
           }
-        } catch {
-          store.setState({ saved: "fail" });
-          await new Promise((r) => setTimeout(r, retryDelayMs));
         }
-      }
-      store.setState({ saved: null });
-    })().finally(() => {
-      flushPromise = null;
-    });
-    return flushPromise;
+      })
+      .finally(() => {
+        if (isStale()) return;
+        flushRunner = { status: "idle" };
+        store.setState({ flushStatus: "idle" });
+      });
+    flushRunner = { status: "flushing", token, promise };
+    store.setState({ flushStatus: "flushing" });
+    return promise;
   };
 
   const whenFlushed = async () => {
-    if (flushPromise) await flushPromise;
+    if (flushRunner.status !== "idle") await flushRunner.promise;
+  };
+
+  let lifecycleGen = 0;
+
+  const dispose = () => {
+    lifecycleGen++;
+    if (statusTimer) {
+      clearTimeout(statusTimer);
+      statusTimer = null;
+      store.setState({ statusPill: null });
+    }
+    if (refreshPromise) {
+      refreshPromise = null;
+      store.setState({ refreshing: false });
+    }
+    if (flushRunner.status !== "idle") {
+      flushToken++;
+      const prev = flushRunner;
+      flushRunner = { status: "idle" };
+      store.setState({ flushStatus: "idle" });
+      if (prev.status === "backoff") prev.wake(true);
+    }
   };
 
   const init = async () => {
+    const gen = lifecycleGen;
     await Promise.all([loadFilm(), loadVideos(), loadNotes().catch(() => [])]);
+    if (lifecycleGen !== gen) return;
     if (getUnsentNotes().length > 0 || Object.keys(getUnsentOps()).length > 0) {
       void flushNotes();
     }
   };
 
-  const refreshAll = async () => {
+  const refreshAll = (): Promise<void> => {
+    if (refreshPromise) return refreshPromise;
+    const gen = lifecycleGen;
+    const p: Promise<void> = Promise.resolve()
+      .then(async () => {
+        if (lifecycleGen !== gen) return;
+        const [, videosRes, notesOk] = await Promise.all([
+          loadFilm(),
+          loadVideos(),
+          loadNotes()
+            .then(() => true)
+            .catch(() => false),
+        ]);
+        if (lifecycleGen !== gen) return;
+        if (!videosRes || !notesOk) {
+          noticeHandler({
+            title: "Couldn’t refresh studio data",
+            description: !videosRes
+              ? "Check connection and tap refresh to reload videos."
+              : "Couldn’t reach notes. Check connection and retry.",
+            type: "warning",
+          });
+        }
+        if (getUnsentNotes().length > 0 || Object.keys(getUnsentOps()).length > 0) {
+          void flushNotes();
+        }
+      })
+      .finally(() => {
+        if (refreshPromise === p) {
+          refreshPromise = null;
+          store.setState({ refreshing: false });
+        }
+      });
+    refreshPromise = p;
     store.setState({ refreshing: true });
-    try {
-      const [, videosRes, notesOk] = await Promise.all([
-        loadFilm(),
-        loadVideos(),
-        loadNotes()
-          .then(() => true)
-          .catch(() => false),
-      ]);
-      if (!videosRes || !notesOk) {
-        noticeHandler({
-          title: "Couldn’t refresh studio data",
-          description: !videosRes
-            ? "Check connection and tap refresh to reload videos."
-            : "Couldn’t reach notes. Check connection and retry.",
-          type: "warning",
-        });
-      }
-      if (getUnsentNotes().length > 0 || Object.keys(getUnsentOps()).length > 0) {
-        void flushNotes();
-      }
-    } finally {
-      store.setState({ refreshing: false });
-    }
+    return p;
   };
 
   const selectVideo = (path: string) => {
     const s = store.getState();
-    if (s.noteSaving) return;
-    if (!s.videos.some((v) => v.path === path)) return;
-    if (s.selectedPath === path) {
-      if (s.videoError !== null) {
+    if (s.composeState.status === "create-saving") return;
+    if (!s.catalog.videos.some((v) => v.path === path)) return;
+    const currentPath = liteVideoPathOf(s);
+    if (currentPath === path) {
+      if (s.video.status === "error") {
         store.setState({
-          videoReady: false,
-          videoError: null,
-          videoMeta: null,
-          videoReloadSeq: s.videoReloadSeq + 1,
+          video: { status: "loading", path, reloadSeq: s.video.reloadSeq + 1 },
         });
       }
       return;
     }
-    const prevPath = s.selectedPath;
-    const wasCreate = s.compose?.kind === "create" ? s.compose : null;
-    const words = s.draft;
-    const strokes = s.inkMarks.slice();
-    const refs = s.refs.slice();
+    const prevPath = currentPath;
+    const prevCreate = s.composeState.status === "create-editing" ? s.composeState : null;
     const dirtyCreate = Boolean(
-      wasCreate && isComposeDirty(wasCreate, words, strokes.length > 0 || refs.length > 0),
+      prevCreate &&
+        isComposeDirty(
+          prevCreate.compose,
+          prevCreate.draft,
+          prevCreate.inkMarks.length > 0 || prevCreate.refs.length > 0,
+        ),
     );
+    const savedWords = prevCreate?.draft ?? "";
+    const savedStrokes = prevCreate ? prevCreate.inkMarks.slice() : [];
+    const savedRefs = prevCreate ? prevCreate.refs.slice() : [];
     store.setState((cur) => ({
-      selectedPath: path,
-      videoReady: false,
-      videoError: null,
-      videoMeta: null,
-      ...(wasCreate
+      video: { status: "loading", path, reloadSeq: cur.video.reloadSeq },
+      ...(prevCreate
         ? {
-            compose: null,
-            draft: "",
-            refs: [],
-            inkTool: null,
-            inkMarks: [],
-            inkSaid: "",
+            composeState: { status: "closed" as const },
             inkRev: cur.inkRev + 1,
           }
         : {}),
     }));
-    if (dirtyCreate && wasCreate) {
+    if (dirtyCreate && prevCreate) {
       noticeHandler({
         title: "Note discarded on video switch",
-        undo: () => restoreCreateDraft(wasCreate, words, strokes, refs, prevPath),
+        undo: () =>
+          restoreCreateDraft(prevCreate.compose, savedWords, savedStrokes, savedRefs, prevPath),
       });
     }
   };
@@ -627,26 +790,40 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   const onVideoMetadata = (width: number, height: number, duration: number) => {
     const item = activeVideo();
     if (!item) return;
+    const s = store.getState();
     const layout = item.layoutExact
       ? item.layout
-      : inferCompareLayout(item.category, width, height, store.getState().film.ratio);
+      : inferCompareLayout(item.category, width, height, s.film.ratio);
     store.setState({
-      videoReady: true,
-      videoError: null,
-      videoMeta: {
+      video: {
+        status: "ready",
         path: item.path,
-        width,
-        height,
-        duration,
-        fps: 30,
-        hasAudio: true,
-        layout,
+        reloadSeq: s.video.reloadSeq,
+        meta: {
+          path: item.path,
+          width,
+          height,
+          duration,
+          fps: 30,
+          hasAudio: true,
+          layout,
+        },
       },
     });
   };
 
   const onVideoError = (message: string) => {
-    store.setState({ videoReady: false, videoError: message });
+    store.setState((s) => {
+      if (s.video.status === "none") return s;
+      return {
+        video: {
+          status: "error",
+          path: s.video.path,
+          error: message,
+          reloadSeq: s.video.reloadSeq,
+        },
+      };
+    });
   };
 
   const setNoteStatus = (noteStatus: NoteStatusFilter) => store.setState({ noteStatus });
@@ -654,22 +831,32 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   const setRate = (rate: number) => store.setState({ rate: Number.isFinite(rate) && rate > 0 ? rate : 1 });
 
   const setInkTool = (inkTool: InkKind | null) => {
-    if (inkTool !== null && store.getState().compose?.kind === "edit") return;
-    store.setState({ inkTool });
+    store.setState((s) => {
+      if (s.composeState.status !== "create-editing") return s;
+      return {
+        composeState: { ...s.composeState, inkTool },
+      };
+    });
   };
 
   const setInkMarks = (marks: Mark[]) => {
-    store.setState((s) => ({
-      inkMarks: marks,
-      inkSaid: inkSummary(marks),
-      inkRev: s.inkRev + 1,
-    }));
+    store.setState((s) => {
+      if (s.composeState.status !== "create-editing") return s;
+      return {
+        composeState: {
+          ...s.composeState,
+          inkMarks: marks,
+          inkSaid: inkSummary(marks),
+        },
+        inkRev: s.inkRev + 1,
+      };
+    });
   };
 
   const undoInk = (): boolean => {
-    const cur = store.getState().inkMarks;
-    if (!cur.length) return false;
-    const next = cur.map((m) => ({
+    const cs = store.getState().composeState;
+    if (cs.status !== "create-editing" || !cs.inkMarks.length) return false;
+    const next = cs.inkMarks.map((m) => ({
       ...m,
       pts: m.pts.slice(),
       ...(m.ts ? { ts: m.ts.slice() } : {}),
@@ -696,106 +883,138 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     opts?: { autoFocus?: boolean },
   ) => {
     const s = store.getState();
+    if (s.composeState.status === "create-saving") return;
     const shot = shotAtTime(s.film.shots, s.film.duration, t);
     const compareVideo = activeCompareSource() ?? undefined;
-    const effectiveWasPlaying = s.compose?.kind === "create" ? s.compose.wasPlaying : wasPlaying;
-    const effectiveResume = s.compose?.kind === "create" ? s.compose.resume : wasPlaying;
+    const prevCreate = s.composeState.status === "create-editing" ? s.composeState : null;
+    const effectiveWasPlaying = prevCreate ? prevCreate.compose.wasPlaying : wasPlaying;
+    const effectiveResume = prevCreate ? prevCreate.compose.resume : wasPlaying;
     const autoFocus = opts?.autoFocus ?? true;
+    const nextCompose: CreateCompose = {
+      kind: "create",
+      t,
+      shot: shot.index,
+      shotName: shot.name,
+      pin,
+      resume: effectiveResume,
+      wasPlaying: effectiveWasPlaying,
+      autoFocus,
+      ...(compareVideo ? { compareVideo } : {}),
+    };
     store.setState({
-      compose: {
-        kind: "create",
-        t,
-        shot: shot.index,
-        shotName: shot.name,
-        pin,
-        resume: effectiveResume,
-        wasPlaying: effectiveWasPlaying,
-        autoFocus,
-        ...(compareVideo ? { compareVideo } : {}),
+      composeState: {
+        status: "create-editing",
+        compose: nextCompose,
+        draft: prevCreate ? prevCreate.draft : "",
+        refs: prevCreate ? prevCreate.refs : [],
+        inkTool: prevCreate ? prevCreate.inkTool : null,
+        inkMarks: prevCreate ? prevCreate.inkMarks : [],
+        inkSaid: prevCreate ? prevCreate.inkSaid : "",
       },
-      draft: s.compose?.kind === "create" ? s.draft : "",
     });
   };
 
   const openEditNote = (note: Note, wasPlaying: boolean) => {
     const s = store.getState();
-    if (s.noteSaving) return;
-    const prevPath = s.selectedPath;
-    const wasCreate = s.compose?.kind === "create" ? s.compose : null;
-    const words = s.draft;
-    const strokes = s.inkMarks.slice();
-    const refs = s.refs.slice();
+    if (s.composeState.status === "create-saving") return;
+    const prevPath = liteVideoPathOf(s);
+    const prevCreate = s.composeState.status === "create-editing" ? s.composeState : null;
+    const words = prevCreate?.draft ?? "";
+    const strokes = prevCreate ? prevCreate.inkMarks.slice() : [];
+    const refs = prevCreate ? prevCreate.refs.slice() : [];
     const dirtyCreate = Boolean(
-      wasCreate && isComposeDirty(wasCreate, words, strokes.length > 0 || refs.length > 0),
+      prevCreate &&
+        isComposeDirty(prevCreate.compose, words, strokes.length > 0 || refs.length > 0),
     );
     store.setState((cur) => ({
-      compose: {
-        kind: "edit",
-        id: note.id,
-        time: stamp(note.t),
-        original: note.text,
-        t: note.t,
-        shot: note.shot,
-        shotName: note.shotName ?? "",
-        pin: null,
-        resume: wasPlaying,
+      composeState: {
+        status: "edit",
+        compose: {
+          kind: "edit",
+          id: note.id,
+          time: stamp(note.t),
+          original: note.text,
+          t: note.t,
+          shot: note.shot,
+          shotName: note.shotName ?? "",
+          pin: null,
+          resume: wasPlaying,
+        },
+        draft: note.text,
       },
-      draft: note.text,
-      inkTool: null,
-      inkMarks: [],
-      inkSaid: "",
-      inkRev: cur.inkMarks.length > 0 || cur.compose?.kind === "create" ? cur.inkRev + 1 : cur.inkRev,
-      refs: [],
+      inkRev: cur.composeState.status === "create-editing" ? cur.inkRev + 1 : cur.inkRev,
     }));
-    if (dirtyCreate && wasCreate) {
+    if (dirtyCreate && prevCreate) {
       noticeHandler({
         title: "Note discarded",
-        undo: () => restoreCreateDraft(wasCreate, words, strokes, refs, prevPath),
+        undo: () => restoreCreateDraft(prevCreate.compose, words, strokes, refs, prevPath),
       });
     }
   };
 
-  const setDraft = (draft: string) => store.setState({ draft });
+  const setDraft = (draft: string) => {
+    store.setState((s) => {
+      if (s.composeState.status !== "create-editing" && s.composeState.status !== "edit") {
+        return s;
+      }
+      return {
+        composeState: { ...s.composeState, draft },
+      };
+    });
+  };
 
-  const closeCompose = (): boolean => {
-    const resume = store.getState().compose?.resume ?? false;
+  const resetCompose = (): boolean => {
+    const cs = store.getState().composeState;
+    const resume = cs.status === "closed" ? false : cs.compose.resume;
     store.setState((s) => ({
-      compose: null,
-      draft: "",
-      refs: [],
-      inkTool: null,
-      inkMarks: [],
-      inkSaid: "",
+      composeState: { status: "closed" },
       inkRev: s.inkRev + 1,
     }));
     return resume;
   };
 
+  const closeCompose = (): boolean => {
+    if (store.getState().composeState.status === "create-saving") return false;
+    return resetCompose();
+  };
+
   const cancelCompose = (): boolean => {
     const s = store.getState();
-    if (s.noteSaving || !s.compose) return false;
-    const prevPath = s.selectedPath;
-    const was = s.compose;
-    const words = s.draft;
-    const strokes = s.inkMarks.slice();
-    const refs = s.refs.slice();
-    const dirty = isComposeDirty(was, words, strokes.length > 0 || refs.length > 0);
-    const resume = closeCompose();
+    const cs = s.composeState;
+    if (cs.status === "closed" || cs.status === "create-saving") return false;
+    const prevPath = liteVideoPathOf(s);
+    if (cs.status === "create-editing") {
+      const was = cs.compose;
+      const words = cs.draft;
+      const strokes = cs.inkMarks.slice();
+      const refs = cs.refs.slice();
+      const dirty = isComposeDirty(was, words, strokes.length > 0 || refs.length > 0);
+      const resume = resetCompose();
+      if (dirty) {
+        noticeHandler({
+          title: "Note discarded",
+          undo: () => restoreCreateDraft(was, words, strokes, refs, prevPath),
+        });
+      }
+      return resume;
+    }
+
+    const was = cs.compose;
+    const words = cs.draft;
+    const dirty = isComposeDirty(was, words, false);
+    const resume = resetCompose();
     if (dirty) {
       noticeHandler({
-        title: was.kind === "edit" ? `Edit at ${was.time} discarded` : "Note discarded",
+        title: `Edit at ${was.time} discarded`,
         undo: () => {
-          if (was.kind === "create") {
-            restoreCreateDraft(was, words, strokes, refs, prevPath);
-            return;
-          }
+          if (store.getState().composeState.status === "create-saving") return;
           store.setState((cur) => ({
-            compose: { ...was, resume: false },
-            draft: words,
-            inkMarks: strokes,
-            inkSaid: inkSummary(strokes),
+            composeState: {
+              status: "edit",
+              compose: { ...was, resume: false },
+              draft: words,
+            },
             inkRev: cur.inkRev + 1,
-            refs,
           }));
           seekHandler(was.t, false);
         },
@@ -808,9 +1027,9 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     const pictures = [...files].filter((f) => f.type.startsWith("image/"));
     if (!pictures.length) return;
     const s = store.getState();
-    if (s.compose?.kind !== "create") return;
-    const startCompose = s.compose;
-    const room = Math.max(0, REFS_MAX - s.refs.length);
+    if (s.composeState.status !== "create-editing") return;
+    const startCompose = s.composeState.compose;
+    const room = Math.max(0, REFS_MAX - s.composeState.refs.length);
     if (pictures.length > room) {
       noticeHandler({ title: `${REFS_MAX} pictures at most on one note`, type: "warning" });
     }
@@ -828,26 +1047,59 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     }
     if (added.length) {
       store.setState((cur) => {
-        if (cur.compose !== startCompose) return cur;
-        return { refs: [...cur.refs, ...added].slice(0, REFS_MAX) };
+        if (
+          cur.composeState.status !== "create-editing" ||
+          cur.composeState.compose !== startCompose
+        ) {
+          return cur;
+        }
+        return {
+          composeState: {
+            ...cur.composeState,
+            refs: [...cur.composeState.refs, ...added].slice(0, REFS_MAX),
+          },
+        };
       });
     }
   };
 
   const removeRef = (id: string) => {
-    const cur = store.getState().refs;
-    const idx = cur.findIndex((r) => r.id === id);
+    const cs = store.getState().composeState;
+    if (cs.status !== "create-editing") return;
+    const startCompose = cs.compose;
+    const idx = cs.refs.findIndex((r) => r.id === id);
     if (idx < 0) return;
-    const removed = cur[idx]!;
-    store.setState({ refs: cur.filter((r) => r.id !== id) });
+    const removed = cs.refs[idx]!;
+    store.setState((s) => {
+      if (s.composeState.status !== "create-editing") return s;
+      return {
+        composeState: {
+          ...s.composeState,
+          refs: s.composeState.refs.filter((r) => r.id !== id),
+        },
+      };
+    });
     noticeHandler({
       title: "Reference picture removed",
       undo: () => {
-        const now = store.getState().refs;
-        if (now.some((r) => r.id === removed.id) || now.length >= REFS_MAX) return;
-        const next = now.slice();
-        next.splice(Math.min(idx, next.length), 0, removed);
-        store.setState({ refs: next });
+        store.setState((s) => {
+          if (
+            s.composeState.status !== "create-editing" ||
+            s.composeState.compose !== startCompose
+          ) {
+            return s;
+          }
+          const now = s.composeState.refs;
+          if (now.some((r) => r.id === removed.id) || now.length >= REFS_MAX) return s;
+          const next = now.slice();
+          next.splice(Math.min(idx, next.length), 0, removed);
+          return {
+            composeState: {
+              ...s.composeState,
+              refs: next,
+            },
+          };
+        });
       },
     });
   };
@@ -881,7 +1133,9 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     if (waiting) setUnsentNotes(getUnsentNotes().filter((x) => x.note.id !== note.id));
     store.setState((s) => ({
       notes: s.notes.filter((x) => x.id !== note.id),
-      ...(s.compose?.kind === "edit" && s.compose.id === note.id ? { compose: null, draft: "" } : {}),
+      ...(s.composeState.status === "edit" && s.composeState.compose.id === note.id
+        ? { composeState: { status: "closed" as const } }
+        : {}),
     }));
     queueOp(note.id, { remove: true });
     void flushNotes();
@@ -935,13 +1189,14 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
     capture?: () => Promise<CapturedNoteMedia>;
   }): Promise<boolean> => {
     const s = store.getState();
-    if (s.noteSaving || !s.compose) return false;
-    const compose = s.compose;
-    const body = s.draft.trim();
+    const cs = s.composeState;
+    if (cs.status === "closed" || cs.status === "create-saving") return false;
+    const body = cs.draft.trim();
 
-    if (compose.kind === "edit") {
+    if (cs.status === "edit") {
+      const compose = cs.compose;
       if (!body || body === compose.original.trim()) {
-        return closeCompose();
+        return resetCompose();
       }
       const before = compose.original;
       const existing = s.notes.find((n) => n.id === compose.id);
@@ -951,7 +1206,7 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
         queueOp(compose.id, { restore: true, text: body });
         void flushNotes();
       }
-      const resume = closeCompose();
+      const resume = resetCompose();
       noticeHandler({
         title: `Note at ${compose.time} updated`,
         undo: () => editNoteText(compose.id, before),
@@ -959,18 +1214,25 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
       return resume;
     }
 
-    const marks = s.inkMarks.slice();
-    const refs = s.refs.map((r) => r.url);
+    const compose = cs.compose;
+    const marks = cs.inkMarks.slice();
+    const refs = cs.refs.map((r) => r.url);
     if (!body && !marks.length && !refs.length) {
-      return closeCompose();
+      return resetCompose();
     }
 
-    store.setState({ noteSaving: true });
+    const gen = lifecycleGen;
+    store.setState({
+      composeState: {
+        ...cs,
+        status: "create-saving",
+      },
+    });
     try {
       const liveItem = activeVideo();
       const targetItem =
         (compose.compareVideo?.path
-          ? s.videos.find((v) => v.path === compose.compareVideo!.path)
+          ? s.catalog.videos.find((v) => v.path === compose.compareVideo!.path)
           : null) ?? liveItem;
       const liveMatchesTarget = Boolean(liveItem && targetItem && liveItem.path === targetItem.path);
       const videoEl = liveMatchesTarget ? (captureOpts?.videoEl ?? null) : null;
@@ -1016,6 +1278,7 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
           }
         }
       }
+      const videoMeta = liteVideoMetaOf(s);
       const note = buildNotePayload({
         t: compose.t,
         shots: s.film.shots,
@@ -1030,9 +1293,7 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
         volume: videoEl?.volume ?? 1,
         canvasSize:
           media.dimensions ??
-          (s.videoMeta?.width && s.videoMeta?.height
-            ? [s.videoMeta.width, s.videoMeta.height]
-            : null),
+          (videoMeta?.width && videoMeta?.height ? [videoMeta.width, videoMeta.height] : null),
         screenSize:
           typeof window !== "undefined" ? [window.innerWidth, window.innerHeight] : [390, 844],
         phone: isPhoneViewport(),
@@ -1047,24 +1308,34 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
         ...(refs.length ? { refs } : {}),
       };
 
-      const nextNotes = [...store.getState().notes, note];
-      const maxNum = Object.values(store.getState().noteNumbers).reduce((a, b) => Math.max(a, b), 0);
       setUnsentNotes([...getUnsentNotes(), outgoing]);
-      store.setState({
-        notes: nextNotes,
-        noteNumbers: { ...store.getState().noteNumbers, [note.id]: maxNum + 1 },
+      store.setState((cur) => {
+        const maxNum = Object.values(cur.noteNumbers).reduce((a, b) => Math.max(a, b), 0);
+        return {
+          notes: [...cur.notes, note],
+          noteNumbers: { ...cur.noteNumbers, [note.id]: maxNum + 1 },
+          composeState: { status: "closed" },
+          inkRev: cur.inkRev + 1,
+        };
       });
-      void flushNotes();
-      return closeCompose();
+      if (lifecycleGen === gen) {
+        void flushNotes();
+      }
+      return compose.resume;
     } catch {
-      noticeHandler({
-        title: "Couldn’t save the note",
-        description: "Try saving it again.",
-        type: "error",
-      });
+      store.setState((cur) =>
+        cur.composeState.status === "create-saving"
+          ? { composeState: { ...cur.composeState, status: "create-editing" } }
+          : cur,
+      );
+      if (lifecycleGen === gen) {
+        noticeHandler({
+          title: "Couldn’t save the note",
+          description: "Try saving it again.",
+          type: "error",
+        });
+      }
       return false;
-    } finally {
-      store.setState({ noteSaving: false });
     }
   };
 
@@ -1079,6 +1350,7 @@ export function createLiteController(opts: CreateLiteControllerOptions = {}) {
   return {
     store,
     init,
+    dispose,
     loadFilm,
     loadVideos,
     loadNotes,

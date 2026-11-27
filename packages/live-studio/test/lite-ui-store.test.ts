@@ -1,6 +1,20 @@
 import { describe, expect, it } from "bun:test";
 
-import { createLiteController } from "../app/lite/store.ts";
+import {
+  createLiteController,
+  liteCatalogErrorOf,
+  liteCatalogVideosOf,
+  liteComposeOf,
+  liteDraftOf,
+  liteInkMarksOf,
+  liteInkToolOf,
+  liteNoteSavingOf,
+  liteVideoErrorOf,
+  liteVideoMetaOf,
+  liteVideoPathOf,
+  liteVideoReadyOf,
+  liteVideoReloadSeqOf,
+} from "../app/lite/store.ts";
 import type { CompareVideoCatalog, LiteFilmMeta, Note } from "../app/lite/types.ts";
 
 class MemoryStorage {
@@ -205,8 +219,8 @@ describe("Lite store controller", () => {
     const s = ctrl.store.getState();
 
     expect(s.film.name).toBe("demo-film");
-    expect(s.selectedPath).toBe("renders/reference/ref_vs_draft.mp4");
-    expect(s.videos).toHaveLength(3);
+    expect(liteVideoPathOf(s)).toBe("renders/reference/ref_vs_draft.mp4");
+    expect(liteCatalogVideosOf(s)).toHaveLength(3);
     expect(s.notes).toHaveLength(2);
     expect(s.noteNumbers).toEqual({ check1: 1, ask1: 2 });
   });
@@ -221,10 +235,10 @@ describe("Lite store controller", () => {
 
     await ctrl.init();
     ctrl.selectVideo("renders/draft.mp4");
-    expect(ctrl.store.getState().selectedPath).toBe("renders/draft.mp4");
+    expect(liteVideoPathOf(ctrl.store.getState())).toBe("renders/draft.mp4");
 
     await ctrl.refreshAll();
-    expect(ctrl.store.getState().selectedPath).toBe("renders/draft.mp4");
+    expect(liteVideoPathOf(ctrl.store.getState())).toBe("renders/draft.mp4");
   });
 
   it("creates a note with compare metadata and captured media, then flushes to API", async () => {
@@ -249,7 +263,7 @@ describe("Lite store controller", () => {
     });
     await ctrl.whenFlushed();
 
-    expect(ctrl.store.getState().compose).toBeNull();
+    expect(liteComposeOf(ctrl.store.getState())).toBeNull();
     const created = ctrl.store.getState().notes.find((n) => n.text === "Right side arm clips through wall");
     expect(created).toBeDefined();
     expect(created?.shot).toBe(1);
@@ -324,7 +338,7 @@ describe("Lite store controller", () => {
     await ctrl.whenFlushed();
 
     expect(server.notes.some((n) => n.text === "Queued offline note")).toBe(true);
-    expect(ctrl.store.getState().saved).toBeNull();
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
     expect(storage.get("liteUnsentNotes")).toBe("[]");
   });
 
@@ -346,16 +360,16 @@ describe("Lite store controller", () => {
     ctrl.setInkMarks([{ kind: "box", t: 2.0, pts: [[0.1, 0.1], [0.4, 0.4]] }]);
 
     ctrl.selectVideo("renders/draft.mp4");
-    expect(ctrl.store.getState().selectedPath).toBe("renders/draft.mp4");
-    expect(ctrl.store.getState().compose).toBeNull();
-    expect(ctrl.store.getState().inkMarks).toHaveLength(0);
+    expect(liteVideoPathOf(ctrl.store.getState())).toBe("renders/draft.mp4");
+    expect(liteComposeOf(ctrl.store.getState())).toBeNull();
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(0);
     expect(lastNotice?.undo).toBeDefined();
 
     lastNotice!.undo!();
-    expect(ctrl.store.getState().selectedPath).toBe("renders/reference/ref_vs_draft.mp4");
-    expect(ctrl.store.getState().compose?.kind).toBe("create");
-    expect(ctrl.store.getState().draft).toBe("Unsaved note on compare clip");
-    expect(ctrl.store.getState().inkMarks).toHaveLength(1);
+    expect(liteVideoPathOf(ctrl.store.getState())).toBe("renders/reference/ref_vs_draft.mp4");
+    expect(liteComposeOf(ctrl.store.getState())?.kind).toBe("create");
+    expect(liteDraftOf(ctrl.store.getState())).toBe("Unsaved note on compare clip");
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(1);
   });
 
   it("ignores non-null ink tools while editing a note", async () => {
@@ -370,9 +384,9 @@ describe("Lite store controller", () => {
     const note = ctrl.store.getState().notes[0]!;
     ctrl.openEditNote(note, false);
     ctrl.setInkTool("pen");
-    expect(ctrl.store.getState().inkTool).toBeNull();
+    expect(liteInkToolOf(ctrl.store.getState())).toBeNull();
     ctrl.setInkTool("box");
-    expect(ctrl.store.getState().inkTool).toBeNull();
+    expect(liteInkToolOf(ctrl.store.getState())).toBeNull();
   });
 
   it("preserves wasPlaying and resume when re-tapping video during an open create compose", async () => {
@@ -386,7 +400,7 @@ describe("Lite store controller", () => {
 
     ctrl.openCreateNote({ x: 0.2, y: 0.5, what: "REF · left" }, 3.0, true);
     ctrl.openCreateNote({ x: 0.8, y: 0.5, what: "OURS · right" }, 3.0, false);
-    const compose = ctrl.store.getState().compose;
+    const compose = liteComposeOf(ctrl.store.getState());
     expect(compose?.kind).toBe("create");
     if (compose?.kind === "create") {
       expect(compose.wasPlaying).toBe(true);
@@ -420,7 +434,7 @@ describe("Lite store controller", () => {
     });
     await ctrl.whenFlushed();
 
-    expect(ctrl.store.getState().saved).toBeNull();
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
     expect(ctrl.getUnsentNotes()).toHaveLength(0);
     expect(notices.some((n) => n.type === "error" && n.description === "Bad payload note")).toBe(true);
 
@@ -445,7 +459,7 @@ describe("Lite store controller", () => {
     expect(lastReqBody.crop).toBeUndefined();
     expect(lastReqBody.img).toBe("data:image/jpeg;base64,/9j/main");
     expect(server.notes.some((n) => n.text === "Large note retried slim")).toBe(true);
-    expect(ctrl.store.getState().saved).toBeNull();
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
   });
 
   it("preserves dirty create compose with Undo on openEditNote and blocks openEditNote while noteSaving", async () => {
@@ -468,16 +482,16 @@ describe("Lite store controller", () => {
     const revBefore = ctrl.store.getState().inkRev;
 
     ctrl.openEditNote(targetNote, false);
-    expect(ctrl.store.getState().compose?.kind).toBe("edit");
-    expect(ctrl.store.getState().inkMarks).toHaveLength(0);
+    expect(liteComposeOf(ctrl.store.getState())?.kind).toBe("edit");
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(0);
     expect(ctrl.store.getState().inkRev).toBeGreaterThan(revBefore);
     const undoNotice = notices.at(-1);
     expect(undoNotice?.undo).toBeDefined();
 
     undoNotice!.undo!();
-    expect(ctrl.store.getState().compose?.kind).toBe("create");
-    expect(ctrl.store.getState().draft).toBe("Important unsaved observation");
-    expect(ctrl.store.getState().inkMarks).toHaveLength(1);
+    expect(liteComposeOf(ctrl.store.getState())?.kind).toBe("create");
+    expect(liteDraftOf(ctrl.store.getState())).toBe("Important unsaved observation");
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(1);
     expect(seeks.at(-1)).toEqual({ t: 4.5, clipChanged: false });
 
     let releaseCapture!: () => void;
@@ -494,13 +508,21 @@ describe("Lite store controller", () => {
             });
         }),
     });
-    expect(ctrl.store.getState().noteSaving).toBe(true);
+    expect(liteNoteSavingOf(ctrl.store.getState())).toBe(true);
     ctrl.openEditNote(targetNote, false);
-    expect(ctrl.store.getState().compose?.kind).toBe("create");
+    ctrl.setDraft("Mutated during save");
+    ctrl.setInkTool("pen");
+    ctrl.setInkMarks([]);
+    ctrl.openCreateNote(null, 9.0, false);
+    ctrl.closeCompose();
+    expect(ctrl.store.getState().composeState.status).toBe("create-saving");
+    expect(liteDraftOf(ctrl.store.getState())).toBe("Important unsaved observation");
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(1);
 
     releaseCapture();
     await saving;
     await ctrl.whenFlushed();
+    expect(ctrl.store.getState().composeState.status).toBe("closed");
   });
 
   it("uses non-blocking statusPill instead of toasts for routine actions and warns on offline refresh", async () => {
@@ -551,7 +573,7 @@ describe("Lite store controller", () => {
     ctrl.setDraft("Switch draft");
     ctrl.selectVideo("renders/draft.mp4");
     notices.at(-1)!.undo!();
-    expect(ctrl.store.getState().selectedPath).toBe("renders/reference/ref_vs_draft.mp4");
+    expect(liteVideoPathOf(ctrl.store.getState())).toBe("renders/reference/ref_vs_draft.mp4");
     expect(seeks.at(-1)).toEqual({ t: 7.25, clipChanged: true });
 
     ctrl.cancelCompose();
@@ -569,7 +591,7 @@ describe("Lite store controller", () => {
     await ctrl.init();
 
     ctrl.openCreateNote(null, 1.0, false, { autoFocus: false });
-    const drawCompose = ctrl.store.getState().compose;
+    const drawCompose = liteComposeOf(ctrl.store.getState());
     expect(drawCompose?.kind).toBe("create");
     if (drawCompose?.kind === "create") {
       expect(drawCompose.autoFocus).toBe(false);
@@ -577,7 +599,7 @@ describe("Lite store controller", () => {
 
     ctrl.closeCompose();
     ctrl.openCreateNote({ x: 0.25, y: 0.5, what: "REF · left" }, 2.0, false);
-    const pinCompose = ctrl.store.getState().compose;
+    const pinCompose = liteComposeOf(ctrl.store.getState());
     expect(pinCompose?.kind).toBe("create");
     if (pinCompose?.kind === "create") {
       expect(pinCompose.autoFocus).toBe(true);
@@ -593,18 +615,18 @@ describe("Lite store controller", () => {
     });
     await ctrl.init();
 
-    const seq0 = ctrl.store.getState().videoReloadSeq;
+    const seq0 = liteVideoReloadSeqOf(ctrl.store.getState());
     ctrl.onVideoError("Decode failed");
-    expect(ctrl.store.getState().videoError).toBe("Decode failed");
+    expect(liteVideoErrorOf(ctrl.store.getState())).toBe("Decode failed");
 
     await ctrl.refreshAll();
-    expect(ctrl.store.getState().videoError).toBeNull();
-    expect(ctrl.store.getState().videoReloadSeq).toBe(seq0 + 1);
+    expect(liteVideoErrorOf(ctrl.store.getState())).toBeNull();
+    expect(liteVideoReloadSeqOf(ctrl.store.getState())).toBe(seq0 + 1);
 
     ctrl.onVideoError("Transient network drop");
     ctrl.selectVideo("renders/reference/ref_vs_draft.mp4");
-    expect(ctrl.store.getState().videoError).toBeNull();
-    expect(ctrl.store.getState().videoReloadSeq).toBe(seq0 + 2);
+    expect(liteVideoErrorOf(ctrl.store.getState())).toBeNull();
+    expect(liteVideoReloadSeqOf(ctrl.store.getState())).toBe(seq0 + 2);
   });
 
   it("reconciles compare layout and pin/mark hits from captured dimensions when layoutExact is absent", async () => {
@@ -635,5 +657,307 @@ describe("Lite store controller", () => {
     expect(saved?.compareVideo?.layout).toBe("vstack");
     expect(saved?.pin?.what).toBe("OURS · bottom");
     expect(saved?.marks?.[0]?.hits?.[0]?.what).toBe("OURS · bottom");
+  });
+
+  it("ignores onVideoError when no video is selected and clears stale videoMeta on error", async () => {
+    const server = makeServer();
+    const ctrl = createLiteController({
+      fetchFn: makeFakeFetch(server),
+      storage: new MemoryStorage(),
+      retryDelayMs: 5,
+    });
+
+    ctrl.onVideoError("Stray error before init");
+    expect(ctrl.store.getState().video.status).toBe("none");
+    expect(liteVideoErrorOf(ctrl.store.getState())).toBeNull();
+
+    await ctrl.init();
+    ctrl.onVideoMetadata(1080, 960, 12);
+    expect(liteVideoReadyOf(ctrl.store.getState())).toBe(true);
+    expect(liteVideoMetaOf(ctrl.store.getState())).not.toBeNull();
+
+    ctrl.onVideoError("Decode failed");
+    expect(ctrl.store.getState().video.status).toBe("error");
+    expect(liteVideoReadyOf(ctrl.store.getState())).toBe(false);
+    expect(liteVideoMetaOf(ctrl.store.getState())).toBeNull();
+    expect(liteVideoErrorOf(ctrl.store.getState())).toBe("Decode failed");
+  });
+
+  it("wakes retry backoff immediately when flushNotes is called on reconnect, including after sync fetch throws", async () => {
+    const server = makeServer();
+    const baseFetch = makeFakeFetch(server);
+    let failSyncOnce = true;
+    const syncThrowFetch: typeof fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "/api/notes" && (init?.method ?? "GET").toUpperCase() === "POST" && failSyncOnce) {
+        failSyncOnce = false;
+        throw new Error("sync offline");
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const ctrl = createLiteController({
+      fetchFn: syncThrowFetch,
+      storage: new MemoryStorage(),
+      retryDelayMs: 60_000,
+    });
+    await ctrl.init();
+
+    const waitBackoff = new Promise<void>((resolve) => {
+      if (ctrl.store.getState().flushStatus === "backoff") {
+        resolve();
+        return;
+      }
+      const unsub = ctrl.store.subscribe((s) => {
+        if (s.flushStatus === "backoff") {
+          unsub();
+          resolve();
+        }
+      });
+    });
+
+    ctrl.openCreateNote(null, 2.0, false);
+    ctrl.setDraft("Reconnect note");
+    await ctrl.saveCompose({
+      capture: async () => ({
+        img: "data:image/jpeg;base64,/9j/reconnect",
+        crop: null,
+        strip: null,
+        frames: [],
+        dimensions: [640, 360],
+      }),
+    });
+
+    await waitBackoff;
+    expect(ctrl.store.getState().flushStatus).toBe("backoff");
+
+    const t0 = performance.now();
+    await ctrl.flushNotes();
+    expect(performance.now() - t0).toBeLessThan(1000);
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
+    expect(server.notes.some((n) => n.text === "Reconnect note")).toBe(true);
+    ctrl.dispose();
+  });
+
+  it("cancels in-flight flush and backoff cleanly on dispose without post-dispose mutations or notices", async () => {
+    const server = makeServer();
+    const baseFetch = makeFakeFetch(server);
+    let releasePost!: (res: Response) => void;
+    let postAttempts = 0;
+
+    const heldFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "/api/notes" && (init?.method ?? "GET").toUpperCase() === "POST") {
+        postAttempts++;
+        if (postAttempts === 1) {
+          return new Promise<Response>((resolve) => {
+            releasePost = resolve;
+          });
+        }
+        return new Response("down", { status: 503 });
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const notices: { title: string }[] = [];
+    const ctrl = createLiteController({
+      fetchFn: heldFetch,
+      storage: new MemoryStorage(),
+      retryDelayMs: 25,
+      onNotice: (n) => notices.push(n),
+    });
+    await ctrl.init();
+
+    ctrl.openCreateNote(null, 1.0, false);
+    ctrl.setDraft("In-flight note");
+    await ctrl.saveCompose({
+      capture: async () => ({
+        img: "data:image/jpeg;base64,/9j/held",
+        crop: null,
+        strip: null,
+        frames: [],
+        dimensions: [640, 360],
+      }),
+    });
+    await Promise.resolve();
+
+    const flushingPromise = ctrl.whenFlushed();
+    ctrl.dispose();
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
+
+    releasePost(new Response("bad request", { status: 400 }));
+    await flushingPromise;
+    expect(notices).toHaveLength(0);
+    expect(ctrl.store.getState().notes.some((n) => n.text === "In-flight note")).toBe(true);
+
+    const waitBackoff = new Promise<void>((resolve) => {
+      const unsub = ctrl.store.subscribe((s) => {
+        if (s.flushStatus === "backoff") {
+          unsub();
+          resolve();
+        }
+      });
+    });
+    const retryRun = ctrl.flushNotes();
+    await waitBackoff;
+    const attemptsBeforeDispose = postAttempts;
+    ctrl.dispose();
+    await retryRun;
+    await new Promise((r) => setTimeout(r, 40));
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
+    expect(postAttempts).toBe(attemptsBeforeDispose);
+  });
+
+  it("coalesces concurrent refreshAll calls without duplicate fetches", async () => {
+    const server = makeServer();
+    const ctrl = createLiteController({
+      fetchFn: makeFakeFetch(server),
+      storage: new MemoryStorage(),
+      retryDelayMs: 5,
+    });
+    await ctrl.init();
+    const before = server.requests.length;
+
+    const p1 = ctrl.refreshAll();
+    const p2 = ctrl.refreshAll();
+    expect(p1).toBe(p2);
+    await Promise.all([p1, p2]);
+    expect(server.requests.length - before).toBe(3);
+  });
+
+  it("does not start flushNotes or emit notices when disposed during in-flight init or refreshAll", async () => {
+    const server = makeServer();
+    server.failVideos = true;
+    const baseFetch = makeFakeFetch(server);
+    let releaseInitVideos!: () => void;
+    let releaseRefreshVideos!: () => void;
+    let videoFetches = 0;
+
+    const heldFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "/api/compare-videos") {
+        videoFetches++;
+        if (videoFetches === 1) {
+          await new Promise<void>((resolve) => {
+            releaseInitVideos = resolve;
+          });
+        } else if (videoFetches === 2) {
+          await new Promise<void>((resolve) => {
+            releaseRefreshVideos = resolve;
+          });
+        }
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const storage = new MemoryStorage();
+    storage.set(
+      "liteUnsentNotes",
+      JSON.stringify([
+        {
+          note: {
+            id: "queued-1",
+            at: "2026-01-01T00:00:00.000Z",
+            t: 1,
+            time: "00:01.000",
+            frame: 30,
+            shot: 0,
+            text: "Queued before mount",
+            done: false,
+          },
+        },
+      ]),
+    );
+    const notices: { title: string }[] = [];
+    const ctrl = createLiteController({
+      fetchFn: heldFetch,
+      storage,
+      retryDelayMs: 60_000,
+      onNotice: (n) => notices.push(n),
+    });
+
+    const initRun = ctrl.init();
+    await Promise.resolve();
+    ctrl.dispose();
+    releaseInitVideos();
+    await initRun;
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
+    expect(server.requests.filter((r) => r.method === "POST")).toHaveLength(0);
+
+    const refreshRun = ctrl.refreshAll();
+    await Promise.resolve();
+    ctrl.dispose();
+    releaseRefreshVideos();
+    await refreshRun;
+    expect(ctrl.store.getState().refreshing).toBe(false);
+    expect(ctrl.store.getState().flushStatus).toBe("idle");
+    expect(notices).toHaveLength(0);
+    expect(server.requests.filter((r) => r.method === "POST")).toHaveLength(0);
+  });
+
+  it("drops stale out-of-order loadVideos failure after a newer catalog succeeds", async () => {
+    const server = makeServer();
+    const baseFetch = makeFakeFetch(server);
+    let releaseFirstVideos!: () => void;
+    let videoCalls = 0;
+
+    const racedFetch: typeof fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      if (url === "/api/compare-videos") {
+        videoCalls++;
+        if (videoCalls === 1) {
+          await new Promise<void>((resolve) => {
+            releaseFirstVideos = resolve;
+          });
+          return new Response("stale failure", { status: 503 });
+        }
+      }
+      return baseFetch(input, init);
+    }) as typeof fetch;
+
+    const ctrl = createLiteController({
+      fetchFn: racedFetch,
+      storage: new MemoryStorage(),
+      retryDelayMs: 5,
+    });
+
+    const first = ctrl.loadVideos();
+    const second = ctrl.loadVideos();
+    await second;
+    expect(ctrl.store.getState().catalog.status).toBe("ready");
+    expect(liteCatalogErrorOf(ctrl.store.getState())).toBeNull();
+
+    releaseFirstVideos();
+    await first;
+    expect(ctrl.store.getState().catalog.status).toBe("ready");
+    expect(liteCatalogErrorOf(ctrl.store.getState())).toBeNull();
+    expect(liteCatalogVideosOf(ctrl.store.getState())).toHaveLength(3);
+  });
+
+  it("restores create-editing with preserved draft when capture throws during saveCompose", async () => {
+    const server = makeServer();
+    const notices: { title: string; type?: string }[] = [];
+    const ctrl = createLiteController({
+      fetchFn: makeFakeFetch(server),
+      storage: new MemoryStorage(),
+      retryDelayMs: 5,
+      onNotice: (n) => notices.push(n),
+    });
+    await ctrl.init();
+
+    ctrl.openCreateNote(null, 3.0, false);
+    ctrl.setDraft("Keep me on error");
+    ctrl.setInkMarks([{ kind: "box", t: 3.0, pts: [[0.1, 0.1], [0.3, 0.3]] }]);
+
+    const resumed = await ctrl.saveCompose({
+      capture: async () => {
+        throw new Error("canvas failed");
+      },
+    });
+    expect(resumed).toBe(false);
+    expect(ctrl.store.getState().composeState.status).toBe("create-editing");
+    expect(liteDraftOf(ctrl.store.getState())).toBe("Keep me on error");
+    expect(liteInkMarksOf(ctrl.store.getState())).toHaveLength(1);
+    expect(notices.some((n) => n.type === "error")).toBe(true);
   });
 });

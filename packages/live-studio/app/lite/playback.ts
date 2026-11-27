@@ -5,16 +5,24 @@ export const PLAYBACK_RATES = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 type TimeListener = (filmT: number, duration: number, startSec: number) => void;
 type PlayListener = (playing: boolean) => void;
 
+type PlaybackState =
+  | { status: "detached"; pendingSeekFilmT: number | null }
+  | { status: "loading"; video: HTMLVideoElement; pendingSeekFilmT: number | null }
+  | { status: "paused"; video: HTMLVideoElement; videoDuration: number }
+  | {
+      status: "playing";
+      video: HTMLVideoElement;
+      videoDuration: number;
+      rafId: number;
+      pendingSeekFilmT: number | null;
+    };
+
 export class LitePlaybackClock {
-  private video: HTMLVideoElement | null = null;
+  private state: PlaybackState = { status: "detached", pendingSeekFilmT: null };
   private startSec = 0;
   private filmDuration = 0;
-  private videoDuration = 0;
   private filmT = 0;
   private playbackRate = 1;
-  private playing = false;
-  private rafId = 0;
-  private pendingSeekFilmT: number | null = null;
   private timeListeners = new Set<TimeListener>();
   private playListeners = new Set<PlayListener>();
 
@@ -23,7 +31,7 @@ export class LitePlaybackClock {
   }
 
   get isPlaying(): boolean {
-    return this.playing;
+    return this.state.status === "playing";
   }
 
   get start(): number {
@@ -31,7 +39,11 @@ export class LitePlaybackClock {
   }
 
   get duration(): number {
-    return this.videoDuration > 0 ? this.videoDuration : this.filmDuration;
+    const videoDuration =
+      this.state.status === "paused" || this.state.status === "playing"
+        ? this.state.videoDuration
+        : 0;
+    return videoDuration > 0 ? videoDuration : this.filmDuration;
   }
 
   get rate(): number {
@@ -39,19 +51,35 @@ export class LitePlaybackClock {
   }
 
   get element(): HTMLVideoElement | null {
-    return this.video;
+    return this.state.status === "detached" ? null : this.state.video;
   }
 
   attach(video: HTMLVideoElement | null): void {
-    this.video = video;
-    if (video) video.playbackRate = this.playbackRate;
-    else this.stopRaf();
+    const prev = this.state;
+    if (video === null) {
+      if (prev.status === "detached") return;
+      const wasPlaying = prev.status === "playing";
+      if (prev.status === "playing") this.cancelRaf(prev.rafId);
+      this.state = { status: "detached", pendingSeekFilmT: null };
+      if (wasPlaying) this.emitPlay();
+      return;
+    }
+    if (prev.status !== "detached" && prev.video === video) {
+      video.playbackRate = this.playbackRate;
+      return;
+    }
+    const wasPlaying = prev.status === "playing";
+    if (prev.status === "playing") this.cancelRaf(prev.rafId);
+    const pendingSeekFilmT = prev.status === "detached" ? prev.pendingSeekFilmT : null;
+    video.playbackRate = this.playbackRate;
+    this.state = { status: "loading", video, pendingSeekFilmT };
+    if (wasPlaying) this.emitPlay();
   }
 
   setRate(rate: number): void {
     const safe = Number.isFinite(rate) && rate > 0 ? rate : 1;
     this.playbackRate = safe;
-    if (this.video) this.video.playbackRate = safe;
+    if (this.state.status !== "detached") this.state.video.playbackRate = safe;
   }
 
   cycleRate(): number {
@@ -66,28 +94,45 @@ export class LitePlaybackClock {
     if (filmDuration !== undefined) {
       this.filmDuration = Number.isFinite(filmDuration) && filmDuration > 0 ? filmDuration : 0;
     }
-    this.videoDuration = 0;
-    if (this.pendingSeekFilmT === null) {
+    const prev = this.state;
+    const wasPlaying = prev.status === "playing";
+    if (prev.status === "playing") this.cancelRaf(prev.rafId);
+    const pendingSeekFilmT =
+      prev.status === "detached" || prev.status === "loading" || prev.status === "playing"
+        ? prev.pendingSeekFilmT
+        : null;
+    if (prev.status !== "detached") {
+      this.state = { status: "loading", video: prev.video, pendingSeekFilmT };
+    }
+    if (pendingSeekFilmT === null) {
       this.filmT = this.startSec;
     }
+    if (wasPlaying) this.emitPlay();
     this.emitTime();
   }
 
   setFilmDuration(filmDuration: number): void {
     this.filmDuration = Number.isFinite(filmDuration) && filmDuration > 0 ? filmDuration : 0;
-    if (this.videoDuration === 0) {
+    if (this.state.status === "detached" || this.state.status === "loading" || this.state.videoDuration === 0) {
       this.emitTime();
     }
   }
 
   onLoadedMetadata(video: HTMLVideoElement): void {
-    if (video !== this.video) return;
+    if (this.state.status === "detached" || this.state.video !== video) return;
     video.playbackRate = this.playbackRate;
-    this.videoDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
-    if (this.pendingSeekFilmT !== null) {
-      const target = this.pendingSeekFilmT;
-      this.pendingSeekFilmT = null;
-      this.seek(target);
+    const videoDuration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+    const pendingSeek =
+      this.state.status === "loading" || this.state.status === "playing"
+        ? this.state.pendingSeekFilmT
+        : null;
+    if (this.state.status === "playing") {
+      this.state = { ...this.state, videoDuration, pendingSeekFilmT: null };
+    } else {
+      this.state = { status: "paused", video, videoDuration };
+    }
+    if (pendingSeek !== null) {
+      this.seek(pendingSeek);
     } else {
       this.filmT = this.startSec + (video.currentTime || 0);
       this.emitTime();
@@ -95,46 +140,87 @@ export class LitePlaybackClock {
   }
 
   onPlay(): void {
-    if (!this.playing) {
-      this.playing = true;
-      this.emitPlay();
+    const prev = this.state;
+    if (prev.status === "detached") return;
+    if (prev.status === "playing") {
+      this.ensureRaf();
+      return;
     }
-    this.startRaf();
+    const videoDuration =
+      prev.status === "paused"
+        ? prev.videoDuration
+        : Number.isFinite(prev.video.duration) && prev.video.duration > 0
+          ? prev.video.duration
+          : 0;
+    const pendingSeekFilmT = prev.status === "loading" ? prev.pendingSeekFilmT : null;
+    this.state = {
+      status: "playing",
+      video: prev.video,
+      videoDuration,
+      rafId: 0,
+      pendingSeekFilmT,
+    };
+    this.emitPlay();
+    this.ensureRaf();
   }
 
   onPause(): void {
-    this.stopRaf();
-    if (this.video) {
-      this.filmT = this.startSec + (this.video.currentTime || 0);
+    const prev = this.state;
+    if (prev.status === "detached") return;
+    const wasPlaying = prev.status === "playing";
+    const hasPendingSeek =
+      (prev.status === "loading" || prev.status === "playing") && prev.pendingSeekFilmT !== null;
+    if (prev.status === "playing") {
+      this.cancelRaf(prev.rafId);
+      this.state =
+        prev.pendingSeekFilmT !== null
+          ? { status: "loading", video: prev.video, pendingSeekFilmT: prev.pendingSeekFilmT }
+          : { status: "paused", video: prev.video, videoDuration: prev.videoDuration };
+    }
+    if (!hasPendingSeek) {
+      this.filmT = this.startSec + (prev.video.currentTime || 0);
       this.emitTime();
     }
-    if (this.playing) {
-      this.playing = false;
-      this.emitPlay();
-    }
+    if (wasPlaying) this.emitPlay();
   }
 
   onSeeked(): void {
-    if (!this.video) return;
-    this.filmT = this.startSec + (this.video.currentTime || 0);
+    if (this.state.status === "detached") return;
+    if (
+      (this.state.status === "loading" || this.state.status === "playing") &&
+      this.state.pendingSeekFilmT !== null
+    ) {
+      return;
+    }
+    this.filmT = this.startSec + (this.state.video.currentTime || 0);
     this.emitTime();
   }
 
   seek(filmT: number): void {
-    const dur = this.videoDuration;
+    const dur =
+      this.state.status === "paused" || this.state.status === "playing"
+        ? this.state.videoDuration
+        : 0;
     const { t: videoT } = filmToVideoTime(filmT, this.startSec, dur);
     this.filmT = this.startSec + videoT;
     this.emitTime();
-    const video = this.video;
-    if (!video) {
-      this.pendingSeekFilmT = filmT;
+    if (this.state.status === "detached") {
+      this.state = { status: "detached", pendingSeekFilmT: filmT };
       return;
     }
+    const video = this.state.video;
     if (video.readyState < 1) {
-      this.pendingSeekFilmT = filmT;
+      this.state =
+        this.state.status === "playing"
+          ? { ...this.state, pendingSeekFilmT: filmT }
+          : { status: "loading", video, pendingSeekFilmT: filmT };
       return;
     }
-    this.pendingSeekFilmT = null;
+    if (this.state.status === "loading") {
+      this.state = { status: "loading", video, pendingSeekFilmT: null };
+    } else if (this.state.status === "playing" && this.state.pendingSeekFilmT !== null) {
+      this.state = { ...this.state, pendingSeekFilmT: null };
+    }
     if (Math.abs(video.currentTime - videoT) > 0.004) {
       try {
         video.currentTime = videoT;
@@ -148,36 +234,62 @@ export class LitePlaybackClock {
 
   seekAfterClipChange(filmT: number): void {
     const safeT = Number.isFinite(filmT) && filmT >= 0 ? filmT : 0;
-    this.pendingSeekFilmT = safeT;
+    const prev = this.state;
+    const wasPlaying = prev.status === "playing";
+    if (prev.status === "playing") this.cancelRaf(prev.rafId);
+    this.state =
+      prev.status === "detached"
+        ? { status: "detached", pendingSeekFilmT: safeT }
+        : { status: "loading", video: prev.video, pendingSeekFilmT: safeT };
     this.filmT = safeT;
+    if (wasPlaying) this.emitPlay();
     this.emitTime();
   }
 
   clearPendingSeek(): void {
-    this.pendingSeekFilmT = null;
+    if (this.state.status === "detached") {
+      this.state = { status: "detached", pendingSeekFilmT: null };
+    } else if (this.state.status === "loading") {
+      this.state = { status: "loading", video: this.state.video, pendingSeekFilmT: null };
+    } else if (this.state.status === "playing" && this.state.pendingSeekFilmT !== null) {
+      this.state = { ...this.state, pendingSeekFilmT: null };
+    }
   }
 
   play(): void {
-    const video = this.video;
-    if (!video) return;
-    if (video.ended || (this.videoDuration > 0 && video.currentTime >= this.videoDuration - 0.02)) {
+    if (this.state.status === "detached") return;
+    const video = this.state.video;
+    const videoDuration =
+      this.state.status === "paused" || this.state.status === "playing"
+        ? this.state.videoDuration
+        : 0;
+    if (video.ended || (videoDuration > 0 && video.currentTime >= videoDuration - 0.02)) {
       video.currentTime = 0;
     }
     void video.play().catch(() => {});
   }
 
   pause(): void {
-    this.video?.pause();
-    this.stopRaf();
-    if (this.playing) {
-      this.playing = false;
-      this.emitPlay();
+    const prev = this.state;
+    if (prev.status === "detached") return;
+    const wasPlaying = prev.status === "playing";
+    if (prev.status === "playing") {
+      this.cancelRaf(prev.rafId);
+      this.state =
+        prev.pendingSeekFilmT !== null
+          ? { status: "loading", video: prev.video, pendingSeekFilmT: prev.pendingSeekFilmT }
+          : { status: "paused", video: prev.video, videoDuration: prev.videoDuration };
     }
+    prev.video.pause();
+    if (wasPlaying) this.emitPlay();
   }
 
   togglePlay(): void {
-    if (this.playing || (this.video && !this.video.paused)) this.pause();
-    else this.play();
+    if (this.state.status === "playing" || (this.state.status !== "detached" && !this.state.video.paused)) {
+      this.pause();
+    } else {
+      this.play();
+    }
   }
 
   subscribeTime(fn: TimeListener): () => void {
@@ -190,7 +302,7 @@ export class LitePlaybackClock {
 
   subscribePlay(fn: PlayListener): () => void {
     this.playListeners.add(fn);
-    fn(this.playing);
+    fn(this.isPlaying);
     return () => {
       this.playListeners.delete(fn);
     };
@@ -202,36 +314,46 @@ export class LitePlaybackClock {
   }
 
   private emitPlay(): void {
-    for (const fn of this.playListeners) fn(this.playing);
+    const playing = this.isPlaying;
+    for (const fn of this.playListeners) fn(playing);
   }
 
-  private startRaf(): void {
-    if (this.rafId || typeof requestAnimationFrame !== "function") return;
+  private ensureRaf(): void {
+    if (this.state.status !== "playing" || this.state.rafId || typeof requestAnimationFrame !== "function") {
+      return;
+    }
+    const video = this.state.video;
     const step = () => {
-      this.rafId = 0;
-      const video = this.video;
-      if (!video || video.paused || video.ended) {
-        if (this.playing) {
-          this.playing = false;
-          this.emitPlay();
-        }
+      if (this.state.status !== "playing" || this.state.video !== video) return;
+      this.state = { ...this.state, rafId: 0 };
+      const { videoDuration, pendingSeekFilmT } = this.state;
+      if (video.paused || video.ended) {
+        this.state =
+          pendingSeekFilmT !== null
+            ? { status: "loading", video, pendingSeekFilmT }
+            : { status: "paused", video, videoDuration };
+        this.emitPlay();
         return;
       }
-      const next = this.startSec + video.currentTime;
-      if (Math.abs(next - this.filmT) > 0.001) {
-        this.filmT = next;
-        this.emitTime();
+      if (pendingSeekFilmT === null) {
+        const next = this.startSec + video.currentTime;
+        if (Math.abs(next - this.filmT) > 0.001) {
+          this.filmT = next;
+          this.emitTime();
+        }
       }
-      this.rafId = requestAnimationFrame(step);
+      if (this.state.status !== "playing" || this.state.video !== video || this.state.rafId !== 0) {
+        return;
+      }
+      this.state = { ...this.state, rafId: requestAnimationFrame(step) };
     };
-    this.rafId = requestAnimationFrame(step);
+    this.state = { ...this.state, rafId: requestAnimationFrame(step) };
   }
 
-  private stopRaf(): void {
-    if (this.rafId && typeof cancelAnimationFrame === "function") {
-      cancelAnimationFrame(this.rafId);
+  private cancelRaf(rafId: number): void {
+    if (rafId && typeof cancelAnimationFrame === "function") {
+      cancelAnimationFrame(rafId);
     }
-    this.rafId = 0;
   }
 }
 

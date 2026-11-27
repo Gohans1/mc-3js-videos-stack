@@ -34,7 +34,7 @@ import {
   surfaceClass,
 } from "./NoteCardParts.tsx";
 import { playback } from "./playback.ts";
-import { lite, useLite } from "./store.ts";
+import { lite, liteNoteSavingOf, useLite } from "./store.ts";
 import type { Note, NoteStatusFilter } from "./types.ts";
 
 const STATUS_TABS: { id: NoteStatusFilter; label: string }[] = [
@@ -320,10 +320,12 @@ const DoneNoteCard = memo(function DoneNoteCard({
 export function NoteList() {
   const notes = useLite((s) => s.notes);
   const noteNumbers = useLite((s) => s.noteNumbers);
-  const saved = useLite((s) => s.saved);
-  const noteSaving = useLite((s) => s.noteSaving);
+  const flushStatus = useLite((s) => s.flushStatus);
+  const noteSaving = useLite(liteNoteSavingOf);
   const statusFilter = useLite((s) => s.noteStatus);
-  const editingId = useLite((s) => (s.compose?.kind === "edit" ? s.compose.id : undefined));
+  const editingId = useLite((s) =>
+    s.composeState.status === "edit" ? s.composeState.compose.id : undefined,
+  );
   const [doneOpen, setDoneOpen] = useState(false);
 
   const grouped = useMemo(() => filterAndGroupNotes(notes), [notes]);
@@ -346,9 +348,9 @@ export function NoteList() {
   };
 
   const saveText =
-    saved === "busy"
+    flushStatus === "flushing"
       ? "Saving…"
-      : saved === "fail"
+      : flushStatus === "backoff"
         ? "Not sent. Retrying…"
         : notes.length
           ? "Saved"
@@ -374,9 +376,9 @@ export function NoteList() {
               role="status"
               className={cn(
                 "text-ui ms-auto text-end leading-snug tabular-nums",
-                saved === "fail"
+                flushStatus === "backoff"
                   ? "text-warn-text font-semibold"
-                  : saved === "busy"
+                  : flushStatus === "flushing"
                     ? "text-label font-medium"
                     : "text-ok-text font-medium",
               )}

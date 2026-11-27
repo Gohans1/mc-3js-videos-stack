@@ -22,17 +22,26 @@ import {
 } from "../picture/compare-video-model.ts";
 import { folderHint, groupVideosByCategory } from "./model.ts";
 import { playback } from "./playback.ts";
-import { lite, useLite } from "./store.ts";
+import {
+  lite,
+  liteCatalogVideosOf,
+  liteComposeOf,
+  liteInkToolOf,
+  liteNoteSavingOf,
+  liteVideoMetaOf,
+  liteVideoPathOf,
+  useLite,
+} from "./store.ts";
 
 export function VideoBar() {
-  const videos = useLite((s) => s.videos);
-  const selectedPath = useLite((s) => s.selectedPath);
-  const videoMeta = useLite((s) => s.videoMeta);
+  const videos = useLite(liteCatalogVideosOf);
+  const selectedPath = useLite(liteVideoPathOf);
+  const videoMeta = useLite(liteVideoMetaOf);
   const ratio = useLite((s) => s.film.ratio);
   const refreshing = useLite((s) => s.refreshing);
-  const inkTool = useLite((s) => s.inkTool);
-  const compose = useLite((s) => s.compose);
-  const noteSaving = useLite((s) => s.noteSaving);
+  const inkTool = useLite(liteInkToolOf);
+  const compose = useLite(liteComposeOf);
+  const noteSaving = useLite(liteNoteSavingOf);
 
   const activeItem = videos.find((v) => v.path === selectedPath) ?? null;
   const matchedMeta = activeItem && videoMeta?.path === activeItem.path ? videoMeta : null;
@@ -60,7 +69,7 @@ export function VideoBar() {
     }
     const wasPlaying = playback.isPlaying;
     if (wasPlaying) playback.pause();
-    if (!lite.store.getState().compose) {
+    if (lite.store.getState().composeState.status === "closed") {
       lite.openCreateNote(null, playback.t, wasPlaying, { autoFocus: false });
     }
     lite.setInkTool("pen");

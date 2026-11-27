@@ -15,24 +15,39 @@ import { drawInkCanvas, type SavedInkEntry } from "./ink.ts";
 import { inkSpan, noteState } from "./model.ts";
 import { playback } from "./playback.ts";
 import { createStagePointerHandler } from "./stage-pointer.ts";
-import { lite, useLite } from "./store.ts";
+import {
+  lite,
+  liteCatalogErrorOf,
+  liteCatalogLoadedOf,
+  liteCatalogVideosOf,
+  liteComposeOf,
+  liteDraftOf,
+  liteInkMarksOf,
+  liteInkToolOf,
+  liteNoteSavingOf,
+  liteVideoErrorOf,
+  liteVideoMetaOf,
+  liteVideoPathOf,
+  liteVideoReloadSeqOf,
+  useLite,
+} from "./store.ts";
 import type { Mark } from "./types.ts";
 
 export function VideoStage() {
-  const videos = useLite((s) => s.videos);
-  const videosLoaded = useLite((s) => s.videosLoaded);
-  const selectedPath = useLite((s) => s.selectedPath);
-  const videoMeta = useLite((s) => s.videoMeta);
-  const videoError = useLite((s) => s.videoError);
-  const videoReloadSeq = useLite((s) => s.videoReloadSeq);
-  const catalogError = useLite((s) => s.catalogError);
+  const videos = useLite(liteCatalogVideosOf);
+  const videosLoaded = useLite(liteCatalogLoadedOf);
+  const selectedPath = useLite(liteVideoPathOf);
+  const videoMeta = useLite(liteVideoMetaOf);
+  const videoError = useLite(liteVideoErrorOf);
+  const videoReloadSeq = useLite(liteVideoReloadSeqOf);
+  const catalogError = useLite(liteCatalogErrorOf);
   const ratio = useLite((s) => s.film.ratio);
   const duration = useLite((s) => s.film.duration);
   const muted = useLite((s) => s.muted);
   const notes = useLite((s) => s.notes);
-  const compose = useLite((s) => s.compose);
-  const draft = useLite((s) => s.draft);
-  const inkMarks = useLite((s) => s.inkMarks);
+  const compose = useLite(liteComposeOf);
+  const draft = useLite(liteDraftOf);
+  const inkMarks = useLite(liteInkMarksOf);
   const inkRev = useLite((s) => s.inkRev);
 
   const activeItem = useMemo(
@@ -337,27 +352,27 @@ export function VideoStage() {
       getContext: () => {
         const item = lite.activeVideo();
         const state = lite.store.getState();
-        if (!item || state.videoError) return null;
+        if (!item || liteVideoErrorOf(state)) return null;
         return {
           category: item.category,
           layout: lite.activeLayout(),
-          noteSaving: state.noteSaving,
-          isEditing: state.compose?.kind === "edit",
+          noteSaving: liteNoteSavingOf(state),
+          isEditing: state.composeState.status === "edit",
         };
       },
-      getInkTool: () => lite.store.getState().inkTool,
+      getInkTool: () => liteInkToolOf(lite.store.getState()),
       getPlaybackTime: () => playback.t,
       isPlaying: () => playback.isPlaying,
       pause: () => playback.pause(),
       ensureComposeForDraw: (wasPlaying) => {
-        if (!lite.store.getState().compose) {
+        if (lite.store.getState().composeState.status === "closed") {
           lite.openCreateNote(null, playback.t, wasPlaying, { autoFocus: false });
         }
       },
       openPin: (pin, t, wasPlaying) => {
         lite.openCreateNote(pin, t, wasPlaying);
       },
-      getMarks: () => lite.store.getState().inkMarks,
+      getMarks: () => liteInkMarksOf(lite.store.getState()),
       setMarks: (marks) => lite.setInkMarks(marks),
       getLiveMark: () => liveMarkRef.current,
       setLiveMark: (mark) => {

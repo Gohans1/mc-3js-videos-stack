@@ -134,4 +134,49 @@ describe("createStagePointerHandler", () => {
       wasPlaying: true,
     });
   });
+
+  it("prevents concurrent ink activation when inkTool toggles mid-tap gesture", () => {
+    let inkTool: InkKind | null = null;
+    let liveMark: Mark | null = null;
+    const committed: Mark[] = [];
+    let pinnedCount = 0;
+
+    const handler = createStagePointerHandler({
+      getRect: makeRect,
+      getContext: () => ({ category: "compare", layout: "hstack", noteSaving: false, isEditing: false }),
+      getInkTool: () => inkTool,
+      getPlaybackTime: () => 1.5,
+      isPlaying: () => false,
+      pause: () => {},
+      ensureComposeForDraw: () => {},
+      openPin: () => {
+        pinnedCount++;
+      },
+      getMarks: () => committed,
+      setMarks: (next) => {
+        committed.length = 0;
+        committed.push(...next);
+      },
+      setLiveMark: (m) => {
+        liveMark = m;
+      },
+      getLiveMark: () => liveMark,
+      renderOverlays: () => {},
+    });
+
+    expect(
+      handler.onDown({ pointerId: 10, button: 0, pointerType: "touch", clientX: 80, clientY: 80, buttons: 1 }),
+    ).toBe(true);
+
+    inkTool = "pen";
+    expect(
+      handler.onDown({ pointerId: 11, button: 0, pointerType: "touch", clientX: 120, clientY: 90, buttons: 1 }),
+    ).toBe(false);
+    handler.onMove({ pointerId: 11, clientX: 200, clientY: 120 });
+    expect(liveMark).toBeNull();
+
+    handler.onUp({ pointerId: 10, clientX: 81, clientY: 81, buttons: 0 });
+    expect(pinnedCount).toBe(1);
+    expect(committed).toHaveLength(0);
+  });
 });

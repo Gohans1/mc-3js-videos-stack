@@ -430,4 +430,146 @@ describe("LitePlaybackClock", () => {
     expect(fakeVideo.playbackRate).toBe(1.25);
     expect(clockInst.rate).toBe(1.25);
   });
+
+  it("emits playing=false and cancels rAF on attach(null), and ignores onPlay while detached", () => {
+    const prevRaf = globalThis.requestAnimationFrame;
+    const prevCancel = globalThis.cancelAnimationFrame;
+    let nextRafId = 1;
+    const cancelled: number[] = [];
+    let scheduled = 0;
+
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      value: () => {
+        scheduled++;
+        return nextRafId++;
+      },
+    });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      value: (id: number) => {
+        cancelled.push(id);
+      },
+    });
+
+    try {
+      const clockInst = new LitePlaybackClock();
+      const playStates: boolean[] = [];
+      clockInst.subscribePlay((p) => playStates.push(p));
+
+      clockInst.onPlay();
+      expect(clockInst.isPlaying).toBe(false);
+      expect(scheduled).toBe(0);
+      expect(playStates).toEqual([false]);
+
+      const fakeVideo = {
+        readyState: 4,
+        duration: 10,
+        currentTime: 2,
+        playbackRate: 1,
+        paused: false,
+        ended: false,
+        pause() {},
+      } as unknown as HTMLVideoElement;
+
+      clockInst.attach(fakeVideo);
+      clockInst.onLoadedMetadata(fakeVideo);
+      clockInst.onPlay();
+      expect(clockInst.isPlaying).toBe(true);
+      expect(scheduled).toBe(1);
+      expect(playStates).toEqual([false, true]);
+
+      clockInst.attach(null);
+      expect(clockInst.isPlaying).toBe(false);
+      expect(cancelled).toEqual([1]);
+      expect(playStates).toEqual([false, true, false]);
+    } finally {
+      Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: prevRaf });
+      Object.defineProperty(globalThis, "cancelAnimationFrame", { configurable: true, value: prevCancel });
+    }
+  });
+
+  it("preserves pendingSeekFilmT if onPlay fires while loading before onLoadedMetadata", () => {
+    const clockInst = new LitePlaybackClock();
+    const fakeVideo = {
+      readyState: 0,
+      duration: 10,
+      currentTime: 0,
+      playbackRate: 1,
+      paused: false,
+      ended: false,
+      pause() {
+        this.paused = true;
+      },
+    } as unknown as HTMLVideoElement;
+
+    clockInst.attach(fakeVideo);
+    clockInst.setClip(2, 12);
+    clockInst.seekAfterClipChange(7.5);
+    clockInst.onPlay();
+    expect(clockInst.isPlaying).toBe(true);
+
+    fakeVideo.readyState = 4;
+    clockInst.onLoadedMetadata(fakeVideo);
+    expect(fakeVideo.currentTime).toBe(5.5);
+    expect(clockInst.t).toBe(7.5);
+    expect(clockInst.isPlaying).toBe(true);
+    clockInst.pause();
+  });
+
+  it("keeps playing state and rAF active when seek is called before metadata loads", () => {
+    const prevRaf = globalThis.requestAnimationFrame;
+    const prevCancel = globalThis.cancelAnimationFrame;
+    let nextRafId = 1;
+    const cancelled: number[] = [];
+
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      value: () => nextRafId++,
+    });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      value: (id: number) => {
+        cancelled.push(id);
+      },
+    });
+
+    try {
+      const clockInst = new LitePlaybackClock();
+      const playStates: boolean[] = [];
+      clockInst.subscribePlay((p) => playStates.push(p));
+
+      const fakeVideo = {
+        readyState: 0,
+        duration: 10,
+        currentTime: 0,
+        playbackRate: 1,
+        paused: false,
+        ended: false,
+        pause() {
+          this.paused = true;
+        },
+      } as unknown as HTMLVideoElement;
+
+      clockInst.attach(fakeVideo);
+      clockInst.setClip(0, 10);
+      clockInst.onPlay();
+      clockInst.seek(5.0);
+
+      expect(clockInst.isPlaying).toBe(true);
+      expect(cancelled).toEqual([]);
+      expect(playStates).toEqual([false, true]);
+
+      fakeVideo.readyState = 4;
+      clockInst.onLoadedMetadata(fakeVideo);
+      expect(clockInst.isPlaying).toBe(true);
+      expect(fakeVideo.currentTime).toBe(5.0);
+      expect(clockInst.t).toBe(5.0);
+      expect(playStates).toEqual([false, true]);
+      clockInst.pause();
+    } finally {
+      Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: prevRaf });
+      Object.defineProperty(globalThis, "cancelAnimationFrame", { configurable: true, value: prevCancel });
+    }
+  });
 });

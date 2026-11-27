@@ -6,14 +6,21 @@ import { cn } from "@/lib/utils";
 
 import { clampRatio, clock, filterAndGroupNotes, spoken } from "./model.ts";
 import { playback } from "./playback.ts";
-import { lite, useLite } from "./store.ts";
+import {
+  lite,
+  liteCatalogVideosOf,
+  liteVideoMetaOf,
+  liteVideoPathOf,
+  liteVideoReadyOf,
+  useLite,
+} from "./store.ts";
 
 export function ScrubBar() {
-  const videoReady = useLite((s) => s.videoReady);
-  const videos = useLite((s) => s.videos);
-  const selectedPath = useLite((s) => s.selectedPath);
+  const videoReady = useLite(liteVideoReadyOf);
+  const videos = useLite(liteCatalogVideosOf);
+  const selectedPath = useLite(liteVideoPathOf);
   const filmDuration = useLite((s) => s.film.duration);
-  const videoMeta = useLite((s) => s.videoMeta);
+  const videoMeta = useLite(liteVideoMetaOf);
   const muted = useLite((s) => s.muted);
   const rate = useLite((s) => s.rate);
   const notes = useLite((s) => s.notes);

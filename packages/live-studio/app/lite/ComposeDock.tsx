@@ -18,7 +18,18 @@ import { stamp } from "../core/time.ts";
 import { REFS_MAX } from "./capture.ts";
 import { formatShortDate, isComposeDirty, noteShotTitle } from "./model.ts";
 import { playback } from "./playback.ts";
-import { lite, useLite } from "./store.ts";
+import {
+  lite,
+  liteComposeOf,
+  liteDraftOf,
+  liteInkMarksOf,
+  liteInkSaidOf,
+  liteInkToolOf,
+  liteNoteSavingOf,
+  liteRefsOf,
+  liteVideoPathOf,
+  useLite,
+} from "./store.ts";
 import type { InkKind } from "./types.ts";
 
 const DRAW_BTNS: [InkKind, string, ReactNode][] = [
@@ -29,15 +40,15 @@ const DRAW_BTNS: [InkKind, string, ReactNode][] = [
 ];
 
 export function ComposeDock() {
-  const compose = useLite((s) => s.compose);
-  const draft = useLite((s) => s.draft);
-  const noteSaving = useLite((s) => s.noteSaving);
-  const refs = useLite((s) => s.refs);
+  const compose = useLite(liteComposeOf);
+  const draft = useLite(liteDraftOf);
+  const noteSaving = useLite(liteNoteSavingOf);
+  const refs = useLite(liteRefsOf);
   const notes = useLite((s) => s.notes);
-  const inkTool = useLite((s) => s.inkTool);
-  const inkMarks = useLite((s) => s.inkMarks);
-  const inkSaid = useLite((s) => s.inkSaid);
-  const activeVideoPath = useLite((s) => s.selectedPath);
+  const inkTool = useLite(liteInkToolOf);
+  const inkMarks = useLite(liteInkMarksOf);
+  const inkSaid = useLite(liteInkSaidOf);
+  const activeVideoPath = useLite(liteVideoPathOf);
 
   const textRef = useRef<HTMLTextAreaElement>(null);
   const pickerRef = useRef<HTMLInputElement>(null);

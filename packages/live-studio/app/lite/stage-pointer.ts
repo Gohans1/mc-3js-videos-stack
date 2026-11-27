@@ -43,18 +43,26 @@ const normalize = (clientX: number, clientY: number, r: StageRect): [number, num
   return [clamp01((clientX - r.left) / r.width), clamp01((clientY - r.top) / r.height)];
 };
 
+type ActiveInkGesture = Exclude<InkGesture, { kind: "idle" }>;
+
+type StagePointerGesture =
+  | { kind: "idle" }
+  | { kind: "ink"; ink: ActiveInkGesture }
+  | {
+      kind: "tap_pending";
+      id: number;
+      startX: number;
+      startY: number;
+      startPt: [number, number];
+      wasPlaying: boolean;
+    }
+  | {
+      kind: "tap_sketching";
+      id: number;
+    };
+
 export function createStagePointerHandler(deps: StagePointerDeps) {
-  let inkGesture: InkGesture = IDLE_INK_GESTURE;
-  let tapDrag:
-    | {
-        id: number;
-        startX: number;
-        startY: number;
-        startPt: [number, number];
-        sketching: boolean;
-        wasPlaying: boolean;
-      }
-    | null = null;
+  let gesture: StagePointerGesture = { kind: "idle" };
 
   const commitStroke = (mark: Mark, smart: boolean) => {
     const ctx = deps.getContext();
@@ -86,8 +94,7 @@ export function createStagePointerHandler(deps: StagePointerDeps) {
   };
 
   const reset = () => {
-    inkGesture = IDLE_INK_GESTURE;
-    tapDrag = null;
+    gesture = { kind: "idle" };
     if (deps.getLiveMark()) {
       deps.setLiveMark(null);
       deps.renderOverlays();
@@ -102,13 +109,14 @@ export function createStagePointerHandler(deps: StagePointerDeps) {
     clientY: number;
     buttons: number;
   }): boolean => {
+    if (gesture.kind !== "idle") return false;
     if (e.button !== 0 && e.pointerType === "mouse") return false;
     const ctx = deps.getContext();
     if (!ctx || ctx.noteSaving || ctx.isEditing) return false;
 
     const tool = deps.getInkTool();
     if (tool) {
-      const res = stepInk(inkGesture, {
+      const res = stepInk(IDLE_INK_GESTURE, {
         type: "down",
         id: e.pointerId,
         button: e.button,
@@ -118,9 +126,9 @@ export function createStagePointerHandler(deps: StagePointerDeps) {
         x: e.clientX,
         y: e.clientY,
       });
-      if (res.effect === "none") return false;
+      if (res.effect === "none" || res.gesture.kind === "idle") return false;
       deps.capturePointer?.(e.pointerId);
-      inkGesture = res.gesture;
+      gesture = { kind: "ink", ink: res.gesture };
       const wasPlaying = deps.isPlaying();
       if (wasPlaying) deps.pause();
       deps.ensureComposeForDraw(wasPlaying);
@@ -136,149 +144,180 @@ export function createStagePointerHandler(deps: StagePointerDeps) {
       return true;
     }
 
-    if (tapDrag) return false;
     deps.capturePointer?.(e.pointerId);
-    tapDrag = {
+    gesture = {
+      kind: "tap_pending",
       id: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       startPt: normalize(e.clientX, e.clientY, deps.getRect()),
-      sketching: false,
       wasPlaying: deps.isPlaying(),
     };
     return true;
   };
 
-  const onMove = (e: { pointerId: number; clientX: number; clientY: number }) => {
-    if (inkGesture.kind !== "idle") {
-      const res = stepInk(inkGesture, {
-        type: "move",
-        id: e.pointerId,
-        x: e.clientX,
-        y: e.clientY,
-      });
-      inkGesture = res.gesture;
-      const live = deps.getLiveMark();
-      if (res.effect === "move_stroke" && live) {
-        const r = deps.getRect();
-        const pt = normalize(e.clientX, e.clientY, r);
-        if (live.kind === "pen") {
-          const [lx, ly] = live.pts.at(-1)!;
-          if (Math.hypot((pt[0] - lx) * r.width, (pt[1] - ly) * r.height) >= 2) {
-            live.pts.push(pt);
-          }
-        } else {
-          live.pts[1] = pt;
-        }
-        deps.renderOverlays();
-      }
-      return;
-    }
-
-    if (!tapDrag || tapDrag.id !== e.pointerId) return;
-    const dist = Math.hypot(e.clientX - tapDrag.startX, e.clientY - tapDrag.startY);
-    if (!tapDrag.sketching && dist > 8) {
-      tapDrag.sketching = true;
-      if (tapDrag.wasPlaying) deps.pause();
-      deps.ensureComposeForDraw(tapDrag.wasPlaying);
-      deps.setLiveMark({
-        kind: "pen",
-        t: +deps.getPlaybackTime().toFixed(3),
-        pts: [tapDrag.startPt],
-      });
-    }
+  const appendSketchPoint = (clientX: number, clientY: number) => {
     const live = deps.getLiveMark();
-    if (tapDrag.sketching && live) {
-      const r = deps.getRect();
-      const pt = normalize(e.clientX, e.clientY, r);
-      const [lx, ly] = live.pts.at(-1)!;
-      if (Math.hypot((pt[0] - lx) * r.width, (pt[1] - ly) * r.height) >= 2) {
-        live.pts.push(pt);
-        deps.renderOverlays();
+    if (!live) return;
+    const r = deps.getRect();
+    const pt = normalize(clientX, clientY, r);
+    const [lx, ly] = live.pts.at(-1)!;
+    if (Math.hypot((pt[0] - lx) * r.width, (pt[1] - ly) * r.height) >= 2) {
+      live.pts.push(pt);
+      deps.renderOverlays();
+    }
+  };
+
+  const onMove = (e: { pointerId: number; clientX: number; clientY: number }) => {
+    switch (gesture.kind) {
+      case "idle":
+        return;
+      case "ink": {
+        const res = stepInk(gesture.ink, {
+          type: "move",
+          id: e.pointerId,
+          x: e.clientX,
+          y: e.clientY,
+        });
+        gesture = res.gesture.kind === "idle" ? { kind: "idle" } : { kind: "ink", ink: res.gesture };
+        const live = deps.getLiveMark();
+        if (res.effect === "move_stroke" && live) {
+          const r = deps.getRect();
+          const pt = normalize(e.clientX, e.clientY, r);
+          if (live.kind === "pen") {
+            const [lx, ly] = live.pts.at(-1)!;
+            if (Math.hypot((pt[0] - lx) * r.width, (pt[1] - ly) * r.height) >= 2) {
+              live.pts.push(pt);
+            }
+          } else {
+            live.pts[1] = pt;
+          }
+          deps.renderOverlays();
+        }
+        return;
+      }
+      case "tap_pending": {
+        if (gesture.id !== e.pointerId) return;
+        const dist = Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY);
+        if (dist <= 8) return;
+        const { id, startPt, wasPlaying } = gesture;
+        gesture = { kind: "tap_sketching", id };
+        if (wasPlaying) deps.pause();
+        deps.ensureComposeForDraw(wasPlaying);
+        deps.setLiveMark({
+          kind: "pen",
+          t: +deps.getPlaybackTime().toFixed(3),
+          pts: [startPt],
+        });
+        appendSketchPoint(e.clientX, e.clientY);
+        return;
+      }
+      case "tap_sketching": {
+        if (gesture.id !== e.pointerId) return;
+        appendSketchPoint(e.clientX, e.clientY);
+        return;
       }
     }
   };
 
   const onUp = (e: { pointerId: number; clientX: number; clientY: number; buttons: number }) => {
-    if (inkGesture.kind !== "idle") {
-      const tool = deps.getInkTool();
-      const res = stepInk(inkGesture, {
-        type: "up",
-        id: e.pointerId,
-        buttons: e.buttons,
-        tool,
-      });
-      inkGesture = res.gesture;
-      if (res.effect === "end_stroke") {
+    switch (gesture.kind) {
+      case "idle":
+        return;
+      case "ink": {
+        const tool = deps.getInkTool();
+        const res = stepInk(gesture.ink, {
+          type: "up",
+          id: e.pointerId,
+          buttons: e.buttons,
+          tool,
+        });
+        gesture = res.gesture.kind === "idle" ? { kind: "idle" } : { kind: "ink", ink: res.gesture };
+        if (res.effect === "end_stroke") {
+          const done = deps.getLiveMark();
+          deps.setLiveMark(null);
+          if (done) commitStroke(done, false);
+          deps.renderOverlays();
+        } else if (res.effect === "commit_path") {
+          const ctx = deps.getContext();
+          if (!ctx) return;
+          const pt = normalize(e.clientX, e.clientY, deps.getRect());
+          const nowT = +deps.getPlaybackTime().toFixed(3);
+          const hit = compareHitForPoint(pt[0], pt[1], ctx.category, ctx.layout);
+          const marks = deps.getMarks().map((m) => ({
+            ...m,
+            pts: m.pts.slice(),
+            ...(m.ts ? { ts: m.ts.slice() } : {}),
+            ...(m.hits ? { hits: m.hits.slice() } : {}),
+          }));
+          let pathMark = marks.find((m) => m.kind === "path");
+          if (!pathMark) {
+            pathMark = { kind: "path", t: nowT, pts: [], ts: [], hits: [] };
+            marks.push(pathMark);
+          }
+          const sameIdx = pathMark.ts!.findIndex((t) => Math.abs(t - nowT) <= SAME);
+          if (sameIdx >= 0) {
+            pathMark.pts[sameIdx] = pt;
+            pathMark.hits![sameIdx] = hit;
+          } else {
+            const insertAt = pathMark.ts!.findIndex((t) => t > nowT);
+            const k = insertAt < 0 ? pathMark.ts!.length : insertAt;
+            pathMark.pts.splice(k, 0, pt);
+            pathMark.ts!.splice(k, 0, nowT);
+            pathMark.hits!.splice(k, 0, hit);
+          }
+          pathMark.t = pathMark.ts![0]!;
+          deps.setMarks(marks);
+        }
+        return;
+      }
+      case "tap_sketching": {
+        if (gesture.id !== e.pointerId) return;
+        gesture = { kind: "idle" };
         const done = deps.getLiveMark();
         deps.setLiveMark(null);
-        if (done) commitStroke(done, false);
+        if (done) commitStroke(done, true);
         deps.renderOverlays();
-      } else if (res.effect === "commit_path") {
+        return;
+      }
+      case "tap_pending": {
+        if (gesture.id !== e.pointerId) return;
+        const { wasPlaying } = gesture;
+        gesture = { kind: "idle" };
         const ctx = deps.getContext();
         if (!ctx) return;
-        const pt = normalize(e.clientX, e.clientY, deps.getRect());
-        const nowT = +deps.getPlaybackTime().toFixed(3);
-        const hit = compareHitForPoint(pt[0], pt[1], ctx.category, ctx.layout);
-        const marks = deps.getMarks().map((m) => ({
-          ...m,
-          pts: m.pts.slice(),
-          ...(m.ts ? { ts: m.ts.slice() } : {}),
-          ...(m.hits ? { hits: m.hits.slice() } : {}),
-        }));
-        let pathMark = marks.find((m) => m.kind === "path");
-        if (!pathMark) {
-          pathMark = { kind: "path", t: nowT, pts: [], ts: [], hits: [] };
-          marks.push(pathMark);
-        }
-        const sameIdx = pathMark.ts!.findIndex((t) => Math.abs(t - nowT) <= SAME);
-        if (sameIdx >= 0) {
-          pathMark.pts[sameIdx] = pt;
-          pathMark.hits![sameIdx] = hit;
-        } else {
-          const insertAt = pathMark.ts!.findIndex((t) => t > nowT);
-          const k = insertAt < 0 ? pathMark.ts!.length : insertAt;
-          pathMark.pts.splice(k, 0, pt);
-          pathMark.ts!.splice(k, 0, nowT);
-          pathMark.hits!.splice(k, 0, hit);
-        }
-        pathMark.t = pathMark.ts![0]!;
-        deps.setMarks(marks);
+        if (wasPlaying) deps.pause();
+        const [x, y] = normalize(e.clientX, e.clientY, deps.getRect());
+        const hit = compareHitForPoint(x, y, ctx.category, ctx.layout);
+        deps.openPin({ x, y, what: hit.what }, deps.getPlaybackTime(), wasPlaying);
+        return;
       }
-      return;
     }
-
-    if (!tapDrag || tapDrag.id !== e.pointerId) return;
-    const finished = tapDrag;
-    tapDrag = null;
-    if (finished.sketching) {
-      const done = deps.getLiveMark();
-      deps.setLiveMark(null);
-      if (done) commitStroke(done, true);
-      deps.renderOverlays();
-      return;
-    }
-    const ctx = deps.getContext();
-    if (!ctx) return;
-    if (finished.wasPlaying) deps.pause();
-    const [x, y] = normalize(e.clientX, e.clientY, deps.getRect());
-    const hit = compareHitForPoint(x, y, ctx.category, ctx.layout);
-    deps.openPin({ x, y, what: hit.what }, deps.getPlaybackTime(), finished.wasPlaying);
   };
 
   const onCancel = (e: { pointerId: number }) => {
-    if (inkGesture.kind !== "idle") {
-      const res = stepInk(inkGesture, { type: "cancel", id: e.pointerId });
-      inkGesture = res.gesture;
-      if (res.effect === "drop") {
-        deps.setLiveMark(null);
-        deps.renderOverlays();
+    switch (gesture.kind) {
+      case "idle":
+        return;
+      case "ink": {
+        const res = stepInk(gesture.ink, { type: "cancel", id: e.pointerId });
+        gesture = res.gesture.kind === "idle" ? { kind: "idle" } : { kind: "ink", ink: res.gesture };
+        if (res.effect === "drop") {
+          deps.setLiveMark(null);
+          deps.renderOverlays();
+        }
+        return;
       }
-    }
-    if (tapDrag && tapDrag.id === e.pointerId) {
-      tapDrag = null;
-      deps.setLiveMark(null);
-      deps.renderOverlays();
+      case "tap_pending":
+      case "tap_sketching": {
+        if (gesture.id !== e.pointerId) return;
+        gesture = { kind: "idle" };
+        if (deps.getLiveMark()) {
+          deps.setLiveMark(null);
+          deps.renderOverlays();
+        }
+        return;
+      }
     }
   };
 

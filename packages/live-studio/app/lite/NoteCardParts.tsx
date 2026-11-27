@@ -35,17 +35,17 @@ import {
   summarizeNoteThread,
 } from "./model.ts";
 import { playback } from "./playback.ts";
-import { lite, useLite } from "./store.ts";
+import { lite, liteCatalogVideosOf, liteNoteSavingOf, liteVideoPathOf, useLite } from "./store.ts";
 import type { Fix, Note, NoteState } from "./types.ts";
 
 export const jumpToNote = (note: Note, useAfter = false) => {
   const s = lite.store.getState();
-  if (s.noteSaving) return;
+  if (liteNoteSavingOf(s)) return;
   playback.pause();
   const media = resolveNoteMedia(note, lite.getUnsentNotes());
   const targetTime = useAfter && media.afterTime !== null ? media.afterTime : note.t;
-  if (note.compareVideo?.path && s.videos.some((v) => v.path === note.compareVideo!.path)) {
-    if (s.selectedPath !== note.compareVideo.path) {
+  if (note.compareVideo?.path && s.catalog.videos.some((v) => v.path === note.compareVideo!.path)) {
+    if (liteVideoPathOf(s) !== note.compareVideo.path) {
       playback.seekAfterClipChange(targetTime);
       lite.selectVideo(note.compareVideo.path);
       return;
@@ -297,7 +297,7 @@ function RefsChip({ note, count }: { note: Note; count: number }) {
 }
 
 export function NoteTags({ note }: { note: Note }) {
-  const videos = useLite((s) => s.videos);
+  const videos = useLite(liteCatalogVideosOf);
   const pinName = pinShortLabel(note.pin?.what);
   const range = noteRangePill(note);
   const marks = note.marks;

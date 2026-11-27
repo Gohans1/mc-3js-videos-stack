@@ -81,11 +81,10 @@ const seekVideoOnce = (video: HTMLVideoElement, rawDest: number, timeoutMs = 150
       resolve(true);
       return;
     }
-    let settled = false;
-    let hasSeeked = nearDest();
+    let phase: "seeking" | "awaiting-ready" | "done" = nearDest() ? "awaiting-ready" : "seeking";
     const finish = (ok: boolean) => {
-      if (settled) return;
-      settled = true;
+      if (phase === "done") return;
+      phase = "done";
       clearTimeout(timer);
       video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("loadeddata", onReady);
@@ -94,11 +93,12 @@ const seekVideoOnce = (video: HTMLVideoElement, rawDest: number, timeoutMs = 150
       resolve(ok);
     };
     const onSeeked = () => {
-      hasSeeked = true;
+      if (phase === "done") return;
+      phase = "awaiting-ready";
       if (!video.seeking && video.readyState >= 2) finish(true);
     };
     const onReady = () => {
-      if (hasSeeked && !video.seeking && video.readyState >= 2) finish(true);
+      if (phase === "awaiting-ready" && !video.seeking && video.readyState >= 2) finish(true);
     };
     const onErr = () => finish(false);
     const timer = window.setTimeout(() => finish(video.readyState >= 2), timeoutMs);
