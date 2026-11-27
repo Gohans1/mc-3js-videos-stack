@@ -77,7 +77,12 @@ import {
   type Mark,
   normalizeStoredCompose,
   type Note,
+  noteComposeOf,
+  noteDraftOf,
+  noteRefsOf,
+  noteSavingOf,
   type Pin,
+  type RefPic,
   type StageAnchor,
 } from "./slice";
 
@@ -608,15 +613,17 @@ const editNote = (id: string, words: string) => {
 };
 
 export const setDraft = (words: string) => {
-  set({ draft: words });
+  const cs = get().composeState;
+  if (cs.status !== "create-editing" && cs.status !== "edit-editing") return;
+  set({ composeState: { ...cs, draft: words } });
   drawPins();
   drawInk(drawnNotes);
-  const { compose } = get();
+  const compose = cs.compose;
   if (isComposeDirty(compose, words, more()))
     stored.set("noteDraft", JSON.stringify({ compose, words }));
   else stored.remove("noteDraft");
 };
-const more = () => inkMarks.length > 0 || get().refs.length > 0;
+const more = () => inkMarks.length > 0 || noteRefsOf(get()).length > 0;
 export {
   type ComposeOrigin,
   composeExitReason,
@@ -636,7 +643,8 @@ const restoreComposeFocus = () => {
   composeReturnNoteId = null;
   if (!el && !noteId) return;
   const run = () => {
-    if (get().compose || get().review || typeof document === "undefined") return;
+    if (get().composeState.status !== "closed" || get().review || typeof document === "undefined")
+      return;
     const active = document.activeElement;
     if (active && active !== document.body && active !== document.documentElement) return;
     if (el?.isConnected && !el.closest("[hidden],[inert]")) {
@@ -658,12 +666,21 @@ const restoreComposeFocus = () => {
   else run();
 };
 
-const openBox = (compose: Compose, words = "", focus = true, origin?: ComposeOrigin) => {
+const openBox = (
+  compose: Compose,
+  words = "",
+  focus = true,
+  origin?: ComposeOrigin,
+  initialRefs?: RefPic[],
+) => {
   if (origin) setComposeOrigin(compose, origin);
-  if (!get().compose && typeof document !== "undefined") {
+  const prevCs = get().composeState;
+  if (prevCs.status === "closed" && typeof document !== "undefined") {
     const active = document.activeElement;
     const inNotes =
-      active instanceof HTMLElement && !!active.closest("[aria-label='Notes'], [data-review-row]");
+      typeof HTMLElement !== "undefined" &&
+      active instanceof HTMLElement &&
+      !!active.closest("[aria-label='Notes'], [data-review-row]");
     composeReturnEl = inNotes ? active : null;
     composeReturnNoteId =
       compose.kind === "edit"
@@ -672,11 +689,30 @@ const openBox = (compose: Compose, words = "", focus = true, origin?: ComposeOri
           ? (active.closest<HTMLElement>("[data-note]")?.dataset.note ?? null)
           : null;
   }
+  if (compose.kind === "edit" && get().ink) setInk(null);
+  const nextRefs =
+    compose.kind === "create"
+      ? (initialRefs ?? (prevCs.status === "create-editing" ? prevCs.refs : []))
+      : [];
+  const nextComposeState =
+    compose.kind === "create"
+      ? ({
+          status: "create-editing",
+          compose,
+          draft: words,
+          refs: nextRefs,
+        } as const)
+      : ({
+          status: "edit-editing",
+          compose,
+          draft: words,
+        } as const);
   if (isStageAnchoredCompose(compose, PHONE)) {
-    set({ compose, settingsOpen: false });
+    set({ composeState: nextComposeState, settingsOpen: false });
   } else {
-    set({ compose, settingsOpen: false, side: "notes", lib: "notes" });
+    set({ composeState: nextComposeState, settingsOpen: false, side: "notes", lib: "notes" });
   }
+  if (compose.kind === "create" && initialRefs) setRefs(initialRefs);
   setDraft(words);
   drawPins();
   if (focus) ui.focusNote();
@@ -689,7 +725,9 @@ export const openNote = async (
   anchor?: StageAnchor,
 ) => {
   if (noteSaveState.status === "saving") await noteSaveState.promise;
-  const { compose, draft } = get();
+  const s0 = get();
+  const compose = noteComposeOf(s0);
+  const draft = noteDraftOf(s0);
   if (compose?.kind === "edit") {
     ui.focusNote();
     return;
@@ -710,11 +748,21 @@ export const openNote = async (
     (spaceMismatch || (draft.trim() && Math.abs(S.t - compose.t) > 0.01 && !inkMarks.length))
   ) {
     if (isComposeDirty(compose, draft, more())) {
-      set({ compose: { ...compose, resume: false } });
+      const curCs = get().composeState;
+      if (curCs.status === "create-editing") {
+        set({
+          composeState: { ...curCs, compose: { ...curCs.compose, resume: false } },
+        });
+      }
       await saveNote();
-      if (get().compose) return;
+      if (get().composeState.status !== "closed") return;
     } else {
-      set({ compose: { ...compose, resume: false } });
+      const curCs = get().composeState;
+      if (curCs.status === "create-editing") {
+        set({
+          composeState: { ...curCs, compose: { ...curCs.compose, resume: false } },
+        });
+      }
       closeNote("cancel", { keepInk: true });
     }
   }
@@ -736,19 +784,20 @@ export const openNote = async (
       wasPlaying,
       spoken: captionAt(S.t) ?? undefined,
     },
-    get().draft,
+    noteDraftOf(get()),
     focus,
     origin,
   );
 };
 export const setComposeAnchor = (anchor: StageAnchor) => {
-  const { compose } = get();
-  if (!compose || compose.kind !== "create") return;
+  const cs = get().composeState;
+  if (cs.status !== "create-editing") return;
+  const compose = cs.compose;
   if (compose.anchor?.x === anchor.x && compose.anchor?.y === anchor.y) return;
   const next = { ...compose, anchor };
   const orig = composeOrigin(compose);
   if (orig) setComposeOrigin(next, orig);
-  set({ compose: next });
+  set({ composeState: { ...cs, compose: next } });
 };
 export const mergeVoiceNoteDraft = (draft: string, voiceName: string, voiceId: string): string => {
   const line = `Use voice: ${voiceName} (${voiceId})`;
@@ -757,36 +806,39 @@ export const mergeVoiceNoteDraft = (draft: string, voiceName: string, voiceId: s
   return cur.split(/[\s()]+/).includes(voiceId) ? draft : `${cur}\n${line}`;
 };
 export const openVoiceNote = async (voiceName: string, voiceId: string, origin?: ComposeOrigin) => {
-  if (get().compose?.kind === "edit") {
+  const cs = get().composeState;
+  if (cs.status === "edit-editing" || cs.status === "edit-saving") {
     set({ settingsOpen: false, side: "notes", lib: "notes" });
     ui.focusNote();
     say("Save or cancel the note edit before adding a voice to a new note");
     return;
   }
   await openNote(null, true, origin);
-  if (get().compose?.kind !== "create") return;
-  const next = mergeVoiceNoteDraft(get().draft, voiceName, voiceId);
-  if (next !== get().draft) setDraft(next);
+  const nowCs = get().composeState;
+  if (nowCs.status !== "create-editing") return;
+  const next = mergeVoiceNoteDraft(nowCs.draft, voiceName, voiceId);
+  if (next !== nowCs.draft) setDraft(next);
 };
 export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
-  const { compose, compareVideoMode, compareVideo, draft, refs } = get();
+  const { composeState, compareVideoMode, compareVideo } = get();
+  if (composeState.status === "create-saving" || composeState.status === "edit-saving") return;
   const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
-  if (!compose) {
+  if (composeState.status === "closed") {
     void openNote(null, false, origin, anchor);
     return;
   }
   if (
-    compose.kind === "create" &&
-    !compose.pin &&
+    composeState.status === "create-editing" &&
+    !composeState.compose.pin &&
     !inkMarks.length &&
-    !draft.trim() &&
-    !refs.length &&
-    !composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath)
+    !composeState.draft.trim() &&
+    !composeState.refs.length &&
+    !composeMatchesStageSpace(composeState.compose, compareVideoMode, compareVideoPath)
   ) {
     const compareSource = compareVideoMode ? activeCompareNoteSource() : null;
     const i = shotIndex(S.t);
-    const next: Compose = {
-      ...compose,
+    const next: ComposeCreate = {
+      ...composeState.compose,
       t: S.t,
       shot: i,
       shotName: S.comments[i] ?? "",
@@ -794,35 +846,42 @@ export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
       ...(anchor ? { anchor } : {}),
       compareVideo: compareSource ?? undefined,
     };
-    const orig = origin ?? composeOrigin(compose);
+    const orig = origin ?? composeOrigin(composeState.compose);
     if (orig) setComposeOrigin(next, orig);
-    set({ compose: next });
+    set({ composeState: { ...composeState, compose: next } });
   }
 };
-inkHooks.changed = () => setDraft(get().draft);
+inkHooks.changed = () => {
+  const cs = get().composeState;
+  if (cs.status === "create-editing" || cs.status === "edit-editing") setDraft(cs.draft);
+};
 inkHooks.anchor = (anchor) => setComposeAnchor(anchor);
 inkHooks.cancelEmpty = () => {
-  const { compose, draft, refs } = get();
+  const cs = get().composeState;
   if (
-    compose?.kind === "create" &&
-    !compose.pin &&
-    !draft.trim() &&
-    !refs.length &&
+    cs.status === "create-editing" &&
+    !cs.compose.pin &&
+    !cs.draft.trim() &&
+    !cs.refs.length &&
     !inkMarks.length
   )
     closeNote("cancel", { keepInk: true });
 };
-refHooks.changed = () => setDraft(get().draft);
+refHooks.changed = () => {
+  const cs = get().composeState;
+  if (cs.status === "create-editing") setDraft(cs.draft);
+};
 export const restoreDraft = () => {
   restoreInk();
-  restoreRefs();
+  const restoredRefs = restoreRefs();
   let raw: { compose?: unknown; words?: string } | null = null;
   try {
     raw = JSON.parse(stored.get("noteDraft") ?? "null");
   } catch {}
   const compose = normalizeStoredCompose(raw?.compose),
     words = typeof raw?.words === "string" ? raw.words : "";
-  if (!compose || !isComposeDirty(compose, words, more())) {
+  const hasRestoredMedia = inkMarks.length > 0 || (compose?.kind === "create" && restoredRefs.length > 0);
+  if (!compose || !isComposeDirty(compose, words, hasRestoredMedia)) {
     clearInk();
     setRefs([]);
     return;
@@ -834,11 +893,13 @@ export const restoreDraft = () => {
     if (compose.kind === "create" && get().compareVideoMode) setCompareVideoMode(false);
     seek(compose.t);
   }
-  openBox(compose, words);
+  openBox(compose, words, true, undefined, compose.kind === "create" ? restoredRefs : undefined);
 };
 export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
   if (noteSaveState.status === "saving") await noteSaveState.promise;
-  const { compose, draft } = get();
+  const s0 = get();
+  const compose = noteComposeOf(s0);
+  const draft = noteDraftOf(s0);
   if (compose?.kind === "edit" && compose.id === n.id) {
     ui.focusNote();
     return;
@@ -846,7 +907,12 @@ export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
   const wasPlaying = compose ? compose.resume : S.playing;
   const at = noteAt(n);
   if (compose && isComposeDirty(compose, draft, more())) {
-    set({ compose: { ...compose, resume: false } });
+    const curCs = get().composeState;
+    if (curCs.status === "create-editing") {
+      set({ composeState: { ...curCs, compose: { ...curCs.compose, resume: false } } });
+    } else if (curCs.status === "edit-editing") {
+      set({ composeState: { ...curCs, compose: { ...curCs.compose, resume: false } } });
+    }
     await saveNote();
   } else if (compose) closeNote();
   if (S.playing) setPlaying(false);
@@ -867,42 +933,61 @@ export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
     origin,
   );
 };
+const finishCloseNote = (
+  reason: "save" | "cancel" = "cancel",
+  opts: { keepInk?: boolean } = {},
+) => {
+  const s = get();
+  const current = noteComposeOf(s);
+  if (current) {
+    recordComposeExit(current, reason, {
+      draft: noteDraftOf(s),
+      drawn: s.inkSaid,
+      refs: [...noteRefsOf(s)],
+    });
+  }
+  const resume = current?.resume;
+  noteSaveState = { status: "idle" };
+  stored.remove("noteDraft");
+  set({ composeState: { status: "closed" } });
+  if (get().composeState.status === "closed") {
+    clearInk();
+    if (!opts.keepInk && get().ink) setInk(null);
+    setRefs([]);
+    ui.blurNote();
+  }
+  drawPins();
+  drawInk(drawnNotes);
+  restoreComposeFocus();
+  if (resume) setPlaying(true);
+};
 export const closeNote = (
   reason: "save" | "cancel" = "cancel",
   opts: { keepInk?: boolean } = {},
 ) => {
-  const current = get().compose;
-  if (current) {
-    recordComposeExit(current, reason, {
-      draft: get().draft,
-      drawn: get().inkSaid,
-      refs: get().refs,
-    });
-  }
-  const resume = current?.resume;
-  set({ compose: null });
-  clearInk();
-  if (!opts.keepInk && get().ink) setInk(null);
-  setRefs([]);
-  setDraft("");
-  ui.blurNote();
-  drawPins();
-  restoreComposeFocus();
-  if (resume) setPlaying(true);
+  if (noteSavingOf(get())) return;
+  finishCloseNote(reason, opts);
 };
 export const cancelNote = () => {
-  if (get().noteSaving) return;
-  const { compose: was, draft: words } = get();
-  if (!was) return;
-  const strokes = inkMarks.slice(),
-    refs = get().refs;
+  const cs = get().composeState;
+  if (cs.status !== "create-editing" && cs.status !== "edit-editing") return;
+  const was = cs.compose;
+  const words = cs.draft;
+  const strokes = cs.status === "create-editing" ? inkMarks.slice() : [];
+  const refs = cs.status === "create-editing" ? cs.refs.slice() : [];
   const lost = isComposeDirty(was, words, strokes.length > 0 || refs.length > 0);
   closeNote();
   if (lost)
     showUndo(was.kind === "edit" ? `Edit at ${was.time} discarded` : "Note discarded", async () => {
-      if (get().compose) {
-        set({ compose: { ...get().compose!, resume: false } });
+      const curCs = get().composeState;
+      if (curCs.status === "create-editing") {
+        set({ composeState: { ...curCs, compose: { ...curCs.compose, resume: false } } });
         await saveNote();
+      } else if (curCs.status === "edit-editing") {
+        set({ composeState: { ...curCs, compose: { ...curCs.compose, resume: false } } });
+        await saveNote();
+      } else if (curCs.status === "create-saving" || curCs.status === "edit-saving") {
+        if (noteSaveState.status === "saving") await noteSaveState.promise;
       }
       if (S.playing) setPlaying(false);
       if (was.kind === "create" && was.compareVideo?.path) {
@@ -913,21 +998,31 @@ export const cancelNote = () => {
       if (was.kind === "create") {
         if (was.compareVideo?.path) seekRecordedCompareTime(was.compareVideo.path, was.t);
         else seek(was.t);
+        inkMarks.push(...strokes);
+        openBox({ ...was, resume: false }, words, true, undefined, refs);
+      } else {
+        openBox({ ...was, resume: false }, words);
       }
-      inkMarks.push(...strokes);
-      setRefs(refs);
-      openBox({ ...was, resume: false }, words);
     });
 };
+const restoreEditingAfterSaveAbort = () => {
+  const cs = get().composeState;
+  if (cs.status === "create-saving") {
+    set({ composeState: { ...cs, status: "create-editing" } });
+  } else if (cs.status === "edit-saving") {
+    set({ composeState: { ...cs, status: "edit-editing" } });
+  }
+};
 const saveNoteNow = async () => {
-  const { compose, draft, notes } = get();
-  const body = draft.trim();
-  if (!compose) return;
-  if (compose.kind === "edit") {
-    const { id, original: before, time: at } = compose,
-      was = notes.find((x) => x.id === id);
+  const s = get();
+  const cs = s.composeState;
+  if (cs.status !== "create-saving" && cs.status !== "edit-saving") return;
+  const body = cs.draft.trim();
+  if (cs.status === "edit-saving") {
+    const { id, original: before, time: at } = cs.compose,
+      was = s.notes.find((x) => x.id === id);
     if (!body || body === before.trim()) {
-      closeNote();
+      finishCloseNote();
       return;
     }
     if (was) editNote(id, body);
@@ -935,20 +1030,22 @@ const saveNoteNow = async () => {
       queueOp(id, { restore: true, text: body });
       flushNotes();
     }
-    closeNote("save");
+    finishCloseNote("save");
     showUndo(`Note at ${at} updated`, () => editNote(id, before));
     return;
   }
+  const compose = cs.compose;
   const strokes = inkMarks.slice(),
-    refs = get().refs.map((r) => r.url);
+    refs = cs.refs.map((r) => r.url);
   if (!body && !strokes.length && !refs.length) {
-    closeNote("cancel");
+    finishCloseNote("cancel");
     return;
   }
   const tools = S.tools;
   const rawCompareSource = compose.compareVideo ?? undefined;
   const compareDims = rawCompareSource ? compareVideoDimensions(rawCompareSource.path) : null;
   if (!tools && !rawCompareSource) {
+    restoreEditingAfterSaveAbort();
     say("Your note draft is kept. Save once the preview loads.");
     return;
   }
@@ -1053,7 +1150,7 @@ const saveNoteNow = async () => {
     { note: n, img, crop, strip, frames, ...(refs.length ? { refs } : {}) },
   ]);
   flushNotes();
-  closeNote("save");
+  finishCloseNote("save");
 };
 
 type NoteSaveState =
@@ -1063,15 +1160,25 @@ type NoteSaveState =
 let noteSaveState: NoteSaveState = { status: "idle" };
 export const saveNote = () => {
   if (noteSaveState.status === "saving") return noteSaveState.promise;
-  if (!get().compose) return Promise.resolve();
+  const cs = get().composeState;
+  if (cs.status !== "create-editing" && cs.status !== "edit-editing") return Promise.resolve();
   let resolve!: () => void;
   const promise = new Promise<void>((r) => {
     resolve = r;
   });
   noteSaveState = { status: "saving", promise };
-  set({ noteSaving: true });
+  set({
+    composeState:
+      cs.status === "create-editing"
+        ? { ...cs, status: "create-saving" }
+        : { ...cs, status: "edit-saving" },
+  });
   void saveNoteNow()
     .catch(() => {
+      if (noteSaveState.status === "saving" && noteSaveState.promise === promise) {
+        noteSaveState = { status: "idle" };
+        restoreEditingAfterSaveAbort();
+      }
       toast.add({
         title: "Couldn’t save the note",
         description: "Try saving it again.",
@@ -1079,8 +1186,10 @@ export const saveNote = () => {
       });
     })
     .finally(() => {
-      noteSaveState = { status: "idle" };
-      set({ noteSaving: false });
+      if (noteSaveState.status === "saving" && noteSaveState.promise === promise) {
+        noteSaveState = { status: "idle" };
+        restoreEditingAfterSaveAbort();
+      }
       resolve();
     });
   return promise;
@@ -1093,8 +1202,8 @@ export const removeNote = (n: Note) => {
   changed(get().notes.filter((x) => x.id !== n.id));
   queueOp(n.id, { remove: true });
   flushNotes();
-  const existing = get().compose;
-  if (existing?.kind === "edit" && existing.id === n.id) closeNote();
+  const cs = get().composeState;
+  if (cs.status === "edit-editing" && cs.compose.id === n.id) closeNote();
   showUndo(`Note at ${n.time} deleted`, () => {
     signalNoteAction(n.id, "restore");
     changed([...get().notes, n]);
@@ -1497,7 +1606,7 @@ export const setReview = (on: boolean, opener?: Element | null, noteId?: string)
         : null);
   }
   invalidatePictures();
-  if (get().compose) cancelNote();
+  if (get().composeState.status !== "closed") cancelNote();
   const { reviewPick, reviewTab } = get();
   const readyCheck = reviewList("check"),
     asking = reviewList("asking"),
@@ -1554,7 +1663,7 @@ export const followNoteLinks = () => {
       say("This note is no longer available in this film");
       return;
     }
-    if (!get().compose && !S.playing) {
+    if (get().composeState.status === "closed" && !S.playing) {
       reviewNote(note);
       return;
     }
@@ -1642,7 +1751,9 @@ export const pinWordsUp = (y: number) => y > 0.88;
 export const drawPins = () => {
   const box = S.el?.pins;
   if (!box) return;
-  const { compose, compareVideoMode, compareVideo } = get();
+  const s = get();
+  const compose = noteComposeOf(s);
+  const { compareVideoMode, compareVideo } = s;
   const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const own =
     compose?.pin &&
@@ -1710,7 +1821,13 @@ export const drawPins = () => {
     saved: true,
   }));
   if (own)
-    want.push({ id: "", pin: own, text: get().draft.trim() || own.what, fade: 1, saved: false });
+    want.push({
+      id: "",
+      pin: own,
+      text: noteDraftOf(get()).trim() || own.what,
+      fade: 1,
+      saved: false,
+    });
 
   const now = new Set<string>();
   const items: {

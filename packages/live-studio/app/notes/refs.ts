@@ -10,15 +10,23 @@ const REF_SIDE = 1600,
   KEY = "noteDraftRefs";
 
 export const refHooks = { changed: () => {} };
-const keep = (refs: RefPic[]) => {
-  set({ refs });
-  refHooks.changed();
+const persistRefs = (refs: readonly RefPic[]) => {
   if (!refs.length) stored.remove(KEY);
   else if (!stored.set(KEY, JSON.stringify(refs)))
     say(
       "These pictures are too big to keep through a reload: send the note before you leave",
       6000,
     );
+};
+const keep = (refs: RefPic[]) => {
+  const cs = get().composeState;
+  if (cs.status !== "create-editing") {
+    if (!refs.length) persistRefs([]);
+    return;
+  }
+  set({ composeState: { ...cs, refs } });
+  refHooks.changed();
+  persistRefs(refs);
 };
 
 export const toJpeg = (source: CanvasImageSource, w: number, h: number) => {
@@ -36,12 +44,14 @@ export const toJpeg = (source: CanvasImageSource, w: number, h: number) => {
 export const addRefs = async (files: Iterable<File>) => {
   const pictures = [...files].filter((f) => f.type.startsWith("image/"));
   if (!pictures.length) return false;
-  const compose = get().compose;
-  if (compose?.kind !== "create") {
+  const cs = get().composeState;
+  if (cs.status === "create-saving" || cs.status === "edit-saving") return true;
+  if (cs.status !== "create-editing") {
     say("Pictures go with a new note, not an edit of an old one");
     return true;
   }
-  const room = REFS_MAX - get().refs.length;
+  const compose = cs.compose;
+  const room = REFS_MAX - cs.refs.length;
   if (pictures.length > room) say(`${REFS_MAX} pictures at most on one note`);
   const made: RefPic[] = [];
   for (const f of pictures.slice(0, Math.max(0, room))) {
@@ -54,22 +64,32 @@ export const addRefs = async (files: Iterable<File>) => {
       say(`Couldn’t read ${f.name || "that picture"}. Try another image.`);
     }
   }
-  if (made.length && get().compose === compose) keep([...get().refs, ...made]);
+  const nowCs = get().composeState;
+  if (made.length && nowCs.status === "create-editing" && nowCs.compose === compose) {
+    keep([...nowCs.refs, ...made].slice(0, REFS_MAX));
+  }
   return true;
 };
-export const changeRef = (r: RefPic) => keep(get().refs.map((x) => (x.id === r.id ? r : x)));
+export const changeRef = (r: RefPic) => {
+  const cs = get().composeState;
+  if (cs.status !== "create-editing") return;
+  keep(cs.refs.map((x) => (x.id === r.id ? r : x)));
+};
 export const removeRef = (id: string) => {
-  const cur = get().refs;
+  const cs = get().composeState;
+  if (cs.status !== "create-editing") return;
+  const cur = cs.refs;
   const idx = cur.findIndex((x) => x.id === id);
   if (idx < 0) return;
   const removed = cur[idx];
-  const compose = get().compose;
+  const compose = cs.compose;
   keep(cur.filter((x) => x.id !== id));
   showUndo(
     removed.strokes.length ? "Picture & drawing removed" : "Reference picture removed",
     () => {
-      if (compose && get().compose !== compose) return;
-      const now = get().refs;
+      const nowCs = get().composeState;
+      if (nowCs.status !== "create-editing" || nowCs.compose !== compose) return;
+      const now = nowCs.refs;
       if (now.some((x) => x.id === removed.id) || now.length >= REFS_MAX) return;
       const next = [...now];
       next.splice(Math.min(idx, next.length), 0, removed);
@@ -90,10 +110,10 @@ const isRef = (r: unknown): r is RefPic => {
     Array.isArray(x.strokes)
   );
 };
-export const restoreRefs = () => {
+export const restoreRefs = (): RefPic[] => {
   let raw: unknown = null;
   try {
     raw = JSON.parse(stored.get(KEY) ?? "null");
   } catch {}
-  set({ refs: Array.isArray(raw) ? raw.filter(isRef).slice(0, REFS_MAX) : [] });
+  return Array.isArray(raw) ? raw.filter(isRef).slice(0, REFS_MAX) : [];
 };

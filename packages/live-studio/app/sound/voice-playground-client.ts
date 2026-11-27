@@ -153,21 +153,28 @@ export const serviceCatalogDataOf = (
   connection: DirectPlaygroundConnection,
 ): PlaygroundCatalog | undefined => s.serviceCatalogs?.[connection]?.catalog;
 
+export interface PlaygroundRegionEditorRequest {
+  item: VoicePlaygroundItem;
+  filmSource?: { takeId: string; audioUrl: string };
+  openerId?: string;
+  initialEdit?: RegionEditInput;
+  revisionOf?: string;
+  failedJobId?: string;
+}
+
+export type PlaygroundSurface =
+  | { kind: "closed"; everOpened: boolean }
+  | { kind: "workbench"; opener: HTMLElement | null }
+  | { kind: "workbench-region"; opener: HTMLElement | null; editor: PlaygroundRegionEditorRequest }
+  | { kind: "standalone-region"; everOpened: boolean; editor: PlaygroundRegionEditorRequest };
+
 export interface VoicePlaygroundClientState {
   castingTarget?: CastingTarget | null;
   clones?: PlaygroundClone[];
   clonesState: ClonesLoadState;
   cloneCloudState: CloneCloudState;
   previewVoice?: PlaygroundVoiceOption;
-  regionEditor: {
-    item: VoicePlaygroundItem;
-    returnToWorkbench: boolean;
-    filmSource?: { takeId: string; audioUrl: string };
-    openerId?: string;
-    initialEdit?: RegionEditInput;
-    revisionOf?: string;
-    failedJobId?: string;
-  } | null;
+  surface: PlaygroundSurface;
   scope: "project" | "global";
   libraryScope: "all" | "project" | "global";
   favoriteVoices: PlaygroundVoiceOption[];
@@ -189,7 +196,6 @@ export interface VoicePlaygroundClientState {
   catalog: PlaygroundCatalog;
   items: VoicePlaygroundItem[];
   jobs: PlaygroundJob[];
-  workbenchOpener?: HTMLElement | null;
   composerError?: { mode: ComposerDraft["mode"]; message: string };
   remoteHistory: RemoteHistoryState;
   sharedSearch: SharedSearchState;
@@ -198,8 +204,6 @@ export interface VoicePlaygroundClientState {
   filters: PlaygroundFilterState;
   selectedUid: string | null;
   starredTakeUids: string[];
-  workbenchOpen: boolean;
-  everOpened: boolean;
   inlineOpen: boolean;
   activeSubTab: PlaygroundSubTab;
   workbenchMediumTab: "library" | "inspect";
@@ -210,6 +214,34 @@ export interface VoicePlaygroundClientState {
     | { status: "failed"; name: string; error: string };
   lastSttResult: (PlaygroundSttResult & { sourceLabel?: string; taskId?: string }) | null;
 }
+
+export const isPlaygroundWorkbenchOpen = (s: Pick<VoicePlaygroundClientState, "surface">): boolean =>
+  s.surface.kind === "workbench" || s.surface.kind === "workbench-region";
+
+export const hasPlaygroundEverOpened = (s: Pick<VoicePlaygroundClientState, "surface">): boolean =>
+  s.surface.kind === "workbench" || s.surface.kind === "workbench-region" || s.surface.everOpened;
+
+export const playgroundWorkbenchOpenerOf = (
+  s: Pick<VoicePlaygroundClientState, "surface">,
+): HTMLElement | null =>
+  s.surface.kind === "workbench" || s.surface.kind === "workbench-region" ? s.surface.opener : null;
+
+export const playgroundWorkbenchRegionOf = (
+  s: Pick<VoicePlaygroundClientState, "surface">,
+): PlaygroundRegionEditorRequest | null =>
+  s.surface.kind === "workbench-region" ? s.surface.editor : null;
+
+export const playgroundStandaloneRegionOf = (
+  s: Pick<VoicePlaygroundClientState, "surface">,
+): PlaygroundRegionEditorRequest | null =>
+  s.surface.kind === "standalone-region" ? s.surface.editor : null;
+
+export const playgroundRegionEditorOf = (
+  s: Pick<VoicePlaygroundClientState, "surface">,
+): PlaygroundRegionEditorRequest | null =>
+  s.surface.kind === "workbench-region" || s.surface.kind === "standalone-region"
+    ? s.surface.editor
+    : null;
 
 const FALLBACK_MODELS: PlaygroundModelInfo[] = [
   {
@@ -292,7 +324,7 @@ let state: VoicePlaygroundClientState = {
   clones: [],
   clonesState: { status: "idle", error: null },
   cloneCloudState: { status: "ok" },
-  regionEditor: null,
+  surface: { kind: "closed", everOpened: false },
   scope: "project",
   libraryScope: "all",
   favoriteVoices: [],
@@ -337,8 +369,6 @@ let state: VoicePlaygroundClientState = {
   filters: DEFAULT_PLAYGROUND_FILTERS,
   selectedUid: null,
   starredTakeUids: [],
-  workbenchOpen: false,
-  everOpened: false,
   inlineOpen: false,
   activeSubTab: "create",
   workbenchMediumTab: "library",
@@ -498,12 +528,25 @@ export const openRecordingEditor = (
     revisionOf?: string;
     openerId?: string;
     failedJobId?: string;
-    filmSource?: NonNullable<VoicePlaygroundClientState["regionEditor"]>["filmSource"];
+    filmSource?: PlaygroundRegionEditorRequest["filmSource"];
   } = {},
-) =>
-  patchState({
-    regionEditor: { item, ...recipe, returnToWorkbench: state.workbenchOpen },
-  });
+) => {
+  const editor: PlaygroundRegionEditorRequest = { item, ...recipe };
+  if (state.surface.kind === "workbench" || state.surface.kind === "workbench-region") {
+    patchState({
+      surface: { kind: "workbench-region", opener: state.surface.opener, editor },
+    });
+  } else {
+    patchState({
+      surface: {
+        kind: "standalone-region",
+        everOpened: hasPlaygroundEverOpened(state),
+        editor,
+      },
+    });
+    set({ modal: "voiceRegion" });
+  }
+};
 export const openFilmRecordingEditor = (entry: UnifiedPlaygroundEntry, openerId?: string) => {
   const take = entry.filmTake;
   if (!take?.file || !entry.audioUrl) return;
@@ -558,11 +601,19 @@ export const openFilmRecordingEditor = (entry: UnifiedPlaygroundEntry, openerId?
     { openerId, filmSource: { takeId: take.id, audioUrl: entry.audioUrl } },
   );
 };
-export const closeRecordingEditor = () =>
-  patchState({
-    workbenchOpen: state.regionEditor?.returnToWorkbench ?? false,
-    regionEditor: null,
-  });
+export const closeRecordingEditor = () => {
+  if (state.surface.kind === "workbench-region") {
+    patchState({
+      surface: { kind: "workbench", opener: state.surface.opener },
+    });
+    set({ modal: "voicePlayground" });
+  } else if (state.surface.kind === "standalone-region") {
+    patchState({
+      surface: { kind: "closed", everOpened: state.surface.everOpened },
+    });
+    set((s) => (s.modal === "voiceRegion" ? { modal: null } : {}));
+  }
+};
 const regionUrl = (item: VoicePlaygroundItem, action: string) =>
   `/api/voice/playground/items/${encodeURIComponent(item.id)}/${action}?scope=${item.scope ?? "project"}`;
 const filmRegionUrl = (takeId: string, action: string, sourceId?: string) =>
@@ -825,7 +876,7 @@ export const handleVoicePlaygroundEvent = (raw?: string) => {
         notifiedJobs.add(job.id);
         if (notifiedJobs.size > 200) notifiedJobs.delete(notifiedJobs.values().next().value!);
         const visibleComparison =
-          state.workbenchOpen &&
+          isPlaygroundWorkbenchOpen(state) &&
           state.activeSubTab === "compare" &&
           job.batch?.id &&
           job.batch.id === state.recentSpeechBatch;
@@ -1253,7 +1304,8 @@ export const startVoiceTemplate = (voice: Parameters<typeof selectComposerVoice>
   resetComposerDraft("tts");
   selectComposerVoice(voice);
   setComposerDraft({ text: "", title: `${voice.name || voice.id} template` });
-  patchState({ castingTarget: null, activeSubTab: "create", workbenchOpen: true });
+  patchState({ castingTarget: null, activeSubTab: "create" });
+  setPlaygroundWorkbenchOpen(true);
 };
 
 export const chooseCastingVoice = (
@@ -1382,32 +1434,30 @@ export const setPlaygroundInlineOpen = (inlineOpen: boolean) => {
 };
 
 export const setPlaygroundWorkbenchOpen = (workbenchOpen: boolean) => {
-  if (workbenchOpen && !state.workbenchOpen) {
-    restoreSpeechDraft();
-    const active = typeof document === "undefined" ? null : document.activeElement;
-    patchState({
-      workbenchOpener:
-        active && active !== document.body && "focus" in active ? (active as HTMLElement) : null,
-    });
-  }
-  patchState({ workbenchOpen, ...(workbenchOpen ? { everOpened: true } : {}) });
   if (workbenchOpen) {
+    if (!isPlaygroundWorkbenchOpen(state)) {
+      restoreSpeechDraft();
+      const active = typeof document === "undefined" ? null : document.activeElement;
+      const opener =
+        active && active !== document.body && "focus" in active ? (active as HTMLElement) : null;
+      patchState({ surface: { kind: "workbench", opener } });
+    }
     set({ modal: "voicePlayground" });
     if (!isPlaygroundLoaded(state)) void loadPlaygroundAll();
   } else {
-    set((s) => (s.modal === "voicePlayground" ? { modal: null } : {}));
+    patchState({ surface: { kind: "closed", everOpened: hasPlaygroundEverOpened(state) } });
+    set((s) => (s.modal === "voicePlayground" || s.modal === "voiceRegion" ? { modal: null } : {}));
   }
 };
 export const changePlaygroundWorkbenchOpen = (
   open: boolean,
   details: { reason: string; cancel: () => void },
 ) => {
-  if (!open && details.reason === "escape-key" && state.regionEditor?.returnToWorkbench) {
+  if (!open && details.reason === "escape-key" && state.surface.kind === "workbench-region") {
     details.cancel();
     closeRecordingEditor();
     return;
   }
-  if (!open && state.regionEditor) closeRecordingEditor();
   setPlaygroundWorkbenchOpen(open);
 };
 
@@ -1562,7 +1612,7 @@ export const launchReviewedSpeech = async ({ scope, input, runId, comparison }: 
     );
     acceptSubmittedJobs(result.jobs);
     if (comparison) patchState({ recentSpeechBatch: result.batchId, activeSubTab: "compare" });
-    if (!state.workbenchOpen || !comparison) {
+    if (!isPlaygroundWorkbenchOpen(state) || !comparison) {
       say(
         result.jobs.length === 1
           ? "Generating voice…"
@@ -1890,7 +1940,7 @@ export const runPlaygroundStt = async (opts: {
       acceptSubmittedJobs([data.job]);
       release();
       const status = state.jobs.find((job) => job.id === data.job?.id)?.status ?? data.job.status;
-      if (!state.workbenchOpen && status !== "completed" && status !== "failed") {
+      if (!isPlaygroundWorkbenchOpen(state) && status !== "completed" && status !== "failed") {
         say("Transcription started. Follow its progress in Jobs while you keep working.");
       }
       return null;
@@ -2042,7 +2092,7 @@ export const deletePlaygroundItem = async (id: string) => {
         if (await patchPlaygroundItem(id, { archived: false })) say("Recording restored");
       },
       10000,
-      state.workbenchOpen ? voicePlaygroundToast : undefined,
+      isPlaygroundWorkbenchOpen(state) ? voicePlaygroundToast : undefined,
     );
     return archived;
   } catch (e) {
@@ -2825,7 +2875,7 @@ export const deletePlaygroundTemplate = async (template: PlaygroundTemplate) => 
         if (await updatePlaygroundTemplate(archived, { archived: false })) say("Template restored");
       },
       10000,
-      state.workbenchOpen ? voicePlaygroundToast : undefined,
+      isPlaygroundWorkbenchOpen(state) ? voicePlaygroundToast : undefined,
     );
   }
   return archived;

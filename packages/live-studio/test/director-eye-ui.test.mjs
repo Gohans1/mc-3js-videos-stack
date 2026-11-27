@@ -298,7 +298,7 @@ beforeEach(async () => {
       ratio: "16:9",
       free: false,
       ink: null,
-      compose: null,
+      composeState: { status: "closed" },
       camRev: 0,
       shotsRev: 0,
       valueCheck: "off",
@@ -693,7 +693,12 @@ test("Director's Eye hotkeys never hijack text inputs, Review mode supports all 
     window.__EYE_TEST__.set({
       review: true,
       ink: "pen",
-      compose: { t: 1, x: 0.5, y: 0.5 },
+      composeState: {
+        status: "create-editing",
+        compose: { kind: "create", t: 1, shot: 0, shotName: "Intro", pin: { x: 0.5, y: 0.5 }, resume: false },
+        draft: "",
+        refs: [],
+      },
     });
   })()`);
   await page.evaluate(`(() => {
@@ -723,5 +728,5 @@ test("Director's Eye hotkeys never hijack text inputs, Review mode supports all 
   const afterEsc = await page.evaluate(`window.__EYE_TEST__.get()`);
   expect(afterEsc.review).toBe(true);
   expect(afterEsc.ink).toBe("pen");
-  expect(afterEsc.compose).not.toBeNull();
+  expect(afterEsc.composeState.status).not.toBe("closed");
 });

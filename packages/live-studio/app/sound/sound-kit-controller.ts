@@ -306,10 +306,30 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
 
   type KitLoadState =
     | { status: "idle"; seq: number }
-    | { status: "loading"; seq: number; promise: Promise<void> }
+    | { status: "loading"; seq: number; loaded: boolean; promise: Promise<void> }
     | { status: "ready"; seq: number }
-    | { status: "error"; seq: number };
+    | { status: "error"; seq: number; loaded: boolean; error: string };
   let kitLoad: KitLoadState = { status: "idle", seq: 0 };
+  const kitLoadLoaded = (s: KitLoadState): boolean =>
+    s.status === "ready" || ((s.status === "loading" || s.status === "error") && s.loaded);
+  const projectKitLoad = (
+    s: KitLoadState,
+  ): Pick<SoundKitSnapshot, "loaded" | "loading" | "error"> => {
+    switch (s.status) {
+      case "idle":
+        return { loaded: false, loading: false, error: null };
+      case "loading":
+        return { loaded: s.loaded, loading: !s.loaded, error: null };
+      case "ready":
+        return { loaded: true, loading: false, error: null };
+      case "error":
+        return { loaded: s.loaded, loading: false, error: s.error };
+    }
+  };
+  const setKitLoad = (next: KitLoadState, extra: Partial<SoundKitSnapshot> = {}) => {
+    kitLoad = next;
+    patch({ ...projectKitLoad(next), ...extra });
+  };
   let mutationChain: Promise<unknown> = Promise.resolve();
   let lastStateJson = JSON.stringify(EMPTY_STATE);
 
@@ -320,38 +340,35 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
 
   const applyServerState = (next: SoundKitState) => {
-    kitLoad = { status: "ready", seq: kitLoad.seq + 1 };
     const nextJson = JSON.stringify(next);
     const changed = nextJson !== lastStateJson;
     lastStateJson = nextJson;
-    patch({
-      state: next,
-      stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
-      loaded: true,
-      loading: false,
-      error: null,
-      warning: null,
-    });
+    setKitLoad(
+      { status: "ready", seq: kitLoad.seq + 1 },
+      {
+        state: next,
+        stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
+        warning: null,
+      },
+    );
   };
 
   const reloadSoundKit = (): Promise<void> => {
     const seq = kitLoad.seq + 1;
+    const loaded = kitLoadLoaded(kitLoad);
     let resolve!: () => void;
     const promise = new Promise<void>((r) => {
       resolve = r;
     });
-    kitLoad = { status: "loading", seq, promise };
-    patch({ loading: !snap.loaded, error: null });
+    setKitLoad({ status: "loading", seq, loaded, promise });
     void (async () => {
       try {
         const r = await deps.fetch("/api/sound-kit", { cache: "no-store" });
         if (kitLoad.seq !== seq) return;
         if (!r.ok) {
-          kitLoad = { status: "error", seq };
-          patch({
-            loading: false,
-            error: await readErrorText(r, `Could not load Core Sound Kit (${r.status})`),
-          });
+          const error = await readErrorText(r, `Could not load Core Sound Kit (${r.status})`);
+          if (kitLoad.seq !== seq) return;
+          setKitLoad({ status: "error", seq, loaded, error });
           return;
         }
         const body = (await r.json()) as {
@@ -365,21 +382,24 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
         const nextJson = JSON.stringify(nextState);
         const changed = nextJson !== lastStateJson;
         lastStateJson = nextJson;
-        kitLoad = { status: "ready", seq };
-        patch({
-          loaded: true,
-          loading: false,
-          error: null,
-          warning: body.warning ?? null,
-          state: nextState,
-          stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
-          categories: body.categories?.length ? body.categories : KIT_CATEGORIES,
-          reasons: body.reasons?.length ? body.reasons : TASTE_REASONS,
-        });
+        setKitLoad(
+          { status: "ready", seq },
+          {
+            warning: body.warning ?? null,
+            state: nextState,
+            stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
+            categories: body.categories?.length ? body.categories : KIT_CATEGORIES,
+            reasons: body.reasons?.length ? body.reasons : TASTE_REASONS,
+          },
+        );
       } catch {
         if (kitLoad.seq !== seq) return;
-        kitLoad = { status: "error", seq };
-        patch({ loading: false, error: "Could not connect to Live Studio for Core Sound Kit" });
+        setKitLoad({
+          status: "error",
+          seq,
+          loaded,
+          error: "Could not connect to Live Studio for Core Sound Kit",
+        });
       } finally {
         resolve();
       }
@@ -388,7 +408,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
 
   const ensureLoaded = (): Promise<void> => {
-    if (snap.loaded) return Promise.resolve();
+    if (kitLoadLoaded(kitLoad)) return Promise.resolve();
     if (kitLoad.status === "loading") return kitLoad.promise;
     return reloadSoundKit();
   };
@@ -804,29 +824,63 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   let videoPreviewSeq = 0;
   let mountedWorkbenches = 0;
 
+  const projectVideoSession = (
+    s: VideoPreviewSession,
+  ): Pick<SoundKitSnapshot, "videoPreview" | "videoPreviewPendingId"> => {
+    switch (s.kind) {
+      case "idle":
+        return { videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null };
+      case "loading":
+        return { videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: s.soundId };
+      case "active":
+        return {
+          videoPreviewPendingId: s.pendingSoundId,
+          videoPreview:
+            s.target.mode === "clip"
+              ? {
+                  active: true,
+                  soundId: s.soundId,
+                  mode: "clip",
+                  targetLabel: s.target.label,
+                  targetClip: { ...s.target.clip },
+                  originalClipName: s.target.originalClipName,
+                }
+              : {
+                  active: true,
+                  soundId: s.soundId,
+                  mode: "playhead",
+                  targetLabel: s.target.label,
+                  targetClip: null,
+                  originalClipName: null,
+                },
+        };
+    }
+  };
+
+  const setVideoSession = (next: VideoPreviewSession) => {
+    videoSession = next;
+    patch(projectVideoSession(next));
+  };
+
   const sessionTargetClip = (s: VideoPreviewSession): ClipRef | null =>
     s.kind !== "idle" && s.target.mode === "clip" ? s.target.clip : null;
 
   const handleDocMutated = (docName?: string) => {
     if (docName && docName !== "sound") return;
-    if (videoSession.kind !== "idle" || snap.videoPreviewPendingId !== null) {
+    if (videoSession.kind !== "idle") {
       videoPreviewSeq += 1;
-      videoSession = { kind: "idle" };
-      if (snap.videoPreview.active || snap.videoPreviewPendingId !== null) {
-        patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
-      }
+      setVideoSession({ kind: "idle" });
     }
   };
 
   const stopVideoPreview = (pauseVideo = false) => {
     videoPreviewSeq += 1;
     const prev = videoSession;
-    videoSession = { kind: "idle" };
+    if (prev.kind !== "idle") {
+      setVideoSession({ kind: "idle" });
+    }
     if (prev.kind === "active") {
       deps.restore(prev.baseSnap);
-    }
-    if (snap.videoPreview.active || snap.videoPreviewPendingId !== null) {
-      patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
     }
     if (pauseVideo && deps.getPlaying()) deps.setPlaying(false);
   };
@@ -1042,41 +1096,35 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     const targetChanged = videoSession.kind !== "idle" && !sameClip(prevClip, nextClip);
 
     if (targetChanged) {
-      if (videoSession.kind === "active") deps.restore(videoSession.baseSnap);
-      videoSession = { kind: "idle" };
-      if (snap.videoPreview.active) patch({ videoPreview: INACTIVE_PREVIEW });
+      const prev = videoSession;
+      setVideoSession({ kind: "idle" });
+      if (prev.kind === "active") deps.restore(prev.baseSnap);
     }
 
     if (videoSession.kind === "idle") {
-      videoSession = {
+      setVideoSession({
         kind: "loading",
         seq,
         soundId: name,
         baseSnap: deps.snapshot(),
         target: captureVideoTarget(explicitClip),
-      };
+      });
     } else if (videoSession.kind === "loading") {
-      videoSession = { ...videoSession, seq, soundId: name };
+      setVideoSession({ ...videoSession, seq, soundId: name });
     } else {
-      videoSession = { ...videoSession, seq, pendingSoundId: name };
+      setVideoSession({ ...videoSession, seq, pendingSoundId: name });
     }
 
-    patch({ videoPreviewPendingId: name });
     const buf = await deps.decoded(name);
     const currentSession = getVideoSession();
     if (currentSession.kind === "idle" || currentSession.seq !== seq) {
-      if (snap.videoPreviewPendingId === name && seq === videoPreviewSeq) {
-        patch({ videoPreviewPendingId: null });
-      }
       return false;
     }
     if (!buf) {
       if (currentSession.kind === "loading") {
-        videoSession = { kind: "idle" };
-        patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
+        setVideoSession({ kind: "idle" });
       } else {
-        videoSession = { ...currentSession, pendingSoundId: null };
-        patch({ videoPreviewPendingId: null });
+        setVideoSession({ ...currentSession, pendingSoundId: null });
       }
       deps.say(`Could not load audio for ${name}`, 3000);
       return false;
@@ -1166,34 +1214,13 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       }
     });
 
-    videoSession = {
+    setVideoSession({
       kind: "active",
       seq,
       soundId: name,
       baseSnap,
       target,
       pendingSoundId: null,
-    };
-    patch({
-      videoPreviewPendingId: null,
-      videoPreview:
-        target.mode === "clip"
-          ? {
-              active: true,
-              soundId: name,
-              mode: "clip",
-              targetLabel: target.label,
-              targetClip: { ...target.clip },
-              originalClipName: target.originalClipName,
-            }
-          : {
-              active: true,
-              soundId: name,
-              mode: "playhead",
-              targetLabel: target.label,
-              targetClip: null,
-              originalClipName: null,
-            },
     });
     deps.seek(playFrom);
     deps.setPlaying(true);

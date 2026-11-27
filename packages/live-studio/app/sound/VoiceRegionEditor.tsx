@@ -71,12 +71,13 @@ import {
   inspectRecordingRegion,
   loadMoreSharedVoices,
   loadRecordingVersions,
+  type PlaygroundRegionEditorRequest,
+  playgroundStandaloneRegionOf,
   previewRecordingRegion,
   resumeRecordingVersion,
   saveRecordingVersion,
   searchLiveSharedVoices,
   useVoicePlaygroundSelector,
-  type VoicePlaygroundClientState,
 } from "./voice-playground-client";
 import { quoteGeneration } from "./voice-playground-pricing";
 import { buildUnifiedEntries } from "./voice-playground-view";
@@ -99,7 +100,7 @@ import {
 import { VoicePaidActionConfirmation, voiceBillingNotice } from "./VoiceSpeechConfirmation";
 import { VoicePlaybackIcon } from "./VoicePlaybackIcon";
 
-type EditorTarget = Omit<NonNullable<VoicePlaygroundClientState["regionEditor"]>, "returnToWorkbench">;
+type EditorTarget = PlaygroundRegionEditorRequest;
 
 type Operation =
   | { status: "idle"; error: string }
@@ -1272,8 +1273,8 @@ export function VoiceRegionEditorSurface({
 }
 
 export function VoiceRegionEditor() {
-  const request = useVoicePlaygroundSelector((state) => state.regionEditor, false);
-  const standalone = Boolean(request && !request.returnToWorkbench);
+  const request = useVoicePlaygroundSelector(playgroundStandaloneRegionOf, false);
+  const standalone = Boolean(request);
   const opener = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     if (standalone) {
@@ -1299,7 +1300,7 @@ export function VoiceRegionEditor() {
           <DialogTitle>Edit a recording</DialogTitle>
           <DialogDescription>Adjust a section and save a new version.</DialogDescription>
         </DialogHeader>
-        {standalone && request && (
+        {request && (
           <VoiceRegionEditorSurface
             key={`${request.item.id}:${request.revisionOf ?? ""}`}
             request={request}

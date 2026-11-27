@@ -33,9 +33,13 @@ import {
   cancelCasting,
   changePlaygroundWorkbenchOpen,
   closeRecordingEditor,
+  hasPlaygroundEverOpened,
+  isPlaygroundWorkbenchOpen,
   loadPlaygroundUsage,
   openSpeechComparison,
   type PlaygroundSubTab,
+  playgroundWorkbenchOpenerOf,
+  playgroundWorkbenchRegionOf,
   resetComposerDraft,
   searchLiveSharedVoices,
   setPlaygroundFilters,
@@ -262,13 +266,19 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
     !selectedEntry.playgroundItem?.archivedAt
       ? selectedEntry
       : (modeResults[0] ?? null);
+  const workbenchRegion = playgroundWorkbenchRegionOf(pg);
+  const workbenchOpener = playgroundWorkbenchOpenerOf(pg);
+  const openerRef = useRef<HTMLElement | null>(isOpen ? workbenchOpener : null);
+  useLayoutEffect(() => {
+    if (isOpen) openerRef.current = workbenchOpener;
+  }, [isOpen, workbenchOpener]);
   const previousPage = useRef(page);
   useLayoutEffect(() => {
     const changedPage = previousPage.current !== page;
     previousPage.current = page;
     if (!isOpen) return;
-    if (pg.regionEditor?.returnToWorkbench) {
-      regionReturn.current = { openerId: pg.regionEditor.openerId };
+    if (workbenchRegion) {
+      regionReturn.current = { openerId: workbenchRegion.openerId };
       return;
     }
     if (regionReturn.current) {
@@ -279,7 +289,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
     } else if (changedPage) {
       pageHeading.current?.focus({ preventScroll: true });
     }
-  }, [pg.regionEditor, page, isOpen]);
+  }, [workbenchRegion, page, isOpen]);
   useLayoutEffect(() => {
     if (!isOpen) return;
     stopAudition();
@@ -324,7 +334,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
   const navigate = (next: PlaygroundPage, viaKeyboard = false) => {
     setCompactResultsPage(null);
     setCompactBatchSetup(null);
-    if (viaKeyboard && next === page && !pg.regionEditor) {
+    if (viaKeyboard && next === page && !workbenchRegion) {
       pageHeading.current?.focus({ preventScroll: true });
     }
     if (pg.castingTarget) cancelCasting();
@@ -332,7 +342,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
       setVoicesFavoritesOnly(false);
       setComparisonDirectory(false);
     }
-    if (pg.regionEditor) closeRecordingEditor();
+    if (workbenchRegion) closeRecordingEditor();
     if (["tts", "dialogue", "voice_changer", "stt", "dubbing"].includes(next)) {
       switchPlaygroundTool(next as typeof pg.draft.mode);
     } else if (["recordings", "templates", "favorites", "archive"].includes(next)) {
@@ -357,7 +367,6 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
     }
   };
   const close = () => {
-    if (pg.regionEditor) closeRecordingEditor();
     setPlaygroundWorkbenchOpen(false);
   };
   return (
@@ -365,7 +374,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
       ref={attachDialog}
       variant="workbench"
       data-voice-playground
-      finalFocus={() => (pg.workbenchOpener?.isConnected ? pg.workbenchOpener : true)}
+      finalFocus={() => (openerRef.current?.isConnected ? openerRef.current : true)}
       showCloseButton={false}
       initialFocus={() =>
         dialogRef.current?.querySelector<HTMLElement>('[aria-current="page"]') ?? dialogRef.current
@@ -441,7 +450,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
                 </Button>
               </div>
             </header>
-            {!pg.regionEditor && isCreate && (
+            {!workbenchRegion && isCreate && (
               <div className="border-hairline flex flex-none items-center border-b px-5 py-2 @[64rem]/voice-workbench:hidden">
                 <ToggleGroup
                   aria-label="Editor and results"
@@ -455,7 +464,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
                 </ToggleGroup>
               </div>
             )}
-            {!pg.regionEditor && isLibrary && (
+            {!workbenchRegion && isLibrary && (
               <div className="border-hairline bg-surface-subtle/20 flex flex-none flex-wrap items-center justify-between gap-2 border-b px-5 py-2.5">
                 <div className="flex items-center gap-2">
                   {isLibrary && (
@@ -517,7 +526,7 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
                 </div>
               </div>
             )}
-            {!pg.regionEditor && isLibrary && (
+            {!workbenchRegion && isLibrary && (
               <div className="border-hairline flex flex-none border-b px-5 py-2 @[64rem]/voice-workbench:hidden">
                 <ToggleGroup
                   variant="pick"
@@ -534,10 +543,10 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
                 </ToggleGroup>
               </div>
             )}
-            {pg.regionEditor?.returnToWorkbench ? (
+            {workbenchRegion ? (
               <VoiceRegionEditorSurface
-                key={`${pg.regionEditor.item.id}:${pg.regionEditor.revisionOf ?? ""}`}
-                request={pg.regionEditor}
+                key={`${workbenchRegion.item.id}:${workbenchRegion.revisionOf ?? ""}`}
+                request={workbenchRegion}
               />
             ) : isCreate || isLibrary ? (
               <div className="grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden @[64rem]/voice-workbench:grid-cols-[minmax(0,1fr)_24rem]">
@@ -807,8 +816,8 @@ function VoicePlaygroundWorkbenchContent({ isOpen }: { isOpen: boolean }) {
 }
 
 export function VoicePlaygroundWorkbenchDialog() {
-  const isOpen = useVoicePlaygroundSelector((s) => s.workbenchOpen, false);
-  const hasOpened = useVoicePlaygroundSelector((s) => s.everOpened, false);
+  const isOpen = useVoicePlaygroundSelector(isPlaygroundWorkbenchOpen, false);
+  const hasOpened = useVoicePlaygroundSelector(hasPlaygroundEverOpened, false);
   useDialogModal("voicePlayground", isOpen);
 
   return (

@@ -430,13 +430,16 @@ describe("Voice Library UI components & openVoiceNote integration", () => {
     ui.focusNote = () => {};
 
     set({
-      compose: { kind: "edit", id: "n1", base: "existing" },
-      draft: "Keep my edit safe",
+      composeState: {
+        status: "edit-editing",
+        compose: { kind: "edit", id: "n1", base: "existing" },
+        draft: "Keep my edit safe",
+      },
       status: "",
     });
     notesMod.openVoiceNote("Clara", "v_clara");
-    expect(get().compose?.kind).toBe("edit");
-    expect(get().draft).toBe("Keep my edit safe");
+    expect(get().composeState.status).toBe("edit-editing");
+    expect(get().composeState.draft).toBe("Keep my edit safe");
     expect(get().status).toContain("Save or cancel the note edit");
     say("", 0);
 

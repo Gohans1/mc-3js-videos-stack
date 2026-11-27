@@ -11,7 +11,14 @@ import { useStudio } from "../core/store";
 import { clearInk, INK_KEYS, setInk, undoInk } from "./ink";
 import { modKeyLabel } from "./note-card-meta";
 import { cancelNote, saveNote } from "./notes";
-import { type InkKind, isComposeDirty } from "./slice";
+import {
+  type InkKind,
+  isComposeDirty,
+  noteComposeOf,
+  noteDraftOf,
+  noteRefsOf,
+  noteSavingOf,
+} from "./slice";
 
 export const TOOLS: [InkKind, string, ReactNode, string][] = [
   ["pen", "Pen", <Pencil key="icon" aria-hidden data-icon="inline-start" />, "Draw freely"],
@@ -50,11 +57,11 @@ export const ToolKey = ({ id, subtle = false }: { id: InkKind; subtle?: boolean 
   );
 
 export function StageNoteActions({ className }: { className?: string }) {
-  const compose = useStudio((s) => s.compose),
-    draft = useStudio((s) => s.draft),
+  const compose = useStudio(noteComposeOf),
+    draft = useStudio(noteDraftOf),
     drawn = useStudio((s) => !!s.inkSaid),
-    hasRefs = useStudio((s) => s.refs.length > 0),
-    saving = useStudio((s) => s.noteSaving);
+    hasRefs = useStudio((s) => noteRefsOf(s).length > 0),
+    saving = useStudio(noteSavingOf);
   if (!compose) return null;
   const isEdit = compose.kind === "edit";
   const dirty = isComposeDirty(compose, draft, drawn || hasRefs);
@@ -86,7 +93,7 @@ export function StageNoteActions({ className }: { className?: string }) {
 export function InkBar() {
   const ink = useStudio((s) => s.ink),
     drawn = useStudio((s) => !!s.inkSaid),
-    composeOpen = useStudio((s) => s.compose !== null);
+    composeOpen = useStudio((s) => s.composeState.status !== "closed");
   if (!ink) return null;
   return (
     <div

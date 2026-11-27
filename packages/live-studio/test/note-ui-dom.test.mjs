@@ -122,13 +122,18 @@ if (!S.el) {
   };
 }
 
+const EMPTY_DOM_REFS = [];
 function Harness() {
   const [mode, setMode] = useState("notes");
   const [segmentedValue, setSegmentedValue] = useState("alpha");
   const choices = [{id:"alpha",title:"Alpha"},{id:"beta",title:"Beta"},{id:"gamma",title:"Gamma"}];
   const undoRef = useRef(null);
   const review = useStudio((s) => s.review);
-  const refs = useStudio((s) => s.refs);
+  const refs = useStudio((s) =>
+    s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+      ? s.composeState.refs
+      : EMPTY_DOM_REFS,
+  );
   const refItem = refs[0] ?? { id: "ref-1", src: PIXEL, url: PIXEL, strokes: [] };
 
   window.__DOM_TEST__ = {
@@ -146,7 +151,12 @@ function Harness() {
     setTiming,
     setMode,
     setSegmentedValue,
-    getRef: () => get().refs[0] ?? refItem,
+    getRef: () => {
+      const cs = get().composeState;
+      const curRefs =
+        cs.status === "create-editing" || cs.status === "create-saving" ? cs.refs : [];
+      return curRefs[0] ?? refItem;
+    },
     undoSketch: () => undoRef.current?.(),
   };
 
@@ -237,10 +247,8 @@ describe("notes UI mounted Chrome DOM interactions", () => {
         reviewPick: null,
         reviewTarget: null,
         noteReturn: null,
-        compose: null,
-        draft: "",
+        composeState: { status: "closed" },
         replyDrafts: new Map(),
-        refs: [],
         noteView: "cards",
         noteStatus: "all",
         noteScope: "all",
@@ -579,11 +587,11 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     await webview.evaluate(
       `document.querySelector('button[aria-label="Edit note #1 at 00:04.000"]').click()`,
     );
-    await waitUntil(`window.__DOM_TEST__.get().compose?.id === "n-check"`, "Compose edit check");
+    await waitUntil(`window.__DOM_TEST__.get().composeState.compose?.id === "n-check"`, "Compose edit check");
     await waitUntil(`document.querySelector('textarea')`, "Compose textarea");
     await webview.evaluate(`document.querySelector('textarea').focus()`);
     await webview.press("Escape");
-    await waitUntil(`window.__DOM_TEST__.get().compose === null`, "Compose Escape close");
+    await waitUntil(`window.__DOM_TEST__.get().composeState.status === "closed"`, "Compose Escape close");
 
     await webview.evaluate(
       `[...document.querySelectorAll('button[aria-expanded]')].find((b) => b.textContent?.includes('Done'))?.click()`,
@@ -595,10 +603,10 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     await webview.evaluate(
       `document.querySelector('button[aria-label="Edit note #4 at 00:07.000"]').click()`,
     );
-    await waitUntil(`window.__DOM_TEST__.get().compose?.id === "n-done"`, "Compose edit done");
+    await waitUntil(`window.__DOM_TEST__.get().composeState.compose?.id === "n-done"`, "Compose edit done");
     await webview.evaluate(`document.querySelector('textarea')?.focus()`);
     await webview.press("Escape");
-    await waitUntil(`window.__DOM_TEST__.get().compose === null`, "Compose Done Escape close");
+    await waitUntil(`window.__DOM_TEST__.get().composeState.status === "closed"`, "Compose Done Escape close");
   }, 20000);
 
   test("Board keyboard Move transitions state and Calendar formats human day aria-labels", async () => {
@@ -719,7 +727,19 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       g.fillRect(0, 0, 200, 120);
       const wideSrc = c.toDataURL('image/png');
       window.__DOM_TEST__.set({
-        refs: [{ id: "ref-1", src: wideSrc, url: wideSrc, strokes: [] }],
+        composeState: {
+          status: "create-editing",
+          compose: {
+            kind: "create",
+            t: 0,
+            shot: 0,
+            shotName: "Intro",
+            pin: null,
+            resume: false,
+          },
+          draft: "",
+          refs: [{ id: "ref-1", src: wideSrc, url: wideSrc, strokes: [] }],
+        },
       });
       window.__DOM_TEST__.setMode("ref");
     })()`);
@@ -943,7 +963,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
 
       await webview.press("Escape");
       await waitUntil(
-        `window.__DOM_TEST__.get().compose === null && document.querySelector('[aria-label="Notes"] > div[inert]') === null`,
+        `window.__DOM_TEST__.get().composeState.status === "closed" && document.querySelector('[aria-label="Notes"] > div[inert]') === null`,
         "Cramped Compose Escape clears inert",
       );
       await waitUntil(
@@ -1007,7 +1027,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       );
       await webview.press("Escape");
       await waitUntil(
-        `window.__DOM_TEST__.get().compose === null`,
+        `window.__DOM_TEST__.get().composeState.status === "closed"`,
         "Escape closes upright Compose",
       );
 
@@ -1693,7 +1713,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       "Needs work feedback visible inside Compose edit",
     );
     await webview.press("Escape");
-    await waitUntil(`window.__DOM_TEST__.get().compose === null`, "Escape closes Compose edit");
+    await waitUntil(`window.__DOM_TEST__.get().composeState.status === "closed"`, "Escape closes Compose edit");
   }, 15000);
 
   test("DialogContent font='md' propagates Inter font to RefSketch dialog title and restores focus", async () => {
@@ -1706,16 +1726,20 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       g.fillRect(0, 0, 40, 40);
       const src = c.toDataURL('image/png');
       window.__DOM_TEST__.set({
-        compose: {
-          kind: "create",
-          t: 3,
-          shot: 1,
-          shotName: "Main",
-          pin: null,
-          resume: false,
-          wasPlaying: false,
+        composeState: {
+          status: "create-editing",
+          compose: {
+            kind: "create",
+            t: 3,
+            shot: 1,
+            shotName: "Main",
+            pin: null,
+            resume: false,
+            wasPlaying: false,
+          },
+          draft: "",
+          refs: [{ id: "ref-title", src, url: src, strokes: [] }],
         },
-        refs: [{ id: "ref-title", src, url: src, strokes: [] }],
       });
     })()`);
     await waitUntil(
@@ -1742,7 +1766,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     );
     await webview.press("Escape");
     await waitUntil(
-      `window.__DOM_TEST__.get().compose === null`,
+      `window.__DOM_TEST__.get().composeState.status === "closed"`,
       "Escape closes Compose after dialog",
     );
   }, 15000);
@@ -1776,7 +1800,7 @@ describe("notes UI mounted Chrome DOM interactions", () => {
       assert.equal(parsedNarrow.openBtnOpacity, 1, "NoteOpenButton visible without hover");
 
       await webview.resize(1280, 800);
-      await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "list", compose: null })`);
+      await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "list", composeState: { status: "closed" } })`);
       await waitUntil(
         `document.querySelector('[aria-label="Notes list"] [data-note] p > span')`,
         "Desktop List row rendered",
@@ -2577,8 +2601,12 @@ describe("notes UI mounted Chrome DOM interactions", () => {
 
   test("Stage-anchored compose hides sidebar dock while Approve and Delete play inert non-duplicate exit transitions", async () => {
     await webview.evaluate(`window.__DOM_TEST__.set({
-      compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: { x: 0.4, y: 0.5, what: "wall" }, anchor: { x: 0.4, y: 0.5 }, resume: false },
-      draft: "",
+      composeState: {
+        status: "create-editing",
+        compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: { x: 0.4, y: 0.5, what: "wall" }, anchor: { x: 0.4, y: 0.5 }, resume: false },
+        draft: "",
+        refs: [],
+      },
     })`);
     await Bun.sleep(40);
     assert.equal(
@@ -2590,14 +2618,18 @@ describe("notes UI mounted Chrome DOM interactions", () => {
     );
 
     await webview.evaluate(`window.__DOM_TEST__.set({
-      compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: null, resume: false },
-      draft: "",
+      composeState: {
+        status: "create-editing",
+        compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: null, resume: false },
+        draft: "",
+        refs: [],
+      },
     })`);
     await waitUntil(
       `document.querySelector('[aria-label="Notes"] textarea[name="note"]')`,
       "Unpinned compose renders in sidebar dock",
     );
-    await webview.evaluate(`window.__DOM_TEST__.set({ compose: null, draft: "" })`);
+    await webview.evaluate(`window.__DOM_TEST__.set({ composeState: { status: "closed" } })`);
 
     await webview.evaluate(`window.__DOM_TEST__.set({ noteView: "cards", noteStatus: "check" })`);
     await waitUntil(

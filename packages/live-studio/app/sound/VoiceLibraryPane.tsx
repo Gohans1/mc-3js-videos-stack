@@ -376,21 +376,32 @@ export function VoiceLibraryPane({
   const [cols, setCols] = useState(1);
   const colsRef = useRef(1);
   const voicesRef = useRef(voices);
-  const refineRafRef = useRef<number | null>(null);
-  const ignoreScrollUntilRef = useRef(0);
-  const pendingAnchorRef = useRef<
-    | (VoiceScrollAnchor & {
-        focusVoiceId: string | null;
-        focusBtnIndex: number;
-      })
-    | null
-  >(null);
-  const lastAnchoredRef = useRef<
-    | (VoiceScrollAnchor & {
+  type PendingVoiceAnchor = VoiceScrollAnchor & {
+    focusVoiceId: string | null;
+    focusBtnIndex: number;
+  };
+  type AnchorSyncState =
+    | { kind: "idle" }
+    | { kind: "pending-layout"; anchor: PendingVoiceAnchor }
+    | {
+        kind: "refining";
+        anchor: VoiceScrollAnchor;
         voices: readonly SharedVoiceEntry[];
-      })
-    | null
-  >(null);
+        rafId: number;
+        ignoreScrollUntil: number;
+      }
+    | {
+        kind: "anchored";
+        anchor: VoiceScrollAnchor;
+        voices: readonly SharedVoiceEntry[];
+        ignoreScrollUntil: number;
+      };
+  const anchorSyncRef = useRef<AnchorSyncState>({ kind: "idle" });
+  const resetAnchorSync = () => {
+    const cur = anchorSyncRef.current;
+    if (cur.kind === "refining") cancelAnimationFrame(cur.rafId);
+    anchorSyncRef.current = { kind: "idle" };
+  };
   const hasVoices = voices.length > 0;
   const activeVoiceId = now.startsWith("gv:") ? now.slice(3) : "";
   const targetVoiceId = targetNow.startsWith("gv:") ? targetNow.slice(3) : "";
@@ -401,23 +412,22 @@ export function VoiceLibraryPane({
 
   useLayoutEffect(() => {
     voicesRef.current = voices;
-    lastAnchoredRef.current = null;
+    resetAnchorSync();
   }, [voices]);
 
-  useEffect(
-    () => () => {
-      if (refineRafRef.current !== null) cancelAnimationFrame(refineRafRef.current);
-    },
-    [],
-  );
+  useEffect(() => () => resetAnchorSync(), []);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
     if (!el || !hasVoices || typeof ResizeObserver === "undefined") return;
     const scrollEl = (el.firstElementChild as HTMLElement | null) ?? el;
     const onUserScroll = () => {
-      if (performance.now() > ignoreScrollUntilRef.current) {
-        lastAnchoredRef.current = null;
+      const cur = anchorSyncRef.current;
+      if (
+        (cur.kind === "refining" || cur.kind === "anchored") &&
+        performance.now() > cur.ignoreScrollUntil
+      ) {
+        resetAnchorSync();
       }
     };
     const syncCols = () => {
@@ -431,23 +441,26 @@ export function VoiceLibraryPane({
       const prev = colsRef.current;
       if (next === prev) return;
 
+      const curSync = anchorSyncRef.current;
+      const prevPending = curSync.kind === "pending-layout" ? curSync.anchor : null;
       const active = document.activeElement as HTMLElement | null;
       const activeCard =
         active && scrollEl.contains(active) ? active.closest<HTMLElement>("[data-voice-id]") : null;
-      const focusVoiceId =
-        activeCard?.dataset.voiceId ?? pendingAnchorRef.current?.focusVoiceId ?? null;
+      const focusVoiceId = activeCard?.dataset.voiceId ?? prevPending?.focusVoiceId ?? null;
       const focusBtnIndex =
         activeCard && active
           ? [...activeCard.querySelectorAll<HTMLElement>("button, [role='slider']")].indexOf(active)
-          : (pendingAnchorRef.current?.focusBtnIndex ?? -1);
+          : (prevPending?.focusBtnIndex ?? -1);
 
-      let anchor: typeof pendingAnchorRef.current = null;
-      const last = lastAnchoredRef.current;
-      if (last && last.voices === voicesRef.current) {
+      let anchor: PendingVoiceAnchor | null = null;
+      if (
+        (curSync.kind === "refining" || curSync.kind === "anchored") &&
+        curSync.voices === voicesRef.current
+      ) {
         anchor = {
-          voiceIndex: last.voiceIndex,
-          offsetWithinRow: last.offsetWithinRow,
-          topRatio: last.topRatio,
+          voiceIndex: curSync.anchor.voiceIndex,
+          offsetWithinRow: curSync.anchor.offsetWithinRow,
+          topRatio: curSync.anchor.topRatio,
           focusVoiceId,
           focusBtnIndex,
         };
@@ -474,7 +487,8 @@ export function VoiceLibraryPane({
         };
       }
 
-      pendingAnchorRef.current = anchor;
+      if (curSync.kind === "refining") cancelAnimationFrame(curSync.rafId);
+      anchorSyncRef.current = anchor ? { kind: "pending-layout", anchor } : { kind: "idle" };
       colsRef.current = next;
       setCols(next);
     };
@@ -497,9 +511,10 @@ export function VoiceLibraryPane({
   }, [rows, targetVoiceId, focusedId]);
 
   useLayoutEffect(() => {
-    const anchor = pendingAnchorRef.current;
-    if (!anchor || !rows.length) return;
-    pendingAnchorRef.current = null;
+    const curSync = anchorSyncRef.current;
+    if (curSync.kind !== "pending-layout" || !rows.length) return;
+    const anchor = curSync.anchor;
+    anchorSyncRef.current = { kind: "idle" };
     const el = hostRef.current;
     const scrollEl = (el?.firstElementChild as HTMLElement | null) ?? el;
     if (!scrollEl) return;
@@ -518,42 +533,69 @@ export function VoiceLibraryPane({
 
     const targetRow = Math.min(rows.length - 1, Math.floor(anchor.voiceIndex / cols));
     const step = VOICE_ESTIMATED_CARD_PX + VOICE_GRID_GAP_PX;
+    const baseAnchor: VoiceScrollAnchor = {
+      voiceIndex: anchor.voiceIndex,
+      offsetWithinRow: anchor.offsetWithinRow,
+      topRatio: anchor.topRatio,
+    };
+    const currentVoices = voicesRef.current;
+    let ignoreScrollUntil = 0;
     if (anchor.voiceIndex > 0) {
       const nextTop = Math.max(0, targetRow * step - anchor.offsetWithinRow);
-      ignoreScrollUntilRef.current = performance.now() + 80;
+      ignoreScrollUntil = performance.now() + 80;
       scrollEl.scrollTo({ top: nextTop, behavior: "instant" });
-      lastAnchoredRef.current = {
-        voiceIndex: anchor.voiceIndex,
-        offsetWithinRow: anchor.offsetWithinRow,
-        topRatio: anchor.topRatio,
-        voices: voicesRef.current,
-      };
     }
 
     restoreFocus();
 
-    if (refineRafRef.current !== null) cancelAnimationFrame(refineRafRef.current);
     const refine = (attempt: number) => {
-      refineRafRef.current = null;
+      const live = anchorSyncRef.current;
+      if (live.kind !== "refining" || live.voices !== currentVoices) return;
       if (anchor.voiceIndex > 0) {
         const rowEl = scrollEl.querySelector<HTMLElement>(`[data-index="${targetRow}"]`);
         if (!rowEl && attempt < 3) {
-          refineRafRef.current = requestAnimationFrame(() => refine(attempt + 1));
+          const rafId = requestAnimationFrame(() => refine(attempt + 1));
+          anchorSyncRef.current = {
+            kind: "refining",
+            anchor: baseAnchor,
+            voices: currentVoices,
+            rafId,
+            ignoreScrollUntil: live.ignoreScrollUntil,
+          };
           return;
         }
+        let delta = 0;
+        let nextIgnoreUntil = live.ignoreScrollUntil;
         if (rowEl) {
           const rowRect = rowEl.getBoundingClientRect();
           const desiredOffset = resolveVoiceRowOffset(anchor, rowRect.height);
-          const delta = rowRect.top - scrollEl.getBoundingClientRect().top - desiredOffset;
+          delta = rowRect.top - scrollEl.getBoundingClientRect().top - desiredOffset;
           if (Math.abs(delta) > 1) {
-            ignoreScrollUntilRef.current = performance.now() + 80;
-            scrollEl.scrollBy({ top: delta, behavior: "instant" });
+            nextIgnoreUntil = performance.now() + 80;
           }
         }
+        anchorSyncRef.current = {
+          kind: "anchored",
+          anchor: baseAnchor,
+          voices: currentVoices,
+          ignoreScrollUntil: nextIgnoreUntil,
+        };
+        if (Math.abs(delta) > 1) {
+          scrollEl.scrollBy({ top: delta, behavior: "instant" });
+        }
+      } else {
+        anchorSyncRef.current = { kind: "idle" };
       }
       restoreFocus();
     };
-    refineRafRef.current = requestAnimationFrame(() => refine(0));
+    const rafId = requestAnimationFrame(() => refine(0));
+    anchorSyncRef.current = {
+      kind: "refining",
+      anchor: baseAnchor,
+      voices: currentVoices,
+      rafId,
+      ignoreScrollUntil,
+    };
   }, [cols, rows]);
   const gridCls = VOICE_GRID_CLS[cols] ?? VOICE_GRID_CLS[1];
   const syncBanner =

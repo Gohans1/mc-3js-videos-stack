@@ -10,7 +10,14 @@ let peek: { t: number; at: number } | null = null;
 
 const allowed = () => {
   const s = get();
-  return s.previewAxis && !S.playing && !S.dragging && !s.free && !s.compose && !s.ink;
+  return (
+    s.previewAxis &&
+    !S.playing &&
+    !S.dragging &&
+    !s.free &&
+    s.composeState.status === "closed" &&
+    !s.ink
+  );
 };
 export const peekTime = () => {
   if (peek && (peek.at !== S.t || !allowed())) end();

@@ -446,9 +446,11 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
             <Button variant="outline" size="sm" onClick={() => location.reload()}>
               Reload
             </Button>
-            <Button variant="outline" size="sm" onClick={() => set({ error: null })}>
-              Close
-            </Button>
+            {ready && (
+              <Button variant="outline" size="sm" onClick={() => set({ error: null })}>
+                Close
+              </Button>
+            )}
           </div>
         </div>
       )}

@@ -609,12 +609,9 @@ beforeEach(async () => {
     u.setAiSpans([]);
     u.set({
       notes: [],
-      compose: null,
-      draft: "",
+      composeState: { status: "closed" },
       ink: null,
       inkSaid: "",
-      refs: [],
-      noteSaving: false,
       free: false,
       ratio: "16:9",
       filmView: "s",
@@ -651,7 +648,9 @@ test("StageNoteComposer embeds Note tools, Cancel, and Add note on the stage, su
     anchor: { x: 0.5, y: 0.5 },
     resume: false,
   };
-  await page.evaluate(`window.__UX_TEST__.set({ compose: ${JSON.stringify(compose)}, draft: "" })`);
+  await page.evaluate(
+    `window.__UX_TEST__.set({ composeState: { status: "create-editing", compose: ${JSON.stringify(compose)}, draft: "", refs: [] } })`,
+  );
   await waitUntil(
     `document.querySelector('[data-stage-compose]') && document.querySelector('[data-stage-compose] [role="toolbar"][aria-label="Note tools"]')`,
   );
@@ -697,10 +696,10 @@ test("StageNoteComposer embeds Note tools, Cancel, and Add note on the stage, su
     const card = document.querySelector('[data-stage-compose]');
     card.querySelectorAll('button').forEach((b) => { if (b.textContent.trim() === 'Cancel') b.click(); });
   })()`);
-  await waitUntil("window.__UX_TEST__.get().compose === null");
+  await waitUntil("window.__UX_TEST__.get().composeState.status === 'closed'");
 
   await page.evaluate(
-    `window.__UX_TEST__.set({ compose: ${JSON.stringify(compose)}, draft: "Move chair left" })`,
+    `window.__UX_TEST__.set({ composeState: { status: "create-editing", compose: ${JSON.stringify(compose)}, draft: "Move chair left", refs: [] } })`,
   );
   await waitUntil(`(() => {
     const card = document.querySelector('[data-stage-compose]');
@@ -712,14 +711,14 @@ test("StageNoteComposer embeds Note tools, Cancel, and Add note on the stage, su
     [...card.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add note').click();
   })()`);
   await waitUntil(
-    "window.__UX_TEST__.savedNotes().length === 1 && window.__UX_TEST__.get().compose === null",
+    "window.__UX_TEST__.savedNotes().length === 1 && window.__UX_TEST__.get().composeState.status === 'closed'",
   );
   const saved = await page.evaluate("window.__UX_TEST__.savedNotes()");
   expect(saved[0].text).toBe("Move chair left");
 });
 
 test("InkBar shows Cancel and Add note while a note is open and fits inside a 9:16 stage", async () => {
-  await page.evaluate(`window.__UX_TEST__.set({ ink: "pen", compose: null, draft: "" })`);
+  await page.evaluate(`window.__UX_TEST__.set({ ink: "pen", composeState: { status: "closed" } })`);
   await waitUntil(`document.querySelector('[role="toolbar"][aria-label="Draw"]')`);
   const idleHasActions = await page.evaluate(`(() => {
     const bar = document.querySelector('[role="toolbar"][aria-label="Draw"]');
@@ -737,7 +736,7 @@ test("InkBar shows Cancel and Add note while a note is open and fits inside a 9:
   };
   await page.evaluate(`(() => {
     window.__UX_TEST__.setStageBox(250, 420);
-    window.__UX_TEST__.set({ ink: "pen", compose: ${JSON.stringify(compose)}, draft: "Circle lamp" });
+    window.__UX_TEST__.set({ ink: "pen", composeState: { status: "create-editing", compose: ${JSON.stringify(compose)}, draft: "Circle lamp", refs: [] } });
   })()`);
   await waitUntil(`(() => {
     const bar = document.querySelector('[role="toolbar"][aria-label="Draw"]');
@@ -774,7 +773,7 @@ test("InkBar shows Cancel and Add note while a note is open and fits inside a 9:
     [...bar.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Add note').click();
   })()`);
   await waitUntil(
-    `window.__UX_TEST__.get().compose === null && window.__UX_TEST__.get().ink === null`,
+    `window.__UX_TEST__.get().composeState.status === 'closed' && window.__UX_TEST__.get().ink === null`,
   );
   expect(
     await page.evaluate(`Boolean(document.querySelector('[role="toolbar"][aria-label="Draw"]'))`),
@@ -2068,22 +2067,22 @@ test("Stage mouse controls pin/draw notes on right-click/drag, select elements o
 
     // 1) Default view (free=false): right-drag sketches a note stroke and does NOT wake or move Free camera
     u.S.tools.free.on = false;
-    u.set({ free: false, compose: null, inkSaid: '', refs: [], object: null });
+    u.set({ free: false, composeState: { status: 'closed' }, inkSaid: '', object: null });
     dispatch('pointerdown', { button: 2, buttons: 2, x: x0, y: y0, id: 10 });
     dispatch('pointermove', { button: 2, buttons: 2, x: x0 + 60, y: y0 + 20, id: 10 });
     dispatch('pointerup', { button: 2, buttons: 0, x: x0 + 60, y: y0 + 20, id: 10 });
     const defaultInk = u.get().inkSaid;
-    const defaultComposed = Boolean(u.get().compose);
+    const defaultComposed = u.get().composeState.status !== 'closed';
     const defaultFree = u.S.tools.free.on;
     u.cancelNote();
 
     // 2) Right-click (no drag) in FreeCam pins a feedback note without moving camera
     u.S.tools.free.on = true;
     u.S.tools.free.l.set(0, 1, 0);
-    u.set({ free: true, compose: null, inkSaid: '', refs: [] });
+    u.set({ free: true, composeState: { status: 'closed' }, inkSaid: '' });
     dispatch('pointerdown', { button: 2, buttons: 2, x: cx, y: cy, id: 11 });
     dispatch('pointerup', { button: 2, buttons: 0, x: cx, y: cy, id: 11 });
-    const pinCompose = Boolean(u.get().compose?.pin);
+    const pinCompose = Boolean(u.get().composeState.compose?.pin);
     u.cancelNote();
 
     // 3) Free camera (free=true): right-drag STILL draws a note without moving camera look
@@ -2117,7 +2116,7 @@ test("Stage mouse controls pin/draw notes on right-click/drag, select elements o
 
     // 6) In Draw mode, left-drag camera move routed through S.el.ink with pointerup captured away to window
     //    must clear passPointerId so the next right-drag stroke (same pointerId) completes instead of cancelling.
-    u.set({ ink: 'pen', compose: null, inkSaid: '' });
+    u.set({ ink: 'pen', composeState: { status: 'closed' }, inkSaid: '' });
     await new Promise((r) => setTimeout(r, 20));
     const inkEl = u.S.el.ink;
     const send = (target, type, opts) =>
@@ -2139,7 +2138,7 @@ test("Stage mouse controls pin/draw notes on right-click/drag, select elements o
     send(inkEl, 'pointermove', { button: 2, buttons: 2, x: x0 + 60, y: y0 + 25 });
     send(inkEl, 'pointerup', { button: 2, buttons: 0, x: x0 + 60, y: y0 + 25 });
     const inkAfterCamLeftDrag = u.get().inkSaid;
-    const composeAfterCamLeftDrag = Boolean(u.get().compose);
+    const composeAfterCamLeftDrag = u.get().composeState.status !== 'closed';
     u.cancelNote();
     u.set({ ink: null });
 
@@ -3167,17 +3166,17 @@ test("Escape cancels an open pinned note (PinTools) even when focus stays outsid
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
     u.S.tools.free.on = false;
-    u.set({ free: false, ink: null, settingsOpen: false, modal: null, review: false, compose: null });
+    u.set({ free: false, ink: null, settingsOpen: false, modal: null, review: false, composeState: { status: 'closed' } });
     u.openNote({ x: 0.5, y: 0.5, what: "boss" }, false);
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   })()`);
   await waitUntil(`document.querySelector('[role="toolbar"][aria-label="Note tools"]')`);
   await page.press("Escape");
   await waitUntil(
-    `window.__UX_TEST__.get().compose === null && !document.querySelector('[role="toolbar"][aria-label="Note tools"]')`,
+    `window.__UX_TEST__.get().composeState.status === 'closed' && !document.querySelector('[role="toolbar"][aria-label="Note tools"]')`,
   );
-  const composeAfterEsc = await page.evaluate(`window.__UX_TEST__.get().compose`);
-  expect(composeAfterEsc).toBeNull();
+  const composeAfterEsc = await page.evaluate(`window.__UX_TEST__.get().composeState.status`);
+  expect(composeAfterEsc).toBe("closed");
 });
 
 test("Free camera Shift descent continues smoothly without blocking or bouncing during mouse drag, wheel, or modifier keys", async () => {
@@ -3403,7 +3402,7 @@ test("G toggles Draw in normal and FreeCam, Shift+G toggles Final quality, Q pla
     u.S.t = 1;
     u.S.playing = false;
     u.S.tools.free.on = false;
-    u.set({ free: false, ink: null, final: false, settingsOpen: false, modal: null, review: false, compose: null, playing: false, pickFocus: null });
+    u.set({ free: false, ink: null, final: false, settingsOpen: false, modal: null, review: false, composeState: { status: 'closed' }, playing: false, pickFocus: null });
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   })()`);
 
@@ -3458,7 +3457,7 @@ test("G toggles Draw in normal and FreeCam, Shift+G toggles Final quality, Q pla
   );
   await page.press("Escape");
   await waitUntil(
-    `window.__UX_TEST__.get().compose === null && window.__UX_TEST__.get().ink === null && !document.querySelector('[role="toolbar"][aria-label="Draw"]') && !document.querySelector('[role="toolbar"][aria-label="Note tools"]') && window.__UX_TEST__.S.el.pins.querySelectorAll('.pin').length === 0`,
+    `window.__UX_TEST__.get().composeState.status === 'closed' && window.__UX_TEST__.get().ink === null && !document.querySelector('[role="toolbar"][aria-label="Draw"]') && !document.querySelector('[role="toolbar"][aria-label="Note tools"]') && window.__UX_TEST__.S.el.pins.querySelectorAll('.pin').length === 0`,
   );
 });
 
@@ -3817,7 +3816,7 @@ test("nowPicture renders distinct snapshots per note camera view and restores li
 test("Right-click pin, right-drag stroke, and Transport Note open StageNoteComposer beside Stage without hijacking sidebar tab", async () => {
   const res = await page.evaluate(`(async () => {
     const u = window.__UX_TEST__;
-    u.set({ side: "camera", free: false, compose: null, inkSaid: "", draft: "" });
+    u.set({ side: "camera", free: false, composeState: { status: "closed" }, inkSaid: "" });
     const canvas = u.S.el.canvas;
     const rect = canvas.getBoundingClientRect();
     const px = rect.left + rect.width * 0.25;
@@ -3853,7 +3852,7 @@ test("Right-click pin, right-drag stroke, and Transport Note open StageNoteCompo
   await waitUntil(`document.querySelector('[data-stage-compose="create"]')`);
   const transportOpen = await page.evaluate(`({
     side: window.__UX_TEST__.get().side,
-    hasAnchor: Boolean(window.__UX_TEST__.get().compose?.anchor),
+    hasAnchor: Boolean(window.__UX_TEST__.get().composeState.compose?.anchor),
     hasTextarea: Boolean(document.querySelector('[data-stage-compose] textarea[name="note"]')),
   })`);
   expect(transportOpen).toEqual({ side: "camera", hasAnchor: true, hasTextarea: true });
@@ -4215,13 +4214,13 @@ test("CamPanel 2-tab Film/Free workspace, Basic/Advanced split, Match all in sho
 test("Pressing M on desktop opens floating StageNoteComposer anchored on the stage", async () => {
   await page.evaluate(`(() => {
     const u = window.__UX_TEST__;
-    u.set({ free: false, settingsOpen: false, compose: null, playing: false });
+    u.set({ free: false, settingsOpen: false, composeState: { status: "closed" }, playing: false });
     u.cancelNote();
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
   })()`);
   await page.press("m");
-  await waitUntil(`window.__UX_TEST__.get().compose?.kind === 'create'`);
-  const anchor = await page.evaluate(`window.__UX_TEST__.get().compose?.anchor`);
+  await waitUntil(`window.__UX_TEST__.get().composeState.compose?.kind === 'create'`);
+  const anchor = await page.evaluate(`window.__UX_TEST__.get().composeState.compose?.anchor`);
   expect(anchor).toEqual({ x: 0.5, y: 0.88 });
   await page.evaluate(`window.__UX_TEST__.cancelNote()`);
 });

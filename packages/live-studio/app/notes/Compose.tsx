@@ -54,7 +54,15 @@ import { AskCallout } from "./note-parts";
 import { cancelNote, saveNote, setDraft } from "./notes";
 import { PinDrawToolbar } from "./PinTools";
 import { addRefs, REFS_MAX, removeRef } from "./refs";
-import { type Compose as ComposeSpec, isComposeDirty, type StageAnchor } from "./slice";
+import {
+  type Compose as ComposeSpec,
+  isComposeDirty,
+  noteComposeOf,
+  noteDraftOf,
+  noteRefsOf,
+  noteSavingOf,
+  type StageAnchor,
+} from "./slice";
 
 const RefSketch = lazy(() => import("./RefSketch").then((m) => ({ default: m.RefSketch })));
 
@@ -91,11 +99,11 @@ export function Compose({
   onHeaderDoubleClick?: () => void;
   className?: string;
 }) {
-  const rawCompose = useStudio((s) => s.compose),
-    noteSaving = useStudio((s) => s.noteSaving),
-    draft = useStudio((s) => s.draft),
+  const rawCompose = useStudio(noteComposeOf),
+    noteSaving = useStudio(noteSavingOf),
+    draft = useStudio(noteDraftOf),
     drawn = useStudio((s) => s.inkSaid),
-    refs = useStudio((s) => s.refs),
+    refs = useStudio(noteRefsOf),
     notes = useStudio((s) => s.notes);
   const compose = stage
     ? isStageAnchoredCompose(rawCompose, PHONE)
@@ -904,7 +912,7 @@ export function Compose({
 }
 
 export function StageNoteComposer() {
-  const rawCompose = useStudio((s) => s.compose);
+  const rawCompose = useStudio(noteComposeOf);
   const inkDrawing = useStudio((s) => s.inkDrawing);
   const active = isStageAnchoredCompose(rawCompose, PHONE);
   const [renderChild, setRenderChild] = useState(active);

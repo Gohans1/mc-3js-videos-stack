@@ -613,7 +613,7 @@ test("pins REF/OURS panels on click, draws ink on left-drag, captures real video
     c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true }));
     c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, pointerType: 'mouse', button: 0, buttons: 0, clientX: x, clientY: y, bubbles: true }));
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compose?.pin?.what === 'REF · left'");
+  await waitUntil("window.__CMP_TEST__.get().composeState.compose?.pin?.what === 'REF · left'");
 
   await page.evaluate(`(() => {
     const c = window.__CMP_TEST__.S.el.canvas;
@@ -623,7 +623,7 @@ test("pins REF/OURS panels on click, draws ink on left-drag, captures real video
     c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 2, pointerType: 'mouse', button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true }));
     c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 2, pointerType: 'mouse', button: 0, buttons: 0, clientX: x, clientY: y, bubbles: true }));
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compose?.pin?.what === 'OURS · right'");
+  await waitUntil("window.__CMP_TEST__.get().composeState.compose?.pin?.what === 'OURS · right'");
 
   await page.evaluate(`(() => {
     const c = window.__CMP_TEST__.S.el.canvas;
@@ -1016,7 +1016,7 @@ test("supports left-mouse Box and Path ink tools in Compare Video mode without l
     c.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 10, pointerType: 'mouse', button: 0, buttons: 1, clientX: x, clientY: y, bubbles: true }));
     c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 10, pointerType: 'mouse', button: 0, buttons: 0, clientX: x, clientY: y, bubbles: true }));
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compose?.pin?.what === 'OURS · right'");
+  await waitUntil("window.__CMP_TEST__.get().composeState.compose?.pin?.what === 'OURS · right'");
 
   await page.evaluate(`window.__CMP_TEST__.setInk('box')`);
   await waitUntil(
@@ -1064,7 +1064,7 @@ test("supports left-mouse Box and Path ink tools in Compare Video mode without l
     const box = marks.find((m) => m.kind === 'box');
     const path = marks.find((m) => m.kind === 'path');
     return {
-      pinWhat: u.get().compose?.pin?.what ?? null,
+      pinWhat: u.get().composeState.compose?.pin?.what ?? null,
       boxPts: box?.pts?.length ?? 0,
       pathPts: path?.pts?.length ?? 0,
       pathHits: path?.hits?.map((h) => h?.what ?? null) ?? [],
@@ -1104,7 +1104,7 @@ test("captures drafted compare video pixels offscreen after switching dropdown a
     c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 20, pointerType: 'mouse', button: 0, buttons: 0, clientX: x, clientY: y, bubbles: true }));
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compose?.compareVideo?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().composeState.compose?.compareVideo?.path === 'renders/reference/v2_sbs.mp4'",
   );
 
   await page.evaluate(`(() => {
@@ -1221,7 +1221,7 @@ test("isolates same-layout cross-video drafts, preserves drafted canvas dimensio
     c.dispatchEvent(new PointerEvent('pointerup', { pointerId: 30, pointerType: 'mouse', button: 0, buttons: 0, clientX: x, clientY: y, bubbles: true }));
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compose?.compareVideo?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().composeState.compose?.compareVideo?.path === 'renders/reference/v2_sbs.mp4'",
   );
 
   const pinsBeforeSwitch = await page.evaluate(`(() => {
@@ -1280,7 +1280,7 @@ test("isolates same-layout cross-video drafts, preserves drafted canvas dimensio
     ink.dispatchEvent(new PointerEvent('pointerup', { pointerId: 32, pointerType: 'mouse', button: 0, buttons: 0, clientX: r.left + r.width * 0.5, clientY: r.top + r.height * 0.5, bubbles: true }));
     u.setInk(null);
     const out = {
-      path: u.get().compose?.compareVideo?.path ?? null,
+      path: u.get().composeState.compose?.compareVideo?.path ?? null,
       marks: u.inkMarks().length,
     };
     u.cancelNote();
@@ -1296,16 +1296,24 @@ test("isolates same-layout cross-video drafts, preserves drafted canvas dimensio
     await u.openNote(null, false);
     u.selectCompareVideo('renders/reference/v1_sbs.mp4');
     u.seek(2.5);
-    u.ensureNote();
+    u.setInk('box');
+    const ink = u.S.el.ink;
+    const r = ink.getBoundingClientRect();
+    ink.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 33, pointerType: 'mouse', button: 0, buttons: 1, clientX: r.left + r.width * 0.2, clientY: r.top + r.height * 0.2, bubbles: true }));
+    ink.dispatchEvent(new PointerEvent('pointermove', { pointerId: 33, pointerType: 'mouse', button: 0, buttons: 1, clientX: r.left + r.width * 0.5, clientY: r.top + r.height * 0.5, bubbles: true }));
+    ink.dispatchEvent(new PointerEvent('pointerup', { pointerId: 33, pointerType: 'mouse', button: 0, buttons: 0, clientX: r.left + r.width * 0.5, clientY: r.top + r.height * 0.5, bubbles: true }));
+    u.setInk(null);
     const out = {
-      path: u.get().compose?.compareVideo?.path ?? null,
-      t: u.get().compose?.t ?? null,
+      path: u.get().composeState.compose?.compareVideo?.path ?? null,
+      t: u.get().composeState.compose?.t ?? null,
+      marks: u.inkMarks().length,
     };
     u.cancelNote();
     return out;
   })()`);
   expect(rebound.path).toBe("renders/reference/v1_sbs.mp4");
   expect(rebound.t).toBeCloseTo(2.5, 1);
+  expect(rebound.marks).toBe(1);
 }, 30000);
 
 test("invalidates stale compareVideoMeta on in-place replacement while exited and enforces Free Camera mutual exclusion", async () => {
@@ -1520,7 +1528,7 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     u.setInk('pen');
     u.setPlaying(true);
     const emptyOut = {
-      compose: u.get().compose,
+      compose: u.get().composeState.status === 'closed' ? null : u.get().composeState.compose,
       ink: u.get().ink,
       playing: u.S.playing,
       playDisabled: document.querySelector('button[aria-label="Play"]')?.disabled ?? false,
@@ -1545,7 +1553,7 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     const errorOut = {
       ignoredWrongPath,
       hasError: u.get().compareVideo.status === 'error',
-      compose: u.get().compose,
+      compose: u.get().composeState.status === 'closed' ? null : u.get().composeState.compose,
       ink: u.get().ink,
       playing: u.S.playing,
       playDisabled: document.querySelector('button[aria-label="Play"]')?.disabled ?? false,
@@ -1584,8 +1592,8 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     u.setCompareVideoMode(true);
     await u.openNote(null, false);
     const afterDirty = {
-      stillLiveDraft: Boolean(u.get().compose) && !u.get().compose?.compareVideo,
-      draftText: u.get().draft,
+      stillLiveDraft: u.get().composeState.status !== 'closed' && !u.get().composeState.compose?.compareVideo,
+      draftText: u.get().composeState.draft ?? '',
       notesAdded: u.get().notes.length - beforeNotes,
     };
     u.setCompareVideoMode(false);
@@ -1594,7 +1602,7 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     u.setCompareVideoMode(true);
     await u.openNote(null, false);
     const afterClean = {
-      stillOpen: Boolean(u.get().compose) && !u.get().compose?.compareVideo,
+      stillOpen: u.get().composeState.status !== 'closed' && !u.get().composeState.compose?.compareVideo,
     };
     u.setCompareVideoMode(false);
     u.cancelNote();
@@ -1621,8 +1629,8 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
       u.setCompareVideoMode(true, 'renders/reference/v2_sbs.mp4');
       await u.openNote({ x: 0.25, y: 0.5, what: 'REF · left' }, false);
       return {
-        stillLiveDraft: !u.get().compose?.compareVideo,
-        draftText: u.get().draft,
+        stillLiveDraft: !u.get().composeState.compose?.compareVideo,
+        draftText: u.get().composeState.draft ?? '',
       };
     } finally {
       u.S.tools = savedTools;
@@ -1681,18 +1689,21 @@ test("stops playback when exiting Compare Video before 3D loads and ignores left
   const editDrag = await page.evaluate(`(() => {
     const u = window.__CMP_TEST__;
     u.set({
-      compose: {
-        kind: 'edit',
-        id: 'edit-guard-id',
-        time: '00:00.500',
-        original: 'Original text',
-        t: 0.5,
-        shot: 0,
-        shotName: 'Intro',
-        pin: null,
-        resume: false,
+      composeState: {
+        status: 'edit-editing',
+        compose: {
+          kind: 'edit',
+          id: 'edit-guard-id',
+          time: '00:00.500',
+          original: 'Original text',
+          t: 0.5,
+          shot: 0,
+          shotName: 'Intro',
+          pin: null,
+          resume: false,
+        },
+        draft: 'Original text',
       },
-      draft: 'Original text',
     });
     const c = u.S.el.canvas;
     const r = c.getBoundingClientRect();
@@ -1730,20 +1741,24 @@ test("recovers true compare video dimensions from offscreen capture session when
       ...(cur.status === 'loading' || cur.status === 'ready'
         ? { compareVideo: { ...cur, meta: null } }
         : {}),
-      compose: {
-        kind: 'create',
-        t: 1.2,
-        shot: 0,
-        shotName: 'Intro',
-        pin: { x: 0.75, y: 0.5, what: 'REF · top' },
-        resume: false,
-        compareVideo: {
-          path: 'renders/reference/v2_sbs.mp4',
-          category: 'compare',
-          layout: 'vstack',
+      composeState: {
+        status: 'create-editing',
+        compose: {
+          kind: 'create',
+          t: 1.2,
+          shot: 0,
+          shotName: 'Intro',
+          pin: { x: 0.75, y: 0.5, what: 'REF · top' },
+          resume: false,
+          compareVideo: {
+            path: 'renders/reference/v2_sbs.mp4',
+            category: 'compare',
+            layout: 'vstack',
+          },
         },
+        draft: 'Uncached metadata save check',
+        refs: [],
       },
-      draft: 'Uncached metadata save check',
     });
     await u.saveNote();
     const note = u.get().notes.at(-1);
@@ -1799,20 +1814,24 @@ test("relabels pre-load pin and ink marks when compare video metadata arrives be
       },
     );
     u.set({
-      compose: {
-        kind: 'create',
-        t: 1.0,
-        shot: 0,
-        shotName: 'Intro',
-        pin: { x: 0.75, y: 0.25, what: 'REF · top' },
-        resume: false,
-        compareVideo: {
-          path: 'renders/reference/v2_sbs.mp4',
-          category: 'compare',
-          layout: 'vstack',
+      composeState: {
+        status: 'create-editing',
+        compose: {
+          kind: 'create',
+          t: 1.0,
+          shot: 0,
+          shotName: 'Intro',
+          pin: { x: 0.75, y: 0.25, what: 'REF · top' },
+          resume: false,
+          compareVideo: {
+            path: 'renders/reference/v2_sbs.mp4',
+            category: 'compare',
+            layout: 'vstack',
+          },
         },
+        draft: 'Pre-load pin and ink relabel check',
+        refs: [],
       },
-      draft: 'Pre-load pin and ink relabel check',
     });
     await u.saveNote();
     const note = u.get().notes.at(-1);
@@ -1931,7 +1950,7 @@ test("does not teleport playhead on stale video element when switching between w
   const feedbackOutsideSpan = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
     await u.openNote({ x: 0.25, y: 0.5, what: 'REF · left' });
-    const pinCreated = Boolean(u.get().compose?.pin);
+    const pinCreated = Boolean(u.get().composeState.compose?.pin);
     if (pinCreated) u.cancelNote();
     const canvas = u.S.el.canvas;
     const rect = canvas.getBoundingClientRect();

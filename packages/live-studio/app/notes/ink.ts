@@ -18,12 +18,16 @@ import type { ComposeOrigin } from "./notes";
 import { spanFade } from "./pinfade";
 import { shapeOf } from "./shape";
 import {
-  type Compose,
   type Hit,
   type InkKind,
   isComposeDirty,
   type Mark,
   type Note,
+  noteComposeOf,
+  type NoteComposeState,
+  noteDraftOf,
+  noteRefsOf,
+  noteSavingOf,
   type StageAnchor,
 } from "./slice";
 
@@ -65,13 +69,19 @@ export const setInk = (tool: InkKind | null) => {
   if (!tool) resetActiveInk();
   set({ ink: tool });
   S.dirty = true;
-  if (!tool && get().compose && !PHONE) ui.focusNote();
+  if (!tool && get().composeState.status !== "closed" && !PHONE) ui.focusNote();
 };
 compareHooks.clearInk = () => setInk(null);
 
 export const INK_KEYS: InkKind[] = ["pen", "arrow", "box", "path"];
-export const toolsOpen = (s: { ink: InkKind | null; compose: Compose | null; playing: boolean }) =>
-  !!s.ink || !!(s.compose?.kind === "create" && s.compose.pin && !s.playing);
+export const toolsOpen = (s: {
+  ink: InkKind | null;
+  composeState: NoteComposeState;
+  playing: boolean;
+}) => {
+  const compose = noteComposeOf(s);
+  return !!s.ink || !!(compose?.kind === "create" && compose.pin && !s.playing);
+};
 
 export const inkTimes = (marks: Mark[]) => {
   const all = marks.flatMap((m) => m.ts ?? [m.t]).sort((a, b) => a - b);
@@ -273,7 +283,10 @@ let inked = false;
 export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[]) => {
   const c = S.el?.ink;
   if (!c) return;
-  const { compose, draft, rate, compareVideoMode, compareVideo } = get();
+  const s = get();
+  const compose = noteComposeOf(s);
+  const draft = noteDraftOf(s);
+  const { rate, compareVideoMode, compareVideo } = s;
   const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const source = activeCompareNoteSource();
   const raw = S.tools?.free.on ? [] : saved();
@@ -425,12 +438,18 @@ let hooks: {
   begin: () => {},
   pause: () => {},
 };
-let live: {
+type LiveStroke = {
   mark: Mark;
   smart: boolean;
   compareVideoMode: boolean;
   compareVideoPath: string | null;
-} | null = null;
+};
+let live: LiveStroke | null = null;
+const setLiveStroke = (next: LiveStroke | null) => {
+  live = next;
+  const drawing = next !== null;
+  if (get().inkDrawing !== drawing) set({ inkDrawing: drawing });
+};
 const pointerOrigin = (e: PointerEvent): ComposeOrigin => ({
   left: e.clientX,
   top: e.clientY,
@@ -443,9 +462,13 @@ const at = (e: PointerEvent): [number, number] => {
   return [+Math.min(1, Math.max(0, x)).toFixed(4), +Math.min(1, Math.max(0, y)).toFixed(4)];
 };
 const canDrawInCurrentSpace = () => {
-  const { compareVideoMode, compareVideo, compose, draft, refs, noteSaving } = get();
+  const s = get();
+  const { compareVideoMode, compareVideo } = s;
+  const compose = noteComposeOf(s);
+  const draft = noteDraftOf(s);
+  const refs = noteRefsOf(s);
   const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
-  if (noteSaving) return false;
+  if (noteSavingOf(s)) return false;
   if (compareVideoMode && (!activeCompareVideo() || compareVideo.status === "error")) return false;
   if (!checkCompareFeedbackRange()) return false;
   if (compose?.kind === "edit") {
@@ -471,12 +494,11 @@ const startStroke = (
 ) => {
   if (!canDrawInCurrentSpace()) return;
   hooks.pause();
-  set({ inkDrawing: true });
-  hooks.begin(origin, { x: p[0], y: p[1] });
   const { compareVideoMode, compareVideo } = get();
   const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
-  live = { mark, smart, compareVideoMode, compareVideoPath };
+  hooks.begin(origin, { x: p[0], y: p[1] });
+  setLiveStroke({ mark, smart, compareVideoMode, compareVideoPath });
   inkMarks.push(mark);
   S.dirty = true;
 };
@@ -493,9 +515,8 @@ const moveStroke = (e: PointerEvent) => {
 };
 const NAMES = { pen: "Pen stroke", arrow: "Arrow", box: "Box" } as const;
 const endStroke = () => {
-  if (get().inkDrawing) set({ inkDrawing: false });
   const active = live;
-  live = null;
+  setLiveStroke(null);
   if (!active) return;
   const { mark: m, smart } = active;
   const now = get();
@@ -536,10 +557,10 @@ const endStroke = () => {
   });
 };
 const dropStroke = () => {
-  if (get().inkDrawing) set({ inkDrawing: false });
-  if (live) {
+  const active = live;
+  setLiveStroke(null);
+  if (active) {
     inkMarks.pop();
-    live = null;
     S.dirty = true;
     inkHooks.cancelEmpty();
   }

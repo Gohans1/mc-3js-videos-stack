@@ -547,7 +547,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
     );
     writeFileSync(
       join(src, "edit.ts"),
-      "export const EDIT = {}; export const fromSource = (t) => t; export const toSource = (t) => t;",
+      "export const EDIT = { beats: {} }; export const fromSource = (t) => t; export const toSource = (t) => t;",
     );
     const loudnessWorklet = {
       find: /^loudness-worklet\/worklet(?=\?|$)/,
@@ -641,9 +641,7 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       noteShot: prev.noteShot,
       noteFacets: prev.noteFacets,
       noteSort: prev.noteSort,
-      compose: prev.compose,
-      draft: prev.draft,
-      refs: prev.refs,
+      composeState: prev.composeState,
       ink: prev.ink,
       inkSaid: prev.inkSaid,
     });
@@ -790,16 +788,20 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       {
         ready: true,
         notes,
-        compose: {
-          kind: "create",
-          t: 0,
-          shot: 0,
-          shotName: "Intro",
-          pin: null,
-          resume: false,
-          wasPlaying: false,
+        composeState: {
+          status: "create-editing",
+          compose: {
+            kind: "create",
+            t: 0,
+            shot: 0,
+            shotName: "Intro",
+            pin: null,
+            resume: false,
+            wasPlaying: false,
+          },
+          draft: "Rim light looks slightly flat",
+          refs: [],
         },
-        draft: "Rim light looks slightly flat",
       },
       () => {
         const composeDockHtml = renderHtml(createElement(composeMod.Compose, { dock: true }));
@@ -1248,20 +1250,39 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       pin: { x: 0.5, y: 0.5, what: "furniture" },
       resume: false,
     };
-    withStore({ compose: pinCompose, draft: "", ink: null, inkSaid: "", refs: [] }, () => {
-      const pinHtml = renderHtml(createElement(pinToolsMod.PinDrawToolbar, { hasPin: true }));
-      assert.match(pinHtml, /role="toolbar"/);
-      assert.match(pinHtml, /aria-label="Note tools"/);
-      const stageHtml = renderHtml(createElement(composeMod.Compose, { stage: true }));
-      assert.match(stageHtml, />Cancel</);
-      assert.match(stageHtml, /<button[^>]*disabled[^>]*>[\s\S]*Add note[\s\S]*<\/button>/);
-    });
+    withStore(
+      {
+        composeState: { status: "create-editing", compose: pinCompose, draft: "", refs: [] },
+        ink: null,
+        inkSaid: "",
+      },
+      () => {
+        const pinHtml = renderHtml(createElement(pinToolsMod.PinDrawToolbar, { hasPin: true }));
+        assert.match(pinHtml, /role="toolbar"/);
+        assert.match(pinHtml, /aria-label="Note tools"/);
+        const stageHtml = renderHtml(createElement(composeMod.Compose, { stage: true }));
+        assert.match(stageHtml, />Cancel</);
+        assert.match(stageHtml, /<button[^>]*disabled[^>]*>[\s\S]*Add note[\s\S]*<\/button>/);
+      },
+    );
 
-    withStore({ compose: pinCompose, draft: "Move chair", ink: "pen", inkSaid: "" }, () => {
-      const inkComposeHtml = renderHtml(createElement(inkBarMod.InkBar));
-      assert.match(inkComposeHtml, />Cancel</);
-      assert.match(inkComposeHtml, />Add note</);
-    });
+    withStore(
+      {
+        composeState: {
+          status: "create-editing",
+          compose: pinCompose,
+          draft: "Move chair",
+          refs: [],
+        },
+        ink: "pen",
+        inkSaid: "",
+      },
+      () => {
+        const inkComposeHtml = renderHtml(createElement(inkBarMod.InkBar));
+        assert.match(inkComposeHtml, />Cancel</);
+        assert.match(inkComposeHtml, />Add note</);
+      },
+    );
   });
 
   test("removeRef dispatches undo toast that restores picture and strokes only for the matching Compose session", () => {
@@ -1289,25 +1310,262 @@ describe("notes views & ReviewRoom component rendering", { timeout: 60000 }, () 
       wasPlaying: false,
     };
     try {
-      withStore({ compose: composeCtx, refs: [picA, picB] }, () => {
-        refsMod.removeRef("ref-a");
-        assert.deepEqual(
-          storeMod.get().refs.map((x) => x.id),
-          ["ref-b"],
-        );
-        assert.equal(calls.length, 1);
-        assert.equal(calls[0].title, "Picture & drawing removed");
-        assert.equal(calls[0].actionProps.children, "Undo");
-        calls[0].actionProps.onClick();
-        assert.deepEqual(storeMod.get().refs, [picA, picB]);
+      withStore(
+        {
+          composeState: {
+            status: "create-editing",
+            compose: composeCtx,
+            draft: "",
+            refs: [picA, picB],
+          },
+        },
+        () => {
+          refsMod.removeRef("ref-a");
+          assert.deepEqual(
+            storeMod.get().composeState.refs.map((x) => x.id),
+            ["ref-b"],
+          );
+          assert.equal(calls.length, 1);
+          assert.equal(calls[0].title, "Picture & drawing removed");
+          assert.equal(calls[0].actionProps.children, "Undo");
+          calls[0].actionProps.onClick();
+          assert.deepEqual(storeMod.get().composeState.refs, [picA, picB]);
 
-        refsMod.removeRef("ref-a");
-        storeMod.set({ compose: { ...composeCtx, t: 4 }, refs: [] });
-        calls[1].actionProps.onClick();
-        assert.equal(storeMod.get().refs.length, 0);
-      });
+          refsMod.removeRef("ref-a");
+          storeMod.set({
+            composeState: {
+              status: "create-editing",
+              compose: { ...composeCtx, t: 4 },
+              draft: "",
+              refs: [],
+            },
+          });
+          calls[1].actionProps.onClick();
+          assert.equal(storeMod.get().composeState.refs.length, 0);
+        },
+      );
     } finally {
       toastMod.toast.add = origAdd;
+    }
+  });
+
+  test("NoteComposeState closes atomically without compose===null && noteSaving===true, clears ink on edit, and isolates overlapping saves", async () => {
+    const notesMod = await server.ssrLoadModule("/notes/notes.ts");
+    const sliceMod = await server.ssrLoadModule("/notes/slice.ts");
+    const stateMod = await server.ssrLoadModule("/core/state.ts");
+    const filmMetaMod = await server.ssrLoadModule("/core/filmMeta.ts");
+    const { notes } = sampleItems();
+    const seen = [];
+    let overlapStarted = false;
+    let overlapPromise = null;
+    const unsub = storeMod.studio.subscribe((s) => {
+      seen.push({
+        status: s.composeState.status,
+        hasCompose: sliceMod.noteComposeOf(s) !== null,
+        saving: sliceMod.noteSavingOf(s),
+      });
+      if (!overlapStarted && s.composeState.status === "closed" && seen.some((x) => x.status === "edit-saving")) {
+        overlapStarted = true;
+        storeMod.set({
+          composeState: {
+            status: "create-editing",
+            compose: { kind: "create", t: 2, shot: 0, shotName: "Intro", pin: null, resume: false },
+            draft: "Second save overlapping first finally",
+            refs: [],
+          },
+        });
+        overlapPromise = notesMod.saveNote();
+      }
+    });
+    const origFetch = globalThis.fetch;
+    const prevTools = stateMod.S.tools;
+    const prevEl = stateMod.S.el;
+    const prevInnerW = Object.getOwnPropertyDescriptor(globalThis, "innerWidth");
+    const prevInnerH = Object.getOwnPropertyDescriptor(globalThis, "innerHeight");
+    globalThis.fetch = async () => new Response("ok", { status: 200 });
+    filmMetaMod.setFilmSource({
+      DURATION: 10,
+      SHOTS: [
+        { t: 0, name: "Intro" },
+        { t: 4, name: "Main" },
+      ],
+      SHOTS_OUT: [
+        { t: 0, name: "Intro" },
+        { t: 4, name: "Main" },
+      ],
+      applyEdit() {},
+    });
+    stateMod.S.tools = {
+      free: { on: false },
+      camera: { position: { x: 0, y: 2, z: 6 }, fov: 50 },
+      look: { x: 0, y: 1, z: 0 },
+    };
+    stateMod.S.el = {
+      canvas: { width: 320, height: 180 },
+      audio: { playbackRate: 1, muted: false, volume: 1 },
+    };
+    Object.defineProperty(globalThis, "innerWidth", { configurable: true, writable: true, value: 1280 });
+    Object.defineProperty(globalThis, "innerHeight", { configurable: true, writable: true, value: 720 });
+    try {
+      await withStoreAsync({ ready: true, notes, ink: "pen", composeState: { status: "closed" } }, async () => {
+        await notesMod.editOldNote(notes[0]);
+        assert.equal(storeMod.get().composeState.status, "edit-editing");
+        assert.equal(storeMod.get().ink, null);
+
+        notesMod.setDraft("Updated text cleanly");
+        await notesMod.saveNote();
+        assert.equal(overlapStarted, true);
+        if (overlapPromise) await overlapPromise;
+        assert.equal(storeMod.get().composeState.status, "closed");
+        assert.equal(sliceMod.noteSavingOf(storeMod.get()), false);
+        assert.equal(
+          seen.some((x) => !x.hasCompose && x.saving),
+          false,
+        );
+        const revertedDuringSecondSave = seen.some(
+          (x, i) => i > 0 && seen[i - 1].status === "create-saving" && x.status === "create-editing",
+        );
+        assert.equal(revertedDuringSecondSave, false);
+      });
+    } finally {
+      unsub();
+      globalThis.fetch = origFetch;
+      stateMod.S.tools = prevTools;
+      stateMod.S.el = prevEl;
+      if (prevInnerW) Object.defineProperty(globalThis, "innerWidth", prevInnerW);
+      else delete globalThis.innerWidth;
+      if (prevInnerH) Object.defineProperty(globalThis, "innerHeight", prevInnerH);
+      else delete globalThis.innerHeight;
+    }
+  });
+
+  test("revealInScrollContainer attaches interrupt listeners only in waiting-height and cleans up on interrupt and cancel", async () => {
+    const inspectorMod = await server.ssrLoadModule("/components/inspector.tsx");
+    const stubKeys = [
+      "window",
+      "requestAnimationFrame",
+      "cancelAnimationFrame",
+      "getComputedStyle",
+      "matchMedia",
+    ];
+    const savedDescs = stubKeys.map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+    const scrollerAdded = [];
+    const scrollerRemoved = [];
+    const targetAdded = [];
+    const targetRemoved = [];
+    let rafCb = null;
+    let clearedTimer = null;
+
+    const makeScroller = (scrollHeight) => ({
+      scrollHeight,
+      clientHeight: 400,
+      scrollTop: 0,
+      scrollBy() {},
+      getBoundingClientRect: () => ({ top: 0, bottom: 400, height: 400 }),
+      addEventListener(type, fn) {
+        scrollerAdded.push([type, fn]);
+      },
+      removeEventListener(type, fn) {
+        scrollerRemoved.push([type, fn]);
+      },
+      parentElement: null,
+    });
+
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: {
+        setTimeout: () => 42,
+        clearTimeout: (id) => {
+          clearedTimer = id;
+        },
+        matchMedia: () => ({ matches: true }),
+      },
+    });
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: (cb) => {
+        rafCb = cb;
+        return 1;
+      },
+    });
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: () => {},
+    });
+    Object.defineProperty(globalThis, "getComputedStyle", {
+      configurable: true,
+      writable: true,
+      value: () => ({ overflowY: "auto" }),
+    });
+    Object.defineProperty(globalThis, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: () => ({ matches: true }),
+    });
+
+    try {
+      const earlyScroller = makeScroller(800);
+      const earlyTarget = {
+        offsetHeight: 80,
+        parentElement: earlyScroller,
+        getBoundingClientRect: () => ({ top: 50, bottom: 130, height: 80 }),
+        addEventListener(type, fn) {
+          targetAdded.push([type, fn]);
+        },
+        removeEventListener(type, fn) {
+          targetRemoved.push([type, fn]);
+        },
+      };
+      const cleanupEarly = inspectorMod.revealInScrollContainer(earlyTarget);
+      rafCb?.();
+      assert.equal(scrollerAdded.length, 0);
+      assert.equal(targetAdded.length, 0);
+      cleanupEarly();
+
+      const waitScroller = makeScroller(410);
+      const waitTarget = {
+        offsetHeight: 20,
+        parentElement: waitScroller,
+        getBoundingClientRect: () => ({ top: 340, bottom: 360, height: 20 }),
+        addEventListener(type, fn) {
+          targetAdded.push([type, fn]);
+        },
+        removeEventListener(type, fn) {
+          targetRemoved.push([type, fn]);
+        },
+      };
+      const cleanupWait = inspectorMod.revealInScrollContainer(waitTarget, {
+        measureEl: { offsetHeight: 200 },
+      });
+      rafCb?.();
+      assert.deepEqual(
+        scrollerAdded.map(([t]) => t),
+        ["wheel", "pointerdown", "touchstart"],
+      );
+      assert.deepEqual(
+        targetAdded.map(([t]) => t),
+        ["transitionend"],
+      );
+      scrollerAdded[0][1]();
+      assert.equal(clearedTimer, 42);
+      assert.deepEqual(
+        scrollerRemoved.map(([t]) => t),
+        ["wheel", "pointerdown", "touchstart"],
+      );
+      assert.deepEqual(
+        targetRemoved.map(([t]) => t),
+        ["transitionend"],
+      );
+      cleanupWait();
+      assert.equal(scrollerRemoved.length, 3);
+    } finally {
+      for (const [key, desc] of savedDescs) {
+        if (desc) Object.defineProperty(globalThis, key, desc);
+        else delete globalThis[key];
+      }
     }
   });
 

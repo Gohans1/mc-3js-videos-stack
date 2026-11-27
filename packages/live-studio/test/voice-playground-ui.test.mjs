@@ -464,8 +464,7 @@ describe("Voice Playground SSR UI components", () => {
     filters: viewMod.DEFAULT_PLAYGROUND_FILTERS,
     selectedUid: "pg:pg_demo_1",
     starredTakeUids: [],
-    workbenchOpen: false,
-    everOpened: true,
+    surface: { kind: "closed", everOpened: true },
     inlineOpen: true,
     activeSubTab: "create",
     workbenchMediumTab: "library",
@@ -1353,8 +1352,8 @@ describe("Voice Playground SSR UI components", () => {
   test("opening a section edit keeps the workbench layer and returns to the selected recording", () => {
     clientMod.setPlaygroundWorkbenchOpen(true);
     clientMod.openRecordingEditor(samplePgItem());
-    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
-    expect(clientMod.getPlaygroundSnapshot().regionEditor.returnToWorkbench).toBe(true);
+    expect(clientMod.isPlaygroundWorkbenchOpen(clientMod.getPlaygroundSnapshot())).toBe(true);
+    expect(clientMod.getPlaygroundSnapshot().surface.kind).toBe("workbench-region");
     let cancelled = false;
     clientMod.changePlaygroundWorkbenchOpen(false, {
       reason: "escape-key",
@@ -1363,15 +1362,19 @@ describe("Voice Playground SSR UI components", () => {
       },
     });
     expect(cancelled).toBe(true);
-    expect(clientMod.getPlaygroundSnapshot().regionEditor).toBeNull();
-    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
+    expect(clientMod.playgroundRegionEditorOf(clientMod.getPlaygroundSnapshot())).toBeNull();
+    expect(clientMod.isPlaygroundWorkbenchOpen(clientMod.getPlaygroundSnapshot())).toBe(true);
     clientMod.changePlaygroundWorkbenchOpen(false, { reason: "escape-key", cancel() {} });
-    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(false);
+    expect(clientMod.isPlaygroundWorkbenchOpen(clientMod.getPlaygroundSnapshot())).toBe(false);
     clientMod.setPlaygroundWorkbenchOpen(true);
     clientMod.openRecordingEditor(samplePgItem());
     clientMod.closeRecordingEditor();
-    expect(clientMod.getPlaygroundSnapshot().workbenchOpen).toBe(true);
-    expect(clientMod.getPlaygroundSnapshot().regionEditor).toBeNull();
+    expect(clientMod.isPlaygroundWorkbenchOpen(clientMod.getPlaygroundSnapshot())).toBe(true);
+    expect(clientMod.playgroundRegionEditorOf(clientMod.getPlaygroundSnapshot())).toBeNull();
+    clientMod.setPlaygroundWorkbenchOpen(false);
+    clientMod.startVoiceTemplate({ id: "voice-1", name: "Narrator" });
+    expect(clientMod.getPlaygroundSnapshot().surface.kind).toBe("workbench");
+    expect(clientMod.hasPlaygroundEverOpened(clientMod.getPlaygroundSnapshot())).toBe(true);
     clientMod.setPlaygroundWorkbenchOpen(false);
   });
 

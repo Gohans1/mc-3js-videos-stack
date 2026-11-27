@@ -909,7 +909,7 @@ export function ReviewRoom() {
     scope = useStudio((s) => s.noteScope),
     shotFilter = useStudio((s) => s.noteShot),
     facets = useStudio((s) => s.noteFacets),
-    composeOpen = useStudio((s) => !!s.compose);
+    composeOpen = useStudio((s) => s.composeState.status !== "closed");
   useStudio((s) => (scope === "shot" ? s.shot : ""));
   const hasSideFilters = scope === "shot" || shotFilter !== null || facets.length > 0;
   const lists = {
@@ -928,7 +928,7 @@ export function ReviewRoom() {
     listIdx = pickId === null ? 0 : list.findIndex((p) => p.n.id === pickId),
     p = list[listIdx] ?? null;
   useEffect(() => {
-    if (get().compose) return;
+    if (get().composeState.status !== "closed") return;
     const cur = document.activeElement;
     if (cur instanceof Node && roomRef.current?.contains(cur)) return;
     const { reviewPick, reviewTab } = get();
@@ -979,7 +979,13 @@ export function ReviewRoom() {
     )
       return;
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (get().settingsOpen || get().ink || get().compose || get().modal !== null) return;
+    if (
+      get().settingsOpen ||
+      get().ink ||
+      get().composeState.status !== "closed" ||
+      get().modal !== null
+    )
+      return;
     if (e.key === "ArrowDown") {
       setDetailEnterMotion(null);
       stepReview(1);

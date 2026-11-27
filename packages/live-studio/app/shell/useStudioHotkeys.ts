@@ -116,7 +116,7 @@ const REVIEW_KEYS = new Set([
 
 export function useStudioHotkeys() {
   const settingsOpen = useStudio((s) => s.settingsOpen);
-  const composeOpen = useStudio((s) => s.compose !== null);
+  const composeOpen = useStudio((s) => s.composeState.status !== "closed");
   const pickFocus = useStudio((s) => s.pickFocus !== null);
   const compareVideoMode = useStudio((s) => s.compareVideoMode);
   const ink = useStudio((s) => s.ink),

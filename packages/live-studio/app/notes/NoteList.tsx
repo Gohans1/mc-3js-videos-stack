@@ -1029,8 +1029,15 @@ export function NoteList({ composeDock = false }: { composeDock?: boolean }) {
     saved = useStudio((s) => s.saved),
     nearNote = useStudio((s) => s.nearNote),
     rawView = useStudio((s) => s.noteView);
-  const editing = useStudio((s) => (s.compose?.kind === "edit" ? s.compose.id : undefined)),
-    composeNew = useStudio((s) => s.compose?.kind === "create"),
+  const editing = useStudio((s) =>
+      s.composeState.status === "edit-editing" || s.composeState.status === "edit-saving"
+        ? s.composeState.compose.id
+        : undefined,
+    ),
+    composeNew = useStudio(
+      (s) =>
+        s.composeState.status === "create-editing" || s.composeState.status === "create-saving",
+    ),
     rawQ = useStudio((s) => s.noteSearch),
     rawStatus = useStudio((s) => s.noteStatus),
     rawScope = useStudio((s) => s.noteScope),

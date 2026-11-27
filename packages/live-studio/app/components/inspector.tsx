@@ -77,6 +77,17 @@ function computeRevealScrollDelta(
   return 0;
 }
 
+type RevealPhase =
+  | { kind: "measuring"; raf: number }
+  | {
+      kind: "waiting-height";
+      scroller: HTMLElement;
+      timer: number;
+      onHeightEnd: (e: TransitionEvent) => void;
+      onInterrupt: () => void;
+    }
+  | { kind: "done" };
+
 export function revealInScrollContainer(
   targetEl: HTMLElement | null,
   opts?: {
@@ -87,31 +98,40 @@ export function revealInScrollContainer(
 ): () => void {
   if (!targetEl) return () => {};
   const stopPulse = opts?.pulseEl ? pulseRevealSurface(opts.pulseEl) : () => {};
-  let cancelled = false;
-  let timer = 0;
-  let scrollerRef: HTMLElement | null = null;
-  let onHeightEnd: ((e: TransitionEvent) => void) | null = null;
-  const cancelScroll = () => {
-    cancelled = true;
-    if (timer) window.clearTimeout(timer);
-    if (onHeightEnd) targetEl.removeEventListener("transitionend", onHeightEnd);
+  let phase: RevealPhase = { kind: "done" };
+
+  const stop = () => {
+    const prev = phase;
+    phase = { kind: "done" };
+    if (prev.kind === "measuring") {
+      cancelAnimationFrame(prev.raf);
+    } else if (prev.kind === "waiting-height") {
+      window.clearTimeout(prev.timer);
+      targetEl.removeEventListener("transitionend", prev.onHeightEnd);
+      prev.scroller.removeEventListener("wheel", prev.onInterrupt);
+      prev.scroller.removeEventListener("pointerdown", prev.onInterrupt);
+      prev.scroller.removeEventListener("touchstart", prev.onInterrupt);
+    }
   };
 
+  phase = { kind: "measuring", raf: 0 };
   const raf = requestAnimationFrame(() => {
-    if (cancelled) return;
+    if (phase.kind !== "measuring") return;
     const rect = targetEl.getBoundingClientRect();
     const fullH = opts?.measureEl ? opts.measureEl.offsetHeight : rect.height;
     const missingH = Math.max(0, fullH - rect.height);
     const scroller = findScrollParent(targetEl, missingH);
-    if (!scroller) return;
-    scrollerRef = scroller;
-    scroller.addEventListener("wheel", cancelScroll, { passive: true, once: true });
-    scroller.addEventListener("pointerdown", cancelScroll, { passive: true, once: true });
-    scroller.addEventListener("touchstart", cancelScroll, { passive: true, once: true });
+    if (!scroller) {
+      phase = { kind: "done" };
+      return;
+    }
 
     const anchorTop = (opts?.anchorEl ?? targetEl).getBoundingClientRect().top;
     const delta = computeRevealScrollDelta(scroller, rect.top + fullH, anchorTop);
-    if (Math.abs(delta) <= 1) return;
+    if (Math.abs(delta) <= 1) {
+      phase = { kind: "done" };
+      return;
+    }
 
     const behavior: ScrollBehavior = prefersReduced() ? "instant" : "smooth";
     const maxScrollRoom = Math.max(
@@ -119,32 +139,34 @@ export function revealInScrollContainer(
       scroller.scrollHeight - scroller.clientHeight - scroller.scrollTop,
     );
     if (delta < 0 || maxScrollRoom >= delta - 1 || missingH <= 1) {
+      phase = { kind: "done" };
       scroller.scrollBy({ top: delta, behavior });
       return;
     }
+
     const settle = () => {
-      if (cancelled) return;
-      cancelScroll();
+      if (phase.kind !== "waiting-height") return;
+      stop();
       const settledRect = targetEl.getBoundingClientRect();
       const settledAnchorTop = (opts?.anchorEl ?? targetEl).getBoundingClientRect().top;
       const remaining = computeRevealScrollDelta(scroller, settledRect.bottom, settledAnchorTop);
       if (Math.abs(remaining) > 1) scroller.scrollBy({ top: remaining, behavior });
     };
-    onHeightEnd = (e: TransitionEvent) => {
+    const onHeightEnd = (e: TransitionEvent) => {
       if (e.target === targetEl && e.propertyName === "height") settle();
     };
+    const onInterrupt = () => stop();
+    scroller.addEventListener("wheel", onInterrupt, { passive: true, once: true });
+    scroller.addEventListener("pointerdown", onInterrupt, { passive: true, once: true });
+    scroller.addEventListener("touchstart", onInterrupt, { passive: true, once: true });
     targetEl.addEventListener("transitionend", onHeightEnd);
-    timer = window.setTimeout(settle, 220);
+    const timer = window.setTimeout(settle, 220);
+    phase = { kind: "waiting-height", scroller, timer, onHeightEnd, onInterrupt };
   });
+  if (phase.kind === "measuring") phase = { kind: "measuring", raf };
 
   return () => {
-    cancelAnimationFrame(raf);
-    cancelScroll();
-    if (scrollerRef) {
-      scrollerRef.removeEventListener("wheel", cancelScroll);
-      scrollerRef.removeEventListener("pointerdown", cancelScroll);
-      scrollerRef.removeEventListener("touchstart", cancelScroll);
-    }
+    stop();
     stopPulse();
   };
 }

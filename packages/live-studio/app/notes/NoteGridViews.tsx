@@ -1143,7 +1143,9 @@ function NoteTableRow({
             <DropdownMenuContent
               motion="none"
               align="end"
-              finalFocus={(closedBy) => closedBy === "keyboard" && !get().compose}
+              finalFocus={(closedBy) =>
+                closedBy === "keyboard" && get().composeState.status === "closed"
+              }
               font="md"
               className="w-44"
             >

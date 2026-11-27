@@ -219,6 +219,29 @@ export type NoteFacet =
   "needsWork" | "asking" | "readyFix" | "drawn" | "pinned" | "refs" | "freeCam" | "learned";
 export type NoteSort = "film" | "activity" | "newest" | "oldest";
 
+export type NoteComposeState =
+  | { status: "closed" }
+  | { status: "create-editing"; compose: ComposeCreate; draft: string; refs: RefPic[] }
+  | { status: "create-saving"; compose: ComposeCreate; draft: string; refs: RefPic[] }
+  | { status: "edit-editing"; compose: ComposeEdit; draft: string }
+  | { status: "edit-saving"; compose: ComposeEdit; draft: string };
+
+const EMPTY_NOTE_REFS: readonly RefPic[] = [];
+
+export const noteComposeOf = (s: { composeState: NoteComposeState }): Compose | null =>
+  s.composeState.status === "closed" ? null : s.composeState.compose;
+
+export const noteSavingOf = (s: { composeState: NoteComposeState }): boolean =>
+  s.composeState.status === "create-saving" || s.composeState.status === "edit-saving";
+
+export const noteDraftOf = (s: { composeState: NoteComposeState }): string =>
+  s.composeState.status === "closed" ? "" : s.composeState.draft;
+
+export const noteRefsOf = (s: { composeState: NoteComposeState }): readonly RefPic[] =>
+  s.composeState.status === "create-editing" || s.composeState.status === "create-saving"
+    ? s.composeState.refs
+    : EMPTY_NOTE_REFS;
+
 export interface NotesSlice {
   noteReturn: {
     at: number;
@@ -237,11 +260,8 @@ export interface NotesSlice {
   noteSort: NoteSort;
   noteView: NoteView;
   saved: "busy" | "fail" | null;
-  compose: Compose | null;
-  noteSaving: boolean;
-  draft: string;
+  composeState: NoteComposeState;
   replyDrafts: ReadonlyMap<string, string>;
-  refs: RefPic[];
   nearNote: string | null;
   ink: InkKind | null;
   inkDrawing: boolean;
@@ -262,11 +282,8 @@ export const notesSlice: NotesSlice = {
   noteSort: "film",
   noteView: "cards",
   saved: null,
-  compose: null,
-  noteSaving: false,
-  draft: "",
+  composeState: { status: "closed" },
   replyDrafts: new Map(),
-  refs: [],
   nearNote: null,
   ink: null,
   inkDrawing: false,

@@ -467,6 +467,61 @@ function disposeObject(root: THREE.Object3D): void {
     TITLE_H / 2,
   );
 
+  type BoundsMeta = {
+    size: [number, number, number];
+    min: [number, number, number];
+    max: [number, number, number];
+  };
+  type LoadedAsset =
+    | { status: "ready"; model: THREE.Group; bounds: BoundsMeta }
+    | { status: "missing" }
+    | { status: "error"; message: string; missing: boolean };
+
+  const loadPreviewAsset = async (
+    item: (typeof spec.items)[number],
+  ): Promise<LoadedAsset> => {
+    if (spec.stagingErrors.has(item.label)) {
+      return {
+        status: "error",
+        message: spec.stagingErrors.get(item.label) || "failed to stage vault asset",
+        missing: true,
+      };
+    }
+    let model: THREE.Group | null = null;
+    try {
+      if (await checkAssetMissing(sources, item.kind, item.id)) {
+        return { status: "missing" };
+      }
+      model =
+        item.kind === "block"
+          ? await blockModel(sources, item.id, {}, { shadows: true, animate: false })
+          : await itemModel(sources, item.id, spec.size, { shadows: true, animate: false });
+      model.updateMatrixWorld(true);
+      const rawBox = computeVisibleBounds(model);
+      if (rawBox.isEmpty()) {
+        disposeObject(model);
+        return { status: "missing" };
+      }
+      const sizeVec = rawBox.getSize(new THREE.Vector3());
+      const bounds: BoundsMeta = {
+        size: [round4(sizeVec.x), round4(sizeVec.y), round4(sizeVec.z)],
+        min: [round4(rawBox.min.x), round4(rawBox.min.y), round4(rawBox.min.z)],
+        max: [round4(rawBox.max.x), round4(rawBox.max.y), round4(rawBox.max.z)],
+      };
+      const cx = (rawBox.min.x + rawBox.max.x) / 2;
+      const cz = (rawBox.min.z + rawBox.max.z) / 2;
+      model.position.set(-cx, -rawBox.min.y, -cz);
+      return { status: "ready", model, bounds };
+    } catch (err) {
+      if (model) disposeObject(model);
+      return {
+        status: "error",
+        message: err instanceof Error ? err.message : String(err),
+        missing: false,
+      };
+    }
+  };
+
   const results = [];
   for (let i = 0; i < spec.items.length; i++) {
     const item = spec.items[i];
@@ -475,49 +530,10 @@ function disposeObject(root: THREE.Object3D): void {
     const tileX = PAD + col * (TILE_W + GAP);
     const tileY = TITLE_H + PAD + row * (TILE_H + GAP);
 
-    let model: THREE.Group | null = null;
-    let error: string | null = null;
-    let missing = false;
-    let boundsMeta: {
-      size: [number, number, number];
-      min: [number, number, number];
-      max: [number, number, number];
-    } | null = null;
+    const loaded = await loadPreviewAsset(item);
+    if (loaded.status === "ready") scene.add(loaded.model);
 
-    if (spec.stagingErrors.has(item.label)) {
-      missing = true;
-      error = spec.stagingErrors.get(item.label) || "failed to stage vault asset";
-    } else {
-      try {
-        missing = await checkAssetMissing(sources, item.kind, item.id);
-        if (!missing) {
-          model =
-            item.kind === "block"
-              ? await blockModel(sources, item.id, {}, { shadows: true, animate: false })
-              : await itemModel(sources, item.id, spec.size, { shadows: true, animate: false });
-          model.updateMatrixWorld(true);
-          const rawBox = computeVisibleBounds(model);
-          if (rawBox.isEmpty()) {
-            missing = true;
-          } else {
-            const sizeVec = rawBox.getSize(new THREE.Vector3());
-            boundsMeta = {
-              size: [round4(sizeVec.x), round4(sizeVec.y), round4(sizeVec.z)],
-              min: [round4(rawBox.min.x), round4(rawBox.min.y), round4(rawBox.min.z)],
-              max: [round4(rawBox.max.x), round4(rawBox.max.y), round4(rawBox.max.z)],
-            };
-            const cx = (rawBox.min.x + rawBox.max.x) / 2;
-            const cz = (rawBox.min.z + rawBox.max.z) / 2;
-            model.position.set(-cx, -rawBox.min.y, -cz);
-          }
-          scene.add(model);
-        }
-      } catch (err) {
-        error = err instanceof Error ? err.message : String(err);
-      }
-    }
-
-    const assetHalfW = boundsMeta ? boundsMeta.size[0] / 2 : 0.5;
+    const assetHalfW = loaded.status === "ready" ? loaded.bounds.size[0] / 2 : 0.5;
     if (scaleFigure) {
       scaleFigure.visible = true;
       scaleFigure.position.set(-(assetHalfW + scaleHalfW + 0.35), 0, 0);
@@ -525,9 +541,9 @@ function disposeObject(root: THREE.Object3D): void {
     }
 
     const frameBox = new THREE.Box3();
-    if (model) {
-      model.updateMatrixWorld(true);
-      const placedBox = computeVisibleBounds(model);
+    if (loaded.status === "ready") {
+      loaded.model.updateMatrixWorld(true);
+      const placedBox = computeVisibleBounds(loaded.model);
       if (!placedBox.isEmpty()) frameBox.union(placedBox);
     }
     if (scaleFigure) {
@@ -560,25 +576,30 @@ function disposeObject(root: THREE.Object3D): void {
     ctx.font = "600 13px Consolas, monospace";
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = error || missing ? "#f97360" : "#e8eef8";
+    ctx.fillStyle = loaded.status === "ready" ? "#e8eef8" : "#f97360";
     ctx.fillText(item.label, tileX + 10, tileY + HEADER_H / 2, TILE_W - 175);
 
     ctx.textAlign = "right";
     ctx.font = "12px Consolas, monospace";
-    if (error) {
-      ctx.fillStyle = "#f97360";
-      ctx.fillText("ERROR", tileX + TILE_W - 10, tileY + HEADER_H / 2);
-    } else if (missing) {
-      ctx.fillStyle = "#f97360";
-      ctx.fillText("MISSING MODEL", tileX + TILE_W - 10, tileY + HEADER_H / 2);
-    } else if (boundsMeta) {
-      ctx.fillStyle = "#9fb3cc";
-      const [bw, bh, bd] = boundsMeta.size;
-      ctx.fillText(
-        `${bw.toFixed(2)}×${bh.toFixed(2)}×${bd.toFixed(2)} m`,
-        tileX + TILE_W - 10,
-        tileY + HEADER_H / 2,
-      );
+    switch (loaded.status) {
+      case "error":
+        ctx.fillStyle = "#f97360";
+        ctx.fillText("ERROR", tileX + TILE_W - 10, tileY + HEADER_H / 2);
+        break;
+      case "missing":
+        ctx.fillStyle = "#f97360";
+        ctx.fillText("MISSING MODEL", tileX + TILE_W - 10, tileY + HEADER_H / 2);
+        break;
+      case "ready": {
+        ctx.fillStyle = "#9fb3cc";
+        const [bw, bh, bd] = loaded.bounds.size;
+        ctx.fillText(
+          `${bw.toFixed(2)}×${bh.toFixed(2)}×${bd.toFixed(2)} m`,
+          tileX + TILE_W - 10,
+          tileY + HEADER_H / 2,
+        );
+        break;
+      }
     }
 
     const drawBadge = (bx: number, by: number, text: string) => {
@@ -594,17 +615,17 @@ function disposeObject(root: THREE.Object3D): void {
     drawBadge(tileX + 8, tileY + HEADER_H + 8, "FRONT");
     drawBadge(tileX + VIEW_W + 8, tileY + HEADER_H + 8, "3/4");
 
-    if (model) {
-      scene.remove(model);
-      disposeObject(model);
+    if (loaded.status === "ready") {
+      scene.remove(loaded.model);
+      disposeObject(loaded.model);
     }
 
     results.push({
       id: item.label,
       kind: item.kind,
-      bounds: missing || error ? null : boundsMeta,
-      missing,
-      ...(error ? { error } : {}),
+      bounds: loaded.status === "ready" ? loaded.bounds : null,
+      missing: loaded.status === "missing" || (loaded.status === "error" && loaded.missing),
+      ...(loaded.status === "error" ? { error: loaded.message } : {}),
     });
   }
 

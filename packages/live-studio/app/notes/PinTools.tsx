@@ -9,7 +9,13 @@ import { cancelNote } from "./notes";
 
 export function PinDrawToolbar({ hasPin }: { hasPin?: boolean } = {}) {
   const show = useStudio(
-    (s) => (hasPin ?? (s.compose?.kind === "create" && !!s.compose.pin)) && !s.ink && !s.playing,
+    (s) =>
+      (hasPin ??
+        ((s.composeState.status === "create-editing" ||
+          s.composeState.status === "create-saving") &&
+          !!s.composeState.compose.pin)) &&
+      !s.ink &&
+      !s.playing,
   );
   const ink = useStudio((s) => s.ink);
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
