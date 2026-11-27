@@ -1,7 +1,7 @@
 import type { AssetsInput } from "block-model-renderer";
 import * as THREE from "three";
 
-import { loadBmr, type ModelRendererApi, texturePath } from "./model";
+import { blockParticleTexture, loadBmr, type ModelRendererApi, texturePath } from "./model";
 
 export type Vec3 = readonly [number, number, number];
 export type Rgb = [number, number, number];
@@ -2102,22 +2102,6 @@ export function createMinecraftParticles(
   };
   const ticksBetween = (at: number, until: number) => Math.max(0, Math.round((until - at) * 20));
 
-  const resolveBlock = async (
-    bmr: ModelRendererApi,
-    block: string,
-    properties: Record<string, string>,
-  ) => {
-    const refs = await bmr.parseBlockstate(sources, block, { data: properties });
-    if (!refs[0]) throw new Error(`createMinecraftParticles(): no model for block "${block}"`);
-    const model = await bmr.resolveModelData(sources, refs[0]);
-    const named = (model.textures ?? {}) as Record<string, string>;
-    let name: string | undefined = named.particle;
-    for (let i = 0; i < 8 && name?.startsWith("#"); i++) name = named[name.slice(1)];
-    if (!name || name.startsWith("#"))
-      throw new Error(`createMinecraftParticles(): block "${block}" has no particle texture`);
-    return name;
-  };
-
   const ready = async (...extra: string[]) => {
     for (const t of extra) textures.add(t);
     const bmr = opts.renderer ?? (await loadBmr());
@@ -2147,7 +2131,10 @@ export function createMinecraftParticles(
     }
     for (const [block, properties] of blocks)
       if (!blockSprite.has(block))
-        blockSprite.set(block, await resolveBlock(bmr, block, properties));
+        blockSprite.set(
+          block,
+          await blockParticleTexture(sources, block, properties, { renderer: bmr }),
+        );
     const all = new Set<string>([
       ...[...sets.values()].flat(),
       ...blockSprite.values(),

@@ -204,6 +204,39 @@ export async function texture(
   return blockTexture(data.image);
 }
 
+export async function blockParticleTexture(
+  sources: AssetsInput,
+  block: string,
+  properties: Record<string, string | number | boolean> = {},
+  opts: { renderer?: ModelRendererApi } = {},
+): Promise<string> {
+  const bmr = opts.renderer ?? (await loadBmr());
+  const refs = await bmr.parseBlockstate(sources, normalizeBlockId(block), { data: properties });
+  if (!refs[0]) throw new Error(`no model for block "${block}"`);
+  const model = await bmr.resolveModelData(sources, refs[0]);
+  const named = (model.textures ?? {}) as Record<string, string>;
+  let name: string | undefined = named.particle;
+  for (let i = 0; i < 8 && name?.startsWith("#"); i++) name = named[name.slice(1)];
+  if (!name || name.startsWith("#")) throw new Error(`block "${block}" has no particle texture`);
+  return name;
+}
+
+export type AssetJson = Record<string, unknown>;
+
+export async function assetJson(
+  sources: AssetsInput,
+  path: string,
+  bmr: ModelRendererApi,
+  optional?: true,
+): Promise<AssetJson> {
+  if (!bmr.readFile)
+    throw new Error(`reading ${path} needs block-model-renderer 2.20 or later (readFile)`);
+  const bytes = await bmr.readFile(path, sources);
+  if (bytes) return JSON.parse(new TextDecoder().decode(bytes)) as AssetJson;
+  if (optional) return {};
+  throw new Error(`no ${path} in the asset sources (is the vanilla jar among them?)`);
+}
+
 export interface AnimatedTexture {
   frames: THREE.Texture[];
   times: number[];

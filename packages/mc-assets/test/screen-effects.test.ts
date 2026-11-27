@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 
 import * as THREE from "three";
 
-import { fireQuads, hudFov, placeOnCamera, viewAngles, waterOverlay } from "../src/screen-effects";
+import {
+  fireQuads,
+  hudFov,
+  placeOnCamera,
+  viewAngles,
+  viewBlockingProbes,
+  waterOverlay,
+} from "../src/screen-effects";
 
 const look = (x: number, y: number, z: number) => {
   const cam = new THREE.PerspectiveCamera(70, 16 / 9, 0.05, 100);
@@ -87,5 +94,24 @@ describe("fire overlay (ScreenEffectRenderer.submitFire)", () => {
       expect(left![i]![0]).toBeCloseTo(-right![j]![0]);
       expect(left![i]![2]).toBeCloseTo(right![j]![2]);
     }
+  });
+});
+
+describe("inside a block (LevelExtractor.getViewBlockingState)", () => {
+  test("eight probes box the eye: 0.24 to each side for a player, 0.05 above and below", () => {
+    const probes = viewBlockingProbes([10.5, 65.62, -3.5]);
+    expect(probes).toHaveLength(8);
+    expect(new Set(probes.map((p) => p.join())).size).toBe(8);
+    for (const [x, y, z] of probes) {
+      expect(Math.abs(x - 10.5)).toBeCloseTo(0.24);
+      expect(Math.abs(y - 65.62)).toBeCloseTo(0.05);
+      expect(Math.abs(z + 3.5)).toBeCloseTo(0.24);
+    }
+  });
+
+  test("smaller or scaled bodies probe a smaller box", () => {
+    const [x, y] = viewBlockingProbes([0, 0, 0], { width: 0.3, scale: 0.5 })[0]!;
+    expect(Math.abs(x)).toBeCloseTo(0.12);
+    expect(Math.abs(y)).toBeCloseTo(0.025);
   });
 });

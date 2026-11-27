@@ -1,7 +1,13 @@
 import type { AssetsInput } from "block-model-renderer";
 import * as THREE from "three";
 
-import { animatedTexture, loadBmr, type ModelRendererApi, texture } from "./model";
+import {
+  animatedTexture,
+  blockParticleTexture,
+  loadBmr,
+  type ModelRendererApi,
+  texture,
+} from "./model";
 import type { Vec3 } from "./particles";
 import type { SkyState } from "./sky";
 
@@ -61,6 +67,21 @@ export function fireQuads(): [Quad, Quad] {
   return [quad(1), quad(-1)];
 }
 
+export function viewBlockingProbes(
+  [x, y, z]: Vec3,
+  o: { width?: number; scale?: number } = {},
+): Vec3[] {
+  const w = (o.width ?? 0.6) * 0.8;
+  const h = 0.1 * (o.scale ?? 1);
+  return Array.from({ length: 8 }, (_, i): Vec3 => [
+    x + ((i & 1) - 0.5) * w,
+    y + (((i >> 1) & 1) - 0.5) * h,
+    z + (((i >> 2) & 1) - 0.5) * w,
+  ]);
+}
+
+export const IN_BLOCK_SHADE = 25 / 255;
+
 const NEAREST_OVERLAY = 0.4;
 
 export function placeOnCamera(group: THREE.Object3D, camera: THREE.PerspectiveCamera, fov: number) {
@@ -73,6 +94,7 @@ export function placeOnCamera(group: THREE.Object3D, camera: THREE.PerspectiveCa
 }
 
 export interface ScreenEffectState {
+  inBlock?: string;
   underwater?: boolean | { light?: number; yaw?: number; pitch?: number };
   inLava?: boolean;
   onFire?: boolean;
@@ -86,6 +108,7 @@ export interface ScreenEffectsOptions {
 
 export interface ScreenEffects {
   group: THREE.Group;
+  ready: (block: string, properties?: Record<string, string>) => Promise<void>;
   update: (t: number, camera: THREE.PerspectiveCamera, state: ScreenEffectState) => void;
   dispose: () => void;
 }
@@ -172,6 +195,26 @@ export async function createScreenEffects(
     overlayMaterial(underwater),
     0,
   );
+  const insideMaterial = overlayMaterial(underwater);
+  const inside = add(
+    "in-block",
+    quadGeometry([
+      [-1, -1, -0.5],
+      [1, -1, -0.5],
+      [1, 1, -0.5],
+      [-1, 1, -0.5],
+    ]),
+    insideMaterial,
+    -1,
+  );
+  const shade = new THREE.Color().setRGB(
+    IN_BLOCK_SHADE,
+    IN_BLOCK_SHADE,
+    IN_BLOCK_SHADE,
+    THREE.SRGBColorSpace,
+  );
+  setQuad(inside.geometry, [1, 1, 0, 0], [shade.r, shade.g, shade.b, 1]);
+  const blockTextures = new Map<string, THREE.Texture>();
   const fireMaterial = overlayMaterial(fire.frames[0]!);
   const flames = fireQuads().map((q, i) => {
     const mesh = add(`fire-${i}`, quadGeometry(q), fireMaterial, 1 + i);
@@ -182,9 +225,23 @@ export async function createScreenEffects(
 
   return {
     group,
+    async ready(block, properties = {}) {
+      if (blockTextures.has(block)) return;
+      const name = await blockParticleTexture(sources, block, properties, { renderer: bmr });
+      blockTextures.set(block, pixelTexture(await texture(sources, name, { renderer: bmr })));
+    },
     update(t, camera, state) {
       const inFluid = Boolean(state.underwater) || state.inLava === true;
       placeOnCamera(group, camera, hudFov(inFluid));
+      inside.visible = state.inBlock !== undefined;
+      if (state.inBlock !== undefined) {
+        const map = blockTextures.get(state.inBlock);
+        if (!map)
+          throw new Error(
+            `createScreenEffects(): block "${state.inBlock}" is not loaded; await ready("${state.inBlock}")`,
+          );
+        insideMaterial.map = map;
+      }
       water.visible = Boolean(state.underwater);
       if (water.visible) {
         const given = typeof state.underwater === "object" ? state.underwater : {};
@@ -206,6 +263,8 @@ export async function createScreenEffects(
     dispose() {
       for (const m of group.children as THREE.Mesh[]) m.geometry.dispose();
       (water.material as THREE.Material).dispose();
+      insideMaterial.dispose();
+      for (const map of blockTextures.values()) map.dispose();
       fireMaterial.dispose();
       underwater.dispose();
       fire.dispose();

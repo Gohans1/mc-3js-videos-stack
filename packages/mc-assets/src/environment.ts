@@ -2,7 +2,14 @@ import type { AssetsInput, Biome } from "block-model-renderer";
 import { type CloudLayerHandle, createCloudLayer } from "film-stage/sky";
 import * as THREE from "three";
 
-import { animatedTexture, loadBmr, type ModelRendererApi, texture } from "./model";
+import {
+  animatedTexture,
+  assetJson as readJson,
+  type AssetJson as Json,
+  loadBmr,
+  type ModelRendererApi,
+  texture,
+} from "./model";
 
 export type Precipitation = "none" | "rain" | "snow";
 
@@ -28,7 +35,6 @@ export interface BiomeEnvironment {
   timelines: string[];
 }
 
-type Json = Record<string, unknown>;
 
 const DEFAULTS: Record<string, string | number> = {
   "minecraft:visual/sky_color": "#000000",
@@ -79,20 +85,6 @@ async function timelinesOf(
 }
 const DARK_FOREST_FOLD = "#28340a";
 const SWAMP_GRASS = "#6a7039";
-
-async function readJson(
-  sources: AssetsInput,
-  path: string,
-  bmr: ModelRendererApi,
-  optional?: true,
-): Promise<Json> {
-  if (!bmr.readFile)
-    throw new Error(`reading ${path} needs block-model-renderer 2.20 or later (readFile)`);
-  const bytes = await bmr.readFile(path, sources);
-  if (bytes) return JSON.parse(new TextDecoder().decode(bytes)) as Json;
-  if (optional) return {};
-  throw new Error(`no ${path} in the asset sources (is the vanilla jar among them?)`);
-}
 
 async function dimensionOf(
   sources: AssetsInput,
