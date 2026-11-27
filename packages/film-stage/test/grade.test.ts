@@ -1,8 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { Color } from "three";
+import { EffectComposer, EffectPass } from "postprocessing";
+import { Color, PerspectiveCamera } from "three";
 
-import { finishStrength, type Grade } from "../src/grade";
+import { DitherEffect, finishStrength, type Grade, makeAdjustments } from "../src/grade";
 import { colorGrade } from "../src/grade-color";
 import { hasSecondary, NEUTRAL_CURVE } from "../src/grade-secondary";
 import { hasWheels } from "../src/grade-wheels";
@@ -195,6 +196,35 @@ test("resolveGrade merges look defaults beneath shot overrides and handles unkno
 
   const unknown = resolveGrade({ look: "does-not-exist", basic: { contrast: 15 } });
   expect(unknown.basic?.contrast).toBe(15);
+});
+
+test("makeAdjustments keeps tail.dithering false when tailDithered is true and preserves legacy true when omitted", () => {
+  const cam = new PerspectiveCamera(50, 16 / 9, 0.1, 100);
+  const makeFakeComposer = () => {
+    const tail = new EffectPass(cam, new DitherEffect(50));
+    const passes = [tail];
+    const composer = {
+      passes,
+      addPass(pass: EffectPass) {
+        passes.push(pass);
+      },
+    } as unknown as EffectComposer;
+    return { composer, tail };
+  };
+
+  const legacy = makeFakeComposer();
+  const legacyAdjust = makeAdjustments(legacy.composer, cam);
+  legacyAdjust(0, {}, 0.5, true);
+  expect(legacyAdjust.isActive()).toBe(false);
+  expect(legacy.tail.dithering).toBe(true);
+  legacyAdjust.dispose();
+
+  const preDithered = makeFakeComposer();
+  const postAdjust = makeAdjustments(preDithered.composer, cam, { tailDithered: true });
+  postAdjust(0, {}, 0.5, true);
+  expect(postAdjust.isActive()).toBe(false);
+  expect(preDithered.tail.dithering).toBe(false);
+  postAdjust.dispose();
 });
 
 test("partial reset helpers neutralize look-supplied curves, wheels, and HSL while keeping g.look intact", () => {

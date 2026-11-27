@@ -928,4 +928,44 @@ describe("mc-actor player rig primitives", () => {
     expect(irises.every((m) => m.visible)).toBe(true);
     expect(pupils.every((m) => m.visible)).toBe(true);
   });
+
+  test("makePlayer attaches lowercase bones on g.userData.bones and showParts hides attached wearToonFace when head is hidden", async () => {
+    installPixelDocument(true);
+    const p = await makePlayer(await loadPlayerTemplate(), plainSkin());
+    expect(p.g.userData.bones?.head).toBe(p.bones.head);
+    expect(p.g.userData.bones?.handR).toBe(p.handR);
+    expect(p.g.userData.bones?.handL).toBe(p.handL);
+
+    const isWorldVisible = (o: THREE.Object3D) => {
+      for (let cur: THREE.Object3D | null = o; cur; cur = cur.parent) {
+        if (!cur.visible) return false;
+      }
+      return true;
+    };
+
+    const wear = wearToonFace(p, { derive: false, skin: false, face: "smitten" });
+    expect(isWorldVisible(wear.mesh)).toBe(true);
+    expect(isWorldVisible(wear.marks)).toBe(true);
+
+    p.showParts(["armR", "armL"]);
+    expect(isWorldVisible(wear.mesh)).toBe(false);
+    expect(isWorldVisible(wear.marks)).toBe(false);
+
+    wear.set("admiring");
+    expect(isWorldVisible(wear.mesh)).toBe(false);
+    expect(isWorldVisible(wear.marks)).toBe(false);
+
+    p.showParts(null);
+    expect(isWorldVisible(wear.mesh)).toBe(true);
+    expect(isWorldVisible(wear.marks)).toBe(true);
+    wear.dispose();
+
+    const cleanWear = wearToonFace(p, { derive: false, skin: false, face: "deadpan", marks: false });
+    expect(cleanWear.marks.visible).toBe(false);
+    expect(cleanWear.face.extras).toEqual({});
+    cleanWear.set("smitten");
+    expect(cleanWear.marks.visible).toBe(false);
+    expect(cleanWear.face.extras).toEqual({});
+    cleanWear.dispose();
+  });
 });

@@ -64,6 +64,7 @@
     "fmt": "bun fmt --no-script",
     "fmt:check": "bun fmt --no-script --check",
     "studio": "bun packages/live-studio/wrong-place.mjs studio",
+    "studio:lite": "bun packages/live-studio/wrong-place.mjs studio:lite",
     "render": "bun packages/live-studio/wrong-place.mjs render",
     "notes": "bun packages/live-studio/wrong-place.mjs notes",
     "at": "bun packages/live-studio/wrong-place.mjs at",

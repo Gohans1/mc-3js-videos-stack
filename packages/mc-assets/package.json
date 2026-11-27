@@ -2,7 +2,7 @@
   "name": "mc-assets",
   "version": "0.1.0",
   "private": true,
-  "description": "Minecraft assets every film shares: the props pack (pack/assets/gohans, pack.ts) and what makes props work (gamefont, ink, screen, variants for the studio), block-model-renderer's runtime files (vendor.mjs, a film's postinstall), blocks cherry-picked from the vault's mod packs (pick.mjs; pick.py forwards here), what the creator drops into a scene from the studio (placed). MineRender's mob dataset mirrored into the vault (mobs.ts, for mc-actor/mob). The game itself, the rig and the clips stay in the vault (vault.json, bun run link).",
+  "description": "Minecraft assets every film shares: the props pack (pack/assets/gohans, pack.ts) and what makes props work (gamefont, ink, screen, variants for the studio), the game's own open air read from the jar for outdoor sets: biome colours and weather, clouds, still water and lava (environment), the sky and fog for a film's composer (sky), the game's particles and the events that throw them, block breaks, explosions, fireworks, torches, mob deaths (particles), rain and snow with their ground splashes (weather), the first-person underwater and burning overlays (screen-effects), block-model-renderer's runtime files (vendor.mjs, a film's postinstall), blocks cherry-picked from the vault's mod packs (pick.mjs; pick.py forwards here), what the creator drops into a scene from the studio (placed). MineRender's mob dataset mirrored into the vault (mobs.ts, for mc-actor/mob). The game itself, the rig and the clips stay in the vault (vault.json, bun run link).",
   "type": "module",
   "exports": {
     "./pack": "./src/pack.ts",
@@ -12,7 +12,12 @@
     "./screen": "./src/screen.ts",
     "./variants": "./src/variants.ts",
     "./placed": "./src/placed.ts",
-    "./model": "./src/model.ts"
+    "./model": "./src/model.ts",
+    "./environment": "./src/environment.ts",
+    "./sky": "./src/sky.ts",
+    "./particles": "./src/particles.ts",
+    "./weather": "./src/weather.ts",
+    "./screen-effects": "./src/screen-effects.ts"
   },
   "dependencies": {
     "block-model-renderer": "catalog:",

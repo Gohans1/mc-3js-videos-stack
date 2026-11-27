@@ -6,9 +6,13 @@ import * as THREE from "three";
 
 import {
   applyLightingRig,
+  applySetLight,
+  bakeSceneProbe,
+  createAreaLight,
   createEnvironment,
   createGodraysPass,
   createLightingRig,
+  createSkyEnvironment,
   DEFAULT_LIGHTS,
   ENVIRONMENT_PRESETS,
   kelvinToHex,
@@ -17,6 +21,7 @@ import {
   type LightKey,
   lightsAt,
   type LightsDoc,
+  loadHDREnvironment,
   practicalIntensityAt,
   resolveLightKeys,
 } from "../src/lights";
@@ -760,5 +765,667 @@ describe("createEnvironment", () => {
       fromSceneSpy.mockRestore();
       pmremDisposeSpy.mockRestore();
     }
+  });
+
+  test("supports custom { bg, ground, panels } specs, interior-warm, and RoomEnvironment 'room' preset with full disposal", () => {
+    const bakedScenes: THREE.Scene[] = [];
+    const targetDisposed = mock(() => {});
+    const fakeTexture = new THREE.Texture();
+    const fromSceneSpy = spyOn(THREE.PMREMGenerator.prototype, "fromScene").mockImplementation(
+      (scene: THREE.Scene) => {
+        bakedScenes.push(scene);
+        return {
+          texture: fakeTexture,
+          dispose: targetDisposed,
+        } as unknown as THREE.WebGLRenderTarget;
+      },
+    );
+    const pmremDisposeSpy = spyOn(THREE.PMREMGenerator.prototype, "dispose").mockImplementation(
+      () => {},
+    );
+    try {
+      const custom = createEnvironment({} as THREE.WebGLRenderer, {
+        bg: 0x9fb4ba,
+        ground: 0x30383e,
+        panels: [
+          { size: [8, 8], at: [0, 6, 0], look: [0, 0, 0], color: 0xffffff, gain: 4 },
+          { size: [5, 3], at: [0, 1, 4], look: [0, 1, 0], color: 0x26315c },
+        ],
+        sigma: 0.03,
+      });
+      expect(custom.texture).toBe(fakeTexture);
+      expect(bakedScenes.at(-1)?.children.length).toBe(3);
+      custom.dispose();
+
+      const room = createEnvironment({} as THREE.WebGLRenderer, { preset: "room" });
+      expect(room.texture).toBe(fakeTexture);
+      expect(bakedScenes.at(-1)?.children.length).toBeGreaterThan(0);
+      room.dispose();
+
+      const warm = createEnvironment({} as THREE.WebGLRenderer, { preset: "interior-warm" });
+      expect(warm.texture).toBe(fakeTexture);
+      warm.dispose();
+
+      const noGround = createEnvironment({} as THREE.WebGLRenderer, {
+        preset: "outdoor",
+        ground: null,
+      });
+      expect(bakedScenes.at(-1)?.children.length).toBe(ENVIRONMENT_PRESETS.outdoor.panels.length);
+      noGround.dispose();
+
+      const tintedOutdoor = createEnvironment({} as THREE.WebGLRenderer, {
+        preset: "outdoor",
+        bg: "#112233",
+      });
+      const tintedScene = bakedScenes.at(-1);
+      expect(tintedScene?.background).toBeInstanceOf(THREE.Color);
+      expect((tintedScene?.background as THREE.Color | undefined)?.getHexString()).toBe("112233");
+      expect(tintedScene?.children.length).toBe(ENVIRONMENT_PRESETS.outdoor.panels.length + 1);
+      tintedOutdoor.dispose();
+
+      const bgOnlyStudio = createEnvironment({} as THREE.WebGLRenderer, { bg: "#223344" });
+      const bgScene = bakedScenes.at(-1);
+      expect(bgScene?.children.length).toBe(ENVIRONMENT_PRESETS.studio.panels.length + 1);
+      for (const child of bgScene?.children ?? []) {
+        if (child instanceof THREE.Mesh) {
+          expect((child.material as THREE.MeshBasicMaterial).toneMapped).toBe(false);
+        }
+      }
+      bgOnlyStudio.dispose();
+
+      const explicitEmptyPanels = createEnvironment({} as THREE.WebGLRenderer, {
+        bg: "#223344",
+        panels: [],
+      });
+      expect(bakedScenes.at(-1)?.children.length).toBe(1);
+      explicitEmptyPanels.dispose();
+
+      expect(() =>
+        createEnvironment({} as THREE.WebGLRenderer, {
+          preset: "room",
+          bg: "#112233",
+        }),
+      ).toThrow(/room/);
+
+      expect(() =>
+        createEnvironment({} as THREE.WebGLRenderer, {
+          preset: "toString" as unknown as "studio",
+        }),
+      ).toThrow(/studio \| outdoor \| night/);
+
+      expect(pmremDisposeSpy).toHaveBeenCalledTimes(7);
+      expect(targetDisposed).toHaveBeenCalledTimes(7);
+    } finally {
+      fromSceneSpy.mockRestore();
+      pmremDisposeSpy.mockRestore();
+    }
+  });
+});
+
+describe("Shorts presets, dynamic shadowExtent, applySetLight, probes, sky IBL, HDR IBL, and RectAreaLight", () => {
+  test("LIGHT_PRESETS includes all 26 presets (6 core + 6 Shorts + 14 Coverage Round 1) with safe PCF shadowRadius", () => {
+    const shortsPresets = [
+      "daylight-exterior",
+      "bedroom-night",
+      "diner-warm",
+      "office-daylight",
+      "moonlit-exterior",
+      "studio-void",
+    ] as const;
+    const coveragePresets = [
+      "hospital-clinical",
+      "neon-city",
+      "dusk-twilight",
+      "storm-rain",
+      "underwater-shallow",
+      "underwater-deep",
+      "space-orbit",
+      "xray-cutaway",
+      "dramatic-diorama",
+      "arctic-snow",
+      "desert-harsh",
+      "forest-canopy",
+      "fire-hazard",
+      "cabin-interior",
+    ] as const;
+
+    expect(LIGHT_PRESET_IDS).toHaveLength(26);
+    for (const id of [...shortsPresets, ...coveragePresets]) {
+      expect(LIGHT_PRESET_IDS).toContain(id);
+      expect(LIGHT_PRESETS[id].title.length).toBeGreaterThan(2);
+      expect(LIGHT_PRESETS[id].state.key.color).toMatch(/^#[0-9a-f]{6}$/);
+      expect(LIGHT_PRESETS[id].state.key.shadowRadius).toBeLessThanOrEqual(3.8);
+    }
+
+    for (const id of LIGHT_PRESET_IDS) {
+      expect(LIGHT_PRESETS[id].state.key.shadowRadius).toBeLessThanOrEqual(4);
+    }
+  });
+
+  test("ENVIRONMENT_PRESETS includes all 13 procedural presets (4 base + 9 coverage) plus room", () => {
+    const expectedProcedural = [
+      "studio",
+      "outdoor",
+      "night",
+      "interior-warm",
+      "golden-hour",
+      "overcast",
+      "neon-night",
+      "indoor-cool",
+      "underwater",
+      "space",
+      "arctic",
+      "dark-stage",
+      "explainer-teal",
+    ] as const;
+    for (const preset of expectedProcedural) {
+      expect(ENVIRONMENT_PRESETS[preset]).toBeDefined();
+      expect(ENVIRONMENT_PRESETS[preset].panels.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test("lightsAt interpolates key.shadowExtent and applyLightingRig updates shadow projection only when extent changes", () => {
+    const doc: LightsDoc = {
+      keys: [
+        { t: 0, key: { shadowExtent: 4 } },
+        { t: 2, ease: "linear", key: { shadowExtent: 12 } },
+      ],
+    };
+
+    expect(lightsAt(doc, 1).key.shadowExtent).toBeCloseTo(8, 5);
+    expect(lightsAt(undefined, 0).key.shadowExtent).toBeUndefined();
+
+    const scene = new THREE.Scene();
+    const rig = createLightingRig(scene, { shadowExtent: 10 });
+    const projSpy = spyOn(rig.key.shadow.camera, "updateProjectionMatrix");
+
+    applyLightingRig(
+      rig,
+      { ...DEFAULT_LIGHTS, key: { ...DEFAULT_LIGHTS.key, shadowExtent: 5 } },
+      0,
+    );
+    expect(rig.key.shadow.camera.left).toBe(-5);
+    expect(rig.key.shadow.camera.right).toBe(5);
+    expect(rig.key.shadow.camera.top).toBe(5);
+    expect(rig.key.shadow.camera.bottom).toBe(-5);
+    expect(projSpy).toHaveBeenCalledTimes(1);
+
+    applyLightingRig(
+      rig,
+      { ...DEFAULT_LIGHTS, key: { ...DEFAULT_LIGHTS.key, shadowExtent: 5 } },
+      1,
+    );
+    expect(projSpy).toHaveBeenCalledTimes(1);
+
+    applyLightingRig(rig, DEFAULT_LIGHTS, 2);
+    expect(rig.key.shadow.camera.right).toBe(10);
+    expect(projSpy).toHaveBeenCalledTimes(2);
+
+    rig.dispose();
+  });
+
+  test("applySetLight drives focus-following key, hemi/fill, camera-back rim, zero-alloc fog/bg, practicals, and godrays without removing lights", () => {
+    const scene = new THREE.Scene();
+    const rig = createLightingRig(scene, { shadowExtent: 12 });
+    const initialChildren = [rig.key, rig.fill, rig.rim, rig.hemisphere, rig.ambient];
+
+    const raysA = applySetLight(
+      rig,
+      {
+        key: {
+          color: "#ffe4c2",
+          intensity: 3,
+          from: [-4, 8, -3],
+          shadowExtent: 6,
+          shadowRadius: 2.5,
+        },
+        hemi: { sky: "#cfe4f2", ground: "#5a4a3a", intensity: 0.7 },
+        rim: { color: "#ffd194", intensity: 1.4, mode: "camera-back", distance: 20, height: 5 },
+        fog: { mode: "linear", color: "#aabbcc", near: 20, far: 100 },
+        background: "#122334",
+        environmentIntensity: 0.65,
+        practicals: [
+          {
+            id: "lamp",
+            name: "Bedside",
+            kind: "point",
+            at: [1, 1.5, 2],
+            color: "#ffaa55",
+            intensity: 4,
+            distance: 8,
+            decay: 2,
+          },
+        ],
+        godrays: { enabled: true, density: 0.02 },
+      },
+      [10, 1, 5],
+      [10, 2, 15],
+    );
+
+    expect(rig.key.position.toArray()).toEqual([6, 9, 2]);
+    expect(rig.key.target.position.toArray()).toEqual([10, 1, 5]);
+    expect(rig.key.shadow.camera.right).toBe(6);
+    expect(rig.fill.visible).toBe(false);
+    expect(rig.fill.intensity).toBe(0);
+    expect(rig.hemisphere.intensity).toBeCloseTo(0.7, 5);
+    expect(rig.rim.visible).toBe(true);
+    expect(rig.rim.position.x).toBeCloseTo(10, 4);
+    expect(rig.rim.position.y).toBeCloseTo(6, 4);
+    expect(rig.rim.position.z).toBeCloseTo(-15, 4);
+    expect(scene.environmentIntensity).toBeCloseTo(0.65, 5);
+    expect(raysA.enabled).toBe(true);
+    expect(raysA.density).toBeCloseTo(0.02, 5);
+    expect(rig.practicals.has("lamp")).toBe(true);
+
+    const ownedFogRef = scene.fog;
+    const ownedBgRef = scene.background;
+    expect(ownedFogRef).toBeInstanceOf(THREE.Fog);
+    expect(ownedBgRef).toBeInstanceOf(THREE.Color);
+
+    applySetLight(
+      rig,
+      {
+        key: { intensity: 0 },
+        fog: { mode: "linear", color: "#334455", near: 10, far: 60 },
+        background: "#445566",
+      },
+      [0, 0, 0],
+    );
+
+    expect(scene.fog).toBe(ownedFogRef);
+    expect(scene.background).toBe(ownedBgRef);
+    expect((scene.fog as THREE.Fog).near).toBe(10);
+    expect((scene.background as THREE.Color).getHexString()).toBe("445566");
+    expect(rig.key.visible).toBe(false);
+    expect(rig.key.intensity).toBe(0);
+    expect(rig.practicals.size).toBe(0);
+
+    for (const light of initialChildren) {
+      expect(scene.children).toContain(light);
+    }
+
+    applySetLight(
+      rig,
+      { key: { color: "#ffffff", intensity: 2, from: [-40, 80, -30], shadowExtent: 10 } },
+      [0, 1, 0],
+    );
+    const farDist = rig.key.position.distanceTo(rig.key.target.position);
+    expect(rig.key.shadow.camera.far).toBeGreaterThanOrEqual(farDist + 20);
+
+    rig.dispose();
+  });
+
+  test("createSkyEnvironment bakes a sky dome into PMREM and disposes generator, dome, and target", () => {
+    const bakedScenes: THREE.Scene[] = [];
+    const targetDisposed = mock(() => {});
+    const fakeTexture = new THREE.Texture();
+    const fromSceneSpy = spyOn(THREE.PMREMGenerator.prototype, "fromScene").mockImplementation(
+      (scene: THREE.Scene) => {
+        bakedScenes.push(scene);
+        return {
+          texture: fakeTexture,
+          dispose: targetDisposed,
+        } as unknown as THREE.WebGLRenderTarget;
+      },
+    );
+    const pmremDisposeSpy = spyOn(THREE.PMREMGenerator.prototype, "dispose").mockImplementation(
+      () => {},
+    );
+    try {
+      const env = createSkyEnvironment(
+        {} as THREE.WebGLRenderer,
+        { preset: "golden-hour" },
+        { sigma: 0.02 },
+      );
+      expect(env.texture).toBe(fakeTexture);
+      expect(bakedScenes).toHaveLength(1);
+      expect(pmremDisposeSpy).toHaveBeenCalledTimes(1);
+      env.dispose();
+      env.dispose();
+      expect(targetDisposed).toHaveBeenCalledTimes(1);
+    } finally {
+      fromSceneSpy.mockRestore();
+      pmremDisposeSpy.mockRestore();
+    }
+  });
+
+  test("bakeSceneProbe captures a live scene at position without mutating or disposing scene meshes", () => {
+    const liveScene = new THREE.Scene();
+    const box = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
+    const geoDisposeSpy = spyOn(box.geometry, "dispose");
+    liveScene.add(box);
+
+    let capturedArgs: unknown[] = [];
+    const targetDisposed = mock(() => {});
+    const fakeTexture = new THREE.Texture();
+    const fromSceneSpy = spyOn(THREE.PMREMGenerator.prototype, "fromScene").mockImplementation(
+      (...args: unknown[]) => {
+        capturedArgs = args;
+        return {
+          texture: fakeTexture,
+          dispose: targetDisposed,
+        } as unknown as THREE.WebGLRenderTarget;
+      },
+    );
+    const pmremDisposeSpy = spyOn(THREE.PMREMGenerator.prototype, "dispose").mockImplementation(
+      () => {},
+    );
+    try {
+      const probe = bakeSceneProbe({} as THREE.WebGLRenderer, liveScene, {
+        position: [200, 1.4, 0.4],
+        sigma: 0.02,
+        near: 0.05,
+        far: 120,
+        size: 128,
+      });
+      expect(probe.texture).toBe(fakeTexture);
+      expect(capturedArgs[0]).toBe(liveScene);
+      expect(capturedArgs[1]).toBe(0.02);
+      expect(capturedArgs[2]).toBe(0.05);
+      expect(capturedArgs[3]).toBe(120);
+      const opts = capturedArgs[4] as { size: number; position: THREE.Vector3 };
+      expect(opts.size).toBe(128);
+      expect(opts.position.toArray()).toEqual([200, 1.4, 0.4]);
+      expect(pmremDisposeSpy).toHaveBeenCalledTimes(1);
+      expect(geoDisposeSpy).not.toHaveBeenCalled();
+
+      probe.dispose();
+      probe.dispose();
+      expect(targetDisposed).toHaveBeenCalledTimes(1);
+    } finally {
+      fromSceneSpy.mockRestore();
+      pmremDisposeSpy.mockRestore();
+      box.geometry.dispose();
+      box.material.dispose();
+    }
+  });
+
+  test("loadHDREnvironment loads via HDRLoader, runs fromEquirectangular, and disposes raw texture and generator", async () => {
+    const rawDispose = mock(() => {});
+    const targetDisposed = mock(() => {});
+    const fakeRawTex = Object.assign(new THREE.DataTexture(), { dispose: rawDispose });
+    const fakeEnvTex = new THREE.Texture();
+
+    const { HDRLoader } = await import("three/addons/loaders/HDRLoader.js");
+    const loadSpy = spyOn(HDRLoader.prototype, "loadAsync").mockResolvedValue(fakeRawTex);
+    const eqSpy = spyOn(THREE.PMREMGenerator.prototype, "fromEquirectangular").mockReturnValue({
+      texture: fakeEnvTex,
+      dispose: targetDisposed,
+    } as unknown as THREE.WebGLRenderTarget);
+    const pmremDisposeSpy = spyOn(THREE.PMREMGenerator.prototype, "dispose").mockImplementation(
+      () => {},
+    );
+    try {
+      const env = await loadHDREnvironment({} as THREE.WebGLRenderer, "env/studio.hdr");
+      expect(env.texture).toBe(fakeEnvTex);
+      expect(loadSpy).toHaveBeenCalledWith("env/studio.hdr");
+      expect(eqSpy).toHaveBeenCalledWith(fakeRawTex);
+      expect(rawDispose).toHaveBeenCalledTimes(1);
+      expect(pmremDisposeSpy).toHaveBeenCalledTimes(1);
+      env.dispose();
+      env.dispose();
+      expect(targetDisposed).toHaveBeenCalledTimes(1);
+    } finally {
+      loadSpy.mockRestore();
+      eqSpy.mockRestore();
+      pmremDisposeSpy.mockRestore();
+    }
+  });
+
+  test("createAreaLight lazily initializes RectAreaLightUniformsLib LTC textures once and positions/aims a RectAreaLight", async () => {
+    const { RectAreaLightUniformsLib } =
+      await import("three/addons/lights/RectAreaLightUniformsLib.js");
+    const initSpy = spyOn(RectAreaLightUniformsLib, "init");
+    try {
+      const a = createAreaLight({
+        color: "#fff4e2",
+        intensity: 3.5,
+        width: 4,
+        height: 2,
+        at: [0, 4, 0],
+        lookAt: [0, 0, 0],
+      });
+      const callsAfterFirst = initSpy.mock.calls.length;
+      const uniformsLib = THREE.UniformsLib as Record<string, unknown>;
+      expect(uniformsLib.LTC_FLOAT_1).toBeInstanceOf(THREE.DataTexture);
+      expect(uniformsLib.LTC_FLOAT_2).toBeInstanceOf(THREE.DataTexture);
+
+      const b = createAreaLight({
+        color: "#e0eeff",
+        intensity: 2,
+        width: 3,
+        height: 3,
+        at: [2, 3, 1],
+      });
+
+      expect(a).toBeInstanceOf(THREE.RectAreaLight);
+      expect(a.color.getHexString()).toBe("fff4e2");
+      expect(a.intensity).toBe(3.5);
+      expect(a.width).toBe(4);
+      expect(a.height).toBe(2);
+      expect(a.position.toArray()).toEqual([0, 4, 0]);
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(a.quaternion);
+      expect(forward.y).toBeCloseTo(-1, 5);
+
+      expect(b).toBeInstanceOf(THREE.RectAreaLight);
+      expect(b.position.toArray()).toEqual([2, 3, 1]);
+      expect(initSpy.mock.calls.length).toBe(callsAfterFirst);
+    } finally {
+      initSpy.mockRestore();
+    }
+  });
+
+  test("resolveLightKeys ignores inherited Object.prototype keys like toString as preset names", () => {
+    const resolved = resolveLightKeys([{ t: 0, preset: "toString", key: { intensity: 1.5 } }]);
+    expect(resolved[0].state.key.intensity).toBe(1.5);
+    expect(resolved[0].state.key.color).toBe(DEFAULT_LIGHTS.key.color);
+  });
+
+  test("createGodraysPass.dispose cleans up leaked blurRenderTarget and depthCopyTarget render targets", () => {
+    const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100);
+    const dir = new THREE.DirectionalLight(0xffffff, 2);
+    dir.castShadow = true;
+    const wrapper = createGodraysPass(dir, cam);
+    expect(wrapper.supported).toBe(true);
+
+    const blurRtDispose = mock(() => {});
+    const illumDepthTexDispose = mock(() => {});
+    const illumRtDispose = mock(() => {});
+    const compDepthTexDispose = mock(() => {});
+    const compRtDispose = mock(() => {});
+
+    const internal = wrapper.pass as unknown as {
+      blurRenderTarget: { dispose: () => void } | null;
+      illumPass: {
+        depthCopyTarget: { depthTexture: { dispose: () => void }; dispose: () => void } | null;
+      };
+      compositorPass: {
+        depthCopyTarget: { depthTexture: { dispose: () => void }; dispose: () => void } | null;
+      };
+    };
+    internal.blurRenderTarget = { dispose: blurRtDispose };
+    internal.illumPass.depthCopyTarget = {
+      depthTexture: { dispose: illumDepthTexDispose },
+      dispose: illumRtDispose,
+    };
+    internal.compositorPass.depthCopyTarget = {
+      depthTexture: { dispose: compDepthTexDispose },
+      dispose: compRtDispose,
+    };
+
+    wrapper.dispose();
+    wrapper.dispose();
+
+    expect(wrapper.pass).toBeNull();
+    expect(blurRtDispose).toHaveBeenCalledTimes(1);
+    expect(illumDepthTexDispose).toHaveBeenCalledTimes(1);
+    expect(illumRtDispose).toHaveBeenCalledTimes(1);
+    expect(compDepthTexDispose).toHaveBeenCalledTimes(1);
+    expect(compRtDispose).toHaveBeenCalledTimes(1);
+    expect(internal.blurRenderTarget).toBeNull();
+    expect(internal.illumPass.depthCopyTarget).toBeNull();
+    expect(internal.compositorPass.depthCopyTarget).toBeNull();
+  });
+
+  test("practicalIntensityAt guards NaN/Infinity t and intensity, and interpolatePractical defaults missing spot targets to ground below light", () => {
+    const lamp = {
+      id: "lamp",
+      name: "Lamp",
+      kind: "point" as const,
+      at: [0, 2, 0] as [number, number, number],
+      color: "#ffaa44",
+      intensity: 4,
+      distance: 8,
+      decay: 2,
+      flicker: { rate: 10, amount: 0.3, seed: 5 },
+    };
+    const atNaN = practicalIntensityAt(lamp, Number.NaN);
+    const atInf = practicalIntensityAt(lamp, Infinity);
+    const atNegInf = practicalIntensityAt(lamp, -Infinity);
+    expect(Number.isFinite(atNaN)).toBe(true);
+    expect(Number.isFinite(atInf)).toBe(true);
+    expect(Number.isFinite(atNegInf)).toBe(true);
+    expect(atNaN).toBe(practicalIntensityAt(lamp, 0));
+    expect(practicalIntensityAt({ ...lamp, intensity: Number.NaN }, 1)).toBe(0);
+
+    const mid = lightsAt(
+      [
+        {
+          t: 0,
+          practicals: [
+            {
+              id: "s1",
+              name: "Spot",
+              kind: "spot",
+              at: [2, 6, 4],
+              color: "#ffffff",
+              intensity: 4,
+              distance: 10,
+              decay: 2,
+            },
+          ],
+        },
+        {
+          t: 2,
+          ease: "linear",
+          practicals: [
+            {
+              id: "s1",
+              name: "Spot",
+              kind: "spot",
+              at: [2, 6, 4],
+              target: [2, 2, 4],
+              color: "#ffffff",
+              intensity: 4,
+              distance: 10,
+              decay: 2,
+            },
+          ],
+        },
+      ],
+      1,
+    );
+    expect(mid.practicals[0].target).toEqual([2, 1, 4]);
+  });
+
+  test("createGodraysPass.update refreshes illumPass lightCameraNear/lightCameraFar when applySetLight changes shadowExtent", () => {
+    const scene = new THREE.Scene();
+    const rig = createLightingRig(scene, { shadowExtent: 10 });
+    const cam = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100);
+    const godrays = createGodraysPass(rig.key, cam);
+    expect(godrays.supported).toBe(true);
+
+    const raySpec = { enabled: true, density: 0.02, weight: 1 };
+    applySetLight(
+      rig,
+      { key: { from: [-10, 15, -10], shadowExtent: 8 }, godrays: raySpec },
+      [0, 0, 0],
+      undefined,
+      {
+        godrays,
+      },
+    );
+    const illumUniforms = (
+      godrays.pass as unknown as {
+        illumPass: {
+          material: {
+            uniforms: { lightCameraNear: { value: number }; lightCameraFar: { value: number } };
+          };
+        };
+      }
+    ).illumPass.material.uniforms;
+    const farBefore = illumUniforms.lightCameraFar.value;
+    expect(farBefore).toBeCloseTo(rig.key.shadow.camera.far, 4);
+
+    applySetLight(
+      rig,
+      { key: { from: [-40, 80, -30], shadowExtent: 25, shadowNear: 1.5 }, godrays: raySpec },
+      [0, 0, 0],
+      undefined,
+      { godrays },
+    );
+    expect(illumUniforms.lightCameraNear.value).toBeCloseTo(1.5, 4);
+    expect(illumUniforms.lightCameraFar.value).toBeCloseTo(rig.key.shadow.camera.far, 4);
+    expect(illumUniforms.lightCameraFar.value).toBeGreaterThan(farBefore);
+
+    const ortho = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.1, 100);
+    const orthoGodrays = createGodraysPass(rig.key, ortho);
+    expect(orthoGodrays.supported).toBe(false);
+    expect(orthoGodrays.pass).toBeNull();
+
+    applySetLight(rig, { key: { dir: [3, 4, 0], distance: 10 } }, [1, 2, 3]);
+    expect(rig.key.position.x).toBeCloseTo(1 + 6, 4);
+    expect(rig.key.position.y).toBeCloseTo(2 + 8, 4);
+    expect(rig.key.position.z).toBeCloseTo(3, 4);
+
+    applySetLight(rig, { key: { dir: [0, 0, 0], distance: 12 } }, [1, 2, 3]);
+    expect(rig.key.position.x).toBeCloseTo(1, 4);
+    expect(rig.key.position.y).toBeCloseTo(14, 4);
+    expect(rig.key.position.z).toBeCloseTo(3, 4);
+
+    applySetLight(
+      rig,
+      {
+        key: { intensity: Number.NaN, shadowRadius: Number.NaN, from: [Number.NaN, 5, 0] },
+        hemi: { intensity: Number.NaN },
+        fog: { mode: "linear", color: "#112233", near: Number.NaN, far: Number.NaN },
+        environmentIntensity: Number.NaN,
+        practicals: [
+          {
+            id: "nan-spot",
+            kind: "spot",
+            color: "#ffffff",
+            intensity: Number.NaN,
+            at: [Number.NaN, 2, 0],
+            distance: Number.NaN,
+            decay: Number.NaN,
+            angle: Number.NaN,
+            penumbra: Number.NaN,
+            target: [0, Number.NaN, 0],
+          },
+        ],
+      },
+      [1, 2, 3],
+    );
+    expect(Number.isFinite(rig.key.intensity)).toBe(true);
+    expect(Number.isFinite(rig.key.shadow.radius)).toBe(true);
+    expect(Number.isFinite(rig.key.position.x)).toBe(true);
+    expect(Number.isFinite(rig.hemisphere.intensity)).toBe(true);
+    expect(Number.isFinite(scene.environmentIntensity)).toBe(true);
+    expect(Number.isFinite((scene.fog as THREE.Fog).near)).toBe(true);
+    expect(Number.isFinite((scene.fog as THREE.Fog).far)).toBe(true);
+    const nanSpot = rig.practicals.get("nan-spot")?.light as THREE.SpotLight | undefined;
+    expect(nanSpot).toBeDefined();
+    expect(Number.isFinite(nanSpot!.position.x)).toBe(true);
+    expect(Number.isFinite(nanSpot!.intensity)).toBe(true);
+    expect(Number.isFinite(nanSpot!.distance)).toBe(true);
+    expect(Number.isFinite(nanSpot!.decay)).toBe(true);
+    expect(Number.isFinite(nanSpot!.angle)).toBe(true);
+    expect(Number.isFinite(nanSpot!.penumbra)).toBe(true);
+    expect(Number.isFinite(nanSpot!.target.position.y)).toBe(true);
+
+    godrays.dispose();
+    expect(godrays.pass).toBeNull();
+    rig.dispose();
   });
 });

@@ -474,11 +474,12 @@ const applyShakify = (
   l: THREE.Vector3,
   roll: number,
   s: ReturnType<ReturnType<typeof makeHandheld>>,
+  refUp: THREE.Vector3 = UP,
 ) => {
   const d = Math.max(1e-4, tmp.copy(l).sub(p).length());
   const fwd = tmp.copy(l).sub(p).normalize();
-  const right = tmp2.copy(fwd).cross(UP);
-  if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+  const right = tmp2.copy(fwd).cross(refUp);
+  if (right.lengthSq() < 1e-8) right.set(Math.abs(fwd.x) > 0.9 ? 0 : 1, 0, Math.abs(fwd.x) > 0.9 ? 1 : 0);
   else right.normalize();
   const up = tmp3.copy(right).cross(fwd).normalize();
   p.addScaledVector(right, s.pos[0]).addScaledVector(up, s.pos[1]).addScaledVector(fwd, -s.pos[2]);
@@ -489,7 +490,7 @@ const applyShakify = (
   const newFwd = tmp.set(0, 0, -1).applyQuaternion(qCam).normalize();
   l.copy(p).addScaledVector(newFwd, d);
   const newUp = tmp2.set(0, 1, 0).applyQuaternion(qCam).normalize();
-  const r0 = tmp3.copy(newFwd).cross(UP);
+  const r0 = tmp3.copy(newFwd).cross(refUp);
   if (r0.lengthSq() >= 1e-8) {
     r0.normalize();
     const u0 = tmp4.copy(r0).cross(newFwd).normalize();
@@ -527,6 +528,7 @@ export interface CameraFeelInput {
   l: THREE.Vector3;
   roll: number;
   t: number;
+  up?: THREE.Vector3 | readonly [number, number, number];
   wave?: number;
   bob?: number;
   walked?: number;
@@ -535,11 +537,21 @@ export interface CameraFeelInput {
   handheld?: unknown;
 }
 
+const resolveRefUp = (up?: THREE.Vector3 | readonly [number, number, number]) => {
+  if (!up) return UP;
+  const v = Array.isArray(up)
+    ? new THREE.Vector3(up[0], up[1], up[2])
+    : (up as THREE.Vector3).clone();
+  const lenSq = v.lengthSq();
+  return Number.isFinite(lenSq) && lenSq > 1e-8 ? v.normalize() : UP;
+};
+
 export function applyCameraFeel({
   p,
   l,
   roll,
   t,
+  up,
   wave = 0,
   bob = 0,
   walked = t * 0.77,
@@ -547,17 +559,23 @@ export function applyCameraFeel({
   shakes,
   handheld,
 }: CameraFeelInput): { roll: number; handheld: ShakeName | undefined; shakes: HandheldConfig[] } {
+  const refUp = resolveRefUp(up);
   const step = Math.sin(walked * Math.PI);
   const lift = Math.abs(Math.cos(walked * Math.PI));
   const amt = bob * Math.min(speed / 4.3, 1.4) * 0.05;
   if (Math.abs(amt) > 1e-12 || Math.abs(wave) > 1e-12) {
-    const right = tmp2.copy(l).sub(p).cross(UP);
-    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
-    else right.normalize();
+    const aimDist = p.distanceTo(l);
+    const waveAimScale = Math.min(1, aimDist / 5);
+    const aimDir = tmp.copy(l).sub(p);
+    const right = tmp2.copy(aimDir).cross(refUp);
+    if (right.lengthSq() < 1e-8) {
+      const fx = aimDist > 1e-8 ? Math.abs(aimDir.x) / aimDist : 0;
+      right.set(fx > 0.9 ? 0 : 1, 0, fx > 0.9 ? 1 : 0);
+    } else right.normalize();
     p.addScaledVector(right, step * amt * 0.5);
-    p.y += -lift * amt + wave * 0.035 * Math.sin(t * 0.9);
-    l.addScaledVector(right, wave * 0.12 * Math.sin(t * 0.47));
-    l.y += wave * 0.08 * Math.sin(t * 0.71 + 1.3);
+    p.addScaledVector(refUp, -lift * amt + wave * 0.035 * Math.sin(t * 0.9));
+    l.addScaledVector(right, wave * waveAimScale * 0.12 * Math.sin(t * 0.47));
+    l.addScaledVector(refUp, wave * waveAimScale * 0.08 * Math.sin(t * 0.71 + 1.3));
     roll += wave * 0.012 * Math.sin(t * 0.53) + step * amt * 0.06;
   }
 
@@ -584,7 +602,7 @@ export function applyCameraFeel({
         0.5 ** octave / weight,
         t,
       );
-      if (offset) roll = applyShakify(p, l, roll, offset);
+      if (offset) roll = applyShakify(p, l, roll, offset, refUp);
     }
     if (!strongest || shake.amount >= strongest.amount) strongest = shake;
   }
@@ -631,6 +649,7 @@ export function cameraAt(
     fovAxis?: FovAxis;
     rail?: readonly (readonly [number, number, number])[];
     extrapolation?: "hold" | "linear";
+    up?: THREE.Vector3 | readonly [number, number, number];
   },
 ) {
   const aspect = opts?.aspect ?? 16 / 9;
@@ -729,6 +748,7 @@ export function cameraAt(
     l,
     roll,
     t,
+    up: opts?.up,
     wave,
     bob,
     walked,

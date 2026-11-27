@@ -42,6 +42,7 @@ export const cameraTrackOptions = (rig?: CameraRig) => ({
   fovAxis: rig?.fovAxis,
   rail: rig?.look === "one-node" ? undefined : rig?.rail,
   extrapolation: rig?.extrapolation,
+  up: rig?.up,
 });
 
 type CameraOrientation = { p: Vector3; l: Vector3; roll: number };
@@ -186,6 +187,7 @@ interface CameraRenderRegion {
 }
 
 const renderRegions = new WeakMap<object, CameraRenderRegion>();
+const defaultClipPlanes = new WeakMap<object, { near: number; far: number }>();
 
 export function setCameraRenderRegion(camera: object, region: CameraRenderRegion | undefined) {
   const previous = renderRegions.get(camera);
@@ -201,8 +203,20 @@ export function projectCamera(
   rig?: CameraRig,
   pupil?: Offset,
 ) {
-  camera.near = rig?.near ?? 0.02;
-  camera.far = Math.max(camera.near + 0.01, rig?.far ?? 500);
+  let saved = defaultClipPlanes.get(camera);
+  if (!saved) {
+    const isThreeDefault =
+      !("isOrthographicCamera" in camera) && camera.near === 0.1 && camera.far === 2000;
+    saved = isThreeDefault
+      ? { near: 0.02, far: 500 }
+      : {
+          near: camera.near > 0 ? camera.near : 0.02,
+          far: camera.far > camera.near ? camera.far : 500,
+        };
+    defaultClipPlanes.set(camera, saved);
+  }
+  camera.near = rig?.near ?? saved.near;
+  camera.far = Math.max(camera.near + 0.01, rig?.far ?? saved.far);
   let [x, y] = rig?.lensShift ?? [0, 0];
   if ("isOrthographicCamera" in camera) {
     const halfHeight =

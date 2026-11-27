@@ -19,10 +19,13 @@ import * as THREE from "three";
 
 import { EASES, lmix } from "./camera";
 import {
+  bridgeSeamlessGaps,
   fontOf,
   FONTS,
   fontsFor,
   isShapeKind,
+  resolveTextItem,
+  resolveTextItems,
   SHAPE_CATEGORIES,
   SHAPE_IN,
   SHAPE_OUT,
@@ -30,6 +33,7 @@ import {
   TEXT_IN,
   TEXT_ITEM_KEYS,
   TEXT_OUT,
+  TEXT_PRESETS,
   TITLE_EASES,
 } from "./titles-catalog";
 import { mixColor } from "./titles-color";
@@ -53,8 +57,20 @@ const lines = (it) => {
   const s = it.upper ? (it.text ?? "").toUpperCase() : (it.text ?? "");
   return s.split("\n");
 };
+const weightOf = (it) =>
+  typeof it.weight === "number" && Number.isFinite(it.weight)
+    ? Math.round(it.weight)
+    : it.bold
+      ? 700
+      : it.font === "mono"
+        ? 400
+        : 500;
 const fontCss = (it, px, own?) =>
-  `${it.italic ? "italic " : ""}${it.bold ? 700 : it.font === "mono" ? 400 : 500} ${px}px ${fontOf(it.font, own)}`;
+  `${it.italic ? "italic " : ""}${weightOf(it)} ${px}px ${fontOf(it.font, own)}`;
+const applyTextQuality = (g) => {
+  if ("textRendering" in g) g.textRendering = "geometricPrecision";
+  if ("fontKerning" in g) g.fontKerning = "normal";
+};
 const textSeed = (s) => {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
@@ -96,6 +112,7 @@ const measure = (g, it, W, H, camera, cache, extra) => {
     const ls = lines(it),
       chars = ls.map((l) => [...l]),
       total = chars.reduce((n, cs) => n + cs.length, 0);
+    applyTextQuality(g);
     g.font = font;
     g.letterSpacing = spacing;
     const tw = Math.max(1, ...ls.map((l) => g.measureText(l).width));
@@ -236,25 +253,38 @@ const clipRect = (g, x, y, w, h) => {
   g.clip();
 };
 
-const paintRun = (g, it, m, s, x, y, fill) => {
+const SHADOW = { color: "rgba(0,0,0,0.55)", blur: 0.25, x: 0, y: 0.04 };
+
+const paintRun = (g, it, m, s, x, y, fill, snap = false) => {
+  const dx = snap ? Math.round(x) : x,
+    dy = snap ? Math.round(y) : y;
   if (it.shadow !== false) {
-    g.shadowColor = "rgba(0,0,0,0.55)";
-    g.shadowBlur = m.px * 0.25;
-    g.shadowOffsetY = m.px * 0.04;
+    const sh = it.shadow && typeof it.shadow === "object" ? { ...SHADOW, ...it.shadow } : SHADOW;
+    g.shadowColor = sh.color;
+    g.shadowBlur = m.px * sh.blur;
+    g.shadowOffsetX = m.px * sh.x;
+    g.shadowOffsetY = m.px * sh.y;
   }
-  if (it.stroke) {
-    g.lineJoin = "round";
+  const strokeW = it.stroke ? (it.stroke.width ?? 6) * m.k : 0;
+  if (strokeW > 0) {
+    g.lineJoin = it.stroke.join ?? "round";
+    if (it.stroke.miterLimit !== undefined) g.miterLimit = it.stroke.miterLimit;
+    else if (g.lineJoin === "miter") g.miterLimit = 4;
     g.strokeStyle = it.stroke.color ?? "#000000";
-    g.lineWidth = (it.stroke.width ?? 6) * m.k;
-    g.strokeText(s, x, y);
+    g.lineWidth = strokeW;
+    g.strokeText(s, dx, dy);
     g.shadowColor = "transparent";
+    g.shadowBlur = 0;
+    g.shadowOffsetX = g.shadowOffsetY = 0;
   }
   g.fillStyle = fill;
-  g.fillText(s, x, y);
+  g.fillText(s, dx, dy);
   g.shadowColor = "transparent";
+  g.shadowBlur = 0;
+  g.shadowOffsetX = g.shadowOffsetY = 0;
 };
 
-const drawText = (g, it, m, lk) => {
+const drawText = (g, it, m, lk, extra) => {
   const { px, lh, chars, total, pad, align } = m;
   const effSpacing = `${((it.spacing ?? 0) + lk.tracking) * px}px`;
   const baseInk = it.color ?? "#FFFFFF";
@@ -271,6 +301,7 @@ const drawText = (g, it, m, lk) => {
     clipRect(g, m.cx - openW / 2, m.y0 - px, openW, m.h + px * 2);
   }
 
+  applyTextQuality(g);
   g.font = m.font;
   g.letterSpacing = effSpacing;
   g.textBaseline = "middle";
@@ -372,6 +403,14 @@ const drawText = (g, it, m, lk) => {
       clipRect(g, m.x0 - px * 2, maskTop, m.w + px * 4, lh * 1.08);
     }
     const hopFont = lk.fontHop === null ? null : fontHopped(it, lk.fontHop);
+    const staticSnap =
+      !lk.rot &&
+      !(it.rotate ?? 0) &&
+      lk.scaleX === 1 &&
+      lk.scaleY === 1 &&
+      !lk.dx &&
+      !lk.dy &&
+      !lk.splitX;
     if (lk.count !== null || it.in?.fx === "counter") {
       // Canvas has no tabular-nums, so each digit gets the widest digit's cell and a count never jitters the line's width
       const cell = Math.max(..."0123456789".split("").map((d) => g.measureText(d).width));
@@ -381,13 +420,13 @@ const drawText = (g, it, m, lk) => {
       let x = align === "left" ? xLine : align === "right" ? xLine - total : xLine - total / 2;
       g.textAlign = "center";
       chars.forEach((ch, k) => {
-        paintRun(g, it, m, ch, x + widths[k] / 2, yBase, lineFill);
+        paintRun(g, it, m, ch, x + widths[k] / 2, yBase, lineFill, staticSnap);
         x += widths[k];
       });
       g.textAlign = align;
     } else if (hopFont) {
       const own = g.measureText(s).width;
-      g.font = fontCss({ ...it, font: hopFont }, px);
+      g.font = fontCss({ ...it, font: hopFont }, px, extra?.fonts);
       const hopped = Math.max(1, g.measureText(s).width);
       g.save();
       g.translate(xLine, 0);
@@ -395,7 +434,7 @@ const drawText = (g, it, m, lk) => {
       paintRun(g, it, m, s, 0, yBase, lineFill);
       g.restore();
       g.font = m.font;
-    } else paintRun(g, it, m, s, xLine, yBase, lineFill);
+    } else paintRun(g, it, m, s, xLine, yBase, lineFill, staticSnap);
     if (lineClip) g.restore();
   });
 };
@@ -518,11 +557,31 @@ const drawShape = (g, it, m, lk, extra) => {
   g.shadowColor = "transparent";
 };
 
-const onScreen = (g, list, t, W, H, camera, tracks, timeAt, cache, extra) => {
+const unpackSource = (listOrDoc, tracks, extra) => {
+  if (listOrDoc && !Array.isArray(listOrDoc) && typeof listOrDoc === "object") {
+    return {
+      list: listOrDoc.items ?? [],
+      doc: listOrDoc,
+      tracks: tracks ?? listOrDoc.tracks,
+    };
+  }
+  const fallbackDoc =
+    extra?.doc && Array.isArray(extra.doc.items) && extra.doc.items === listOrDoc
+      ? extra.doc
+      : null;
+  return { list: listOrDoc ?? [], doc: fallbackDoc, tracks: tracks ?? fallbackDoc?.tracks };
+};
+
+const onScreen = (g, listOrDoc, t, W, H, camera, tracks, timeAt, cache, extra) => {
+  const { list, doc, tracks: effTracks } = unpackSource(listOrDoc, tracks, extra);
+  const resolved = bridgeSeamlessGaps(
+    list.map((rawIt) => resolveTextItem(rawIt, doc, extra?.presets)),
+    effTracks,
+  );
   const out = [];
-  (list ?? []).forEach((it, i) => {
+  resolved.forEach((it, i) => {
     const ph = phaseOf(it, timeAt ? timeAt(it) : t);
-    if (!ph || it.hidden || tracks?.[it.track ?? 0]?.hidden) return;
+    if (!ph || it.hidden || effTracks?.[it.track ?? 0]?.hidden) return;
     const m = measure(g, it, W, H, camera, cache, extra);
     if (m) out.push({ it, i, ph, m });
   });
@@ -556,7 +615,8 @@ const visualKey = (now) => {
     const { it, ph, m } = now[n],
       st = it.stroke,
       bg = it.background;
-    k += `${it.kind ?? "text"}|${it.text ?? ""}|${it.upper ? 1 : 0}|${it.font ?? ""}|${it.bold ? 1 : 0}|${it.italic ? 1 : 0}|${it.size ?? ""}|${it.line ?? ""}|${it.spacing ?? ""}|${it.align ?? ""}|${it.color ?? ""}|${it.opacity ?? ""}|${it.scale ?? ""}|${it.rotate ?? ""}|${it.w ?? ""}|${it.h ?? ""}|${it.width ?? ""}|${it.shadow ?? ""}|${st?.color ?? ""}|${st?.width ?? ""}|${bg ? `${bg.color ?? ""}:${bg.opacity ?? ""}` : ""}|${slotKey(it.in)}|${slotKey(it.out)}|${ph.in}|${ph.out}|${m.cx}|${m.cy}|${m.w}|${m.h}|${extraFieldsKey(it, KNOWN_ITEM_KEYS)}\n`;
+    const shKey = it.shadow && typeof it.shadow === "object" ? JSON.stringify(it.shadow) : String(it.shadow ?? "");
+    k += `${it.kind ?? "text"}|${it.text ?? ""}|${it.upper ? 1 : 0}|${it.font ?? ""}|${weightOf(it)}|${it.italic ? 1 : 0}|${it.size ?? ""}|${it.line ?? ""}|${it.spacing ?? ""}|${it.align ?? ""}|${it.color ?? ""}|${it.opacity ?? ""}|${it.scale ?? ""}|${it.rotate ?? ""}|${it.w ?? ""}|${it.h ?? ""}|${it.width ?? ""}|${shKey}|${st?.color ?? ""}|${st?.width ?? ""}|${st?.join ?? ""}|${st?.miterLimit ?? ""}|${bg ? `${bg.color ?? ""}:${bg.opacity ?? ""}` : ""}|${slotKey(it.in)}|${slotKey(it.out)}|${ph.in}|${ph.out}|${m.cx}|${m.cy}|${m.w}|${m.h}|${extraFieldsKey(it, KNOWN_ITEM_KEYS)}\n`;
   }
   return k;
 };
@@ -567,21 +627,34 @@ const mergeVoices = (base, extra) => {
   return [...base.filter((v) => !seen.has(v.id)), ...extra];
 };
 
-export const preloadTitleFonts = (items, fonts?) =>
-  Promise.all(
-    fontsFor(items, fonts).flatMap((f) =>
-      [400, 700].map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
+export const preloadTitleFonts = (itemsOrDoc, fonts?, presets?) => {
+  const weights = new Set([400, 700]);
+  for (const it of resolveTextItems(itemsOrDoc, presets)) {
+    if (typeof it.weight === "number" && Number.isFinite(it.weight)) weights.add(Math.round(it.weight));
+  }
+  const list = [...weights];
+  return Promise.all(
+    fontsFor(itemsOrDoc, fonts, presets).flatMap((f) =>
+      list.map((w) => document.fonts.load(`${w} 40px ${f.css}`, "AÀaà0")),
     ),
   ).catch(() => {});
+};
 
 export function makeTitles(renderer, W, H, extra) {
+  const shortSide = Math.min(W, H);
+  const ss = shortSide > 0 && shortSide < 1080 ? Math.min(2, 1080 / shortSide) : 1;
+  const CW = Math.round(W * ss),
+    CH = Math.round(H * ss);
   const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
+  canvas.width = CW;
+  canvas.height = CH;
   const g = canvas.getContext("2d");
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.premultiplyAlpha = true;
+  tex.generateMipmaps = false;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   const mat = new THREE.MeshBasicMaterial({
     map: tex,
     transparent: true,
@@ -602,10 +675,10 @@ export function makeTitles(renderer, W, H, extra) {
     last = "";
   };
   document.fonts?.addEventListener?.("loadingdone", onFontsLoaded);
-  const ready = preloadTitleFonts(extra?.items, extra?.fonts);
+  const ready = preloadTitleFonts(extra?.doc ?? extra?.items, extra?.fonts, extra?.presets);
 
   const draw = (list, t, camera, tracks, timeAt) => {
-    const now = onScreen(g, list, t, W, H, camera, tracks, timeAt, textCache, extra);
+    const now = onScreen(g, list, t, CW, CH, camera, tracks, timeAt, textCache, extra);
     if (!now.length) {
       last = "";
       return;
@@ -614,7 +687,7 @@ export function makeTitles(renderer, W, H, extra) {
     if (key !== last) {
       last = key;
       g.setTransform(1, 0, 0, 1, 0, 0);
-      g.clearRect(0, 0, W, H);
+      g.clearRect(0, 0, CW, CH);
       for (const { it, ph, m } of now) {
         const lk = lookOf(it, ph, extra);
         if (lk.alpha <= 0.001) continue;
@@ -631,7 +704,7 @@ export function makeTitles(renderer, W, H, extra) {
           g.scale(lk.scaleX, lk.scaleY);
           g.translate(-m.cx, -m.cy);
           if (isShapeKind(it.kind)) drawShape(g, it, m, lk, extra);
-          else drawText(g, it, m, lk);
+          else drawText(g, it, m, lk, extra);
           g.restore();
         }
       }
@@ -645,6 +718,7 @@ export function makeTitles(renderer, W, H, extra) {
 
   draw.ready = ready;
   draw.fonts = [...FONTS, ...(extra?.fonts ?? [])];
+  draw.presets = [...TEXT_PRESETS, ...(extra?.presets ?? [])];
   draw.categories = { text: TEXT_CATEGORIES, shape: SHAPE_CATEGORIES };
   draw.eases = [
     ...TITLE_EASES,
@@ -666,7 +740,7 @@ export function makeTitles(renderer, W, H, extra) {
     },
   };
   draw.boxes = (list, t, camera, tracks, timeAt) =>
-    onScreen(g, list, t, W, H, camera, tracks, timeAt, textCache, extra).flatMap(
+    onScreen(g, list, t, CW, CH, camera, tracks, timeAt, textCache, extra).flatMap(
       ({ i, it, ph, m }) => {
         const lk = lookOf(it, ph, extra);
         if (lk.alpha * (it.opacity ?? 1) <= 0.001 || lk.show <= 0) return [];
@@ -684,7 +758,7 @@ export function makeTitles(renderer, W, H, extra) {
         ].map(([x, y]) => {
           const px = (x - m.cx) * lk.scaleX,
             py = (y - m.cy) * lk.scaleY;
-          return [(px * c - py * s + m.cx + tx) / W, (px * s + py * c + m.cy + ty) / H];
+          return [(px * c - py * s + m.cx + tx) / CW, (px * s + py * c + m.cy + ty) / CH];
         });
         const xs = corners.map((p) => p[0]),
           ys = corners.map((p) => p[1]);
@@ -692,7 +766,7 @@ export function makeTitles(renderer, W, H, extra) {
           {
             i,
             corners,
-            anchor: [(m.cx + tx) / W, (m.cy + ty) / H],
+            anchor: [(m.cx + tx) / CW, (m.cy + ty) / CH],
             box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)],
           },
         ];

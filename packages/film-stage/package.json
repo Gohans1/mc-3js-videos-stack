@@ -2,7 +2,7 @@
   "name": "film-stage",
   "version": "0.1.0",
   "private": true,
-  "description": "three.js parts of a film's stage that any film shares: the keyed camera with named eases and impact shake, and when a box is on screen (camera), a flickering lamp's level (flicker), fades to and from black over the whole frame (fade); a shot's In, Out and Combo animations on the camera (animate); two-shot WebGL cut shaders (transitions); optical lens effects and beat accents (velocity); primary, wheel, HSL, curve, LUT, halation and TPDF dither colour grading (grade); titles, arrows and callout shapes over the picture (titles)",
+  "description": "three.js parts of a film's stage that any film shares: keyed camera with named eases and impact shake (camera); lighting rigs, IBL environments, probes, and area lights (lights); procedural skies, studio backdrops, clouds, stars, and sun/moon discs (sky); water, wet reflections, haze, physical materials, X-ray, beams, caustics, and flames (surfaces); atmospheric particle fields and ballistic emitters (particles); lookdev renderer, post-processing profiles, and screen effects (post); non-destructive outline and emissive highlights (highlight); flickering lamps (flicker); fades (fade); camera shot animations (animate); WebGL cut shaders (transitions); optical lens effects and beat accents (velocity); colour grading and TPDF dither (grade); titles and callouts (titles)",
   "type": "module",
   "exports": {
     "./openfilm": "./src/openfilm.ts",
@@ -13,6 +13,11 @@
     "./camera-meta": "./src/camera-meta.ts",
     "./lights": "./src/lights.ts",
     "./lights-meta": "./src/lights-meta.ts",
+    "./sky": "./src/sky.ts",
+    "./surfaces": "./src/surfaces.ts",
+    "./particles": "./src/particles.ts",
+    "./post": "./src/post.ts",
+    "./post-meta": "./src/post-meta.ts",
     "./highlight": "./src/highlight.ts",
     "./flicker": "./src/flicker.ts",
     "./fade": "./src/fade.ts",
@@ -59,6 +64,7 @@
     "film-kit": "workspace:*",
     "gl-transitions": "3.1.0",
     "html-to-image": "1.11.13",
+    "n8ao": "catalog:",
     "postprocessing": "catalog:",
     "three-good-godrays": "catalog:"
   },

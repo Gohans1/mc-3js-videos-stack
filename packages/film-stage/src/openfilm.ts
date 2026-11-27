@@ -108,56 +108,84 @@ function motionStyle(
   target.style.animation = `${motion.name} ${duration}s ${motion.ease} both`;
 }
 
+type TransitionMode =
+  | { kind: "motion"; ready: Promise<Awaited<ReturnType<typeof loadOpenFilmPage>>> }
+  | {
+      kind: "page";
+      overlay: { key: string; page: Promise<Awaited<ReturnType<typeof loadOpenFilmPage>>> } | null;
+    };
+
+type TransitionState =
+  | { status: "active"; mode: TransitionMode; hasFrame: boolean }
+  | { status: "disposed" };
+
 function nativeTransition(recipe: OpenFilmRecipe, renderer: THREE.WebGLRenderer) {
   const screen = makeScreen(renderer);
   const { width: w, height: h } = screen.canvas;
-  let ready: Promise<Awaited<ReturnType<typeof loadOpenFilmPage>>>;
-  let overlay: Promise<Awaited<ReturnType<typeof loadOpenFilmPage>>> | undefined;
-  let overlayProps = "";
-  let disposed = false;
-  if (recipe.render === "motion")
-    ready = loadOpenFilmPage(compositorUrl, w, h).then((page) => {
-      const doc = page.iframe.contentDocument!;
-      for (const phase of ["out", "in"]) {
-        const canvas = doc.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        canvas.id = phase;
-        canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
-        doc.body.append(canvas);
-        motionStyle(doc, recipe, canvas, phase, 1);
-      }
-      return page;
-    });
-  let hasFrame = false;
+  let state: TransitionState = {
+    status: "active",
+    hasFrame: false,
+    mode:
+      recipe.render === "motion"
+        ? {
+            kind: "motion",
+            ready: loadOpenFilmPage(compositorUrl, w, h).then((page) => {
+              const doc = page.iframe.contentDocument!;
+              for (const phase of ["out", "in"]) {
+                const canvas = doc.createElement("canvas");
+                canvas.width = w;
+                canvas.height = h;
+                canvas.id = phase;
+                canvas.style.cssText = "position:absolute;inset:0;width:100%;height:100%";
+                doc.body.append(canvas);
+                motionStyle(doc, recipe, canvas, phase, 1);
+              }
+              return page;
+            }),
+          }
+        : { kind: "page", overlay: null },
+  };
+  const assertActive = () => {
+    if (state.status === "disposed") throw new Error("OpenFilm transition was disposed");
+    return state;
+  };
   return {
     async prepare(
       progress: number,
       capture: (incoming: boolean) => HTMLCanvasElement,
       props?: PageProps,
     ) {
-      if (disposed) throw new Error("OpenFilm transition was disposed");
-      if (recipe.render === "page") {
+      const active = assertActive();
+      if (active.mode.kind === "page") {
         const key = JSON.stringify([props?.vars, props?.text]);
-        if (!overlay || overlayProps !== key) {
-          disposePage(overlay);
-          overlayProps = key;
-          overlay = loadOpenFilmPage(resourceUrl(recipe.path!), w, h, props, {
+        if (!active.mode.overlay || active.mode.overlay.key !== key) {
+          disposePage(active.mode.overlay?.page);
+          const pagePromise = loadOpenFilmPage(resourceUrl(recipe.path!), w, h, props, {
             resetCanvasState: true,
           }).catch((error) => {
-            overlay = undefined;
+            if (
+              state.status === "active" &&
+              state.mode.kind === "page" &&
+              state.mode.overlay?.page === pagePromise
+            ) {
+              state.mode.overlay = null;
+            }
             throw error;
           });
+          active.mode.overlay = { key, page: pagePromise };
         }
-        const page = await overlay;
+        const page = await active.mode.overlay.page;
+        assertActive();
         page.setOverrides(props?.elements ?? []);
         const image = await page.seek((progress * (recipe.durationMs ?? 1000)) / 1000);
+        assertActive();
         screen.ctx.globalCompositeOperation = "copy";
         screen.ctx.drawImage(capture(progress >= 0.5), 0, 0, w, h);
         screen.ctx.globalCompositeOperation = page.blend;
         screen.ctx.drawImage(image, 0, 0, w, h);
       } else {
-        const page = await ready;
+        const page = await active.mode.ready;
+        assertActive();
         page.setOverrides(props?.elements ?? []);
         const doc = page.iframe.contentDocument!;
         const cut = recipe.id.startsWith("motions/cut-");
@@ -179,18 +207,21 @@ function nativeTransition(recipe: OpenFilmRecipe, renderer: THREE.WebGLRenderer)
         const image = await page.seek(
           cut ? (progress < 0.5 ? progress * 2 : progress * 2 - 1) : progress,
         );
+        assertActive();
         screen.ctx.globalCompositeOperation = "copy";
         screen.ctx.drawImage(image, 0, 0);
       }
-      hasFrame = true;
+      assertActive().hasFrame = true;
     },
     draw() {
-      if (hasFrame) screen.draw();
+      if (state.status === "active" && state.hasFrame) screen.draw();
     },
     dispose() {
-      disposed = true;
-      disposePage(overlay);
-      disposePage(ready);
+      if (state.status === "disposed") return;
+      const prev = state;
+      state = { status: "disposed" };
+      if (prev.mode.kind === "page") disposePage(prev.mode.overlay?.page);
+      else disposePage(prev.mode.ready);
       screen.dispose();
     },
   };

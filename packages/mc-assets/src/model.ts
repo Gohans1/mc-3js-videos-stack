@@ -43,7 +43,16 @@ export interface ModelRendererApi {
     model: ResolvedModel,
     args?: LoadModelArgs,
   ) => Promise<THREE.Group>;
-  readTexture?: (path: string, assets: AssetsInput) => Promise<{ image: unknown } | null>;
+  readTexture?: (
+    path: string,
+    assets: AssetsInput,
+  ) => Promise<{
+    image: unknown;
+    frames?: unknown[];
+    times?: number[];
+    interpolate?: boolean;
+  } | null>;
+  readFile?: (path: string, assets: AssetsInput) => Promise<Uint8Array | undefined>;
 }
 
 export interface ModelLoadOptions {
@@ -55,7 +64,7 @@ export interface ModelLoadOptions {
 }
 
 let cachedBmr: Promise<ModelRendererApi> | null = null;
-const loadBmr = (): Promise<ModelRendererApi> =>
+export const loadBmr = (): Promise<ModelRendererApi> =>
   (cachedBmr ??= (import("block-model-renderer") as unknown as Promise<ModelRendererApi>).catch(
     (err) => {
       cachedBmr = null;
@@ -176,19 +185,66 @@ export async function itemModel(
   return holder;
 }
 
+export const texturePath = (name: string) => {
+  const colon = name.indexOf(":");
+  return `assets/${colon >= 0 ? name.slice(0, colon) : "minecraft"}/textures/${name.slice(colon + 1)}.png`;
+};
+
 export async function texture(
   sources: AssetsInput,
   name: string,
   opts: { renderer?: ModelRendererApi } = {},
 ): Promise<THREE.Texture> {
-  const colon = name.indexOf(":");
-  const path = `assets/${colon >= 0 ? name.slice(0, colon) : "minecraft"}/textures/${name.slice(colon + 1)}.png`;
+  const path = texturePath(name);
   const bmr = opts.renderer ?? (await loadBmr());
   if (!bmr.readTexture)
     throw new Error("texture() needs block-model-renderer 2.20 or later (readTexture)");
   const data = await bmr.readTexture(path, sources);
   if (!data) throw new Error(`no texture ${path} in the asset sources`);
-  const t = new THREE.Texture(data.image as THREE.Texture["image"]);
+  return blockTexture(data.image);
+}
+
+export interface AnimatedTexture {
+  frames: THREE.Texture[];
+  times: number[];
+  interpolate: boolean;
+  frameAt: (t: number) => number;
+  dispose: () => void;
+}
+
+export async function animatedTexture(
+  sources: AssetsInput,
+  name: string,
+  opts: { renderer?: ModelRendererApi } = {},
+): Promise<AnimatedTexture> {
+  const path = texturePath(name);
+  const bmr = opts.renderer ?? (await loadBmr());
+  if (!bmr.readTexture)
+    throw new Error("animatedTexture() needs block-model-renderer 2.20 or later (readTexture)");
+  const data = await bmr.readTexture(path, sources);
+  if (!data) throw new Error(`no texture ${path} in the asset sources`);
+  const frames = (data.frames?.length ? data.frames : [data.image]).map(blockTexture);
+  const times = frames.map((_, i) => Math.max(1, data.times?.[i] ?? 1));
+  const ends: number[] = [];
+  times.reduce((sum, n) => (ends.push(sum + n), sum + n), 0);
+  const total = ends[ends.length - 1] ?? 1;
+  return {
+    frames,
+    times,
+    interpolate: data.interpolate === true,
+    frameAt(t: number) {
+      const tick = Math.floor((Number.isFinite(t) ? t : 0) * 20 + 1e-6);
+      const at = ((tick % total) + total) % total;
+      return ends.findIndex((end) => at < end);
+    },
+    dispose() {
+      for (const f of frames) f.dispose();
+    },
+  };
+}
+
+export function blockTexture(image: unknown): THREE.Texture {
+  const t = new THREE.Texture(image as THREE.Texture["image"]);
   Object.assign(t, {
     magFilter: THREE.NearestFilter,
     minFilter: THREE.NearestMipmapLinearFilter,

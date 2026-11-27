@@ -40,7 +40,8 @@ export function makeDof(
     const p = dofParams({ mm, fstop, focus: focusDistance, widthPx, heightPx });
     // the CoC shader shares the camera's matrices but copied its near and far once, at construction; a rig that sets them
     // per frame (projectCamera) would otherwise have every depth read back at the wrong distance and blur the focus plane
-    effect.cocMaterial.adoptCameraSettings(camera);
+    const activeCamera = (effect as unknown as { camera?: Camera }).camera ?? camera;
+    effect.cocMaterial.adoptCameraSettings(activeCamera);
     effect.cocMaterial.focusDistance = p.focusDistance;
     effect.cocMaterial.focusRange = p.focusRange;
     effect.bokehScale = p.bokehScale;

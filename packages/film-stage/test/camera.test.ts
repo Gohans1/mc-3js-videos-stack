@@ -8,6 +8,7 @@ import {
   cameraAt,
   cameraKeyOptics,
   cameraMotionSpans,
+  cameraTrackOptions,
   EASES,
   inView,
   onScreenRanges,
@@ -131,6 +132,21 @@ test("matching speed eases to a stop at a sharp corner without reshaping the pat
   expect(cameraAt(1 + dt, keys).base.p.distanceTo(at) / dt).toBeLessThan(0.02);
   expect(cameraAt(0.9, keys).base.p.z).toBe(5);
   expect(cameraAt(1.1, keys).base.p.x).toBe(8);
+});
+
+test("applyCameraFeel scales wave aim drift proportionally on close-ups without altering 5m framing", () => {
+  const t = 3.34;
+  const farP = new THREE.Vector3(0, 0, 5);
+  const farL = new THREE.Vector3(0, 0, 0);
+  applyCameraFeel({ p: farP, l: farL, roll: 0, t, wave: 1 });
+
+  const closeP = new THREE.Vector3(0, 0, 0.8);
+  const closeL = new THREE.Vector3(0, 0, 0);
+  applyCameraFeel({ p: closeP, l: closeL, roll: 0, t, wave: 1 });
+
+  expect(Math.abs(farL.x)).toBeGreaterThan(0.1);
+  expect(Math.abs(closeL.x)).toBeLessThan(0.025);
+  expect(Math.abs(closeL.x / 0.8 - farL.x / 5)).toBeLessThan(0.005);
 });
 
 test("walking bob has no position jump at a matched key", () => {
@@ -1474,4 +1490,71 @@ test("inView performs exact convex frustum-AABB intersection for large tele-lens
   );
   expect(grazingFrustum.intersectsBox(grazingOutsideBox)).toBe(true);
   expect(inView(grazingFrustum, grazingOutsideBox)).toBe(false);
+});
+
+test("applyCameraFeel respects non-default up vectors on vertical top-down shots for wave/bob and applyShakify", () => {
+  const shakeOnly = {
+    p: new THREE.Vector3(0, 10, 0),
+    l: new THREE.Vector3(0, 0, 0),
+    roll: 0,
+    t: 1.25,
+    wave: 0,
+    bob: 0,
+    up: new THREE.Vector3(0, 0, -1),
+    handheld: { preset: "THE_CLOSEUP", amount: 0.8, speed: 1, move: 1 },
+  };
+  const shakeRes = applyCameraFeel(shakeOnly);
+  expect(shakeRes.handheld).toBe("THE_CLOSEUP");
+  expect(shakeRes.shakes.length).toBe(1);
+  expect(Math.abs(shakeRes.roll)).toBeLessThan(0.1);
+  expect(shakeOnly.p.toArray().every(Number.isFinite)).toBe(true);
+  expect(shakeOnly.l.toArray().every(Number.isFinite)).toBe(true);
+  expect(Math.hypot(shakeOnly.p.x, shakeOnly.p.z)).toBeGreaterThan(0.001);
+
+  const shakeRotated = {
+    p: new THREE.Vector3(0, 10, 0),
+    l: new THREE.Vector3(0, 0, 0),
+    roll: 0,
+    t: 1.25,
+    wave: 0,
+    bob: 0,
+    up: new THREE.Vector3(1, 0, 0),
+    handheld: { preset: "THE_CLOSEUP", amount: 0.8, speed: 1, move: 1 },
+  };
+  const shakeRotRes = applyCameraFeel(shakeRotated);
+  expect(Math.abs(shakeRotRes.roll)).toBeLessThan(0.1);
+  expect(shakeRotated.p.distanceTo(shakeOnly.p)).toBeGreaterThan(1e-4);
+
+  const waveBob = {
+    p: new THREE.Vector3(0, 10, 0),
+    l: new THREE.Vector3(0, 0, 0),
+    roll: 0,
+    t: 1.25,
+    wave: 1,
+    bob: 0.4,
+    up: new THREE.Vector3(0, 0, -1),
+  };
+  applyCameraFeel(waveBob);
+  expect(waveBob.p.toArray().every(Number.isFinite)).toBe(true);
+  expect(waveBob.l.toArray().every(Number.isFinite)).toBe(true);
+  expect(waveBob.p.y).toBe(10);
+  expect(Math.abs(waveBob.p.z)).toBeGreaterThan(0.01);
+
+  const track = [
+    {
+      t: 0,
+      p: [0, 10, 0],
+      l: [0, 0, 0],
+      wave: 1,
+      bob: 0.4,
+      handheld: { preset: "THE_CLOSEUP", amount: 0.6, speed: 1, move: 1 },
+    },
+    { t: 3, p: [0, 10, 0], l: [0, 0, 0], wave: 1, bob: 0.4 },
+  ];
+  const topDown = cameraAt(1.25, track, cameraTrackOptions({ up: [0, 0, -1] }));
+  expect(topDown.p.toArray().every(Number.isFinite)).toBe(true);
+  expect(topDown.l.toArray().every(Number.isFinite)).toBe(true);
+  expect(Math.abs(topDown.roll)).toBeLessThan(0.1);
+  expect(Math.abs(topDown.p.z)).toBeGreaterThan(0.01);
+  expect(Math.abs(topDown.p.y - 10)).toBeLessThan(0.01);
 });

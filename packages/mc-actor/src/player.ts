@@ -354,6 +354,8 @@ export const faceFrame = (root, head) => {
   const toHead = new THREE.Matrix3().setFromMatrix4(restToHead);
   const up = new THREE.Vector3(0, 1, 0).applyMatrix3(toHead).normalize(),
     right = new THREE.Vector3(1, 0, 0).applyMatrix3(toHead).normalize();
+  let headVisible = true;
+  const visibilityListeners = new Set();
   const add = (m, x, y, z) => {
     m.position.set(mid.x + x * px, box.max.y - y * px, box.max.z + z * px);
     m.castShadow = false;
@@ -361,7 +363,16 @@ export const faceFrame = (root, head) => {
     head.add(m);
     return m;
   };
-  return { px, localPx, up, right, add, box };
+  const isVisible = () => headVisible;
+  const onVisible = (fn) => {
+    visibilityListeners.add(fn);
+    return () => visibilityListeners.delete(fn);
+  };
+  const setVisible = (on) => {
+    headVisible = Boolean(on);
+    for (const fn of visibilityListeners) fn(headVisible);
+  };
+  return { px, localPx, up, right, add, box, isVisible, onVisible, setVisible };
 };
 
 const makeFace = ({ px, localPx, up, right, add }, skin, glow = 0.08, faceColors = null) => {
@@ -815,7 +826,9 @@ export async function makePlayer(
       inner.alphaTest = cut;
       inner.needsUpdate = true;
     }
-    gameFace?.show(!shown || shown.has("head"));
+    const headVisible = !shown || shown.has("head");
+    gameFace?.show(headVisible);
+    restFaceFrame.setVisible(headVisible);
     redrawSkin();
   };
   if (initMeta.hold) ensureGameFace()(...initMeta.hold);
@@ -1156,6 +1169,7 @@ export async function makePlayer(
     );
     return parts.join("|");
   };
+  g.userData.bones = { ...b, handR: hand, handL };
   return {
     g,
     rig,

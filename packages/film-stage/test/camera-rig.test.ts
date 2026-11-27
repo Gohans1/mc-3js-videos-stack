@@ -31,6 +31,26 @@ test("horizontal FOV stays fixed across frame shapes and orthogonal lookup is st
   expect(camera.far).toBe(450);
 });
 
+test("projectCamera preserves custom camera near/far when rig omits them, while defaulting bare cameras to 0.02/500", () => {
+  const bare = new PerspectiveCamera(45, 16 / 9);
+  projectCamera(bare, 1920, 1080);
+  expect(bare.near).toBe(0.02);
+  expect(bare.far).toBe(500);
+
+  const aerial = new PerspectiveCamera(40, 9 / 16, 0.05, 20000);
+  projectCamera(aerial, 1080, 1920);
+  expect(aerial.near).toBe(0.05);
+  expect(aerial.far).toBe(20000);
+
+  projectCamera(aerial, 1080, 1920, { near: 0.2, far: 1000 });
+  expect(aerial.near).toBe(0.2);
+  expect(aerial.far).toBe(1000);
+
+  projectCamera(aerial, 1080, 1920);
+  expect(aerial.near).toBe(0.05);
+  expect(aerial.far).toBe(20000);
+});
+
 test("one-node holds position and retains aim direction at a converted pose", () => {
   const cam = { p: new Vector3(2, 2, 1), l: new Vector3(2, 3, 1), roll: 0 };
   applyCameraRig(cam, 1, [0, 2], { look: "one-node", position: [6, 3, 9] }, () => cam);

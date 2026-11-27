@@ -164,6 +164,48 @@ test("a film's own font is drawn, loaded before the first frame and offered in t
   }
 });
 
+test("a text's own shadow is drawn at its colour, blur and offset in fractions of its size, and redraws when it changes", () => {
+  const prevDoc = (globalThis as { document?: unknown }).document;
+  const seen: { color: unknown; blur: unknown; x: unknown; y: unknown }[] = [];
+  const ctx = new Proxy(
+    { measureText: (s: string) => ({ width: s.length * 12 }) } as Record<string, unknown>,
+    {
+      get: (o, k) =>
+        k in o
+          ? o[k as string]
+          : k === "fillText"
+            ? () => seen.push({ color: o.shadowColor, blur: o.shadowBlur, x: o.shadowOffsetX, y: o.shadowOffsetY })
+            : () => {},
+      set: (o, k, v) => ((o[k as string] = v), true),
+    },
+  );
+  (globalThis as { document?: unknown }).document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => ctx }),
+    fonts: { load: async () => {}, addEventListener() {} },
+  };
+  try {
+    const draw = makeTitles({ autoClear: true, render() {} }, 1080, 1920);
+    const it: Record<string, unknown> = {
+      kind: "text",
+      from: 0,
+      to: 4,
+      text: "it was strange",
+      size: 100,
+      shadow: { color: "rgba(0,0,0,0.9)", blur: 0.05, x: 0.04, y: 0.05 },
+    };
+    draw([it], 1);
+    expect(seen.at(-1)).toEqual({ color: "rgba(0,0,0,0.9)", blur: 5, x: 4, y: 5 });
+    it.shadow = { color: "#000", blur: 0.1, x: 0, y: 0.02 };
+    draw([it], 1.1);
+    expect(seen.at(-1)).toEqual({ color: "#000", blur: 10, x: 0, y: 2 });
+    it.shadow = false;
+    draw([it], 1.2);
+    expect(seen.at(-1)!.color).not.toBe("#000");
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDoc;
+  }
+});
+
 test("exposes categorized Cinetic typography and shape voices with unique ids and positive defaults", () => {
   expect(TEXT_CATEGORIES).toEqual([
     "Clean",
@@ -834,4 +876,343 @@ test("a film waits only on the fonts its items draw in, every font once one cycl
   expect(fontsFor([])).toEqual([]);
   expect(fontsFor([{ font: "serif", out: { fx: "fontCycle" } }])).toEqual(FONTS);
   expect(fontsFor(undefined)).toEqual(FONTS);
+  expect(fontsFor({ preset: "zack-d-films", items: [{ text: "hello" }] }).map((f) => f.id)).toEqual(
+    ["tahoma"],
+  );
+});
+
+test("resolveTextItem merges document preset, defaults, item preset, and item overrides cleanly", async () => {
+  const { resolveTextItem, textPresetOf } = await import("../src/titles-catalog");
+  expect(textPresetOf("zack-d-films")?.style).toMatchObject({
+    font: "tahoma",
+    weight: 700,
+    size: 75,
+    y: 0.784,
+    stroke: { color: "#000000", width: 4, join: "miter", miterLimit: 4 },
+  });
+
+  const doc = {
+    preset: "zack-d-films",
+    defaults: { color: "#FFEEAA", stroke: { width: 6 } },
+    items: [],
+  };
+  const merged = resolveTextItem({ from: 0, to: 1, text: "test", stroke: { color: "#111111" } }, doc);
+  expect(merged.kind).toBe("text");
+  expect(merged.font).toBe("tahoma");
+  expect(merged.weight).toBe(700);
+  expect(merged.size).toBe(75);
+  expect(merged.color).toBe("#FFEEAA");
+  expect(merged.stroke).toEqual({ color: "#111111", width: 6, join: "miter", miterLimit: 4 });
+  expect(merged.shadow).toEqual({ color: "rgba(0,0,0,1)", blur: 0.015, x: 0.034, y: 0.034 });
+
+  const noShadow = resolveTextItem({ from: 0, to: 1, text: "clean", shadow: false, stroke: null }, doc);
+  expect(noShadow.shadow).toBe(false);
+  expect(noShadow.stroke).toBeUndefined();
+
+  const shapeItem = resolveTextItem({ kind: "arrow", from: 0, to: 1 }, doc);
+  expect(shapeItem.kind).toBe("arrow");
+  expect(shapeItem.size).toBeUndefined();
+  expect(shapeItem.y).toBeUndefined();
+  expect(shapeItem.stroke).toBeUndefined();
+  expect(shapeItem.color).toBeUndefined();
+
+  const lowerThird = resolveTextItem(
+    { preset: "doc-lower-third", from: 0, to: 1, text: "Dr. Chen" },
+    { preset: "zack-d-films", items: [] },
+  );
+  expect(lowerThird.align).toBe("left");
+  expect(lowerThird.stroke).toBeUndefined();
+  expect(lowerThird.bold).toBeUndefined();
+  expect(lowerThird.safeArea).toBeUndefined();
+
+  const noAnim = resolveTextItem(
+    { from: 0, to: 1, text: "still", in: { fx: "none" } },
+    { defaults: { kind: "text", in: { fx: "fade", len: 0.4 } }, items: [] },
+  );
+  expect(noAnim.in).toBeUndefined();
+});
+
+test("stroke width 0 skips strokeText and preserves fill shadow instead of drawing stale lineWidth", () => {
+  const prevDoc = (globalThis as { document?: unknown }).document;
+  let strokeCalls = 0;
+  let fillShadowColor = "";
+  const ctx = new Proxy(
+    { lineWidth: 9, measureText: (s: string) => ({ width: s.length * 14 }) } as Record<string, unknown>,
+    {
+      get: (o, k) =>
+        k in o
+          ? o[k as string]
+          : k === "strokeText"
+            ? () => {
+                strokeCalls++;
+              }
+            : k === "fillText"
+              ? () => {
+                  fillShadowColor = typeof o.shadowColor === "string" ? o.shadowColor : "";
+                }
+              : () => {},
+      set: (o, k, v) => ((o[k as string] = v), true),
+    },
+  );
+  (globalThis as { document?: unknown }).document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => ctx }),
+    fonts: { load: async () => {}, addEventListener() {} },
+  };
+  try {
+    const draw = makeTitles({ autoClear: true, render() {} }, 1080, 1920);
+    draw(
+      [
+        {
+          kind: "text",
+          from: 0,
+          to: 2,
+          text: "no stroke",
+          stroke: { color: "#000000", width: 0 },
+          shadow: { color: "rgba(0,0,0,0.9)", blur: 0.05, x: 0.02, y: 0.02 },
+        },
+      ],
+      1,
+    );
+    expect(strokeCalls).toBe(0);
+    expect(fillShadowColor).toBe("rgba(0,0,0,0.9)");
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDoc;
+  }
+});
+
+test("zack-d-films seamlessGap closes 1-frame blank caption gaps cleanly while preserving real pauses, opt-out 0, and out fades", () => {
+  const prevDoc = (globalThis as { document?: unknown }).document;
+  const drawn: string[] = [];
+  const ctx = new Proxy(
+    { measureText: (s: string) => ({ width: s.length * 14 }) } as Record<string, unknown>,
+    {
+      get: (o, k) =>
+        k in o
+          ? o[k as string]
+          : k === "fillText"
+            ? (s: string) => drawn.push(s)
+            : () => {},
+      set: (o, k, v) => ((o[k as string] = v), true),
+    },
+  );
+  (globalThis as { document?: unknown }).document = {
+    createElement: () => ({ width: 0, height: 0, getContext: () => ctx }),
+    fonts: { load: async () => {}, addEventListener() {} },
+  };
+  try {
+    const draw = makeTitles({ autoClear: true, render() {} }, 1080, 1920);
+    const doc = {
+      preset: "zack-d-films",
+      items: [
+        { from: 0.0, to: 0.534, text: "She jumped" },
+        { from: 0.567, to: 1.2, text: "from a plane" },
+        { from: 1.5, to: 2.0, text: "after pause" },
+        { from: 2.033, to: 2.5, text: "with opt-out", seamlessGap: 0 },
+        { from: 2.533, to: 3.0, text: "after opt-out" },
+        { from: 3.0, to: 3.5, text: "fading out", out: { fx: "fade", len: 0.2 } },
+        { from: 3.533, to: 4.0, text: "after fade" },
+      ],
+    };
+
+    drawn.length = 0;
+    draw(doc, 17 / 30);
+    expect(drawn).toEqual(["She jumped"]);
+
+    drawn.length = 0;
+    draw(doc, 18 / 30);
+    expect(drawn).toEqual(["from a plane"]);
+
+    drawn.length = 0;
+    draw(doc, 1.35);
+    expect(drawn).toEqual([]);
+
+    drawn.length = 0;
+    draw(doc, 2.515);
+    expect(drawn).toEqual([]);
+
+    drawn.length = 0;
+    draw(doc, 3.515);
+    expect(drawn).toEqual([]);
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDoc;
+  }
+});
+
+test("makeTitles supersamples 720p drafts crisply, honors weight/stroke.join, and keeps normalized boxes identical", () => {
+  const prevDoc = (globalThis as { document?: unknown }).document;
+  const createdCanvas = { width: 0, height: 0, getContext: () => ctx };
+  const strokes: { join: unknown; miter: unknown; width: unknown; font: unknown }[] = [];
+  const ctx = new Proxy(
+    { measureText: (s: string) => ({ width: s.length * 18 }) } as Record<string, unknown>,
+    {
+      get: (o, k) =>
+        k in o
+          ? o[k as string]
+          : k === "strokeText"
+            ? () =>
+                strokes.push({
+                  join: o.lineJoin,
+                  miter: o.miterLimit,
+                  width: o.lineWidth,
+                  font: o.font,
+                })
+            : () => {},
+      set: (o, k, v) => ((o[k as string] = v), true),
+    },
+  );
+  (globalThis as { document?: unknown }).document = {
+    createElement: () => createdCanvas,
+    fonts: { load: async () => {}, addEventListener() {} },
+  };
+  try {
+    const doc = {
+      preset: "zack-d-films",
+      items: [{ from: 0, to: 2, text: "it was strange" }],
+    };
+    const draw = makeTitles({ autoClear: true, render() {} }, 720, 1280, { doc });
+    expect(createdCanvas.width).toBe(1080);
+    expect(createdCanvas.height).toBe(1920);
+    expect(draw.presets.some((p: { id: string }) => p.id === "zack-d-films")).toBe(true);
+
+    draw(doc, 1);
+    expect(strokes.at(-1)).toMatchObject({ join: "miter", miter: 4, width: 4 });
+    expect(String(strokes.at(-1)!.font)).toContain("700 75px");
+    expect(String(strokes.at(-1)!.font)).toContain("Tahoma");
+
+    const beforeLen = strokes.length;
+    (doc.items[0] as Record<string, unknown>).stroke = { join: "bevel" };
+    draw(doc, 1);
+    expect(strokes.length).toBeGreaterThan(beforeLen);
+    expect(strokes.at(-1)!.join).toBe("bevel");
+
+    const boxes = draw.boxes(doc, 1);
+    expect(boxes.length).toBe(1);
+    expect(boxes[0].box[1]).toBeGreaterThan(0.7);
+    expect(boxes[0].box[3]).toBeLessThan(0.85);
+  } finally {
+    (globalThis as { document?: unknown }).document = prevDoc;
+  }
+});
+
+test("zack-d-films preset renders Tahoma Bold at exact 1080x1920 reference bbox in headless Chrome", async () => {
+  const { existsSync } = await import("node:fs");
+  const { resolve } = await import("node:path");
+  const { spawn } = await import("node:child_process");
+  const { FONTS, resolveTextItem } = await import("../src/titles-catalog");
+  const chrome = resolve(
+    import.meta.dir,
+    "../../../vault/tools/chrome-headless-shell/chrome-headless-shell.exe",
+  );
+  if (!existsSync(chrome)) return;
+
+  const item = resolveTextItem(
+    { from: 0, to: 2, text: "it was strange" },
+    { preset: "zack-d-films", items: [] },
+  );
+  const fontCss = FONTS.find((f) => f.id === item.font)!.css;
+  let metrics: Record<string, number> | null = null;
+  let done!: () => void;
+  const waited = new Promise<void>((r) => {
+    done = r;
+  });
+  const html = `<!doctype html><html><body><canvas id="c" width="1080" height="1920"></canvas><script>
+const c = document.getElementById("c");
+const ctx = c.getContext("2d");
+ctx.fillStyle = "rgb(128,128,128)";
+ctx.fillRect(0, 0, 1080, 1920);
+const px = ${item.size};
+ctx.font = "${item.weight} " + px + "px ${fontCss.replace(/"/g, '\\"')}";
+ctx.textAlign = "center";
+ctx.textBaseline = "middle";
+ctx.textRendering = "geometricPrecision";
+ctx.fontKerning = "normal";
+const x = Math.round(1080 * ${item.x});
+const y = Math.round(1920 * ${item.y});
+ctx.save();
+ctx.lineJoin = "${item.stroke!.join}";
+ctx.miterLimit = ${item.stroke!.miterLimit};
+ctx.lineWidth = ${item.stroke!.width};
+ctx.strokeStyle = "${item.stroke!.color}";
+ctx.shadowColor = "${item.shadow && typeof item.shadow === "object" ? item.shadow.color : "transparent"}";
+ctx.shadowBlur = px * ${item.shadow && typeof item.shadow === "object" ? item.shadow.blur : 0};
+ctx.shadowOffsetX = px * ${item.shadow && typeof item.shadow === "object" ? item.shadow.x : 0};
+ctx.shadowOffsetY = px * ${item.shadow && typeof item.shadow === "object" ? item.shadow.y : 0};
+ctx.strokeText("it was strange", x, y);
+ctx.restore();
+ctx.fillStyle = "${item.color}";
+ctx.fillText("it was strange", x, y);
+const d = ctx.getImageData(0, 0, 1080, 1920).data;
+let wx0 = 1080, wx1 = 0, wy0 = 1920, wy1 = 0;
+let dx0 = 1080, dx1 = 0, dy0 = 1920, dy1 = 0;
+for (let py = 1400; py < 1620; py++) {
+  for (let px0 = 150; px0 < 930; px0++) {
+    const i = (py * 1080 + px0) * 4;
+    const r = d[i], g = d[i + 1], b = d[i + 2];
+    if (r > 235 && g > 235 && b > 235) {
+      if (px0 < wx0) wx0 = px0; if (px0 > wx1) wx1 = px0;
+      if (py < wy0) wy0 = py; if (py > wy1) wy1 = py;
+    }
+    if (r < 40 && g < 40 && b < 40) {
+      if (px0 < dx0) dx0 = px0; if (px0 > dx1) dx1 = px0;
+      if (py < dy0) dy0 = py; if (py > dy1) dy1 = py;
+    }
+  }
+}
+fetch("/done", { method: "POST", body: JSON.stringify({ wx0, wx1, wy0, wy1, dx0, dx1, dy0, dy1 }) });
+</script></body></html>`;
+
+  const server = Bun.serve({
+    port: 0,
+    async fetch(req) {
+      if (new URL(req.url).pathname === "/done") {
+        metrics = (await req.json()) as Record<string, number>;
+        done();
+        return new Response("ok");
+      }
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+    },
+  });
+  const proc = spawn(
+    chrome,
+    ["--headless", "--disable-gpu", "--no-first-run", `http://127.0.0.1:${server.port}/`],
+    { stdio: "ignore" },
+  );
+  try {
+    await Promise.race([
+      waited,
+      new Promise<void>((_, rej) => setTimeout(() => rej(new Error("chrome timeout")), 15000)),
+    ]);
+  } finally {
+    proc.kill();
+    server.stop(true);
+  }
+  expect(metrics).not.toBeNull();
+  expect(Math.abs(metrics!.wx0 - 277)).toBeLessThanOrEqual(2);
+  expect(Math.abs(metrics!.wx1 - 804)).toBeLessThanOrEqual(2);
+  expect(Math.abs(metrics!.wy0 - 1470)).toBeLessThanOrEqual(2);
+  expect(Math.abs(metrics!.wy1 - 1541)).toBeLessThanOrEqual(2);
+  expect(metrics!.wx0 - metrics!.dx0).toBeGreaterThanOrEqual(1);
+  expect(metrics!.wx0 - metrics!.dx0).toBeLessThanOrEqual(4);
+  expect(metrics!.dx1 - metrics!.wx1).toBeGreaterThanOrEqual(1);
+  expect(metrics!.dx1 - metrics!.wx1).toBeLessThanOrEqual(6);
+  expect(metrics!.dy1 - metrics!.wy1).toBeGreaterThanOrEqual(1);
+  expect(metrics!.dy1 - metrics!.wy1).toBeLessThanOrEqual(6);
+});
+
+test("bridgeSeamlessGaps scans past intervening same-track labels at different positions", async () => {
+  const { resolveTextItems } = await import("../src/titles-catalog");
+  const bridged = resolveTextItems({
+    preset: "zack-d-films",
+    items: [
+      { from: 0, to: 0.534, text: "She jumped" },
+      { from: 0.2, to: 2.0, y: 0.2, text: "30,000 FT" },
+      { from: 0.567, to: 1.2, text: "from a plane" },
+      { from: 1.233, to: 1.8, text: "wrong clock", timebase: "heard" },
+      { from: 1.234, to: 2.0, text: "and survived" },
+    ],
+  });
+  expect(bridged[0].to).toBe(0.567);
+  expect(bridged[1].to).toBe(2.0);
+  expect(bridged[2].to).toBe(1.234);
+  expect(bridged[3].to).toBe(1.8);
 });

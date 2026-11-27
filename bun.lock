@@ -15,6 +15,42 @@
         "yazl": "catalog:",
       },
     },
+    "films/bomb-under-bed": {
+      "name": "bomb-under-bed",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
+    "films/dreaming-test": {
+      "name": "dreaming-test",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
     "films/elon-musk-short": {
       "name": "elon-musk-short",
       "dependencies": {
@@ -35,6 +71,78 @@
     },
     "films/food-eat-more": {
       "name": "food-eat-more",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
+    "films/girl-joined-navy": {
+      "name": "girl-joined-navy",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
+    "films/gta6-13-years": {
+      "name": "gta6-13-years",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
+    "films/gta6-npc-police": {
+      "name": "gta6-npc-police",
+      "dependencies": {
+        "@dimforge/rapier3d-compat": "catalog:",
+        "block-model-renderer": "catalog:",
+        "fflate": "catalog:",
+        "film-kit": "workspace:*",
+        "film-stage": "workspace:*",
+        "live-studio": "workspace:*",
+        "math": "catalog:",
+        "mc-actor": "workspace:*",
+        "mc-assets": "workspace:*",
+        "n8ao": "catalog:",
+        "postprocessing": "catalog:",
+        "three": "catalog:",
+        "three-good-godrays": "catalog:",
+      },
+    },
+    "films/skydiver-unconscious": {
+      "name": "skydiver-unconscious",
       "dependencies": {
         "@dimforge/rapier3d-compat": "catalog:",
         "block-model-renderer": "catalog:",
@@ -110,6 +218,7 @@
         "film-kit": "workspace:*",
         "gl-transitions": "3.1.0",
         "html-to-image": "1.11.13",
+        "n8ao": "catalog:",
         "postprocessing": "catalog:",
         "three-good-godrays": "catalog:",
       },
@@ -825,6 +934,8 @@
 
     "block-model-renderer": ["block-model-renderer@2.20.0", "", { "dependencies": { "gl": "^8.1.6", "headless-three": "^1.8.1", "sharp": "^0.34.5", "skia-canvas": "^3.0.8" }, "peerDependencies": { "three": ">=0.152.0" }, "optionalPeers": ["three"] }, "sha512-UuYiRedK8rBh1LxFDh5jMg12iyrYiXAXzXYC44k7e5qUC+EpHfFvQj+jXkeJr5QMALeFsCmH4ZwN40A3EPqppw=="],
 
+    "bomb-under-bed": ["bomb-under-bed@workspace:films/bomb-under-bed"],
+
     "brace-expansion": ["brace-expansion@5.0.12", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="],
 
     "braces": ["braces@3.0.3", "", { "dependencies": { "fill-range": "^7.1.1" } }, "sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA=="],
@@ -924,6 +1035,8 @@
     "dot-prop": ["dot-prop@10.2.0", "", { "dependencies": { "type-fest": "^5.0.0" } }, "sha512-BTJ9aZYL3vCfZlZOBLy9v8TUqWGQ0pzFnygKwFZt5udj6viBoFIBviKPUoZLDCPn1FoXffv6McQFDenrm5Krfw=="],
 
     "dotenv": ["dotenv@17.4.2", "", {}, "sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw=="],
+
+    "dreaming-test": ["dreaming-test@workspace:films/dreaming-test"],
 
     "eastasianwidth": ["eastasianwidth@0.2.0", "", {}, "sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA=="],
 
@@ -1043,6 +1156,8 @@
 
     "get-stream": ["get-stream@9.0.1", "", { "dependencies": { "@sec-ant/readable-stream": "^0.4.1", "is-stream": "^4.0.1" } }, "sha512-kVCxPF3vQM/N0B1PmoqVUqgHP+EeVjmZSQn+1oCRPxd2P21P2F19lIgbR3HBosbB1PUhOAoctJnfEn2GbN2eZA=="],
 
+    "girl-joined-navy": ["girl-joined-navy@workspace:films/girl-joined-navy"],
+
     "github-from-package": ["github-from-package@0.0.0", "", {}, "sha512-SyHy3T1v2NUXn29OsWdxmK6RwHD+vkj3v8en8AOBZ1wBQ/hCAQ5bAQTD02kW4W9tUp/3Qh6J8r9EvntiyCmOOw=="],
 
     "gl": ["gl@8.1.6", "", { "dependencies": { "bindings": "^1.5.0", "bit-twiddle": "^1.0.2", "glsl-tokenizer": "^2.1.5", "nan": "^2.22.0", "node-abi": "^3.71.0", "node-gyp": "^10.2.0", "prebuild-install": "^7.1.2" } }, "sha512-BcvkgW+jWiX2SjTddgq4lOfkFmeiKE/n1N3zFnq/JlSwemIvQvH1rLURz5oMdfp4ZT5bzseuIOE608zQI0DRYA=="],
@@ -1056,6 +1171,10 @@
     "glsl-tokenizer": ["glsl-tokenizer@2.1.5", "", { "dependencies": { "through2": "^0.6.3" } }, "sha512-XSZEJ/i4dmz3Pmbnpsy3cKh7cotvFlBiZnDOwnj/05EwNp2XrhQ4XKJxT7/pDt4kp4YcpRSKz8eTV7S+mwV6MA=="],
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
+
+    "gta6-13-years": ["gta6-13-years@workspace:films/gta6-13-years"],
+
+    "gta6-npc-police": ["gta6-npc-police@workspace:films/gta6-npc-police"],
 
     "hashery": ["hashery@1.5.1", "", { "dependencies": { "hookified": "^1.15.0" } }, "sha512-iZyKG96/JwPz1N55vj2Ie2vXbhu440zfUfJvSwEqEbeLluk7NnapfGqa7LH0mOsnDxTF85Mx8/dyR6HfqcbmbQ=="],
 
@@ -1440,6 +1559,8 @@
     "sisteransi": ["sisteransi@1.0.5", "", {}, "sha512-bLGGlR1QxBcynn2d5YmDX4MGjlZvy2MRBDRNHLJ8VI6l6+9FUiyTFNJ0IveOSP0bcXgVDPRcfGqA0pjaqUpfVg=="],
 
     "skia-canvas": ["skia-canvas@3.0.8", "", { "dependencies": { "detect-libc": "^2.1.1", "follow-redirects": "^1.15.11", "https-proxy-agent": "^7.0.6", "string-split-by": "^1.0.0" } }, "sha512-FSYKxp8Ng2vOeeOBiyPhnn6ui6FirPJXMyjk4PKl8N/OWzVrkMawUgY9zubIWHMdYtyWFn0gfX3QlRwg6HBmdg=="],
+
+    "skydiver-unconscious": ["skydiver-unconscious@workspace:films/skydiver-unconscious"],
 
     "smart-buffer": ["smart-buffer@4.2.0", "", {}, "sha512-94hK0Hh8rPqQl2xXc3HsaBoOXKV20MToPkcXvwbISWLEs+64sBq5kFgn2kJDHb1Pry9yrP0dxrCI9RRci7RXKg=="],
 

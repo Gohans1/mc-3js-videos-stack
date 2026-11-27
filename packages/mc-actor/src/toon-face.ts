@@ -702,17 +702,23 @@ export function wearToonFace(
     derive = true,
     glow = 0.08,
     face = "neutral",
+    marks: showMarks = true,
   }: {
     style?: Overrides;
     skin?: SkinPrep | false;
     derive?: boolean;
     glow?: number;
     face?: ExpressionName | FaceSpec | Face;
+    marks?: boolean;
   } = {},
 ): ToonWear {
   if (derive && !player.skin) throw new Error("toon face: derive reads the player's skin canvas, which this player lacks");
   const S = toonStyle({ ...style, color: { ...(derive && player.skin ? colorsFromSkin(player.skin) : {}), ...style.color } });
-  let current = resolveFace(face);
+  const resolveClean = (input: ExpressionName | FaceSpec | Face) => {
+    const resolved = resolveFace(input);
+    return showMarks ? resolved : { ...resolved, extras: {} };
+  };
+  let current = resolveClean(face);
   let drawn = JSON.stringify(current);
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = S.size;
@@ -751,7 +757,7 @@ export function wearToonFace(
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -8,
   });
-  const { px, add } = player.faceFrame;
+  const { px, add, isVisible, onVisible } = player.faceFrame;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(8 * px, 8 * px), material);
   mesh.name = "toonFace";
   mesh.receiveShadow = true;
@@ -771,7 +777,13 @@ export function wearToonFace(
   const marks = new THREE.Sprite(haloMaterial);
   marks.name = "toonMarks";
   marks.scale.set(16 * px, 16 * px, 1);
-  marks.visible = initiallyMarked;
+  let hasMarks = initiallyMarked;
+  const syncVisibility = (headShown = isVisible?.() ?? true) => {
+    mesh.visible = headShown;
+    marks.visible = headShown && hasMarks;
+  };
+  syncVisibility();
+  const stopVisible = onVisible?.(syncVisibility);
   add(marks, 0, 4, 0);
   return {
     mesh,
@@ -783,21 +795,23 @@ export function wearToonFace(
       return clone(current);
     },
     set(next) {
-      const resolved = resolveFace(next);
+      const resolved = resolveClean(next);
       const key = JSON.stringify(resolved);
       if (key === drawn) return;
       try {
-        marks.visible = paint(resolved);
+        hasMarks = paint(resolved);
       } catch (error) {
         paint(current);
         throw error;
       }
+      marks.visible = (isVisible?.() ?? true) && hasMarks;
       current = resolved;
       drawn = key;
       texture.needsUpdate = true;
       haloTexture.needsUpdate = true;
     },
     dispose() {
+      stopVisible?.();
       mesh.removeFromParent();
       mesh.geometry.dispose();
       material.dispose();

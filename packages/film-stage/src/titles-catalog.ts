@@ -108,19 +108,294 @@ export const FONTS: readonly Font[] = [
     css: "'Geist Mono Variable', monospace",
     tip: "Mono beside Geist: numbers, code, labels",
   },
+  {
+    id: "tahoma",
+    title: "Tahoma",
+    css: "'Tahoma', 'DejaVu Sans', sans-serif",
+    tip: "Crisp humanist sans: YouTube Shorts captions (Windows/macOS system font)",
+  },
+  {
+    id: "verdana",
+    title: "Verdana",
+    css: "'Verdana', 'DejaVu Sans', sans-serif",
+    tip: "Wide humanist sans: legible screen captions (Windows/macOS system font)",
+  },
 ];
 export const fontOf = (id?: string, own: readonly Font[] = []) =>
   (own.find((f) => f.id === id) ?? FONTS.find((f) => f.id === id) ?? FONTS[0]!).css;
 
-type FontUser = { font?: string; in?: { fx?: string }; out?: { fx?: string } };
+export interface TextStroke {
+  color?: string;
+  width?: number;
+  join?: "round" | "miter" | "bevel";
+  miterLimit?: number;
+}
+export interface TextShadow {
+  color?: string;
+  blur?: number;
+  x?: number;
+  y?: number;
+}
+export interface TextSafeArea {
+  left?: number;
+  right?: number;
+  top?: number;
+  bottom?: number;
+}
+export interface TextStylePreset {
+  id: string;
+  title: string;
+  tip: string;
+  style: Record<string, unknown>;
+}
+export const TEXT_PRESETS: readonly TextStylePreset[] = [
+  {
+    id: "zack-d-films",
+    title: "Zack D. Films",
+    tip: "Pixel-matched 9:16 narration captions: Tahoma Bold 75px, 2px black miter outline, tight drop shadow, y=78.4%",
+    style: {
+      kind: "text",
+      font: "tahoma",
+      weight: 700,
+      bold: true,
+      size: 75,
+      line: 1.15,
+      spacing: 0,
+      x: 0.5,
+      y: 0.784,
+      align: "center",
+      color: "#FFFFFF",
+      stroke: { color: "#000000", width: 4, join: "miter", miterLimit: 4 },
+      shadow: { color: "rgba(0,0,0,1)", blur: 0.015, x: 0.034, y: 0.034 },
+      safeArea: { bottom: 0.18 },
+      seamlessGap: 0.06,
+    },
+  },
+  {
+    id: "clean-caption",
+    title: "Clean caption",
+    tip: "High-contrast Inter Bold subtitles with soft outline and shadow",
+    style: {
+      kind: "text",
+      font: "sans",
+      weight: 700,
+      bold: true,
+      size: 64,
+      line: 1.18,
+      x: 0.5,
+      y: 0.78,
+      align: "center",
+      color: "#FFFFFF",
+      stroke: { color: "#000000", width: 4, join: "round" },
+      shadow: { color: "rgba(0,0,0,0.75)", blur: 0.08, x: 0, y: 0.03 },
+      safeArea: { bottom: 0.18 },
+    },
+  },
+  {
+    id: "doc-lower-third",
+    title: "Doc lower-third",
+    tip: "Documentary lower-left Plex Mono readout",
+    style: {
+      kind: "text",
+      font: "mono",
+      weight: 600,
+      size: 40,
+      spacing: 0.06,
+      line: 1.35,
+      x: 0.07,
+      y: 0.84,
+      align: "left",
+      color: "#FFFFFF",
+    },
+  },
+];
+export const TEXT_PRESET_IDS: readonly string[] = TEXT_PRESETS.map((p) => p.id);
+export const textPresetOf = (id?: string, own: readonly TextStylePreset[] = []) =>
+  id ? (own.find((p) => p.id === id) ?? TEXT_PRESETS.find((p) => p.id === id) ?? null) : null;
+
+const isObj = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v);
+
+const mergeStyleLayer = (
+  base: Record<string, unknown>,
+  patch?: Record<string, unknown> | null,
+): Record<string, unknown> => {
+  if (!isObj(patch)) return base;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === undefined) continue;
+    if (k === "stroke") {
+      out.stroke =
+        v === null || v === false
+          ? undefined
+          : isObj(v) && isObj(out.stroke)
+            ? { ...out.stroke, ...v }
+            : v;
+    } else if (k === "shadow") {
+      out.shadow =
+        v === false || v === null
+          ? false
+          : isObj(v) && isObj(out.shadow)
+            ? { ...out.shadow, ...v }
+            : v;
+    } else if (k === "background") {
+      out.background =
+        v === null || v === false
+          ? undefined
+          : isObj(v) && isObj(out.background)
+            ? { ...out.background, ...v }
+            : v;
+    } else if (k === "safeArea") {
+      out.safeArea =
+        v === false
+          ? false
+          : isObj(v) && isObj(out.safeArea)
+            ? { ...out.safeArea, ...v }
+            : v;
+    } else if (k === "in" || k === "out") {
+      out[k] = v === null || (isObj(v) && v.fx === "none") ? undefined : v;
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+};
+
+export interface TextDocLike {
+  items?: readonly Record<string, unknown>[];
+  tracks?: Record<string, unknown>;
+  preset?: string;
+  defaults?: Record<string, unknown>;
+}
+
+export const resolveTextItem = <T extends Record<string, unknown>>(
+  it: T,
+  doc?: TextDocLike | null,
+  extraPresets: readonly TextStylePreset[] = [],
+): T => {
+  const itemPreset =
+    typeof it?.preset === "string" ? textPresetOf(it.preset, extraPresets)?.style : undefined;
+  const effKind = it?.kind ?? itemPreset?.kind;
+  const rawDocPreset = textPresetOf(doc?.preset, extraPresets)?.style;
+  const docPreset =
+    rawDocPreset && (!effKind || effKind === (rawDocPreset.kind ?? "text"))
+      ? rawDocPreset
+      : undefined;
+  const rawDocDefaults = doc?.defaults;
+  const docDefaults =
+    rawDocDefaults && (!effKind || effKind === (rawDocDefaults.kind ?? "text"))
+      ? rawDocDefaults
+      : undefined;
+  if (!docPreset && !docDefaults && !itemPreset) {
+    const cleaned =
+      (isObj(it?.in) && (it.in as Record<string, unknown>).fx === "none") ||
+      (isObj(it?.out) && (it.out as Record<string, unknown>).fx === "none");
+    if (!cleaned) return it.kind ? it : ({ kind: "text", ...it } as T);
+    const out = mergeStyleLayer({}, it);
+    if (!out.kind) out.kind = "text";
+    return out as T;
+  }
+  let merged: Record<string, unknown> = {};
+  if (!itemPreset && docPreset) merged = mergeStyleLayer(merged, docPreset);
+  if (docDefaults) merged = mergeStyleLayer(merged, docDefaults);
+  if (itemPreset) merged = mergeStyleLayer(merged, itemPreset);
+  merged = mergeStyleLayer(merged, it);
+  if (!merged.kind) merged.kind = "text";
+  return merged as T;
+};
+
+const sameTimebase = (a: unknown, b: unknown) =>
+  a === b || (a != null && b != null && JSON.stringify(a) === JSON.stringify(b));
+
+export const bridgeSeamlessGaps = <T extends Record<string, unknown>>(
+  items: readonly T[],
+  tracks?: Record<string, unknown> | null,
+): T[] => {
+  const out = items.slice();
+  const byTrack = new Map<number, number[]>();
+  for (let i = 0; i < out.length; i++) {
+    const it = out[i];
+    if (!it || (it.kind ?? "text") !== "text" || it.hidden || it.at) continue;
+    const tr = typeof it.track === "number" ? it.track : 0;
+    const trackInfo = tracks?.[tr];
+    if (isObj(trackInfo) && trackInfo.hidden) continue;
+    if (
+      typeof it.from !== "number" ||
+      typeof it.to !== "number" ||
+      !Number.isFinite(it.from) ||
+      !Number.isFinite(it.to) ||
+      it.to <= it.from
+    )
+      continue;
+    const bucket = byTrack.get(tr);
+    if (bucket) bucket.push(i);
+    else byTrack.set(tr, [i]);
+  }
+  for (const idxs of byTrack.values()) {
+    if (idxs.length < 2) continue;
+    idxs.sort(
+      (a, b) =>
+        (out[a]!.from as number) - (out[b]!.from as number) ||
+        (out[a]!.to as number) - (out[b]!.to as number),
+    );
+    for (let k = 0; k < idxs.length - 1; k++) {
+      const pi = idxs[k]!;
+      const prev = out[pi]!;
+      const maxGap =
+        typeof prev.seamlessGap === "number" && Number.isFinite(prev.seamlessGap)
+          ? prev.seamlessGap
+          : 0;
+      if (maxGap <= 0) continue;
+      if (isObj(prev.out) && prev.out.fx) continue;
+      const px = typeof prev.x === "number" ? prev.x : 0.5,
+        py = typeof prev.y === "number" ? prev.y : 0.5;
+      const pTo = prev.to as number;
+      for (let m = k + 1; m < idxs.length; m++) {
+        const next = out[idxs[m]!]!;
+        const gap = (next.from as number) - pTo;
+        if (gap > maxGap) break;
+        const nx = typeof next.x === "number" ? next.x : 0.5,
+          ny = typeof next.y === "number" ? next.y : 0.5;
+        if (Math.abs(px - nx) >= 0.08 || Math.abs(py - ny) >= 0.08) continue;
+        if (!sameTimebase(prev.timebase, next.timebase)) continue;
+        if (gap <= 0) {
+          if ((next.to as number) > pTo) break;
+          continue;
+        }
+        out[pi] = { ...prev, to: next.from };
+        break;
+      }
+    }
+  }
+  return out;
+};
+
+export const resolveTextItems = <T extends Record<string, unknown>>(
+  listOrDoc?: readonly T[] | TextDocLike | null,
+  extraPresets: readonly TextStylePreset[] = [],
+): T[] => {
+  if (!listOrDoc) return [];
+  if (Array.isArray(listOrDoc)) {
+    return bridgeSeamlessGaps(listOrDoc.map((it) => resolveTextItem(it, null, extraPresets)));
+  }
+  const doc = listOrDoc as TextDocLike;
+  return bridgeSeamlessGaps(
+    (doc.items ?? []).map((it) => resolveTextItem(it as T, doc, extraPresets)),
+    doc.tracks,
+  );
+};
+
+type FontUser = { font?: string; preset?: string; in?: { fx?: string }; out?: { fx?: string } };
 export const fontsFor = (
-  items?: readonly FontUser[],
+  itemsOrDoc?: readonly FontUser[] | TextDocLike | null,
   own: readonly Font[] = [],
+  extraPresets: readonly TextStylePreset[] = [],
 ): readonly Font[] => {
   const all = [...own, ...FONTS];
-  if (!items || items.some((it) => it.in?.fx === "fontCycle" || it.out?.fx === "fontCycle"))
-    return all;
-  const ids = new Set(items.map((it) => all.find((f) => f.id === it.font)?.id ?? FONTS[0]!.id));
+  if (!itemsOrDoc) return all;
+  const resolved = resolveTextItems(itemsOrDoc as readonly Record<string, unknown>[] | TextDocLike, extraPresets) as FontUser[];
+  if (resolved.some((it) => it.in?.fx === "fontCycle" || it.out?.fx === "fontCycle")) return all;
+  const ids = new Set(resolved.map((it) => all.find((f) => f.id === it.font)?.id ?? FONTS[0]!.id));
   return all.filter((f) => ids.has(f.id));
 };
 
@@ -699,13 +974,19 @@ export const SHAPE_OUT: readonly TitleVoice[] = [
 export const TEXT_ITEM_KEYS = [
   "id",
   "kind",
+  "preset",
   "text",
   "from",
   "to",
+  "timebase",
   "track",
   "hidden",
+  "read",
+  "safeArea",
+  "seamlessGap",
   "x",
   "y",
+  "at",
   "x2",
   "y2",
   "dx",
@@ -713,6 +994,7 @@ export const TEXT_ITEM_KEYS = [
   "target",
   "upper",
   "font",
+  "weight",
   "bold",
   "italic",
   "size",

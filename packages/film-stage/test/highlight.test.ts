@@ -1,8 +1,8 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 
 import * as THREE from "three";
 
-import { createHighlight, pulseEnvelope } from "../src/highlight";
+import { createHighlight, createOutlineHighlight, pulseEnvelope } from "../src/highlight";
 
 test("pulseEnvelope returns smooth trapezoid weights and guards invalid or short spans", () => {
   expect(pulseEnvelope(0.9, 1, 2)).toBe(0);
@@ -82,4 +82,149 @@ test("createHighlight handles multi-material arrays, skips non-emissive material
   hl.dispose();
   std.dispose();
   basic.dispose();
+});
+
+test("createOutlineHighlight preserves original mesh materials, toggles visibility via set(), supports outline and rim modes, and disposes overlays without touching source geometry", () => {
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshStandardMaterial({ color: 0x336699 });
+  const mesh = new THREE.Mesh(geo, mat);
+  const skipped = new THREE.Mesh(geo, mat);
+  skipped.name = "skip-me";
+  const root = new THREE.Group();
+  root.add(mesh, skipped);
+
+  const geoDisposeSpy = spyOn(geo, "dispose");
+  const outline = createOutlineHighlight(root, {
+    mode: "outline",
+    color: "#ffaa00",
+    thickness: 0.04,
+    intensity: 2.0,
+    include: (m) => m.name !== "skip-me",
+  });
+
+  expect(mesh.material).toBe(mat);
+  expect(skipped.material).toBe(mat);
+  expect(mesh.children).toHaveLength(1);
+  expect(skipped.children).toHaveLength(0);
+  const overlay = mesh.children[0] as THREE.Mesh;
+  expect(overlay.visible).toBe(false);
+  const overlayMat = overlay.material as THREE.ShaderMaterial;
+  expect(overlayMat.side).toBe(THREE.BackSide);
+  expect(overlayMat.transparent).toBe(true);
+  expect(overlayMat.depthWrite).toBe(false);
+  expect(overlayMat.polygonOffset).toBe(false);
+  expect(overlayMat.fragmentShader).not.toContain("#include <tonemapping_fragment>");
+  expect(overlayMat.fragmentShader).not.toContain("#include <colorspace_fragment>");
+
+  outline.set(0.3);
+  expect(overlay.visible).toBe(true);
+  expect((overlayMat.uniforms.uLevel as { value: number }).value).toBeCloseTo(0.3, 6);
+  outline.set(1);
+  expect(overlay.visible).toBe(true);
+  outline.setColor("#00ffaa");
+  expect((overlayMat.uniforms.uColor as { value: THREE.Color }).value.getHexString()).toBe(
+    "00ffaa",
+  );
+  outline.set(0);
+  expect(overlay.visible).toBe(false);
+
+  const spans = [{ start: 1, end: 2, rampIn: 0.1, rampOut: 0.1, color: "#ff3366", intensity: 2.4 }];
+  expect(outline.apply(1.5, spans)).toBe(1);
+  expect(overlay.visible).toBe(true);
+  expect((overlayMat.uniforms.uColor as { value: THREE.Color }).value.getHexString()).toBe(
+    "ff3366",
+  );
+  expect((overlayMat.uniforms.uIntensity as { value: number }).value).toBeCloseTo(2.4, 6);
+  expect(outline.apply(2.5, spans)).toBe(0);
+  expect(overlay.visible).toBe(false);
+  expect((overlayMat.uniforms.uIntensity as { value: number }).value).toBeCloseTo(2.0, 6);
+
+  outline.apply(1.5, spans);
+  outline.set(0.5);
+  expect((overlayMat.uniforms.uIntensity as { value: number }).value).toBeCloseTo(2.0, 6);
+  expect((overlayMat.uniforms.uColor as { value: THREE.Color }).value.getHexString()).toBe(
+    "00ffaa",
+  );
+  expect(outline.apply(1.5, [{ start: 1, end: 2, rampIn: 0.1, rampOut: 0.1 }])).toBe(1);
+  expect((overlayMat.uniforms.uColor as { value: THREE.Color }).value.getHexString()).toBe(
+    "00ffaa",
+  );
+  outline.set(0.5, "#112233", 3.2);
+  expect((overlayMat.uniforms.uIntensity as { value: number }).value).toBeCloseTo(3.2, 6);
+  expect((overlayMat.uniforms.uColor as { value: THREE.Color }).value.getHexString()).toBe(
+    "112233",
+  );
+
+  outline.dispose();
+  outline.dispose();
+  expect(mesh.children).toHaveLength(0);
+  expect(mesh.material).toBe(mat);
+  expect(geoDisposeSpy).not.toHaveBeenCalled();
+
+  const rim = createOutlineHighlight(root, { mode: "rim", color: "#44ddff", intensity: 1.8 });
+  expect(mesh.children).toHaveLength(1);
+  const rimOverlay = mesh.children[0] as THREE.Mesh;
+  const rimMat = rimOverlay.material as THREE.ShaderMaterial;
+  expect(rimMat.blending).toBe(THREE.AdditiveBlending);
+  expect(rimMat.transparent).toBe(true);
+  expect(rimMat.depthWrite).toBe(false);
+  expect(rimMat.polygonOffset).toBe(true);
+  expect(rimMat.polygonOffsetFactor).toBe(-1);
+  expect(rimMat.polygonOffsetUnits).toBe(-1);
+  expect(rimMat.fragmentShader).not.toContain("#include <tonemapping_fragment>");
+  expect(rimMat.fragmentShader).not.toContain("#include <colorspace_fragment>");
+  rim.set(0.75);
+  expect(rimOverlay.visible).toBe(true);
+  rim.dispose();
+  expect(mesh.children).toHaveLength(0);
+
+  const instanced = new THREE.InstancedMesh(geo, mat, 4);
+  const instRoot = new THREE.Group();
+  instRoot.add(instanced);
+  const instHl = createOutlineHighlight(instRoot);
+  expect(instHl.count).toBe(0);
+  expect(instanced.children).toHaveLength(0);
+  instHl.dispose();
+  instanced.dispose();
+
+  geo.dispose();
+  mat.dispose();
+});
+
+test("createOutlineHighlight binds SkinnedMesh overlays to the same skeleton non-destructively", () => {
+  const geo = new THREE.BoxGeometry(1, 2, 1);
+  const count = geo.attributes.position.count;
+  geo.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(count * 4), 4));
+  const weights = new Float32Array(count * 4);
+  for (let i = 0; i < count; i++) weights[i * 4] = 1;
+  geo.setAttribute("skinWeight", new THREE.Float32BufferAttribute(weights, 4));
+
+  const bone = new THREE.Bone();
+  const skeleton = new THREE.Skeleton([bone]);
+  const mat = new THREE.MeshStandardMaterial({ color: 0xdddddd });
+  const skinned = new THREE.SkinnedMesh(geo, mat);
+  skinned.add(bone);
+  skinned.bind(skeleton);
+
+  const root = new THREE.Group();
+  root.add(skinned);
+
+  const hl = createOutlineHighlight(root, { mode: "outline", color: 0x00ffff });
+  expect(skinned.material).toBe(mat);
+  const overlay = skinned.children.find((c) => c instanceof THREE.SkinnedMesh) as
+    THREE.SkinnedMesh | undefined;
+  expect(overlay).toBeDefined();
+  if (!overlay) throw new Error("expected skinned overlay");
+  expect(overlay.skeleton).toBe(skeleton);
+  expect((overlay.material as THREE.ShaderMaterial).vertexShader).toContain(
+    "#include <skinning_vertex>",
+  );
+
+  hl.set(1);
+  expect(overlay.visible).toBe(true);
+  hl.dispose();
+  expect(skinned.children.some((c) => c instanceof THREE.SkinnedMesh)).toBe(false);
+
+  geo.dispose();
+  mat.dispose();
 });

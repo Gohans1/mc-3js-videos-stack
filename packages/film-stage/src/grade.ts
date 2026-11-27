@@ -167,8 +167,9 @@ class DetailEffect extends Effect {
   }
 }
 
-class DitherEffect extends Effect {
-  constructor() {
+export class DitherEffect extends Effect {
+  private currentAmount = 0;
+  constructor(amount = 0) {
     super(
       "TpdfDither",
       `
@@ -193,9 +194,14 @@ class DitherEffect extends Effect {
         uniforms: new Map<string, Uniform>([["ditherAmp", new Uniform(0)]]),
       },
     );
+    this.amount = amount;
+  }
+  get amount(): number {
+    return this.currentAmount;
   }
   set amount(v: number) {
-    this.uniforms.get("ditherAmp")!.value = Math.max(0, v) / 50 / 255;
+    this.currentAmount = Number.isFinite(v) ? Math.max(0, v) : 0;
+    this.uniforms.get("ditherAmp")!.value = this.currentAmount / 50 / 255;
   }
 }
 
@@ -303,8 +309,13 @@ function makeGradeStage(
   return apply;
 }
 
-export function makeAdjustments(composer: EffectComposer, camera: Camera) {
+export function makeAdjustments(
+  composer: EffectComposer,
+  camera: Camera,
+  opts?: { tailDithered?: boolean },
+) {
   const tail = composer.passes.at(-1)!;
+  const tailDithered = opts?.tailDithered === true;
   const imported = new Map<string, LookupTexture>(),
     loading = new Map<string, Promise<void>>();
   const stages: ReturnType<typeof makeGradeStage>[] = [];
@@ -327,6 +338,7 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
       }),
     );
   };
+  let active = false;
   const apply = (
     shot: number,
     settings: Grade | undefined,
@@ -345,12 +357,16 @@ export function makeAdjustments(composer: EffectComposer, camera: Camera) {
       pass.renderToScreen = false;
     });
     const screen = passes.findLast((pass) => pass.enabled)!;
+    active = screen !== tail;
     screen.renderToScreen = true;
     // The 8-bit picture bands smooth light (CAMBI ~20 on a lit floor) unless the screen pass dithers; a setter recompiles
-    for (const pass of passes)
-      if (pass instanceof EffectPass && pass.dithering !== (pass === screen))
-        pass.dithering = pass === screen;
+    for (const pass of passes) {
+      if (!(pass instanceof EffectPass)) continue;
+      const wantDither = pass === screen && !(tailDithered && pass === tail);
+      if (pass.dithering !== wantDither) pass.dithering = wantDither;
+    }
   };
+  apply.isActive = () => active;
   apply.prepare = prepare;
   apply.dispose = () => {
     stages.forEach((stage) => stage.dispose());

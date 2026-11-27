@@ -24,3 +24,25 @@ test("a group filter composes with both exact aliases and descriptive keywords",
   const hits = listToonExpressions({ group: "pain", query: "cheeks sealed" });
   expect(hits.map(({ name }) => name)).toEqual(["holding-breath"]);
 });
+
+test("catalog entries expose attached comic extras including from:-inherited marks in parity with resolveFace", () => {
+  const deadpan = listToonExpressions({ query: "deadpan" })[0];
+  expect(deadpan?.name).toBe("deadpan");
+  expect(deadpan?.extras).toEqual(["sweat"]);
+  expect(deadpan?.description.toLowerCase()).toContain("sweat");
+
+  const baffled = listToonExpressions({ query: "baffled" })[0];
+  expect(baffled?.name).toBe("baffled");
+  expect([...(baffled?.extras ?? [])].sort()).toEqual(["question", "sweat"]);
+
+  const neutral = listToonExpressions({ query: "neutral" })[0];
+  expect(neutral?.extras).toEqual([]);
+
+  for (const entry of listToonExpressions()) {
+    const expected = Object.entries(resolveFace(entry.name).extras)
+      .filter(([, v]) => typeof v === "number" && v > 0)
+      .map(([k]) => k)
+      .sort();
+    expect([...entry.extras].sort(), entry.name).toEqual(expected);
+  }
+});

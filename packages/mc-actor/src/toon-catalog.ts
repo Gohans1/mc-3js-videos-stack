@@ -1,4 +1,9 @@
-import { EXPRESSION_GROUPS, type ExpressionGroup, type ExpressionName } from "./toon-expressions";
+import {
+  EXPRESSION_GROUPS,
+  EXPRESSIONS,
+  type ExpressionGroup,
+  type ExpressionName,
+} from "./toon-expressions";
 
 interface ExpressionMetadata {
   readonly description: string;
@@ -83,7 +88,7 @@ const metadata = {
   bored: { description: "Heavy sidelong eyes and a sigh when nothing is happening.", aliases: ["boredom", "restless boredom", "tedium"] },
   unimpressed: { description: "Symmetric half-lidded eyes and a flat, unenthused mouth.", aliases: ["not impressed", "underwhelmed", "unenthused"] },
   contempt: { description: "One narrowed eye and a mouth pulled aside in disdain.", aliases: ["disdain", "sneer", "dismissive side eye"] },
-  deadpan: { description: "Flat eye lines and mouth for a dry comic pause.", aliases: ["deadpan delivery", "straight faced", "dry reaction"] },
+  deadpan: { description: "Flat eye lines, flat mouth and a small comic sweat drop for a dry pause.", aliases: ["deadpan delivery", "straight faced", "dry reaction"] },
   skeptical: { description: "One questioning eyebrow up and one eye narrowed.", aliases: ["skepticism", "doubtful", "raised eyebrow"] },
   suspicious: { description: "Both eyes narrow and slide sideways at a suspected trick.", aliases: ["distrustful", "sus", "suspicious glance"] },
   "eye-roll": { description: "Upward pupils and skewed lips with an exasperated sigh.", aliases: ["rolling eyes", "exasperated", "oh brother"] },
@@ -149,6 +154,7 @@ const metadata = {
 export interface ToonExpressionEntry extends ExpressionMetadata {
   readonly name: ExpressionName;
   readonly group: ExpressionGroup;
+  readonly extras: readonly string[];
 }
 
 export interface ToonExpressionFilters {
@@ -156,8 +162,33 @@ export interface ToonExpressionFilters {
   readonly query?: string;
 }
 
+const mergedExtras = (
+  name: ExpressionName,
+  seen = new Set<ExpressionName>(),
+): Record<string, number> => {
+  if (seen.has(name)) return {};
+  seen.add(name);
+  const spec = EXPRESSIONS[name];
+  const parent =
+    spec.from && spec.from in EXPRESSIONS
+      ? mergedExtras(spec.from as ExpressionName, seen)
+      : {};
+  return { ...parent, ...spec.extras };
+};
+
+const extrasOf = (name: ExpressionName): readonly string[] =>
+  Object.entries(mergedExtras(name))
+    .filter(([, v]) => typeof v === "number" && v > 0)
+    .map(([k]) => k);
+
 const catalog: readonly ToonExpressionEntry[] = (Object.keys(EXPRESSION_GROUPS) as ExpressionGroup[]).flatMap(
-  (group) => EXPRESSION_GROUPS[group].map((name) => ({ name, group, ...metadata[name] })),
+  (group) =>
+    EXPRESSION_GROUPS[group].map((name) => ({
+      name,
+      group,
+      ...metadata[name],
+      extras: extrasOf(name),
+    })),
 );
 
 const normalize = (text: string) => (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []).join(" ");
