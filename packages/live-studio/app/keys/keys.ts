@@ -135,23 +135,39 @@ const push = (f: number) => {
       invalidatePictures();
     });
 };
-let held = false,
-  idle = 0;
-const pending = new Set<number>();
+type HoldState =
+  | { kind: "live" }
+  | { kind: "held"; pending: Set<number>; timer: number | null };
+
+let holdState: HoldState = { kind: "live" };
 const flush = () => {
-  clearTimeout(idle);
-  for (const f of pending) push(f);
-  pending.clear();
+  if (holdState.kind !== "held") return;
+  if (holdState.timer !== null) {
+    clearTimeout(holdState.timer);
+    holdState.timer = null;
+  }
+  const filesToPush = [...holdState.pending];
+  holdState.pending.clear();
+  for (const f of filesToPush) push(f);
 };
 export const hold = (on: boolean) => {
-  held = on;
-  if (!on) flush();
+  if (on) {
+    if (holdState.kind === "live") {
+      holdState = { kind: "held", pending: new Set<number>(), timer: null };
+    }
+    return;
+  }
+  if (holdState.kind !== "held") return;
+  if (holdState.timer !== null) clearTimeout(holdState.timer);
+  const filesToPush = [...holdState.pending];
+  holdState = { kind: "live" };
+  for (const f of filesToPush) push(f);
 };
 const changed = (f: number, previous?: TimedProjection<object>) => {
-  if (held) {
-    pending.add(f);
-    clearTimeout(idle);
-    idle = window.setTimeout(flush, 250);
+  if (holdState.kind === "held") {
+    holdState.pending.add(f);
+    if (holdState.timer !== null) clearTimeout(holdState.timer);
+    holdState.timer = window.setTimeout(flush, 250);
   } else push(f);
   rows = files.flatMap((y, g) =>
     y.doc.data
@@ -199,45 +215,64 @@ const replaced = (f: number, was: unknown) => {
   if (picks.some((p) => p.f === f) && lengths(was) !== lengths(files[f].doc.data))
     set({ keyPicks: picks.filter((p) => p.f !== f) });
 };
-let initFiles: Promise<void> | null = null,
-  filesLoaded = false;
+type FilesLoadState =
+  | { status: "idle" }
+  | { status: "loading"; promise: Promise<void> }
+  | { status: "loaded" };
+
+let filesLoadState: FilesLoadState = { status: "idle" };
 const ensureFiles = () => {
-  if (filesLoaded) return Promise.resolve();
-  return (initFiles ??= (async () => {
-    const r = await getFile("/api/keys");
-    const list: { file: string; edit: string; requiredRows: string[][] }[] = r.ok
-      ? await r.json()
-      : [];
-    files = list.map((x, f) => ({
-      ...x,
-      doc: createTimedDoc<object>(`keys/${f}`, {
-        label: x.file.split("/").pop()!,
-        changed: (previous) => changed(f, previous),
-        received: (before, after) => {
-          if (!get().aiActivity) return;
-          const changed = rowsOf(f).filter(
-            (row) => !equalJson(rowAt(before, row.path), rowAt(after, row.path)),
-          );
-          lightEdit("keys", [`keys-file:${f}`, ...changed.map((row) => `keys-row:${row.id}`)]);
-          if (x.edit !== S.tools?.placed?.key) return;
-          const oldObjects = before as Record<string, unknown>;
-          const newObjects = after as Record<string, unknown>;
-          const names = Object.keys(newObjects).filter(
-            (name) => !equalJson(oldObjects[name], newObjects[name]),
-          );
-          lightEdit(
-            "objects",
-            names.map((name) => `object:${name}`),
-          );
-        },
-        saved: (keysSaved) => set({ keysSaved }),
-        replaced: (was) => replaced(f, was),
-      }),
-    }));
-    if (r.ok) filesLoaded = true;
-  })().finally(() => {
-    initFiles = null;
-  }));
+  if (filesLoadState.status === "loaded") return Promise.resolve();
+  if (filesLoadState.status === "loading") return filesLoadState.promise;
+  let resolve!: () => void;
+  let reject!: (err: unknown) => void;
+  const promise = new Promise<void>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  filesLoadState = { status: "loading", promise };
+  void (async () => {
+    let ok = false;
+    try {
+      const r = await getFile("/api/keys");
+      ok = r.ok;
+      const list: { file: string; edit: string; requiredRows: string[][] }[] = ok
+        ? await r.json()
+        : [];
+      files = list.map((x, f) => ({
+        ...x,
+        doc: createTimedDoc<object>(`keys/${f}`, {
+          label: x.file.split("/").pop()!,
+          changed: (previous) => changed(f, previous),
+          received: (before, after) => {
+            if (!get().aiActivity) return;
+            const changed = rowsOf(f).filter(
+              (row) => !equalJson(rowAt(before, row.path), rowAt(after, row.path)),
+            );
+            lightEdit("keys", [`keys-file:${f}`, ...changed.map((row) => `keys-row:${row.id}`)]);
+            if (x.edit !== S.tools?.placed?.key) return;
+            const oldObjects = before as Record<string, unknown>;
+            const newObjects = after as Record<string, unknown>;
+            const names = Object.keys(newObjects).filter(
+              (name) => !equalJson(oldObjects[name], newObjects[name]),
+            );
+            lightEdit(
+              "objects",
+              names.map((name) => `object:${name}`),
+            );
+          },
+          saved: (keysSaved) => set({ keysSaved }),
+          replaced: (was) => replaced(f, was),
+        }),
+      }));
+      filesLoadState = ok ? { status: "loaded" } : { status: "idle" };
+      resolve();
+    } catch (err) {
+      filesLoadState = { status: "idle" };
+      reject(err);
+    }
+  })();
+  return promise;
 };
 export const prepareKeys = async () => {
   await ensureFiles();

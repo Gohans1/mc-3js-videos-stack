@@ -147,3 +147,39 @@ test("findTarget resolves Actor.bone dot paths scoped to that actor and targetHe
   const help = targetHelp(tools, "Steve.hed");
   assert.match(help, /did you mean "Steve\.head"/);
 });
+
+test("findTarget tolerates bare Object3D entries and resolves per-actor userData.bones and case-insensitive child names", () => {
+  const scene = new THREE.Scene(),
+    camera = new THREE.PerspectiveCamera();
+  const lead = new THREE.Group();
+  lead.name = "lead";
+  const leadHead = new THREE.Bone();
+  leadHead.name = "Head";
+  lead.add(leadHead);
+
+  const cop = new THREE.Group();
+  cop.name = "cop";
+  const copHead = new THREE.Bone();
+  copHead.name = "Head";
+  const copHandR = new THREE.Group();
+  copHandR.name = "handR";
+  cop.add(copHead, copHandR);
+  cop.userData.bones = { head: copHead, handR: copHandR };
+
+  const bareProp = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+  bareProp.name = "lamp";
+  scene.add(lead, cop, bareProp);
+
+  const tools = {
+    scene,
+    camera,
+    objects: [[lead, "lead"], [cop, "cop"], bareProp],
+    bones: { head: leadHead },
+  };
+
+  assert.equal(findTarget(tools, "lamp"), bareProp);
+  assert.equal(findTarget(tools, "cop.head"), copHead);
+  assert.equal(findTarget(tools, "cop.handR"), copHandR);
+  assert.equal(findTarget(tools, "cop.HEAD"), copHead);
+  assert.match(targetHelp(tools, "lmp"), /"lamp"/);
+});

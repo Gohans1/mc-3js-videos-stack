@@ -89,10 +89,10 @@ export const openLessonFiles = (dir = LESSONS) => {
   };
   const watch = (onChange) => {
     const waiting = new Set();
-    let timer;
-    let dirWatch = null;
-    let parentWatch = null;
-    const settled = () => {
+    let watchState = { status: "unwatched" };
+    const settled = (timer) => {
+      if (watchState.status !== "watching" || watchState.timer !== timer) return;
+      watchState.timer = null;
       const paths = [...waiting].filter((path) => {
         const file = join(dir, path),
           tag = existsSync(file) ? tagOf(readFileSync(file)) : null;
@@ -104,12 +104,23 @@ export const openLessonFiles = (dir = LESSONS) => {
       if (paths.length) onChange(paths);
     };
     const queue = (path) => {
+      if (watchState.status !== "watching") return;
       waiting.add(path);
-      clearTimeout(timer);
-      timer = setTimeout(settled, 150);
+      if (watchState.timer) clearTimeout(watchState.timer);
+      const timer = setTimeout(() => settled(timer), 150);
+      watchState.timer = timer;
     };
     const attachDir = (notifyExisting) => {
-      if (dirWatch || !existsSync(dir)) return false;
+      if (watchState.status === "watching" || watchState.status === "closed" || !existsSync(dir))
+        return false;
+      const dirWatch = fsWatch(dir, { recursive: true }, (_, name) => {
+        const path = name?.replaceAll("\\", "/");
+        if (!path || !NAME.test(path)) return;
+        queue(path);
+      });
+      const prev = watchState;
+      watchState = { status: "watching", watcher: dirWatch, timer: null };
+      if (prev.status === "waiting-parent") prev.watcher.close();
       for (const f of list()) {
         if (notifyExisting) {
           if (f.tag !== (seen.get(f.path) ?? null)) queue(f.path);
@@ -117,27 +128,27 @@ export const openLessonFiles = (dir = LESSONS) => {
           seen.set(f.path, f.tag);
         }
       }
-      dirWatch = fsWatch(dir, { recursive: true }, (_, name) => {
-        const path = name?.replaceAll("\\", "/");
-        if (!path || !NAME.test(path)) return;
-        queue(path);
-      });
       return true;
     };
     if (!attachDir(false)) {
       const parent = dirname(dir);
       if (existsSync(parent)) {
-        parentWatch = fsWatch(parent, () => {
-          if (!attachDir(true)) return;
-          parentWatch?.close();
-          parentWatch = null;
+        const parentWatch = fsWatch(parent, () => {
+          if (watchState.status !== "waiting-parent") return;
+          attachDir(true);
         });
+        watchState = { status: "waiting-parent", watcher: parentWatch };
       }
     }
     return () => {
-      dirWatch?.close();
-      parentWatch?.close();
-      clearTimeout(timer);
+      const prev = watchState;
+      watchState = { status: "closed" };
+      if (prev.status === "watching") {
+        if (prev.timer) clearTimeout(prev.timer);
+        prev.watcher.close();
+      } else if (prev.status === "waiting-parent") {
+        prev.watcher.close();
+      }
     };
   };
   return { dir, list, write, remove, watch };

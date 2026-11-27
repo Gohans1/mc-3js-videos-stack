@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { measure, summary, verdict } from "../checks/text.mjs";
+import { isRead, pxOf } from "../src/readable.mjs";
 
 const W = 200,
   H = 100;
@@ -79,4 +80,37 @@ test("the summary counts the faults and, when there are some, names the way out 
   const faulty = summary(4, 2).join("\n");
   assert.match(faulty, /2 at fault/);
   assert.match(faulty, /"read": false/);
+});
+
+test("thin dark strokes stay readable over white sky when strokePx tightens halo sampling, and safeArea overrides Shorts margins", () => {
+  const without = frame([235, 235, 235]);
+  const withText = frame([235, 235, 235]);
+  for (let x = 60; x < 140; x += 12) {
+    paint(withText, x - 2, 38, x + 4, 62, [0, 0, 0]);
+    paint(withText, x, 40, x + 2, 60, [255, 255, 255]);
+  }
+  const wideHalo = measure(withText, without, W, H, WHITE, 60, 0);
+  assert.ok(wideHalo && wideHalo.contrast < 4.5, `expected wide halo < 4.5, got ${wideHalo?.contrast}`);
+  const thinStroked = measure(withText, without, W, H, WHITE, 60, 4);
+  assert.ok(thinStroked && thinStroked.contrast > 4.5, `expected > 4.5, got ${thinStroked?.contrast}`);
+
+  const lowCaption = { box: [0.25, 0.76, 0.75, 0.805], contrast: 12 };
+  assert.deepEqual(verdict({ i: 0, text: "it was strange", at: 1, px: 75 }, lowCaption, "9:16").faults, [
+    "OUTSIDE",
+  ]);
+  assert.deepEqual(
+    verdict(
+      { i: 0, text: "it was strange", at: 1, px: 75, safeArea: { bottom: 0.18 } },
+      lowCaption,
+      "9:16",
+    ).faults,
+    [],
+  );
+  assert.deepEqual(
+    verdict({ i: 0, text: "edge", at: 1, px: 75, safeArea: false }, { box: [0.01, 0.85, 0.99, 0.95], contrast: 12 }, "9:16")
+      .faults,
+    [],
+  );
+  assert.equal(pxOf({ kind: "text", preset: "zack-d-films", from: 0, to: 1, text: "hi" }), 75);
+  assert.equal(isRead({ preset: "zack-d-films", from: 0, to: 1, text: "hi" }, undefined), true);
 });

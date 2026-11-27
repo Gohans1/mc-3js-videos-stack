@@ -59,7 +59,7 @@ const PREFS = {
     write: JSON.stringify,
   },
   mainMagnet: flag("mainTrackMagnet", true),
-  previewAxis: flag("previewAxis", true),
+  previewAxis: flag("previewAxis", false),
   previewAudio: flag("previewAudio", false),
   nightVision: flag("nightVision", false),
   freeLook: flag("freeCameraLook", true),

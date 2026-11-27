@@ -19,6 +19,11 @@ import {
   isCompareVideoTail,
   type NoteCompareSource,
 } from "./compare-video-model";
+import {
+  compareVideoMetaOf,
+  compareVideoPathOf,
+  type CompareVideoState,
+} from "./slice";
 
 export const compareHooks = {
   pause: () => {},
@@ -26,15 +31,31 @@ export const compareHooks = {
   seek: (_time: number) => {},
 };
 
-let catalogSeq = 0;
-let pendingComparePath: string | null = null;
+type CatalogFetchState =
+  | { status: "idle"; seq: number }
+  | { status: "loading"; seq: number; pendingPath: string | null };
+
+type ProbeState =
+  | { status: "idle"; seq: number }
+  | { status: "probing"; seq: number; path: string }
+  | { status: "probed"; seq: number; path: string };
+
+let catalogFetch: CatalogFetchState = { status: "idle", seq: 0 };
 let selectSeq = 0;
-let probeSeq = 0;
-let probingPath: string | null = null;
-let probedPath: string | null = null;
+let probeState: ProbeState = { status: "idle", seq: 0 };
 let captureQueue: Promise<unknown> = Promise.resolve();
 let compareSeekOnLoad: { path: string; time: number | null } | null = null;
 const videoSizes = new Map<string, [number, number]>();
+
+const resetProbe = (invalidateInFlight: boolean) => {
+  probeState = {
+    status: "idle",
+    seq: invalidateInFlight ? probeState.seq + 1 : probeState.seq,
+  };
+};
+
+const isProbingOrProbed = (path: string) =>
+  (probeState.status === "probing" || probeState.status === "probed") && probeState.path === path;
 
 export const isLiveCompareVideoSynced = (
   video: HTMLVideoElement | null | undefined,
@@ -56,7 +77,7 @@ export const compareVideoDimensions = (
   if (isLiveCompareVideoSynced(live, item) && live.videoWidth > 0 && live.videoHeight > 0) {
     return [live.videoWidth, live.videoHeight];
   }
-  const meta = get().compareVideoMeta;
+  const meta = compareVideoMetaOf(get());
   if (meta?.path === path && meta.width > 0 && meta.height > 0) {
     return [meta.width, meta.height];
   }
@@ -67,7 +88,7 @@ const activeRate = () => (S.shuttle > 0 ? S.shuttle : get().rate);
 
 const findCompareVideoItem = (path: string | null | undefined): CompareVideoItem | null => {
   if (!path) return null;
-  return get().compareVideos.find((v) => v.path === path) ?? null;
+  return get().compareCatalog.videos.find((v) => v.path === path) ?? null;
 };
 
 export const compareLayoutForSize = (
@@ -83,15 +104,16 @@ export const compareLayoutForSize = (
 
 export const activeCompareVideo = (): CompareVideoItem | null => {
   const s = get();
-  if (!s.compareVideoMode || !s.compareVideoPath) return null;
-  return s.compareVideos.find((v) => v.path === s.compareVideoPath) ?? null;
+  const path = compareVideoPathOf(s);
+  if (!s.compareVideoMode || !path) return null;
+  return s.compareCatalog.videos.find((v) => v.path === path) ?? null;
 };
 
 export const activeCompareLayout = (): CompareVideoLayout | null => {
   const item = activeCompareVideo();
   if (!item) return null;
   if (item.layoutExact) return item.layout;
-  const meta = get().compareVideoMeta;
+  const meta = compareVideoMetaOf(get());
   if (meta && meta.path === item.path) return meta.layout;
   const video = S.el?.compareVideo;
   if (isLiveCompareVideoSynced(video, item) && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -115,7 +137,7 @@ export const activeCompareNoteSource = (): NoteCompareSource | null => {
 export const compareVideoHasAudio = (): boolean => {
   const item = activeCompareVideo();
   if (!item) return false;
-  const meta = get().compareVideoMeta;
+  const meta = compareVideoMetaOf(get());
   if (meta && meta.path === item.path) return meta.hasAudio;
   return compareItemLikelyHasAudio(item);
 };
@@ -132,7 +154,11 @@ export const compareStudioOffset = (item = activeCompareVideo()): number =>
 
 const activeReferenceItem = () => {
   const s = get();
-  return compareReferenceItem(activeCompareVideo(), s.compareVideos, s.compareCanBuild.ref);
+  return compareReferenceItem(
+    activeCompareVideo(),
+    s.compareCatalog.videos,
+    s.compareCatalog.canBuild.ref,
+  );
 };
 
 export const loadCompareReferenceAudio = async (path: string, src: string, signal: AbortSignal) => {
@@ -168,9 +194,11 @@ export const compareLookAt = (x: number, y: number) => {
 export const compareVideoPlayable = (): boolean => {
   const s = get();
   const item = activeCompareVideo();
-  if (!item || s.compareVideoError) return false;
+  if (!item || s.compareVideo.status === "error") return false;
   const v = S.el?.compareVideo;
-  return s.compareVideoReady || (isLiveCompareVideoSynced(v, item) && v.readyState >= 1);
+  return (
+    s.compareVideo.status === "ready" || (isLiveCompareVideoSynced(v, item) && v.readyState >= 1)
+  );
 };
 
 export const compareVideoNaturalSize = (): [number, number] => {
@@ -179,7 +207,7 @@ export const compareVideoNaturalSize = (): [number, number] => {
   if (isLiveCompareVideoSynced(video, item) && video.videoWidth > 0 && video.videoHeight > 0) {
     return [video.videoWidth, video.videoHeight];
   }
-  const meta = get().compareVideoMeta;
+  const meta = compareVideoMetaOf(get());
   if (item && meta && meta.path === item.path && meta.width > 0 && meta.height > 0) {
     return [meta.width, meta.height];
   }
@@ -196,7 +224,7 @@ export const compareVideoDuration = (): number => {
   ) {
     return video.duration;
   }
-  const meta = get().compareVideoMeta;
+  const meta = compareVideoMetaOf(get());
   if (item && meta && meta.path === item.path && meta.duration > 0) return meta.duration;
   return 0;
 };
@@ -383,23 +411,25 @@ export const pauseCompareVideoPlayback = (): void => {
 };
 
 export const probeCompareVideoPath = async (path: string | null): Promise<void> => {
-  const seq = ++probeSeq;
+  const seq = probeState.seq + 1;
   if (!path) {
-    probingPath = null;
-    probedPath = null;
-    set({ compareVideoMeta: null });
+    probeState = { status: "idle", seq };
+    const cur = get().compareVideo;
+    if (cur.status === "loading" || cur.status === "ready") {
+      set({ compareVideo: { ...cur, meta: null } });
+    }
     return;
   }
   const startedItem = findCompareVideoItem(path);
-  probingPath = path;
+  probeState = { status: "probing", seq, path };
   try {
     const res = await fetch(`/api/compare-videos/probe?path=${encodeURIComponent(path)}`, {
       cache: "no-store",
     });
-    if (seq !== probeSeq) return;
+    if (probeState.seq !== seq) return;
     if (!res.ok) return;
     const data = (await res.json()) as CompareVideoMeta;
-    if (seq !== probeSeq) return;
+    if (probeState.seq !== seq) return;
     const latestItem = findCompareVideoItem(path);
     if (
       startedItem &&
@@ -410,27 +440,39 @@ export const probeCompareVideoPath = async (path: string | null): Promise<void> 
       return;
     }
     if (data.width > 0 && data.height > 0) videoSizes.set(path, [data.width, data.height]);
-    if (get().compareVideoPath !== path) return;
-    probedPath = path;
-    set({ compareVideoMeta: data });
+    const cur = get().compareVideo;
+    if ((cur.status !== "loading" && cur.status !== "ready") || cur.path !== path) return;
+    probeState = { status: "probed", seq, path };
+    set({ compareVideo: { ...cur, meta: data } });
     reconcileCompareAudioStreams();
     invalidatePictures();
     S.dirty = true;
   } catch {
   } finally {
-    if (seq === probeSeq) probingPath = null;
+    if (probeState.status === "probing" && probeState.seq === seq) {
+      probeState = { status: "idle", seq };
+    }
   }
 };
 
 export const loadCompareVideos = async (
   opts: { selectPath?: string } = {},
 ): Promise<CompareVideoCatalog | null> => {
-  const seq = ++catalogSeq;
-  if (opts.selectPath) pendingComparePath = opts.selectPath;
+  const seq = catalogFetch.seq + 1;
+  const carriedPending = catalogFetch.status === "loading" ? catalogFetch.pendingPath : null;
+  catalogFetch = { status: "loading", seq, pendingPath: opts.selectPath ?? carriedPending };
   const failed = (message: string) => {
-    if (seq !== catalogSeq) return null;
-    pendingComparePath = null;
-    set({ compareCatalogError: message });
+    if (catalogFetch.seq !== seq) return null;
+    catalogFetch = { status: "idle", seq };
+    const curCatalog = get().compareCatalog;
+    set({
+      compareCatalog: {
+        status: "error",
+        videos: curCatalog.videos,
+        canBuild: curCatalog.canBuild,
+        error: message,
+      },
+    });
     if (activeCompareVideo()) say(message, 4000);
     return null;
   };
@@ -446,14 +488,14 @@ export const loadCompareVideos = async (
           : `Studio returned HTTP ${res.status}. Retry to load project videos.`,
       );
     }
-    if (seq !== catalogSeq) return null;
+    if (catalogFetch.seq !== seq) return null;
     const data = (await res.json()) as CompareVideoCatalog;
-    if (seq !== catalogSeq) return null;
-    const requestedPath = pendingComparePath;
-    pendingComparePath = null;
+    if (catalogFetch.seq !== seq) return null;
+    const requestedPath = catalogFetch.status === "loading" ? catalogFetch.pendingPath : null;
+    catalogFetch = { status: "idle", seq };
 
     const prev = get();
-    const prevByPath = new Map(prev.compareVideos.map((v) => [v.path, v]));
+    const prevByPath = new Map(prev.compareCatalog.videos.map((v) => [v.path, v]));
     const nextByPath = new Map(data.videos.map((v) => [v.path, v]));
     for (const [p, oldItem] of prevByPath) {
       const freshItem = nextByPath.get(p);
@@ -461,7 +503,7 @@ export const loadCompareVideos = async (
         videoSizes.delete(p);
       }
     }
-    const currentPath = prev.compareVideoPath;
+    const currentPath = compareVideoPathOf(prev);
     const stillExists = Boolean(currentPath && nextByPath.has(currentPath));
     const nextPath =
       requestedPath && nextByPath.has(requestedPath)
@@ -473,7 +515,7 @@ export const loadCompareVideos = async (
     const newestCompare = data.videos.find((v) => v.category === "compare");
     let latestNotice = prev.compareLatestNotice;
     if (
-      prev.compareVideosLoaded &&
+      prev.compareCatalog.status === "ready" &&
       prev.compareVideoMode &&
       newestCompare &&
       newestCompare.path !== nextPath &&
@@ -492,34 +534,33 @@ export const loadCompareVideos = async (
         nextItem &&
         (prevItem.size !== nextItem.size || prevItem.mtimeMs !== nextItem.mtimeMs));
 
+    const nextVideo: CompareVideoState = !nextPath
+      ? { status: "none" }
+      : fileChanged || prev.compareVideo.status === "none"
+        ? { status: "loading", path: nextPath, meta: null }
+        : prev.compareVideo;
+
     set({
-      compareVideos: data.videos,
-      compareVideosLoaded: true,
-      compareCatalogError: null,
-      compareCanBuild: data.canBuild,
-      compareVideoPath: nextPath,
+      compareCatalog: {
+        status: "ready",
+        videos: data.videos,
+        canBuild: data.canBuild,
+      },
+      compareVideo: nextVideo,
       compareLatestNotice: latestNotice,
-      ...(fileChanged
-        ? { compareVideoReady: false, compareVideoError: null, compareVideoMeta: null }
-        : {}),
     });
 
     if (fileChanged) {
       pauseCompareVideoPlayback();
-      probeSeq++;
-      probingPath = null;
-      probedPath = null;
+      resetProbe(true);
       if (currentPath) videoSizes.delete(currentPath);
       if (nextPath) videoSizes.delete(nextPath);
       invalidatePictures();
     }
-    if (nextPath && (fileChanged || probedPath !== nextPath)) {
+    if (nextPath && (fileChanged || probeState.status !== "probed" || probeState.path !== nextPath)) {
       if (get().compareVideoMode) void probeCompareVideoPath(nextPath);
     } else if (!nextPath) {
-      probeSeq++;
-      probingPath = null;
-      probedPath = null;
-      set({ compareVideoMeta: null });
+      resetProbe(true);
       if (get().compareVideoMode) {
         if (S.playing) compareHooks.pause();
         if (get().ink) compareHooks.clearInk();
@@ -533,10 +574,11 @@ export const loadCompareVideos = async (
 };
 
 export const retryCompareVideo = async (): Promise<void> => {
-  probeSeq++;
-  probingPath = null;
-  probedPath = null;
-  set({ compareVideoError: null, compareVideoReady: false, compareVideoMeta: null });
+  resetProbe(true);
+  const curPath = compareVideoPathOf(get());
+  set({
+    compareVideo: curPath ? { status: "loading", path: curPath, meta: null } : { status: "none" },
+  });
   const recordedPath = compareSeekOnLoad?.path;
   const catalog = await loadCompareVideos({ selectPath: recordedPath });
   if (!get().compareVideoMode) return;
@@ -550,9 +592,9 @@ export const retryCompareVideo = async (): Promise<void> => {
     if (catalog.defaultPath)
       say("Original compare video was removed; opened the latest video instead", 4000);
   }
-  const path = get().compareVideoPath ?? catalog?.defaultPath ?? null;
+  const path = compareVideoPathOf(get()) ?? catalog?.defaultPath ?? null;
   if (path) {
-    if (probingPath !== path && probedPath !== path) {
+    if (!isProbingOrProbed(path)) {
       void probeCompareVideoPath(path);
     }
     S.el?.compareVideo?.load();
@@ -562,19 +604,22 @@ export const retryCompareVideo = async (): Promise<void> => {
 
 export const selectCompareVideo = (path: string): void => {
   const s = get();
-  if (!s.compareVideos.some((v) => v.path === path)) return;
+  if (!s.compareCatalog.videos.some((v) => v.path === path)) return;
   selectSeq++;
-  const changed = s.compareVideoPath !== path;
+  const currentPath = compareVideoPathOf(s);
+  const changed = currentPath !== path;
   if (changed) {
     compareSeekOnLoad = null;
     pauseCompareVideoPlayback();
-    probedPath = null;
+    if (probeState.status === "probed") resetProbe(false);
   }
+  const nextVideo: CompareVideoState =
+    changed || s.compareVideo.status === "none" || s.compareVideo.status === "error"
+      ? { status: "loading", path, meta: null }
+      : s.compareVideo;
   set({
-    compareVideoPath: path,
+    compareVideo: nextVideo,
     compareLatestNotice: null,
-    compareVideoError: null,
-    ...(changed ? { compareVideoReady: false, compareVideoMeta: null } : {}),
   });
   if (changed) {
     invalidatePictures();
@@ -608,30 +653,34 @@ export const setCompareVideoMode = (on: boolean, path?: string): void => {
   const s = get();
   if (on) {
     if (s.free) engine.setFree(false);
-    const hasRequested = Boolean(path && s.compareVideos.some((v) => v.path === path));
-    const chosenPath = hasRequested
-      ? path!
-      : (s.compareVideoPath ?? s.compareVideos[0]?.path ?? null);
+    const videos = s.compareCatalog.videos;
+    const prevPath = compareVideoPathOf(s);
+    const hasRequested = Boolean(path && videos.some((v) => v.path === path));
+    const chosenPath = hasRequested ? path! : (prevPath ?? videos[0]?.path ?? null);
     const chosenItem = findCompareVideoItem(chosenPath);
-    const pathChanged = Boolean(chosenPath && chosenPath !== s.compareVideoPath);
+    const pathChanged = Boolean(chosenPath && chosenPath !== prevPath);
     if (pathChanged) {
       pauseCompareVideoPlayback();
-      probedPath = null;
+      if (probeState.status === "probed") resetProbe(false);
     }
     const domReady = Boolean(
       !pathChanged &&
       isLiveCompareVideoSynced(S.el?.compareVideo, chosenItem) &&
       S.el.compareVideo.readyState >= 1,
     );
+    const keptMeta = !pathChanged ? compareVideoMetaOf(s) : null;
+    const nextVideo: CompareVideoState = !chosenPath
+      ? { status: "none" }
+      : domReady
+        ? { status: "ready", path: chosenPath, meta: keptMeta }
+        : { status: "loading", path: chosenPath, meta: keptMeta };
     set({
       compareVideoMode: true,
-      compareVideoError: null,
-      compareVideoReady: domReady,
+      compareVideo: nextVideo,
       cameraPick: null,
       pickFocus: null,
       compareGrid: false,
       shotList: false,
-      ...(pathChanged ? { compareVideoPath: chosenPath, compareVideoMeta: null } : {}),
       ...(chosenPath && chosenPath === s.compareLatestNotice ? { compareLatestNotice: null } : {}),
     });
     invalidatePictures();
@@ -641,7 +690,7 @@ export const setCompareVideoMode = (on: boolean, path?: string): void => {
       if (S.playing) compareHooks.pause();
       if (get().ink) compareHooks.clearInk();
     }
-    if (!s.compareVideosLoaded || (path && !hasRequested)) {
+    if (s.compareCatalog.status !== "ready" || (path && !hasRequested)) {
       void loadCompareVideos({ selectPath: path }).then((catalog) => {
         if (!catalog || !get().compareVideoMode || mySelect !== selectSeq) return;
         const found = Boolean(path && catalog.videos.some((v) => v.path === path));
@@ -649,29 +698,24 @@ export const setCompareVideoMode = (on: boolean, path?: string): void => {
         if (path && !found && catalog.defaultPath) {
           say("Original compare video was removed; opened the latest video instead", 4000);
         }
-        const target = found
-          ? path!
-          : path
-            ? catalog.defaultPath
-            : (get().compareVideoPath ?? catalog.defaultPath);
-        if (target && target !== get().compareVideoPath) {
+        const currentNow = compareVideoPathOf(get());
+        const target = found ? path! : path ? catalog.defaultPath : (currentNow ?? catalog.defaultPath);
+        if (target && target !== currentNow) {
           pauseCompareVideoPlayback();
-          probedPath = null;
+          if (probeState.status === "probed") resetProbe(false);
           set({
-            compareVideoPath: target,
-            compareVideoReady: false,
-            compareVideoMeta: null,
+            compareVideo: { status: "loading", path: target, meta: null },
             ...(target === get().compareLatestNotice ? { compareLatestNotice: null } : {}),
           });
           invalidatePictures();
           reconcileCompareAudioStreams();
           S.dirty = true;
         }
-        if (target && probingPath !== target && probedPath !== target) {
+        if (target && !isProbingOrProbed(target)) {
           void probeCompareVideoPath(target);
         }
       });
-    } else if (chosenPath && probingPath !== chosenPath && probedPath !== chosenPath) {
+    } else if (chosenPath && !isProbingOrProbed(chosenPath)) {
       void probeCompareVideoPath(chosenPath);
     }
     if (S.playing && S.shuttle >= 0) {
@@ -689,10 +733,13 @@ export const setCompareVideoMode = (on: boolean, path?: string): void => {
 
   if (!s.compareVideoMode) return;
   pauseCompareVideoPlayback();
+  const prevPath = compareVideoPathOf(s);
+  const prevMeta = compareVideoMetaOf(s);
   set({
     compareVideoMode: false,
-    compareVideoError: null,
-    compareVideoReady: false,
+    compareVideo: prevPath
+      ? { status: "loading", path: prevPath, meta: prevMeta }
+      : { status: "none" },
   });
   applyCompareVideoAudioState();
   invalidatePictures();
@@ -730,22 +777,24 @@ export const handleCompareVideoLoadedMetadata = (video: HTMLVideoElement): void 
   const height = video.videoHeight || 0;
   if (width > 0 && height > 0) videoSizes.set(item.path, [width, height]);
   const duration = Number.isFinite(video.duration) ? video.duration : 0;
-  const prevMeta = get().compareVideoMeta;
+  const prevMeta = compareVideoMetaOf(get());
   const samePath = prevMeta?.path === item.path;
   const resolvedWidth = width || (samePath ? prevMeta.width : 0);
   const resolvedHeight = height || (samePath ? prevMeta.height : 0);
   const layout = compareLayoutForSize(item, resolvedWidth, resolvedHeight);
   set({
-    compareVideoReady: true,
-    compareVideoError: null,
-    compareVideoMeta: {
+    compareVideo: {
+      status: "ready",
       path: item.path,
-      width: resolvedWidth,
-      height: resolvedHeight,
-      duration: duration || (samePath ? prevMeta.duration : 0),
-      fps: samePath ? prevMeta.fps : 30,
-      hasAudio: samePath ? prevMeta.hasAudio : compareVideoHasAudio(),
-      layout,
+      meta: {
+        path: item.path,
+        width: resolvedWidth,
+        height: resolvedHeight,
+        duration: duration || (samePath ? prevMeta.duration : 0),
+        fps: samePath ? prevMeta.fps : 30,
+        hasAudio: samePath ? prevMeta.hasAudio : compareVideoHasAudio(),
+        layout,
+      },
     },
   });
   const recorded = compareSeekOnLoad?.path === item.path ? compareSeekOnLoad : null;
@@ -770,9 +819,13 @@ export const handleCompareVideoError = (video: HTMLVideoElement): void => {
   if (compareSeekOnLoad?.path === item.path) compareSeekOnLoad = null;
   if (S.playing) compareHooks.pause();
   if (get().ink) compareHooks.clearInk();
+  resetProbe(true);
   set({
-    compareVideoReady: false,
-    compareVideoError: `Could not decode ${item.path}. Check that the file is a valid MP4/WebM/MOV.`,
+    compareVideo: {
+      status: "error",
+      path: item.path,
+      error: `Could not decode ${item.path}. Check that the file is a valid MP4/WebM/MOV.`,
+    },
   });
 };
 
@@ -788,11 +841,10 @@ const seekVideoOnce = (video: HTMLVideoElement, rawDest: number) =>
       return;
     }
     const needSeek = !nearDest(0.012);
-    let hasSeeked = !needSeek;
-    let settled = false;
+    let phase: "seeking" | "awaiting-ready" | "done" = needSeek ? "seeking" : "awaiting-ready";
     const done = () => {
-      if (settled) return;
-      settled = true;
+      if (phase === "done") return;
+      phase = "done";
       clearTimeout(timer);
       video.removeEventListener("seeked", onSeeked);
       video.removeEventListener("loadeddata", onReady);
@@ -801,11 +853,11 @@ const seekVideoOnce = (video: HTMLVideoElement, rawDest: number) =>
       resolve();
     };
     const onSeeked = () => {
-      hasSeeked = true;
+      if (phase === "seeking") phase = "awaiting-ready";
       if (!video.seeking && video.readyState >= 2) done();
     };
     const onReady = () => {
-      if (hasSeeked && !video.seeking && video.readyState >= 2) done();
+      if (phase === "awaiting-ready" && !video.seeking && video.readyState >= 2) done();
     };
     const timer = window.setTimeout(done, 2000);
     video.addEventListener("seeked", onSeeked);
@@ -951,7 +1003,7 @@ export const withCompareVideoCapture = async <T>(
   const startSec = target?.startSec ?? item?.startSec ?? 0;
   const live = S.el?.compareVideo;
   if (
-    get().compareVideoReady &&
+    get().compareVideo.status === "ready" &&
     isLiveCompareVideoSynced(live, item) &&
     !live.seeking &&
     live.readyState >= 2 &&

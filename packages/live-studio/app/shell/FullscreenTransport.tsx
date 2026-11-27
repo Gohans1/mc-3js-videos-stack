@@ -23,8 +23,10 @@ function Controls() {
     playing = useStudio((s) => s.playing),
     ready = useStudio((s) => s.ready),
     compareVideoMode = useStudio((s) => s.compareVideoMode),
-    compareVideoReady = useStudio((s) => s.compareVideoReady),
-    compareVideoError = useStudio((s) => s.compareVideoError);
+    compareVideoReady = useStudio((s) => s.compareVideo.status === "ready"),
+    compareVideoError = useStudio((s) =>
+      s.compareVideo.status === "error" ? s.compareVideo.error : null,
+    );
   const bar = useRef<HTMLDivElement>(null);
   const [visibility, setVisibility] = useState<"visible" | "hidden">("visible");
   useEffect(() => {

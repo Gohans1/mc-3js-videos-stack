@@ -20,14 +20,31 @@ import type { Bed, Lanes, LibraryItem, OneShot } from "./sound";
 import { toggleAbSlot } from "./sound-kit-view";
 import { inferClipTrackRole, inferTrackRole } from "./tracks";
 
-export interface VideoPreviewState {
-  active: boolean;
-  soundId: string | null;
-  mode: "clip" | "playhead" | null;
-  targetLabel: string | null;
-  targetClip: ClipRef | null;
-  originalClipName: string | null;
-}
+export type VideoPreviewState =
+  | {
+      active: false;
+      soundId: null;
+      mode: null;
+      targetLabel: null;
+      targetClip: null;
+      originalClipName: null;
+    }
+  | {
+      active: true;
+      soundId: string;
+      mode: "clip";
+      targetLabel: string;
+      targetClip: ClipRef;
+      originalClipName: string | null;
+    }
+  | {
+      active: true;
+      soundId: string;
+      mode: "playhead";
+      targetLabel: string;
+      targetClip: null;
+      originalClipName: null;
+    };
 
 export interface SoundKitSnapshot {
   loaded: boolean;
@@ -287,8 +304,12 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
   const getSnapshot = () => snap;
 
-  let loadSeq = 0;
-  let inflight: Promise<void> | null = null;
+  type KitLoadState =
+    | { status: "idle"; seq: number }
+    | { status: "loading"; seq: number; promise: Promise<void> }
+    | { status: "ready"; seq: number }
+    | { status: "error"; seq: number };
+  let kitLoad: KitLoadState = { status: "idle", seq: 0 };
   let mutationChain: Promise<unknown> = Promise.resolve();
   let lastStateJson = JSON.stringify(EMPTY_STATE);
 
@@ -299,7 +320,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
 
   const applyServerState = (next: SoundKitState) => {
-    loadSeq += 1;
+    kitLoad = { status: "ready", seq: kitLoad.seq + 1 };
     const nextJson = JSON.stringify(next);
     const changed = nextJson !== lastStateJson;
     lastStateJson = nextJson;
@@ -313,54 +334,63 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     });
   };
 
-  const reloadSoundKit = async (): Promise<void> => {
-    const seq = ++loadSeq;
+  const reloadSoundKit = (): Promise<void> => {
+    const seq = kitLoad.seq + 1;
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    kitLoad = { status: "loading", seq, promise };
     patch({ loading: !snap.loaded, error: null });
-    try {
-      const r = await deps.fetch("/api/sound-kit", { cache: "no-store" });
-      if (seq !== loadSeq) return;
-      if (!r.ok) {
+    void (async () => {
+      try {
+        const r = await deps.fetch("/api/sound-kit", { cache: "no-store" });
+        if (kitLoad.seq !== seq) return;
+        if (!r.ok) {
+          kitLoad = { status: "error", seq };
+          patch({
+            loading: false,
+            error: await readErrorText(r, `Could not load Core Sound Kit (${r.status})`),
+          });
+          return;
+        }
+        const body = (await r.json()) as {
+          state?: SoundKitState;
+          categories?: KitCategoryMeta[];
+          reasons?: string[];
+          warning?: string;
+        };
+        if (kitLoad.seq !== seq) return;
+        const nextState = body.state ?? EMPTY_STATE;
+        const nextJson = JSON.stringify(nextState);
+        const changed = nextJson !== lastStateJson;
+        lastStateJson = nextJson;
+        kitLoad = { status: "ready", seq };
         patch({
+          loaded: true,
           loading: false,
-          error: await readErrorText(r, `Could not load Core Sound Kit (${r.status})`),
+          error: null,
+          warning: body.warning ?? null,
+          state: nextState,
+          stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
+          categories: body.categories?.length ? body.categories : KIT_CATEGORIES,
+          reasons: body.reasons?.length ? body.reasons : TASTE_REASONS,
         });
-        return;
+      } catch {
+        if (kitLoad.seq !== seq) return;
+        kitLoad = { status: "error", seq };
+        patch({ loading: false, error: "Could not connect to Live Studio for Core Sound Kit" });
+      } finally {
+        resolve();
       }
-      const body = (await r.json()) as {
-        state?: SoundKitState;
-        categories?: KitCategoryMeta[];
-        reasons?: string[];
-        warning?: string;
-      };
-      if (seq !== loadSeq) return;
-      const nextState = body.state ?? EMPTY_STATE;
-      const nextJson = JSON.stringify(nextState);
-      const changed = nextJson !== lastStateJson;
-      lastStateJson = nextJson;
-      patch({
-        loaded: true,
-        loading: false,
-        error: null,
-        warning: body.warning ?? null,
-        state: nextState,
-        stateRev: changed ? snap.stateRev + 1 : snap.stateRev,
-        categories: body.categories?.length ? body.categories : KIT_CATEGORIES,
-        reasons: body.reasons?.length ? body.reasons : TASTE_REASONS,
-      });
-    } catch {
-      if (seq !== loadSeq) return;
-      patch({ loading: false, error: "Could not connect to Live Studio for Core Sound Kit" });
-    }
+    })();
+    return promise;
   };
 
   const ensureLoaded = (): Promise<void> => {
     if (snap.loaded) return Promise.resolve();
-    if (!inflight) {
-      inflight = reloadSoundKit().finally(() => {
-        inflight = null;
-      });
-    }
-    return inflight;
+    if (kitLoad.status === "loading") return kitLoad.promise;
+    return reloadSoundKit();
   };
 
   const saveKitItem = (input: KitItemInput): Promise<SoundKitState | null> =>
@@ -634,27 +664,60 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     }
   };
 
-  const decodedCache = new Map<string, { buf: AudioBufferLike; rmsDb: number; peak: number }>();
+  type CachedBuffer = { buf: AudioBufferLike; rmsDb: number; peak: number };
+  type BufferPlayback =
+    | { kind: "idle" }
+    | {
+        kind: "playing";
+        seq: number;
+        name: string;
+        cached: CachedBuffer;
+        duration: number;
+        startedAt: number;
+        src: BufferSourceLike;
+        gain: GainNodeLike;
+        handle: ExternalAuditionSource;
+      }
+    | {
+        kind: "paused";
+        name: string;
+        cached: CachedBuffer;
+        duration: number;
+        pausedAt: number;
+        handle: ExternalAuditionSource | null;
+      };
+  type VideoPreviewTarget =
+    | { mode: "clip"; clip: ClipRef; originalClipName: string | null; from: number; label: string }
+    | { mode: "playhead"; anchorAt: number; label: string };
+  type VideoPreviewSession =
+    | { kind: "idle" }
+    | { kind: "loading"; seq: number; soundId: string; baseSnap: string; target: VideoPreviewTarget }
+    | {
+        kind: "active";
+        seq: number;
+        soundId: string;
+        baseSnap: string;
+        target: VideoPreviewTarget;
+        pendingSoundId: string | null;
+      };
+
+  const decodedCache = new Map<string, CachedBuffer>();
   const warming = new Set<string>();
   let cacheEpoch = 0;
-  let activeBufferSrc: BufferSourceLike | null = null;
-  let activeBufferGain: GainNodeLike | null = null;
-  let activeBufferName: string | null = null;
-  let activeBufferCached: { buf: AudioBufferLike; rmsDb: number; peak: number } | null = null;
-  let activeBufferDuration = 0;
-  let activeBufferStartedAt: number | null = null;
-  let activeBufferPausedAt = 0;
-  let activeExternalHandle: ExternalAuditionSource | null = null;
+  let bufferState: BufferPlayback = { kind: "idle" };
   let bufferSeq = 0;
   const audioNowSec = () => {
     const t = deps.getAudio().ctx.currentTime;
     return typeof t === "number" && Number.isFinite(t) ? t : performance.now() / 1000;
   };
   const currentBufferTime = () => {
-    if (activeBufferStartedAt !== null) {
-      return Math.min(activeBufferDuration, Math.max(0, audioNowSec() - activeBufferStartedAt));
+    if (bufferState.kind === "playing") {
+      return Math.min(bufferState.duration, Math.max(0, audioNowSec() - bufferState.startedAt));
     }
-    return Math.min(activeBufferDuration, Math.max(0, activeBufferPausedAt));
+    if (bufferState.kind === "paused") {
+      return Math.min(bufferState.duration, Math.max(0, bufferState.pausedAt));
+    }
+    return 0;
   };
 
   const clearAudioCache = () => {
@@ -689,69 +752,66 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     patch({ abLoudnessMatch: on });
   };
 
-  const teardownBufferNode = () => {
-    bufferSeq += 1;
-    const src = activeBufferSrc;
-    const gain = activeBufferGain;
-    activeBufferSrc = null;
-    activeBufferGain = null;
-    activeBufferStartedAt = null;
-    if (src) {
-      try {
-        src.onended = null;
-        src.stop();
-      } catch {}
-      try {
-        src.disconnect();
-      } catch {}
-    }
-    if (gain) {
-      try {
-        gain.disconnect();
-      } catch {}
-    }
+  const disconnectPlayingNode = (src: BufferSourceLike, gain: GainNodeLike) => {
+    try {
+      src.onended = null;
+      src.stop();
+    } catch {}
+    try {
+      src.disconnect();
+    } catch {}
+    try {
+      gain.disconnect();
+    } catch {}
   };
 
   const stopMiniStudioBuffer = (keepTarget = false) => {
-    teardownBufferNode();
-    const prevHandle = activeExternalHandle;
-    if (!keepTarget) {
-      activeExternalHandle = null;
-      activeBufferName = null;
-      activeBufferCached = null;
-      activeBufferDuration = 0;
-      activeBufferPausedAt = 0;
+    bufferSeq += 1;
+    const prev = bufferState;
+    if (prev.kind === "playing") {
+      disconnectPlayingNode(prev.src, prev.gain);
+    }
+    const prevHandle = prev.kind === "idle" ? null : prev.handle;
+    if (keepTarget && prev.kind !== "idle") {
+      bufferState = {
+        kind: "paused",
+        name: prev.name,
+        cached: prev.cached,
+        duration: prev.duration,
+        pausedAt: prev.kind === "paused" ? prev.pausedAt : 0,
+        handle: prev.handle,
+      };
+    } else {
+      bufferState = { kind: "idle" };
     }
     if (snap.loudnessPlayingId !== null) patch({ loudnessPlayingId: null });
     if (prevHandle) deps.releaseExternalAudition?.(prevHandle, keepTarget);
   };
 
   const pauseMiniStudioBuffer = () => {
-    if (!activeBufferSrc) return;
-    activeBufferPausedAt = currentBufferTime();
-    teardownBufferNode();
+    if (bufferState.kind !== "playing") return;
+    const pausedAt = currentBufferTime();
+    const { name, cached, duration, handle, src, gain } = bufferState;
+    bufferSeq += 1;
+    disconnectPlayingNode(src, gain);
+    bufferState = { kind: "paused", name, cached, duration, pausedAt, handle };
     if (snap.loudnessPlayingId !== null) patch({ loudnessPlayingId: null });
-    if (activeExternalHandle) deps.attachExternalAudition?.(activeExternalHandle);
+    deps.attachExternalAudition?.(handle);
   };
 
-  let videoBaseSnap: string | null = null;
-  let videoPreviewApplied = false;
+  let videoSession: VideoPreviewSession = { kind: "idle" };
+  const getVideoSession = (): VideoPreviewSession => videoSession;
   let videoPreviewSeq = 0;
-  let videoTargetClip: ClipRef | null = null;
-  let videoOriginalClipName: string | null = null;
-  let videoTargetFrom = 0;
-  let videoAnchorAt = 0;
-  let videoTargetLabel = "";
   let mountedWorkbenches = 0;
+
+  const sessionTargetClip = (s: VideoPreviewSession): ClipRef | null =>
+    s.kind !== "idle" && s.target.mode === "clip" ? s.target.clip : null;
 
   const handleDocMutated = (docName?: string) => {
     if (docName && docName !== "sound") return;
-    if (videoPreviewApplied || videoBaseSnap !== null || snap.videoPreviewPendingId !== null) {
+    if (videoSession.kind !== "idle" || snap.videoPreviewPendingId !== null) {
       videoPreviewSeq += 1;
-      videoBaseSnap = null;
-      videoPreviewApplied = false;
-      videoTargetClip = null;
-      videoOriginalClipName = null;
+      videoSession = { kind: "idle" };
       if (snap.videoPreview.active || snap.videoPreviewPendingId !== null) {
         patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
       }
@@ -760,13 +820,11 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
 
   const stopVideoPreview = (pauseVideo = false) => {
     videoPreviewSeq += 1;
-    if (videoPreviewApplied && videoBaseSnap !== null) {
-      deps.restore(videoBaseSnap);
+    const prev = videoSession;
+    videoSession = { kind: "idle" };
+    if (prev.kind === "active") {
+      deps.restore(prev.baseSnap);
     }
-    videoBaseSnap = null;
-    videoPreviewApplied = false;
-    videoTargetClip = null;
-    videoOriginalClipName = null;
     if (snap.videoPreview.active || snap.videoPreviewPendingId !== null) {
       patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
     }
@@ -774,7 +832,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
 
   const stopVideoPreviewIfTarget = (clip: ClipRef) => {
-    if (sameClip(videoTargetClip, clip)) {
+    if (sameClip(sessionTargetClip(videoSession), clip)) {
       stopVideoPreview(false);
     }
   };
@@ -791,12 +849,13 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     };
   };
 
-  const startLoudnessBuffer = (
-    name: string,
-    cached: { buf: AudioBufferLike; rmsDb: number; peak: number },
-    offsetSec: number,
-  ) => {
-    teardownBufferNode();
+  const startLoudnessBuffer = (name: string, cached: CachedBuffer, offsetSec: number) => {
+    bufferSeq += 1;
+    const existingHandle = bufferState.kind !== "idle" ? bufferState.handle : null;
+    if (bufferState.kind === "playing") {
+      disconnectPlayingNode(bufferState.src, bufferState.gain);
+      bufferState = { kind: "idle" };
+    }
     deps.resumeAudio();
     const { ctx, master } = deps.getAudio();
     const src = ctx.createBufferSource();
@@ -811,27 +870,21 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     const duration = Math.max(0.01, cached.buf.duration || deps.seconds(name) || 0.01);
     const clampedOffset = Math.min(Math.max(0, duration - 0.02), Math.max(0, offsetSec));
     const seq = ++bufferSeq;
-    activeBufferSrc = src;
-    activeBufferGain = gain;
-    activeBufferName = name;
-    activeBufferCached = cached;
-    activeBufferDuration = duration;
-    activeBufferPausedAt = clampedOffset;
-    activeBufferStartedAt = audioNowSec() - clampedOffset;
     const handle: ExternalAuditionSource =
-      activeExternalHandle && activeExternalHandle.id === name
-        ? activeExternalHandle
+      existingHandle && existingHandle.id === name
+        ? existingHandle
         : {
             id: name,
             duration,
             currentTime: () => currentBufferTime(),
-            isPlaying: () => activeBufferSrc !== null && activeBufferName === name,
+            isPlaying: () => bufferState.kind === "playing" && bufferState.name === name,
             toggle: () => {
-              if (activeBufferSrc && activeBufferName === name) {
+              if (bufferState.kind === "playing" && bufferState.name === name) {
                 pauseMiniStudioBuffer();
               } else {
                 const live = decodedCache.get(name);
-                if (live) startLoudnessBuffer(name, live, activeBufferPausedAt);
+                const offset = bufferState.kind === "paused" ? bufferState.pausedAt : 0;
+                if (live) startLoudnessBuffer(name, live, offset);
                 else {
                   stopMiniStudioBuffer(false);
                   deps.listen(name);
@@ -840,25 +893,35 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
             },
             seek: (toSeconds: number) => {
               const target = Math.min(Math.max(0, duration - 0.02), Math.max(0, toSeconds));
-              activeBufferPausedAt = target;
-              if (activeBufferSrc && activeBufferName === name) {
-                const live = decodedCache.get(name) ?? activeBufferCached;
-                if (live) startLoudnessBuffer(name, live, target);
+              if (bufferState.kind === "playing" && bufferState.name === name) {
+                const live = decodedCache.get(name) ?? bufferState.cached;
+                startLoudnessBuffer(name, live, target);
+              } else if (bufferState.kind === "paused" && bufferState.name === name) {
+                bufferState = { ...bufferState, pausedAt: target };
               }
             },
             stop: () => {
-              if (activeExternalHandle !== handle) return;
-              activeExternalHandle = null;
-              teardownBufferNode();
-              activeBufferName = null;
-              activeBufferCached = null;
-              activeBufferDuration = 0;
-              activeBufferPausedAt = 0;
+              if (bufferState.kind === "idle" || bufferState.handle !== handle) return;
+              bufferSeq += 1;
+              if (bufferState.kind === "playing") {
+                disconnectPlayingNode(bufferState.src, bufferState.gain);
+              }
+              bufferState = { kind: "idle" };
               if (snap.loudnessPlayingId !== null) patch({ loudnessPlayingId: null });
             },
           };
     handle.duration = duration;
-    activeExternalHandle = handle;
+    bufferState = {
+      kind: "playing",
+      seq,
+      name,
+      cached,
+      duration,
+      startedAt: audioNowSec() - clampedOffset,
+      src,
+      gain,
+      handle,
+    };
     patch({ loudnessPlayingId: name });
     deps.attachExternalAudition?.(handle);
     src.onended = () => {
@@ -868,11 +931,15 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       try {
         gain.disconnect();
       } catch {}
-      if (seq === bufferSeq) {
-        activeBufferSrc = null;
-        activeBufferGain = null;
-        activeBufferStartedAt = null;
-        activeBufferPausedAt = 0;
+      if (bufferState.kind === "playing" && bufferState.seq === seq) {
+        bufferState = {
+          kind: "paused",
+          name,
+          cached,
+          duration,
+          pausedAt: 0,
+          handle,
+        };
         patch({ loudnessPlayingId: null });
         deps.releaseExternalAudition?.(handle, true);
       }
@@ -887,7 +954,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     const cached = wantLoud ? decodedCache.get(name) : undefined;
     const samePlaying = snap.loudnessPlayingId === name || deps.listening() === name;
     if (samePlaying && !opts?.forcePlay) {
-      if (activeBufferSrc && activeBufferName === name) {
+      if (bufferState.kind === "playing" && bufferState.name === name) {
         pauseMiniStudioBuffer();
       } else if (deps.listening() === name) {
         deps.listen(name);
@@ -900,7 +967,10 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       if (!deps.attachExternalAudition) {
         deps.stopAudition();
       }
-      const resumeOffset = !opts?.forcePlay && activeBufferName === name ? activeBufferPausedAt : 0;
+      const resumeOffset =
+        !opts?.forcePlay && bufferState.kind === "paused" && bufferState.name === name
+          ? bufferState.pausedAt
+          : 0;
       startLoudnessBuffer(name, cached, resumeOffset);
       return;
     }
@@ -916,7 +986,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
   };
 
   const getVideoTargetSummary = (): { mode: "clip" | "playhead"; label: string } => {
-    if (snap.videoPreview.active && snap.videoPreview.mode && snap.videoPreview.targetLabel) {
+    if (snap.videoPreview.active) {
       return { mode: snap.videoPreview.mode, label: snap.videoPreview.targetLabel };
     }
     const clip = deps.getSelectedClip();
@@ -927,7 +997,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
     return { mode: "playhead", label: `Playhead @ ${deps.stamp(deps.getPlayhead())}` };
   };
 
-  const captureVideoTarget = (explicitClip?: ClipRef | null) => {
+  const captureVideoTarget = (explicitClip?: ClipRef | null): VideoPreviewTarget => {
     const candidateClip = explicitClip !== undefined ? explicitClip : deps.getSelectedClip();
     if (deps.isEditableSoundClip(candidateClip)) {
       const curLanes = deps.getLanes();
@@ -935,17 +1005,22 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
         candidateClip.list === "beds"
           ? curLanes?.beds[candidateClip.i]
           : curLanes?.sfx[candidateClip.i];
-      videoTargetClip = { ...candidateClip };
-      videoOriginalClipName = curEntry?.name ?? null;
-      videoTargetFrom = deps.span(candidateClip)[0];
-      videoTargetLabel = `Clip @ ${deps.stamp(videoTargetFrom)}`;
-    } else {
-      videoTargetClip = null;
-      videoOriginalClipName = null;
-      const dur = deps.getDuration();
-      videoAnchorAt = Math.max(0, Math.min(dur, deps.getPlayhead()));
-      videoTargetLabel = `Playhead @ ${deps.stamp(videoAnchorAt)}`;
+      const from = deps.span(candidateClip)[0];
+      return {
+        mode: "clip",
+        clip: { ...candidateClip },
+        originalClipName: curEntry?.name ?? null,
+        from,
+        label: `Clip @ ${deps.stamp(from)}`,
+      };
     }
+    const dur = deps.getDuration();
+    const anchorAt = Math.max(0, Math.min(dur, deps.getPlayhead()));
+    return {
+      mode: "playhead",
+      anchorAt,
+      label: `Playhead @ ${deps.stamp(anchorAt)}`,
+    };
   };
 
   const previewSoundInVideo = async (
@@ -963,59 +1038,68 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
 
     const requestedClip = explicitClip !== undefined ? explicitClip : deps.getSelectedClip();
     const nextClip = deps.isEditableSoundClip(requestedClip) ? requestedClip : null;
-    const targetChanged = videoBaseSnap !== null && !sameClip(videoTargetClip, nextClip);
+    const prevClip = sessionTargetClip(videoSession);
+    const targetChanged = videoSession.kind !== "idle" && !sameClip(prevClip, nextClip);
 
-    if (targetChanged && videoBaseSnap !== null) {
-      if (videoPreviewApplied) deps.restore(videoBaseSnap);
-      videoBaseSnap = null;
-      videoPreviewApplied = false;
-      videoTargetClip = null;
-      videoOriginalClipName = null;
+    if (targetChanged) {
+      if (videoSession.kind === "active") deps.restore(videoSession.baseSnap);
+      videoSession = { kind: "idle" };
       if (snap.videoPreview.active) patch({ videoPreview: INACTIVE_PREVIEW });
     }
 
-    if (videoBaseSnap === null) {
-      videoBaseSnap = deps.snapshot();
-      captureVideoTarget(explicitClip);
+    if (videoSession.kind === "idle") {
+      videoSession = {
+        kind: "loading",
+        seq,
+        soundId: name,
+        baseSnap: deps.snapshot(),
+        target: captureVideoTarget(explicitClip),
+      };
+    } else if (videoSession.kind === "loading") {
+      videoSession = { ...videoSession, seq, soundId: name };
+    } else {
+      videoSession = { ...videoSession, seq, pendingSoundId: name };
     }
 
     patch({ videoPreviewPendingId: name });
     const buf = await deps.decoded(name);
-    if (seq !== videoPreviewSeq || videoBaseSnap === null) {
+    const currentSession = getVideoSession();
+    if (currentSession.kind === "idle" || currentSession.seq !== seq) {
       if (snap.videoPreviewPendingId === name && seq === videoPreviewSeq) {
         patch({ videoPreviewPendingId: null });
       }
       return false;
     }
     if (!buf) {
-      if (!videoPreviewApplied) {
-        videoBaseSnap = null;
-        videoTargetClip = null;
-        videoOriginalClipName = null;
+      if (currentSession.kind === "loading") {
+        videoSession = { kind: "idle" };
         patch({ videoPreview: INACTIVE_PREVIEW, videoPreviewPendingId: null });
       } else {
+        videoSession = { ...currentSession, pendingSoundId: null };
         patch({ videoPreviewPendingId: null });
       }
       deps.say(`Could not load audio for ${name}`, 3000);
       return false;
     }
 
-    if (videoPreviewApplied) deps.restore(videoBaseSnap);
+    const { baseSnap, target } = currentSession;
+    if (currentSession.kind === "active") deps.restore(baseSnap);
     const item = deps.itemOf(name);
     const isBed = item ? deps.kindOf(item) === "bgm" : buf.duration >= 10;
     const duration = deps.getDuration();
-    let playFrom = Math.max(0, videoAnchorAt - 0.25);
+    const fallbackAnchor = target.mode === "playhead" ? target.anchorAt : target.from;
+    let playFrom = Math.max(0, fallbackAnchor - 0.25);
 
     deps.preview((l) => {
-      if (videoTargetClip) {
-        const target =
-          videoTargetClip.list === "beds" ? l.beds[videoTargetClip.i] : l.sfx[videoTargetClip.i];
-        if (target) {
-          applyClipSoundReset(target, videoTargetClip.list, name, l.narration);
-          playFrom = Math.max(0, videoTargetFrom - 0.35);
+      if (target.mode === "clip") {
+        const entry = target.clip.list === "beds" ? l.beds[target.clip.i] : l.sfx[target.clip.i];
+        if (entry) {
+          applyClipSoundReset(entry, target.clip.list, name, l.narration);
+          playFrom = Math.max(0, target.from - 0.35);
           return;
         }
       }
+      const anchorAt = target.mode === "playhead" ? target.anchorAt : target.from;
       const targetRole = inferClipTrackRole(
         { name },
         isBed ? "beds" : "sfx",
@@ -1045,7 +1129,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       const trackId = pickTrack(isBed)?.id;
       if (isBed) {
         const len = Math.min(deps.seconds(name) || buf.duration || 10, 12);
-        const clampedFrom = Math.min(Math.max(0, duration - 1), videoAnchorAt);
+        const clampedFrom = Math.min(Math.max(0, duration - 1), anchorAt);
         const from = deps.r3(clampedFrom);
         const to = deps.r3(Math.min(duration, from + Math.max(1, len)));
         const overlapping = l.beds.filter((b) => b.from < to && b.to > from);
@@ -1069,7 +1153,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
           ...(bedTrack ? { track: bedTrack } : {}),
         });
       } else {
-        const clampedAt = Math.min(Math.max(0, duration - 0.35), videoAnchorAt);
+        const clampedAt = Math.min(Math.max(0, duration - 0.35), anchorAt);
         const at = deps.r3(clampedAt);
         playFrom = Math.max(0, at - 0.25);
         const idx = l.sfx.findIndex((s) => s.at > at);
@@ -1082,17 +1166,34 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       }
     });
 
-    videoPreviewApplied = true;
+    videoSession = {
+      kind: "active",
+      seq,
+      soundId: name,
+      baseSnap,
+      target,
+      pendingSoundId: null,
+    };
     patch({
       videoPreviewPendingId: null,
-      videoPreview: {
-        active: true,
-        soundId: name,
-        mode: videoTargetClip ? "clip" : "playhead",
-        targetLabel: videoTargetLabel,
-        targetClip: videoTargetClip ? { ...videoTargetClip } : null,
-        originalClipName: videoOriginalClipName,
-      },
+      videoPreview:
+        target.mode === "clip"
+          ? {
+              active: true,
+              soundId: name,
+              mode: "clip",
+              targetLabel: target.label,
+              targetClip: { ...target.clip },
+              originalClipName: target.originalClipName,
+            }
+          : {
+              active: true,
+              soundId: name,
+              mode: "playhead",
+              targetLabel: target.label,
+              targetClip: null,
+              originalClipName: null,
+            },
     });
     deps.seek(playFrom);
     deps.setPlaying(true);
@@ -1115,14 +1216,17 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       return null;
     }
     const selectedClip = deps.getSelectedClip();
-    const activePreviewClip = snap.videoPreview.active ? videoTargetClip : null;
+    const activePreviewClip = snap.videoPreview.active ? sessionTargetClip(videoSession) : null;
     const targetClip =
       explicitClip !== undefined
         ? explicitClip
         : deps.isEditableSoundClip(selectedClip)
           ? selectedClip
           : activePreviewClip;
-    const anchorAt = snap.videoPreview.active ? videoAnchorAt : deps.getPlayhead();
+    const anchorAt =
+      videoSession.kind === "active" && videoSession.target.mode === "playhead"
+        ? videoSession.target.anchorAt
+        : deps.getPlayhead();
     stopVideoPreview(true);
     stopMiniStudioBuffer();
     deps.stopAudition();
@@ -1161,7 +1265,7 @@ export const createSoundKitController = (deps: SoundKitControllerDeps) => {
       } catch {}
     }
     const selectedClip = deps.getSelectedClip();
-    const activePreviewClip = snap.videoPreview.active ? videoTargetClip : null;
+    const activePreviewClip = snap.videoPreview.active ? sessionTargetClip(videoSession) : null;
     const targetClip =
       explicitClip !== undefined
         ? explicitClip

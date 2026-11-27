@@ -26,15 +26,22 @@ export function VoiceDubbingCloud({
   configured: boolean;
   jobs: readonly DubbingJob[];
 }) {
+  type CloudActivity =
+    | { kind: "idle"; error: string }
+    | { kind: "loading" }
+    | { kind: "importing"; taskId: string };
+
   const [tasks, setTasks] = useState<CloudDubbingTask[]>([]),
     [page, setPage] = useState(0),
     [hasMore, setHasMore] = useState(false),
-    [loading, setLoading] = useState(configured),
-    [importing, setImporting] = useState<string | null>(null),
-    [error, setError] = useState("");
+    [activity, setActivity] = useState<CloudActivity>(() =>
+      configured ? { kind: "loading" } : { kind: "idle", error: "" },
+    );
+  const loading = activity.kind === "loading";
+  const importing = activity.kind === "importing" ? activity.taskId : null;
+  const error = activity.kind === "idle" ? activity.error : "";
   const load = async (next = 0) => {
-    setLoading(true);
-    setError("");
+    setActivity({ kind: "loading" });
     try {
       const data = await loadCloudDubbing("project", next);
       setTasks((old) =>
@@ -47,10 +54,9 @@ export function VoiceDubbingCloud({
       );
       setPage(next);
       setHasMore(data.hasMore);
+      setActivity({ kind: "idle", error: "" });
     } catch (cause) {
-      setError(historyError(cause));
-    } finally {
-      setLoading(false);
+      setActivity({ kind: "idle", error: historyError(cause) });
     }
   };
   useEffect(() => {
@@ -62,21 +68,26 @@ export function VoiceDubbingCloud({
           setTasks(data.tasks);
           setPage(0);
           setHasMore(data.hasMore);
+          setActivity((prev) =>
+            prev.kind === "importing" ? prev : { kind: "idle", error: "" },
+          );
         }
       })
       .catch((cause) => {
-        if (active) setError(historyError(cause));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          const message = historyError(cause);
+          setActivity((prev) =>
+            prev.kind === "importing" ? prev : { kind: "idle", error: message },
+          );
+        }
       });
     return () => {
       active = false;
     };
   }, [configured]);
   const archive = async (task: CloudDubbingTask) => {
-    setImporting(task.id);
-    setError("");
+    if (activity.kind !== "idle") return;
+    setActivity({ kind: "importing", taskId: task.id });
     try {
       const { job } = await dubbingPost<{ job: DubbingJob }>("import", "project", {
         taskId: task.id,
@@ -84,18 +95,20 @@ export function VoiceDubbingCloud({
       acceptDubbingJob(job);
       await loadDubbingJobs();
       if (job.phase === "completed") await openDubbingResult(job);
+      setActivity({ kind: "idle", error: "" });
     } catch (cause) {
-      setError(
-        cause instanceof TypeError
-          ? "Couldn’t confirm the save. Check your connection and open Jobs to continue."
-          : cause instanceof Error
-            ? cause.message
-            : "Saving was interrupted. Check Jobs to continue without generating again.",
-      );
-    } finally {
-      setImporting(null);
+      setActivity({
+        kind: "idle",
+        error:
+          cause instanceof TypeError
+            ? "Couldn’t confirm the save. Check your connection and open Jobs to continue."
+            : cause instanceof Error
+              ? cause.message
+              : "Saving was interrupted. Check Jobs to continue without generating again.",
+      });
     }
   };
+  const anyBusy = activity.kind !== "idle";
   return (
     <section
       aria-label="Cloud Dubbing history"
@@ -109,9 +122,9 @@ export function VoiceDubbingCloud({
         <Button
           variant="secondary"
           disabled={!configured}
-          aria-disabled={!configured || loading}
+          aria-disabled={!configured || anyBusy}
           onClick={() => {
-            if (configured && !loading) void load();
+            if (configured && !anyBusy) void load();
           }}
         >
           {loading ? (
@@ -209,11 +222,13 @@ export function VoiceDubbingCloud({
                 {saved || complete ? (
                   <Button
                     variant={saved ? "secondary" : "default"}
-                    aria-disabled={Boolean(importing)}
+                    aria-disabled={saved ? Boolean(importing) : anyBusy}
                     onClick={() => {
-                      if (importing) return;
-                      if (saved) void openDubbingResult(saved);
-                      else void archive(task);
+                      if (saved) {
+                        if (!importing) void openDubbingResult(saved);
+                        return;
+                      }
+                      if (!anyBusy) void archive(task);
                     }}
                   >
                     {busy ? (
@@ -246,7 +261,13 @@ export function VoiceDubbingCloud({
         })
       )}
       {hasMore && (
-        <Button variant="secondary" disabled={loading} onClick={() => void load(page + 1)}>
+        <Button
+          variant="secondary"
+          disabled={anyBusy}
+          onClick={() => {
+            if (!anyBusy) void load(page + 1);
+          }}
+        >
           {loading ? "Loading…" : "Load more Dubbing history"}
         </Button>
       )}

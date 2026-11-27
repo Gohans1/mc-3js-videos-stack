@@ -293,22 +293,32 @@ export const spanOf = (i: number, slot: Slot): [number, number] => {
   return [Math.max(a, Math.min(last, at(end - srcOut + delay)) - 0.8), last];
 };
 
-let run = 0,
-  home: number | null = null,
-  expect = -1;
+type SpanPlayback =
+  | { status: "idle" }
+  | { status: "playing"; rafId: number; home: number; expectedTime: number | null };
+
+let playback: SpanPlayback = { status: "idle" };
+
 export const playSpan = (a: number, b: number, loop = false) => {
-  run++;
+  const home = playback.status === "playing" ? playback.home : S.t;
+  if (playback.status === "playing") cancelAnimationFrame(playback.rafId);
   if (S.playing) setPlaying(false);
-  home ??= S.t;
-  const id = run,
-    t0 = performance.now(),
+  const t0 = performance.now(),
     rate = Math.max(1, (b - a) / 4);
+  const session: Extract<SpanPlayback, { status: "playing" }> = {
+    status: "playing",
+    rafId: 0,
+    home,
+    expectedTime: null,
+  };
+  playback = session;
   const step = () => {
-    if (id !== run) return;
-    if (S.playing || (expect >= 0 && Math.abs(S.t - expect) > 0.05)) {
-      run++;
-      home = null;
-      expect = -1;
+    if (playback !== session) return;
+    if (
+      S.playing ||
+      (session.expectedTime !== null && Math.abs(S.t - session.expectedTime) > 0.05)
+    ) {
+      playback = { status: "idle" };
       return;
     }
     let t = a + ((performance.now() - t0) / 1000) * rate;
@@ -320,16 +330,16 @@ export const playSpan = (a: number, b: number, loop = false) => {
       t = a + ((t - a) % Math.max(0.01, b - a));
     }
     seek(t);
-    expect = S.t;
-    requestAnimationFrame(step);
+    if (playback !== session) return;
+    session.expectedTime = S.t;
+    session.rafId = requestAnimationFrame(step);
   };
-  requestAnimationFrame(step);
+  session.rafId = requestAnimationFrame(step);
 };
 export const stopSpan = () => {
-  run++;
-  expect = -1;
-  if (home !== null) {
-    seek(home);
-    home = null;
-  }
+  if (playback.status !== "playing") return;
+  const { rafId, home } = playback;
+  playback = { status: "idle" };
+  cancelAnimationFrame(rafId);
+  seek(home);
 };

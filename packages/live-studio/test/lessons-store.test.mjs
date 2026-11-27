@@ -130,7 +130,7 @@ test("LESSON_NAME accepts valid names with or without a .md suffix and rejects u
 test("saveLesson exits cleanly if an edit entry is cleared while the request is in flight", async () => {
   lessons.setState((s) => ({
     ...s,
-    edits: { ...s.edits, "all:race.md": { text: "# Race\n", base: null } },
+    edits: { ...s.edits, "all:race.md": { text: "# Race\n", base: null, sync: { status: "dirty" } } },
   }));
   postHandler = async () => {
     const { "all:race.md": _, ...rest } = lessons.getState().edits;
@@ -158,7 +158,7 @@ test("loadLessons preserves a saveLesson completion that landed while GET /api/l
     files: [
       { key: "all:walk.md", scope: "all", path: "walk.md", tag: "t3", text: "# Old before save\n" },
     ],
-    edits: { "all:walk.md": { text: "# Saved mid-load\n", base: "t3" } },
+    edits: { "all:walk.md": { text: "# Saved mid-load\n", base: "t3", sync: { status: "dirty" } } },
   }));
   postHandler = async () => Response.json({ tag: "t9" });
 
@@ -206,18 +206,29 @@ test("saveLesson records API validation errors without retrying and schedules re
   try {
     lessons.setState((s) => ({
       ...s,
-      edits: { "all:bad.md": { text: "# Bad\n", base: null } },
+      edits: { "all:bad.md": { text: "# Bad\n", base: null, sync: { status: "dirty" } } },
     }));
     postHandler = async () => Response.json({ error: "invalid name" }, { status: 400 });
     await saveLesson("all:bad.md");
-    assert.equal(lessons.getState().edits["all:bad.md"]?.failed, "invalid name");
+    assert.deepEqual(lessons.getState().edits["all:bad.md"]?.sync, {
+      status: "failed",
+      error: "invalid name",
+    });
     assert.equal(scheduled.length, 0);
+
+    typeLesson("all:bad.md", "# Bad edited\n");
+    assert.deepEqual(lessons.getState().edits["all:bad.md"]?.sync, { status: "dirty" });
+    clearLessonTimers();
+    scheduled.length = 0;
 
     postHandler = async () => {
       throw new Error("offline");
     };
     await saveLesson("all:bad.md");
-    assert.equal(lessons.getState().edits["all:bad.md"]?.failed, "the studio didn't answer");
+    assert.deepEqual(lessons.getState().edits["all:bad.md"]?.sync, {
+      status: "failed",
+      error: "the studio didn't answer",
+    });
     assert.equal(scheduled.length, 1);
     assert.equal(scheduled[0].ms, 3000);
   } finally {
@@ -253,9 +264,9 @@ test("saveLesson 409 adopts AI version while keeping prior seen snapshot for dif
       "all:gone.md": { tag: "g1", text: "# Gone v1\n" },
     },
     edits: {
-      "all:cam.md": { text: "# Cam mine\n", base: "c1" },
-      "all:gone.md": { text: "# Gone mine\n", base: "g1" },
-      "all:ai-created.md": { text: "# Mine before list\n", base: null },
+      "all:cam.md": { text: "# Cam mine\n", base: "c1", sync: { status: "dirty" } },
+      "all:gone.md": { text: "# Gone mine\n", base: "g1", sync: { status: "dirty" } },
+      "all:ai-created.md": { text: "# Mine before list\n", base: null, sync: { status: "dirty" } },
     },
     open: "all:gone.md",
   }));
@@ -386,7 +397,7 @@ test("deleteLesson deletes file with base tag, ignores stale in-flight GET, and 
 
   const staleLoad = loadLessons();
   const res = await deleteLesson("all:walk.md");
-  assert.equal(res.removed, true);
+  assert.equal(res.kind, "removed");
   assert.deepEqual(deleted, [{ scope: "all", path: "walk.md", base: "t1" }]);
   assert.equal(lessons.getState().open, null);
   assert.equal(
@@ -424,8 +435,7 @@ test("deleteLesson surfaces 409 conflict without losing newer AI changes", async
     Response.json({ conflict: true, tag: "t9", text: "# Updated by AI\n" }, { status: 409 });
 
   const res = await deleteLesson("all:walk.md");
-  assert.equal(res.removed, false);
-  assert.equal(res.conflict, true);
+  assert.deepEqual(res, { kind: "conflict" });
   const f = lessons.getState().files.find((x) => x.key === "all:walk.md");
   assert.equal(f?.tag, "t9");
   assert.equal(f?.text, "# Updated by AI\n");
@@ -436,12 +446,12 @@ test("deleteLesson treats an already-missing file as an external removal and kee
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
-    edits: { "all:walk.md": { text: "# Draft\n", base: "t1" } },
+    edits: { "all:walk.md": { text: "# Draft\n", base: "t1", sync: { status: "dirty" } } },
     open: "all:walk.md",
   }));
   deleteHandler = async () => Response.json({ removed: false, missing: true });
 
-  assert.deepEqual(await deleteLesson("all:walk.md"), { removed: false, missing: true });
+  assert.deepEqual(await deleteLesson("all:walk.md"), { kind: "missing" });
   assert.equal(lessons.getState().open, null);
   assert.equal(lessons.getState().files.length, 0);
   assert.deepEqual(lessons.getState().aiNotice?.drafts, [{ path: "walk.md", text: "# Draft\n" }]);
@@ -451,7 +461,13 @@ test("loadLessons skips failed drafts and ignores stale out-of-order GET respons
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:bad.md", scope: "all", path: "bad.md", tag: "b1", text: "# Bad\n" }],
-    edits: { "all:bad.md": { text: "# Bad edit\n", base: "b1", failed: "the studio refused it" } },
+    edits: {
+      "all:bad.md": {
+        text: "# Bad edit\n",
+        base: "b1",
+        sync: { status: "failed", error: "the studio refused it" },
+      },
+    },
   }));
 
   let resolveOld;
@@ -538,7 +554,7 @@ test("deleteLesson 409 does not resurrect an edit committed while DELETE was in 
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
-    edits: { "all:walk.md": { text: "# Walk v2\n", base: "t1", saving: true } },
+    edits: { "all:walk.md": { text: "# Walk v2\n", base: "t1", sync: { status: "saving" } } },
     seen: { "all:walk.md": { tag: "t1", text: "# Walk\n" } },
     open: "all:walk.md",
   }));
@@ -554,8 +570,7 @@ test("deleteLesson 409 does not resurrect an edit committed while DELETE was in 
   };
 
   const res = await deleteLesson("all:walk.md");
-  assert.equal(res.removed, false);
-  assert.equal(res.conflict, true);
+  assert.deepEqual(res, { kind: "conflict" });
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
   assert.equal(lessons.getState().aiNotice?.drafts, undefined);
 });
@@ -564,7 +579,7 @@ test("deleteLesson 409 adopts the disk version and saves the rejected draft for 
   lessons.setState((s) => ({
     ...s,
     files: [{ key: "all:walk.md", scope: "all", path: "walk.md", tag: "t1", text: "# Walk\n" }],
-    edits: { "all:walk.md": { text: "# Old\n", base: "t1", saving: true } },
+    edits: { "all:walk.md": { text: "# Old\n", base: "t1", sync: { status: "saving" } } },
     seen: { "all:walk.md": { tag: "t1", text: "# Walk\n" } },
     open: "all:walk.md",
   }));
@@ -572,8 +587,7 @@ test("deleteLesson 409 adopts the disk version and saves the rejected draft for 
     Response.json({ conflict: true, tag: "t9", text: "# AI edit\n" }, { status: 409 });
 
   const res = await deleteLesson("all:walk.md");
-  assert.equal(res.removed, false);
-  assert.equal(res.conflict, true);
+  assert.deepEqual(res, { kind: "conflict" });
   assert.equal(lessons.getState().edits["all:walk.md"], undefined);
   assert.equal(lessons.getState().files.find((f) => f.key === "all:walk.md")?.text, "# AI edit\n");
   assert.equal(lessons.getState().seen["all:walk.md"]?.text, "# Walk\n");
@@ -635,7 +649,7 @@ test("saveLesson and deleteLesson operate independently on film vs global copies
   );
 
   const del = await deleteLesson("film:camera.md");
-  assert.equal(del.removed, true);
+  assert.equal(del.kind, "removed");
   assert.deepEqual(deleted.at(-1), { scope: "film", path: "camera.md", base: "f1" });
   assert.equal(
     lessons.getState().files.some((f) => f.key === "all:camera.md"),
@@ -674,12 +688,12 @@ test("deleteLesson, loadLessons, and conflict removal clamp stale nested folder 
   assert.deepEqual(lessons.getState().folder, ["craft", "sub"]);
 
   const delDeep = await deleteLesson("film:craft/sub/deep.md");
-  assert.equal(delDeep.removed, true);
+  assert.equal(delDeep.kind, "removed");
   assert.equal(lessons.getState().open, null);
   assert.deepEqual(lessons.getState().folder, ["craft"]);
 
   const delSib = await deleteLesson("film:craft/sibling.md");
-  assert.equal(delSib.removed, true);
+  assert.equal(delSib.kind, "removed");
   assert.deepEqual(lessons.getState().folder, []);
 
   getHandler = async () =>
@@ -732,22 +746,21 @@ test("loadLessons prunes stale seen snapshots when files are removed outside the
 });
 
 test("a failed first load allows retry and a failed refresh keeps the loaded lessons", async () => {
-  lessons.setState({ loaded: false, files: [], edits: {} });
+  lessons.setState({ loadState: "loading", files: [], edits: {} });
   getHandler = async () => new Response(null, { status: 503 });
   await loadLessons();
-  assert.equal(lessons.getState().loadFailed, true);
-  assert.equal(lessons.getState().loaded, false);
+  assert.equal(lessons.getState().loadState, "failed");
 
   resetHandlers();
   await loadLessons();
   const loaded = lessons.getState();
-  assert.equal(loaded.loadFailed, false);
+  assert.equal(loaded.loadState, "ready");
   assert.equal(loaded.files.length, 2);
 
   getHandler = async () => {
     throw new Error("offline");
   };
   await loadLessons();
-  assert.equal(lessons.getState().loadFailed, true);
+  assert.equal(lessons.getState().loadState, "refresh-failed");
   assert.equal(lessons.getState().files, loaded.files);
 });

@@ -14,7 +14,7 @@ import { onDocMutated } from "../core/doc";
 import { engine, type FreeView } from "../core/engine";
 import { shotEnd, shotIndex } from "../core/film";
 import { DURATION, SHOTS_OUT as SHOTS } from "../core/filmMeta";
-import { getFile, postJson, wait } from "../core/net";
+import { getFile, postJson } from "../core/net";
 import { matcher } from "../core/search";
 import { S } from "../core/state";
 import { stored } from "../core/storage";
@@ -337,16 +337,58 @@ const dropOp = (id: string, op: Op) => {
   keepOps(now);
 };
 
-let flushing = false;
+type NotesFlushState =
+  | { status: "idle" }
+  | { status: "debouncing"; timer: ReturnType<typeof setTimeout> }
+  | { status: "flushing" }
+  | { status: "backoff"; timer: ReturnType<typeof setTimeout>; wake: () => void };
+
+let flushState: NotesFlushState = { status: "idle" };
+const savedForFlush = (state: NotesFlushState): "busy" | "fail" | null =>
+  state.status === "idle" ? null : state.status === "backoff" ? "fail" : "busy";
+const setFlushState = (next: NotesFlushState) => {
+  flushState = next;
+  set({ saved: savedForFlush(next) });
+};
+const waitBackoff = (ms: number) =>
+  new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timer = setTimeout(finish, ms);
+    setFlushState({
+      status: "backoff",
+      timer,
+      wake: () => {
+        clearTimeout(timer);
+        finish();
+      },
+    });
+  });
+
 export const flushNotes = async () => {
-  if (flushing) return;
-  flushing = true;
+  if (flushState.status === "flushing") return;
+  if (flushState.status === "backoff") {
+    flushState.wake();
+    return;
+  }
+  if (flushState.status === "debouncing") {
+    clearTimeout(flushState.timer);
+  }
+  if (!unsent().length && !Object.keys(unsentOps()).length) {
+    setFlushState({ status: "idle" });
+    return;
+  }
+  setFlushState({ status: "flushing" });
   for (
     let list = unsent(), ops = Object.entries(unsentOps());
     list.length || ops.length;
     list = unsent(), ops = Object.entries(unsentOps())
   ) {
-    set({ saved: "busy" });
+    setFlushState({ status: "flushing" });
     try {
       if (list.length) {
         const item = list[0];
@@ -395,12 +437,10 @@ export const flushNotes = async () => {
         dropOp(id, op);
       }
     } catch {
-      set({ saved: "fail" });
-      await wait(3000);
+      await waitBackoff(3000);
     }
   }
-  flushing = false;
-  set({ saved: null });
+  setFlushState({ status: "idle" });
 };
 
 const changed = (notes: Note[]) => {
@@ -520,7 +560,7 @@ export const loadNotes = async ({ notify = false } = {}) => {
     );
   changed(notes);
   if (notify) announceNoteChanges(mine, notes);
-  if (flushing) set({ saved: "busy" });
+  if (flushState.status !== "idle") set({ saved: savedForFlush(flushState) });
 };
 
 export const changeNote = (id: string, op: NoteChange, said?: string) => {
@@ -549,7 +589,6 @@ export const changeNote = (id: string, op: NoteChange, said?: string) => {
   return true;
 };
 
-let editSend = 0;
 const editNote = (id: string, words: string) => {
   const was = get().notes.find((x) => x.id === id);
   if (!was || !words || words === was.text) return;
@@ -558,9 +597,14 @@ const editNote = (id: string, words: string) => {
   if (noteState(was) !== noteState(n) && noteState(n) === "open") signalNoteAction(id, "reopen");
   changed(get().notes.map((x) => (x.id === id ? n : x)));
   queueOp(id, { text: words });
-  set({ saved: "busy" });
-  clearTimeout(editSend);
-  editSend = window.setTimeout(flushNotes, 400);
+  if (flushState.status === "flushing" || flushState.status === "backoff") return;
+  if (flushState.status === "debouncing") clearTimeout(flushState.timer);
+  const timer = setTimeout(() => {
+    if (flushState.status === "debouncing" && flushState.timer === timer) {
+      void flushNotes();
+    }
+  }, 400);
+  setFlushState({ status: "debouncing", timer });
 };
 
 export const setDraft = (words: string) => {
@@ -644,19 +688,20 @@ export const openNote = async (
   origin?: ComposeOrigin,
   anchor?: StageAnchor,
 ) => {
-  if (savingNote) await savingNote;
+  if (noteSaveState.status === "saving") await noteSaveState.promise;
   const { compose, draft } = get();
   if (compose?.kind === "edit") {
     ui.focusNote();
     return;
   }
-  if (get().compareVideoMode && (!activeCompareVideo() || get().compareVideoError)) {
+  if (get().compareVideoMode && (!activeCompareVideo() || get().compareVideo.status === "error")) {
     say("Load a compare video or switch to Live 3D (V) before adding a note", 3500);
     return;
   }
   if (!checkCompareFeedbackRange()) return;
   const wasPlaying = compose ? compose.wasPlaying : S.playing;
-  const { compareVideoMode, compareVideoPath } = get();
+  const { compareVideoMode, compareVideo } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const spaceMismatch = Boolean(
     compose && !composeMatchesStageSpace(compose, compareVideoMode, compareVideoPath),
   );
@@ -724,7 +769,8 @@ export const openVoiceNote = async (voiceName: string, voiceId: string, origin?:
   if (next !== get().draft) setDraft(next);
 };
 export const ensureNote = (origin?: ComposeOrigin, anchor?: StageAnchor) => {
-  const { compose, compareVideoMode, compareVideoPath, draft, refs } = get();
+  const { compose, compareVideoMode, compareVideo, draft, refs } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   if (!compose) {
     void openNote(null, false, origin, anchor);
     return;
@@ -791,7 +837,7 @@ export const restoreDraft = () => {
   openBox(compose, words);
 };
 export const editOldNote = async (n: Note, origin?: ComposeOrigin) => {
-  if (savingNote) await savingNote;
+  if (noteSaveState.status === "saving") await noteSaveState.promise;
   const { compose, draft } = get();
   if (compose?.kind === "edit" && compose.id === n.id) {
     ui.focusNote();
@@ -1010,11 +1056,21 @@ const saveNoteNow = async () => {
   closeNote("save");
 };
 
-let savingNote: Promise<void> | null = null;
+type NoteSaveState =
+  | { status: "idle" }
+  | { status: "saving"; promise: Promise<void> };
+
+let noteSaveState: NoteSaveState = { status: "idle" };
 export const saveNote = () => {
-  if (savingNote) return savingNote;
+  if (noteSaveState.status === "saving") return noteSaveState.promise;
+  if (!get().compose) return Promise.resolve();
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  noteSaveState = { status: "saving", promise };
   set({ noteSaving: true });
-  savingNote = saveNoteNow()
+  void saveNoteNow()
     .catch(() => {
       toast.add({
         title: "Couldn’t save the note",
@@ -1023,10 +1079,11 @@ export const saveNote = () => {
       });
     })
     .finally(() => {
-      savingNote = null;
+      noteSaveState = { status: "idle" };
       set({ noteSaving: false });
+      resolve();
     });
-  return savingNote;
+  return promise;
 };
 
 export const removeNote = (n: Note) => {
@@ -1097,7 +1154,11 @@ export const goToNote = (n: Note, newVisit = !get().review, mode: NoteJumpMode =
   }
   const wasView = readLiveFreeView();
   const wasFree = wasView !== undefined;
-  const wasCompare = { on: get().compareVideoMode, path: get().compareVideoPath };
+  const curCompareVideo = get().compareVideo;
+  const wasCompare = {
+    on: get().compareVideoMode,
+    path: curCompareVideo.status === "none" ? null : curCompareVideo.path,
+  };
   const wantsFree = useAfter && media.afterCam !== null ? true : Boolean(n.freeCam);
   const targetView =
     useAfter && media.afterCam !== null ? media.afterCam : n.freeCam ? noteFreeView(n) : null;
@@ -1173,7 +1234,11 @@ export const openNoteInCompareVideo = (n: Note) => {
   const inReview = get().review;
   const wasView = readLiveFreeView();
   const wasFree = Boolean(S.tools?.free.on ?? get().free);
-  const wasCompare = { on: get().compareVideoMode, path: get().compareVideoPath };
+  const curCompare = get().compareVideo;
+  const wasCompare = {
+    on: get().compareVideoMode,
+    path: curCompare.status === "none" ? null : curCompare.path,
+  };
   const willChange =
     !wasCompare.on ||
     wasCompare.path !== n.compareVideo.path ||
@@ -1215,7 +1280,7 @@ export const nowPicture = (n: Note): Promise<string | null> => {
       const target = activeCompareNoteSource();
       if (
         !s.compareVideoMode ||
-        s.compareVideoError ||
+        s.compareVideo.status === "error" ||
         !item ||
         !target ||
         !noteMatchesStageSpace(n, s.compareVideoMode, target)
@@ -1577,7 +1642,8 @@ export const pinWordsUp = (y: number) => y > 0.88;
 export const drawPins = () => {
   const box = S.el?.pins;
   if (!box) return;
-  const { compose, compareVideoMode, compareVideoPath } = get();
+  const { compose, compareVideoMode, compareVideo } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const own =
     compose?.pin &&
     (compose.kind !== "create" ||

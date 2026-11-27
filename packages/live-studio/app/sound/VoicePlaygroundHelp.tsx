@@ -42,9 +42,10 @@ const tasks = [
   },
 ];
 
+type CopyState = { status: "idle" } | { status: "copied" } | { status: "error"; message: string };
+
 export function VoicePlaygroundHelp() {
-  const [copied, setCopied] = useState(false),
-    [error, setError] = useState(""),
+  const [copyState, setCopyState] = useState<CopyState>({ status: "idle" }),
     command = "bun run voice:playground --help";
   return (
     <div className="h-full overflow-y-auto overscroll-contain p-6">
@@ -66,21 +67,23 @@ export function VoicePlaygroundHelp() {
                 void navigator.clipboard
                   .writeText(command)
                   .then(() => {
-                    setCopied(true);
-                    setError("");
+                    setCopyState({ status: "copied" });
                   })
                   .catch(() =>
-                    setError("Select and copy the command above. Clipboard access is unavailable."),
+                    setCopyState({
+                      status: "error",
+                      message: "Select and copy the command above. Clipboard access is unavailable.",
+                    }),
                   )
               }
             >
               <Copy />
-              {copied ? "Copied" : "Copy command"}
+              {copyState.status === "copied" ? "Copied" : "Copy command"}
             </Button>
           </div>
-          {error && (
+          {copyState.status === "error" && (
             <p role="alert" className="text-warn-text mt-2 text-sm">
-              {error}
+              {copyState.message}
             </p>
           )}
         </section>

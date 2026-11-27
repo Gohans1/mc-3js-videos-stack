@@ -135,8 +135,19 @@ export async function stageDubbingUpload(
   return source;
 }
 
+type DubbingLoadState =
+  | { status: "idle"; jobs: DubbingJob[] }
+  | { status: "loading"; jobs: DubbingJob[]; promise: Promise<void> }
+  | { status: "error"; jobs: DubbingJob[]; error: string };
+
 type DubbingState = { jobs: DubbingJob[]; loading: boolean; error: string | null };
-let state: DubbingState = { jobs: [], loading: false, error: null };
+let loadState: DubbingLoadState = { status: "idle", jobs: [] };
+const toSnapshot = (s: DubbingLoadState): DubbingState => ({
+  jobs: s.jobs,
+  loading: s.status === "loading",
+  error: s.status === "error" ? s.error : null,
+});
+let state: DubbingState = toSnapshot(loadState);
 const listeners = new Set<() => void>(),
   notified = new Set<string>();
 const notices = new Set<(message: string) => void>();
@@ -146,9 +157,9 @@ export const onDubbingNotice = (listener: (message: string) => void) => {
     notices.delete(listener);
   };
 };
-let loading: Promise<void> | null = null;
-const update = (patch: Partial<DubbingState>) => {
-  state = { ...state, ...patch };
+const setLoadState = (next: DubbingLoadState) => {
+  loadState = next;
+  state = toSnapshot(next);
   listeners.forEach((listener) => listener());
 };
 export const dubbingSnapshot = () => state;
@@ -160,13 +171,12 @@ const subscribe = (listener: () => void) => {
 };
 
 export function acceptDubbingJob(job: DubbingJob, notify = true) {
-  const old = state.jobs.find((row) => row.id === job.id);
+  const old = loadState.jobs.find((row) => row.id === job.id);
   if (old && old.updatedAt > job.updatedAt) return;
-  update({
-    jobs: [...state.jobs.filter((row) => row.id !== job.id), job].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    ),
-  });
+  const jobs = [...loadState.jobs.filter((row) => row.id !== job.id), job].sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+  setLoadState({ ...loadState, jobs });
   if (!notify) {
     if (terminal.has(job.phase)) notified.add(`${job.id}:${job.phase}`);
     return;
@@ -187,25 +197,25 @@ export function acceptDubbingJob(job: DubbingJob, notify = true) {
 }
 
 export function loadDubbingJobs() {
-  if (loading) return loading;
-  update({ loading: true });
-  loading = dubbingRequest<{ jobs: DubbingJob[] }>("?includeGlobal=1")
+  if (loadState.status === "loading") return loadState.promise;
+  const promise = dubbingRequest<{ jobs: DubbingJob[] }>("?includeGlobal=1")
     .then(({ jobs }) => {
       for (const job of jobs ?? [])
         acceptDubbingJob(
           job,
-          state.jobs.some((old) => old.id === job.id),
+          loadState.jobs.some((old) => old.id === job.id),
         );
-      update({ error: null });
+      setLoadState({ status: "idle", jobs: loadState.jobs });
     })
     .catch((error) =>
-      update({ error: error instanceof Error ? error.message : "Unable to load Dubbing jobs" }),
-    )
-    .finally(() => {
-      loading = null;
-      update({ loading: false });
-    });
-  return loading;
+      setLoadState({
+        status: "error",
+        jobs: loadState.jobs,
+        error: error instanceof Error ? error.message : "Unable to load Dubbing jobs",
+      }),
+    );
+  setLoadState({ status: "loading", jobs: loadState.jobs, promise });
+  return promise;
 }
 
 export function useDubbingJobs(enabled = true) {

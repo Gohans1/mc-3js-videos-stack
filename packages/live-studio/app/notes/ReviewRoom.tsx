@@ -117,9 +117,15 @@ function Compare({ n, at }: { n: Note; at: number }) {
     ratio = useStudio((s) => s.ratio),
     pictureRev = useStudio((s) => s.pictureRev),
     compareVideoMode = useStudio((s) => s.compareVideoMode),
-    compareVideoPath = useStudio((s) => s.compareVideoPath),
-    compareVideoReady = useStudio((s) => s.compareVideoReady),
-    compareVideoLayout = useStudio((s) => s.compareVideoMeta?.layout ?? null);
+    compareVideoPath = useStudio((s) =>
+      s.compareVideo.status === "none" ? null : s.compareVideo.path,
+    ),
+    compareVideoReady = useStudio((s) => s.compareVideo.status === "ready"),
+    compareVideoLayout = useStudio((s) =>
+      s.compareVideo.status === "loading" || s.compareVideo.status === "ready"
+        ? (s.compareVideo.meta?.layout ?? null)
+        : null,
+    );
   const compareAspect = noteCompareAspect(n, ratio);
   const frameAspect = compareAspect ? `${compareAspect[0]} / ${compareAspect[1]}` : undefined;
   const compareKey = n.compareVideo

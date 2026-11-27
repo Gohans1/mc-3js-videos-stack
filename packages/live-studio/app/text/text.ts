@@ -1,4 +1,5 @@
 import { EDIT } from "film/edit";
+import { resolveTextItem, TEXT_PRESETS, type TextStylePreset } from "film-stage/titles-catalog";
 
 import { lightItems } from "../activity/timeline-activity";
 import { DURATION } from "../core/filmMeta";
@@ -13,7 +14,8 @@ export type Kind = "text" | "arrow" | "circle" | "box" | "bracket" | "underline"
 export type Fx = TitleFxData;
 export interface TextItem {
   timebase?: import("../../src/timing.mjs").LayerHistory & { sourceDuration: number };
-  kind: Kind;
+  kind?: Kind;
+  preset?: string;
   from: number;
   to: number;
   track?: number;
@@ -23,6 +25,7 @@ export interface TextItem {
   at?: [number, number, number];
   size?: number;
   font?: string;
+  weight?: number;
   color?: string;
   bold?: boolean;
   italic?: boolean;
@@ -30,9 +33,10 @@ export interface TextItem {
   align?: "left" | "center" | "right";
   spacing?: number;
   line?: number;
-  stroke?: { color?: string; width?: number };
-  background?: { color?: string; opacity?: number };
-  shadow?: boolean;
+  stroke?: { color?: string; width?: number; join?: "round" | "miter" | "bevel"; miterLimit?: number } | null;
+  background?: { color?: string; opacity?: number } | null;
+  shadow?: boolean | { color?: string; blur?: number; x?: number; y?: number };
+  safeArea?: boolean | { left?: number; right?: number; top?: number; bottom?: number };
   opacity?: number;
   scale?: number;
   rotate?: number;
@@ -47,7 +51,9 @@ export interface TextTrack {
   lock?: boolean;
   hidden?: boolean;
 }
-interface TextFile {
+export interface TextFile {
+  preset?: string;
+  defaults?: Partial<TextItem>;
   items: TextItem[];
   tracks?: Record<string, TextTrack>;
   [k: string]: unknown;
@@ -96,9 +102,23 @@ export const loadText = async () => {
   set({ text: !!(await doc.load()) });
 };
 
-export const isShape = (it: TextItem) => it.kind !== "text";
-export const nameOf = (it: TextItem) =>
-  isShape(it) ? shapeLabel(it.kind) : (it.text ?? "").split("\n")[0].trim() || "Text";
+export const textDoc = () => doc.data;
+export const resolveItem = (it: TextItem): TextItem =>
+  resolveTextItem(
+    it as Record<string, unknown>,
+    doc.data as Record<string, unknown> | null,
+    S.tools?.titles?.presets as readonly TextStylePreset[] | undefined,
+  ) as TextItem;
+export const isShape = (it: TextItem) => {
+  const k = resolveItem(it).kind ?? "text";
+  return k !== "text";
+};
+export const nameOf = (it: TextItem) => {
+  const r = resolveItem(it);
+  return (r.kind ?? "text") !== "text"
+    ? shapeLabel(r.kind ?? "box")
+    : (r.text ?? "").split("\n")[0].trim() || "Text";
+};
 export const tracksUsed = () => Math.max(0, ...items.map((it) => (it.track ?? 0) + 1));
 export const trackState = (track: number): TextTrack => doc.data?.tracks?.[track] ?? {};
 export const locked = (i: number) => !!trackState(items[i]?.track ?? 0).lock;
@@ -167,6 +187,17 @@ export interface Preset {
   item: Partial<TextItem> & { kind: Kind };
 }
 export const PRESETS: Preset[] = [
+  {
+    id: "zack-d-films",
+    title: "Zack D. Films",
+    hint: TEXT_PRESETS[0]!.tip,
+    len: 2,
+    item: {
+      kind: "text",
+      preset: "zack-d-films",
+      text: "She lifted",
+    },
+  },
   {
     id: "default",
     title: "Default text",

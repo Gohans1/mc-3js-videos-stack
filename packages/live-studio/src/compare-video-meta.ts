@@ -86,3 +86,18 @@ export const compareHitForPoint = (
   if (category === "reference") return { what: "Reference video" };
   return { what: "Render video" };
 };
+
+const EXPLICIT_COMPARE_NAME = /(?:^|[_-])(vs|sbs|sidebyside|compare|cmp)(?:[_.-]|$)/i;
+
+export const pickDefaultLiteVideo = (
+  videos: readonly Pick<CompareVideoItem, "path" | "category" | "name" | "layoutExact">[],
+): string | null => {
+  if (!Array.isArray(videos) || !videos.length) return null;
+  const explicit = videos.find((v) => {
+    if (v?.category !== "compare") return false;
+    if (v.layoutExact === true) return true;
+    const leaf = v.name ?? v.path?.split(/[\\/]/).pop() ?? "";
+    return EXPLICIT_COMPARE_NAME.test(leaf);
+  });
+  return explicit?.path ?? videos[0]?.path ?? null;
+};

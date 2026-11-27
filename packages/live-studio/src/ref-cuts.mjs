@@ -72,11 +72,11 @@ export const unstudiedWarning = (project) => {
 
 const whipSaid = (w) => `${w.camera} ${+w.from.toFixed(2)}-${+w.to.toFixed(2)}`;
 
-export const cutItems = (study, cuts, until) => {
+export const cutItems = (study, cuts, until, transitions = []) => {
   const near = Math.max(0.05, 1.5 / study.fps);
   const close = (a) => (b) => Math.abs(a - b) <= near;
   const items = [];
-  for (const t of cuts.filter((c) => !study.cuts.some(close(c)))) {
+  for (const t of cuts.filter((c) => !study.cuts.some(close(c)) && !transitions.some(close(c)))) {
     const w = whipAt(study, t);
     items.push(
       w
@@ -123,10 +123,10 @@ export const cutItems = (study, cuts, until) => {
   return items;
 };
 
-export const refCutsWarning = (project, camFile, cameraCuts, until) => {
+export const refCutsWarning = (project, camFile, cameraCuts, until, transitions = []) => {
   const study = latestStudy(project);
   if (!study) return "";
-  const items = cutItems(study, cameraCuts, until);
+  const items = cutItems(study, cameraCuts, until, transitions);
   if (!items.length) return "";
   const of = (kind) => items.filter((x) => x.kind === kind);
   const [extra, missing, looks] = ["extra cut", "missing cut", "cut in a whip"].map(of);

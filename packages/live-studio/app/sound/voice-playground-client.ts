@@ -71,12 +71,93 @@ export type CastingTarget =
   { mode: "tts" | "voice_changer" | "dubbing" } | { mode: "dialogue"; speakerId: string };
 onDubbingNotice(say);
 
+export type DirectPlaygroundConnection = Exclude<PlaygroundConnection, "genvoice">;
+
+export type PlaygroundCatalog = {
+  models: PlaygroundModelInfo[];
+  languages: Array<{ code: string; name: string }>;
+  providerLanguages?: Partial<
+    Record<NonNullable<PlaygroundVoiceOption["provider"]>, Array<{ code: string; name: string }>>
+  >;
+  defaultVoices: PlaygroundVoiceOption[];
+  liveSynced: boolean;
+  error?: string;
+};
+
+export type PlaygroundLoadState =
+  | { status: "idle" }
+  | { status: "loading"; loaded: boolean }
+  | { status: "ready" }
+  | { status: "error"; loaded: boolean; error: string };
+
+export type ServiceCatalogState =
+  | { status: "loading"; seq: number; catalog?: PlaygroundCatalog }
+  | { status: "ready"; seq: number; catalog: PlaygroundCatalog }
+  | { status: "error"; seq: number; error: string; catalog?: PlaygroundCatalog };
+
+export type RemoteHistoryState = (
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "error"; error: string }
+) & {
+  items: RemoteHistoryEntry[];
+  hasMore: boolean;
+  warning?: string | null;
+  page: number;
+};
+
+export type SharedSearchState = (
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready" }
+  | { status: "error"; error: string }
+) & {
+  voices: PlaygroundVoiceOption[];
+  hasMore: boolean;
+  queryKey: string;
+  page: number;
+  nextPageToken?: string;
+  params: Record<string, string | number | undefined>;
+};
+
+export type ClonesLoadState =
+  | { status: "idle"; error: string | null }
+  | { status: "loading" };
+
+export type CloneCloudState =
+  | { status: "ok" }
+  | { status: "error"; error: string };
+
+export type PlaygroundBusyAction =
+  | "config"
+  | "status-test"
+  | "generate"
+  | "stt"
+  | "source"
+  | "duplicate"
+  | "template"
+  | `delete:${string}`
+  | `retry:${string}`
+  | `import:${string}`
+  | `promote:${string}`
+  | `copy:${string}`
+  | `archive:${string}`
+  | `use:${string}`;
+
+export const isPlaygroundLoaded = (s: Pick<VoicePlaygroundClientState, "loadState">): boolean =>
+  s.loadState.status === "ready" || (s.loadState.status !== "idle" && s.loadState.loaded);
+
+export const serviceCatalogDataOf = (
+  s: Pick<VoicePlaygroundClientState, "serviceCatalogs">,
+  connection: DirectPlaygroundConnection,
+): PlaygroundCatalog | undefined => s.serviceCatalogs?.[connection]?.catalog;
+
 export interface VoicePlaygroundClientState {
   castingTarget?: CastingTarget | null;
   clones?: PlaygroundClone[];
-  clonesLoading?: boolean;
-  clonesError?: string | null;
-  clonesCloudError?: string | null;
+  clonesState: ClonesLoadState;
+  cloneCloudState: CloneCloudState;
   previewVoice?: PlaygroundVoiceOption;
   regionEditor: {
     item: VoicePlaygroundItem;
@@ -102,47 +183,16 @@ export interface VoicePlaygroundClientState {
     scope: "project" | "global";
     reason?: "job-review";
   };
-  loaded: boolean;
-  loading: boolean;
-  error: string | null;
+  loadState: PlaygroundLoadState;
   status: PlaygroundStatus;
-  serviceCatalogErrors?: Partial<Record<Exclude<PlaygroundConnection, "genvoice">, string>>;
-  serviceCatalogs?: Partial<
-    Record<Exclude<PlaygroundConnection, "genvoice">, VoicePlaygroundClientState["catalog"]>
-  >;
-  catalog: {
-    models: PlaygroundModelInfo[];
-    languages: Array<{ code: string; name: string }>;
-    providerLanguages?: Partial<
-      Record<NonNullable<PlaygroundVoiceOption["provider"]>, Array<{ code: string; name: string }>>
-    >;
-    defaultVoices: PlaygroundVoiceOption[];
-    liveSynced: boolean;
-    error?: string;
-  };
+  serviceCatalogs?: Partial<Record<DirectPlaygroundConnection, ServiceCatalogState>>;
+  catalog: PlaygroundCatalog;
   items: VoicePlaygroundItem[];
   jobs: PlaygroundJob[];
   workbenchOpener?: HTMLElement | null;
   composerError?: { mode: ComposerDraft["mode"]; message: string };
-  remoteHistory: {
-    loaded?: boolean;
-    items: RemoteHistoryEntry[];
-    hasMore: boolean;
-    loading: boolean;
-    error: string | null;
-    warning?: string | null;
-    page: number;
-  };
-  sharedSearch: {
-    voices: PlaygroundVoiceOption[];
-    hasMore: boolean;
-    loading: boolean;
-    error: string | null;
-    queryKey: string;
-    page: number;
-    nextPageToken?: string;
-    params: Record<string, string | number | undefined>;
-  };
+  remoteHistory: RemoteHistoryState;
+  sharedSearch: SharedSearchState;
   draft: ComposerDraft;
   draftVersion: number;
   filters: PlaygroundFilterState;
@@ -153,8 +203,11 @@ export interface VoicePlaygroundClientState {
   inlineOpen: boolean;
   activeSubTab: PlaygroundSubTab;
   workbenchMediumTab: "library" | "inspect";
-  busyAction: string | null;
-  sttSourceUpload?: { status: "idle" | "uploading" | "failed"; name?: string; error?: string };
+  busyAction: PlaygroundBusyAction | null;
+  sttSourceUpload?:
+    | { status: "idle" }
+    | { status: "uploading"; name: string }
+    | { status: "failed"; name: string; error: string };
   lastSttResult: (PlaygroundSttResult & { sourceLabel?: string; taskId?: string }) | null;
 }
 
@@ -237,9 +290,8 @@ const mergeJobsById = (
 
 let state: VoicePlaygroundClientState = {
   clones: [],
-  clonesLoading: false,
-  clonesError: null,
-  clonesCloudError: null,
+  clonesState: { status: "idle", error: null },
+  cloneCloudState: { status: "ok" },
   regionEditor: null,
   scope: "project",
   libraryScope: "all",
@@ -248,9 +300,7 @@ let state: VoicePlaygroundClientState = {
   usage: [],
   targetTakeId: "",
   compareUids: [],
-  loaded: false,
-  loading: false,
-  error: null,
+  loadState: { status: "idle" },
   status: {
     configured: false,
     source: "none",
@@ -268,18 +318,16 @@ let state: VoicePlaygroundClientState = {
   items: [],
   jobs: [],
   remoteHistory: {
+    status: "idle",
     items: [],
     hasMore: false,
-    loading: false,
-    error: null,
     warning: null,
     page: 0,
   },
   sharedSearch: {
+    status: "idle",
     voices: [],
     hasMore: false,
-    loading: false,
-    error: null,
     queryKey: "",
     page: 0,
     params: {},
@@ -298,11 +346,55 @@ let state: VoicePlaygroundClientState = {
   lastSttResult: null,
 };
 
+type BootstrapLoadState =
+  | { status: "idle"; seq: number }
+  | { status: "loading"; seq: number; promise: Promise<void> };
+
 const subs = new Set<() => void>();
 let consumers = 0;
-let inflightLoad: Promise<void> | null = null;
+let bootstrapLoad: BootstrapLoadState = { status: "idle", seq: 0 };
+const getBootstrapLoad = (): BootstrapLoadState => bootstrapLoad;
 let sharedSearchSeq = 0;
+let serviceCatalogSeq = 0;
 let didAutoVerifyAccount = false;
+
+const activeBusyActions = new Map<symbol, PlaygroundBusyAction>();
+const hasBusyAction = (action: PlaygroundBusyAction): boolean => {
+  for (const value of activeBusyActions.values()) {
+    if (value === action) return true;
+  }
+  return false;
+};
+const latestBusyAction = (): PlaygroundBusyAction | null => {
+  let last: PlaygroundBusyAction | null = null;
+  for (const value of activeBusyActions.values()) last = value;
+  return last;
+};
+const beginBusyAction = (action: PlaygroundBusyAction, extra?: Partial<VoicePlaygroundClientState>) => {
+  const token = Symbol(action);
+  activeBusyActions.set(token, action);
+  patchState({ ...extra, busyAction: action });
+  let released = false;
+  return (finalPatch?: Partial<VoicePlaygroundClientState>) => {
+    if (released) {
+      if (finalPatch) patchState(finalPatch);
+      return;
+    }
+    released = true;
+    activeBusyActions.delete(token);
+    patchState({ ...finalPatch, busyAction: latestBusyAction() });
+  };
+};
+const releaseBusyByKind = (action: PlaygroundBusyAction) => {
+  let removed = false;
+  for (const [token, value] of activeBusyActions) {
+    if (value === action) {
+      activeBusyActions.delete(token);
+      removed = true;
+    }
+  }
+  if (removed) patchState({ busyAction: latestBusyAction() });
+};
 
 const notify = () => {
   for (const fn of subs) fn();
@@ -359,7 +451,6 @@ const acceptSubmittedJobs = (
     }
   }
   patchState({
-    busyAction: null,
     jobs,
     selectedUid,
     ...(openRetry ? { activeSubTab: "inspect", workbenchMediumTab: "inspect" } : {}),
@@ -569,20 +660,24 @@ export const getPlaygroundItemByAuditionId = (auditionId: string): VoicePlaygrou
   return state.items.find((x) => x.id === id) ?? null;
 };
 
-let loadSeq = 0;
-
 export const loadPlaygroundAll = async (opts?: { refresh?: boolean; liveStatus?: boolean }) => {
-  if (inflightLoad && !opts?.refresh && !opts?.liveStatus) return inflightLoad;
-  const seq = ++loadSeq;
-  let active: Promise<void> | null = null;
-  const run = (async () => {
-    patchState({ loading: true, error: null });
+  if (bootstrapLoad.status === "loading" && !opts?.refresh && !opts?.liveStatus) {
+    return bootstrapLoad.promise;
+  }
+  const seq = bootstrapLoad.seq + 1;
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  bootstrapLoad = { status: "loading", seq, promise };
+  patchState({ loadState: { status: "loading", loaded: isPlaygroundLoaded(state) } });
+  void (async () => {
     try {
       const [status, catalog, itemsPayload, usage] = await Promise.all([
         fetchJson<PlaygroundStatus>(
           opts?.liveStatus ? "/api/voice/playground/status?live=1" : "/api/voice/playground/status",
         ),
-        fetchJson<VoicePlaygroundClientState["catalog"]>(
+        fetchJson<PlaygroundCatalog>(
           opts?.refresh
             ? "/api/voice/playground/catalog?refresh=1"
             : "/api/voice/playground/catalog",
@@ -598,7 +693,7 @@ export const loadPlaygroundAll = async (opts?: { refresh?: boolean; liveStatus?:
           .then((result) => result.usage ?? [])
           .catch(() => []),
       ]);
-      if (seq !== loadSeq) return;
+      if (getBootstrapLoad().seq !== seq) return;
       registerCatalogVoices(catalog.defaultVoices ?? []);
       const items = itemsPayload.items ?? [];
       registerRecordingVoices(items);
@@ -609,9 +704,7 @@ export const loadPlaygroundAll = async (opts?: { refresh?: boolean; liveStatus?:
         usage,
         templates: itemsPayload.templates ?? [],
         starredTakeUids: itemsPayload.starredTakeUids ?? [],
-        loaded: true,
-        loading: false,
-        error: null,
+        loadState: { status: "ready" },
         status,
         catalog,
         items,
@@ -623,13 +716,13 @@ export const loadPlaygroundAll = async (opts?: { refresh?: boolean; liveStatus?:
         didAutoVerifyAccount = true;
         void fetchJson<PlaygroundStatus>("/api/voice/playground/status?live=1")
           .then((liveSt) => {
-            if (seq !== loadSeq) return;
+            if (getBootstrapLoad().seq !== seq) return;
             if (liveSt && (liveSt.account || liveSt.error)) {
               patchState({ status: liveSt });
             }
           })
           .catch((e) => {
-            if (seq !== loadSeq || state.status.account) return;
+            if (getBootstrapLoad().seq !== seq || state.status.account) return;
             patchState({
               status: {
                 ...state.status,
@@ -639,18 +732,23 @@ export const loadPlaygroundAll = async (opts?: { refresh?: boolean; liveStatus?:
           });
       }
     } catch (e) {
-      if (seq !== loadSeq) return;
+      if (getBootstrapLoad().seq !== seq) return;
       patchState({
-        loading: false,
-        error: e instanceof Error ? e.message : "Could not load Voice Playground",
+        loadState: {
+          status: "error",
+          loaded: isPlaygroundLoaded(state),
+          error: e instanceof Error ? e.message : "Could not load Voice Playground",
+        },
       });
     } finally {
-      if (inflightLoad === active) inflightLoad = null;
+      const current = getBootstrapLoad();
+      if (current.status === "loading" && current.seq === seq) {
+        bootstrapLoad = { status: "idle", seq };
+      }
+      resolve();
     }
   })();
-  active = run;
-  inflightLoad = run;
-  return run;
+  return promise;
 };
 
 const stopDeletedAudition = (id: string) => {
@@ -684,7 +782,7 @@ const removeItemState = (id: string) => {
 export const handleVoicePlaygroundEvent = (raw?: string) => {
   const payload = parseSsePayload(raw);
   if (!payload) {
-    if (consumers > 0 || state.loaded) void loadPlaygroundAll();
+    if (consumers > 0 || isPlaygroundLoaded(state)) void loadPlaygroundAll();
     return;
   }
   switch (payload.type) {
@@ -772,7 +870,7 @@ export const handleVoicePlaygroundEvent = (raw?: string) => {
       break;
     }
     default: {
-      if (consumers > 0 || state.loaded) void loadPlaygroundAll();
+      if (consumers > 0 || isPlaygroundLoaded(state)) void loadPlaygroundAll();
     }
   }
 };
@@ -783,14 +881,14 @@ export const savePlaygroundConfig = async (cfg: {
   apiBase?: string;
   clearOverride?: boolean;
 }) => {
-  patchState({ busyAction: "config" });
+  const release = beginBusyAction("config");
   try {
     const status = await fetchJson<PlaygroundStatus>("/api/voice/playground/config", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(cfg),
     });
-    patchState({ status, busyAction: null });
+    release({ status });
     if (cfg.connection && cfg.connection !== "genvoice") {
       if (status.connections?.[cfg.connection]?.configured) void loadSpeechCatalog(cfg.connection);
       say(cfg.clearOverride ? "Reverted to the environment key" : "API key verified and saved");
@@ -811,52 +909,73 @@ export const savePlaygroundConfig = async (cfg: {
     return status;
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not save API config";
-    patchState({ busyAction: null });
+    release();
     say(msg);
     throw e;
   }
 };
 
 export const testPlaygroundConnection = async (connection: PlaygroundConnection = "genvoice") => {
-  patchState({ busyAction: "status-test" });
+  const release = beginBusyAction("status-test");
   try {
     if (connection !== "genvoice") {
       const status = await fetchJson<PlaygroundStatus>(
         `/api/voice/playground/status?live=1&connection=${connection}`,
       );
-      patchState({ status, busyAction: null });
+      release({ status });
       const tested = status.connections?.[connection];
       say(tested?.error || (tested?.verified ? "Connection verified" : "API key missing"));
       if (tested?.verified) void loadSpeechCatalog(connection);
       return;
     }
     await loadPlaygroundAll({ refresh: true, liveStatus: true });
-    patchState({ busyAction: null });
+    release();
     say(
       state.status.account?.credit_balance != null
         ? `Connected (${state.status.account.credit_balance.toLocaleString()} credits)`
         : state.status.error || "Checked GenVoice connection",
     );
   } catch {
-    patchState({ busyAction: null });
+    release();
   }
 };
 
-export const loadSpeechCatalog = async (connection: Exclude<PlaygroundConnection, "genvoice">) => {
-  patchState({ serviceCatalogErrors: { ...state.serviceCatalogErrors, [connection]: undefined } });
+export const loadSpeechCatalog = async (connection: DirectPlaygroundConnection) => {
+  const seq = ++serviceCatalogSeq;
+  const previous = state.serviceCatalogs?.[connection];
+  patchState({
+    serviceCatalogs: {
+      ...state.serviceCatalogs,
+      [connection]: { status: "loading", seq, catalog: previous?.catalog },
+    },
+  });
   try {
-    const catalog = await fetchJson<VoicePlaygroundClientState["catalog"]>(
+    const catalog = await fetchJson<PlaygroundCatalog>(
       `/api/voice/playground/catalog?refresh=1&connection=${connection}`,
     );
-    patchState({ serviceCatalogs: { ...state.serviceCatalogs, [connection]: catalog } });
+    const current = state.serviceCatalogs?.[connection];
+    if (current && current.seq !== seq) return;
+    patchState({
+      serviceCatalogs: {
+        ...state.serviceCatalogs,
+        [connection]: { status: "ready", seq, catalog },
+      },
+    });
   } catch (err) {
+    const current = state.serviceCatalogs?.[connection];
+    if (current && current.seq !== seq) return;
     const message =
       err instanceof TypeError
         ? "Could not load voices. Reconnect to Studio, then try again."
         : err instanceof Error
           ? err.message
           : "Could not load voices.";
-    patchState({ serviceCatalogErrors: { ...state.serviceCatalogErrors, [connection]: message } });
+    patchState({
+      serviceCatalogs: {
+        ...state.serviceCatalogs,
+        [connection]: { status: "error", seq, error: message, catalog: current?.catalog },
+      },
+    });
   }
 };
 
@@ -881,10 +1000,10 @@ export const searchLiveSharedVoices = async (
   const reqId = ++sharedSearchSeq;
   patchState({
     sharedSearch: {
-      ...state.sharedSearch,
-      ...(opts?.append ? {} : { voices: [] }),
-      loading: true,
-      error: null,
+      status: "loading",
+      voices: opts?.append ? state.sharedSearch.voices : [],
+      hasMore: state.sharedSearch.hasMore,
+      nextPageToken: state.sharedSearch.nextPageToken,
       queryKey,
       page: pageNum,
       params: normalized,
@@ -907,11 +1026,10 @@ export const searchLiveSharedVoices = async (
       : incoming;
     patchState({
       sharedSearch: {
+        status: "ready",
         voices: mergedVoices,
         hasMore: Boolean(res.hasMore),
         nextPageToken: res.nextPageToken,
-        loading: false,
-        error: null,
         queryKey,
         page: pageNum,
         params: normalized,
@@ -921,8 +1039,13 @@ export const searchLiveSharedVoices = async (
     if (reqId !== sharedSearchSeq) return;
     patchState({
       sharedSearch: {
-        ...state.sharedSearch,
-        loading: false,
+        status: "error",
+        voices: state.sharedSearch.voices,
+        hasMore: state.sharedSearch.hasMore,
+        nextPageToken: state.sharedSearch.nextPageToken,
+        queryKey: state.sharedSearch.queryKey,
+        page: state.sharedSearch.page,
+        params: state.sharedSearch.params,
         error: e instanceof Error ? e.message : "Live voice search failed",
       },
     });
@@ -930,7 +1053,7 @@ export const searchLiveSharedVoices = async (
 };
 
 export const loadMoreSharedVoices = async () => {
-  if (state.sharedSearch.loading || !state.sharedSearch.hasMore) return;
+  if (state.sharedSearch.status === "loading" || !state.sharedSearch.hasMore) return;
   const nextPage = state.sharedSearch.page + 1;
   return searchLiveSharedVoices(
     {
@@ -1011,7 +1134,7 @@ const invalidateSttSourceUpload = () => {
 };
 const invalidateVoiceSourceUpload = () => {
   sourceUploadSeq++;
-  if (state.busyAction === "source") patchState({ busyAction: null });
+  releaseBusyByKind("source");
 };
 const rememberToolDraft = () => toolDrafts.set(state.draft.mode, structuredClone(state.draft));
 
@@ -1206,7 +1329,7 @@ export const previewCastingVoice = (voice: PlaygroundVoiceOption) => {
 };
 
 export const openFilmTakeRemix = async (take: VoiceTakeItem) => {
-  if (!state.loaded) await loadPlaygroundAll();
+  if (!isPlaygroundLoaded(state)) await loadPlaygroundAll();
   const findSource = () =>
     state.items.find(
       (item) =>
@@ -1255,7 +1378,7 @@ export const setWorkbenchMediumTab = (workbenchMediumTab: "library" | "inspect")
 
 export const setPlaygroundInlineOpen = (inlineOpen: boolean) => {
   patchState({ inlineOpen });
-  if (inlineOpen && !state.loaded) void loadPlaygroundAll();
+  if (inlineOpen && !isPlaygroundLoaded(state)) void loadPlaygroundAll();
 };
 
 export const setPlaygroundWorkbenchOpen = (workbenchOpen: boolean) => {
@@ -1270,7 +1393,7 @@ export const setPlaygroundWorkbenchOpen = (workbenchOpen: boolean) => {
   patchState({ workbenchOpen, ...(workbenchOpen ? { everOpened: true } : {}) });
   if (workbenchOpen) {
     set({ modal: "voicePlayground" });
-    if (!state.loaded) void loadPlaygroundAll();
+    if (!isPlaygroundLoaded(state)) void loadPlaygroundAll();
   } else {
     set((s) => (s.modal === "voicePlayground" ? { modal: null } : {}));
   }
@@ -1303,7 +1426,7 @@ export const openVoicePlaygroundWith = (
   });
   if (openWorkbench) {
     setPlaygroundWorkbenchOpen(true);
-  } else if (!state.loaded) {
+  } else if (!isPlaygroundLoaded(state)) {
     void loadPlaygroundAll();
   }
 };
@@ -1329,7 +1452,7 @@ const buildSpeechInput = (d: ComposerDraft): PlaygroundTtsRequest => {
   const models =
     connection === "genvoice"
       ? state.catalog.models
-      : (state.serviceCatalogs?.[connection]?.models ?? []);
+      : (state.serviceCatalogs?.[connection]?.catalog?.models ?? []);
   const ttsModelId = recorded
     ? d.modelId
     : connection === "genvoice"
@@ -1427,7 +1550,7 @@ export const reviewGenVoiceSpeech = async (
 
 export const launchReviewedSpeech = async ({ scope, input, runId, comparison }: SpeechReview) => {
   if (state.busyAction) throw new Error("Wait for the current action to finish.");
-  patchState({ busyAction: "generate", composerError: undefined });
+  const release = beginBusyAction("generate", { composerError: undefined });
   try {
     const result = await fetchJson<{ batchId: string; jobs: PlaygroundJob[] }>(
       `/api/voice/playground/tts/batch?scope=${scope}`,
@@ -1453,10 +1576,12 @@ export const launchReviewedSpeech = async ({ scope, input, runId, comparison }: 
         : error instanceof Error
           ? error.message
           : "Couldn't start Speech. Check Jobs before trying again.";
-    patchState({ busyAction: null, composerError: { mode: "tts", message } });
+    release({ composerError: { mode: "tts", message } });
     throw error instanceof TypeError
       ? new TypeError(message, { cause: error })
       : new Error(message);
+  } finally {
+    release();
   }
 };
 
@@ -1468,7 +1593,7 @@ export const generateFromComposer = async (opts?: {
 }) => {
   const d = state.draft;
   if (d.mode === "stt") return;
-  patchState({ busyAction: "generate", composerError: undefined, activeSubTab: "create" });
+  const release = beginBusyAction("generate", { composerError: undefined, activeSubTab: "create" });
   try {
     if (d.mode === "dubbing")
       throw new Error(
@@ -1496,7 +1621,10 @@ export const generateFromComposer = async (opts?: {
       const google = connection === "google";
       const sceneModel = direct
         ? visibleSpeechModel(
-            dialogueServiceModels(connection, state.serviceCatalogs?.[connection]?.models ?? []),
+            dialogueServiceModels(
+              connection,
+              state.serviceCatalogs?.[connection]?.catalog?.models ?? [],
+            ),
             d.modelId,
           )?.model_id
         : undefined;
@@ -1556,7 +1684,7 @@ export const generateFromComposer = async (opts?: {
       ) {
         const msg =
           'Dialogue requires at least 2 speakers and "SpeakerName: line" turns matching them.';
-        patchState({ busyAction: null, composerError: { mode: d.mode, message: msg } });
+        release({ composerError: { mode: d.mode, message: msg } });
         say(msg);
         return;
       }
@@ -1656,8 +1784,10 @@ export const generateFromComposer = async (opts?: {
         : e instanceof Error
           ? e.message
           : "Voice generation failed";
-    patchState({ busyAction: null, composerError: { mode: d.mode, message: msg } });
+    release({ composerError: { mode: d.mode, message: msg } });
     say(msg);
+  } finally {
+    release();
   }
 };
 
@@ -1694,11 +1824,11 @@ export const runPlaygroundStt = async (opts: {
   if (!langCode || langCode.toLowerCase() === "auto") {
     const msg =
       "Speech-to-Text (Scribe v2) requires an explicit language code (e.g. 'en', 'vi'); 'auto' is not supported.";
-    patchState({ busyAction: null, composerError: { mode: "stt", message: msg } });
+    patchState({ composerError: { mode: "stt", message: msg } });
     say(msg);
     return null;
   }
-  patchState({ busyAction: "stt", composerError: undefined });
+  const release = beginBusyAction("stt", { composerError: undefined });
   try {
     let data: {
       taskId: string;
@@ -1758,7 +1888,7 @@ export const runPlaygroundStt = async (opts: {
     }
     if (data.job) {
       acceptSubmittedJobs([data.job]);
-      patchState({ busyAction: null });
+      release();
       const status = state.jobs.find((job) => job.id === data.job?.id)?.status ?? data.job.status;
       if (!state.workbenchOpen && status !== "completed" && status !== "failed") {
         say("Transcription started. Follow its progress in Jobs while you keep working.");
@@ -1776,8 +1906,7 @@ export const runPlaygroundStt = async (opts: {
             : it,
         )
       : state.items;
-    patchState({
-      busyAction: null,
+    release({
       items: data.item ? upsertById(items, data.item) : items,
       ...(data.item ? { selectedUid: playgroundAuditionId(data.item.id) } : {}),
       lastSttResult: {
@@ -1795,9 +1924,11 @@ export const runPlaygroundStt = async (opts: {
         : e instanceof Error
           ? e.message
           : "Transcription failed";
-    patchState({ busyAction: null, composerError: { mode: "stt", message: msg } });
+    release({ composerError: { mode: "stt", message: msg } });
     say(msg);
     return null;
+  } finally {
+    release();
   }
 };
 
@@ -1895,8 +2026,8 @@ export function recordingRemovalFocus(trigger: HTMLButtonElement) {
 export const voicePlaygroundToast = createToastManager();
 
 export const deletePlaygroundItem = async (id: string) => {
-  if (state.busyAction === `delete:${id}`) return;
-  patchState({ busyAction: `delete:${id}` });
+  if (hasBusyAction(`delete:${id}`)) return;
+  const release = beginBusyAction(`delete:${id}`);
   try {
     const archived = await patchPlaygroundItem(id, { archived: true });
     if (!archived) return;
@@ -1917,7 +2048,7 @@ export const deletePlaygroundItem = async (id: string) => {
   } catch (e) {
     say(e instanceof Error ? e.message : "Could not archive clip");
   } finally {
-    patchState({ busyAction: null });
+    release();
   }
 };
 
@@ -1981,7 +2112,7 @@ export const duplicateEntryToComposer = async (
   const recording = entry.playgroundItem ?? entry.sourceRecording;
   if (nextDraft.mode === "dubbing" && recording?.dubbing?.sourceFile && nextDraft.dubbing) {
     const version = state.draftVersion;
-    patchState({ busyAction: "duplicate" });
+    const release = beginBusyAction("duplicate");
     say("Preparing the saved original. No generation charge.");
     try {
       const { source } = await fetchJson<{ source: { id: string } }>(
@@ -2002,7 +2133,7 @@ export const duplicateEntryToComposer = async (
       );
       return;
     } finally {
-      if (state.busyAction === "duplicate") patchState({ busyAction: null });
+      release();
     }
   }
   const voice = opts?.overrideVoice;
@@ -2119,7 +2250,9 @@ export const retryWithVoiceSwap = async (
   },
   { showJobs }: { showJobs?: boolean } = {},
 ) => {
-  patchState({ busyAction: `retry:${itemId}`, activeSubTab: showJobs ? "jobs" : "create" });
+  const release = beginBusyAction(`retry:${itemId}`, {
+    activeSubTab: showJobs ? "jobs" : "create",
+  });
   try {
     const res = await fetchJson<{ job?: PlaygroundJob; jobs?: PlaygroundJob[] }>(
       `/api/voice/playground/items/${encodeURIComponent(itemId)}/retry`,
@@ -2138,15 +2271,22 @@ export const retryWithVoiceSwap = async (
     );
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Retry failed";
-    patchState({ busyAction: null });
     say(msg);
+  } finally {
+    release();
   }
 };
 
 export const loadRemoteHistory = async (page = 0) => {
-  if (state.remoteHistory.loading) return;
+  if (state.remoteHistory.status === "loading") return;
   patchState({
-    remoteHistory: { ...state.remoteHistory, loading: true, error: null },
+    remoteHistory: {
+      status: "loading",
+      items: state.remoteHistory.items,
+      hasMore: state.remoteHistory.hasMore,
+      warning: state.remoteHistory.warning,
+      page: state.remoteHistory.page,
+    },
   });
   try {
     const res = await fetchJson<{
@@ -2162,11 +2302,9 @@ export const loadRemoteHistory = async (page = 0) => {
         : [...state.remoteHistory.items, ...incoming.filter((x) => !seen.has(x.id))];
     patchState({
       remoteHistory: {
+        status: "ready",
         items,
-        loaded: true,
         hasMore: Boolean(res.hasMore),
-        loading: false,
-        error: null,
         warning: res.warning ?? null,
         page,
       },
@@ -2174,8 +2312,11 @@ export const loadRemoteHistory = async (page = 0) => {
   } catch (e) {
     patchState({
       remoteHistory: {
-        ...state.remoteHistory,
-        loading: false,
+        status: "error",
+        items: state.remoteHistory.items,
+        hasMore: state.remoteHistory.hasMore,
+        warning: state.remoteHistory.warning,
+        page: state.remoteHistory.page,
         error:
           e instanceof TypeError
             ? "Couldn't load cloud history. Reconnect to Studio, then select Refresh."
@@ -2193,7 +2334,7 @@ export const importRemoteHistoryTask = async (
   job?: PlaygroundJob,
 ) => {
   const scope = job?.scope ?? "project";
-  patchState({ busyAction: `import:${taskId}` });
+  const release = beginBusyAction(`import:${taskId}`);
   try {
     const res = await fetchJson<{ item: VoicePlaygroundItem; alreadyImported: boolean }>(
       `/api/voice/playground/remote-history/import?scope=${scope}`,
@@ -2219,8 +2360,7 @@ export const importRemoteHistoryTask = async (
         ? { ...r, importedItemId: res.item?.id ?? r.importedItemId }
         : r,
     );
-    patchState({
-      busyAction: null,
+    release({
       items,
       selectedUid: res.item ? playgroundAuditionId(res.item.id) : state.selectedUid,
       ...(job && item && state.activeSubTab === "jobs"
@@ -2238,9 +2378,11 @@ export const importRemoteHistoryTask = async (
         : e instanceof Error
           ? e.message
           : "Couldn't save the cloud recording. Refresh and try again.";
-    patchState({ busyAction: null });
+    release();
     say(msg);
     return null;
+  } finally {
+    release();
   }
 };
 
@@ -2250,7 +2392,7 @@ export const recoverDialogueRecording = (job: PlaygroundJob) => {
 };
 
 export const promotePlaygroundToTake = async (itemId: string, takeId: string): Promise<boolean> => {
-  patchState({ busyAction: `promote:${itemId}` });
+  const release = beginBusyAction(`promote:${itemId}`);
   try {
     const scope = state.items.find((item) => item.id === itemId)?.scope ?? state.scope;
     const res = await fetchJson<{ ok: true; takeId: string; tryFile: string }>(
@@ -2261,14 +2403,16 @@ export const promotePlaygroundToTake = async (itemId: string, takeId: string): P
         body: JSON.stringify({ itemId, takeId }),
       },
     );
-    patchState({ busyAction: null });
+    release();
     await loadVoiceTakes();
     say(`Added to Take ${res.takeId} alternatives (${res.tryFile})`);
     return true;
   } catch (e) {
-    patchState({ busyAction: null });
+    release();
     say(e instanceof Error ? e.message : "Could not send to film take");
     return false;
+  } finally {
+    release();
   }
 };
 
@@ -2318,7 +2462,7 @@ export const useVoicePlaygroundSelector = <T>(
   useEffect(() => {
     if (!enabled) return;
     consumers++;
-    if (!state.loaded && !state.loading) {
+    if (!isPlaygroundLoaded(state) && state.loadState.status !== "loading") {
       void loadPlaygroundAll();
     }
     return () => {
@@ -2373,7 +2517,7 @@ export const copyPlaygroundToScope = async (id: string) => {
     (state.items.find((item) => item.id === id)?.scope ?? state.scope) === "global"
       ? "project"
       : "global";
-  patchState({ busyAction: `copy:${id}` });
+  const release = beginBusyAction(`copy:${id}`);
   try {
     await fetchJson(`/api/voice/playground/items/${encodeURIComponent(id)}/copies`, {
       method: "POST",
@@ -2384,7 +2528,7 @@ export const copyPlaygroundToScope = async (id: string) => {
   } catch (error) {
     say(error instanceof Error ? error.message : "Unable to copy; try again");
   } finally {
-    patchState({ busyAction: null });
+    release();
   }
 };
 export const togglePlaygroundVoiceFavorite = async (
@@ -2508,7 +2652,7 @@ export const archiveFilmTake = async (
   { reveal = true } = {},
 ): Promise<VoicePlaygroundItem | null> => {
   if (entry.origin !== "film_take" || !entry.audioUrl) return null;
-  patchState({ busyAction: `archive:${entry.id}` });
+  const release = beginBusyAction(`archive:${entry.id}`);
   try {
     const { item } = await fetchJson<{ item: VoicePlaygroundItem }>(
       `/api/voice/playground/film-takes/${encodeURIComponent(entry.id)}/copies?scope=project`,
@@ -2533,7 +2677,7 @@ export const archiveFilmTake = async (
     say(error instanceof Error ? error.message : "Unable to save recording; try again");
     return null;
   } finally {
-    patchState({ busyAction: null });
+    release();
   }
 };
 
@@ -2569,7 +2713,7 @@ export const savePlaygroundTemplate = async (
     );
     return false;
   }
-  patchState({ busyAction: "template" });
+  const release = beginBusyAction("template");
   try {
     const id = update ? state.draft.templateId : undefined;
     const draft = { ...state.draft, templateId: undefined, templateScope: undefined };
@@ -2589,7 +2733,7 @@ export const savePlaygroundTemplate = async (
     say(error instanceof Error ? error.message : "Unable to save template; try again");
     return false;
   } finally {
-    patchState({ busyAction: null });
+    release();
   }
 };
 export const updatePlaygroundTemplate = async (
@@ -2623,7 +2767,7 @@ export const loadPlaygroundUsage = async () => {
 };
 export const usePlaygroundTakeInFilm = async (entry: UnifiedPlaygroundEntry, takeId: string) => {
   if (!takeId || !entry.playgroundItem) return false;
-  patchState({ busyAction: `use:${entry.id}` });
+  const release = beginBusyAction(`use:${entry.id}`);
   try {
     const scope = entry.playgroundItem.scope ?? "project";
     const result = await fetchJson<{ ok: boolean; tryFile: string }>(
@@ -2651,7 +2795,7 @@ export const usePlaygroundTakeInFilm = async (entry: UnifiedPlaygroundEntry, tak
     say(error instanceof Error ? error.message : "Unable to switch take; try again");
     return false;
   } finally {
-    patchState({ busyAction: null });
+    release();
   }
 };
 
@@ -2720,7 +2864,7 @@ export const saveUploadedSttSource = async (file: File) => {
 
 export const saveUploadedVoiceSource = async (file: File) => {
   const sequence = ++sourceUploadSeq;
-  patchState({ busyAction: "source" });
+  const release = beginBusyAction("source");
   try {
     const form = new FormData();
     form.set("audio", file);
@@ -2738,16 +2882,27 @@ export const saveUploadedVoiceSource = async (file: File) => {
   } catch (error) {
     say(error instanceof Error ? error.message : "Unable to save source; choose the file again");
   } finally {
-    if (sequence === sourceUploadSeq && state.busyAction === "source")
-      patchState({ busyAction: null });
+    release();
   }
 };
 
-let cloneLoad: Promise<void> | null = null,
-  cloneObservation: Promise<void> | null = null;
-let cloneLoadQueued = false,
-  cloneMonitor: ReturnType<typeof setTimeout> | null = null,
-  cloneMonitorUntil = 0;
+type CloneLoadState =
+  | { status: "idle" }
+  | { status: "loading"; promise: Promise<void>; rerun: boolean };
+type CloneObservationState = { status: "idle" } | { status: "observing" };
+type CloneMonitorState =
+  | { status: "idle" }
+  | { status: "armed"; until: number }
+  | { status: "scheduled"; until: number; timer: ReturnType<typeof setTimeout> };
+
+let cloneLoad: CloneLoadState = { status: "idle" };
+const getCloneLoad = (): CloneLoadState => cloneLoad;
+let cloneObservation: CloneObservationState = { status: "idle" };
+let cloneMonitor: CloneMonitorState = { status: "idle" };
+const resetCloneMonitor = () => {
+  if (cloneMonitor.status === "scheduled") clearTimeout(cloneMonitor.timer);
+  cloneMonitor = { status: "idle" };
+};
 const ensureCloneMonitor = () => {
   const active = state.clones?.some(
     (clone) =>
@@ -2758,24 +2913,32 @@ const ensureCloneMonitor = () => {
         (!clone.lastCheckedAt || clone.previewStale)),
   );
   if (!active) {
-    if (cloneMonitor) clearTimeout(cloneMonitor);
-    cloneMonitor = null;
-    cloneMonitorUntil = 0;
+    resetCloneMonitor();
     return;
   }
-  if (!state.status.configured || cloneMonitor || state.clonesCloudError) return;
-  cloneMonitorUntil ||= Date.now() + 15 * 60_000;
-  if (Date.now() >= cloneMonitorUntil) {
+  if (
+    !state.status.configured ||
+    cloneMonitor.status === "scheduled" ||
+    state.cloneCloudState.status === "error"
+  )
+    return;
+  const until = cloneMonitor.status === "armed" ? cloneMonitor.until : Date.now() + 15 * 60_000;
+  if (Date.now() >= until) {
+    cloneMonitor = { status: "armed", until };
     patchState({
-      clonesCloudError:
-        "Processing is taking longer. Use Refresh to check the existing voice; nothing was submitted again.",
+      cloneCloudState: {
+        status: "error",
+        error:
+          "Processing is taking longer. Use Refresh to check the existing voice; nothing was submitted again.",
+      },
     });
     return;
   }
-  cloneMonitor = setTimeout(() => {
-    cloneMonitor = null;
+  const timer = setTimeout(() => {
+    cloneMonitor = { status: "armed", until };
     void loadPlaygroundClones({ observe: true });
   }, 2000);
+  cloneMonitor = { status: "scheduled", until, timer };
 };
 export const loadPlaygroundClones = async ({ observe = false } = {}) => {
   const needsCloud = state.clones?.some(
@@ -2786,31 +2949,39 @@ export const loadPlaygroundClones = async ({ observe = false } = {}) => {
           !clone.previewError &&
           (!clone.lastCheckedAt || clone.previewStale))),
   );
-  if (observe && needsCloud && state.status.configured && !cloneObservation) {
-    cloneObservation = fetchJson(
-      "/api/voice/playground/clones?scope=project&includeGlobal=1&refresh=1",
-      { signal: AbortSignal.timeout(120_000) },
-    )
-      .then(async () => {
-        patchState({ clonesCloudError: null });
+  if (observe && needsCloud && state.status.configured && cloneObservation.status === "idle") {
+    cloneObservation = { status: "observing" };
+    void (async () => {
+      try {
+        await fetchJson("/api/voice/playground/clones?scope=project&includeGlobal=1&refresh=1", {
+          signal: AbortSignal.timeout(120_000),
+        });
+        patchState({ cloneCloudState: { status: "ok" } });
         await loadPlaygroundClones();
-      })
-      .catch((error) =>
+      } catch (error) {
         patchState({
-          clonesCloudError:
-            error instanceof Error ? error.message : "Unable to check GenVoice clone status",
-        }),
-      )
-      .finally(() => {
-        cloneObservation = null;
-      });
+          cloneCloudState: {
+            status: "error",
+            error: error instanceof Error ? error.message : "Unable to check GenVoice clone status",
+          },
+        });
+      } finally {
+        cloneObservation = { status: "idle" };
+      }
+    })();
   }
-  if (cloneLoad) {
-    cloneLoadQueued = true;
-    return cloneLoad;
+  if (cloneLoad.status === "loading") {
+    cloneLoad = { ...cloneLoad, rerun: true };
+    return cloneLoad.promise;
   }
-  cloneLoad = (async () => {
-    patchState({ clonesLoading: true, clonesError: null });
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  cloneLoad = { status: "loading", promise, rerun: false };
+  patchState({ clonesState: { status: "loading" } });
+  void (async () => {
+    let nextError: string | null = null;
     try {
       const data = await fetchJson<{
         clones: PlaygroundClone[];
@@ -2837,19 +3008,17 @@ export const loadPlaygroundClones = async ({ observe = false } = {}) => {
       patchState({ clones: data.clones, favoriteVoices: data.favoriteVoices });
       ensureCloneMonitor();
     } catch (error) {
-      patchState({
-        clonesError: error instanceof Error ? error.message : "Unable to load saved voices",
-      });
+      nextError = error instanceof Error ? error.message : "Unable to load saved voices";
     } finally {
-      cloneLoad = null;
-      patchState({ clonesLoading: false });
-      if (cloneLoadQueued) {
-        cloneLoadQueued = false;
-        void loadPlaygroundClones();
-      }
+      const current = getCloneLoad();
+      const rerun = current.status === "loading" && current.rerun;
+      cloneLoad = { status: "idle" };
+      patchState({ clonesState: { status: "idle", error: nextError } });
+      if (rerun) void loadPlaygroundClones();
+      resolve();
     }
   })();
-  return cloneLoad;
+  return promise;
 };
 export const createPlaygroundClone = async (
   file: File,
@@ -2863,8 +3032,8 @@ export const createPlaygroundClone = async (
     `/api/voice/playground/clones?scope=${scope}`,
     { method: "POST", body, signal: AbortSignal.timeout(90_000) },
   );
-  cloneMonitorUntil = 0;
-  patchState({ clonesCloudError: null });
+  resetCloneMonitor();
+  patchState({ cloneCloudState: { status: "ok" } });
   await loadPlaygroundClones();
   void loadPlaygroundAll({ liveStatus: true });
   return result.clone;
@@ -2904,8 +3073,8 @@ export const cloneAction = async (
     },
   );
   if (action !== "cloud") {
-    cloneMonitorUntil = 0;
-    patchState({ clonesCloudError: null });
+    resetCloneMonitor();
+    patchState({ cloneCloudState: { status: "ok" } });
     await loadPlaygroundClones();
   }
   if (action === "retry" || action === "submit") void loadPlaygroundAll({ liveStatus: true });

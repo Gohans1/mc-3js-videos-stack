@@ -166,6 +166,16 @@ function RangeBar({
   );
 }
 
+type ExportLifecycle =
+  | { status: "idle" }
+  | { status: "exporting"; frame: number; total: number; abort: AbortController }
+  | { status: "canceling"; abort: AbortController }
+  | { status: "ready"; url: string; name: string }
+  | { status: "error"; message: string };
+
+const isExportBusy = (state: ExportLifecycle) =>
+  state.status === "exporting" || state.status === "canceling";
+
 export function ClipExport({ className }: { className?: string }) {
   useStudio((s) => s.metaRev);
   const ratio = useStudio((s) => s.ratio);
@@ -173,19 +183,40 @@ export function ClipExport({ className }: { className?: string }) {
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState<[number, number]>(() => defaultSpanForTime(S.t, inOut));
   const [quality, setQuality] = useState<QualityPreset>("540p");
-  const [progress, setProgress] = useState<{ frame: number; total: number } | null>(null);
-  const [ready, setReady] = useState<{ url: string; name: string } | null>(null);
-  const [error, setError] = useState("");
-  const abortRef = useRef<AbortController | null>(null);
+  const [controller] = useState(() => {
+    let current: ExportLifecycle = { status: "idle" };
+    return {
+      get: () => current,
+      set: (next: ExportLifecycle) => {
+        const prev = current;
+        current = next;
+        if (
+          prev.status === "exporting" &&
+          (next.status === "canceling" ||
+            (next.status === "exporting" && next.abort !== prev.abort))
+        ) {
+          prev.abort.abort();
+        }
+        if (prev.status === "ready" && (next.status !== "ready" || next.url !== prev.url)) {
+          URL.revokeObjectURL(prev.url);
+        }
+      },
+      dispose: () => {
+        const prev = current;
+        current = { status: "idle" };
+        if (prev.status === "exporting" || prev.status === "canceling") prev.abort.abort();
+        if (prev.status === "ready") URL.revokeObjectURL(prev.url);
+      },
+    };
+  });
+  const [job, setJob] = useState<ExportLifecycle>({ status: "idle" });
 
-  const revokeReady = () => {
-    setReady((prev) => {
-      if (prev) URL.revokeObjectURL(prev.url);
-      return null;
-    });
+  const transition = (next: ExportLifecycle) => {
+    controller.set(next);
+    setJob(next);
   };
 
-  useEffect(() => () => revokeReady(), []);
+  useEffect(() => () => controller.dispose(), [controller]);
 
   const [from, to] = range;
   const preset = QUALITY_INFO[quality];
@@ -200,41 +231,51 @@ export function ClipExport({ className }: { className?: string }) {
     const a = r3(Math.max(0, Math.min(DURATION - MIN_SPAN, nextFrom))),
       b = r3(Math.min(DURATION, Math.max(a + MIN_SPAN, nextTo)));
     setRange([a, b]);
-    revokeReady();
-    setError("");
+    if (!isExportBusy(controller.get())) transition({ status: "idle" });
+  };
+
+  const updateQuality = (next: QualityPreset) => {
+    setQuality(next);
+    if (!isExportBusy(controller.get())) transition({ status: "idle" });
   };
 
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
-    if (nextOpen && !progress) {
+    const cur = controller.get();
+    if (nextOpen && !isExportBusy(cur)) {
       setRange(defaultSpanForTime(S.t, inOut));
-      setError("");
+      if (cur.status === "error") transition({ status: "idle" });
     }
   };
 
   const renderAndDownload = async () => {
-    if (progress) return;
+    if (isExportBusy(controller.get())) return;
     if (typeof VideoEncoder !== "function") {
-      setError("Open Studio in Chrome or Edge to export MP4 clips.");
+      transition({ status: "error", message: "Open Studio in Chrome or Edge to export MP4 clips." });
       return;
     }
     if (!S.render || !S.el?.canvas) {
-      setError("Preview is still loading. Wait for the picture to appear, then export again.");
+      transition({
+        status: "error",
+        message: "Preview is still loading. Wait for the picture to appear, then export again.",
+      });
       return;
     }
-    revokeReady();
-    setError("");
-    const abort = new AbortController();
-    abortRef.current = abort;
 
     const canvas = document.createElement("canvas");
     canvas.width = outW;
     canvas.height = outH;
     const ctx = canvas.getContext("2d");
     if (!ctx) {
-      setError("Unable to prepare the export canvas. Reload the page and try again.");
+      transition({
+        status: "error",
+        message: "Unable to prepare the export canvas. Reload the page and try again.",
+      });
       return;
     }
+
+    const abort = new AbortController();
+    transition({ status: "exporting", frame: 0, total: frameCount, abort });
 
     const wasPlaying = S.playing,
       savedT = S.t,
@@ -246,7 +287,6 @@ export function ClipExport({ className }: { className?: string }) {
 
     let output: Output<Mp4OutputFormat, BufferTarget> | null = null;
     try {
-      setProgress({ frame: 0, total: frameCount });
       const { AudioBufferSource, BufferTarget, CanvasSource, Mp4OutputFormat, Output } =
         await import("mediabunny");
       if (abort.signal.aborted) return;
@@ -262,6 +302,10 @@ export function ClipExport({ className }: { className?: string }) {
       const spanStart = firstFrame / FPS,
         spanEnd = (lastFrame + 1) / FPS;
       const audioBuffer = await renderAudioSpan(spanStart, spanEnd, abort.signal);
+      if (abort.signal.aborted) {
+        await output.cancel();
+        return;
+      }
       let audioSource: AudioBufferSource | null = null;
       if (audioBuffer && typeof AudioEncoder !== "undefined") {
         let audioCodec: "aac" | "opus" = "aac";
@@ -271,12 +315,20 @@ export function ClipExport({ className }: { className?: string }) {
           numberOfChannels: audioBuffer.numberOfChannels,
           bitrate: 96_000,
         }).catch(() => ({ supported: false }));
+        if (abort.signal.aborted) {
+          await output.cancel();
+          return;
+        }
         if (!aac.supported) audioCodec = "opus";
         audioSource = new AudioBufferSource({ codec: audioCodec, bitrate: 96_000 });
         output.addAudioTrack(audioSource);
       }
 
       await output.start();
+      if (abort.signal.aborted) {
+        await output.cancel();
+        return;
+      }
       if (audioSource && audioBuffer) {
         await audioSource.add(audioBuffer);
         audioSource.close();
@@ -290,10 +342,18 @@ export function ClipExport({ className }: { className?: string }) {
         const t = f / FPS;
         if (S.render.renderFrame) await S.render.renderFrame(t);
         else S.render(t);
+        if (abort.signal.aborted) {
+          await output.cancel();
+          return;
+        }
         ctx.clearRect(0, 0, outW, outH);
         ctx.drawImage(S.el.canvas, 0, 0, outW, outH);
         await videoSource.add((f - firstFrame) / FPS, 1 / FPS);
-        setProgress({ frame: f - firstFrame + 1, total: frameCount });
+        if (abort.signal.aborted) {
+          await output.cancel();
+          return;
+        }
+        transition({ status: "exporting", frame: f - firstFrame + 1, total: frameCount, abort });
         if ((f - firstFrame) % 2 === 1) await new Promise((r) => setTimeout(r, 0));
       }
 
@@ -304,6 +364,7 @@ export function ClipExport({ className }: { className?: string }) {
 
       videoSource.close();
       await output.finalize();
+      if (abort.signal.aborted) return;
       const buffer = output.target.buffer;
       if (!buffer) throw new Error("MP4 buffer missing");
 
@@ -311,27 +372,32 @@ export function ClipExport({ className }: { className?: string }) {
       const fileName = `${safeFilm}-${spanStart.toFixed(1)}s-${spanEnd.toFixed(1)}s-${quality}.mp4`;
       const blob = new Blob([buffer], { type: "video/mp4" });
       const url = URL.createObjectURL(blob);
-      setReady({ url, name: fileName });
+      transition({ status: "ready", url, name: fileName });
       triggerDownload(url, fileName);
       say(`Exported ${fileName} (${outW}×${outH})`);
     } catch (e) {
       if (!abort.signal.aborted) {
         const reason = e instanceof Error ? e.message.replace(/\.+$/, "") : "";
-        setError(
-          reason
+        transition({
+          status: "error",
+          message: reason
             ? `Unable to export MP4 clip (${reason}). Try a shorter range or lower quality.`
             : "Unable to export MP4 clip. Try a shorter range or lower quality.",
-        );
+        });
       }
       await output?.cancel().catch(() => {});
     } finally {
-      abortRef.current = null;
-      setProgress(null);
       if (free) free.on = wasFree;
       S.t = savedT;
       S.dirty = true;
+      const cur = controller.get();
+      if ((cur.status === "exporting" || cur.status === "canceling") && cur.abort === abort) {
+        transition({ status: "idle" });
+      }
     }
   };
+
+  const exporting = isExportBusy(job);
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
@@ -342,12 +408,12 @@ export function ClipExport({ className }: { className?: string }) {
               variant="toolbar"
               size="icon-lg"
               aria-label="Export clip (MP4)"
-              aria-busy={!!progress}
+              aria-busy={exporting}
               className={cn("pointer-coarse:size-10", className)}
             />
           }
         >
-          {progress ? <Loader2 className="motion-safe:animate-spin" /> : <Clapperboard />}
+          {exporting ? <Loader2 className="motion-safe:animate-spin" /> : <Clapperboard />}
         </PopoverTrigger>
       </Tip>
       <PopoverContent
@@ -512,25 +578,25 @@ export function ClipExport({ className }: { className?: string }) {
                   ariaLabel: "540p",
                 },
               ]}
-              onChange={setQuality}
+              onChange={updateQuality}
             />
           </div>
 
-          {progress && (
+          {job.status === "exporting" && (
             <div className="flex flex-col gap-1.5">
               <div className="text-ui flex items-center justify-between tabular-nums">
                 <span className="text-primary-text font-medium">
-                  Exporting frame {progress.frame} of {progress.total}…
+                  Exporting frame {job.frame} of {job.total}…
                 </span>
                 <span className="text-foreground">
-                  {Math.round((progress.frame / Math.max(1, progress.total)) * 100)}%
+                  {Math.round((job.frame / Math.max(1, job.total)) * 100)}%
                 </span>
               </div>
               <div className="bg-scrubber-track h-1.5 w-full overflow-hidden rounded-full">
                 <div
                   style={
                     {
-                      "--ce-prog": String(progress.frame / Math.max(1, progress.total)),
+                      "--ce-prog": String(job.frame / Math.max(1, job.total)),
                     } as CSSProperties
                   }
                   className="bg-primary ease-studio-out h-full w-full origin-left scale-x-(--ce-prog) transition-transform duration-75 motion-reduce:transition-none"
@@ -539,23 +605,23 @@ export function ClipExport({ className }: { className?: string }) {
             </div>
           )}
 
-          {error && (
+          {job.status === "error" && (
             <p role="alert" className="text-destructive text-ui/relaxed">
-              {error}
+              {job.message}
             </p>
           )}
 
-          {ready && (
+          {job.status === "ready" && (
             <div className="bg-card border-hairline flex items-center justify-between gap-2 rounded-md border px-2.5 py-2">
               <span className="text-ok-text text-ui flex min-w-0 items-center gap-1.5 tabular-nums">
                 <Check className="size-3.5 flex-none" />
-                <span className="truncate">{ready.name}</span>
+                <span className="truncate">{job.name}</span>
               </span>
               <Button
                 variant="secondary"
                 size="sm"
                 className="flex-none"
-                onClick={() => triggerDownload(ready.url, ready.name)}
+                onClick={() => triggerDownload(job.url, job.name)}
               >
                 <Download data-icon="inline-start" aria-hidden />
                 Download again
@@ -564,9 +630,17 @@ export function ClipExport({ className }: { className?: string }) {
           )}
 
           <div className="flex items-center justify-end gap-2 pt-0.5">
-            {progress ? (
-              <Button variant="remove" size="md" onClick={() => abortRef.current?.abort()}>
+            {job.status === "exporting" ? (
+              <Button
+                variant="remove"
+                size="md"
+                onClick={() => transition({ status: "canceling", abort: job.abort })}
+              >
                 Cancel export
+              </Button>
+            ) : job.status === "canceling" ? (
+              <Button variant="remove" size="md" disabled>
+                Canceling…
               </Button>
             ) : (
               <>

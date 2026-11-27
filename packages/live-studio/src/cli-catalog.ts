@@ -40,6 +40,7 @@ export interface CliVisibleWhen {
   unsetOrIn?: readonly string[];
   unsetOrStartsWith?: readonly string[];
   and?: CliVisibleWhen;
+  or?: CliVisibleWhen;
 }
 
 export interface CliArgDef {
@@ -3833,8 +3834,9 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         key: "remake",
         label: "Remake Video",
         type: "string",
-        requiredWhen: { field: "operation", in: ["compare", "sidebyside", "frames"] },
+        requiredWhen: { field: "operation", in: ["compare", "sidebyside"] },
         visibleWhen: { field: "operation", in: ["compare", "sidebyside", "frames"] },
+        hint: "Optional for frames (omit for single-source timecoded stills).",
       },
     ],
     flags: [
@@ -3857,8 +3859,10 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         exclusiveGroup: "reference-window",
         visibleWhen: {
           field: "operation",
-          in: ["sidebyside", "frames"],
+          in: ["sidebyside"],
+          or: { field: "operation", in: ["frames"], and: { field: "remake", nonEmpty: true } },
         },
+        hint: "Two-video sidebyside/frames only.",
       },
       {
         key: "--range",
@@ -3868,6 +3872,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         placeholder: "1:45,3:35",
         exclusiveGroup: "reference-window",
         visibleWhen: { field: "operation", in: ["sidebyside", "frames"] },
+        hint: "Film seconds (from,to). Omit on span_*.mp4 to auto-align; floor end to min(refEnd, remEnd).",
       },
       {
         key: "--fps",
@@ -3891,7 +3896,12 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Timecode Strip Label",
         type: "string",
         placeholder: "REFERENCE",
-        visibleWhen: { field: "operation", in: ["timecode"] },
+        visibleWhen: {
+          field: "operation",
+          in: ["timecode"],
+          or: { field: "operation", in: ["frames"], and: { field: "remake", nonEmpty: false } },
+        },
+        hint: "Single-video timecode or single-source frames only (omit Remake Video).",
       },
       {
         key: "--short-edge",
@@ -3932,7 +3942,12 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         label: "Side-by-Side Layout",
         type: "enum",
         options: ["auto", "hstack", "vstack"],
-        visibleWhen: { field: "operation", in: ["sidebyside", "frames"] },
+        visibleWhen: {
+          field: "operation",
+          in: ["sidebyside"],
+          or: { field: "operation", in: ["frames"], and: { field: "remake", nonEmpty: true } },
+        },
+        hint: "Two-video sidebyside/frames only.",
       },
       {
         key: "--name",
@@ -4155,6 +4170,28 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         hint: "Normalized rectangle within the frame, rendered at native pixel density.",
       },
       {
+        key: "--ref",
+        flag: "--ref",
+        label: "Reference Video",
+        type: "string",
+        visibleWhen: { field: "target", in: ["stills", "poster"] },
+        placeholder: "references/ref.mp4",
+        hint: "Place each still/poster beside the reference frame (renders/vs_*.jpg) with luma, saturation, and sharpness ratio. Incompatible with --inspect, --views, --crop, --entry, and --list.",
+      },
+      {
+        key: "--ref-region",
+        flag: "--ref-region",
+        label: "Reference Region (x,y,w,h)",
+        type: "string",
+        visibleWhen: {
+          field: "target",
+          in: ["stills", "poster"],
+          and: { field: "--ref", nonEmpty: true },
+        },
+        placeholder: "0.2,0.2,0.5,0.5",
+        hint: "Normalized x,y,w,h subject box for mean RGB, brightness, and sharpness ratio isolated from burnt-in captions.",
+      },
+      {
         key: "--compare",
         flag: "--compare",
         label: "Compare with previous still",
@@ -4169,8 +4206,8 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         type: "string",
         visibleWhen: { field: "target", in: ["stills", "all"] },
         tier: "common",
-        placeholder: "pops or pops:20,45 or touch:20,45 or motion:cam,81,83",
-        hint: "Times are heard seconds. Pops writes renders/pops.json and fails on pops or slides. Touch without a target checks every player.",
+        placeholder: "pops or pops:20,45 or touch:handR,20,45 or motion:cam,81,83",
+        hint: "Times are heard seconds. Pops (30 fps) writes renders/pops.json (misses .visible pop-ins and 3+ frame snaps; pair with framecheck). Prefer targeted 30 fps touch:<part>,<from>,<to> for thick solid contacts over slow 10 fps whole-film touch.",
       },
       {
         key: "--fresh-cache",
@@ -4189,7 +4226,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         visibleWhen: { field: "target", in: ["stills", "clip", "final", "poster", "all"] },
         tier: "advanced",
         placeholder: "8",
-        hint: "Motion blur: stills and clip default to 1, final and poster to 8.",
+        hint: "Motion blur: stills and clip default to 1, final and poster to 8. Draft forces apertureSamples=1; --samples 1 does not turn off post-DOF (fstop > 0).",
       },
       {
         key: "--res",
@@ -4548,7 +4585,13 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
         flags: [
           { key: "--at", flag: "--at", label: "File Seconds", type: "string", placeholder: "5,10" },
           { key: "--from", flag: "--from", label: "From File Second", type: "string" },
-          { key: "--to", flag: "--to", label: "To File Second", type: "string" },
+          {
+            key: "--to",
+            flag: "--to",
+            label: "To File Second",
+            type: "string",
+            hint: "Omit to scan to exact probed video duration.",
+          },
           {
             key: "--frames",
             flag: "--frames",
@@ -4562,6 +4605,7 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
             label: "Band x,y,w,h (fractions)",
             type: "string",
             placeholder: "0,0.7,1,0.2",
+            hint: "Studio drafts carry a bottom bar (0,0,1,0.946 excludes it on 9:16).",
           },
           { key: "--captions", flag: "--captions", label: "Timed Captions", type: "boolean" },
           {
@@ -5727,6 +5771,63 @@ export const CLI_COMMANDS: readonly CliCommand[] = [
       guard: {
         disabled: true,
         reason: "Starts a long-lived Live Studio server; run from a terminal instead.",
+      },
+    },
+  },
+  {
+    id: "studio:lite",
+    label: "studio:lite",
+    category: "dev",
+    summary:
+      "Launch a film's lightweight Live Studio Lite server for desktop & mobile MP4 review & notes (guarded in Live Studio UI; --help is safe).",
+    runner: "bun-script",
+    target: "studio:lite",
+    cwdModes: ["film"],
+    args: [
+      {
+        key: "port",
+        label: "Port (Optional)",
+        type: "number",
+        placeholder: "5330",
+        hint: "Defaults to film studio port + 1000 (fallback 5321)",
+      },
+    ],
+    flags: [
+      { key: "--lan", flag: "--lan", label: "Bind LAN (0.0.0.0)", type: "boolean", tier: "common" },
+      {
+        key: "--detach",
+        flag: "--detach",
+        label: "Start Detached (Background)",
+        type: "boolean",
+        exclusiveGroup: "studio-lite-mode",
+        tier: "common",
+      },
+      {
+        key: "--status",
+        flag: "--status",
+        label: "Check Running Status",
+        type: "boolean",
+        exclusiveGroup: "studio-lite-mode",
+        tier: "common",
+      },
+      {
+        key: "--stop",
+        flag: "--stop",
+        label: "Stop Recorded Lite Studio",
+        type: "boolean",
+        exclusiveGroup: "studio-lite-mode",
+        tier: "common",
+      },
+    ],
+    meta: {
+      effect: "daemon",
+      cost: "free",
+      speed: "short",
+      cancellable: false,
+      helpMode: "flag",
+      guard: {
+        disabled: true,
+        reason: "Starts a long-lived Live Studio Lite server; run from a terminal instead.",
       },
     },
   },
@@ -6973,11 +7074,7 @@ function normalizeConditionValues(raw: CliArgValue): string[] {
   return parts.map((s) => s.trim()).filter(Boolean);
 }
 
-export function isFieldVisible(
-  rule: CliVisibleWhen | undefined,
-  values: Record<string, CliArgValue>,
-): boolean {
-  if (!rule) return true;
+function matchesCondition(rule: CliVisibleWhen, values: Record<string, CliArgValue>): boolean {
   if (rule.and && !isFieldVisible(rule.and, values)) return false;
   const items = normalizeConditionValues(values[rule.field]);
   if (rule.nonEmpty !== undefined && (rule.nonEmpty ? items.length === 0 : items.length > 0)) {
@@ -6993,6 +7090,14 @@ export function isFieldVisible(
     );
   }
   return true;
+}
+
+export function isFieldVisible(
+  rule: CliVisibleWhen | undefined,
+  values: Record<string, CliArgValue>,
+): boolean {
+  if (!rule) return true;
+  return matchesCondition(rule, values) || (Boolean(rule.or) && isFieldVisible(rule.or, values));
 }
 
 export function isFieldRequired(
@@ -7332,7 +7437,7 @@ export function buildCliInvocation(
       validationErrors.push("Give Video or Image Files, not both.");
     }
     if (
-      command.id === "studio" &&
+      (command.id === "studio" || command.id === "studio:lite") &&
       isBooleanActive(flags["--lan"]) &&
       (isBooleanActive(flags["--stop"]) || isBooleanActive(flags["--status"]))
     ) {
@@ -7404,6 +7509,7 @@ export function buildCliInvocation(
       argvTokens.push(...tokens);
     }
 
+    const activeVisibleFlags = new Set<string>();
     for (const def of chain.flagsDef) {
       if (!isFieldVisible(def.visibleWhen, combinedFieldValues)) continue;
       const raw = flags[def.key];
@@ -7415,6 +7521,7 @@ export function buildCliInvocation(
         continue;
       }
       if (!active) continue;
+      activeVisibleFlags.add(def.key);
 
       if (def.type === "boolean") {
         argvTokens.push(def.flag);
@@ -7451,6 +7558,17 @@ export function buildCliInvocation(
       if (valStr) {
         validateArgumentTokens(def, [valStr], validationErrors);
         argvTokens.push(def.flag, valStr);
+      }
+    }
+
+    if (command.id === "render" && activeVisibleFlags.has("--ref")) {
+      const conflicts = ["--inspect", "--views", "--crop", "--entry", "--list"].filter((flag) =>
+        activeVisibleFlags.has(flag),
+      );
+      if (conflicts.length) {
+        validationErrors.push(
+          `--ref cannot be combined with ${conflicts.join(", ")} (they draw another picture than the reference's).`,
+        );
       }
     }
 

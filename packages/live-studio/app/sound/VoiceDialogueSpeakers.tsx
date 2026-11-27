@@ -48,7 +48,7 @@ export function DialogueSpeakersPanel({
   const connection = draft.connection ?? "genvoice";
   const direct = connection !== "genvoice";
   const google = connection === "google";
-  const catalog = direct ? pg.serviceCatalogs?.[connection] : pg.catalog;
+  const catalog = direct ? pg.serviceCatalogs?.[connection]?.catalog : pg.catalog;
   const configured = direct
     ? pg.status.connections?.[connection]?.configured
     : pg.status.configured;

@@ -447,3 +447,24 @@ test("a live history read keeps an asset successfully added by the CLI", (t) => 
     film.stop();
   }
 });
+
+test("history.start after history.close is a safe no-op that does not touch the closed database", (t) => {
+  const { project } = setup(t);
+  let errors = 0;
+  let changes = 0;
+  const h = openFilmHistory(project, {
+    onError: () => {
+      errors++;
+    },
+    changed: () => {
+      changes++;
+    },
+  });
+  h.close();
+  assert.doesNotThrow(() => {
+    h.start();
+    h.close();
+  });
+  assert.equal(errors, 0);
+  assert.equal(changes, 0);
+});

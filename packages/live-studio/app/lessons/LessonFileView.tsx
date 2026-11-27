@@ -380,7 +380,9 @@ export function LessonFileView({
             title={folder ? `${folder}/${displayPath}` : displayPath}
           >
             <SaveStatus
-              state={edit ? (oversizedDraft || edit.failed ? "fail" : "busy") : null}
+              state={
+                edit ? (oversizedDraft || edit.sync.status === "failed" ? "fail" : "busy") : null
+              }
               idleText="Saved"
               failText="Draft"
             />
@@ -468,7 +470,7 @@ export function LessonFileView({
         </Popover>
         <ConfirmDeleteButton path={displayPath} scope={scope} size="icon-lg" onConfirm={onDelete} />
       </div>
-      {(oversizedDraft || edit?.failed) && (
+      {(oversizedDraft || edit?.sync.status === "failed") && (
         <div className="flex flex-none flex-wrap items-center gap-2 px-3 pb-2">
           <p role="status" className="text-warn-text min-w-0 flex-1 text-sm/relaxed wrap-anywhere">
             {oversizedDraft

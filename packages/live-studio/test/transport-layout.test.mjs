@@ -283,7 +283,7 @@ beforeEach(async () => {
     const t = window.__TL_TEST__;
     t.setAutoSave(true);
     t.setLayout(400, 340);
-    t.set({ free: false, aiActivity: true, cam: true, still: null, ratio: "16:9", noteReturn: null });
+    t.set({ free: false, aiActivity: true, cam: true, snapshot: { status: "none" }, ratio: "16:9", noteReturn: null });
   })()`);
   await page.evaluate("window.__TL_TEST__.resetCam()");
   await waitUntil(`!document.querySelector('[aria-label="Unconfirmed Studio changes"]')`);
@@ -293,7 +293,15 @@ test("PendingChangesBar sits in its own strip above the control row and collapse
   await page.evaluate(`(() => {
     const t = window.__TL_TEST__;
     t.setAutoSave(false);
-    t.set({ free: true, noteReturn: 1, still: { url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", t: 0 } });
+    t.set({
+      free: true,
+      noteReturn: 1,
+      snapshot: {
+        status: "captured",
+        still: { url: "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", t: 0 },
+        comparing: false,
+      },
+    });
   })()`);
   await waitUntil(`document.querySelector('[role="radiogroup"][aria-label="Camera workspace"]')`);
   await page.evaluate(`(() => {

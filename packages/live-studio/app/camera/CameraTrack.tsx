@@ -56,15 +56,21 @@ const openTab = (i: number, side: "cam" | "anim" | "transition", slot?: Slot) =>
   S.dirty = true;
 };
 
+type CameraContextTarget =
+  | { kind: "none" }
+  | { kind: "key"; index: number }
+  | { kind: "shot"; shot: number };
+
 export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
   const data = useStudio((s) => s.shots),
     sound = useStudio((s) => s.sound),
     timing = useStudio((s) => s.timing);
-  const [shot, setShot] = useState(-1);
-  const [keyIndex, setKeyIndex] = useState(-1);
+  const [contextTarget, setContextTarget] = useState<CameraContextTarget>({ kind: "none" });
   useStudio((s) => s.camRev);
   useStudio((s) => s.shotsRev);
-  const key = keys[keyIndex];
+  const keyIndex = contextTarget.kind === "key" ? contextTarget.index : -1;
+  const shot = contextTarget.kind === "shot" ? contextTarget.shot : -1;
+  const key = keyIndex >= 0 ? keys[keyIndex] : undefined;
   const hardCut = isHardCut(keyIndex);
   const canMatch = canMatchCameraKey(keyIndex);
   const [a, b] = shot >= 0 ? shotSpan(shot) : [0, DURATION];
@@ -77,14 +83,18 @@ export function CameraTrack({ bind, shown }: { bind: Bind; shown: boolean }) {
         className={cn(!shown && "hidden")}
         onContextMenu={(e) => {
           const i = cameraKeyAtPointer(e);
-          setKeyIndex(i);
           if (i >= 0) {
+            setContextTarget({ kind: "key", index: i });
             setKey(i);
             return;
           }
           const s = shotAtPointer(e);
-          setShot(s);
-          if (s >= 0) pickShot(s);
+          if (s >= 0) {
+            setContextTarget({ kind: "shot", shot: s });
+            pickShot(s);
+            return;
+          }
+          setContextTarget({ kind: "none" });
         }}
       >
         <canvas

@@ -594,3 +594,76 @@ test("manual confirm accepts canonical field order and keeps the next edit pendi
   assert.equal(await confirmDocs(), true);
   assert.equal(files.get(name).data.opacity, 0.5);
 });
+
+test("editing during an in-flight save and disabling autoSave never auto-saves via a leaked timer", async (t) => {
+  const post = globalThis.fake.post;
+  t.after(async () => {
+    globalThis.fake.post = post;
+    await revertDocs();
+    setAutoSave(true);
+  });
+  const doc = await open(t, "no-leak.json", { v: 1 });
+  const deferred = Promise.withResolvers();
+  let postCount = 0;
+  globalThis.fake.post = async (url, body) => {
+    postCount += 1;
+    if (postCount === 1) await deferred.promise;
+    return post(url, body);
+  };
+
+  doc.edit((d) => {
+    d.v = 2;
+  });
+  t.mock.timers.tick(350);
+  await settle();
+  assert.equal(postCount, 1);
+
+  doc.edit((d) => {
+    d.v = 3;
+  });
+  setAutoSave(false);
+  deferred.resolve();
+  await settle();
+  t.mock.timers.tick(5000);
+  await settle();
+
+  assert.equal(postCount, 1, "leaked timer must not fire after autoSave is disabled");
+  assert.equal(files.get("no-leak.json").data.v, 2);
+  assert.equal(doc.data.v, 3);
+  assert.deepEqual(getPendingSnapshot(), [{ name: "no-leak.json", label: "no-leak.json" }]);
+});
+
+test("revertDocs during an in-flight save preserves saving lock so load does not race the POST", async (t) => {
+  const post = globalThis.fake.post;
+  t.after(async () => {
+    globalThis.fake.post = post;
+    await revertDocs();
+    setAutoSave(true);
+  });
+  const doc = await open(t, "revert-in-flight.json", { v: 1 });
+  const deferred = Promise.withResolvers();
+  globalThis.fake.post = async (url, body) => {
+    await deferred.promise;
+    return post(url, body);
+  };
+
+  doc.edit((d) => {
+    d.v = 2;
+  });
+  t.mock.timers.tick(350);
+  await settle();
+
+  doc.edit((d) => {
+    d.v = 3;
+  });
+  agentWrites("revert-in-flight.json", { v: 99 });
+  const reverting = revertDocs();
+  await settle();
+  assert.equal(doc.data.v, 1, "load() must not overwrite data while POST is still in flight");
+
+  deferred.resolve();
+  await reverting;
+  await settle();
+  assert.equal(files.get("revert-in-flight.json").data.v, 99);
+  assert.equal(doc.data.v, 1);
+});

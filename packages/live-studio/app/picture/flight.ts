@@ -14,14 +14,17 @@ const AXES: Record<string, [axis: number, sign: number]> = {
 const shift = (code: string) => code.startsWith("Shift");
 const CHORD_WINDOW = 0.25;
 
+type ShiftState =
+  | { kind: "up" }
+  | { kind: "dropping"; elapsed: number; dropped: number }
+  | { kind: "chorded" };
+
 export const createFlight = (onWake?: () => void) => {
   const held = new Set<string>(),
     v = [0, 0, 0];
   let lastW = -Infinity,
     sprint = false,
-    dropped = 0,
-    shiftElapsed = 0,
-    shiftUsed = false;
+    shiftState: ShiftState = { kind: "up" };
   return {
     press(code: string, at: number) {
       if (!AXES[code]) return false;
@@ -32,9 +35,7 @@ export const createFlight = (onWake?: () => void) => {
         lastW = at;
       }
       if (shift(code) && ![...held].some((c) => c !== code && shift(c))) {
-        dropped = 0;
-        shiftElapsed = 0;
-        shiftUsed = false;
+        shiftState = { kind: "dropping", elapsed: 0, dropped: 0 };
       }
       onWake?.();
       return true;
@@ -42,27 +43,27 @@ export const createFlight = (onWake?: () => void) => {
     release(code: string) {
       held.delete(code);
       if (code === "KeyW") sprint = false;
+      if (shift(code) && ![...held].some(shift)) shiftState = { kind: "up" };
     },
     clear(immediate = false) {
       held.clear();
       sprint = false;
-      shiftElapsed = 0;
+      shiftState = { kind: "up" };
       if (immediate) v.fill(0);
     },
     flying: () => held.size > 0,
     active: () => held.size > 0 || v[0] !== 0 || v[1] !== 0 || v[2] !== 0,
     chord() {
-      if (shiftUsed || ![...held].some(shift)) return 0;
-      shiftUsed = true;
+      if (shiftState.kind !== "dropping") return 0;
+      const back = shiftState.elapsed <= CHORD_WINDOW ? -shiftState.dropped : 0;
+      shiftState = { kind: "chorded" };
       v[2] = 0;
-      const back = shiftElapsed <= CHORD_WINDOW ? -dropped : 0;
-      dropped = 0;
       return back;
     },
     step(dt: number, speed: number): [number, number, number] | null {
       const want = [0, 0, 0];
       for (const code of held) {
-        if (shiftUsed && shift(code)) continue;
+        if (shiftState.kind === "chorded" && shift(code)) continue;
         const [axis, sign] = AXES[code];
         want[axis] += sign * speed * (sprint && axis < 2 ? SPRINT : 1);
       }
@@ -71,9 +72,12 @@ export const createFlight = (onWake?: () => void) => {
         v[i] += (want[i] - v[i]) * k;
         if (!want[i] && Math.abs(v[i]) < 0.01) v[i] = 0;
       }
-      if ([...held].some(shift) && !shiftUsed) {
-        shiftElapsed += dt;
-        dropped += v[2] * dt;
+      if (shiftState.kind === "dropping") {
+        shiftState = {
+          kind: "dropping",
+          elapsed: shiftState.elapsed + dt,
+          dropped: shiftState.dropped + v[2] * dt,
+        };
       }
       if (!v[0] && !v[1] && !v[2]) return null;
       return [v[0] * dt, v[1] * dt, v[2] * dt];

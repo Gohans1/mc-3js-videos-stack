@@ -355,6 +355,24 @@ test("two slides of one actor a moment apart are reported as one", () => {
   assert.equal(slides[0].runs, 2);
 });
 
+test("a two-frame takeoff or ledge graze does not trigger a planted sole slide", () => {
+  const t = times(0, 2);
+  const graze = {
+    owner: "man",
+    part: "L",
+    kind: "sole",
+    t,
+    v: t.map((s) => [0, s < 1 ? 0.5 : 0.5 - (s - 1), 0]),
+    seen: t.map(() => true),
+    support: t.map((s, i) =>
+      i === 30 || i === 31
+        ? { id: "door", position: [0, 0, (i - 30) * 0.13], scale: [1, 1, 1], height: 0.01 }
+        : null,
+    ),
+  };
+  assert.deepEqual(findSlides([graze], []), []);
+});
+
 test("one frame thrown out of pose and back is one pop", () => {
   const t = times(0, 2);
   const pops = findPops([turnTrack("dreamer", "head", t, fromSteps([0, 0, 60, -60, 0, 0]))], []);
@@ -371,4 +389,91 @@ test("pops on back-to-back frames of one joint are reported as one", () => {
   );
   assert.equal(pops.length, 1);
   assert.equal(pops[0].frames, 3);
+});
+
+test("popsCheck evaluates scene transforms in pose-only mode and still detects planted sole sliding on floor meshes", async () => {
+  const fetchBefore = globalThis.fetch;
+  const windowBefore = globalThis.window;
+  globalThis.window = {};
+  globalThis.fetch = async () => new Response();
+  try {
+    const { popsCheck } = await import("../render/pops.ts");
+    const scene = new THREE.Scene();
+    const floor = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 0.2, 10),
+      new THREE.MeshBasicMaterial(),
+    );
+    floor.position.set(0, -0.1, 0);
+    scene.add(floor);
+    const farWall = new THREE.Mesh(
+      new THREE.BoxGeometry(2, 4, 2),
+      new THREE.MeshBasicMaterial(),
+    );
+    farWall.position.set(20, 2, 0);
+    scene.add(farWall);
+    const actor = new THREE.Group();
+    actor.name = "walker";
+    actor.soleNow = (_side, out) => out.set(actor.position.x, 0, 0);
+    scene.add(actor);
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 1.5, 6);
+    camera.lookAt(0, 0.5, 0);
+    const seenOptions = [];
+    const draw = (t, options) => {
+      seenOptions.push(options);
+      actor.position.x = t;
+    };
+    draw.tools = { scene, camera };
+
+    const lines = await popsCheck(draw)("", 0, 1);
+
+    assert.ok(seenOptions.length > 0);
+    assert.equal(seenOptions[0]?.pictureVisible, false);
+    assert.equal(seenOptions[0]?.layersVisible, false);
+    assert.match(lines.join("\n"), /SLIDE .* walker: .* sole slides while planted/);
+  } finally {
+    globalThis.fetch = fetchBefore;
+    if (windowBefore === undefined) delete globalThis.window;
+    else globalThis.window = windowBefore;
+  }
+});
+
+test("popsCheck skips hidden set subtrees instead of allocating tracks for never-visible actors", async () => {
+  const fetchBefore = globalThis.fetch;
+  const windowBefore = globalThis.window;
+  globalThis.window = {};
+  globalThis.fetch = async () => new Response();
+  try {
+    const { popsCheck } = await import("../render/pops.ts");
+    const scene = new THREE.Scene();
+    const visibleSet = new THREE.Group();
+    const active = new THREE.Group();
+    active.name = "active";
+    active.add(new THREE.Bone());
+    visibleSet.add(active);
+    scene.add(visibleSet);
+
+    const hiddenSet = new THREE.Group();
+    hiddenSet.visible = false;
+    for (let k = 0; k < 20; k++) {
+      const dormant = new THREE.Group();
+      dormant.name = `dormant-${k}`;
+      dormant.add(new THREE.Bone());
+      hiddenSet.add(dormant);
+    }
+    scene.add(hiddenSet);
+
+    const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+    camera.position.set(0, 0, 5);
+    const draw = () => {};
+    draw.tools = { scene, camera };
+
+    const lines = await popsCheck(draw)("", 0, 0.5);
+
+    assert.match(lines[0], /on 1 owner\b/, lines.join("\n"));
+  } finally {
+    globalThis.fetch = fetchBefore;
+    if (windowBefore === undefined) delete globalThis.window;
+    else globalThis.window = windowBefore;
+  }
 });

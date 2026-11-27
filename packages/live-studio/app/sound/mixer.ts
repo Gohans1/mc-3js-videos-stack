@@ -99,38 +99,67 @@ const stage = (ctx: BaseAudioContext, out: AudioNode) => {
   });
   return { bus, drive, ready };
 };
-let liveStage: ReturnType<typeof stage> | null = null,
-  fromMix: GainNode | null = null,
-  wantLive = false,
-  unsubAudio: (() => void) | null = null;
-const getLive = () => {
-  if (!liveStage) {
-    const { ctx, master } = getAudio();
-    liveStage = stage(ctx, master);
-    const l = source?.lanes();
-    if (l) liveStage.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
-  }
-  return liveStage;
+type AudioGraph = {
+  fromMix: GainNode;
+  routed: MediaElementAudioSourceNode;
+  liveStage: ReturnType<typeof stage> | null;
 };
 
-let source: Source | null = null,
-  on = false,
-  routed: MediaElementAudioSourceNode | null = null;
+type RoutingState =
+  | { status: "idle" }
+  | {
+      status: "attached";
+      live: boolean;
+      source: Source;
+      unsubAudio: () => void;
+      graph: AudioGraph | null;
+    };
+
+let routing: RoutingState = { status: "idle" };
+
+const isLiveOn = (): boolean => routing.status === "attached" && routing.live;
+const liveSource = (): Source | null => (routing.status === "attached" ? routing.source : null);
+const currentLiveStage = (): ReturnType<typeof stage> | null =>
+  routing.status === "attached" ? (routing.graph?.liveStage ?? null) : null;
+
+const ensureAudioGraph = (): AudioGraph => {
+  if (routing.status === "attached" && routing.graph) return routing.graph;
+  const { ctx } = getAudio();
+  const fromMix = ctx.createGain();
+  const routed = ctx.createMediaElementSource(S.el.audio);
+  routed.connect(fromMix);
+  const graph: AudioGraph = { fromMix, routed, liveStage: null };
+  if (routing.status === "attached") routing.graph = graph;
+  return graph;
+};
+
+const getLive = () => {
+  const existing = currentLiveStage();
+  if (existing) return existing;
+  const { ctx, master } = getAudio();
+  const existingAfterAudio = currentLiveStage();
+  if (existingAfterAudio) return existingAfterAudio;
+  const created = stage(ctx, master);
+  const l = liveSource()?.lanes();
+  if (l) created.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+  if (routing.status === "attached") {
+    const graph = ensureAudioGraph();
+    graph.liveStage = created;
+  }
+  return created;
+};
+
 const levelMix = () => {
-  if (!fromMix) return;
+  if (routing.status !== "attached" || !routing.graph) return;
   const a = S.el.audio,
     v = a.muted ? 0 : a.volume;
-  fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0;
+  routing.graph.fromMix.gain.value = v > 0 && !get().solo.length ? 1 / v : 0;
 };
 const ensureRouting = () => {
-  const { ctx, master } = getAudio();
-  fromMix ??= ctx.createGain();
-  if (!routed) {
-    routed = ctx.createMediaElementSource(S.el.audio);
-    routed.connect(fromMix);
-  }
-  fromMix.disconnect();
-  fromMix.connect(wantLive ? getLive().bus : master);
+  const { master } = getAudio();
+  const graph = ensureAudioGraph();
+  graph.fromMix.disconnect();
+  graph.fromMix.connect(isLiveOn() ? getLive().bus : master);
   levelMix();
 };
 
@@ -292,7 +321,7 @@ const irAudioBufferFor = (ctx: BaseAudioContext, space: string): AudioBuffer | n
 
   if (irBytes.get(space) !== null) {
     void ensureCustomIrForCtx(ctx, space).then((buf) => {
-      if (buf && on && hasAudio() && ctx === getAudioCtx()) replan();
+      if (buf && isLiveOn() && hasAudio() && ctx === getAudioCtx()) replan();
     });
   }
   return null;
@@ -366,7 +395,8 @@ export const forgetSounds = () => {
   irCtxBuffers = new WeakMap();
   irDecodePromises = new WeakMap();
   clearSkims();
-  if (liveStage) resetBusConvolvers(liveStage.bus);
+  const stageNow = currentLiveStage();
+  if (stageNow) resetBusConvolvers(stageNow.bus);
   convolversByBus = new WeakMap();
   clearProcessed();
 };
@@ -537,7 +567,7 @@ export const canWarmProcessed = (from: number, to: number) =>
   Boolean(window.__live) || (from < S.t + LOOKAHEAD * get().rate && S.t < to);
 
 export const warmLiveClips = () => {
-  const lanes = on && source?.lanes();
+  const lanes = isLiveOn() ? liveSource()?.lanes() : null;
   if (lanes)
     for (const clip of clips(lanes))
       if (!clip.process || canWarmProcessed(clip.t0, clip.t1)) void loadClip(clip);
@@ -606,7 +636,7 @@ const play = (
   }
   let pts = envelopePoints(u0, c.t1 - c.t0, c.fadeIn, c.fadeOut, c.length);
   if (c.duck > 0) {
-    const lines = source?.voice() ?? S.voiceOut;
+    const lines = liveSource()?.voice() ?? S.voiceOut;
     const w = cachedDuckWindows(lines);
     const us = [
       ...new Set([
@@ -638,10 +668,11 @@ const play = (
     tail = tail.connect(p);
   }
   let updateSpatial: Voice["updateSpatial"];
+  const spatialSource = liveSource();
   if (
     c.spatial &&
     isSpatialActive(c.spatial) &&
-    source?.camPose &&
+    spatialSource?.camPose &&
     typeof ctx.createBiquadFilter === "function"
   ) {
     const spSpec = c.spatial;
@@ -649,10 +680,10 @@ const play = (
       offline ?? (typeof OfflineAudioContext !== "undefined" && ctx instanceof OfflineAudioContext);
     const sampleSpatial = (tFilm: number) => {
       const sample = sampled?.(spSpec.target, tFilm);
-      const cam = sample?.camera ?? source!.camPose!(tFilm, { offline: isOffline });
+      const cam = sample?.camera ?? spatialSource.camPose!(tFilm, { offline: isOffline });
       const rawSrc = spSpec.target
         ? (sample?.at ??
-          source!.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
+          spatialSource.targetPos?.(spSpec.target, tFilm, { offline: isOffline }) ??
           spSpec.at)
         : spSpec.at;
       if (!rawSrc && isOffline && spSpec.target) {
@@ -738,11 +769,12 @@ addPlayer({
   reset: () => {
     started.clear();
     voices = [];
-    if (liveStage) resetBusConvolvers(liveStage.bus);
+    const stageNow = currentLiveStage();
+    if (stageNow) resetBusConvolvers(stageNow.bus);
   },
   tick: (w) => {
-    if (routed) levelMix();
-    const l = on && source?.lanes();
+    if (routing.status === "attached" && routing.graph) levelMix();
+    const l = isLiveOn() ? liveSource()?.lanes() : null;
     if (!l) return;
     const ctx = getAudioCtx(),
       live = getLive();
@@ -771,16 +803,17 @@ addPlayer({
 let replanTimer = 0,
   plans = 0;
 export const replan = () => {
-  if (!on) return;
+  if (!isLiveOn()) return;
   clearTimeout(replanTimer);
   replanTimer = window.setTimeout(() => {
     hush(voices);
     voices = [];
     started.clear();
     plans++;
-    const l = source?.lanes();
+    const l = liveSource()?.lanes();
     if (l) {
-      if (liveStage) liveStage.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
+      const stageNow = currentLiveStage();
+      if (stageNow) stageNow.drive.gain.value = 10 ** (Number(l.drive ?? 0) / 20);
       setLaneGroups(groups(l));
       retainProcessed(clips(l, true).flatMap((c) => (c.process ? [c.process] : [])));
     }
@@ -805,7 +838,7 @@ const trackPreview = (srcs: readonly AudioScheduledSourceNode[]) => {
   wake("audio");
 };
 const audition = async (name: string) => {
-  const l = source?.lanes();
+  const l = liveSource()?.lanes();
   if (!l) return;
   const all = clips(l).filter((c) => {
     const [list, i] = c.key.split(":") as ["beds" | "sfx", string];
@@ -832,7 +865,9 @@ const audition = async (name: string) => {
   trackPreview(v.srcs);
 };
 const groups = (l: Lanes): Record<string, LaneGroup> => {
-  const lib = new Map(source!.library().map((x) => [x.name, x]));
+  const src = liveSource();
+  if (!src) return {};
+  const lib = new Map(src.library().map((x) => [x.name, x]));
   const out: Record<string, LaneGroup> = {};
   for (const [list, kind] of [
     ["beds", "bed"],
@@ -852,7 +887,7 @@ const groups = (l: Lanes): Record<string, LaneGroup> => {
           audition(e.name);
         },
       };
-      out[e.name].spans.push(source!.span({ list, i }));
+      out[e.name].spans.push(src.span({ list, i }));
     });
   }
   return out;
@@ -863,8 +898,11 @@ interface SkimEntry {
   srcs: AudioScheduledSourceNode[];
   cancelAuto: () => void;
 }
-let skim: SkimEntry | null = null,
-  skims = 0;
+type SkimState =
+  | { kind: "idle"; seq: number }
+  | { kind: "active"; seq: number; entry: SkimEntry };
+
+let skimState: SkimState = { kind: "idle", seq: 0 };
 const skimCleanupTimers = new Set<number>();
 const disposeSkim = (entry: SkimEntry) => {
   entry.cancelAuto();
@@ -876,15 +914,16 @@ const disposeSkim = (entry: SkimEntry) => {
 const clearSkims = () => {
   for (const id of skimCleanupTimers) clearTimeout(id);
   skimCleanupTimers.clear();
-  if (skim) {
-    disposeSkim(skim);
-    skim = null;
+  if (skimState.kind === "active") {
+    const old = skimState.entry;
+    skimState = { kind: "idle", seq: skimState.seq };
+    disposeSkim(old);
   }
 };
 const endSkim = (at: number) => {
-  if (!skim) return;
-  const old = skim;
-  skim = null;
+  if (skimState.kind !== "active") return;
+  const old = skimState.entry;
+  skimState = { kind: "idle", seq: skimState.seq };
   old.cancelAuto();
   old.out.gain.cancelScheduledValues(at);
   old.out.gain.setTargetAtTime(0, at, 0.003);
@@ -902,9 +941,9 @@ const endSkim = (at: number) => {
   skimCleanupTimers.add(timer);
 };
 export const playSlice = async (t: number, len: number) => {
-  const mine = ++skims,
+  const mine = ++skimState.seq,
     mix = await mixBuffer();
-  if (mine !== skims) return;
+  if (mine !== skimState.seq) return;
   const { ctx, master } = getAudio(),
     t0 = ctx.currentTime + 0.01,
     end = t0 + len,
@@ -915,7 +954,7 @@ export const playSlice = async (t: number, len: number) => {
   out.gain.linearRampToValueAtTime(1, t0 + 0.004);
   out.gain.setValueAtTime(1, end - 0.012);
   out.gain.linearRampToValueAtTime(0, end);
-  out.connect(on ? getLive().bus : master);
+  out.connect(isLiveOn() ? getLive().bus : master);
   if (mix && !get().solo.length && t < mix.duration) {
     const s = ctx.createBufferSource();
     s.buffer = mix;
@@ -923,7 +962,7 @@ export const playSlice = async (t: number, len: number) => {
     s.start(t0, t);
     srcs.push(s);
   }
-  const l = on && source?.lanes();
+  const l = isLiveOn() ? liveSource()?.lanes() : null;
   if (l) {
     const w = {
       speed: 1,
@@ -958,47 +997,55 @@ export const playSlice = async (t: number, len: number) => {
   doneTimer = window.setTimeout(() => {
     skimCleanupTimers.delete(doneTimer);
     doneTimer = 0;
-    if (skim === entry) skim = null;
+    if (skimState.kind === "active" && skimState.entry === entry) {
+      skimState = { kind: "idle", seq: skimState.seq };
+    }
     disposeSkim(entry);
   }, autoDelayMs);
   skimCleanupTimers.add(doneTimer);
-  skim = entry;
+  skimState = { kind: "active", seq: skimState.seq, entry };
   trackPreview(srcs);
 };
 
 export const setLive = (live_: boolean, src: Source) => {
-  source = src;
-  wantLive = live_;
-  if (!unsubAudio) {
-    unsubAudio = onAudioReady(() => {
+  const wasLive = isLiveOn();
+  if (routing.status === "idle") {
+    const attached: Extract<RoutingState, { status: "attached" }> = {
+      status: "attached",
+      live: live_,
+      source: src,
+      unsubAudio: () => {},
+      graph: null,
+    };
+    routing = attached;
+    attached.unsubAudio = onAudioReady(() => {
       ensureRouting();
     });
-  } else if (hasAudio()) {
-    ensureRouting();
+  } else {
+    routing = { ...routing, live: live_, source: src };
+    if (hasAudio()) ensureRouting();
   }
-  if (live_ !== on) {
-    on = live_;
-    if (!on) {
-      hush(voices);
-      voices = [];
-      started.clear();
-      if (liveStage) resetBusConvolvers(liveStage.bus);
-      setLaneGroups({});
-    }
+  if (live_ !== wasLive && !live_) {
+    hush(voices);
+    voices = [];
+    started.clear();
+    const stageNow = currentLiveStage();
+    if (stageNow) resetBusConvolvers(stageNow.bus);
+    setLaneGroups({});
   }
   levelMix();
   const l = src.lanes();
-  if (on && l) {
+  if (live_ && l) {
     warmLiveClips();
     void preloadReverbIrs(l, hasAudio() ? getAudioCtx() : undefined).then((loadedNew) => {
-      if (loadedNew && on) replan();
+      if (loadedNew && isLiveOn()) replan();
     });
     replan();
   }
 };
 
 const sampleNamedTargets = (all: Clip[], from: number, to: number, signal?: AbortSignal) =>
-  source?.prepareTargets?.(
+  liveSource()?.prepareTargets?.(
     all.flatMap((clip) => {
       if (!clip.spatial || clip.t0 >= to || clip.t1 <= from) return [];
       return [
@@ -1083,7 +1130,7 @@ const renderLanesSpan = async (
 };
 
 window.__lanesRender = async (from: number, to: number) => {
-  const l = source?.lanes();
+  const l = liveSource()?.lanes();
   if (!l || to <= from) return null;
   const out = await renderLanesSpan(l, from, to, Math.ceil((to - from) * SPAN_SAMPLE_RATE));
   if (!out) return null;
@@ -1109,8 +1156,8 @@ window.__lanesRender = async (from: number, to: number) => {
 export const renderFilm = async (
   into: (ctx: OfflineAudioContext) => Promise<AudioNode>,
 ): Promise<Lanes | null> => {
-  const l = source?.lanes();
-  if (!on || !l) return null;
+  const l = liveSource()?.lanes();
+  if (!isLiveOn() || !l) return null;
   await preloadSources(l);
   const all = clips(l, true);
   const [voice, loaded] = await Promise.all([mixBuffer(), Promise.all(all.map(loadClip))]);
@@ -1151,8 +1198,8 @@ export const renderAudioSpan = async (
   if (dur <= 1e-3) return null;
   const frames = Math.max(1, Math.round(dur * SPAN_SAMPLE_RATE)),
     voice = await mixBuffer(),
-    l = source?.lanes();
-  if (on && l) {
+    l = liveSource()?.lanes();
+  if (isLiveOn() && l) {
     const rendered = await renderLanesSpan(l, from, to, frames, voice, signal);
     if (rendered) return rendered;
   }

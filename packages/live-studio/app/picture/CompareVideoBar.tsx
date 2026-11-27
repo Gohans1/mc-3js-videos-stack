@@ -30,6 +30,13 @@ import {
   setCompareVideoMode,
 } from "./compare-video";
 import {
+  compareCatalogErrorOf,
+  compareVideoErrorOf,
+  compareVideoMetaOf,
+  compareVideoPathOf,
+  compareVideosLoadedOf,
+} from "./slice";
+import {
   compareLayoutBadge,
   type CompareVideoItem,
   defaultCompareLayout,
@@ -61,8 +68,8 @@ const groupByCategory = (videos: readonly CompareVideoItem[], pairLabel: string)
     .filter((g) => g.items.length > 0);
 
 function SpanNotice() {
-  const path = useStudio((s) => s.compareVideoPath);
-  const meta = useStudio((s) => s.compareVideoMeta);
+  const path = useStudio(compareVideoPathOf);
+  const meta = useStudio(compareVideoMetaOf);
   const [outside, setOutside] = useState<"before" | "after" | null>(null);
 
   useEffect(() => {
@@ -107,9 +114,9 @@ function SpanNotice() {
 }
 
 export function CompareVideoBar() {
-  const videos = useStudio((s) => s.compareVideos);
-  const path = useStudio((s) => s.compareVideoPath);
-  const meta = useStudio((s) => s.compareVideoMeta);
+  const videos = useStudio((s) => s.compareCatalog.videos);
+  const path = useStudio(compareVideoPathOf);
+  const meta = useStudio(compareVideoMetaOf);
   const ratio = useStudio((s) => s.ratio);
   const latestNotice = useStudio((s) => s.compareLatestNotice);
   const [refreshing, setRefreshing] = useState(false);
@@ -288,13 +295,13 @@ export function CompareVideoBar() {
 }
 
 export function CompareVideoEmpty() {
-  const loaded = useStudio((s) => s.compareVideosLoaded);
-  const videos = useStudio((s) => s.compareVideos);
-  const path = useStudio((s) => s.compareVideoPath);
-  const videoError = useStudio((s) => s.compareVideoError);
-  const catalogError = useStudio((s) => s.compareCatalogError);
+  const loaded = useStudio(compareVideosLoadedOf);
+  const videos = useStudio((s) => s.compareCatalog.videos);
+  const path = useStudio(compareVideoPathOf);
+  const videoError = useStudio(compareVideoErrorOf);
+  const catalogError = useStudio(compareCatalogErrorOf);
   const ratio = useStudio((s) => s.ratio);
-  const canBuild = useStudio((s) => s.compareCanBuild);
+  const canBuild = useStudio((s) => s.compareCatalog.canBuild);
 
   const activeItem = videos.find((v) => v.path === path) ?? null;
   if (activeItem && !videoError) return null;

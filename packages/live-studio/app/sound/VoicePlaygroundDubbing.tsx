@@ -138,18 +138,34 @@ export function VoicePlaygroundDubbing({
     if (preview.current && preview.current !== node) releaseNativeAudition(preview.current);
     preview.current = node;
   }, []);
-  const [source, setSource] = useState<SavedSource | null>(null),
+  type DubbingActivity =
+    | { kind: "idle" }
+    | { kind: "uploading"; startedAt: number }
+    | { kind: "copying"; startedAt: number }
+    | { kind: "quoting" }
+    | { kind: "submitting" };
+  type DubbingQuoteState =
+    | { status: "none" }
+    | { status: "quoted"; job: DubbingJob; key: string; consent: boolean };
+  type SourceState =
+    | { status: "empty"; checkedId: string }
+    | { status: "ready"; saved: SavedSource; replacing: boolean };
+
+  const [sourceState, setSourceState] = useState<SourceState>({ status: "empty", checkedId: "" }),
     [receipt, setReceipt] = useState<SavedSource | null>(null),
-    [operation, setOperation] = useState<Operation>("idle"),
+    [activity, setActivity] = useState<DubbingActivity>({ kind: "idle" }),
+    [error, setError] = useState(""),
     [sourceTab, setSourceTab] = useState("upload"),
-    [replacingSource, setReplacingSource] = useState(false),
     [recordingUid, setRecordingUid] = useState("");
-  const [error, setError] = useState(""),
-    [quote, setQuote] = useState<DubbingJob | null>(null),
-    [quotedKey, setQuotedKey] = useState(""),
-    [consent, setConsent] = useState(false),
-    [startedAt, setStartedAt] = useState(0),
+  const [quoteState, setQuoteState] = useState<DubbingQuoteState>({ status: "none" }),
     [now, setNow] = useState(Date.now);
+  const sourceCheckSeqRef = useRef(0);
+  const source = sourceState.status === "ready" ? sourceState.saved : null;
+  const replacingSource = sourceState.status === "ready" && sourceState.replacing;
+  const operation: Operation = activity.kind;
+  const startedAt =
+    activity.kind === "uploading" || activity.kind === "copying" ? activity.startedAt : 0;
+  const clearQuote = () => setQuoteState({ status: "none" });
   useEffect(() => {
     if (error) {
       errorRef.current?.focus();
@@ -167,8 +183,13 @@ export function VoicePlaygroundDubbing({
   };
   const scope = pg.scope ?? "project",
     receiptKey = `voice-playground:dubbing-upload:${globalThis.location?.origin ?? "studio"}:${S.film}:${scope}`;
-  const busy = operation !== "idle",
-    quoteValid = quote?.phase === "prepared" && quotedKey === jsonKey(settings);
+  const busy = activity.kind !== "idle",
+    quote = quoteState.status === "quoted" ? quoteState.job : null,
+    quoteValid =
+      quoteState.status === "quoted" &&
+      quoteState.job.phase === "prepared" &&
+      quoteState.key === jsonKey(settings),
+    consent = quoteState.status === "quoted" && quoteState.consent;
   const sourcePrepared = source?.source.phase === "prepared";
   const recordingOptions = recordingSourceOptions(
     entries
@@ -184,8 +205,7 @@ export function VoicePlaygroundDubbing({
   const selectedRecording = entries.find((entry) => entry.uid === recordingUid);
   const updateSettings = (patch: Partial<Settings>) => {
     setComposerDraft({ dubbing: { ...settings, ...patch } });
-    setQuote(null);
-    setConsent(false);
+    clearQuote();
     setError("");
   };
   const remember = (saved: SavedSource) => {
@@ -199,22 +219,21 @@ export function VoicePlaygroundDubbing({
     }
   };
   const ready = (saved: SavedSource) => {
-    setSource(saved);
-    setReplacingSource(false);
+    sourceCheckSeqRef.current += 1;
+    setSourceState({ status: "ready", saved, replacing: false });
     remember(saved);
     const current = getPlaygroundSnapshot().draft;
     setComposerDraft({
       dubbing: { ...settings, ...current.dubbing, sourceId: saved.source.id },
       dubbingSourceScope: saved.scope,
     });
-    setQuote(null);
-    setConsent(false);
+    clearQuote();
   };
   useEffect(() => {
-    if (operation !== "uploading" && operation !== "copying") return;
+    if (activity.kind !== "uploading" && activity.kind !== "copying") return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [operation]);
+  }, [activity.kind]);
   useEffect(
     () => () => {
       uploadController.current?.abort();
@@ -225,24 +244,26 @@ export function VoicePlaygroundDubbing({
     requestedScope = pg.draft.dubbingSourceScope ?? pg.draft.templateScope ?? scope;
   useEffect(() => {
     const controller = new AbortController();
+    const checkSeq = ++sourceCheckSeqRef.current;
     let saved: SavedSource | null = null;
     try {
       const raw = localStorage.getItem(receiptKey);
       if (raw) saved = JSON.parse(raw);
     } catch {}
-    const requestedId = sourceId || saved?.source?.id,
-      sourceScope = sourceId ? requestedScope : (saved?.scope ?? requestedScope);
-    if (requestedId)
+    const requestedId = sourceId || saved?.source?.id;
+    const sourceScope = sourceId ? requestedScope : (saved?.scope ?? requestedScope);
+    if (requestedId) {
       void dubbingRequest<{ source: DubbingSource }>(
         `sources/${encodeURIComponent(requestedId)}`,
         sourceScope,
         { signal: controller.signal },
       )
         .then(({ source: found }) => {
+          if (controller.signal.aborted || checkSeq !== sourceCheckSeqRef.current) return;
           const value = { source: found, scope: sourceScope };
           setReceipt(value);
           if (found.phase === "prepared") {
-            setSource(value);
+            setSourceState({ status: "ready", saved: value, replacing: false });
             if (!sourceId)
               setComposerDraft((draft) => ({
                 ...draft,
@@ -256,23 +277,28 @@ export function VoicePlaygroundDubbing({
                 },
                 dubbingSourceScope: sourceScope,
               }));
+          } else {
+            setSourceState({ status: "empty", checkedId: requestedId });
           }
         })
         .catch((cause) => {
-          if (!controller.signal.aborted)
+          if (!controller.signal.aborted && checkSeq === sourceCheckSeqRef.current) {
+            setSourceState({ status: "empty", checkedId: requestedId });
             setError(cause instanceof Error ? cause.message : "Choose the original file again.");
+          }
         });
+    }
     return () => controller.abort();
   }, [sourceId, requestedScope, receiptKey]);
   const upload = async (file: File) => {
+    sourceCheckSeqRef.current += 1;
     const controller = new AbortController();
     uploadController.current = controller;
-    setOperation("uploading");
+    const t = Date.now();
+    setActivity({ kind: "uploading", startedAt: t });
     setError("");
-    setStartedAt(Date.now());
-    setNow(Date.now());
-    setQuote(null);
-    setConsent(false);
+    setNow(t);
+    clearQuote();
     const same =
       receipt?.scope === scope &&
       receipt.source.filename === file.name &&
@@ -284,8 +310,10 @@ export function VoicePlaygroundDubbing({
         signal: controller.signal,
         onProgress: (source) => remember({ source, scope }),
       });
+      setActivity({ kind: "idle" });
       ready({ source: staged, scope });
     } catch (cause) {
+      setActivity({ kind: "idle" });
       setError(
         controller.signal.aborted
           ? "Upload paused. Choose the same original file to continue from its saved parts."
@@ -296,16 +324,16 @@ export function VoicePlaygroundDubbing({
               : "Upload interrupted. Choose the same original file to resume.",
       );
     } finally {
-      setOperation("idle");
       if (fileInput.current) fileInput.current.value = "";
     }
   };
   const reuse = async (asset: "audio" | "source") => {
     if (!selectedRecording) return;
-    setOperation("copying");
+    sourceCheckSeqRef.current += 1;
+    const t = Date.now();
+    setActivity({ kind: "copying", startedAt: t });
     setError("");
-    setStartedAt(Date.now());
-    setNow(Date.now());
+    setNow(t);
     try {
       const item =
         selectedRecording.playgroundItem ??
@@ -317,11 +345,11 @@ export function VoicePlaygroundDubbing({
           itemId: item.id,
           asset,
         });
+      setActivity({ kind: "idle" });
       ready({ source, scope: sourceScope });
     } catch (cause) {
+      setActivity({ kind: "idle" });
       setError(cause instanceof Error ? cause.message : "Unable to reuse the saved recording");
-    } finally {
-      setOperation("idle");
     }
   };
   const chooseVoice = (voice: PickedVoice) => {
@@ -350,26 +378,25 @@ export function VoicePlaygroundDubbing({
       voiceName: voice.name,
       modelId: DUBBING_MODELS[provider],
     });
-    setQuote(null);
-    setConsent(false);
+    clearQuote();
     setError("");
   };
   const prepare = async () => {
     if (busy || !source || source.source.phase !== "prepared") return;
+    clearQuote();
+    setActivity({ kind: "quoting" });
     setError("");
-    setConsent(false);
-    setOperation("quoting");
     try {
-      let sourceId = source.source.id;
+      let nextSourceId = source.source.id;
       if (source.scope !== scope) {
         const copied = await dubbingPost<{ source: DubbingSource }>("sources", scope, {
-          sourceId,
+          sourceId: nextSourceId,
           sourceScope: source.scope,
         });
-        sourceId = copied.source.id;
+        nextSourceId = copied.source.id;
         ready({ source: copied.source, scope });
       }
-      const input = { ...settings, sourceId },
+      const input = { ...settings, sourceId: nextSourceId },
         parsed = DubbingInput.safeParse(input);
       if (!parsed.success)
         throw Error(
@@ -378,22 +405,21 @@ export function VoicePlaygroundDubbing({
       const { job } = await dubbingPost<{ job: DubbingJob }>("", scope, parsed.data);
       setComposerDraft({ dubbing: input, dubbingSourceScope: scope });
       acceptDubbingJob(job);
-      setQuote(job);
-      setQuotedKey(jsonKey(input));
+      setQuoteState({ status: "quoted", job, key: jsonKey(input), consent: false });
+      setActivity({ kind: "idle" });
     } catch (cause) {
-      setQuote(null);
+      clearQuote();
+      setActivity({ kind: "idle" });
       setError(
         cause instanceof Error
           ? cause.message
           : "Unable to prepare a quote. Check the source and voice.",
       );
-    } finally {
-      setOperation("idle");
     }
   };
   const submit = async () => {
     if (!quote || !quoteValid || !consent || busy) return;
-    setOperation("submitting");
+    setActivity({ kind: "submitting" });
     setError("");
     try {
       const { job } = await dubbingPost<{ job: DubbingJob }>(
@@ -401,21 +427,23 @@ export function VoicePlaygroundDubbing({
         scope,
       );
       acceptDubbingJob(job);
-      setQuote(null);
-      setConsent(false);
+      clearQuote();
+      setActivity({ kind: "idle" });
       say("Dubbing started. Its source and progress are saved; you can keep working.");
     } catch (cause) {
-      setQuote(null);
-      setConsent(false);
+      clearQuote();
+      setActivity({ kind: "idle" });
       setError(
         `${cause instanceof Error ? cause.message : "Submission response unconfirmed"} Open Jobs and check this saved attempt before starting another paid request.`,
       );
-    } finally {
-      setOperation("idle");
     }
   };
   const staged = source?.source,
-    checkingSource = Boolean(sourceId && !staged && !receipt && !error),
+    checkingSource =
+      Boolean(sourceId) &&
+      (sourceState.status === "ready"
+        ? sourceState.saved.source.id !== sourceId
+        : sourceState.checkedId !== sourceId),
     showSourcePicker = !checkingSource && (!staged || replacingSource),
     uploading = receipt?.source,
     progress = uploading
@@ -461,7 +489,12 @@ export function VoicePlaygroundDubbing({
                       aria-expanded={replacingSource}
                       aria-controls={replacingSource ? `${id}-replacement-source` : undefined}
                       onClick={() => {
-                        if (!busy) setReplacingSource((value) => !value);
+                        if (!busy)
+                          setSourceState((prev) =>
+                            prev.status === "ready"
+                              ? { ...prev, replacing: !prev.replacing }
+                              : prev,
+                          );
                       }}
                     >
                       {replacingSource ? "Cancel replacement" : "Replace source"}
@@ -728,8 +761,7 @@ export function VoicePlaygroundDubbing({
               onValueChange={(value) => {
                 if (value === "project" || value === "global") {
                   setPlaygroundScope(value);
-                  setQuote(null);
-                  setConsent(false);
+                  clearQuote();
                 }
               }}
             >
@@ -778,7 +810,11 @@ export function VoicePlaygroundDubbing({
             id={`${id}-consent`}
             checked={consent}
             disabled={!quoteValid || busy}
-            onCheckedChange={(value) => setConsent(value === true)}
+            onCheckedChange={(value) =>
+              setQuoteState((prev) =>
+                prev.status === "quoted" ? { ...prev, consent: value === true } : prev,
+              )
+            }
           />
           <FieldLabel htmlFor={`${id}-consent`} variant="row">
             <span className="tabular-nums">

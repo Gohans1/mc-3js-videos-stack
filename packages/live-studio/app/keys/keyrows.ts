@@ -193,20 +193,24 @@ export const attachKeyRows = () => {
     const r = c.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width };
   };
-  let drag: {
-    ref: KeyRef;
-    column: KeyRef[];
-    group: KeyRef[];
-    along: Along | null;
-    x: number;
-    t: number;
-    snap: string[];
-    moved: boolean;
-    alone: boolean;
-    magnet: ReturnType<typeof makeSnapper>;
-  } | null = null;
-  let scrub: { resume: boolean } | null = null;
-  let box: { add: boolean } | null = null;
+  type KeyRowsGesture =
+    | { kind: "idle" }
+    | { kind: "scrub"; resume: boolean }
+    | { kind: "box"; add: boolean }
+    | {
+        kind: "drag";
+        ref: KeyRef;
+        column: KeyRef[];
+        group: KeyRef[];
+        along: Along | null;
+        x: number;
+        t: number;
+        snap: string[];
+        moved: boolean;
+        alone: boolean;
+        magnet: ReturnType<typeof makeSnapper>;
+      };
+  let gesture: KeyRowsGesture = { kind: "idle" };
 
   c.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
@@ -226,11 +230,11 @@ export const attachKeyRows = () => {
           pickKeys([]);
           if (w) seek(timeAt(x, w));
         }
-        scrub = { resume: S.playing };
+        gesture = { kind: "scrub", resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
       } else {
-        box = { add };
+        gesture = { kind: "box", add };
         boxStart(e, add);
       }
       return;
@@ -245,7 +249,8 @@ export const attachKeyRows = () => {
       ref = s.refs[0];
     if (!was) pickKeys(s.refs);
     const along = was ? alongWith("keys") : null;
-    drag = {
+    gesture = {
+      kind: "drag",
       ref,
       column: s.refs,
       group: get().keyPicks,
@@ -262,22 +267,23 @@ export const attachKeyRows = () => {
     const { x, y, w } = local(e),
       { v } = view(),
       perPx = v / w;
-    if (scrub) {
+    if (gesture.kind === "scrub") {
       seek(timeAt(x, w));
       return;
     }
-    if (get().blade && !drag && !box) {
-      c.style.cursor = spotAt(x, y, false) ? "not-allowed" : "default";
-      return;
-    }
-    if (box) {
+    if (gesture.kind === "box") {
       boxMove(e);
       return;
     }
-    if (!drag) {
+    if (gesture.kind !== "drag") {
+      if (get().blade) {
+        c.style.cursor = spotAt(x, y, false) ? "not-allowed" : "default";
+        return;
+      }
       c.style.cursor = !spotAt(x, y, false) && onPlayhead(x, w, false) ? "ew-resize" : "default";
       return;
     }
+    const drag = gesture;
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     if (!drag.moved) hold(true);
     drag.moved = true;
@@ -301,22 +307,20 @@ export const attachKeyRows = () => {
     );
   });
   const up = (e: PointerEvent) => {
-    if (scrub) {
-      const r = scrub.resume;
-      scrub = null;
+    const active = gesture;
+    gesture = { kind: "idle" };
+    if (active.kind === "scrub") {
       holdView(false);
-      if (r) setPlaying(true);
+      if (active.resume) setPlaying(true);
       return;
     }
-    if (box) {
-      box = null;
+    if (active.kind === "box") {
       boxEnd(e);
       return;
     }
-    if (!drag) return;
+    if (active.kind !== "drag") return;
     snapLine(null);
-    const { snap, moved, alone, ref, column, group, along, t: was } = drag;
-    drag = null;
+    const { snap, moved, alone, ref, column, group, along, t: was } = active;
     c.style.cursor = "";
     if (!moved) {
       if (e.type === "pointerup") {

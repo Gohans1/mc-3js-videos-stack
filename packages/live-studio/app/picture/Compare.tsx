@@ -16,8 +16,9 @@ const typing = (e: KeyboardEvent) =>
   e.target instanceof Element && !!e.target.closest("input, textarea, [contenteditable=true]");
 
 export function CompareOverlay() {
-  const comparing = useStudio((s) => s.comparing),
-    still = useStudio((s) => s.still);
+  const snapshot = useStudio((s) => s.snapshot);
+  const comparing = snapshot.status === "captured" && snapshot.comparing;
+  const still = snapshot.status === "captured" ? snapshot.still : null;
   const onion = useStudio((s) => s.preview.onion);
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -157,8 +158,9 @@ export function AngleGrid() {
 }
 
 export function SnapshotButtons({ className }: { className: string }) {
-  const still = useStudio((s) => s.still),
-    comparing = useStudio((s) => s.comparing);
+  const snapshot = useStudio((s) => s.snapshot);
+  const still = snapshot.status === "captured" ? snapshot.still : null;
+  const comparing = snapshot.status === "captured" && snapshot.comparing;
   const hold = (on: boolean) => () => compare(on);
   return (
     <>

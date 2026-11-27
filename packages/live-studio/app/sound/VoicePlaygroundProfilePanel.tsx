@@ -45,9 +45,14 @@ export function VoicePlaygroundProfilePanel({
   const [color, setColor] = useState(initialProfile?.color ?? "");
   const [rating, setRating] = useState(initialProfile?.rating ?? null);
   const [licenseNote, setLicenseNote] = useState(initialProfile?.rights?.notes ?? "");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  type ProfileMutation =
+    | { status: "idle" }
+    | { status: "saving" }
+    | { status: "saved"; message: string }
+    | { status: "error"; message: string };
+
+  const [mutation, setMutation] = useState<ProfileMutation>({ status: "idle" });
+  const busy = mutation.status === "saving";
   const playing =
     useSyncExternalStore(subscribeAudition, listening, listening) === castingAuditionId(voice);
   const name = profile?.alias || voice.name || voice.id;
@@ -75,9 +80,7 @@ export function VoicePlaygroundProfilePanel({
     confirmation: string,
     select = true,
   ) => {
-    setBusy(true);
-    setMessage("");
-    setError("");
+    setMutation({ status: "saving" });
     try {
       const saved = await operation();
       if (select) {
@@ -90,11 +93,12 @@ export function VoicePlaygroundProfilePanel({
         setLicenseNote(saved.rights?.notes ?? "");
       }
       onChange(saved);
-      setMessage(confirmation);
+      setMutation({ status: "saved", message: confirmation });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Could not update this voice profile.");
-    } finally {
-      setBusy(false);
+      setMutation({
+        status: "error",
+        message: cause instanceof Error ? cause.message : "Could not update this voice profile.",
+      });
     }
   };
   return (
@@ -412,14 +416,14 @@ export function VoicePlaygroundProfilePanel({
           </div>
         </form>
       )}
-      {message && (
+      {mutation.status === "saved" && (
         <p role="status" className="text-ok-text text-sm">
-          {message}
+          {mutation.message}
         </p>
       )}
-      {error && (
+      {mutation.status === "error" && (
         <p role="alert" className="text-warn-text text-sm">
-          {error}
+          {mutation.message}
         </p>
       )}
     </aside>

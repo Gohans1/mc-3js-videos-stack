@@ -63,13 +63,16 @@ const value = (shot: GradeTarget, key: BasicKey, v: number, keep = true) =>
     keep,
   );
 
+type SavePresetState = { status: "idle"; error: string } | { status: "saving" };
+
 function SavePreset({ grade }: { grade: Grade }) {
   const open = useStudio((s) => s.modal === "savePreset");
   const setOpen = (o: boolean) =>
     set({ modal: o ? "savePreset" : get().modal === "savePreset" ? null : get().modal });
   const [name, setName] = useState(""),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
+    [saveState, setSaveState] = useState<SavePresetState>({ status: "idle", error: "" });
+  const busy = saveState.status === "saving";
+  const error = saveState.status === "idle" ? saveState.error : "";
   const input = useRef<HTMLInputElement>(null),
     id = useId();
   return (
@@ -78,7 +81,7 @@ function SavePreset({ grade }: { grade: Grade }) {
         render={<Button size="sm" />}
         onClick={() => {
           setName("");
-          setError("");
+          setSaveState({ status: "idle", error: "" });
         }}
       >
         Save as preset
@@ -89,17 +92,15 @@ function SavePreset({ grade }: { grade: Grade }) {
           onSubmit={async (e) => {
             e.preventDefault();
             if (!name.trim() || busy) return;
-            setBusy(true);
-            setError("");
+            setSaveState({ status: "saving" });
             try {
               await savePreset(name.trim(), structuredClone(grade));
+              setSaveState({ status: "idle", error: "" });
               setOpen(false);
               set({ lib: "adjust" });
               say("Preset saved. Available in every film.");
             } catch (err) {
-              setError((err as Error).message);
-            } finally {
-              setBusy(false);
+              setSaveState({ status: "idle", error: (err as Error).message });
             }
           }}
         >

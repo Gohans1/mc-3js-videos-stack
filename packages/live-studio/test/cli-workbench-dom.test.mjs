@@ -21,13 +21,13 @@ import '/index.css';
 import {TooltipProvider} from '/components/ui/tooltip.tsx';
 import {Toaster} from '/components/ui/toast.tsx';
 import {CliPanel} from '/cli/CliPanel.tsx';
-import {cliStore,openCommandWorkbench,ensureCliLoaded} from '/cli/cli-store.ts';
+import {cliCatalogOf,cliStore,openCommandWorkbench,ensureCliLoaded} from '/cli/cli-store.ts';
 const root=createRoot(document.getElementById('root'));
 let generation=0;
 const render=()=>root.render(
   <TooltipProvider><div id="cli-test-panel" style={{height:570,width:360}} className="bg-background text-foreground flex flex-col overflow-hidden"><CliPanel key={generation}/></div><Toaster/></TooltipProvider>
 );
-window.__CLI_TEST__={open:openCommandWorkbench,ready:()=>!!cliStore.getState().catalog,remount:()=>{generation++;render()},seedRun:async run=>{await ensureCliLoaded();cliStore.setState({lastRun:run})}};
+window.__CLI_TEST__={open:openCommandWorkbench,ready:()=>!!cliCatalogOf(cliStore.getState()),remount:()=>{generation++;render()},seedRun:async run=>{await ensureCliLoaded();cliStore.setState({lastRun:run})}};
 render();
 `;
 const moreButton = `[...document.querySelectorAll('button')].find(n=>n.textContent.startsWith('More options'))`;

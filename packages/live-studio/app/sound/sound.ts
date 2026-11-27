@@ -118,9 +118,14 @@ let libraryByFamily = new Map<string, LibraryItem[]>();
 let libraryDurations: Record<string, number> = {};
 let clipUseCounts = new Map<string, number>();
 
+type FullLibraryState =
+  | { status: "partial"; seq: number }
+  | { status: "loading"; seq: number; promise: Promise<void> }
+  | { status: "ready"; seq: number };
+
 let cancelTokenWarm: (() => void) | null = null;
-let fullLibraryLoaded = false;
-let fullLibraryLoading: Promise<void> | null = null;
+let fullLibraryState: FullLibraryState = { status: "partial", seq: 0 };
+const getFullLibraryState = (): FullLibraryState => fullLibraryState;
 let wantTokenWarm = false;
 
 const scheduleSearchTokenWarm = (items: readonly LibraryItem[]) => {
@@ -309,29 +314,43 @@ const anyItemChanged = (prev: readonly LibraryItem[], next: readonly LibraryItem
 
 export const ensureSoundLibrary = (): Promise<void> => {
   wantTokenWarm = true;
-  if (fullLibraryLoaded) {
+  if (fullLibraryState.status === "ready") {
     scheduleSearchTokenWarm(library);
     return Promise.resolve();
   }
-  if (!fullLibraryLoading) {
-    fullLibraryLoading = getFile("/api/sound?library=1")
-      .then(async (r) => {
-        if (!r.ok) return;
-        const got: { library?: LibraryItem[] } = await r.json();
-        if (!Array.isArray(got.library)) return;
-        if (library.length && anyItemChanged(library, got.library)) forgetSounds();
-        library = got.library;
-        fullLibraryLoaded = true;
-        rebuildLibraryIndex();
-        doc.refresh();
-        set({ soundRev: get().soundRev + 1 });
-      })
-      .catch((e: unknown) => say(e instanceof Error ? e.message : String(e)))
-      .finally(() => {
-        fullLibraryLoading = null;
-      });
+  if (fullLibraryState.status === "loading") {
+    return fullLibraryState.promise;
   }
-  return fullLibraryLoading;
+  const seq = fullLibraryState.seq + 1;
+  let resolve!: () => void;
+  const promise = new Promise<void>((r) => {
+    resolve = r;
+  });
+  fullLibraryState = { status: "loading", seq, promise };
+  void (async () => {
+    try {
+      const r = await getFile("/api/sound?library=1");
+      if (!r.ok) return;
+      const got: { library?: LibraryItem[] } = await r.json();
+      if (!Array.isArray(got.library)) return;
+      if (getFullLibraryState().seq !== seq) return;
+      if (library.length && anyItemChanged(library, got.library)) forgetSounds();
+      library = got.library;
+      fullLibraryState = { status: "ready", seq };
+      rebuildLibraryIndex();
+      doc.refresh();
+      set({ soundRev: get().soundRev + 1 });
+    } catch (e: unknown) {
+      say(e instanceof Error ? e.message : String(e));
+    } finally {
+      const current = getFullLibraryState();
+      if (current.status === "loading" && current.seq === seq) {
+        fullLibraryState = { status: "partial", seq };
+      }
+      resolve();
+    }
+  })();
+  return promise;
 };
 
 export const loadSound = async (opts?: {
@@ -351,7 +370,7 @@ export const loadSound = async (opts?: {
   const query =
     opts?.lanesOnly && library.length > 0
       ? "?lanes=1"
-      : opts?.usedOnly && !fullLibraryLoaded
+      : opts?.usedOnly && fullLibraryState.status !== "ready"
         ? "?used=1"
         : "";
   let got: { data?: Lanes; library?: LibraryItem[]; live?: boolean } = {};
@@ -359,10 +378,10 @@ export const loadSound = async (opts?: {
     raw: { data?: Lanes; library?: LibraryItem[]; live?: boolean },
     full: boolean,
   ) => {
-    if (Array.isArray(raw.library) && (!fullLibraryLoaded || full)) {
+    if (Array.isArray(raw.library) && (fullLibraryState.status !== "ready" || full)) {
       if (library.length && anyItemChanged(library, raw.library)) forgetSounds();
       library = raw.library;
-      if (full) fullLibraryLoaded = true;
+      if (full) fullLibraryState = { status: "ready", seq: fullLibraryState.seq + 1 };
       rebuildLibraryIndex();
     }
   };
@@ -377,7 +396,7 @@ export const loadSound = async (opts?: {
   const latestLanes = got.data ?? lanes;
   if (
     query === "?lanes=1" &&
-    !fullLibraryLoaded &&
+    fullLibraryState.status !== "ready" &&
     missingSoundNames(latestLanes, (name) => libraryByName.has(name)).length > 0
   ) {
     await doc.load("?used=1", (raw) => {

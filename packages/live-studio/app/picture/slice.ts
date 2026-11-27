@@ -13,10 +13,37 @@ import type { GuideMode, ValueCheckMode } from "./director-eye";
 import { initialPreview, type PreviewOptions } from "./preview-model";
 
 export type PreviewStill = { url: string; t: number };
+export type SnapshotState =
+  | { status: "none" }
+  | { status: "captured"; still: PreviewStill; comparing: boolean };
 export type PinnedAngle = PreviewStill & { view: FreeView | null };
 export type FreeTouched = Partial<
   Record<"roll" | "wave" | "bob" | "fstop" | "focus" | "handheld", boolean>
 >;
+
+export type CompareCatalogState =
+  | {
+      status: "loading";
+      videos: CompareVideoItem[];
+      canBuild: { ref: string | null; ours: string | null };
+    }
+  | {
+      status: "ready";
+      videos: CompareVideoItem[];
+      canBuild: { ref: string | null; ours: string | null };
+    }
+  | {
+      status: "error";
+      videos: CompareVideoItem[];
+      canBuild: { ref: string | null; ours: string | null };
+      error: string;
+    };
+
+export type CompareVideoState =
+  | { status: "none" }
+  | { status: "loading"; path: string; meta: CompareVideoMeta | null }
+  | { status: "ready"; path: string; meta: CompareVideoMeta | null }
+  | { status: "error"; path: string; error: string };
 
 export interface PictureSlice {
   ratio: Ratio;
@@ -55,21 +82,32 @@ export interface PictureSlice {
   shotList: boolean;
   final: boolean;
   pickFocus: CameraKeyIdentity | "free" | null;
-  still: PreviewStill | null;
-  comparing: boolean;
+  snapshot: SnapshotState;
   compareVideoMode: boolean;
-  compareVideos: CompareVideoItem[];
-  compareVideosLoaded: boolean;
-  compareCatalogError: string | null;
-  compareCanBuild: { ref: string | null; ours: string | null };
-  compareVideoPath: string | null;
+  compareCatalog: CompareCatalogState;
+  compareVideo: CompareVideoState;
   compareVideoAudio: CompareVideoAudioMode;
   compareReferenceAudioStatus: { src: string; state: "ready" | "silent" | "unavailable" } | null;
-  compareVideoMeta: CompareVideoMeta | null;
-  compareVideoReady: boolean;
-  compareVideoError: string | null;
   compareLatestNotice: string | null;
 }
+
+export const compareVideoPathOf = (s: Pick<PictureSlice, "compareVideo">): string | null =>
+  s.compareVideo.status === "none" ? null : s.compareVideo.path;
+export const compareVideoMetaOf = (
+  s: Pick<PictureSlice, "compareVideo">,
+): CompareVideoMeta | null =>
+  s.compareVideo.status === "loading" || s.compareVideo.status === "ready"
+    ? s.compareVideo.meta
+    : null;
+export const compareVideoReadyOf = (s: Pick<PictureSlice, "compareVideo">): boolean =>
+  s.compareVideo.status === "ready";
+export const compareVideoErrorOf = (s: Pick<PictureSlice, "compareVideo">): string | null =>
+  s.compareVideo.status === "error" ? s.compareVideo.error : null;
+export const compareCatalogErrorOf = (s: Pick<PictureSlice, "compareCatalog">): string | null =>
+  s.compareCatalog.status === "error" ? s.compareCatalog.error : null;
+export const compareVideosLoadedOf = (s: Pick<PictureSlice, "compareCatalog">): boolean =>
+  s.compareCatalog.status === "ready";
+
 export const pictureSlice: Omit<
   PictureSlice,
   | "captions"
@@ -110,17 +148,10 @@ export const pictureSlice: Omit<
   shotList: false,
   final: false,
   pickFocus: null,
-  still: null,
-  comparing: false,
+  snapshot: { status: "none" },
   compareVideoMode: false,
-  compareVideos: [],
-  compareVideosLoaded: false,
-  compareCatalogError: null,
-  compareCanBuild: { ref: null, ours: null },
-  compareVideoPath: null,
-  compareVideoMeta: null,
+  compareCatalog: { status: "loading", videos: [], canBuild: { ref: null, ours: null } },
+  compareVideo: { status: "none" },
   compareReferenceAudioStatus: null,
-  compareVideoReady: false,
-  compareVideoError: null,
   compareLatestNotice: null,
 };

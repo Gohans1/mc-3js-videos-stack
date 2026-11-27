@@ -1,3 +1,4 @@
+import { resolveTextItem } from "film-stage/titles-catalog";
 import { graphemes, inOutLengths } from "film-stage/titles-text";
 
 import { isTornByReorder, remapOutputTime, timebaseClock } from "./layer-timing.mjs";
@@ -6,14 +7,21 @@ export const READ_CPS = 20;
 export const READ_MIN = 5 / 6;
 export const SIZE_MIN = 36;
 
-export const isRead = (it, tracks) =>
-  it?.kind === "text" &&
-  it.read !== false &&
-  !it.hidden &&
-  !tracks?.[it.track ?? 0]?.hidden &&
-  !!it.text?.trim();
+export const isRead = (it, tracks, doc = null) => {
+  const r = it && (doc || it.preset) ? resolveTextItem(it, doc) : it;
+  return (
+    (r?.kind ?? "text") === "text" &&
+    r.read !== false &&
+    !r.hidden &&
+    !tracks?.[r.track ?? 0]?.hidden &&
+    !!r.text?.trim()
+  );
+};
 export const charsOf = (text) => graphemes(text.replace(/\s*\n\s*/g, " ").trim()).length;
-export const pxOf = (it) => (it.size ?? 56) * (it.scale ?? 1);
+export const pxOf = (it, doc = null) => {
+  const r = it && (doc || it.preset) ? resolveTextItem(it, doc) : it;
+  return (r.size ?? 56) * (r.scale ?? 1);
+};
 
 export const sizeFaults = (scene, ratio = "16:9") => {
   const word = ["size", "scale"].find((k) => scene[k] != null && typeof scene[k] !== "number");

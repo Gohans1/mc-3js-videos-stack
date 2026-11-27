@@ -26,22 +26,22 @@ export function VoicePlaygroundShortlist({
   const [tag, setTag] = useState("");
   const [sort, setSort] = useState("relevance");
   const [page, setPage] = useState(0);
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState("");
-  const [results, setResults] = useState<{
-    profiles: PlaygroundVoiceProfile[];
-    total: number;
-    hasMore: boolean;
-  }>({
-    profiles: [],
-    total: 0,
-    hasMore: false,
+  type ShortlistQueryState =
+    | { status: "loading"; results: { profiles: PlaygroundVoiceProfile[]; total: number; hasMore: boolean } }
+    | { status: "ready"; results: { profiles: PlaygroundVoiceProfile[]; total: number; hasMore: boolean } }
+    | { status: "error"; message: string; results: { profiles: PlaygroundVoiceProfile[]; total: number; hasMore: boolean } };
+
+  const [queryState, setQueryState] = useState<ShortlistQueryState>({
+    status: "loading",
+    results: { profiles: [], total: 0, hasMore: false },
   });
+  const busy = queryState.status === "loading";
+  const error = queryState.status === "error" ? queryState.message : "";
+  const results = queryState.results;
   useEffect(() => {
     const abort = new AbortController();
     const timer = setTimeout(() => {
-      setBusy(true);
-      setError("");
+      setQueryState((prev) => ({ status: "loading", results: prev.results }));
       const params = new URLSearchParams({
         scope: scope === "global" ? "global" : "project",
         includeGlobal: scope === "all" ? "1" : "0",
@@ -55,13 +55,16 @@ export function VoicePlaygroundShortlist({
       if (rating) params.set("minRating", rating);
       if (tag.trim()) params.set("tag", tag.trim());
       void listPlaygroundProfiles(params, abort.signal)
-        .then(setResults)
+        .then((nextResults) => {
+          if (!abort.signal.aborted) setQueryState({ status: "ready", results: nextResults });
+        })
         .catch((cause: unknown) => {
           if (!abort.signal.aborted)
-            setError(cause instanceof Error ? cause.message : "Could not load Shortlist.");
-        })
-        .finally(() => {
-          if (!abort.signal.aborted) setBusy(false);
+            setQueryState((prev) => ({
+              status: "error",
+              message: cause instanceof Error ? cause.message : "Could not load Shortlist.",
+              results: prev.results,
+            }));
         });
     }, 140);
     return () => {

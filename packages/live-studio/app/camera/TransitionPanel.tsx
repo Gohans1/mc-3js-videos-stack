@@ -41,7 +41,7 @@ import {
 } from "./transitions";
 
 export function TransitionPanel() {
-  const catalog = useOpenFilm((s) => s.catalog);
+  const catalog = useOpenFilm((s) => s.catalogState.recipes);
   useStudio((s) => s.shotsRev);
   useStudio((s) => s.timingRev);
   useStudio((s) => s.shotPick);

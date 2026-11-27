@@ -43,11 +43,15 @@ export interface AiNotice {
   removed: boolean;
   drafts?: RecoverableLessonDraft[];
 }
+export type LessonLoadState = "loading" | "ready" | "failed" | "refresh-failed";
+export type LessonEditSync =
+  | { status: "dirty" }
+  | { status: "saving" }
+  | { status: "failed"; error: string };
 interface Edit {
   text: string;
   base: string | null;
-  saving?: boolean;
-  failed?: string;
+  sync: LessonEditSync;
 }
 interface LessonsState {
   subTab: "deck" | "inspector";
@@ -57,8 +61,7 @@ interface LessonsState {
   projectDir: string;
   scopeFilter: LessonScopeFilter;
   files: LessonFile[];
-  loaded: boolean;
-  loadFailed: boolean;
+  loadState: LessonLoadState;
   folder: string[];
   open: string | null;
   preferredView: LessonPreferredView;
@@ -126,17 +129,15 @@ export const lessons = createStore<LessonsState>(() => ({
   projectDir: "",
   scopeFilter: "both",
   files: [],
-  loaded: false,
-  loadFailed: false,
+  loadState: "loading",
   folder: [],
   open: null,
   preferredView: readPreferredLessonView(),
   viewByPath: {},
   edits: Object.fromEntries(
-    Object.entries(normalizeMapKeys(readJson<Record<string, Edit>>(DRAFTS, {}))).map(([p, e]) => [
-      p,
-      { text: e.text, base: e.base },
-    ]),
+    Object.entries(
+      normalizeMapKeys(readJson<Record<string, { text: string; base: string | null }>>(DRAFTS, {})),
+    ).map(([p, e]) => [p, { text: e.text, base: e.base, sync: { status: "dirty" } as const }]),
   ),
   seen: normalizeMapKeys(readJson(SEEN, {})),
   pick: null,
@@ -224,7 +225,14 @@ export const clearLessonTimers = () => {
 export const loadLessons = async () => {
   const myLoad = ++loadSeq;
   const startSaveSeq = saveSeq;
-  set({ loadFailed: false });
+  set((s) => ({
+    loadState:
+      s.loadState === "failed"
+        ? "loading"
+        : s.loadState === "refresh-failed"
+          ? "ready"
+          : s.loadState,
+  }));
   let got: { dir: string; projectDir?: string; files: WireLessonFile[] };
   try {
     const r = await fetch("/api/lessons");
@@ -233,7 +241,12 @@ export const loadLessons = async () => {
     got = await r.json();
     if (!Array.isArray(got.files)) throw new Error("Invalid lessons list");
   } catch {
-    if (myLoad === loadSeq) set({ loadFailed: true });
+    if (myLoad === loadSeq) {
+      set((s) => ({
+        loadState:
+          s.loadState === "ready" || s.loadState === "refresh-failed" ? "refresh-failed" : "failed",
+      }));
+    }
     return;
   }
   if (myLoad !== loadSeq) return;
@@ -275,7 +288,7 @@ export const loadLessons = async () => {
   for (const [key, e] of Object.entries(edits)) {
     if ((savedAtSeq.get(key) ?? 0) > startSaveSeq) continue;
     const f = sorted.find((x) => x.key === key);
-    if (e.saving || (f?.tag ?? null) === e.base) continue;
+    if (e.sync.status === "saving" || (f?.tag ?? null) === e.base) continue;
     clearTimer(key);
     edits = omitKey(edits, key);
     editsChanged = true;
@@ -294,8 +307,7 @@ export const loadLessons = async () => {
     dir: got.dir,
     projectDir: got.projectDir ?? "",
     files: sorted,
-    loaded: true,
-    loadFailed: false,
+    loadState: "ready",
     pick,
     open,
     folder: nextFolder,
@@ -303,13 +315,20 @@ export const loadLessons = async () => {
   });
 
   for (const [key, e] of Object.entries(edits))
-    if (!e.saving && !e.failed && !timers.has(key)) void saveLesson(key);
+    if (e.sync.status === "dirty" && !timers.has(key)) void saveLesson(key);
 };
 
 export const typeLesson = (key: string, text: string) => {
   const e = get().edits[key],
     f = fileOf(key);
-  setEdits({ ...get().edits, [key]: { ...e, text, base: e ? e.base : (f?.tag ?? null) } });
+  setEdits({
+    ...get().edits,
+    [key]: {
+      text,
+      base: e ? e.base : (f?.tag ?? null),
+      sync: e?.sync.status === "saving" ? e.sync : { status: "dirty" },
+    },
+  });
   clearTimer(key);
   if (text.length > LESSON_TEXT_MAX) return;
   timers.set(
@@ -324,10 +343,10 @@ export const typeLesson = (key: string, text: string) => {
 export const saveLesson = async (key: string): Promise<void> => {
   clearTimer(key);
   const e = get().edits[key];
-  if (!e || e.saving || e.text.length > LESSON_TEXT_MAX) return;
+  if (!e || e.sync.status === "saving" || e.text.length > LESSON_TEXT_MAX) return;
   const { scope, path } = parseLessonKey(key);
   const sent = e.text;
-  setEdits({ ...get().edits, [key]: { ...e, saving: true, failed: undefined } });
+  setEdits({ ...get().edits, [key]: { ...e, sync: { status: "saving" } } });
   let r: Response | null = null;
   try {
     r = await fetch("/api/lessons", {
@@ -348,7 +367,7 @@ export const saveLesson = async (key: string): Promise<void> => {
     const rest = omitKey(get().edits, key);
     if (now.text === sent) setEdits(rest);
     else {
-      setEdits({ ...rest, [key]: { text: now.text, base: tag } });
+      setEdits({ ...rest, [key]: { text: now.text, base: tag, sync: { status: "dirty" } } });
       void saveLesson(key);
     }
   } else if (r?.status === 409) {
@@ -360,13 +379,15 @@ export const saveLesson = async (key: string): Promise<void> => {
       ...get().edits,
       [key]: {
         ...now,
-        saving: false,
-        failed:
-          typeof body.error === "string"
-            ? body.error
-            : body.error
-              ? "the studio refused it (too long?)"
-              : "the studio didn't answer",
+        sync: {
+          status: "failed",
+          error:
+            typeof body.error === "string"
+              ? body.error
+              : body.error
+                ? "the studio refused it (too long?)"
+                : "the studio didn't answer",
+        },
       },
     });
     if (!body.error)
@@ -447,8 +468,10 @@ export const setLessonView = (key: string, mode: LessonViewMode, remember = true
   });
 
 export type DeleteLessonResult =
-  | { removed: true; path: string; restore: () => Promise<boolean> }
-  | { removed: false; conflict?: boolean; missing?: boolean; error?: string };
+  | { kind: "removed"; path: string; restore: () => Promise<boolean> }
+  | { kind: "conflict" }
+  | { kind: "missing" }
+  | { kind: "error"; error: string };
 
 const deleting = new Set<string>();
 
@@ -456,7 +479,7 @@ export const deleteLesson = async (
   key: string,
   onBeforeRemove?: () => void,
 ): Promise<DeleteLessonResult> => {
-  if (deleting.has(key)) return { removed: false, error: "delete already in progress" };
+  if (deleting.has(key)) return { kind: "error", error: "delete already in progress" };
   deleting.add(key);
   try {
     clearTimer(key);
@@ -473,7 +496,7 @@ export const deleteLesson = async (
         body: JSON.stringify({ scope, path, base }),
       });
     } catch {
-      return { removed: false, error: "the studio didn't answer" };
+      return { kind: "error", error: "the studio didn't answer" };
     }
     const body = (await r.json().catch(() => null)) ?? {};
     if (r.status === 409) {
@@ -481,11 +504,11 @@ export const deleteLesson = async (
       const text = typeof body.text === "string" ? body.text : null;
       adoptExternalVersion(key, tag, text);
       if (tag !== null && text !== null) openLesson(key);
-      return { removed: false, conflict: true };
+      return { kind: "conflict" };
     }
     if (!r.ok) {
       return {
-        removed: false,
+        kind: "error",
         error: typeof body.error === "string" ? body.error : "could not delete lesson",
       };
     }
@@ -494,7 +517,7 @@ export const deleteLesson = async (
     onBeforeRemove?.();
     if (body.missing === true) {
       adoptExternalVersion(key, null, null);
-      return { removed: false, missing: true };
+      return { kind: "missing" };
     }
     const nextEdits = omitKey(get().edits, key);
     set((s) => {
@@ -535,7 +558,7 @@ export const deleteLesson = async (
       openLesson(key);
       return true;
     };
-    return { removed: true, path, restore };
+    return { kind: "removed", path, restore };
   } finally {
     deleting.delete(key);
   }
@@ -548,7 +571,7 @@ export const newLesson = (name: string, scope: LessonScope = "film") => {
   if (existing) return openLesson(existing.key);
   const key = lessonKey(scope, path);
   const { text, pick } = lessonTemplate(path);
-  setEdits({ ...get().edits, [key]: { text, base: null } });
+  setEdits({ ...get().edits, [key]: { text, base: null, sync: { status: "dirty" } } });
   set({ pick: { key, range: pick } });
   openLesson(key);
   void saveLesson(key);

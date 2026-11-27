@@ -96,6 +96,9 @@ test("a film whose code does not build is named by file and line, in plain words
   );
   const scene = join(dir, "src/scene.ts");
   writeFileSync(scene, `${readFileSync(scene, "utf8")}\nconst twice = 1;\nconst twice = 2;\n`);
+  mkdirSync(join(dir, "renders"), { recursive: true });
+  writeFileSync(join(dir, "renders/still_1s.jpg"), "previous-still");
+  writeFileSync(join(dir, "renders/vs_still_1s.jpg"), "previous-vs-still");
   const out = spawnSync("bun", [RENDER, "stills", "--at", "1"], {
     cwd: dir,
     encoding: "utf8",
@@ -108,6 +111,8 @@ test("a film whose code does not build is named by file and line, in plain words
   assert.match(out.stderr, /the film's code does not build: fix it, then bun run render again/);
   assert.equal(stripVTControlCharacters(said), said, "no colour codes");
   assert.doesNotMatch(said, /node_modules|rolldown/);
+  assert.equal(readFileSync(join(dir, "renders/still_1s.jpg"), "utf8"), "previous-still");
+  assert.equal(readFileSync(join(dir, "renders/vs_still_1s.jpg"), "utf8"), "previous-vs-still");
 });
 
 test("render clip reports the chunk and frame range when encoding fails", (t) => {
@@ -1013,4 +1018,68 @@ test("--ref refuses what would not put our picture beside the reference's frame,
   );
   refused(["--ref", "references/ref.mp4", "--list"], /--ref and --list draw another picture/);
   refused(["--ref-region", "0,0,0.5,0.5"], /--ref-region goes with --ref <reference video>/);
+  refused(["--at", "1", "--keep"], /--keep is for render stills/, "poster");
+  refused(["--keep"], /--keep is for render stills/, "clip");
+  refused(
+    ["--inspect", "0,1,2,0,0,0,50,0.1,99"],
+    /--inspect takes 7 or 8 numbers/,
+  );
+  refused(
+    ["--check", "probe:a,,2"],
+    /probe filter cannot be empty/,
+  );
+});
+
+test("render CLI accepts repeatable --at/--check/--views, comma probe targets, 8-num --inspect roll, and --ref with --inspect", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "render-cli-ergo-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  copyDemo(dir);
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ "live-studio": {} }));
+  mkdirSync(join(dir, "references"));
+  writeFileSync(join(dir, "references/ref.mp4"), "");
+  const run = (flags) =>
+    spawnSync("bun", [RENDER, "stills", ...flags], {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: 20000,
+      env: { ...process.env, LIVE_PROJECT: dir },
+    });
+  const badCheck = run([
+    "--at",
+    "1",
+    "--at",
+    "2",
+    "--check",
+    "probe:a,b,1",
+    "--check",
+    "motion:cam,bad,2",
+  ]);
+  assert.equal(badCheck.status, 2, badCheck.stdout + badCheck.stderr);
+  assert.doesNotMatch(badCheck.stderr, /given twice/);
+  assert.match(badCheck.stderr, /--check motion:cam,bad,2/);
+
+  const viewsAndRef = run([
+    "--views",
+    "a:0,1,2,0,0,0,50,0.1",
+    "--views",
+    "b:1,1,2,0,0,0,50",
+    "--ref",
+    "references/ref.mp4",
+    "--crop",
+    "0,0,1,1",
+  ]);
+  assert.equal(viewsAndRef.status, 2, viewsAndRef.stdout + viewsAndRef.stderr);
+  assert.doesNotMatch(viewsAndRef.stderr, /--views is given twice/);
+  assert.match(viewsAndRef.stderr, /--ref and --crop/);
+
+  const inspectAndRef = run([
+    "--inspect",
+    "0,1,2,0,0,0,50,0.2",
+    "--ref",
+    "references/ref.mp4",
+    "--list",
+  ]);
+  assert.equal(inspectAndRef.status, 2, inspectAndRef.stdout + inspectAndRef.stderr);
+  assert.doesNotMatch(inspectAndRef.stderr, /--ref and --inspect/);
+  assert.match(inspectAndRef.stderr, /--ref and --list/);
 });

@@ -402,7 +402,7 @@ describe("Voice Playground SSR UI components", () => {
           selectedId: "",
           selectedName: "",
           defaultVoices: [{ id: "unstarred", name: "Unstarred Default" }],
-          sharedSearch: { voices: [], hasMore: false, loading: false, error: null },
+          sharedSearch: { status: "idle", voices: [], hasMore: false },
           onSearchShared() {},
           onSelect() {},
         }),
@@ -417,9 +417,9 @@ describe("Voice Playground SSR UI components", () => {
   });
 
   const makePgState = (draftOverrides = {}, rootOverrides = {}) => ({
-    loaded: true,
-    loading: false,
-    error: null,
+    loadState: { status: "ready" },
+    clonesState: { status: "idle", error: null },
+    cloneCloudState: { status: "ok" },
     status: {
       configured: true,
       source: "secrets_file",
@@ -451,12 +451,11 @@ describe("Voice Playground SSR UI components", () => {
     },
     items: [samplePgItem()],
     jobs: [],
-    remoteHistory: { items: [], hasMore: false, loading: false, error: null, page: 0 },
+    remoteHistory: { status: "idle", items: [], hasMore: false, page: 0 },
     sharedSearch: {
+      status: "idle",
       voices: [],
       hasMore: false,
-      loading: false,
-      error: null,
       queryKey: "",
       page: 0,
       params: {},
@@ -2837,6 +2836,45 @@ describe("Voice Playground SSR UI components", () => {
       soundMod.stopAudition();
       globalThis.fetch = origFetch;
       restore();
+    }
+  });
+
+  test("loadSpeechCatalog ignores stale out-of-order responses and keeps latest catalog state", async () => {
+    const origFetch = globalThis.fetch;
+    const prevCatalog = clientMod.getPlaygroundSnapshot().serviceCatalogs?.elevenlabs?.catalog;
+    const resolvers = [];
+    try {
+      globalThis.fetch = () =>
+        new Promise((resolve) => {
+          resolvers.push(resolve);
+        });
+      const first = clientMod.loadSpeechCatalog("elevenlabs");
+      const second = clientMod.loadSpeechCatalog("elevenlabs");
+      expect(resolvers).toHaveLength(2);
+      resolvers[1](
+        Response.json({
+          defaultVoices: [{ id: "fresh-voice", name: "Fresh", provider: "elevenlabs" }],
+          models: [],
+          languages: [],
+          liveSynced: true,
+        }),
+      );
+      await second;
+      expect(clientMod.getPlaygroundSnapshot().serviceCatalogs?.elevenlabs?.status).toBe("ready");
+      expect(
+        clientMod.getPlaygroundSnapshot().serviceCatalogs?.elevenlabs?.catalog?.defaultVoices?.[0]?.id,
+      ).toBe("fresh-voice");
+      resolvers[0](Response.json({ error: "Stale timeout" }, { status: 500 }));
+      await first;
+      const finalEntry = clientMod.getPlaygroundSnapshot().serviceCatalogs?.elevenlabs;
+      expect(finalEntry?.status).toBe("ready");
+      expect(finalEntry?.catalog?.defaultVoices?.[0]?.id).toBe("fresh-voice");
+    } finally {
+      if (prevCatalog) {
+        globalThis.fetch = async () => Response.json(prevCatalog);
+        await clientMod.loadSpeechCatalog("elevenlabs");
+      }
+      globalThis.fetch = origFetch;
     }
   });
 });

@@ -239,12 +239,17 @@ export function Transport() {
     cam = useStudio((s) => s.cam),
     night = useStudio((s) => s.nightVision),
     compareVideoMode = useStudio((s) => s.compareVideoMode),
-    compareVideoReady = useStudio((s) => s.compareVideoReady),
-    compareVideoError = useStudio((s) => s.compareVideoError),
-    hasActiveCompareVideo = useStudio((s) =>
-      Boolean(s.compareVideoPath && s.compareVideos.some((v) => v.path === s.compareVideoPath)),
+    compareVideoReady = useStudio((s) => s.compareVideo.status === "ready"),
+    compareVideoError = useStudio((s) =>
+      s.compareVideo.status === "error" ? s.compareVideo.error : null,
     ),
-    hasCompareVideos = useStudio((s) => s.compareVideos.some((v) => v.category === "compare")),
+    hasActiveCompareVideo = useStudio((s) => {
+      const path = s.compareVideo.status === "none" ? null : s.compareVideo.path;
+      return Boolean(path && s.compareCatalog.videos.some((v) => v.path === path));
+    }),
+    hasCompareVideos = useStudio((s) =>
+      s.compareCatalog.videos.some((v) => v.category === "compare"),
+    ),
     full = useFullscreen();
   const compareUnavailable =
     compareVideoMode && (!hasActiveCompareVideo || Boolean(compareVideoError));

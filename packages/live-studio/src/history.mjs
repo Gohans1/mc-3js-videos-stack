@@ -295,13 +295,13 @@ export const openFilmHistory = (
       restartRequired: hash(previousPackage ?? "") !== hash(nextPackage ?? ""),
     };
   };
-  let timer,
-    watchers = [],
-    closed = false,
+  let watchState = { status: "idle" },
     problem = null;
   const start = () => {
-    if (watchers.length) return;
+    if (watchState.status !== "idle") return;
+    watchState = { status: "watching", watcher: null, timer: null };
     const autosave = () => {
+      if (watchState.status !== "watching") return;
       const previousProblem = problem ?? preparationProblem;
       let created = false;
       try {
@@ -311,29 +311,38 @@ export const openFilmHistory = (
         problem = error.message;
         onError(error.message);
       }
-      if (created || previousProblem !== (problem ?? preparationProblem)) changed();
+      if (watchState.status === "watching" && (created || previousProblem !== (problem ?? preparationProblem)))
+        changed();
     };
     autosave();
+    if (watchState.status !== "watching") return;
     const schedule = () => {
-      clearTimeout(timer);
-      timer = setTimeout(autosave, 1000);
+      if (watchState.status !== "watching") return;
+      if (watchState.timer !== null) clearTimeout(watchState.timer);
+      const handle = setTimeout(() => {
+        if (watchState.status !== "watching" || watchState.timer !== handle) return;
+        watchState.timer = null;
+        autosave();
+      }, 1000);
+      watchState.timer = handle;
     };
-    watchers = [
-      watch(project, { recursive: true }, (_, file) => {
-        const name = String(file).replaceAll("\\", "/");
-        if (name.split("/").some((p) => EXCLUDED.includes(p))) return;
-        if (
-          name === "src" ||
-          name.startsWith("src/") ||
-          watched.has(name) ||
-          [...watched].some(
-            (p) => p.toLowerCase() === name.toLowerCase() && actualName(p) === actualName(name),
-          ) ||
-          [...watched].some((p) => p.startsWith(name + "/"))
-        )
-          schedule();
-      }),
-    ];
+    const watcher = watch(project, { recursive: true }, (_, file) => {
+      if (watchState.status !== "watching") return;
+      const name = String(file).replaceAll("\\", "/");
+      if (name.split("/").some((p) => EXCLUDED.includes(p))) return;
+      if (
+        name === "src" ||
+        name.startsWith("src/") ||
+        watched.has(name) ||
+        [...watched].some(
+          (p) => p.toLowerCase() === name.toLowerCase() && actualName(p) === actualName(name),
+        ) ||
+        [...watched].some((p) => p.startsWith(name + "/"))
+      )
+        schedule();
+    });
+    if (watchState.status === "watching") watchState.watcher = watcher;
+    else watcher.close();
   };
   return {
     capture,
@@ -345,11 +354,13 @@ export const openFilmHistory = (
       return problem ?? preparationProblem;
     },
     close() {
-      if (closed) return;
-      closed = true;
-      clearTimeout(timer);
-      for (const watcher of watchers) watcher.close();
-      watchers = [];
+      if (watchState.status === "closed") return;
+      const prev = watchState;
+      watchState = { status: "closed" };
+      if (prev.status === "watching") {
+        if (prev.timer !== null) clearTimeout(prev.timer);
+        prev.watcher?.close();
+      }
       db.close();
     },
   };

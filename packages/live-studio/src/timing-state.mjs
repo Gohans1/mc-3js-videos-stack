@@ -131,10 +131,12 @@ export const timedDraw = (draw) => {
       adjustments: adjustment.sourceAt(t),
       textTime: (item) => overlayTime(layerClock, layerAt, item),
       adjustmentTime: (item) => overlayTime(adjustment, t, item),
-      pictureVisible: frameVisible(timingClock, t),
-      layersVisible: frameVisible(layerClock, layerAt),
-      adjustmentsVisible: frameVisible(adjustment, t),
-      transitionVisible: (at) => transitionAvailable(timingClock, at),
+      pictureVisible: options?.pictureVisible === false ? false : frameVisible(timingClock, t),
+      layersVisible: options?.layersVisible === false ? false : frameVisible(layerClock, layerAt),
+      adjustmentsVisible:
+        options?.adjustmentsVisible === false ? false : frameVisible(adjustment, t),
+      transitionVisible: (at) =>
+        options?.pictureVisible === false ? false : transitionAvailable(timingClock, at),
       velocity: velocityAt(timing.velocity, frame),
     });
   };

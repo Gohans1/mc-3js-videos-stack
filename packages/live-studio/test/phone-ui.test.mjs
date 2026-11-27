@@ -232,7 +232,7 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
         status: prev.status,
         contract: prev.contract,
         hasVideo: prev.hasVideo,
-        downloading: prev.downloading,
+        videoDownload: prev.videoDownload,
         noteView: prev.noteView,
         noteStatus: prev.noteStatus,
         noteSearch: prev.noteSearch,
@@ -348,7 +348,7 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
   });
 
   test("PhoneBar renders one confirmation-guarded light 540p video download button beside play and scrub", () => {
-    const html = withStore({ hasVideo: true, downloading: false }, () =>
+    const html = withStore({ hasVideo: true, videoDownload: "idle" }, () =>
       renderHtml(createElement(phoneBarMod.PhoneBar)),
     );
     assert.equal(html.includes('href="/api/video.mp4"'), false);
@@ -356,7 +356,7 @@ describe("phone mobile UI layout (Stage, NoteList header, PhoneBar)", { timeout:
     assert.match(html, /aria-busy="false"/);
     assert.equal(html.includes(">Download<"), false);
 
-    const busyHtml = withStore({ hasVideo: true, downloading: true }, () =>
+    const busyHtml = withStore({ hasVideo: true, videoDownload: "downloading" }, () =>
       renderHtml(createElement(phoneBarMod.PhoneBar)),
     );
     assert.match(busyHtml, /aria-busy="true"/);

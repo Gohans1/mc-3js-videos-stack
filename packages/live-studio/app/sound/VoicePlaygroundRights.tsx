@@ -11,13 +11,18 @@ import { patchPlaygroundItem } from "./voice-playground-client";
 import { extractDialogueSpeakerEntries } from "./voice-playground-view";
 import { recordedCastSummary } from "./voice-setting-details";
 
+type RightsSaveState =
+  | { status: "idle"; error: string }
+  | { status: "saving" };
+
 export function VoicePlaygroundRights({ item }: { item: VoicePlaygroundItem }) {
   const id = useId();
   const [url, setUrl] = useState(item.rights?.evidenceUrl ?? "");
   const [notes, setNotes] = useState(item.rights?.notes ?? "");
   const [confirmed, setConfirmed] = useState(item.rights?.status === "user_confirmed");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [saveState, setSaveState] = useState<RightsSaveState>({ status: "idle", error: "" });
+  const saving = saveState.status === "saving";
+  const error = saveState.status === "idle" ? saveState.error : "";
   const cast = item.dialogue
     ? recordedCastSummary(extractDialogueSpeakerEntries(item.dialogue.speakers))
     : undefined;
@@ -31,12 +36,15 @@ export function VoicePlaygroundRights({ item }: { item: VoicePlaygroundItem }) {
         className="mt-3 flex flex-col gap-3"
         onSubmit={async (event) => {
           event.preventDefault();
+          if (saving) return;
           if (confirmed && !url.trim() && !notes.trim()) {
-            setError("Add an evidence link or record the permission you received.");
+            setSaveState({
+              status: "idle",
+              error: "Add an evidence link or record the permission you received.",
+            });
             return;
           }
-          setError("");
-          setSaving(true);
+          setSaveState({ status: "saving" });
           try {
             await patchPlaygroundItem(item.id, {
               rights: {
@@ -45,8 +53,12 @@ export function VoicePlaygroundRights({ item }: { item: VoicePlaygroundItem }) {
                 notes: notes.trim(),
               },
             });
-          } finally {
-            setSaving(false);
+            setSaveState({ status: "idle", error: "" });
+          } catch (cause) {
+            setSaveState({
+              status: "idle",
+              error: cause instanceof Error ? cause.message : "Could not save rights record.",
+            });
           }
         }}
       >

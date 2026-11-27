@@ -210,9 +210,36 @@ export function SoundKitWorkbench({
   const [metaOpenId, setMetaOpenId] = useState<string | null>(null);
   const [similarId, setSimilarId] = useState<string | null>(sessionView.similarId);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [revealFilterIds, setRevealFilterIds] = useState<string[] | null>(null);
-  const [pendingScrollId, setPendingScrollId] = useState<string | null>(null);
-  const [revealedId, setRevealedId] = useState<string | null>(null);
+  type KitRevealUi =
+    | { kind: "idle" }
+    | { kind: "scrolling"; id: string; revealedId: string | null; filterIds: string[] | null }
+    | { kind: "revealed"; id: string; filterIds: string[] | null }
+    | { kind: "filtered"; filterIds: string[] };
+  const [revealUi, setRevealUi] = useState<KitRevealUi>({ kind: "idle" });
+  const revealFilterIds =
+    revealUi.kind === "scrolling" || revealUi.kind === "revealed" || revealUi.kind === "filtered"
+      ? revealUi.filterIds
+      : null;
+  const pendingScrollId = revealUi.kind === "scrolling" ? revealUi.id : null;
+  const revealedId =
+    revealUi.kind === "scrolling"
+      ? revealUi.revealedId
+      : revealUi.kind === "revealed"
+        ? revealUi.id
+        : null;
+  const setRevealFilterIds = (filterIds: string[] | null) =>
+    setRevealUi((prev) => {
+      if (filterIds) {
+        return prev.kind === "scrolling"
+          ? { ...prev, filterIds }
+          : prev.kind === "revealed"
+            ? { ...prev, filterIds }
+            : { kind: "filtered", filterIds };
+      }
+      if (prev.kind === "scrolling") return { ...prev, filterIds: null };
+      if (prev.kind === "revealed") return { ...prev, filterIds: null };
+      return { kind: "idle" };
+    });
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastRevealSeqRef = useRef(0);
   const searchId = useId();
@@ -470,11 +497,19 @@ export function SoundKitWorkbench({
         return;
       }
 
-      const flashReveal = (id: string) => {
-        setRevealedId(id);
+      const startReveal = (id: string, filterIds: string[] | null) => {
+        setRevealUi({ kind: "scrolling", id, revealedId: id, filterIds });
         if (revealTimerRef.current !== null) clearTimeout(revealTimerRef.current);
         revealTimerRef.current = setTimeout(() => {
-          setRevealedId(null);
+          setRevealUi((prev) => {
+            if (prev.kind === "scrolling") return { ...prev, revealedId: null };
+            if (prev.kind === "revealed") {
+              return prev.filterIds
+                ? { kind: "filtered", filterIds: prev.filterIds }
+                : { kind: "idle" };
+            }
+            return prev;
+          });
           revealTimerRef.current = null;
         }, 2200);
       };
@@ -483,10 +518,8 @@ export function SoundKitWorkbench({
         setQuery("");
         setActiveTag("");
         setCategory("all");
-        setRevealFilterIds(eligible);
         setFocusedId(eligible[0]!);
-        setPendingScrollId(eligible[0]!);
-        flashReveal(eligible[0]!);
+        startReveal(eligible[0]!, eligible);
         return;
       }
 
@@ -501,7 +534,6 @@ export function SoundKitWorkbench({
         return;
       }
 
-      setRevealFilterIds(null);
       setQuery("");
       setActiveTag("");
       setCategory(inferredCategory ?? "all");
@@ -517,8 +549,7 @@ export function SoundKitWorkbench({
         }
       }
       setFocusedId(id);
-      setPendingScrollId(id);
-      flashReveal(id);
+      startReveal(id, null);
     });
     return () => {
       cancelled = true;
@@ -528,9 +559,19 @@ export function SoundKitWorkbench({
   useEffect(() => {
     if (!pendingScrollId) return;
     if (query !== deferredQuery) return;
+    const finishScroll = () =>
+      setRevealUi((prev) => {
+        if (prev.kind !== "scrolling") return prev;
+        if (prev.revealedId) {
+          return { kind: "revealed", id: prev.revealedId, filterIds: prev.filterIds };
+        }
+        return prev.filterIds
+          ? { kind: "filtered", filterIds: prev.filterIds }
+          : { kind: "idle" };
+      });
     if (pendingScrollIdx < 0) {
       if (!kit.loaded || !libraryItems.length) return;
-      const frame = requestAnimationFrame(() => setPendingScrollId(null));
+      const frame = requestAnimationFrame(finishScroll);
       return () => cancelAnimationFrame(frame);
     }
     const targetRow = rows[pendingScrollIdx];
@@ -543,7 +584,7 @@ export function SoundKitWorkbench({
     const frame = requestAnimationFrame(() => {
       kitScrollToRef.current?.(entryIdx, "center");
       refineFrame = requestAnimationFrame(() => {
-        setPendingScrollId(null);
+        finishScroll();
         const rowEl = listRef.current?.querySelector<HTMLElement>(
           `[data-kit-row="${CSS.escape(domId)}"]`,
         );

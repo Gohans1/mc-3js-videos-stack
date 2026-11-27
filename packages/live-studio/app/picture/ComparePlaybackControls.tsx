@@ -12,6 +12,12 @@ import {
   compareReferenceItem,
   compareVideoUrl,
 } from "./compare-video-model";
+import {
+  compareVideoErrorOf,
+  compareVideoMetaOf,
+  compareVideoPathOf,
+  compareVideoReadyOf,
+} from "./slice";
 
 export function handleCompareSeekKey(e: KeyboardEvent): boolean {
   if (e.altKey || e.ctrlKey || e.metaKey || (e.key !== "ArrowRight" && e.key !== "ArrowLeft"))
@@ -25,14 +31,14 @@ export function handleCompareSeekKey(e: KeyboardEvent): boolean {
 }
 
 export function ComparePlaybackControls() {
-  const videos = useStudio((s) => s.compareVideos);
-  const path = useStudio((s) => s.compareVideoPath);
+  const videos = useStudio((s) => s.compareCatalog.videos);
+  const path = useStudio(compareVideoPathOf);
   const audioMode = useStudio((s) => s.compareVideoAudio);
   const referenceStatus = useStudio((s) => s.compareReferenceAudioStatus);
-  const ready = useStudio((s) => s.compareVideoReady);
-  const error = useStudio((s) => s.compareVideoError);
-  const meta = useStudio((s) => s.compareVideoMeta);
-  const preferredRef = useStudio((s) => s.compareCanBuild.ref);
+  const ready = useStudio(compareVideoReadyOf);
+  const error = useStudio(compareVideoErrorOf);
+  const meta = useStudio(compareVideoMetaOf);
+  const preferredRef = useStudio((s) => s.compareCatalog.canBuild.ref);
   const activeItem = videos.find((v) => v.path === path) ?? null;
   if (!activeItem) return null;
 

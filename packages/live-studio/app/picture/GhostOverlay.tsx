@@ -18,13 +18,16 @@ import {
   type GhostTarget,
 } from "./director-eye";
 
+type SlotCapture = {
+  cacheKey: string;
+  queued: { cacheKey: string; captureAt: number } | null;
+};
+
 const MAX_GHOST_CACHE = 48;
 const REV_DEBOUNCE_MS = 200;
 const ghostCache = new Map<string, string>();
 const slotLatest = new Map<string, string>();
-const pendingGhost = new Map<string, Promise<string | null>>();
-const pendingSlot = new Set<string>();
-const queuedSlot = new Map<string, { cacheKey: string; captureAt: number }>();
+const slotCaptures = new Map<string, SlotCapture>();
 const ghostSubs = new Set<() => void>();
 
 function putLru(map: Map<string, string>, key: string, value: string) {
@@ -37,13 +40,15 @@ function putLru(map: Map<string, string>, key: string, value: string) {
 }
 
 function ensureGhostCapture(slotKey: string, cacheKey: string, captureAt: number) {
-  if (ghostCache.has(cacheKey) || pendingGhost.has(cacheKey)) return;
-  if (pendingSlot.has(slotKey)) {
-    queuedSlot.set(slotKey, { cacheKey, captureAt });
+  if (ghostCache.has(cacheKey)) return;
+  const active = slotCaptures.get(slotKey);
+  if (active) {
+    if (active.cacheKey !== cacheKey) active.queued = { cacheKey, captureAt };
     return;
   }
-  pendingSlot.add(slotKey);
-  const task = captureFrameDataUrl(captureAt, 960)
+  const entry: SlotCapture = { cacheKey, queued: null };
+  slotCaptures.set(slotKey, entry);
+  void captureFrameDataUrl(captureAt, 960)
     .then((url) => {
       if (url) {
         putLru(ghostCache, cacheKey, url);
@@ -53,19 +58,14 @@ function ensureGhostCapture(slotKey: string, cacheKey: string, captureAt: number
     })
     .catch(() => null)
     .finally(() => {
-      pendingGhost.delete(cacheKey);
-      pendingSlot.delete(slotKey);
-      const next = queuedSlot.get(slotKey);
-      if (next) {
-        queuedSlot.delete(slotKey);
-        if (!ghostCache.has(next.cacheKey) && get().ghost && !S.playing && !S.dragging) {
-          ensureGhostCapture(slotKey, next.cacheKey, next.captureAt);
-          return;
-        }
+      slotCaptures.delete(slotKey);
+      const next = entry.queued;
+      if (next && !ghostCache.has(next.cacheKey) && get().ghost && !S.playing && !S.dragging) {
+        ensureGhostCapture(slotKey, next.cacheKey, next.captureAt);
+        return;
       }
       for (const fn of ghostSubs) fn();
     });
-  pendingGhost.set(cacheKey, task);
   for (const fn of ghostSubs) fn();
 }
 
@@ -153,7 +153,7 @@ function useGhostTarget(autoCapture: boolean): {
   }, [autoCapture, ready, available, captureAt, slotKey, cacheKey, playing, dragEpoch]);
 
   const url = cacheKey ? (ghostCache.get(cacheKey) ?? slotLatest.get(slotKey) ?? null) : null;
-  const busy = available && (pendingGhost.has(cacheKey) || pendingSlot.has(slotKey));
+  const busy = available && slotCaptures.has(slotKey);
 
   return { opacity, target, url, busy };
 }

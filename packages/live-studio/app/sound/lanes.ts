@@ -474,10 +474,13 @@ export const attachLanes = () => {
     const r = c.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width };
   };
-  let drag: Drag | null = null;
-  let lastPointer: PointerEvent | null = null;
-  let scrub: { resume: boolean } | null = null;
-  let box: { add: boolean } | null = null;
+  type LanesGesture =
+    | { kind: "idle" }
+    | { kind: "scrub"; resume: boolean }
+    | { kind: "box"; add: boolean }
+    | ({ kind: "drag"; pointer: number; lastPointer: PointerEvent | null } & Drag);
+
+  let gesture: LanesGesture = { kind: "idle" };
   const localTime = (b: Pick<Box, "x0" | "x1" | "ref">, x: number) =>
     ((x - b.x0) / (b.x1 - b.x0)) * (span(b.ref)[1] - span(b.ref)[0]);
   const onGain = (b: Box, x: number, y: number) =>
@@ -547,11 +550,11 @@ export const attachLanes = () => {
           setClips([]);
           if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
         }
-        scrub = { resume: S.playing };
+        gesture = { kind: "scrub", resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
       } else {
-        box = { add };
+        gesture = { kind: "box", add };
         boxStart(e, add);
       }
       return;
@@ -594,7 +597,10 @@ export const attachLanes = () => {
                   : "move"));
     const [from, to] = span(b.ref);
     if (gainKey !== null) seek(from + clipOf(b.ref)!.gainKeys![gainKey].t);
-    drag = {
+    gesture = {
+      kind: "drag",
+      pointer: e.pointerId,
+      lastPointer: e,
       ref: b.ref,
       group,
       mode,
@@ -626,20 +632,22 @@ export const attachLanes = () => {
     else if (e.clientY < r.top + 18) box.scrollTop -= 10;
   };
   const move = (e: PointerEvent, scroll = true) => {
-    lastPointer = e;
-    if (drag?.moved && scroll) edgeScroll(e);
+    if (gesture.kind === "drag") {
+      gesture.lastPointer = e;
+      if (gesture.moved && scroll) edgeScroll(e);
+    }
     const { x, y, w } = local(e),
       { v } = view(),
       perPx = v / w;
-    if (scrub) {
+    if (gesture.kind === "scrub") {
       seek(timeAt(x, w));
       return;
     }
-    if (box) {
+    if (gesture.kind === "box") {
       boxMove(e);
       return;
     }
-    if (!drag && get().blade) {
+    if (gesture.kind === "idle" && get().blade) {
       const b = hit(x, y, false);
       c.style.cursor = !b ? "default" : locked(b.ref) ? "not-allowed" : BLADE_CURSOR;
       bladeLine.row = b && !locked(b.ref) ? "lanes" : null;
@@ -647,7 +655,7 @@ export const attachLanes = () => {
       drawLanes();
       return;
     }
-    if (!drag) {
+    if (gesture.kind !== "drag") {
       const b = hit(x, y, false),
         edge =
           b &&
@@ -676,6 +684,7 @@ export const attachLanes = () => {
       }
       return;
     }
+    const drag = gesture;
     if (
       !drag.moved &&
       Math.abs(x - drag.x) < 3 &&
@@ -750,24 +759,24 @@ export const attachLanes = () => {
     let target: number | null = null,
       valid = true;
     preview((l) => {
-      if (drag!.mode === "move") {
-        const moving = (drag!.moving = drag!.copy
+      if (drag.mode === "move") {
+        const moving = (drag.moving = drag.copy
           ? group.map((r): ClipRef => {
               const list = l[r.list] as unknown[];
               list.push(structuredClone(list[r.i]));
               return { list: r.list, i: list.length - 1 };
             })
           : group);
-        const snapped = drag!.magnet(from + d, [0, to - from], pts, perPx, off);
+        const snapped = drag.magnet(from + d, [0, to - from], pts, perPx, off);
         target = snapped.target;
         const starts = moving.map((r) => span(r)[0]);
-        const room = drag!.along?.room ?? [-Infinity, Infinity];
+        const room = drag.along?.room ?? [-Infinity, Infinity];
         const layout = laneLayout(lanes),
           rows = moving.map((r) => layout.rowsByTrack.get(clipOf(r)?.track)?.index ?? -1),
           n = l.tracks.length;
         const dk = Math.max(
           -Math.min(...rows),
-          Math.min(n - Math.max(...rows), rowAt(layout.rows, y) - rowAt(layout.rows, drag!.y)),
+          Math.min(n - Math.max(...rows), rowAt(layout.rows, y) - rowAt(layout.rows, drag.y)),
         );
         const fresh = rows.some((k) => k + dk === n)
           ? addRoleTrack(l, clipTrackRole(ref), n).id
@@ -783,9 +792,9 @@ export const attachLanes = () => {
           valid = false;
           return;
         }
-        drag!.shift = shift;
+        drag.shift = shift;
         const grabbed = moving[group.findIndex((r) => same(r, ref))];
-        floating = { refs: moving, grabbed, clientY: e.clientY, grabOffsetY: drag!.y - drag!.y0 };
+        floating = { refs: moving, grabbed, clientY: e.clientY, grabOffsetY: drag.y - drag.y0 };
         moving.forEach((r) => {
           const e = l[r.list][r.i] as { from?: number; to?: number; at?: number; track?: string };
           if (r.list === "beds") {
@@ -794,8 +803,8 @@ export const attachLanes = () => {
             e.to = r3(e.from + len);
           } else e.at = r3(e.at! + shift);
         });
-      } else if (drag!.mode === "end") {
-        const snapped = drag!.magnet(to + d, [0], pts, perPx, off);
+      } else if (drag.mode === "end") {
+        const snapped = drag.magnet(to + d, [0], pts, perPx, off);
         target = snapped.target;
         const neighbours = allClips()
           .filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track)
@@ -807,7 +816,7 @@ export const attachLanes = () => {
         const e2 = Math.min(next, Math.max(from + 1 / FPS, snapped.time));
         cutAfter(l[ref.list][ref.i], ref.list, e2);
       } else {
-        const snapped = drag!.magnet(from + d, [0], pts, perPx, off);
+        const snapped = drag.magnet(from + d, [0], pts, perPx, off);
         target = snapped.target;
         const neighbours = allClips()
           .filter((r) => !same(r, ref) && clipOf(r)!.track === clipOf(ref)!.track)
@@ -848,31 +857,30 @@ export const attachLanes = () => {
   c.closest("[data-tracks-scroll]")?.addEventListener(
     "scroll",
     () => {
-      if (drag?.moved && drag.mode === "move" && lastPointer) move(lastPointer, false);
+      if (gesture.kind === "drag" && gesture.moved && gesture.mode === "move" && gesture.lastPointer)
+        move(gesture.lastPointer, false);
     },
     { passive: true },
   );
 
   const up = (e: PointerEvent) => {
-    if (scrub) {
-      const r = scrub.resume;
-      scrub = null;
+    if (gesture.kind === "drag" && e.type === "pointerup" && gesture.moved && gesture.mode === "move")
+      move(e, false);
+    const active = gesture;
+    gesture = { kind: "idle" };
+    if (active.kind === "scrub") {
       holdView(false);
-      if (r) setPlaying(true);
+      if (active.resume) setPlaying(true);
       return;
     }
-    if (box) {
-      box = null;
+    if (active.kind === "box") {
       boxEnd(e);
       return;
     }
-    if (!drag) return;
-    if (e.type === "pointerup" && drag.moved && drag.mode === "move") move(e, false);
-    lastPointer = null;
+    if (active.kind !== "drag") return;
     snapLine(null);
     floating = null;
-    const { snap, moved, alone, ref, copy, moving, along, shift, gainKey } = drag;
-    drag = null;
+    const { snap, moved, alone, ref, copy, moving, along, shift, gainKey } = active;
     c.style.cursor = "";
     if (!moved) {
       if (e.type === "pointerup") {
@@ -921,12 +929,18 @@ export const attachLanes = () => {
   window.addEventListener(
     "keydown",
     (e) => {
-      if (e.key !== "Escape" || !drag?.mode.startsWith("gain")) return;
+      if (e.key !== "Escape" || gesture.kind !== "drag") return;
+      const active = gesture;
+      gesture = { kind: "idle" };
       e.preventDefault();
       e.stopPropagation();
-      restore(drag.snap);
-      drag = null;
+      snapLine(null);
+      floating = null;
+      restore(active.snap);
+      active.along?.restore();
       c.style.cursor = "";
+      if (c.hasPointerCapture(active.pointer)) c.releasePointerCapture(active.pointer);
+      drawLanes();
     },
     true,
   );
@@ -935,7 +949,7 @@ export const attachLanes = () => {
       bladeLine.row = null;
       drawLanes();
     }
-    if (hover && !drag) {
+    if (hover && gesture.kind !== "drag") {
       hover = null;
       drawLanes();
     }

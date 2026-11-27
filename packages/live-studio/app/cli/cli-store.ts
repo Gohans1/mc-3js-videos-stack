@@ -33,14 +33,38 @@ import {
   setDraftFieldWithExclusiveClear,
 } from "./model";
 
+export type CliSaveDialogState =
+  | { status: "closed" }
+  | { status: "open"; error: string | null }
+  | { status: "saving" };
+
+export interface CliConfirmPending {
+  request: CliRunRequest;
+  dialog: CliConfirmRequest;
+  openCommandOnStart?: boolean;
+  templateToLoad?: CliTemplate;
+}
+
+export type CliRunLifecycle =
+  | { status: "idle"; error: CliRunError | null }
+  | { status: "confirming"; pending: CliConfirmPending }
+  | { status: "submitting" }
+  | { status: "running"; run: CliRunSnapshot; error: CliRunError | null }
+  | { status: "stopping"; run: CliRunSnapshot };
+
+export type CliCatalogState =
+  | { status: "idle"; filmQuery: string | null }
+  | { status: "loading"; catalog: CliCatalogResponse | null; filmQuery: string | null }
+  | { status: "ready"; catalog: CliCatalogResponse; filmQuery: string | null }
+  | { status: "error"; catalog: CliCatalogResponse | null; filmQuery: string | null; error: string };
+
+export type CliTemplatesState =
+  | { status: "loading"; templates: CliTemplate[] }
+  | { status: "ready"; templates: CliTemplate[]; error: string | null };
+
 export interface CliUiState {
-  catalog: CliCatalogResponse | null;
-  catalogFilmQuery: string | null;
-  loadingCatalog: boolean;
-  catalogError: string | null;
-  templates: CliTemplate[];
-  templatesLoaded: boolean;
-  templatesError: string | null;
+  catalogState: CliCatalogState;
+  templatesState: CliTemplatesState;
   view: "browse" | "workbench";
   panelMode: "embedded" | "expanded";
   helpOpen: boolean;
@@ -49,34 +73,37 @@ export interface CliUiState {
   activeCommandId: string;
   drafts: Record<string, CliCommandDraft>;
   editingTemplateId: string | null;
-  activeRun: CliRunSnapshot | null;
+  runState: CliRunLifecycle;
   lastRun: CliRunSnapshot | null;
   hiddenRunId: string | null;
-  stoppingRunId: string | null;
   consoleExpanded: boolean;
   focusConsoleRunId: string | null;
-  submittingRun: boolean;
-  runError: CliRunError | null;
   clearedHint: string | null;
-  confirmPending: {
-    request: CliRunRequest;
-    dialog: CliConfirmRequest;
-    openCommandOnStart?: boolean;
-    templateToLoad?: CliTemplate;
-  } | null;
-  saveDialogOpen: boolean;
-  savingTemplate: boolean;
-  saveError: string | null;
+  saveDialog: CliSaveDialogState;
 }
 
+export const cliCatalogOf = (s: Pick<CliUiState, "catalogState">): CliCatalogResponse | null =>
+  s.catalogState.status === "idle" ? null : s.catalogState.catalog;
+
+export const cliActiveRunOf = (s: Pick<CliUiState, "runState">): CliRunSnapshot | null =>
+  s.runState.status === "running" || s.runState.status === "stopping" ? s.runState.run : null;
+
+export const cliStoppingRunIdOf = (s: Pick<CliUiState, "runState">): string | null =>
+  s.runState.status === "stopping" ? s.runState.run.runId : null;
+
+export const cliRunErrorOf = (s: Pick<CliUiState, "runState">): CliRunError | null =>
+  s.runState.status === "idle" || s.runState.status === "running" ? s.runState.error : null;
+
+const clearRunError = (runState: CliRunLifecycle): CliRunLifecycle =>
+  runState.status === "idle"
+    ? { status: "idle", error: null }
+    : runState.status === "running"
+      ? { ...runState, error: null }
+      : runState;
+
 export const cliStore = createStore<CliUiState>(() => ({
-  catalog: null,
-  catalogFilmQuery: null,
-  loadingCatalog: false,
-  catalogError: null,
-  templates: [],
-  templatesLoaded: false,
-  templatesError: null,
+  catalogState: { status: "idle", filmQuery: null },
+  templatesState: { status: "loading", templates: [] },
   view: "browse",
   panelMode: "embedded",
   helpOpen: false,
@@ -85,47 +112,46 @@ export const cliStore = createStore<CliUiState>(() => ({
   activeCommandId: "find",
   drafts: {},
   editingTemplateId: null,
-  activeRun: null,
+  runState: { status: "idle", error: null },
   lastRun: null,
   hiddenRunId: null,
-  stoppingRunId: null,
   consoleExpanded: false,
   focusConsoleRunId: null,
-  submittingRun: false,
-  runError: null,
   clearedHint: null,
-  confirmPending: null,
-  saveDialogOpen: false,
-  savingTemplate: false,
-  saveError: null,
+  saveDialog: { status: "closed" },
 }));
 
 export const useCliStore = <T>(pick: (s: CliUiState) => T) => useStore(cliStore, pick);
 
-let closeStream: (() => void) | null = null;
-let streamingRunId: string | null = null;
+type StreamSession =
+  | { kind: "idle" }
+  | {
+      kind: "connected";
+      runId: string;
+      close: () => void;
+      stopTimer: ReturnType<typeof setTimeout> | null;
+    };
+
+let streamSession: StreamSession = { kind: "idle" };
 let bootPromise: Promise<void> | null = null;
-let stopFallbackTimer: ReturnType<typeof setTimeout> | null = null;
 let catalogRequestSeq = 0;
 
 function clearStopFallbackTimer() {
-  if (stopFallbackTimer !== null) {
-    clearTimeout(stopFallbackTimer);
-    stopFallbackTimer = null;
+  if (streamSession.kind === "connected" && streamSession.stopTimer !== null) {
+    clearTimeout(streamSession.stopTimer);
+    streamSession = { ...streamSession, stopTimer: null };
   }
 }
 
 function stopStream() {
-  clearStopFallbackTimer();
-  if (closeStream) {
-    closeStream();
-    closeStream = null;
-  }
-  streamingRunId = null;
+  if (streamSession.kind === "idle") return;
+  const active = streamSession;
+  streamSession = { kind: "idle" };
+  if (active.stopTimer !== null) clearTimeout(active.stopTimer);
+  active.close();
 }
 
-function appendChunkToRun(run: CliRunSnapshot | null, chunk: CliRunChunk): CliRunSnapshot | null {
-  if (!run) return null;
+function appendChunkToRun(run: CliRunSnapshot, chunk: CliRunChunk): CliRunSnapshot {
   const last = run.output.at(-1);
   if (last && chunk.seq <= last.seq && run.output.some((c) => c.seq === chunk.seq)) return run;
   return { ...run, output: [...run.output, chunk] };
@@ -133,16 +159,21 @@ function appendChunkToRun(run: CliRunSnapshot | null, chunk: CliRunChunk): CliRu
 
 function attachRunStream(run: CliRunSnapshot) {
   if (run.status !== "running") return;
-  if (streamingRunId === run.runId && closeStream) return;
+  if (streamSession.kind === "connected" && streamSession.runId === run.runId) return;
   stopStream();
-  streamingRunId = run.runId;
   const lastSeq = run.output.length ? run.output.at(-1)!.seq : -1;
 
-  closeStream = openCliRunStream(run.runId, lastSeq, {
+  let ended = false;
+  const close = openCliRunStream(run.runId, lastSeq, {
     onChunk: (chunk) => {
       cliStore.setState((s) => {
-        if (s.activeRun?.runId === run.runId) {
-          return { activeRun: appendChunkToRun(s.activeRun, chunk) };
+        if (
+          (s.runState.status === "running" || s.runState.status === "stopping") &&
+          s.runState.run.runId === run.runId
+        ) {
+          return {
+            runState: { ...s.runState, run: appendChunkToRun(s.runState.run, chunk) },
+          };
         }
         if (s.lastRun?.runId === run.runId) {
           return { lastRun: appendChunkToRun(s.lastRun, chunk) };
@@ -151,16 +182,13 @@ function attachRunStream(run: CliRunSnapshot) {
       });
     },
     onDone: (payload) => {
-      clearStopFallbackTimer();
+      ended = true;
       stopStream();
       cliStore.setState((s) => {
-        const current = s.activeRun?.runId === payload.runId ? s.activeRun : s.lastRun;
-        if (!current) {
-          return {
-            activeRun: null,
-            stoppingRunId: s.stoppingRunId === payload.runId ? null : s.stoppingRunId,
-          };
-        }
+        const activeRun = cliActiveRunOf(s);
+        const matchesActive = activeRun?.runId === payload.runId;
+        const current = matchesActive ? activeRun : s.lastRun;
+        if (!current) return {};
         const finished: CliRunSnapshot = {
           ...current,
           status: payload.status,
@@ -172,59 +200,77 @@ function attachRunStream(run: CliRunSnapshot) {
           finishedAt: Date.now(),
         };
         return {
-          stoppingRunId: s.stoppingRunId === payload.runId ? null : s.stoppingRunId,
-          activeRun: s.activeRun?.runId === payload.runId ? null : s.activeRun,
+          runState: matchesActive ? { status: "idle", error: null } : s.runState,
           lastRun: finished,
         };
       });
     },
     onError: (terminal) => {
-      if (terminal && streamingRunId === run.runId) {
-        if (closeStream) {
-          closeStream();
-          closeStream = null;
+      if (terminal) {
+        ended = true;
+        if (streamSession.kind === "connected" && streamSession.runId === run.runId) {
+          stopStream();
         }
-        streamingRunId = null;
       }
       void syncCliRuns();
     },
   });
+  if (!ended) {
+    streamSession = { kind: "connected", runId: run.runId, close, stopTimer: null };
+  } else {
+    close();
+  }
 }
 
 export async function refreshCliCatalog(film?: string | null): Promise<void> {
   const seq = ++catalogRequestSeq;
-  cliStore.setState({ loadingCatalog: true, catalogError: null });
+  cliStore.setState((s) => ({
+    catalogState: {
+      status: "loading",
+      catalog: cliCatalogOf(s),
+      filmQuery: s.catalogState.filmQuery,
+    },
+  }));
   try {
     const catalog = await fetchCliCatalog(film);
     if (seq !== catalogRequestSeq) return;
     cliStore.setState({
-      catalog,
-      catalogFilmQuery: film ?? null,
-      loadingCatalog: false,
+      catalogState: {
+        status: "ready",
+        catalog,
+        filmQuery: film ?? null,
+      },
     });
   } catch (err) {
     if (seq !== catalogRequestSeq) return;
-    cliStore.setState({
-      loadingCatalog: false,
-      catalogError: err instanceof Error ? err.message : String(err),
-    });
+    const error = err instanceof Error ? err.message : String(err);
+    cliStore.setState((s) => ({
+      catalogState: {
+        status: "error",
+        catalog: cliCatalogOf(s),
+        filmQuery: s.catalogState.filmQuery,
+        error,
+      },
+    }));
   }
 }
 
 export async function refreshCliTemplates(): Promise<void> {
   try {
     const { templates, warning } = await fetchCliTemplatesState();
-    cliStore.setState({ templates, templatesLoaded: true, templatesError: warning });
-  } catch (err) {
     cliStore.setState({
-      templatesLoaded: true,
-      templatesError: err instanceof Error ? err.message : String(err),
+      templatesState: { status: "ready", templates, error: warning },
     });
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    cliStore.setState((s) => ({
+      templatesState: { status: "ready", templates: s.templatesState.templates, error },
+    }));
   }
 }
 
 export function retryCliPanel(): Promise<void> {
-  const film = cliStore.getState().catalogFilmQuery;
+  const film = cliStore.getState().catalogState.filmQuery;
   return Promise.all([refreshCliCatalog(film), refreshCliTemplates(), syncCliRuns()]).then(
     () => undefined,
   );
@@ -233,14 +279,32 @@ export function retryCliPanel(): Promise<void> {
 export async function syncCliRuns(): Promise<void> {
   try {
     const { active, last } = await fetchCliRuns();
-    cliStore.setState((s) => ({
-      activeRun: active,
-      lastRun: last && last.runId !== s.hiddenRunId ? last : s.lastRun,
-      stoppingRunId:
-        active && active.status === "running" && s.stoppingRunId === active.runId
-          ? s.stoppingRunId
-          : null,
-    }));
+    cliStore.setState((s) => {
+      let nextRunState = s.runState;
+      if (active) {
+        if (
+          active.status === "running" &&
+          s.runState.status === "stopping" &&
+          s.runState.run.runId === active.runId
+        ) {
+          nextRunState = { status: "stopping", run: active };
+        } else {
+          const carriedError =
+            s.runState.status === "running" && s.runState.run.runId === active.runId
+              ? s.runState.error
+              : s.runState.status === "idle" && s.runState.error?.operation === "start"
+                ? s.runState.error
+                : null;
+          nextRunState = { status: "running", run: active, error: carriedError };
+        }
+      } else if (s.runState.status === "running" || s.runState.status === "stopping") {
+        nextRunState = { status: "idle", error: null };
+      }
+      return {
+        runState: nextRunState,
+        lastRun: last && last.runId !== s.hiddenRunId ? last : s.lastRun,
+      };
+    });
     if (active && active.status === "running") {
       attachRunStream(active);
     } else if (!active) {
@@ -252,7 +316,7 @@ export async function syncCliRuns(): Promise<void> {
 export function syncCatalogForTarget(targetFilm: string) {
   const desiredQuery =
     !targetFilm || targetFilm === "active" || targetFilm === "root" ? null : targetFilm;
-  if (cliStore.getState().catalogFilmQuery !== desiredQuery) {
+  if (cliStore.getState().catalogState.filmQuery !== desiredQuery) {
     void refreshCliCatalog(desiredQuery);
   }
 }
@@ -269,7 +333,7 @@ export function ensureCliLoaded(): Promise<void> {
 
 export function getOrCreateDraft(command: CliCommand): CliCommandDraft {
   const s = cliStore.getState();
-  return s.drafts[command.id] ?? createInitialDraft(command, s.catalog?.context);
+  return s.drafts[command.id] ?? createInitialDraft(command, cliCatalogOf(s)?.context);
 }
 
 export function consumeFocusConsoleRun(runId?: string) {
@@ -284,14 +348,14 @@ export function openCommandWorkbench(commandId: string, opts?: { focusRunId?: st
   const cmd = findCliCommand(commandId);
   if (!cmd) return;
   const s = cliStore.getState();
-  const draft = s.drafts[commandId] ?? createInitialDraft(cmd, s.catalog?.context);
+  const draft = s.drafts[commandId] ?? createInitialDraft(cmd, cliCatalogOf(s)?.context);
   cliStore.setState({
     view: "workbench",
     activeCommandId: commandId,
     helpOpen: false,
     editingTemplateId: null,
     clearedHint: null,
-    runError: null,
+    runState: clearRunError(s.runState),
     consoleExpanded: false,
     focusConsoleRunId: opts?.focusRunId ?? null,
     drafts: s.drafts[commandId] ? s.drafts : { ...s.drafts, [commandId]: draft },
@@ -302,9 +366,13 @@ export function openCommandWorkbench(commandId: string, opts?: { focusRunId?: st
 export function openTemplateInWorkbench(template: CliTemplate) {
   const cmd = findCliCommand(template.commandId);
   if (!cmd) {
-    cliStore.setState({
-      templatesError: `Command "${template.commandId}" is not available in the CLI catalog.`,
-    });
+    cliStore.setState((s) => ({
+      templatesState: {
+        status: "ready",
+        templates: s.templatesState.templates,
+        error: `Command "${template.commandId}" is not available in the CLI catalog.`,
+      },
+    }));
     return;
   }
   const draft = draftFromTemplate(template, cmd);
@@ -314,7 +382,7 @@ export function openTemplateInWorkbench(template: CliTemplate) {
     helpOpen: false,
     editingTemplateId: template.id,
     clearedHint: null,
-    runError: null,
+    runState: clearRunError(s.runState),
     consoleExpanded: false,
     focusConsoleRunId: null,
     drafts: { ...s.drafts, [cmd.id]: draft },
@@ -354,7 +422,7 @@ export function setActiveCommandSubcommand(level: number, subId: string) {
 
   cliStore.setState((prev) => ({
     clearedHint: null,
-    runError: null,
+    runState: clearRunError(prev.runState),
     drafts: {
       ...prev.drafts,
       [cmd.id]: {
@@ -415,7 +483,7 @@ export function updateDraftField(
     optionalValue,
   );
   cliStore.setState((prev) => ({
-    runError: null,
+    runState: clearRunError(prev.runState),
     clearedHint: cleared.length ? `Cleared mutually exclusive ${cleared.join(", ")}` : null,
     drafts: {
       ...prev.drafts,
@@ -428,10 +496,10 @@ export function resetCommandDraft(commandId: string) {
   const cmd = findCliCommand(commandId);
   if (!cmd) return;
   const s = cliStore.getState();
-  const nextDraft = createInitialDraft(cmd, s.catalog?.context);
+  const nextDraft = createInitialDraft(cmd, cliCatalogOf(s)?.context);
   cliStore.setState({
     clearedHint: null,
-    runError: null,
+    runState: clearRunError(s.runState),
     editingTemplateId: null,
     focusConsoleRunId: null,
     drafts: {
@@ -447,7 +515,7 @@ function buildFallbackConfirmDialog(
   reason: string,
   sourceLabel?: string,
 ): CliConfirmRequest {
-  const ctx = cliStore.getState().catalog?.context ?? null;
+  const ctx = cliCatalogOf(cliStore.getState())?.context ?? null;
   try {
     const spec = buildCliInvocation(request, ctx ?? undefined);
     return {
@@ -485,26 +553,40 @@ export async function dispatchCliRun(
     templateToLoad?: CliTemplate;
   },
 ): Promise<void> {
+  const runStatus = cliStore.getState().runState.status;
+  if (runStatus === "submitting" || runStatus === "running" || runStatus === "stopping") return;
   if (opts?.confirmMeta && !request.confirmed) {
     cliStore.setState({
-      confirmPending: {
-        request,
-        dialog: opts.confirmMeta,
-        openCommandOnStart: opts.openWorkbench,
-        templateToLoad: opts.templateToLoad,
+      runState: {
+        status: "confirming",
+        pending: {
+          request,
+          dialog: opts.confirmMeta,
+          openCommandOnStart: opts.openWorkbench,
+          templateToLoad: opts.templateToLoad,
+        },
       },
     });
     return;
   }
 
-  cliStore.setState({ submittingRun: true, runError: null, confirmPending: null });
+  cliStore.setState({ runState: { status: "submitting" } });
   let res: Awaited<ReturnType<typeof startCliRun>>;
   try {
     res = await startCliRun(request);
   } catch (err) {
-    cliStore.setState({
-      submittingRun: false,
-      runError: { operation: "start", message: err instanceof Error ? err.message : String(err) },
+    const error: CliRunError = {
+      operation: "start",
+      message: err instanceof Error ? err.message : String(err),
+    };
+    cliStore.setState((s) => {
+      if (s.runState.status === "running") {
+        return { runState: { status: "running", run: s.runState.run, error } };
+      }
+      if (s.runState.status === "submitting") {
+        return { runState: { status: "idle", error } };
+      }
+      return {};
     });
     return;
   }
@@ -517,20 +599,32 @@ export async function dispatchCliRun(
       const dialog: CliConfirmRequest = opts?.confirmMeta
         ? { ...opts.confirmMeta, reason }
         : buildFallbackConfirmDialog(request, reason, opts?.templateToLoad?.name);
-      cliStore.setState({
-        submittingRun: false,
-        confirmPending: {
-          request,
-          dialog,
-          openCommandOnStart: opts?.openWorkbench,
-          templateToLoad: opts?.templateToLoad,
-        },
-      });
+      cliStore.setState((s) =>
+        s.runState.status === "submitting"
+          ? {
+              runState: {
+                status: "confirming",
+                pending: {
+                  request,
+                  dialog,
+                  openCommandOnStart: opts?.openWorkbench,
+                  templateToLoad: opts?.templateToLoad,
+                },
+              },
+            }
+          : {},
+      );
       return;
     }
-    cliStore.setState({
-      submittingRun: false,
-      runError: { operation: "start", message: res.error },
+    const error: CliRunError = { operation: "start", message: res.error };
+    cliStore.setState((s) => {
+      if (s.runState.status === "running") {
+        return { runState: { status: "running", run: s.runState.run, error } };
+      }
+      if (s.runState.status === "submitting") {
+        return { runState: { status: "idle", error } };
+      }
+      return {};
     });
     return;
   }
@@ -540,10 +634,7 @@ export async function dispatchCliRun(
   }
   const run = res.run;
   cliStore.setState((s) => ({
-    submittingRun: false,
-    stoppingRunId: s.stoppingRunId === run.runId ? null : s.stoppingRunId,
-    activeRun: run,
-    runError: null,
+    runState: { status: "running", run, error: null },
     consoleExpanded: opts?.openWorkbench ? false : s.consoleExpanded,
     focusConsoleRunId: opts?.openWorkbench ? run.runId : s.focusConsoleRunId,
     view: opts?.openWorkbench ? "workbench" : s.view,
@@ -553,52 +644,85 @@ export async function dispatchCliRun(
 }
 
 export async function stopCurrentRun(runId: string): Promise<void> {
-  cliStore.setState({ stoppingRunId: runId, runError: null });
+  const cur = cliStore.getState().runState;
+  if (cur.status === "stopping" && cur.run.runId === runId) return;
+  cliStore.setState((s) => {
+    const activeRun = cliActiveRunOf(s);
+    if (!activeRun || activeRun.runId !== runId) return {};
+    return { runState: { status: "stopping", run: activeRun } };
+  });
   let stopped: CliRunSnapshot | null;
   try {
     stopped = await stopCliRun(runId);
   } catch (err) {
-    cliStore.setState({
-      stoppingRunId: null,
-      runError: { operation: "stop", message: err instanceof Error ? err.message : String(err) },
+    const error: CliRunError = {
+      operation: "stop",
+      message: err instanceof Error ? err.message : String(err),
+    };
+    cliStore.setState((s) => {
+      if (
+        (s.runState.status === "stopping" || s.runState.status === "running") &&
+        s.runState.run.runId === runId
+      ) {
+        return { runState: { status: "running", run: s.runState.run, error } };
+      }
+      return {};
     });
     return;
   }
   if (!stopped) {
-    cliStore.setState((s) => (s.stoppingRunId === runId ? { stoppingRunId: null } : {}));
+    cliStore.setState((s) =>
+      s.runState.status === "stopping" && s.runState.run.runId === runId
+        ? { runState: { status: "running", run: s.runState.run, error: null } }
+        : {},
+    );
     await syncCliRuns();
     return;
   }
   if (stopped.status === "running") {
-    cliStore.setState((s) => ({
-      stoppingRunId: runId,
-      activeRun:
-        s.activeRun?.runId === runId
-          ? {
-              ...stopped,
-              output:
-                s.activeRun.output.length >= stopped.output.length
-                  ? s.activeRun.output
-                  : stopped.output,
-            }
-          : s.activeRun,
-    }));
+    cliStore.setState((s) => {
+      const activeRun = cliActiveRunOf(s);
+      if (!activeRun || activeRun.runId !== runId) return {};
+      const merged: CliRunSnapshot = {
+        ...stopped,
+        output: activeRun.output.length >= stopped.output.length ? activeRun.output : stopped.output,
+      };
+      return { runState: { status: "stopping", run: merged } };
+    });
+    const afterStop = cliStore.getState().runState;
+    if (afterStop.status !== "stopping" || afterStop.run.runId !== runId) return;
     attachRunStream(stopped);
     clearStopFallbackTimer();
-    stopFallbackTimer = setTimeout(() => {
-      stopFallbackTimer = null;
-      if (cliStore.getState().stoppingRunId === runId) {
-        void syncCliRuns();
-      }
-    }, 2500);
+    if (streamSession.kind === "connected" && streamSession.runId === runId) {
+      const stopTimer = setTimeout(() => {
+        if (streamSession.kind === "connected" && streamSession.stopTimer === stopTimer) {
+          streamSession = { ...streamSession, stopTimer: null };
+        }
+        const rs = cliStore.getState().runState;
+        if (rs.status === "stopping" && rs.run.runId === runId) {
+          void syncCliRuns();
+        }
+      }, 2500);
+      streamSession = { ...streamSession, stopTimer };
+    }
     return;
   }
-  stopStream();
-  cliStore.setState((s) => ({
-    stoppingRunId: s.stoppingRunId === runId ? null : s.stoppingRunId,
-    activeRun: s.activeRun?.runId === runId ? null : s.activeRun,
-    lastRun: stopped,
-  }));
+  if (streamSession.kind === "connected" && streamSession.runId === runId) {
+    stopStream();
+  }
+  cliStore.setState((s) => {
+    const activeRun = cliActiveRunOf(s);
+    const shouldUpdateLast = activeRun?.runId === runId || !s.lastRun || s.lastRun.runId === runId;
+    return {
+      runState:
+        activeRun?.runId === runId ? { status: "idle", error: null } : s.runState,
+      lastRun: shouldUpdateLast ? stopped : s.lastRun,
+    };
+  });
+}
+
+export function dismissCliRunError() {
+  cliStore.setState((s) => ({ runState: clearRunError(s.runState) }));
 }
 
 export function hideConsoleRun(commandId: string) {
@@ -613,7 +737,8 @@ export async function commitSaveTemplate(input: {
   targetFilm: string;
   draft: CliCommandDraft;
 }): Promise<CliTemplate | null> {
-  cliStore.setState({ savingTemplate: true, saveError: null });
+  if (cliStore.getState().saveDialog.status === "saving") return null;
+  cliStore.setState({ saveDialog: { status: "saving" } });
   try {
     const res = await saveCliTemplate({
       id: input.id,
@@ -625,18 +750,22 @@ export async function commitSaveTemplate(input: {
       targetFilm: input.targetFilm,
     });
     cliStore.setState({
-      templates: res.templates,
+      templatesState: { status: "ready", templates: res.templates, error: null },
       editingTemplateId: res.template.id,
-      saveDialogOpen: false,
-      savingTemplate: false,
-      saveError: null,
+      saveDialog: { status: "closed" },
     });
     return res.template;
   } catch (err) {
-    cliStore.setState({
-      savingTemplate: false,
-      saveError: err instanceof Error ? err.message : String(err),
-    });
+    cliStore.setState((s) =>
+      s.saveDialog.status === "saving"
+        ? {
+            saveDialog: {
+              status: "open",
+              error: err instanceof Error ? err.message : String(err),
+            },
+          }
+        : {},
+    );
     return null;
   }
 }
@@ -645,15 +774,15 @@ export async function removeTemplate(id: string): Promise<boolean> {
   try {
     const next = await deleteCliTemplate(id);
     cliStore.setState((s) => ({
-      templates: next,
-      templatesError: null,
+      templatesState: { status: "ready", templates: next, error: null },
       editingTemplateId: s.editingTemplateId === id ? null : s.editingTemplateId,
     }));
     return true;
   } catch (err) {
-    cliStore.setState({
-      templatesError: err instanceof Error ? err.message : String(err),
-    });
+    const error = err instanceof Error ? err.message : String(err);
+    cliStore.setState((s) => ({
+      templatesState: { status: "ready", templates: s.templatesState.templates, error },
+    }));
     return false;
   }
 }
@@ -670,12 +799,15 @@ export async function restoreDeletedTemplate(tpl: CliTemplate): Promise<boolean>
       targetFilm: tpl.targetFilm,
       pinned: tpl.pinned,
     });
-    cliStore.setState({ templates: res.templates, templatesError: null });
+    cliStore.setState({
+      templatesState: { status: "ready", templates: res.templates, error: null },
+    });
     return true;
   } catch (err) {
-    cliStore.setState({
-      templatesError: err instanceof Error ? err.message : String(err),
-    });
+    const error = err instanceof Error ? err.message : String(err);
+    cliStore.setState((s) => ({
+      templatesState: { status: "ready", templates: s.templatesState.templates, error },
+    }));
     return false;
   }
 }

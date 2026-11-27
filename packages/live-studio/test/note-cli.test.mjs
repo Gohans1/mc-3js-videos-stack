@@ -574,3 +574,44 @@ test("render, check and at end on the creator's open notes, and how many came si
   );
   assert.equal(noteNudge(film([note("b", "y", { state: "done", done: true })])), "");
 });
+
+test("notes CLI selects comma lists, numeric ranges, and unambiguous 4+ char ID prefixes while rejecting ambiguous prefixes", () => {
+  const dir = film([
+    note("alpha1111", "one", { at: "2026-11-01" }),
+    note("alpha2222", "two", { at: "2026-11-02" }),
+    note("beta33333", "three", { at: "2026-11-03" }),
+    note("gamma4444", "four", { at: "2026-11-04" }),
+  ]);
+  const combo = list(dir, "1,3-4", "--json");
+  assert.equal(combo.status, 0, combo.stderr);
+  assert.deepEqual(
+    JSON.parse(combo.stdout).notes.map((n) => n.id),
+    ["alpha1111", "beta33333", "gamma4444"],
+  );
+
+  const uniqPrefix = list(dir, "beta3", "--json");
+  assert.equal(uniqPrefix.status, 0, uniqPrefix.stderr);
+  assert.deepEqual(
+    JSON.parse(uniqPrefix.stdout).notes.map((n) => n.id),
+    ["beta33333"],
+  );
+
+  const ambig = list(dir, "alpha", "--json");
+  assert.equal(ambig.status, 2);
+  assert.match(ambig.stderr, /ambiguous note prefix/);
+
+  const gapDir = film([
+    note("g1", "first", { at: "2026-11-01" }),
+    note("g3", "third", { at: "2026-11-03" }),
+  ]);
+  writeFileSync(
+    join(gapDir, "notes/deleted.jsonl"),
+    JSON.stringify(note("g2", "deleted", { at: "2026-11-02" })) + "\n",
+  );
+  const gapRange = list(gapDir, "1-3", "--json");
+  assert.equal(gapRange.status, 0, gapRange.stderr);
+  assert.deepEqual(
+    JSON.parse(gapRange.stdout).notes.map((n) => n.id),
+    ["g1", "g3"],
+  );
+});

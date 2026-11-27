@@ -28,16 +28,19 @@ export function VoiceSpeechBatch({
   onBrowse: () => void;
   resultFocus: RefObject<HTMLHeadingElement | null>;
 }) {
+  type BatchReviewFlow =
+    | { status: "idle" }
+    | { status: "checking"; viaKeyboard: boolean }
+    | { status: "error"; message: string }
+    | { status: "reviewing"; review: SpeechReview; viaKeyboard: boolean };
+
   const playingVoice = useSyncExternalStore(subscribeAudition, listening, listening);
-  const [keyboardReview, setKeyboardReview] = useState(false);
   const voices = pg.compareVoices ?? [];
   const draft = comparisonSpeechDraft(pg.draft);
   const genVoiceDraft = (draft?.connection ?? "genvoice") === "genvoice";
   const script = genVoiceDraft ? draft?.text : undefined;
   const hasScript = Boolean(script?.trim());
-  const [review, setReview] = useState<SpeechReview | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [error, setError] = useState("");
+  const [flow, setFlow] = useState<BatchReviewFlow>({ status: "idle" });
   const reviewButton = useRef<HTMLButtonElement>(null);
   const currentVoice = draft?.voiceId
     ? {
@@ -53,23 +56,23 @@ export function VoiceSpeechBatch({
   const hasCurrent =
     currentVoice &&
     voices.some((voice) => castingAuditionId(voice) === castingAuditionId(currentVoice));
+  const checking = flow.status === "checking";
   const requestReview = async (viaKeyboard: boolean) => {
-    if (checking || review) return;
-    setKeyboardReview(viaKeyboard);
-    setError("");
-    setChecking(true);
+    if (flow.status === "checking" || flow.status === "reviewing") return;
+    setFlow({ status: "checking", viaKeyboard });
     try {
-      setReview(await reviewGenVoiceSpeech(voices));
+      const nextReview = await reviewGenVoiceSpeech(voices);
+      setFlow({ status: "reviewing", review: nextReview, viaKeyboard });
     } catch (cause) {
-      setError(
-        cause instanceof TypeError
-          ? "Couldn't get the estimate. Reconnect to Studio, then review the batch again."
-          : cause instanceof Error
-            ? cause.message
-            : "Couldn't get the estimate. Review the batch again to retry.",
-      );
-    } finally {
-      setChecking(false);
+      setFlow({
+        status: "error",
+        message:
+          cause instanceof TypeError
+            ? "Couldn't get the estimate. Reconnect to Studio, then review the batch again."
+            : cause instanceof Error
+              ? cause.message
+              : "Couldn't get the estimate. Review the batch again to retry.",
+      });
     }
   };
   return (
@@ -192,20 +195,20 @@ export function VoiceSpeechBatch({
           </p>
         )}
       </div>
-      {error && (
+      {flow.status === "error" && (
         <p role="alert" className="text-warn-text text-sm">
-          {error}
+          {flow.message}
         </p>
       )}
-      {review && (
+      {flow.status === "reviewing" && (
         <VoiceSpeechConfirmation
-          review={review}
+          review={flow.review}
           models={pg.catalog.models}
           returnFocus={reviewButton}
           successFocus={resultFocus}
-          motion={keyboardReview ? "none" : "default"}
-          onConfirm={() => launchReviewedSpeech(review)}
-          onClose={() => setReview(null)}
+          motion={flow.viaKeyboard ? "none" : "default"}
+          onConfirm={() => launchReviewedSpeech(flow.review)}
+          onClose={() => setFlow({ status: "idle" })}
         />
       )}
     </section>

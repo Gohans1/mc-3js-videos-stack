@@ -508,6 +508,17 @@ test("Speech keeps the selected connection through generation, archive and retry
     text: "Xin chào.",
     annotations: [{ type: "speech_metadata", style: "Softly, with a brief pause." }],
   });
+  const googleCatalog = await (
+    await api.request("/api/voice/playground/catalog?connection=google")
+  ).json();
+  expect(googleCatalog.models.map((m) => m.model_id)).toEqual(["gemini-3.8-flash-tts"]);
+  const rejectedLite = await post("tts", {
+    connection: "google",
+    modelId: "gemini-3.8-flash-lite-tts",
+    voiceId: "Kore",
+    text: "Blocked.",
+  });
+  expect(rejectedLite.status).toBe(400);
 });
 
 test("manual credentials and voice stars are isolated by service", async () => {

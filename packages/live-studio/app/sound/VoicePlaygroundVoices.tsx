@@ -68,7 +68,7 @@ export function VoicePlaygroundVoices({
         ? (pg.draft.connection ?? "genvoice")
         : (service ?? pg.draft.connection ?? "genvoice");
   const direct = connection !== "genvoice";
-  const catalog = direct ? pg.serviceCatalogs?.[connection] : pg.catalog;
+  const catalog = direct ? pg.serviceCatalogs?.[connection]?.catalog : pg.catalog;
   const configured = direct
     ? pg.status.connections?.[connection]?.configured
     : pg.status.configured;

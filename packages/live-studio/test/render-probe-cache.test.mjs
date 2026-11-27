@@ -587,6 +587,85 @@ test("collectProbeTargets disambiguates duplicate bone names and handles case-in
   assert.deepEqual(collectProbeTargets(tools, "does_not_exist"), []);
 });
 
+test("collectProbeTargets prefers exact matches over substring collisions, reads userData.bones, and probeCheck merges same-t reports with center", async () => {
+  const scene = new THREE.Scene();
+  const camera = makePerspectiveCamera();
+
+  const cop = new THREE.Group();
+  const copHead = new THREE.Bone();
+  copHead.name = "Head";
+  cop.add(copHead);
+  cop.userData.bones = { head: copHead };
+
+  const copKitchen = new THREE.Group();
+  copKitchen.visible = false;
+  const copKitchenHead = new THREE.Bone();
+  copKitchenHead.name = "Head";
+  copKitchen.add(copKitchenHead);
+  copKitchen.userData.bones = { head: copKitchenHead };
+
+  const woodsGirl = new THREE.Group();
+  const handL = new THREE.Group();
+  handL.name = "handL";
+  woodsGirl.add(handL);
+  woodsGirl.userData.bones = { handL };
+
+  const handle = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), new THREE.MeshBasicMaterial());
+  handle.name = "handle";
+  handle.visible = false;
+
+  const offPivot = new THREE.Group();
+  const shiftedBox = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshBasicMaterial());
+  shiftedBox.position.set(0, 1, 0);
+  offPivot.add(shiftedBox);
+
+  scene.add(cop, copKitchen, woodsGirl, handle, offPivot);
+  scene.updateMatrixWorld(true);
+
+  const tools = {
+    scene,
+    camera,
+    objects: [
+      [cop, "cop"],
+      [copKitchen, "copKitchen"],
+      [woodsGirl, "woodsGirl"],
+      [handle, "handle"],
+      [offPivot, "offPivot"],
+    ],
+  };
+
+  assert.deepEqual(
+    collectProbeTargets(tools, "cop.head").map((x) => x.obj),
+    [copHead],
+  );
+  assert.deepEqual(
+    collectProbeTargets(tools, "woodsGirl.handL").map((x) => x.obj),
+    [handL],
+  );
+
+  const posted = [];
+  const postStub = async (url, body) => {
+    posted.push({ url, report: JSON.parse(body) });
+  };
+  const check = probeCheck(Object.assign(() => {}, { tools }), {}, postStub);
+  const firstLines = await check("cop.head", 2);
+  const secondLines = await check("offPivot", 2);
+  const thirdLines = await check("copKitchen.head", 2);
+  assert.equal(posted.length, 3);
+  assert.equal(posted[1].url, "/still/probe_2s.json");
+  assert.deepEqual(
+    posted[1].report.targets.map((x) => x.name),
+    ["Head", "offPivot"],
+  );
+  assert.deepEqual(
+    posted[2].report.targets.map((x) => x.name),
+    ["cop.Head", "offPivot", "copKitchen.Head"],
+  );
+  assert.match(secondLines.join("\n"), /center=\[0\.00,1\.00,0\.00\]/);
+  assert.match(thirdLines.join("\n"), /copKitchen\.Head/);
+  assert.ok(firstLines.length > 0 && thirdLines.length > 0);
+});
+
 test("projectBoundsToScreen handles perspective, near-plane straddling, offscreen, behind, orthographic, and beyond-far targets", () => {
   const camera = makePerspectiveCamera();
 
@@ -715,6 +794,23 @@ test("probeCheck restores tools.free on success and error, and maps sceneT under
     assert.equal(free.roll, 12);
     assert.deepEqual(free.p.toArray(), [1, 2, 3]);
     assert.deepEqual(free.l.toArray(), [4, 5, 6]);
+
+    const freeNoRoll = {
+      on: false,
+      fov: 55,
+      p: new THREE.Vector3(1, 2, 3),
+      l: new THREE.Vector3(4, 5, 6),
+    };
+    let seenRoll;
+    const renderRoll = Object.assign(
+      () => {
+        seenRoll = freeNoRoll.roll;
+      },
+      { tools: { scene, camera, free: freeNoRoll, objects: [[box, "box"]] } },
+    );
+    await probeCheck(renderRoll, { inspect: [0, 1, 8, 0, 1, 0, 40, 0.35] }, postStub)("box", 0.5);
+    assert.equal(seenRoll, 0.35);
+    assert.equal(Object.hasOwn(freeNoRoll, "roll"), false);
   } finally {
     setTiming({}, 0);
   }
@@ -799,11 +895,11 @@ test(
     assert.equal(typo.status, 2, typo.stdout + typo.stderr);
     assert.match(typo.stderr, /unknown option --fresh-cach/);
 
-    const twice = run(["stills"], ["--check", "text", "--check", "order"]);
+    const twice = run(["clip"], ["--chunks", "0", "--chunks", "1"]);
     assert.equal(twice.status, 2, twice.stdout + twice.stderr);
     assert.match(
       twice.stderr,
-      /--check is given twice: once, with every value in it \(--check "text;order"\)/,
+      /--chunks is given twice: once, with every value in it \(--chunks 3,4\)/,
     );
 
     const lab = run(["stills"], ["--lab", "view=desk"]);

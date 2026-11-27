@@ -32,57 +32,57 @@ import { StudioEntry, UrlActionRow } from "./StudioEntry";
 const COPY_FEEDBACK_MS = 1800;
 const CLOCK_TICK_MS = 30_000;
 
+type PortsViewState =
+  | { status: "loading"; snapshot: null }
+  | { status: "ready"; snapshot: PortsSnapshot }
+  | { status: "refreshing"; snapshot: PortsSnapshot | null }
+  | { status: "error"; snapshot: PortsSnapshot | null; error: string };
+
+type ActivePortsRequest =
+  | { kind: "idle"; seq: number }
+  | { kind: "auto" | "force"; seq: number; controller: AbortController };
+
 export function PortsPanel({
   initialSnapshot = null,
 }: {
   initialSnapshot?: PortsSnapshot | null;
 } = {}) {
-  const [snapshot, setSnapshot] = useState<PortsSnapshot | null>(
-    () => initialSnapshot ?? getCachedPortsSnapshot(),
-  );
-  const [loading, setLoading] = useState(
-    () => initialSnapshot === null && getCachedPortsSnapshot() === null,
-  );
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<PortsViewState>(() => {
+    const cached = initialSnapshot ?? getCachedPortsSnapshot();
+    return cached ? { status: "ready", snapshot: cached } : { status: "loading", snapshot: null };
+  });
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState("");
   const [unmatchedOpen, setUnmatchedOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  const reqSeqRef = useRef(0);
-  const abortRef = useRef<AbortController | null>(null);
-  const inFlightRef = useRef<"auto" | "force" | null>(null);
+  const requestRef = useRef<ActivePortsRequest>({ kind: "idle", seq: 0 });
   const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const refreshRef = useRef<HTMLButtonElement>(null);
 
   const executeFetch = useCallback((forceRefresh: boolean) => {
-    const seq = ++reqSeqRef.current;
-    abortRef.current?.abort();
+    const prev = requestRef.current;
+    if (prev.kind !== "idle") prev.controller.abort();
+    const seq = prev.seq + 1;
     const controller = new AbortController();
-    abortRef.current = controller;
-    inFlightRef.current = forceRefresh ? "force" : "auto";
+    requestRef.current = { kind: forceRefresh ? "force" : "auto", seq, controller };
 
     void fetchPortsSnapshot({
       refresh: forceRefresh,
       signal: controller.signal,
     }).then(
       (next) => {
-        if (controller.signal.aborted || seq !== reqSeqRef.current) return;
-        inFlightRef.current = null;
+        if (controller.signal.aborted || requestRef.current.seq !== seq) return;
+        requestRef.current = { kind: "idle", seq };
         setCachedPortsSnapshot(next);
-        setSnapshot(next);
-        setError(null);
+        setView({ status: "ready", snapshot: next });
         setNow(Date.now());
-        setLoading(false);
-        setRefreshing(false);
       },
       (err: unknown) => {
-        if (controller.signal.aborted || seq !== reqSeqRef.current) return;
-        inFlightRef.current = null;
-        setError(err instanceof Error ? err.message : String(err));
-        setLoading(false);
-        setRefreshing(false);
+        if (controller.signal.aborted || requestRef.current.seq !== seq) return;
+        requestRef.current = { kind: "idle", seq };
+        const message = err instanceof Error ? err.message : String(err);
+        setView((current) => ({ status: "error", snapshot: current.snapshot, error: message }));
       },
     );
   }, []);
@@ -90,8 +90,7 @@ export function PortsPanel({
   const handleRefresh = useCallback(() => {
     refreshRef.current?.focus();
     setCopyMessage("");
-    setRefreshing(true);
-    setError(null);
+    setView((current) => ({ status: "refreshing", snapshot: current.snapshot }));
     executeFetch(true);
   }, [executeFetch]);
 
@@ -100,10 +99,11 @@ export function PortsPanel({
       executeFetch(false);
     }
     const onFocusOrVisible = () => {
+      const req = requestRef.current;
       if (
         shouldSkipBackgroundRefresh({
           visibilityState: document.visibilityState,
-          inFlight: inFlightRef.current,
+          inFlight: req.kind === "idle" ? null : req.kind,
         })
       ) {
         return;
@@ -115,14 +115,20 @@ export function PortsPanel({
     const clockTimer = setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
 
     return () => {
-      abortRef.current?.abort();
-      inFlightRef.current = null;
+      const req = requestRef.current;
+      if (req.kind !== "idle") req.controller.abort();
+      requestRef.current = { kind: "idle", seq: req.seq + 1 };
       window.removeEventListener("focus", onFocusOrVisible);
       document.removeEventListener("visibilitychange", onFocusOrVisible);
       clearInterval(clockTimer);
       if (copyTimerRef.current !== null) clearTimeout(copyTimerRef.current);
     };
   }, [executeFetch, initialSnapshot]);
+
+  const snapshot = view.snapshot;
+  const loading = view.status === "loading";
+  const refreshing = view.status === "refreshing";
+  const error = view.status === "error" ? view.error : null;
 
   const handleCopy = useCallback((key: string, safeUrl: string) => {
     setCopyMessage("");

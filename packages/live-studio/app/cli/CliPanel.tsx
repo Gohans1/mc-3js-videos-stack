@@ -8,10 +8,15 @@ import { toast } from "@/components/ui/toast";
 import { type CliCategoryId, findCliCommand } from "../../src/cli-catalog.ts";
 import { useDialogModal } from "../core/store";
 import {
+  cliActiveRunOf,
+  cliCatalogOf,
+  cliRunErrorOf,
+  cliStoppingRunIdOf,
   cliStore,
   commitSaveTemplate,
   consumeFocusConsoleRun,
   dispatchCliRun,
+  dismissCliRunError,
   ensureCliLoaded,
   getOrCreateDraft,
   hideConsoleRun,
@@ -42,10 +47,12 @@ import {
 export function CliPanel() {
   const [resetOpen, setResetOpen] = useState(false);
   const helpOpen = useCliStore((s) => s.helpOpen);
-  const catalog = useCliStore((s) => s.catalog);
-  const catalogError = useCliStore((s) => s.catalogError);
-  const templates = useCliStore((s) => s.templates);
-  const templatesError = useCliStore((s) => s.templatesError);
+  const catalogState = useCliStore((s) => s.catalogState);
+  const catalog = cliCatalogOf({ catalogState });
+  const catalogError = catalogState.status === "error" ? catalogState.error : null;
+  const templatesState = useCliStore((s) => s.templatesState);
+  const templates = templatesState.templates;
+  const templatesError = templatesState.status === "ready" ? templatesState.error : null;
   const view = useCliStore((s) => s.view);
   const panelMode = useCliStore((s) => s.panelMode);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -56,18 +63,20 @@ export function CliPanel() {
   const activeCommandId = useCliStore((s) => s.activeCommandId);
   const drafts = useCliStore((s) => s.drafts);
   const editingTemplateId = useCliStore((s) => s.editingTemplateId);
-  const activeRun = useCliStore((s) => s.activeRun);
+  const runState = useCliStore((s) => s.runState);
+  const activeRun = cliActiveRunOf({ runState });
   const lastRun = useCliStore((s) => s.lastRun);
-  const stoppingRunId = useCliStore((s) => s.stoppingRunId);
+  const stoppingRunId = cliStoppingRunIdOf({ runState });
   const consoleExpanded = useCliStore((s) => s.consoleExpanded);
   const focusConsoleRunId = useCliStore((s) => s.focusConsoleRunId);
-  const submittingRun = useCliStore((s) => s.submittingRun);
-  const runError = useCliStore((s) => s.runError);
+  const submittingRun = runState.status === "submitting";
+  const runError = cliRunErrorOf({ runState });
   const clearedHint = useCliStore((s) => s.clearedHint);
-  const confirmPending = useCliStore((s) => s.confirmPending);
-  const saveDialogOpen = useCliStore((s) => s.saveDialogOpen);
-  const savingTemplate = useCliStore((s) => s.savingTemplate);
-  const saveError = useCliStore((s) => s.saveError);
+  const confirmPending = runState.status === "confirming" ? runState.pending : null;
+  const saveDialog = useCliStore((s) => s.saveDialog);
+  const saveDialogOpen = saveDialog.status !== "closed";
+  const savingTemplate = saveDialog.status === "saving";
+  const saveError = saveDialog.status === "open" ? saveDialog.error : null;
 
   useEffect(() => {
     void ensureCliLoaded();
@@ -247,9 +256,29 @@ export function CliPanel() {
             runError={runError}
             catalogError={catalogError}
             templatesError={templatesError}
-            onDismissRunError={() => cliStore.setState({ runError: null })}
-            onDismissCatalogError={() => cliStore.setState({ catalogError: null })}
-            onDismissTemplatesError={() => cliStore.setState({ templatesError: null })}
+            onDismissRunError={dismissCliRunError}
+            onDismissCatalogError={() =>
+              cliStore.setState((s) =>
+                s.catalogState.status === "error"
+                  ? {
+                      catalogState: s.catalogState.catalog
+                        ? {
+                            status: "ready",
+                            catalog: s.catalogState.catalog,
+                            filmQuery: s.catalogState.filmQuery,
+                          }
+                        : { status: "idle", filmQuery: s.catalogState.filmQuery },
+                    }
+                  : {},
+              )
+            }
+            onDismissTemplatesError={() =>
+              cliStore.setState((s) =>
+                s.templatesState.status === "ready"
+                  ? { templatesState: { ...s.templatesState, error: null } }
+                  : {},
+              )
+            }
             onRetryCatalog={() => void retryCliPanel()}
             onSearchChange={(q) => cliStore.setState({ searchQuery: q })}
             onSelectCategory={(cat) => cliStore.setState({ selectedCategory: cat })}
@@ -304,7 +333,9 @@ export function CliPanel() {
               cliStore.setState((s) => ({ consoleExpanded: !s.consoleExpanded }))
             }
             onConsumeFocusRun={() => consumeFocusConsoleRun()}
-            onOpenSaveTemplate={() => cliStore.setState({ saveDialogOpen: true, saveError: null })}
+            onOpenSaveTemplate={() =>
+              cliStore.setState({ saveDialog: { status: "open", error: null } })
+            }
           />
         )}
       </div>
@@ -324,7 +355,13 @@ export function CliPanel() {
       <CliConfirmDialog
         request={confirmPending?.dialog ?? null}
         submitting={submittingRun}
-        onCancel={() => cliStore.setState({ confirmPending: null })}
+        onCancel={() =>
+          cliStore.setState((s) =>
+            s.runState.status === "confirming"
+              ? { runState: { status: "idle", error: null } }
+              : {},
+          )
+        }
         onConfirm={() => {
           if (!confirmPending) return;
           void dispatchCliRun(
@@ -349,7 +386,7 @@ export function CliPanel() {
         editingExisting={Boolean(editingTemplate)}
         saving={savingTemplate}
         saveError={saveError}
-        onClose={() => cliStore.setState({ saveDialogOpen: false, saveError: null })}
+        onClose={() => cliStore.setState({ saveDialog: { status: "closed" } })}
         onSave={({ name, targetFilm, asNew }) => {
           void commitSaveTemplate({
             id: asNew ? undefined : editingTemplate?.id,

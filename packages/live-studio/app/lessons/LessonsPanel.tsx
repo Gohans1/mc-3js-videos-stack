@@ -120,6 +120,13 @@ export function LessonsPanel(props: LessonsPanelProps = {}) {
   );
 }
 
+type CreateLessonDraft = {
+  name: string;
+  depth: number;
+  scope: LessonScope;
+  submitted: boolean;
+};
+
 function LessonDeckPanel({
   active,
   desktop,
@@ -130,8 +137,7 @@ function LessonDeckPanel({
   useFresh();
   const {
       files,
-      loaded,
-      loadFailed,
+      loadState,
       folder,
       open,
       seen,
@@ -141,6 +147,8 @@ function LessonDeckPanel({
       aiNotice,
     } = useLessons((s) => s),
     lit = useActivity((s) => s.lit);
+  const loaded = loadState === "ready" || loadState === "refresh-failed";
+  const loadFailed = loadState === "failed" || loadState === "refresh-failed";
 
   const isDesktop =
     desktop ??
@@ -164,10 +172,11 @@ function LessonDeckPanel({
   const [containerWidth, setContainerWidth] = useState(LESSONS_LIBRARY_WIDTH);
   const [jumpTarget, setJumpTarget] = useState<{ path: string; line: number } | null>(null);
   const [query, setQuery] = useState("");
-  const [naming, setNaming] = useState<string | null>(null);
-  const [namingDepth, setNamingDepth] = useState(0);
-  const [newScope, setNewScope] = useState<LessonScope>("film");
-  const [submitted, setSubmitted] = useState(false);
+  const [createDraft, setCreateDraft] = useState<CreateLessonDraft | null>(null);
+  const naming = createDraft?.name ?? null;
+  const namingDepth = createDraft?.depth ?? 0;
+  const newScope: LessonScope = createDraft?.scope ?? "film";
+  const submitted = createDraft?.submitted ?? false;
   const isLockedWidth = isDesktop && typeof lockWidthPx === "number" && lockWidthPx > 0;
   const hasPaneWidth = typeof paneWidthPx === "number" && paneWidthPx > 0;
 
@@ -372,8 +381,7 @@ function LessonDeckPanel({
   }, [activeColumns.length, activeOpen, layout.showAncestors, effectiveContainerWidth]);
 
   const closeForm = () => {
-    setNaming(null);
-    setSubmitted(false);
+    setCreateDraft(null);
   };
 
   const cancelForm = () => {
@@ -386,7 +394,7 @@ function LessonDeckPanel({
   };
 
   const triggerTrailChange = (animate: boolean, apply: () => void) => {
-    if (naming !== null) closeForm();
+    if (createDraft !== null) closeForm();
     pendingMotionRef.current = {
       snapshot: animate ? captureDeckSnapshot(deckScrollRef.current) : null,
       prevTrail: trail,
@@ -403,10 +411,12 @@ function LessonDeckPanel({
     const focused = document.activeElement;
     formTriggerRef.current =
       focused instanceof HTMLElement && focused.matches("[data-new-lesson]") ? focused : null;
-    setSubmitted(false);
-    setNewScope(scope ?? (!hasProject || scopeFilter === "all" ? "all" : "film"));
-    setNamingDepth(depth);
-    setNaming(prefixParts.length ? `${prefixParts.join("/")}/` : "");
+    setCreateDraft({
+      name: prefixParts.length ? `${prefixParts.join("/")}/` : "",
+      depth,
+      scope: scope ?? (!hasProject || scopeFilter === "all" ? "all" : "film"),
+      submitted: false,
+    });
     requestAnimationFrame(() => {
       const box = nameInputRef.current;
       if (!box) return;
@@ -430,7 +440,7 @@ function LessonDeckPanel({
           : null;
   const createLesson = () => {
     if (errMsg) {
-      setSubmitted(true);
+      setCreateDraft((d) => (d ? { ...d, submitted: true } : null));
       nameInputRef.current?.focus();
       return;
     }
@@ -609,12 +619,18 @@ function LessonDeckPanel({
             closeForm={cancelForm}
             nameInputRef={nameInputRef}
             newScope={newScope}
-            setNewScope={setNewScope}
+            setNewScope={(scope) => setCreateDraft((d) => (d ? { ...d, scope } : null))}
             naming={naming}
-            setNaming={setNaming}
+            setNaming={(val) =>
+              setCreateDraft((d) =>
+                d
+                  ? { ...d, name: val }
+                  : { name: val, depth: 0, scope: "film", submitted: false },
+              )
+            }
             submitted={submitted}
             openExisting={Boolean(existingLesson)}
-            setSubmitted={setSubmitted}
+            setSubmitted={(val) => setCreateDraft((d) => (d ? { ...d, submitted: val } : null))}
             errMsg={errMsg}
             onCreateLesson={createLesson}
             matchByKey={matchByKey}

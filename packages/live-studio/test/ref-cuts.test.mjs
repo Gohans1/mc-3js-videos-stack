@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -12,6 +12,7 @@ import {
   referenceVideo,
   unstudiedWarning,
 } from "../src/ref-cuts.mjs";
+import { transitionCutSeconds } from "../src/film.mjs";
 
 const study = (dir, name, run, cuts, when) => {
   const folder = join(dir, "renders/reference", name, run);
@@ -145,4 +146,42 @@ test("cuts are matched to the reference's, and one inside a whip of it is a look
   assert.equal(at(3), undefined, "within a frame and a half");
   assert.equal(at(20), undefined, "past the draft's end");
   assert.ok(at(2).weight > at(9).weight && at(9).weight > at(5).weight);
+});
+
+test("camera cuts at shots.json transition boundaries are not flagged as extra cuts and transitionCutSeconds maps warp and freezes", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "ref-cuts-tr-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  study(dir, "ref", "run-1", [cut(4.0)], new Date());
+  const warning = refCutsWarning(dir, "src/timeline/cam.json", [4.0, 12.38, 20.35], 25, [12.38, 20.35]);
+  assert.equal(warning, "");
+  const mixed = refCutsWarning(dir, "src/timeline/cam.json", [4.0, 8.5, 12.38], 25, [12.38]);
+  assert.match(mixed, /cuts at 8\.5 s/);
+  assert.doesNotMatch(mixed, /12\.38/);
+
+  mkdirSync(join(dir, "src/timeline"), { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        shotsTimeline: "src/timeline/shots.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ end: 20 }));
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ freezes: [{ at: 10, duration: 2 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/shots.json"),
+    JSON.stringify([
+      { t: 0, name: "open" },
+      { t: 5, name: "hard" },
+      { t: 10, name: "dissolve-on-freeze", transition: { fx: "dissolve", len: 0.4 } },
+      { t: 15, name: "push", transition: { fx: "pushUp", len: 0.23 } },
+    ]),
+  );
+  const times = transitionCutSeconds(dir);
+  assert.deepEqual(times, [10, 12, 17]);
 });

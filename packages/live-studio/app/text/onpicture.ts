@@ -9,10 +9,12 @@ import { picturePoint } from "../picture/preview-state";
 import { openTextEditor } from "./inline-editor";
 import {
   edit,
+  isShape,
   items,
   locked,
   pickText,
   preview,
+  resolveItem,
   restore,
   snapshot,
   type TextItem,
@@ -31,9 +33,18 @@ const rotationHandle = (points: number[][], anchor: number[]) => {
 const boxesNow = () => {
   const tl = S.tools?.titles;
   if (!tl || S.tools?.free.on || !layerClock.visible(layerClock.sourceAt(S.t))) return [];
-  const text = (EDIT as { text?: { items: unknown[]; tracks?: Record<string, TextTrack> } }).text;
+  const text = (
+    EDIT as {
+      text?: {
+        items: unknown[];
+        tracks?: Record<string, TextTrack>;
+        preset?: string;
+        defaults?: Record<string, unknown>;
+      };
+    }
+  ).text;
   return tl.boxes(
-    text?.items ?? [],
+    text ?? [],
     layerClock.sourceAt(S.t),
     S.tools!.camera,
     text?.tracks,
@@ -165,7 +176,8 @@ export const startTextDrag = (
         ? "scale"
         : null;
     if (!kind) continue;
-    const before = { scale: items[b.i].scale, rotate: items[b.i].rotate },
+    const resolved = resolveItem(items[b.i]);
+    const before = { scale: resolved.scale, rotate: resolved.rotate },
       snap = snapshot();
     let moved = false;
     canvas.setPointerCapture(e.pointerId);
@@ -211,7 +223,10 @@ export const startTextDrag = (
   }
   const group = get().textPicks.filter((j) => !locked(j)),
     snap = snapshot();
-  const start = group.map((j) => [items[j].x ?? 0.5, items[j].y ?? 0.5] as const),
+  const start = group.map((j) => {
+      const r = resolveItem(items[j]);
+      return [r.x ?? 0.5, r.y ?? 0.5] as const;
+    }),
     lead = group.indexOf(i);
   let moved = false;
   canvas.setPointerCapture(e.pointerId);
@@ -266,7 +281,7 @@ export function textDoubleClick(e: MouseEvent, at: readonly [number, number]) {
   const i = textAt(...at),
     item = items[i],
     box = boxesNow().find((b) => b.i === i)?.box;
-  if (!item || item.kind !== "text" || locked(i) || !box) return;
+  if (!item || isShape(item) || locked(i) || !box) return;
   e.preventDefault();
   pickText([i]);
   openTextEditor(S.el.stage, item.text ?? "", box, (value) => {

@@ -198,9 +198,7 @@ const pathPrefixPattern = (d) =>
 export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}) =>
   new Promise((ready, fail) => {
     const dir = join(film.PROJECT, "node_modules/.vite/live-studio-page");
-    let html = null,
-      error = null,
-      started = false;
+    let buildState = { status: "booting" };
     const warned = new Set();
     const clearOld = () => {
       const code = join(dir, ASSETS),
@@ -215,16 +213,15 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
     };
     const page = {
       dir,
-      html: () => html,
-      error: () => error,
+      html: () =>
+        buildState.status === "ready"
+          ? buildState.html
+          : buildState.status === "error"
+            ? buildState.lastHtml
+            : null,
+      error: () => (buildState.status === "error" ? buildState.error : null),
       watcher: null,
       close: () => page.watcher?.close(),
-    };
-    const start = () => {
-      if (!started) {
-        started = true;
-        ready(page);
-      }
     };
     build({
       configFile: join(STUDIO, "vite.config.ts"),
@@ -322,19 +319,27 @@ export const buildPage = (film, { onChange = () => {}, onError = () => {} } = {}
       watcher.on("event", (e) => {
         e.result?.close?.();
         if (e.code === "ERROR") {
-          error = stripVTControlCharacters(e.error.message);
-          onError(error, e.error.errors?.[0]);
-          start();
+          const wasBooting = buildState.status === "booting";
+          const lastHtml =
+            buildState.status === "ready"
+              ? buildState.html
+              : buildState.status === "error"
+                ? buildState.lastHtml
+                : null;
+          const message = stripVTControlCharacters(e.error.message);
+          buildState = { status: "error", error: message, lastHtml };
+          onError(message, e.error.errors?.[0]);
+          if (wasBooting) ready(page);
         }
         if (e.code === "BUNDLE_END") {
           const next = readFileSync(join(dir, "index.html"), "utf8");
-          const differs = next !== html || error !== null;
-          html = next;
-          error = null;
+          const wasBooting = buildState.status === "booting";
+          const differs = buildState.status !== "ready" || next !== buildState.html;
+          buildState = { status: "ready", html: next };
           clearOld();
-          if (started && differs) onChange(changed);
+          if (!wasBooting && differs) onChange(changed);
           changed = [];
-          start();
+          if (wasBooting) ready(page);
         }
       });
     }, fail);

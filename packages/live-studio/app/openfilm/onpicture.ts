@@ -11,17 +11,18 @@ import { openFilmDoc, type OverlayItem, useOpenFilm } from "./state";
 export const pageLayers = () => S.render?.inspectOpenFilm?.() ?? [];
 studio.subscribe((s, previous) => {
   if (s.side !== "openfilm" && previous.side === "openfilm")
-    useOpenFilm.setState({ selected: null, element: null });
+    useOpenFilm.setState({ selection: { kind: "none" } });
 });
 
 export function drawPageSelection() {
   const svg = S.el.stage.querySelector<SVGSVGElement>("[data-page-selection]");
   if (!svg) return;
-  const { selected, element } = useOpenFilm.getState();
-  svg.style.display = selected && element && !S.playing ? "" : "none";
-  if (!selected || !element || S.playing) return;
-  const layer = pageLayers().find((it) => it.id === selected),
-    node = layer?.elements.find((it) => it.selector === element);
+  const { selection } = useOpenFilm.getState();
+  const hasElement = selection.kind === "element" && !S.playing;
+  svg.style.display = hasElement ? "" : "none";
+  if (!hasElement) return;
+  const layer = pageLayers().find((it) => it.id === selection.id),
+    node = layer?.elements.find((it) => it.selector === selection.selector);
   if (!layer || !node) {
     svg.style.display = "none";
     return;
@@ -56,7 +57,9 @@ export function updateElement(item: OverlayItem, selector: string, patch: Partia
 
 export function selectPageElement(id: string, selector: string | null) {
   set({ ...CLEAR_PICKS, side: "openfilm", lib: "openfilm" });
-  useOpenFilm.setState({ selected: id, element: selector });
+  useOpenFilm.setState({
+    selection: selector ? { kind: "element", id, selector } : { kind: "item", id },
+  });
   S.dirty = true;
 }
 

@@ -249,14 +249,24 @@ function BezierCurveFields({
   );
 }
 
-type TemplateDraft = {
-  mode: "create" | "edit";
-  templateId?: string;
-  sourceTitle?: string;
-  name: string;
-  curve: Bezier;
-  baseCurve: Bezier;
-};
+type TemplateDraft =
+  | {
+      mode: "create";
+      sourceTitle: string;
+      name: string;
+      curve: Bezier;
+      baseCurve: Bezier;
+      status: "editing" | "saving";
+    }
+  | {
+      mode: "edit";
+      templateId: string;
+      sourceTitle?: string;
+      name: string;
+      curve: Bezier;
+      baseCurve: Bezier;
+      status: "editing" | "saving";
+    };
 
 const uniqueTemplateName = (base: string, existing: EaseTemplate[]) => {
   const taken = new Set(existing.map((t) => t.name.toLowerCase()));
@@ -284,8 +294,8 @@ export function EaseTiles({
   const templates = useStudio((s) => s.easeTemplates);
   const [draft, setDraft] = useState<TemplateDraft | null>(null);
   const [draftRevealSeq, setDraftRevealSeq] = useState(0);
-  const [saving, setSaving] = useState(false);
   const draftRef = useRef<HTMLDivElement>(null);
+  const saving = draft?.status === "saving";
 
   const list = names ?? easeNames();
   const curve = Array.isArray(value) ? value : null,
@@ -319,6 +329,7 @@ export function EaseTiles({
       name: uniqueTemplateName(`${sourceTitle} custom`, templates),
       curve: [...baseCurve] as Bezier,
       baseCurve: [...baseCurve] as Bezier,
+      status: "editing",
     });
   };
 
@@ -332,6 +343,7 @@ export function EaseTiles({
       name: tpl.name,
       curve: [...tpl.curve] as Bezier,
       baseCurve: [...tpl.curve] as Bezier,
+      status: "editing",
     });
   };
 
@@ -341,32 +353,38 @@ export function EaseTiles({
   }, [draft, draftRevealSeq]);
 
   const applyDraft = async () => {
-    if (!draft || saving || !draft.name.trim()) return;
-    setSaving(true);
+    if (!draft || draft.status === "saving" || !draft.name.trim()) return;
+    const current = draft;
+    setDraft((d) => (d ? { ...d, status: "saving" } : null));
+    let closed = false;
     try {
       const saved = await saveEaseTemplate({
-        id: draft.templateId,
-        name: draft.name.trim(),
-        curve: draft.curve,
-        basedOn: draft.sourceTitle,
+        id: current.mode === "edit" ? current.templateId : undefined,
+        name: current.name.trim(),
+        curve: current.curve,
+        basedOn: current.sourceTitle,
       });
       if (saved) {
         onPick([...saved.curve]);
+        closed = true;
         setDraft(null);
       }
     } finally {
-      setSaving(false);
+      if (!closed) setDraft((d) => (d ? { ...d, status: "editing" } : null));
     }
   };
 
   const removeDraft = async () => {
-    if (!draft?.templateId || saving) return;
-    setSaving(true);
+    if (!draft || draft.mode !== "edit" || draft.status === "saving") return;
+    const templateId = draft.templateId;
+    setDraft((d) => (d ? { ...d, status: "saving" } : null));
+    let closed = false;
     try {
-      await deleteEaseTemplate(draft.templateId);
+      await deleteEaseTemplate(templateId);
+      closed = true;
       setDraft(null);
     } finally {
-      setSaving(false);
+      if (!closed) setDraft((d) => (d ? { ...d, status: "editing" } : null));
     }
   };
 

@@ -38,21 +38,25 @@ export const overlayBasis = () =>
       sourceDuration: timingClock.sourceDuration,
     },
   );
+export type OpenFilmSelection =
+  | { kind: "none" }
+  | { kind: "item"; id: string }
+  | { kind: "element"; id: string; selector: string };
+
+export type OpenFilmCatalogState =
+  | { status: "loading"; recipes: Recipe[] }
+  | { status: "ready"; recipes: Recipe[] }
+  | { status: "error"; recipes: Recipe[]; message: string };
+
 export const useOpenFilm = create<{
-  catalog: Recipe[];
-  loaded: boolean;
+  catalogState: OpenFilmCatalogState;
   doc: Doc;
-  selected: string | null;
-  element: string | null;
-  error: string;
+  selection: OpenFilmSelection;
   busy: boolean;
 }>(() => ({
-  catalog: [],
-  loaded: false,
+  catalogState: { status: "loading", recipes: [] },
   doc: { revision: 0, data: { items: [] } },
-  selected: null,
-  element: null,
-  error: "",
+  selection: { kind: "none" },
   busy: false,
 }));
 export const openFilmDoc = createTimedDoc<OverlayTimeline>("openfilm", {
@@ -73,15 +77,46 @@ export async function readOpenFilm() {
   await openFilmDoc.load();
   return useOpenFilm.getState().doc;
 }
+let catalogLoadSeq = 0;
 export async function loadOpenFilmAssets() {
-  const catalog = (await loadOpenFilmCatalog()) as Recipe[];
-  registerOpenFilm(catalog);
-  useOpenFilm.setState({ catalog, loaded: true });
-  return catalog;
+  const seq = ++catalogLoadSeq;
+  const prev = useOpenFilm.getState().catalogState;
+  useOpenFilm.setState({ catalogState: { status: "loading", recipes: prev.recipes } });
+  try {
+    const catalog = (await loadOpenFilmCatalog()) as Recipe[];
+    if (catalogLoadSeq !== seq) return catalog;
+    registerOpenFilm(catalog);
+    useOpenFilm.setState({ catalogState: { status: "ready", recipes: catalog } });
+    return catalog;
+  } catch (e) {
+    if (catalogLoadSeq !== seq) throw e;
+    useOpenFilm.setState({
+      catalogState: {
+        status: "error",
+        recipes: useOpenFilm.getState().catalogState.recipes,
+        message: e instanceof Error ? e.message : String(e),
+      },
+    });
+    throw e;
+  }
 }
 export async function loadOpenFilm() {
-  await loadOpenFilmAssets();
-  await readOpenFilm();
+  const assets = loadOpenFilmAssets();
+  const seq = catalogLoadSeq;
+  await assets;
+  try {
+    await readOpenFilm();
+  } catch (e) {
+    if (catalogLoadSeq !== seq) throw e;
+    useOpenFilm.setState((s) => ({
+      catalogState: {
+        status: "error",
+        recipes: s.catalogState.recipes,
+        message: e instanceof Error ? e.message : String(e),
+      },
+    }));
+    throw e;
+  }
 }
 export async function saveOpenFilm(items: OverlayItem[]) {
   TimelineSchema.parse({ items });

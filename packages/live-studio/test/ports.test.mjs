@@ -637,6 +637,61 @@ describe("createPortsService", () => {
     expect(calls.commands).toHaveLength(12);
   });
 
+  test("stale normal scan finishing after a newer forced scan does not overwrite cache", async () => {
+    let releaseSlowNormal;
+    let scanCount = 0;
+    let clock = 1_000_000;
+    const service = createPortsService({
+      repoRoot: "C:/Temp/repo",
+      platform: "darwin",
+      now: () => clock,
+      runCommand: async (cmd) => {
+        if (cmd === "lsof") {
+          scanCount += 1;
+          const id = scanCount;
+          if (id === 1) {
+            await new Promise((resolve) => {
+              releaseSlowNormal = resolve;
+            });
+            return { ok: true, code: 0, stdout: "p100\nn127.0.0.1:4111\n", stderr: "" };
+          }
+          return { ok: true, code: 0, stdout: "p200\nn127.0.0.1:4222\n", stderr: "" };
+        }
+        if (cmd === "ps") {
+          return {
+            ok: true,
+            code: 0,
+            stdout: "100 bun live.mjs 4111\n200 bun live.mjs 4222\n",
+            stderr: "",
+          };
+        }
+        return { ok: true, code: 0, stdout: "", stderr: "" };
+      },
+      fetchJson: async (url) => ({
+        ok: true,
+        status: 200,
+        data: url.includes(":4222")
+          ? { name: "fresh-forced", ratio: "16:9", project: "C:/Temp/repo/films/fresh" }
+          : { name: "stale-normal", ratio: "16:9", project: "C:/Temp/repo/films/stale" },
+      }),
+      readText: () => null,
+      readdir: () => null,
+    });
+
+    const slowNormalPromise = service.getSnapshot({ currentPort: null });
+    clock += 100;
+    const forcedSnap = await service.getSnapshot({ currentPort: null, forceRefresh: true });
+    expect(forcedSnap.studios[0]?.port).toBe(4222);
+
+    clock += 100;
+    releaseSlowNormal();
+    const slowNormalSnap = await slowNormalPromise;
+    expect(slowNormalSnap.studios[0]?.port).toBe(4111);
+
+    const cachedSnap = await service.getSnapshot({ currentPort: null });
+    expect(cachedSnap.studios[0]?.port).toBe(4222);
+  });
+
   test("splits Windows netstat + PowerShell procs cleanly, falls back to selfPort on PowerShell timeout, and distinguishes Tailscale timeout", async () => {
     const service = createPortsService({
       repoRoot: "C:/Users/ADMIN/Desktop/gohans-wt-ports",

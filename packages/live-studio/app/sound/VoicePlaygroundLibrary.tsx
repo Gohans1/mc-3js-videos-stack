@@ -188,11 +188,16 @@ export function VoicePlaygroundLibrary({
   const comparePanelRef = useRef<HTMLDivElement>(null);
   const [advanced, setAdvanced] = useState(false);
   const [favoriteActors, setFavoriteActors] = useState(false);
-  const [selecting, setSelecting] = useState(false);
+  const [bulk, setBulk] = useState<
+    | { status: "off" }
+    | { status: "selecting"; ids: string[]; tags: string }
+    | { status: "updating"; ids: string[]; tags: string }
+  >({ status: "off" });
+  const selecting = bulk.status !== "off";
   const selectingRecordings = selecting && filters.source !== "templates";
-  const [selection, setSelection] = useState<string[]>([]);
-  const [bulkTags, setBulkTags] = useState("");
-  const [updating, setUpdating] = useState(false);
+  const selection = bulk.status === "off" ? [] : bulk.ids;
+  const bulkTags = bulk.status === "off" ? "" : bulk.tags;
+  const updating = bulk.status === "updating";
   const filterId = useId();
   const [ranking, setRanking] = useState<{
     key: string;
@@ -325,16 +330,26 @@ export function VoicePlaygroundLibrary({
   for (const entry of visible)
     titleCounts.set(entry.title, (titleCounts.get(entry.title) ?? 0) + 1);
   const changeSelected = async (patch: Parameters<typeof patchPlaygroundSelection>[1]) => {
-    setUpdating(true);
+    if (bulk.status !== "selecting") return;
+    setBulk({ status: "updating", ids: bulk.ids, tags: bulk.tags });
     try {
       const changed = await patchPlaygroundSelection(
         selectedRecordings.map((entry) => entry.id),
         patch,
       );
       const ids = new Set(changed.map((item) => item.id));
-      setSelection((current) => current.filter((id) => !ids.has(id)));
-    } finally {
-      setUpdating(false);
+      setBulk((current) =>
+        current.status === "updating"
+          ? { status: "selecting", ids: current.ids.filter((id) => !ids.has(id)), tags: current.tags }
+          : current,
+      );
+    } catch (error) {
+      setBulk((current) =>
+        current.status === "updating"
+          ? { status: "selecting", ids: current.ids, tags: current.tags }
+          : current,
+      );
+      throw error;
     }
   };
 
@@ -531,10 +546,14 @@ export function VoicePlaygroundLibrary({
             variant={selecting ? "lit" : "ghost"}
             size="sm"
             aria-pressed={selecting}
-            onClick={() => {
-              setSelecting((open) => !open);
-              setSelection([]);
-            }}
+            disabled={updating}
+            onClick={() =>
+              setBulk((current) =>
+                current.status === "off"
+                  ? { status: "selecting", ids: [], tags: "" }
+                  : { status: "off" },
+              )
+            }
           >
             {selecting ? "Done selecting" : "Select recordings"}
           </Button>
@@ -661,7 +680,14 @@ export function VoicePlaygroundLibrary({
               variant="ghost"
               disabled={updating}
               onClick={() =>
-                setSelection(visible.flatMap((entry) => (entry.playgroundItem ? [entry.id] : [])))
+                setBulk((current) =>
+                  current.status === "selecting"
+                    ? {
+                        ...current,
+                        ids: visible.flatMap((entry) => (entry.playgroundItem ? [entry.id] : [])),
+                      }
+                    : current,
+                )
               }
             >
               Select visible
@@ -696,7 +722,13 @@ export function VoicePlaygroundLibrary({
               aria-label="Tags for selected recordings"
               placeholder="Tags, separated by commas"
               value={bulkTags}
-              onChange={(event) => setBulkTags(event.currentTarget.value)}
+              disabled={updating}
+              onChange={(event) => {
+                const tags = event.currentTarget.value;
+                setBulk((current) =>
+                  current.status === "selecting" ? { ...current, tags } : current,
+                );
+              }}
             />
             <Button
               size="sm"
@@ -822,7 +854,7 @@ export function VoicePlaygroundLibrary({
 
           <span className="text-muted-foreground text-xs tabular-nums">
             {cloudMode
-              ? remoteHistory.loaded && !remoteHistory.error && !remoteHistory.loading
+              ? remoteHistory.status === "ready"
                 ? `${remoteHistory.items.length} found`
                 : null
               : `${visible.length} shown`}
@@ -841,15 +873,15 @@ export function VoicePlaygroundLibrary({
                 variant="secondary"
                 size="sm"
                 disabled={!configured}
-                aria-disabled={!configured || remoteHistory.loading}
+                aria-disabled={!configured || remoteHistory.status === "loading"}
                 onClick={() => {
-                  if (configured && !remoteHistory.loading) void loadRemoteHistory(0);
+                  if (configured && remoteHistory.status !== "loading") void loadRemoteHistory(0);
                 }}
               >
                 <RefreshCw
                   className={cn(
                     "size-3",
-                    remoteHistory.loading && "animate-spin motion-reduce:animate-none",
+                    remoteHistory.status === "loading" && "animate-spin motion-reduce:animate-none",
                   )}
                 />
                 <span>Refresh</span>
@@ -859,14 +891,14 @@ export function VoicePlaygroundLibrary({
               <p className="text-muted-foreground text-sm">
                 Connect GenVoice to check cloud history.
               </p>
-            ) : remoteHistory.loading || (!remoteHistory.loaded && !remoteHistory.error) ? (
+            ) : remoteHistory.status === "loading" || remoteHistory.status === "idle" ? (
               <p role="status" className="text-muted-foreground text-sm">
                 Checking cloud history…
               </p>
-            ) : remoteHistory.loaded && !remoteHistory.error && !remoteHistory.items.length ? (
+            ) : remoteHistory.status === "ready" && !remoteHistory.items.length ? (
               <p className="text-muted-foreground text-sm">No recordings in the last 24 hours.</p>
             ) : null}
-            {remoteHistory.error && (
+            {remoteHistory.status === "error" && (
               <p
                 role="alert"
                 className="bg-warn-bg/80 text-warn-text rounded px-2.5 py-1.5 text-sm"
@@ -1004,24 +1036,24 @@ export function VoicePlaygroundLibrary({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  disabled={remoteHistory.loading}
+                  disabled={remoteHistory.status === "loading"}
                   onClick={() => void loadRemoteHistory(remoteHistory.page + 1)}
                 >
-                  {remoteHistory.loading ? "Loading…" : "Load more remote history"}
+                  {remoteHistory.status === "loading" ? "Loading…" : "Load more remote history"}
                 </Button>
               )}
             </div>
           </div>
         ) : (
           <>
-            {pg.error && !pg.loading && (
+            {pg.loadState.status === "error" && (
               <div className="border-warn/40 bg-warn-bg/80 text-warn-text flex items-start justify-between gap-2 rounded-md border px-2.5 py-1.5 text-sm">
                 <p
                   role="alert"
                   dir="auto"
                   className="max-w-[58ch] min-w-0 leading-relaxed text-pretty wrap-anywhere"
                 >
-                  {pg.error}
+                  {pg.loadState.error}
                 </p>
                 <Button
                   type="button"
@@ -1073,10 +1105,18 @@ export function VoicePlaygroundLibrary({
                           className="accent-primary size-4"
                           aria-label={`Select ${entry.title}`}
                           checked={selection.includes(entry.id)}
+                          disabled={updating}
                           onChange={(event) => {
                             const checked = event.currentTarget.checked;
-                            setSelection((ids) =>
-                              checked ? [...ids, entry.id] : ids.filter((id) => id !== entry.id),
+                            setBulk((current) =>
+                              current.status === "selecting"
+                                ? {
+                                    ...current,
+                                    ids: checked
+                                      ? [...current.ids, entry.id]
+                                      : current.ids.filter((id) => id !== entry.id),
+                                  }
+                                : current,
                             );
                           }}
                         />

@@ -209,3 +209,31 @@ test("layerTime keeps 2D text/layer clocks locked to the whole frame time during
   assert.equal(sub.textAt, 5.667);
   assert.equal(sub.layersVisible, true);
 });
+
+test("pose-only draw options can suppress picture, layers, adjustments and transitions without changing frame time", () => {
+  setTiming({}, 10);
+  const draw = timedDraw((frame, clocks) => ({
+    frame,
+    pictureVisible: clocks.pictureVisible,
+    layersVisible: clocks.layersVisible,
+    adjustmentsVisible: clocks.adjustmentsVisible,
+    transitionVisible: clocks.transitionVisible(5),
+  }));
+  assert.deepEqual(
+    draw(2.5, { pictureVisible: false, layersVisible: false, adjustmentsVisible: false }),
+    {
+      frame: 2.5,
+      pictureVisible: false,
+      layersVisible: false,
+      adjustmentsVisible: false,
+      transitionVisible: false,
+    },
+  );
+  assert.deepEqual(draw(2.5), {
+    frame: 2.5,
+    pictureVisible: true,
+    layersVisible: true,
+    adjustmentsVisible: true,
+    transitionVisible: true,
+  });
+});

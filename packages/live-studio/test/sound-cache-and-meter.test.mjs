@@ -70,6 +70,7 @@ function installSoundGlobals(fetchImpl) {
     }
   }
 
+  const mediaElementSources = new WeakSet();
   class FakeAudioContext {
     constructor() {
       this.currentTime = 1;
@@ -97,7 +98,16 @@ function installSoundGlobals(fetchImpl) {
     createIIRFilter() {
       return mkNode();
     }
-    createMediaElementSource() {
+    createMediaElementSource(el) {
+      if (el && typeof el === "object") {
+        if (mediaElementSources.has(el)) {
+          throw new DOMException(
+            "HTMLMediaElement already connected previously to a different MediaElementSourceNode.",
+            "InvalidStateError",
+          );
+        }
+        mediaElementSources.add(el);
+      }
       return mkNode();
     }
     createBufferSource() {
@@ -505,6 +515,28 @@ test("loadSound retains decoded SFX cache on ?used=1 -> full library transition 
     for (const s of env.sources.slice(srcCountBeforeSlice)) s.emitEnded();
     assert.equal(mixer.hasPreviewSounding(), false);
     offWake();
+  } finally {
+    env.restore();
+  }
+});
+
+test("setLive attaches audio graph once when AudioContext is already unlocked before first setLive", async () => {
+  const env = installSoundGlobals(async () => new Response("{}", { status: 200 }));
+  try {
+    const { mixer, meter } = await loadSoundBundle();
+    await meter.startMeter();
+    const src = {
+      lanes: () => ({ beds: [], sfx: [], drive: 0 }),
+      library: () => [],
+      span: () => [0, 1],
+      voice: () => [],
+    };
+    assert.doesNotThrow(() => {
+      mixer.setLive(true, src);
+      mixer.setLive(true, src);
+      mixer.setLive(false, src);
+      mixer.setLive(true, src);
+    });
   } finally {
     env.restore();
   }

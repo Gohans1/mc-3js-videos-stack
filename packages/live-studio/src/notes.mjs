@@ -293,27 +293,35 @@ export const watchNotesFile = (file, onChange, { debounceMs = 80 } = {}) => {
       }
     };
   mkdirSync(dir, { recursive: true });
-  let seen = snap() ?? "",
-    timer = null;
-  const check = () => {
+  let watchState = { status: "watching", watcher: null, timer: null, seen: snap() ?? "" };
+  const check = (handle) => {
+    if (watchState.status !== "watching" || watchState.timer !== handle) return;
+    watchState.timer = null;
     const now = snap();
-    if (now === null || now === seen) return;
-    seen = now;
+    if (now === null || now === watchState.seen) return;
+    watchState.seen = now;
     onChange();
   };
   const watcher = fsWatch(dir, (_, name) => {
+    if (watchState.status !== "watching") return;
     if (name && basename(String(name)) !== target) return;
-    clearTimeout(timer);
-    timer = setTimeout(check, debounceMs);
+    if (watchState.timer !== null) clearTimeout(watchState.timer);
+    const handle = setTimeout(() => check(handle), debounceMs);
+    watchState.timer = handle;
   });
+  watchState.watcher = watcher;
   return {
     sync: () => {
+      if (watchState.status !== "watching") return;
       const now = snap();
-      if (now !== null) seen = now;
+      if (now !== null) watchState.seen = now;
     },
     close: () => {
-      clearTimeout(timer);
-      watcher.close();
+      if (watchState.status !== "watching") return;
+      const prev = watchState;
+      watchState = { status: "closed" };
+      if (prev.timer !== null) clearTimeout(prev.timer);
+      prev.watcher?.close();
     },
   };
 };

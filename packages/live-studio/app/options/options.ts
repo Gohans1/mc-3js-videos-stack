@@ -21,13 +21,17 @@ import {
 } from "../sound/clock";
 import { type ChipView, type GroupView } from "./slice";
 
+type OptionLoadState =
+  | { status: "loading"; promise: Promise<void> }
+  | { status: "ready"; buffers: AudioBuffer[] }
+  | { status: "failed" };
+
 interface SoundOption {
   id: string;
   title: string;
   files?: string[];
   source?: string;
-  buffers?: AudioBuffer[];
-  loading?: Promise<void>;
+  loadState?: OptionLoadState;
   level?: number;
   scale?: number;
   plain?: boolean;
@@ -100,25 +104,29 @@ const decodeFile = async (path: string) => {
   if (!response.ok) throw new Error(`Couldn't load ${path} (HTTP ${response.status})`);
   return getAudioCtx().decodeAudioData(await response.arrayBuffer());
 };
-const failedOptions = new WeakSet<SoundOption>();
 const loadOption = (o: SoundOption, retry = false) => {
   if (!o.files) return Promise.resolve();
-  if (retry && failedOptions.delete(o)) o.loading = undefined;
-  return (o.loading ??= Promise.all(o.files.map(decodeFile))
+  if (o.loadState?.status === "ready") return Promise.resolve();
+  if (o.loadState?.status === "loading") return o.loadState.promise;
+  if (o.loadState?.status === "failed" && !retry) return Promise.resolve();
+  const promise = Promise.all(o.files.map(decodeFile))
     .then((buffers) => {
-      o.buffers = buffers;
+      o.loadState = { status: "ready", buffers };
     })
     .catch((error) => {
-      failedOptions.add(o);
+      o.loadState = { status: "failed" };
       audioLoadError(error);
-    }));
+    });
+  o.loadState = { status: "loading", promise };
+  return promise;
 };
 const playHit = (name: string, cue: Cue, when: number, speed: number) => {
-  const o = optionOf(name),
-    buf = o.buffers?.[cue.pick % o.buffers.length];
+  const o = optionOf(name);
   if (o.off) return;
+  const buffers = o.loadState?.status === "ready" ? o.loadState.buffers : undefined;
+  const buf = buffers?.[cue.pick % buffers.length];
   if (!buf) {
-    loadOption(o);
+    void loadOption(o);
     return;
   }
   const { ctx, master } = getAudio(),
@@ -141,11 +149,11 @@ const playHit = (name: string, cue: Cue, when: number, speed: number) => {
   };
 };
 const playStem = (name: string, when: number, offset: number, speed: number, length?: number) => {
-  const o = optionOf(name),
-    buf = o.buffers?.[0];
+  const o = optionOf(name);
   if (o.off) return null;
+  const buf = o.loadState?.status === "ready" ? o.loadState.buffers[0] : undefined;
   if (!buf) {
-    loadOption(o);
+    void loadOption(o);
     return null;
   }
   const { ctx, master } = getAudio(),
@@ -167,17 +175,26 @@ const playStem = (name: string, when: number, offset: number, speed: number, len
   return src;
 };
 const soundFiles: Record<string, { buf: AudioBuffer; scale: number }> = {};
-let soundsJob: Promise<void> | null = null;
-let soundsFailed = false;
+type BeatSoundsState =
+  | { status: "idle" }
+  | { status: "loading"; job: Promise<void> }
+  | { status: "ready" }
+  | { status: "failed" };
+let beatSoundsState: BeatSoundsState = { status: "idle" };
 export const ensureBeatSounds = (retry = false) => {
-  if (retry && soundsFailed) {
-    soundsJob = null;
-    soundsFailed = false;
-  }
-  return (soundsJob ??= loadSounds().catch((error) => {
-    soundsFailed = true;
-    audioLoadError(error);
-  }));
+  if (beatSoundsState.status === "ready") return Promise.resolve();
+  if (beatSoundsState.status === "loading") return beatSoundsState.job;
+  if (beatSoundsState.status === "failed" && !retry) return Promise.resolve();
+  const job = loadSounds()
+    .then(() => {
+      beatSoundsState = { status: "ready" };
+    })
+    .catch((error) => {
+      beatSoundsState = { status: "failed" };
+      audioLoadError(error);
+    });
+  beatSoundsState = { status: "loading", job };
+  return job;
 };
 export const loadSounds = async () => {
   const names = new Set(Object.values(EDIT.beats).flatMap((b) => b.sounds.map((s) => s[1])));
@@ -312,7 +329,7 @@ export const choose = (name: string, i: number) => {
     return;
   }
   void loadOption(o, true).then(() => {
-    if (S.playing || !o.buffers?.length) return;
+    if (S.playing || o.loadState?.status !== "ready" || !o.loadState.buffers.length) return;
     const ctx = getAudioCtx();
     if (g.cues?.length)
       playHit(name, g.cues[Math.floor(Math.random() * g.cues.length)], ctx.currentTime, 1);

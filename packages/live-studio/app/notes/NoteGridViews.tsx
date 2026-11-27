@@ -443,6 +443,10 @@ function BoardColumnList({
   );
 }
 
+type BoardDragState =
+  | { kind: "idle" }
+  | { kind: "dragging"; item: PlacedWithState; over: BoardDropId | null };
+
 export function NoteBoardView({
   items,
   statusFilter = "all",
@@ -452,8 +456,9 @@ export function NoteBoardView({
 }) {
   const [groupBy, setGroupBy] = useState<"status" | "shot">("status");
   const [replyId, setReplyId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<PlacedWithState | null>(null);
-  const [dropCol, setDropCol] = useState<BoardDropId | null>(null);
+  const [boardDrag, setBoardDrag] = useState<BoardDragState>({ kind: "idle" });
+  const dragging = boardDrag.kind === "dragging" ? boardDrag.item : null;
+  const dropCol = boardDrag.kind === "dragging" ? boardDrag.over : null;
   const colRefs = useRef<Record<string, HTMLElement | null>>({});
 
   const statusColumns = useMemo(() => {
@@ -567,24 +572,23 @@ export function NoteBoardView({
   };
 
   const handleDropStatus = (target: NoteState) => {
-    setDropCol(null);
-    if (!dragging) return;
-    const tx = boardTransition(dragging.state, target, !!dragging.n.fixes?.at(-1)?.ask);
+    if (boardDrag.kind !== "dragging") return;
+    const item = boardDrag.item;
+    setBoardDrag({ kind: "idle" });
+    const tx = boardTransition(item.state, target, !!item.n.fixes?.at(-1)?.ask);
     if (!tx) {
       say(
-        dragging.state === "open"
+        item.state === "open"
           ? "To fix notes move to To check after the AI fixes them"
-          : dragging.n.fixes?.at(-1)?.ask
+          : item.n.fixes?.at(-1)?.ask
             ? "Answer the AI’s question before approving"
             : "This status move isn’t available",
       );
-      setDragging(null);
       return;
     }
-    if (tx === "approve") approveNote(dragging.n);
-    else if (tx === "reopen") reopenNote(dragging.n);
-    else if (tx === "feedback") setReplyId(dragging.n.id);
-    setDragging(null);
+    if (tx === "approve") approveNote(item.n);
+    else if (tx === "reopen") reopenNote(item.n);
+    else if (tx === "feedback") setReplyId(item.n.id);
   };
 
   return (
@@ -680,17 +684,20 @@ export function NoteBoardView({
                   }}
                   aria-label={`${col.label} column`}
                   onDragOver={(e) => {
-                    if (!dragging) return;
+                    if (boardDrag.kind !== "dragging") return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = validTarget ? "move" : "none";
-                    if (dropCol !== col.id) setDropCol(col.id);
+                    if (boardDrag.over !== col.id) {
+                      setBoardDrag({ kind: "dragging", item: boardDrag.item, over: col.id });
+                    }
                   }}
                   onDragLeave={(e) => {
                     if (
                       !e.currentTarget.contains(e.relatedTarget as Node | null) &&
-                      dropCol === col.id
+                      boardDrag.kind === "dragging" &&
+                      boardDrag.over === col.id
                     ) {
-                      setDropCol(null);
+                      setBoardDrag({ kind: "dragging", item: boardDrag.item, over: null });
                     }
                   }}
                   onDrop={(e) => {
@@ -731,11 +738,8 @@ export function NoteBoardView({
                     draggable
                     replyId={replyId}
                     setReplyId={setReplyId}
-                    onDragStartNote={setDragging}
-                    onDragEndNote={() => {
-                      setDragging(null);
-                      setDropCol(null);
-                    }}
+                    onDragStartNote={(item) => setBoardDrag({ kind: "dragging", item, over: null })}
+                    onDragEndNote={() => setBoardDrag({ kind: "idle" })}
                   />
                 </section>
               );
@@ -784,11 +788,8 @@ export function NoteBoardView({
                   showStatus
                   replyId={replyId}
                   setReplyId={setReplyId}
-                  onDragStartNote={setDragging}
-                  onDragEndNote={() => {
-                    setDragging(null);
-                    setDropCol(null);
-                  }}
+                  onDragStartNote={(item) => setBoardDrag({ kind: "dragging", item, over: null })}
+                  onDragEndNote={() => setBoardDrag({ kind: "idle" })}
                 />
               </section>
             ))

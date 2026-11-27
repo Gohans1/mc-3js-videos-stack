@@ -227,13 +227,14 @@ const listen = () => {
   onReload("favorites", loadFavorites);
   onReload("ease-templates", loadEaseTemplates);
   onEvent("lessons", () => {
-    if (lessons.getState().loaded) void loadLessons();
+    const s = lessons.getState().loadState;
+    if (s === "ready" || s === "refresh-failed") void loadLessons();
   });
   onEvent("voice-library", handleVoiceLibraryEvent);
   onEvent("voice-playground", handleVoicePlaygroundEvent);
   const refreshCompareVideos = () => {
-    const { compareVideoMode, compareVideosLoaded } = get();
-    if (compareVideoMode || compareVideosLoaded) void loadCompareVideos();
+    const { compareVideoMode, compareCatalog } = get();
+    if (compareVideoMode || compareCatalog.status === "ready") void loadCompareVideos();
   };
   onEvent("compare-videos", refreshCompareVideos);
   listenActivity();
@@ -264,7 +265,8 @@ const listen = () => {
       void loadEaseTemplates();
       void loadActivity();
       refreshCompareVideos();
-      if (lessons.getState().loaded) void loadLessons();
+      const s = lessons.getState().loadState;
+      if (s === "ready" || s === "refresh-failed") void loadLessons();
     }
   });
 };
@@ -318,7 +320,7 @@ export const start = async (el: Elements) => {
   flushNotes();
   setFilmSource(FILM);
   applyEdit();
-  loopStarted = true;
+  loopState = { kind: "idle" };
   scheduleLoop();
   const comments = getFile("/api/shots.json")
     .then(async (r) => {
@@ -463,7 +465,7 @@ export const start = async (el: Elements) => {
   refreshTimes();
   if (!get().compareVideoMode) seek(S.t);
   else S.dirty = true;
-  if (!inFrame) await loop();
+  if (getLoopState().kind !== "running") await loop();
   else scheduleLoop();
   set({ loading: "", ready: true });
   if (window.__live) say(`Loaded in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
@@ -499,11 +501,15 @@ let drawMs = 0,
   lastFrame = performance.now();
 let keptAt = -1e9,
   keptT = -1;
-let loopStarted = false,
-  inFrame = false,
-  loopKind: 0 | 1 | 2 = 0,
-  loopId = 0;
-let pausePaint: Promise<void> | null = null;
+type LoopState =
+  | { kind: "unstarted" }
+  | { kind: "idle" }
+  | { kind: "raf"; id: number }
+  | { kind: "timeout"; id: number }
+  | { kind: "running"; pausePaint: Promise<void> | null }
+  | { kind: "pause_paint"; paint: Promise<void> };
+let loopState: LoopState = { kind: "unstarted" };
+const getLoopState = (): LoopState => loopState;
 const needFrame = () =>
   S.dirty ||
   S.viewMoved ||
@@ -511,56 +517,67 @@ const needFrame = () =>
   (!get().compareVideoMode && Boolean(S.render) && warm.length > 0) ||
   flight.active();
 const cancelLoop = () => {
-  if (loopKind === 1) cancelAnimationFrame(loopId);
-  else if (loopKind === 2) clearTimeout(loopId);
-  loopKind = 0;
-  loopId = 0;
-};
-const scheduleLoop = () => {
-  if (!loopStarted || inFrame || loopKind || pausePaint || !needFrame()) return;
-  if (document.hidden) {
-    loopKind = 2;
-    loopId = window.setTimeout(loop, 100);
-  } else {
-    loopKind = 1;
-    loopId = requestAnimationFrame(loop);
+  if (loopState.kind === "raf") {
+    cancelAnimationFrame(loopState.id);
+    loopState = { kind: "idle" };
+  } else if (loopState.kind === "timeout") {
+    clearTimeout(loopState.id);
+    loopState = { kind: "idle" };
   }
 };
+const scheduleLoop = () => {
+  if (loopState.kind !== "idle" || !needFrame()) return;
+  loopState = document.hidden
+    ? { kind: "timeout", id: window.setTimeout(loop, 100) }
+    : { kind: "raf", id: requestAnimationFrame(loop) };
+};
 onWake("render", () => {
-  if (!inFrame && !loopKind) lastFrame = performance.now();
+  if (loopState.kind === "idle" || loopState.kind === "pause_paint") lastFrame = performance.now();
   scheduleLoop();
 });
 document.addEventListener("visibilitychange", () => {
   cancelLoop();
-  if (!document.hidden && !loopKind) lastFrame = performance.now();
+  if (!document.hidden) lastFrame = performance.now();
   scheduleLoop();
 });
 const loop = async () => {
-  loopKind = 0;
-  loopId = 0;
-  if (pausePaint) return;
-  inFrame = true;
+  cancelLoop();
+  if (loopState.kind === "pause_paint" || loopState.kind === "running") return;
+  loopState = { kind: "running", pausePaint: null };
   try {
     await frame();
   } catch (e) {
     showError(e);
   } finally {
-    inFrame = false;
+    const deferred = loopState.kind === "running" ? loopState.pausePaint : null;
+    loopState = deferred ? { kind: "pause_paint", paint: deferred } : { kind: "idle" };
   }
   scheduleLoop();
 };
 onWake("playing", () => {
+  if (loopState.kind === "unstarted") return;
   const paint = !S.playing && S.render && !get().compareVideoMode ? afterPaint() : null;
-  pausePaint = paint;
   if (!paint) {
+    if (loopState.kind === "running") loopState = { kind: "running", pausePaint: null };
+    else if (loopState.kind === "pause_paint") loopState = { kind: "idle" };
     scheduleLoop();
     return;
   }
-  cancelLoop();
+  if (loopState.kind === "running") {
+    loopState = { kind: "running", pausePaint: paint };
+  } else {
+    cancelLoop();
+    loopState = { kind: "pause_paint", paint };
+  }
   void paint.then(() => {
-    if (pausePaint !== paint) return;
-    pausePaint = null;
-    scheduleLoop();
+    if (loopState.kind === "running" && loopState.pausePaint === paint) {
+      loopState = { kind: "running", pausePaint: null };
+      return;
+    }
+    if (loopState.kind === "pause_paint" && loopState.paint === paint) {
+      loopState = { kind: "idle" };
+      scheduleLoop();
+    }
   });
 });
 let lastClockEl: HTMLElement | null = null;

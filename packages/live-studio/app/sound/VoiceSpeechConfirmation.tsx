@@ -40,14 +40,19 @@ export function VoiceSpeechConfirmation({
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
+  type ConfirmPhase =
+    | { status: "ready" }
+    | { status: "submitting" }
+    | { status: "failed"; message: string; unconfirmed: boolean }
+    | { status: "closing"; outcome: "cancel" | "succeeded" | "check-jobs" };
+
   const cancel = useRef<HTMLButtonElement>(null);
-  const pending = useRef(false);
-  const succeeded = useRef(false);
-  const checkJobs = useRef(false);
-  const [open, setOpen] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [failure, setFailure] = useState("");
-  const [submissionUnconfirmed, setSubmissionUnconfirmed] = useState(false);
+  const [phase, setPhase] = useState<ConfirmPhase>({ status: "ready" });
+  const phaseRef = useRef<ConfirmPhase>(phase);
+  const transitionPhase = (next: ConfirmPhase) => {
+    phaseRef.current = next;
+    setPhase(next);
+  };
   const { quote, scope } = review;
   const count = quote.rows.reduce((sum, row) => sum + row.takes, 0);
   const estimate = quote.totalCredits ?? quote.modelEstimateCredits;
@@ -57,37 +62,46 @@ export function VoiceSpeechConfirmation({
     quote.balanceCredits !== null && quote.totalCredits !== null
       ? Math.max(0, quote.balanceCredits - quote.totalCredits)
       : null;
+  const submitting = phase.status === "submitting";
+  const failure = phase.status === "failed" ? phase.message : "";
+  const submissionUnconfirmed = phase.status === "failed" && phase.unconfirmed;
+  const open = phase.status !== "closing";
   const confirm = async () => {
-    if (pending.current || belowEstimate || submissionUnconfirmed) return;
-    pending.current = true;
-    setSubmitting(true);
-    setFailure("");
+    const current = phaseRef.current;
+    if (
+      current.status === "submitting" ||
+      current.status === "closing" ||
+      belowEstimate ||
+      (current.status === "failed" && current.unconfirmed)
+    )
+      return;
+    transitionPhase({ status: "submitting" });
     try {
       await onConfirm();
-      succeeded.current = true;
-      setOpen(false);
+      transitionPhase({ status: "closing", outcome: "succeeded" });
     } catch (error) {
-      setFailure(
-        error instanceof Error
-          ? error.message
-          : "Couldn't start Speech. Check Jobs before trying again.",
-      );
-      setSubmissionUnconfirmed(error instanceof TypeError);
-    } finally {
-      pending.current = false;
-      setSubmitting(false);
+      transitionPhase({
+        status: "failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Couldn't start Speech. Check Jobs before trying again.",
+        unconfirmed: error instanceof TypeError,
+      });
     }
   };
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next && !pending.current) setOpen(false);
+        if (!next && phaseRef.current.status !== "submitting" && phaseRef.current.status !== "closing")
+          transitionPhase({ status: "closing", outcome: "cancel" });
       }}
       onOpenChangeComplete={(next) => {
         if (next) return;
         onClose();
-        if (checkJobs.current) setPlaygroundSubTab("jobs");
+        if (phaseRef.current.status === "closing" && phaseRef.current.outcome === "check-jobs")
+          setPlaygroundSubTab("jobs");
       }}
     >
       <DialogContent
@@ -95,7 +109,11 @@ export function VoiceSpeechConfirmation({
         data-voice-playground
         motion={motion === "none" ? "none" : "confirmation"}
         initialFocus={cancel}
-        finalFocus={() => (succeeded.current ? successFocus?.current : null) ?? returnFocus.current}
+        finalFocus={() =>
+          (phaseRef.current.status === "closing" && phaseRef.current.outcome === "succeeded"
+            ? successFocus?.current
+            : null) ?? returnFocus.current
+        }
         className="flex max-h-[85dvh] flex-col overflow-hidden sm:max-w-xl"
       >
         <DialogHeader className="me-7 shrink-0">
@@ -171,8 +189,12 @@ export function VoiceSpeechConfirmation({
             ref={cancel}
             type="button"
             variant="secondary"
-            disabled={submitting}
-            onClick={() => setOpen(false)}
+            disabled={submitting || phase.status === "closing"}
+            onClick={() => {
+              if (phaseRef.current.status !== "closing") {
+                transitionPhase({ status: "closing", outcome: "cancel" });
+              }
+            }}
           >
             Cancel
           </Button>
@@ -180,10 +202,7 @@ export function VoiceSpeechConfirmation({
             <Button
               type="button"
               size="xl"
-              onClick={() => {
-                checkJobs.current = true;
-                setOpen(false);
-              }}
+              onClick={() => transitionPhase({ status: "closing", outcome: "check-jobs" })}
             >
               Check Jobs
             </Button>

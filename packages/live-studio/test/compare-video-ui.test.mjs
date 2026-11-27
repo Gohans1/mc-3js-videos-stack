@@ -488,7 +488,7 @@ beforeAll(async () => {
   await page.navigate(vite.resolvedUrls.local[0]);
   await waitUntil("window.__CMP_TEST__ && window.__CMP_TEST__.S.el?.canvas", 20000);
   await page.evaluate("window.__CMP_TEST__.init()");
-  await waitUntil("window.__CMP_TEST__.get().compareVideosLoaded === true", 15000);
+  await waitUntil("window.__CMP_TEST__.get().compareCatalog.status === 'ready'", 15000);
 }, 60000);
 
 afterAll(async () => {
@@ -505,7 +505,12 @@ beforeEach(async () => {
     if (u.S.playing) u.setPlaying(false);
     u.setInk(null);
     u.setCompareVideoAudio('video');
-    u.set({ compareVideoError: null, inOut: null, ready: true });
+    const cur = u.get().compareVideo;
+    u.set({
+      ...(cur.status === 'error' ? { compareVideo: { status: 'loading', path: cur.path, meta: null } } : {}),
+      inOut: null,
+      ready: true,
+    });
     u.cancelNote();
     u.setCompareVideoMode(false);
     u.seek(0);
@@ -521,20 +526,25 @@ afterEach(async () => {
 test("opening a note before the compare catalog loads probes only its recorded video", async () => {
   compareProbeRequests.length = 0;
   const path = "renders/reference/v1_sbs.mp4";
-  const previous = await page.evaluate("window.__CMP_TEST__.get().compareVideoPath");
+  const previous = await page.evaluate("window.__CMP_TEST__.get().compareVideo");
   try {
     await page.evaluate(`(() => {
       const u = window.__CMP_TEST__;
-      u.set({ compareVideos: [], compareVideosLoaded: false, compareVideoPath: null });
+      u.set({
+        compareCatalog: { status: 'loading', videos: [], canBuild: { ref: null, ours: null } },
+        compareVideo: { status: 'none' },
+      });
       u.openNoteInCompareVideo({ t: 0.5, compareVideo: { path: ${JSON.stringify(path)} } });
     })()`);
-    await waitUntil(`window.__CMP_TEST__.get().compareVideoMeta?.path === ${JSON.stringify(path)}`);
+    await waitUntil(
+      `window.__CMP_TEST__.get().compareVideo.meta?.path === ${JSON.stringify(path)}`,
+    );
     expect(compareProbeRequests).toEqual([path]);
   } finally {
     await page.evaluate(`(() => {
       const u = window.__CMP_TEST__;
       u.setCompareVideoMode(false);
-      u.set({ compareVideoPath: ${JSON.stringify(previous)}, noteReturn: null });
+      u.set({ compareVideo: ${JSON.stringify(previous)}, noteReturn: null });
     })()`);
   }
 }, 30000);
@@ -548,7 +558,7 @@ test("toggles Compare Video via Transport button and V hotkey, resizes stage to 
 
   await page.evaluate(`document.querySelector('button[aria-label="Compare video"]').click()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoMode === true && window.__CMP_TEST__.get().compareVideoReady === true",
+    "window.__CMP_TEST__.get().compareVideoMode === true && window.__CMP_TEST__.get().compareVideo.status === 'ready'",
   );
 
   const cmpState = await page.evaluate(`(() => {
@@ -562,7 +572,7 @@ test("toggles Compare Video via Transport button and V hotkey, resizes stage to 
       videoHeight: v.videoHeight,
       stageW: r.width,
       stageH: r.height,
-      layout: u.get().compareVideoMeta?.layout,
+      layout: u.get().compareVideo.meta?.layout,
       canvasOpaque: getComputedStyle(u.S.el.canvas).opacity,
     };
   })()`);
@@ -591,7 +601,7 @@ test("toggles Compare Video via Transport button and V hotkey, resizes stage to 
 
 test("pins REF/OURS panels on click, draws ink on left-drag, captures real video pixels on save, and isolates pins from Live 3D", async () => {
   await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(true)`);
-  await waitUntil("window.__CMP_TEST__.get().compareVideoReady === true");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
   await page.evaluate(`window.__CMP_TEST__.seek(1.2)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.2) < 0.15");
 
@@ -689,7 +699,7 @@ test("pins REF/OURS panels on click, draws ink on left-drag, captures real video
 test("offers the embedded track when present and keeps Studio mix available on silent videos", async () => {
   await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(true)`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
 
   const withAudioBtn = await page.evaluate(`(() => {
@@ -706,7 +716,7 @@ test("offers the embedded track when present and keeps Studio mix available on s
 
   await page.evaluate(`window.__CMP_TEST__.selectCompareVideo('renders/draft_video.mp4')`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideoMeta?.hasAudio === false",
+    "window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideo.meta?.hasAudio === false",
   );
   const silentBtn = await page.evaluate(`(() => {
     const video = document.querySelector('button[aria-label="Audio source: OURS export"]');
@@ -742,7 +752,7 @@ test("switches REF and Studio sound without moving the picture on a windowed com
       u.seek(4);
     })()`);
     await waitUntil(
-      "window.__CMP_TEST__.get().compareVideoReady && Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 2) < 0.08",
+      "window.__CMP_TEST__.get().compareVideo.status === 'ready' && Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 2) < 0.08",
     );
     await waitUntil("window.__CMP_TEST__.S.el.audio.readyState >= 1");
     await waitUntil(
@@ -882,7 +892,7 @@ test("Compare only seeks to each requested time once and Pause leaves the latest
   await page.evaluate(
     `window.__CMP_TEST__.setCompareVideoMode(true, "renders/reference/v1_sbs.mp4")`,
   );
-  await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
   await clickButton("Play");
   await waitUntil("!window.__CMP_TEST__.S.el.compareVideo.paused");
   const result = await page.evaluate(`(() => {
@@ -918,7 +928,7 @@ test("seek completion wakes the paused Compare preview to reconcile the latest p
   );
   await waitUntil(`(() => {
     const u = window.__CMP_TEST__;
-    return u.get().compareVideoReady && !u.S.el.compareVideo.seeking;
+    return u.get().compareVideo.status === 'ready' && !u.S.el.compareVideo.seeking;
   })()`);
   const woke = await page.evaluate(`new Promise(resolve => {
     const u = window.__CMP_TEST__, video = u.S.el.compareVideo;
@@ -939,7 +949,7 @@ test("seeks five seconds with Compare buttons and arrows, clamped to the active 
       u.setCompareVideoMode(true, '${path}');
       u.seek(3);
     })()`);
-    await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
+    await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
     await page.press("ArrowRight");
     expect(await page.evaluate("window.__CMP_TEST__.S.t")).toBeCloseTo(8);
     await clickButton("Back 5 seconds");
@@ -993,7 +1003,7 @@ test("supports left-mouse Box and Path ink tools in Compare Video mode without l
     u.selectCompareVideo('renders/reference/v2_sbs.mp4');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.seek(1.0)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.0) < 0.15");
@@ -1080,7 +1090,7 @@ test("captures drafted compare video pixels offscreen after switching dropdown a
     u.selectCompareVideo('renders/reference/v2_sbs.mp4');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.seek(1.2)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.2) < 0.15");
@@ -1102,7 +1112,7 @@ test("captures drafted compare video pixels offscreen after switching dropdown a
     u.setDraft("Offscreen fallback capture after switch");
     u.selectCompareVideo('renders/draft_video.mp4');
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/draft_video.mp4'");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/draft_video.mp4'");
 
   await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(false)`);
   await waitUntil("window.__CMP_TEST__.get().compareVideoMode === false");
@@ -1145,7 +1155,7 @@ test("keeps forward shuttle clock accurate and scopes nowPicture to active Compa
     u.setCompareVideoAudio('studio');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.seek(1.0)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.0) < 0.15");
@@ -1197,7 +1207,7 @@ test("isolates same-layout cross-video drafts, preserves drafted canvas dimensio
     u.selectCompareVideo('renders/reference/v2_sbs.mp4');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.seek(1.1)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.1) < 0.15");
@@ -1226,7 +1236,7 @@ test("isolates same-layout cross-video drafts, preserves drafted canvas dimensio
     u.selectCompareVideo('renders/reference/v1_sbs.mp4');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v1_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v1_sbs.mp4'",
   );
 
   const crossVideoState = await page.evaluate(`(() => {
@@ -1310,7 +1320,7 @@ test("invalidates stale compareVideoMeta on in-place replacement while exited an
       u.selectCompareVideo('renders/draft_video.mp4');
     })()`);
     await waitUntil(
-      "window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideoMeta?.hasAudio === false",
+      "window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideo.meta?.hasAudio === false",
     );
 
     await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(false)`);
@@ -1321,11 +1331,11 @@ test("invalidates stale compareVideoMeta on in-place replacement while exited an
     utimesSync(draftFile, newer, newer);
 
     await page.evaluate(`window.__CMP_TEST__.loadCompareVideos()`);
-    await waitUntil("window.__CMP_TEST__.get().compareVideoMeta === null");
+    await waitUntil("(window.__CMP_TEST__.get().compareVideo.meta ?? null) === null");
 
     await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(true)`);
     await waitUntil(
-      "window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideoMeta?.hasAudio === true",
+      "window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/draft_video.mp4' && window.__CMP_TEST__.get().compareVideo.meta?.hasAudio === true",
     );
 
     const mutual = await page.evaluate(`(() => {
@@ -1370,7 +1380,7 @@ test("captures note media offscreen without seeking live stage video, prevents E
     u.setCompareVideoAudio('video');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.seek(1.5)`);
   await waitUntil("Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - 1.5) < 0.15");
@@ -1423,7 +1433,7 @@ test("captures note media offscreen without seeking live stage video, prevents E
 
   await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(false)`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoMode === false && window.__CMP_TEST__.get().compareVideoReady === false && window.__CMP_TEST__.S.el.compareVideo.getAttribute('src') === null && window.__CMP_TEST__.S.el.compareVideo.readyState === 0",
+    "window.__CMP_TEST__.get().compareVideoMode === false && window.__CMP_TEST__.get().compareVideo.status !== 'ready' && window.__CMP_TEST__.S.el.compareVideo.getAttribute('src') === null && window.__CMP_TEST__.S.el.compareVideo.readyState === 0",
   );
 }, 30000);
 
@@ -1432,7 +1442,10 @@ test("reports an unavailable catalog and recovers with Retry", async () => {
   try {
     await page.evaluate(`(() => {
       const u = window.__CMP_TEST__;
-      u.set({ compareVideos: [], compareVideosLoaded: false, compareVideoPath: null });
+      u.set({
+        compareCatalog: { status: 'loading', videos: [], canBuild: { ref: null, ours: null } },
+        compareVideo: { status: 'none' },
+      });
       u.setCompareVideoMode(true);
     })()`);
     await waitUntil(
@@ -1441,8 +1454,8 @@ test("reports an unavailable catalog and recovers with Retry", async () => {
     compareCatalogUnavailable = false;
     await page.evaluate(`Array.from(document.querySelectorAll('[data-compare-video-empty] button'))
       .find((button) => button.textContent.includes('Retry')).click()`);
-    await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
-    expect(await page.evaluate("window.__CMP_TEST__.get().compareVideoPath")).toBe(
+    await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
+    expect(await page.evaluate("window.__CMP_TEST__.get().compareVideo.path")).toBe(
       "renders/reference/v2_sbs.mp4",
     );
   } finally {
@@ -1455,22 +1468,25 @@ test.each([0.5, 1.5])(
   "retrying a recorded note video respects the current playhead (%s)",
   async (time) => {
     const path = "renders/reference/v1_sbs.mp4";
-    const previous = await page.evaluate("window.__CMP_TEST__.get().compareVideoPath");
+    const previous = await page.evaluate("window.__CMP_TEST__.get().compareVideo");
     compareCatalogUnavailable = true;
     try {
       await page.evaluate(`(() => {
       const u = window.__CMP_TEST__;
-      u.set({ compareVideos: [], compareVideosLoaded: false, compareVideoPath: null });
+      u.set({
+        compareCatalog: { status: 'loading', videos: [], canBuild: { ref: null, ours: null } },
+        compareVideo: { status: 'none' },
+      });
       u.openNoteInCompareVideo({ t: 0.5, compareVideo: { path: ${JSON.stringify(path)} } });
     })()`);
-      await waitUntil("window.__CMP_TEST__.get().compareCatalogError");
+      await waitUntil("window.__CMP_TEST__.get().compareCatalog.status === 'error'");
       if (time !== 0.5) await page.evaluate(`window.__CMP_TEST__.seek(${time})`);
       compareProbeRequests.length = 0;
       compareCatalogUnavailable = false;
       await page.evaluate(`Array.from(document.querySelectorAll('[data-compare-video-empty] button'))
       .find((button) => button.textContent.includes('Retry')).click()`);
-      await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
-      expect(await page.evaluate("window.__CMP_TEST__.get().compareVideoPath")).toBe(path);
+      await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
+      expect(await page.evaluate("window.__CMP_TEST__.get().compareVideo.path")).toBe(path);
       expect(await page.evaluate("window.__CMP_TEST__.S.t")).toBe(time);
       await waitUntil(
         `Math.abs(window.__CMP_TEST__.S.el.compareVideo.currentTime - ${time}) < 0.1`,
@@ -1481,7 +1497,7 @@ test.each([0.5, 1.5])(
       await page.evaluate(`(() => {
       const u = window.__CMP_TEST__;
       u.setCompareVideoMode(false);
-      u.set({ compareVideoPath: ${JSON.stringify(previous)}, noteReturn: null });
+      u.set({ compareVideo: ${JSON.stringify(previous)}, noteReturn: null });
     })()`);
     }
   },
@@ -1491,11 +1507,14 @@ test.each([0.5, 1.5])(
 test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears active ink, and preserves open Live 3D drafts", async () => {
   const emptyCheck = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
-    const prevVideos = u.get().compareVideos;
-    const prevPath = u.get().compareVideoPath;
+    const prevCatalog = u.get().compareCatalog;
+    const prevVideo = u.get().compareVideo;
     u.setInk('pen');
     u.setPlaying(true);
-    u.set({ compareVideos: [], compareVideoPath: null, compareVideoError: null });
+    u.set({
+      compareCatalog: { ...prevCatalog, videos: [] },
+      compareVideo: { status: 'none' },
+    });
     u.setCompareVideoMode(true);
     await u.openNote(null, false);
     u.setInk('pen');
@@ -1510,21 +1529,22 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     };
 
     u.setCompareVideoMode(false);
-    u.set({ compareVideos: prevVideos, compareVideoPath: prevPath, compareVideoError: null });
+    u.set({ compareCatalog: prevCatalog, compareVideo: prevVideo });
     u.setCompareVideoMode(true, 'renders/reference/v2_sbs.mp4');
     await new Promise((r) => setTimeout(r, 50));
     u.setInk('arrow');
     u.setPlaying(true);
     const fakeWrong = { dataset: { comparePath: 'renders/reference/v1_sbs.mp4' } };
     u.handleCompareVideoError(fakeWrong);
-    const ignoredWrongPath = u.get().compareVideoError;
+    const ignoredWrongPath =
+      u.get().compareVideo.status === 'error' ? u.get().compareVideo.error : null;
     u.handleCompareVideoError(u.S.el.compareVideo);
     await u.openNote(null, false);
     u.setInk('box');
     u.setPlaying(true);
     const errorOut = {
       ignoredWrongPath,
-      hasError: Boolean(u.get().compareVideoError),
+      hasError: u.get().compareVideo.status === 'error',
       compose: u.get().compose,
       ink: u.get().ink,
       playing: u.S.playing,
@@ -1552,12 +1572,15 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
 
   const liveDraftPreserved = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
-    const prevVideos = u.get().compareVideos;
-    const prevPath = u.get().compareVideoPath;
+    const prevCatalog = u.get().compareCatalog;
+    const prevVideo = u.get().compareVideo;
     const beforeNotes = u.get().notes.length;
     await u.openNote(null, false);
     u.setDraft('Keep dirty Live 3D draft');
-    u.set({ compareVideos: [], compareVideoPath: null });
+    u.set({
+      compareCatalog: { ...prevCatalog, videos: [] },
+      compareVideo: { status: 'none' },
+    });
     u.setCompareVideoMode(true);
     await u.openNote(null, false);
     const afterDirty = {
@@ -1575,7 +1598,7 @@ test("blocks Play, Note, and Draw in empty or errored Compare Video mode, clears
     };
     u.setCompareVideoMode(false);
     u.cancelNote();
-    u.set({ compareVideos: prevVideos, compareVideoPath: prevPath });
+    u.set({ compareCatalog: prevCatalog, compareVideo: prevVideo });
     return { afterDirty, afterClean };
   })()`);
   expect(liveDraftPreserved).toEqual({
@@ -1620,7 +1643,7 @@ test("stops playback when exiting Compare Video before 3D loads and ignores left
     u.seek(0.5);
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
 
   const exitUnready = await page.evaluate(`(async () => {
@@ -1653,7 +1676,7 @@ test("stops playback when exiting Compare Video before 3D loads and ignores left
     const u = window.__CMP_TEST__;
     u.setCompareVideoMode(true, 'renders/reference/v2_sbs.mp4');
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compareVideoReady === true");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
 
   const editDrag = await page.evaluate(`(() => {
     const u = window.__CMP_TEST__;
@@ -1702,8 +1725,11 @@ test("recovers true compare video dimensions from offscreen capture session when
 
   const result = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
+    const cur = u.get().compareVideo;
     u.set({
-      compareVideoMeta: null,
+      ...(cur.status === 'loading' || cur.status === 'ready'
+        ? { compareVideo: { ...cur, meta: null } }
+        : {}),
       compose: {
         kind: 'create',
         t: 1.2,
@@ -1744,7 +1770,7 @@ test("relabels pre-load pin and ink marks when compare video metadata arrives be
     u.setCompareVideoMode(true, 'renders/reference/v2_sbs.mp4');
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoMeta?.path === 'renders/reference/v2_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.meta?.path === 'renders/reference/v2_sbs.mp4'",
   );
 
   const result = await page.evaluate(`(async () => {
@@ -1863,7 +1889,7 @@ test("ignores stale in-flight probe response after in-place file replacement whi
       await u.loadCompareVideos();
       window.__PROBE_RACE__.release();
       await new Promise((r) => setTimeout(r, 60));
-      const metaAfterStale = u.get().compareVideoMeta;
+      const metaAfterStale = u.get().compareVideo.meta ?? null;
       u.setCompareVideoMode(true, 'renders/draft_video.mp4');
       await new Promise((r) => setTimeout(r, 60));
       return {
@@ -1887,7 +1913,7 @@ test("does not teleport playhead on stale video element when switching between w
   utimesSync(spanFile, olderSpan, olderSpan);
   await page.evaluate(`window.__CMP_TEST__.loadCompareVideos()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideos.some((v) => v.path === 'renders/reference/span_2-6_sbs.mp4')",
+    "window.__CMP_TEST__.get().compareCatalog.videos.some((v) => v.path === 'renders/reference/span_2-6_sbs.mp4')",
   );
 
   await page.evaluate(`(() => {
@@ -1896,7 +1922,7 @@ test("does not teleport playhead on stale video element when switching between w
     u.seek(0.5);
   })()`);
   await waitUntil(
-    "window.__CMP_TEST__.get().compareVideoReady === true && window.__CMP_TEST__.get().compareVideoPath === 'renders/reference/span_2-6_sbs.mp4'",
+    "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareVideo.path === 'renders/reference/span_2-6_sbs.mp4'",
   );
   await page.evaluate(`window.__CMP_TEST__.S.dirty = true`);
   await waitUntil(
@@ -1960,7 +1986,7 @@ test("seeks and plays the comparison tail beyond the film duration", async () =>
         compareVideo: { path: '${path}', category: 'compare', layout: 'hstack' },
       });
     })()`);
-    await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
+    await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
     const initialTime = await page.evaluate("window.__CMP_TEST__.S.t");
     expect(initialTime).toBeCloseTo(8, 3);
     const scrub = await page.evaluate(`(() => {
@@ -2053,7 +2079,7 @@ test("reopens saved comparison at the recorded frame after a speed edit", async 
 
 test("keeps raw reference feedback off a single-panel render", async () => {
   await page.evaluate(`window.__CMP_TEST__.setCompareVideoMode(true, 'renders/draft_video.mp4')`);
-  await waitUntil("window.__CMP_TEST__.get().compareVideoReady");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
   const result = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
     const previousNotes = u.get().notes;
@@ -2095,9 +2121,9 @@ test("refreshes the catalog after an agent adds an export and keeps Compare focu
   try {
     await clickButton("Refresh video list");
     await waitUntil(
-      `window.__CMP_TEST__.get().compareVideos.some(item => item.path === '${path}')`,
+      `window.__CMP_TEST__.get().compareCatalog.videos.some(item => item.path === '${path}')`,
     );
-    expect(await page.evaluate("window.__CMP_TEST__.get().compareVideoPath")).toBe(
+    expect(await page.evaluate("window.__CMP_TEST__.get().compareVideo.path")).toBe(
       "renders/reference/v2_sbs.mp4",
     );
   } finally {
@@ -2112,18 +2138,16 @@ test("keeps CompareVideoBar unclipped with Back to Live 3D visible across 680px-
     u.setCompareVideoMode(true, 'renders/reference/v2_sbs.mp4');
     u.seek(0);
   })()`);
-  await waitUntil("window.__CMP_TEST__.get().compareVideoReady === true");
+  await waitUntil("window.__CMP_TEST__.get().compareVideo.status === 'ready'");
 
   const measurements = await page.evaluate(`(async () => {
     const u = window.__CMP_TEST__;
     const harness = document.getElementById('harness');
     const origCols = harness.style.gridTemplateColumns;
     const origW = harness.style.width;
-    const prevVideos = u.get().compareVideos;
-    const prevPath = u.get().compareVideoPath;
-    const prevMeta = u.get().compareVideoMeta;
+    const prevCatalog = u.get().compareCatalog;
+    const prevVideo = u.get().compareVideo;
     const prevNotice = u.get().compareLatestNotice;
-    const prevBuild = u.get().compareCanBuild;
     const longItem = {
       path: 'renders/reference/ref_long_scene_name_vs_draft_v12_sbs.mp4',
       name: 'ref_long_scene_name_vs_draft_v12_sbs.mp4',
@@ -2144,18 +2168,24 @@ test("keeps CompareVideoBar unclipped with Back to Live 3D visible across 680px-
     };
     try {
       u.set({
-        compareVideos: [newerItem, longItem, ...prevVideos],
-        compareVideoPath: longItem.path,
+        compareCatalog: {
+          status: 'ready',
+          videos: [newerItem, longItem, ...prevCatalog.videos],
+          canBuild: { ref: 'references/ref.mp4', ours: 'renders/draft.mp4' },
+        },
         compareLatestNotice: newerItem.path,
-        compareCanBuild: { ref: 'references/ref.mp4', ours: 'renders/draft.mp4' },
-        compareVideoMeta: {
+        compareVideo: {
+          status: 'ready',
           path: longItem.path,
-          width: 1440,
-          height: 1414,
-          duration: 6,
-          fps: 30,
-          hasAudio: false,
-          layout: 'hstack',
+          meta: {
+            path: longItem.path,
+            width: 1440,
+            height: 1414,
+            duration: 6,
+            fps: 30,
+            hasAudio: false,
+            layout: 'hstack',
+          },
         },
       });
       u.seek(0);
@@ -2179,11 +2209,9 @@ test("keeps CompareVideoBar unclipped with Back to Live 3D visible across 680px-
       harness.style.width = origW;
       harness.style.gridTemplateColumns = origCols;
       u.set({
-        compareVideos: prevVideos,
-        compareVideoPath: prevPath,
-        compareVideoMeta: prevMeta,
+        compareCatalog: prevCatalog,
+        compareVideo: prevVideo,
         compareLatestNotice: prevNotice,
-        compareCanBuild: prevBuild,
       });
     }
   })()`);
@@ -2230,7 +2258,7 @@ test("outputs only the selected audio signal and restores project sound in Live 
       u.seek(4);
     })()`);
     await waitUntil(
-      "window.__CMP_TEST__.get().compareVideoReady && window.__CMP_TEST__.get().compareReferenceAudioStatus?.state === 'ready' && window.__CMP_TEST__.S.el.audio.readyState >= 1",
+      "window.__CMP_TEST__.get().compareVideo.status === 'ready' && window.__CMP_TEST__.get().compareReferenceAudioStatus?.state === 'ready' && window.__CMP_TEST__.S.el.audio.readyState >= 1",
     );
     await choose("Live mix");
     const scrub = await page.evaluate(`(() => {

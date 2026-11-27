@@ -1146,10 +1146,20 @@ function Library({ side }: { side: boolean }) {
       sessionStorage.setItem("studio-audio-mode", next);
     } catch {}
   }, []);
-  const [revealFilterNames, setRevealFilterNames] = useState<string[] | null>(null);
-  const [pendingRevealName, setPendingRevealName] = useState<string | null>(null);
-  const [revealedKey, setRevealedKey] = useState<string | null>(null);
-  const [voiceoverRevealed, setVoiceoverRevealed] = useState(false);
+  type SoundRevealUi =
+    | { kind: "idle" }
+    | { kind: "voiceover" }
+    | { kind: "pending"; name: string; filterNames: string[] | null }
+    | { kind: "revealed"; key: string; filterNames: string[] | null }
+    | { kind: "filtered"; filterNames: string[] };
+  const [revealUi, setRevealUi] = useState<SoundRevealUi>({ kind: "idle" });
+  const revealFilterNames =
+    revealUi.kind === "pending" || revealUi.kind === "revealed" || revealUi.kind === "filtered"
+      ? revealUi.filterNames
+      : null;
+  const pendingRevealName = revealUi.kind === "pending" ? revealUi.name : null;
+  const revealedKey = revealUi.kind === "revealed" ? revealUi.key : null;
+  const voiceoverRevealed = revealUi.kind === "voiceover";
   const [showRawNarrationOnTimeline, setShowRawNarrationOnTimeline] = useState(false);
   const [gridCols, setGridCols] = useState(1);
   const gridHostRef = useRef<HTMLDivElement>(null);
@@ -1509,25 +1519,25 @@ function Library({ side }: { side: boolean }) {
       setSrc(ALL);
       if (plan.mode === "voiceover") {
         setShowRawNarrationOnTimeline(false);
-        setRevealFilterNames(null);
-        setPendingRevealName(null);
         setNav({ group: "yours", leaf: "voice" });
         setOpen((prev) => ({ ...prev, yours: true }));
-        setVoiceoverRevealed(true);
+        setRevealUi({ kind: "voiceover" });
         if (revealTimerRef.current !== null) clearTimeout(revealTimerRef.current);
         revealTimerRef.current = setTimeout(() => {
-          setVoiceoverRevealed(false);
+          setRevealUi((prev) => (prev.kind === "voiceover" ? { kind: "idle" } : prev));
           revealTimerRef.current = null;
         }, 2200);
         return;
       }
-      setVoiceoverRevealed(false);
       if (plan.mode === "multi") {
         setShowRawNarrationOnTimeline(false);
         setNav({ group: "yours", leaf: "timeline" });
         setOpen((prev) => ({ ...prev, yours: true }));
-        setRevealFilterNames(plan.filterNames);
-        setPendingRevealName(plan.pendingName);
+        setRevealUi({
+          kind: "pending",
+          name: plan.pendingName,
+          filterNames: plan.filterNames,
+        });
         return;
       }
       setShowRawNarrationOnTimeline(
@@ -1538,10 +1548,9 @@ function Library({ side }: { side: boolean }) {
           plan.pendingName === narrationName,
         ),
       );
-      setRevealFilterNames(null);
       setNav(plan.nav);
       setOpen((prev) => ({ ...prev, [plan.openGroup]: true }));
-      setPendingRevealName(plan.pendingName);
+      setRevealUi({ kind: "pending", name: plan.pendingName, filterNames: null });
     },
     [narrationName, voiceTakes.length, switchLibraryMode],
   );
@@ -1593,32 +1602,48 @@ function Library({ side }: { side: boolean }) {
     if (q !== deferredQ) return;
     if (pendingRevealIdx < 0) {
       if (!libraryItems.length) return;
-      const frame = requestAnimationFrame(() => setPendingRevealName(null));
+      const frame = requestAnimationFrame(() =>
+        setRevealUi((prev) =>
+          prev.kind === "pending"
+            ? prev.filterNames
+              ? { kind: "filtered", filterNames: prev.filterNames }
+              : { kind: "idle" }
+            : prev,
+        ),
+      );
       return () => cancelAnimationFrame(frame);
     }
     const g = groups[pendingRevealIdx]!;
     const vIdx = g.variants.findIndex((v) => v.name === pendingRevealName);
     const rowIdx = Math.floor(pendingRevealIdx / gridCols);
     libraryScrollToRef.current?.(rowIdx, "center");
-    let refineFrame: number | null = null;
     const frame = requestAnimationFrame(() => {
       if (vIdx >= 0 && g.variants.length > 1) {
         setVariantCursor((prev) => (prev[g.key] === vIdx ? prev : { ...prev, [g.key]: vIdx }));
       }
       libraryScrollToRef.current?.(rowIdx, "center");
-      setRevealedKey(g.key);
+      setRevealUi((prev) => ({
+        kind: "revealed",
+        key: g.key,
+        filterNames:
+          prev.kind === "pending" || prev.kind === "revealed" || prev.kind === "filtered"
+            ? prev.filterNames
+            : null,
+      }));
       if (revealTimerRef.current !== null) clearTimeout(revealTimerRef.current);
       revealTimerRef.current = setTimeout(() => {
-        setRevealedKey(null);
+        setRevealUi((prev) =>
+          prev.kind === "revealed"
+            ? prev.filterNames
+              ? { kind: "filtered", filterNames: prev.filterNames }
+              : { kind: "idle" }
+            : prev,
+        );
         revealTimerRef.current = null;
       }, 2200);
-      refineFrame = requestAnimationFrame(() => {
-        setPendingRevealName(null);
-      });
     });
     return () => {
       cancelAnimationFrame(frame);
-      if (refineFrame !== null) cancelAnimationFrame(refineFrame);
     };
   }, [
     pendingRevealIdx,
@@ -1708,10 +1733,19 @@ function Library({ side }: { side: boolean }) {
     }
   };
 
+  const clearRevealFilter = () =>
+    setRevealUi((prev) =>
+      prev.kind === "pending" || prev.kind === "revealed"
+        ? { ...prev, filterNames: null }
+        : prev.kind === "filtered"
+          ? { kind: "idle" }
+          : prev,
+    );
+
   const selectNav = (next: NavPick) => {
     resetSourceIfAbsentInGroup(next.group, next.leaf);
     if (next.group !== "yours" || next.leaf !== "timeline") setShowRawNarrationOnTimeline(false);
-    setRevealFilterNames(null);
+    clearRevealFilter();
     setNav(next);
     setExpandedKey(null);
   };
@@ -1721,7 +1755,7 @@ function Library({ side }: { side: boolean }) {
     if (stepped.nav.group !== "yours" || stepped.nav.leaf !== "timeline") {
       setShowRawNarrationOnTimeline(false);
     }
-    setRevealFilterNames(null);
+    clearRevealFilter();
     setNav(stepped.nav);
     setOpen(stepped.open);
     setExpandedKey(null);
@@ -1898,7 +1932,7 @@ function Library({ side }: { side: boolean }) {
             name="sound-search"
             value={q}
             onChange={(v) => {
-              setRevealFilterNames(null);
+              clearRevealFilter();
               setQ(v);
             }}
             onClear={() => {
@@ -2171,7 +2205,7 @@ function Library({ side }: { side: boolean }) {
                 <span className="text-primary-text truncate font-medium">
                   Showing {filteredPlacedItems.length} selected sounds
                 </span>
-                <Button variant="ghost" size="xs" onClick={() => setRevealFilterNames(null)}>
+                <Button variant="ghost" size="xs" onClick={clearRevealFilter}>
                   Show all
                 </Button>
               </div>

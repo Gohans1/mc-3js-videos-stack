@@ -392,7 +392,7 @@ describe("phone mobile UI real Chromium DOM interactions", () => {
         t: 4,
         ratio: "16:9",
         hasVideo: false,
-        downloading: false,
+        videoDownload: "idle",
         status: "",
         saved: null,
         newBuild: false,
@@ -662,9 +662,9 @@ describe("phone mobile UI real Chromium DOM interactions", () => {
       "dialog closed after Download",
     );
     const duringPrep = await webview.evaluate(
-      `({ downloading: window.__PHONE_TEST__.get().downloading, status: window.__PHONE_TEST__.get().status })`,
+      `({ videoDownload: window.__PHONE_TEST__.get().videoDownload, status: window.__PHONE_TEST__.get().status })`,
     );
-    assert.equal(duringPrep.downloading, true);
+    assert.equal(duringPrep.videoDownload, "downloading");
     assert.equal(duringPrep.status, "Preparing 540p video…");
     const dlDeadline = Date.now() + 2000;
     while (videoDownloadHits < 1 && Date.now() < dlDeadline) {
@@ -674,7 +674,7 @@ describe("phone mobile UI real Chromium DOM interactions", () => {
 
     sseBroadcast("video-ready", {});
     await waitUntil(
-      `window.__PHONE_TEST__.get().downloading === false && window.__PHONE_TEST__.get().status === "Light video ready"`,
+      `window.__PHONE_TEST__.get().videoDownload === "idle" && window.__PHONE_TEST__.get().status === "Light video ready"`,
       "SSE video-ready clears Preparing status",
     );
 
@@ -692,7 +692,7 @@ describe("phone mobile UI real Chromium DOM interactions", () => {
     );
     sseBroadcast("video-failed", {});
     await waitUntil(
-      `window.__PHONE_TEST__.get().downloading === false && window.__PHONE_TEST__.get().hasVideo === false && window.__PHONE_TEST__.get().status.includes("No rendered video yet")`,
+      `window.__PHONE_TEST__.get().videoDownload === "idle" && window.__PHONE_TEST__.get().hasVideo === false && window.__PHONE_TEST__.get().status.includes("No rendered video yet")`,
       "SSE video-failed clears Preparing status and stale hasVideo",
     );
   });

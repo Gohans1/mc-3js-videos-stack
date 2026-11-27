@@ -21,9 +21,11 @@ export const takeSnapshot = async (slot?: number) => {
     set({ pinnedAngles: get().pinnedAngles.map((current, i) => (i === slot ? pin : current)) });
     return;
   }
-  set({ still: { url: still.url, t }, comparing: false });
+  set({ snapshot: { status: "captured", still: { url: still.url, t }, comparing: false } });
   say(`Snapshot taken at ${stamp(t)}. Make the change, then hold \\ to compare`);
 };
 export const compare = (on: boolean) => {
-  if (get().still || !on) set({ comparing: on && !!get().still });
+  const current = get().snapshot;
+  if (current.status !== "captured") return;
+  if (current.comparing !== on) set({ snapshot: { ...current, comparing: on } });
 };

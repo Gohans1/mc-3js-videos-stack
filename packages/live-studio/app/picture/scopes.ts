@@ -35,36 +35,41 @@ const glow = (count: number, per: number) => Math.min(255, Math.sqrt(count / per
 
 const clipped = { black: 0, white: 0 };
 
-let asked = 0,
-  last = 0,
-  busy = false,
-  next: ImageBitmap | null = null;
+type ScopeReadState =
+  | { kind: "idle"; asked: number }
+  | { kind: "reading"; asked: number; queued: ImageBitmap | null };
+
+let scopeState: ScopeReadState = { kind: "idle", asked: 0 };
+let last = 0;
 export const measureScopes = (src: HTMLCanvasElement | null) => {
   if (!src || !get().scopes) return;
   ensureBuffers();
   const now = performance.now();
   if (S.playing && now - last < 100) return;
   last = now;
-  const id = ++asked;
+  const id = ++scopeState.asked;
   createImageBitmap(src, { resizeWidth: W, resizeHeight: H, resizeQuality: "low" }).then(
     (copy) => {
-      if (id !== asked) {
+      if (id !== scopeState.asked) {
         copy.close();
         return;
       }
-      next?.close();
-      next = copy;
-      if (!busy) void readAll();
+      if (scopeState.kind === "reading") {
+        scopeState.queued?.close();
+        scopeState.queued = copy;
+        return;
+      }
+      scopeState = { kind: "reading", asked: scopeState.asked, queued: copy };
+      void readAll();
     },
     () => {},
   );
 };
 const readAll = async () => {
-  busy = true;
   try {
-    while (next) {
-      const copy = next;
-      next = null;
+    while (scopeState.kind === "reading" && scopeState.queued) {
+      const copy = scopeState.queued;
+      scopeState.queued = null;
       try {
         const px = await pixels(copy);
         if (px) read(px);
@@ -73,7 +78,10 @@ const readAll = async () => {
       }
     }
   } finally {
-    busy = false;
+    if (scopeState.kind === "reading") {
+      scopeState.queued?.close();
+      scopeState = { kind: "idle", asked: scopeState.asked };
+    }
   }
 };
 

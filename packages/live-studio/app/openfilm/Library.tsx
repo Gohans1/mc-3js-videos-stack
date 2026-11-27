@@ -66,7 +66,11 @@ function Inspector({
     } = item;
     return JSON.stringify(rest, null, 2);
   });
-  const [busy, setBusy] = useState(false);
+  const [saveState, setSaveState] = useState<
+    { status: "idle"; error: string } | { status: "saving" }
+  >({ status: "idle", error: "" });
+  const busy = saveState.status === "saving";
+  const saveError = saveState.status === "idle" ? saveState.error : "";
   const props = useMemo(() => {
     try {
       return controls(raw);
@@ -75,8 +79,8 @@ function Inspector({
     }
   }, [raw]);
   const save = async () => {
-    setBusy(true);
-    useOpenFilm.setState({ error: "" });
+    if (busy) return;
+    setSaveState({ status: "saving" });
     try {
       const custom = controls(raw);
       if (!(to > from) || from < 0) throw new Error("Choose a positive time range");
@@ -133,11 +137,13 @@ function Inspector({
             { ...custom, id: crypto.randomUUID(), asset: asset.id, from, to, timebase: basis },
           ]);
       }
+      setSaveState({ status: "idle", error: "" });
       say(asset.title + " saved");
     } catch (e) {
-      useOpenFilm.setState({ error: (e as Error).message });
-    } finally {
-      setBusy(false);
+      setSaveState({
+        status: "idle",
+        error: e instanceof Error ? e.message : String(e),
+      });
     }
   };
   return (
@@ -148,6 +154,11 @@ function Inspector({
           Close
         </Button>
       </div>
+      {saveError && (
+        <p role="alert" className="text-destructive text-xs">
+          {saveError}
+        </p>
+      )}
       <OpenFilmPreview recipe={asset} props={props} />
       <p className="text-muted-foreground text-xs">{asset.about}</p>
       {category !== "filter" &&
@@ -259,7 +270,10 @@ function Inspector({
 }
 
 export function OpenFilmDetails() {
-  const { catalog, selected, element, doc } = useOpenFilm();
+  const { catalogState, selection, doc } = useOpenFilm();
+  const catalog = catalogState.recipes;
+  const selected = selection.kind === "none" ? null : selection.id;
+  const element = selection.kind === "element" ? selection.selector : null;
   const item = doc.data.items.find((it) => it.id === selected);
   const recipe =
     item &&
@@ -281,7 +295,7 @@ export function OpenFilmDetails() {
           key={item.id + ":" + doc.revision}
           asset={recipe}
           item={item}
-          onClose={() => useOpenFilm.setState({ selected: null, element: null })}
+          onClose={() => useOpenFilm.setState({ selection: { kind: "none" } })}
         />
       )}
     </div>
@@ -289,14 +303,17 @@ export function OpenFilmDetails() {
 }
 
 export function OpenFilmLibrary({ category, onApply, showInspector = true }: LibraryProps = {}) {
-  const { catalog, loaded, doc, selected, element, error } = useOpenFilm();
+  const { catalogState, doc, selection } = useOpenFilm();
+  const catalog = catalogState.recipes;
+  const selected = selection.kind === "none" ? null : selection.id;
+  const element = selection.kind === "element" ? selection.selector : null;
   const [query, setQuery] = useState(""),
     [kind, setKind] = useState(category ?? "effect"),
     [group, setGroup] = useState("");
   const [limit, setLimit] = useState(40),
     [choice, setChoice] = useState<{ recipe: Recipe; revision: number } | null>(null);
   useEffect(() => {
-    void loadOpenFilm().catch((e) => useOpenFilm.setState({ error: e.message }));
+    void loadOpenFilm().catch(() => {});
   }, []);
   const item = doc.data.items.find((it) => it.id === selected);
   const picked =
@@ -368,14 +385,14 @@ export function OpenFilmLibrary({ category, onApply, showInspector = true }: Lib
         </div>
         <p className="text-muted-foreground text-xs">{matches.length} assets · OpenFilm</p>
       </div>
-      {error && (
+      {catalogState.status === "error" && (
         <p role="alert" className="text-destructive text-xs">
-          {error}
+          {catalogState.message}
         </p>
       )}
-      {!catalog.length && (
+      {!catalog.length && catalogState.status !== "error" && (
         <p role="status" className="text-muted-foreground text-xs">
-          {loaded
+          {catalogState.status === "ready"
             ? "Enter /your-page.html to use this film's HTML. Run bun run fetch:openfilm for the asset library."
             : "Loading library…"}
         </p>
@@ -384,7 +401,7 @@ export function OpenFilmLibrary({ category, onApply, showInspector = true }: Lib
         <Button
           variant="secondary"
           onClick={() => {
-            useOpenFilm.setState({ selected: null, element: null });
+            useOpenFilm.setState({ selection: { kind: "none" } });
             setChoice({
               recipe: resolveOpenFilmRecipe(query.trim(), [])!,
               revision: (choice?.revision ?? 0) + 1,
@@ -404,7 +421,7 @@ export function OpenFilmLibrary({ category, onApply, showInspector = true }: Lib
           onApply={onApply}
           onClose={() => {
             setChoice(null);
-            useOpenFilm.setState({ selected: null, element: null });
+            useOpenFilm.setState({ selection: { kind: "none" } });
           }}
         />
       )}
@@ -414,7 +431,7 @@ export function OpenFilmLibrary({ category, onApply, showInspector = true }: Lib
             type="button"
             key={recipe.id}
             onClick={() => {
-              useOpenFilm.setState({ selected: null, element: null, error: "" });
+              useOpenFilm.setState({ selection: { kind: "none" } });
               setChoice({ recipe, revision: (choice?.revision ?? 0) + 1 });
             }}
             className="bg-card hover:bg-tint focus-visible:ring-ring border-border min-h-12 rounded border px-2 py-2 text-left text-xs outline-none focus-visible:ring-2"

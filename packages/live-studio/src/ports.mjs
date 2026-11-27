@@ -686,9 +686,9 @@ export const createPortsService = ({
   readdir = defaultReaddir,
   now = () => Date.now(),
 } = {}) => {
-  let cached = null;
-  let inflight = null;
-  let inflightForced = null;
+  let cache = { snapshot: null, seq: 0 };
+  let scanSeq = 0;
+  let activeScan = { kind: "idle" };
 
   const scanListeners = async (warnings) => {
     if (platform === "win32") {
@@ -956,38 +956,38 @@ export const createPortsService = ({
     };
   };
 
+  const launchScan = (kind) => {
+    const seq = ++scanSeq;
+    const promise = runScan()
+      .then((snap) => {
+        if (seq > cache.seq) cache = { snapshot: snap, seq };
+        return snap;
+      })
+      .finally(() => {
+        if (activeScan.kind !== "idle" && activeScan.seq === seq) {
+          activeScan = { kind: "idle" };
+        }
+      });
+    activeScan = { kind, seq, promise };
+    return promise;
+  };
+
   const getSnapshot = async ({ currentPort = null, forceRefresh = false } = {}) => {
-    if (inflightForced) {
-      return applyCurrentPort(await inflightForced, currentPort);
+    if (activeScan.kind === "forced") {
+      return applyCurrentPort(await activeScan.promise, currentPort);
     }
 
-    if (!forceRefresh && cached && now() - cached.scannedAt < cacheTtlMs) {
-      return applyCurrentPort(cached, currentPort);
+    if (!forceRefresh && cache.snapshot && now() - cache.snapshot.scannedAt < cacheTtlMs) {
+      return applyCurrentPort(cache.snapshot, currentPort);
     }
 
     if (forceRefresh) {
-      inflightForced = runScan()
-        .then((snap) => {
-          cached = snap;
-          return snap;
-        })
-        .finally(() => {
-          inflightForced = null;
-        });
-      return applyCurrentPort(await inflightForced, currentPort);
+      return applyCurrentPort(await launchScan("forced"), currentPort);
     }
 
-    if (!inflight) {
-      inflight = runScan()
-        .then((snap) => {
-          cached = snap;
-          return snap;
-        })
-        .finally(() => {
-          inflight = null;
-        });
-    }
-    return applyCurrentPort(await inflight, currentPort);
+    const promise =
+      activeScan.kind === "normal" ? activeScan.promise : launchScan("normal");
+    return applyCurrentPort(await promise, currentPort);
   };
 
   return { getSnapshot };

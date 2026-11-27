@@ -80,9 +80,27 @@ const scopes = [
   { value: "all", label: SCOPE_LABEL.all },
 ];
 type RequestFailure = { key: string; message: string; chargeReported?: boolean };
+type ReceivedPreview = {
+  key: string;
+  value: InspectResult;
+  previous?: InspectResult;
+};
+type PreviewState =
+  | { status: "idle"; received: ReceivedPreview | null }
+  | { status: "error"; received: ReceivedPreview | null; error: string };
+type JevRunState =
+  | { status: "idle" }
+  | { status: "running" }
+  | { status: "failed"; failure: RequestFailure };
+type SettingsSaveState =
+  | { status: "idle" }
+  | { status: "saving" }
+  | { status: "failed"; failure: RequestFailure };
 
 export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDeck: () => void }) {
-  const { files, edits, loaded, loadFailed, inspectorLiveEnabled } = useLessons((s) => s);
+  const { files, edits, loadState, inspectorLiveEnabled } = useLessons((s) => s);
+  const loaded = loadState === "ready" || loadState === "refresh-failed";
+  const loadFailed = loadState === "failed" || loadState === "refresh-failed";
   const liveNotes = useStudio((s) => s.notes),
     ready = useStudio((s) => s.ready);
   const [info, setInfo] = useState<InspectorInfo | null>(null);
@@ -94,17 +112,13 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const includedCount = scopedFiles.length - scopedExcluded.length;
   const [view, setView] = useState<InspectorView>("ai");
   const [change, setChange] = useState("Ready");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [runFailure, setRunFailure] = useState<RequestFailure | null>(null);
-  const [saveFailure, setSaveFailure] = useState<RequestFailure | null>(null);
-  const [received, setReceived] = useState<{
-    key: string;
-    value: InspectResult;
-    previous?: InspectResult;
-  } | null>(null);
+  const [previewState, setPreviewState] = useState<PreviewState>({
+    status: "idle",
+    received: null,
+  });
+  const [runState, setRunState] = useState<JevRunState>({ status: "idle" });
+  const [saveState, setSaveState] = useState<SettingsSaveState>({ status: "idle" });
   const [retry, setRetry] = useState(0);
-  const [saving, setSaving] = useState(false);
   const [pinnedActionsHeight, setPinnedActionsHeight] = useState(0);
   const controlsRef = useRef<HTMLDivElement>(null),
     errorRef = useRef<HTMLDivElement>(null),
@@ -113,10 +127,30 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     advancedRef = useRef<HTMLDetailsElement>(null),
     chargeThresholdRef = useRef<HTMLInputElement>(null),
     lessonFilesSummaryRef = useRef<HTMLElement>(null);
-  const running = useRef(false),
+  const runStateRef = useRef<JevRunState>({ status: "idle" }),
     generation = useRef(0);
   const runFailureToast = useRef<string | null>(null),
     saveFailureToast = useRef<string | null>(null);
+  const setRun = (next: JevRunState) => {
+    runStateRef.current = next;
+    setRunState(next);
+  };
+  const clearPreviewError = () =>
+    setPreviewState((prev) =>
+      prev.status === "error" ? { status: "idle", received: prev.received } : prev,
+    );
+  const setPreviewError = (message: string) =>
+    setPreviewState((prev) =>
+      message
+        ? { status: "error", received: prev.received, error: message }
+        : { status: "idle", received: prev.received },
+    );
+  const busy = runState.status === "running";
+  const saving = saveState.status === "saving";
+  const error = previewState.status === "error" ? previewState.error : "";
+  const received = previewState.received;
+  const runFailure = runState.status === "failed" ? runState.failure : null;
+  const saveFailure = saveState.status === "failed" ? saveState.failure : null;
   const enabled = active && inspectorLiveEnabled;
   const usesFreeModel =
     config.route === "free" && config.freeModel === DEFAULT_LESSON_JEV_CONFIG.freeModel;
@@ -191,7 +225,11 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         : "Settings up to date";
   const choosePreviewView = (next: InspectorView) => {
     setView(next);
-    setReceived((current) => (current?.previous ? { ...current, previous: undefined } : current));
+    setPreviewState((prev) =>
+      prev.received?.previous
+        ? { ...prev, received: { ...prev.received, previous: undefined } }
+        : prev,
+    );
   };
   const revealPreviewError = () => {
     errorRef.current?.scrollIntoView({ block: "start" });
@@ -207,14 +245,17 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     threshold.scrollIntoView({ block: "nearest" });
   };
   const accept = (key: string, value: InspectResult) =>
-    setReceived((previous) => ({
-      key,
-      value,
-      previous: previous?.key === key ? previous.previous : previous?.value,
+    setPreviewState((prev) => ({
+      status: "idle",
+      received: {
+        key,
+        value,
+        previous: prev.received?.key === key ? prev.received.previous : prev.received?.value,
+      },
     }));
   const changeNote = (value: InspectNote) => {
     useInspectorSession.setState({ note: value });
-    setError("");
+    clearPreviewError();
     setView("ai");
     setChange("Note edited");
   };
@@ -225,7 +266,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     nextView: InspectorView,
   ) => {
     useInspectorSession.setState({ config: value });
-    setError("");
+    clearPreviewError();
     setView(nextView);
     setChange(label + " changed");
   };
@@ -235,7 +276,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
     useInspectorSession.setState({
       excluded: included ? excluded.filter((x) => x !== key) : [...excluded, key],
     });
-    setError("");
+    clearPreviewError();
     setView("lessons");
     setChange(included ? "File restored" : "File excluded");
   };
@@ -252,10 +293,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
             saved: JSON.stringify(data.config),
             hydrated: true,
           });
-        setError("");
+        clearPreviewError();
       })
       .catch((e: Error) => {
-        if (!controller.signal.aborted) setError(e.message);
+        if (!controller.signal.aborted) setPreviewError(e.message);
       });
     return () => controller.abort();
   }, [retry]);
@@ -271,11 +312,10 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         .then((data) => {
           if (id === generation.current) {
             accept(previewKey, data);
-            setError("");
           }
         })
         .catch((e: Error) => {
-          if (!controller.signal.aborted && id === generation.current) setError(e.message);
+          if (!controller.signal.aborted && id === generation.current) setPreviewError(e.message);
         });
     }, 200);
     return () => {
@@ -286,7 +326,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
   const run = async () => {
     if (
       !enabled ||
-      running.current ||
+      runStateRef.current.status === "running" ||
       validationError ||
       updating ||
       chargeReported ||
@@ -298,11 +338,9 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       toast.close(runFailureToast.current);
       runFailureToast.current = null;
     }
-    running.current = true;
     ++generation.current;
-    setBusy(true);
-    setError("");
-    setRunFailure(null);
+    setRun({ status: "running" });
+    clearPreviewError();
     setView("ai");
     const snapshot = previewKey;
     try {
@@ -314,6 +352,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         accept(snapshot, value);
         setChange(value.status === "cached" ? "Cached matches reused" : "Jev run finished");
       }
+      setRun({ status: "idle" });
       toast.add({
         title: value.status === "cached" ? "Cached result reused · no call" : "Jev run finished",
         type: "info",
@@ -325,16 +364,16 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
         usesFreeModel || failure.cause === 424 || chargeReported
           ? failure.message
           : `${failure.message} The provider may still charge for this attempt.`;
-      if (currentBody.current === snapshot)
-        setRunFailure({ key: snapshot, message, chargeReported });
+      setRun(
+        currentBody.current === snapshot
+          ? { status: "failed", failure: { key: snapshot, message, chargeReported } }
+          : { status: "idle" },
+      );
       runFailureToast.current = toast.add({
         title: "Jev run failed",
         description: message,
         type: "error",
       });
-    } finally {
-      running.current = false;
-      setBusy(false);
     }
   };
   const save = async () => {
@@ -344,24 +383,25 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
       saveFailureToast.current = null;
     }
     const snapshot = configKey;
-    setSaving(true);
-    setSaveFailure(null);
+    setSaveState({ status: "saving" });
     try {
       await request("/api/lessons/inspect", json("PUT", config));
       useInspectorSession.setState({ saved: snapshot });
+      setSaveState({ status: "idle" });
       toast.add({
         title: "Settings saved for this film",
         description: "The notes CLI now uses these settings.",
       });
     } catch (e) {
-      setSaveFailure({ key: snapshot, message: (e as Error).message });
+      setSaveState({
+        status: "failed",
+        failure: { key: snapshot, message: (e as Error).message },
+      });
       saveFailureToast.current = toast.add({
         title: "Settings were not saved",
         description: (e as Error).message,
         type: "error",
       });
-    } finally {
-      setSaving(false);
     }
   };
   const missingLessons = loadFailed
@@ -465,7 +505,7 @@ export function AiInspector({ active, onOpenDeck }: { active: boolean; onOpenDec
                         target?.focus();
                         if (runError) void run();
                         else {
-                          setError("");
+                          clearPreviewError();
                           setRetry((v) => v + 1);
                         }
                       }}

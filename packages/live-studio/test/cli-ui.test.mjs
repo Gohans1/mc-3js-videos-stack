@@ -5,6 +5,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+  cliActiveRunOf,
+  cliCatalogOf,
+  cliRunErrorOf,
+  cliStoppingRunIdOf,
   cliStore,
   commitSaveTemplate,
   consumeFocusConsoleRun,
@@ -318,12 +322,12 @@ for (const mode of ["execute", "help"]) {
       };
       const request = { commandId: "help", targetFilm: "root", mode };
       await assert.doesNotReject(() => dispatchCliRun(request));
-      assert.equal(cliStore.getState().submittingRun, false);
-      assert.equal(cliStore.getState().runError?.message, "Failed to fetch");
+      assert.notEqual(cliStore.getState().runState.status, "submitting");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Failed to fetch");
       await dispatchCliRun(request);
       assert.equal(calls, 2);
-      assert.equal(cliStore.getState().submittingRun, false);
-      assert.equal(cliStore.getState().runError?.message, "Retry request reached Studio");
+      assert.notEqual(cliStore.getState().runState.status, "submitting");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Retry request reached Studio");
     } finally {
       globalThis.fetch = originalFetch;
       cliStore.setState(savedState);
@@ -342,15 +346,15 @@ test("network rejection releases Stop so the running command can be stopped agai
       if (calls === 1) throw new TypeError("Failed to fetch");
       return Response.json({ run: { ...running, status: "stopped" } });
     };
-    cliStore.setState({ activeRun: running, stoppingRunId: null, runError: null });
+    cliStore.setState({ runState: { status: "running", run: running, error: null } });
     await assert.doesNotReject(() => stopCurrentRun("run-offline"));
-    assert.equal(cliStore.getState().stoppingRunId, null);
-    assert.equal(cliStore.getState().runError?.message, "Failed to fetch");
-    assert.equal(cliStore.getState().runError?.operation, "stop");
-    assert.equal(cliStore.getState().activeRun?.runId, "run-offline");
+    assert.equal(cliStoppingRunIdOf(cliStore.getState()), null);
+    assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Failed to fetch");
+    assert.equal(cliRunErrorOf(cliStore.getState())?.operation, "stop");
+    assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "run-offline");
     await stopCurrentRun("run-offline");
     assert.equal(calls, 2);
-    assert.equal(cliStore.getState().activeRun, null);
+    assert.equal(cliActiveRunOf(cliStore.getState()), null);
     assert.equal(cliStore.getState().lastRun?.status, "stopped");
   } finally {
     globalThis.fetch = originalFetch;
@@ -367,14 +371,14 @@ test("a stop service error stays visible and leaves the run available to stop ag
       url.endsWith("/stop")
         ? Response.json({ error: "Stop service unavailable" }, { status: 503 })
         : Response.json({ active: activeRun, last: null });
-    cliStore.setState({ activeRun, stoppingRunId: null, runError: null });
+    cliStore.setState({ runState: { status: "running", run: activeRun, error: null } });
     await stopCurrentRun(activeRun.runId);
-    assert.deepEqual(cliStore.getState().runError, {
+    assert.deepEqual(cliRunErrorOf(cliStore.getState()), {
       operation: "stop",
       message: "Stop service unavailable",
     });
-    assert.equal(cliStore.getState().stoppingRunId, null);
-    assert.equal(cliStore.getState().activeRun?.runId, activeRun.runId);
+    assert.equal(cliStoppingRunIdOf(cliStore.getState()), null);
+    assert.equal(cliActiveRunOf(cliStore.getState())?.runId, activeRun.runId);
   } finally {
     globalThis.fetch = originalFetch;
     cliStore.setState(savedState);
@@ -896,14 +900,13 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       };
 
       cliStore.setState({
-        activeRun: runningRun,
+        runState: { status: "running", run: runningRun, error: null },
         lastRun: null,
-        stoppingRunId: null,
       });
 
       await stopCurrentRun("r-stop-1");
-      assert.equal(cliStore.getState().stoppingRunId, "r-stop-1");
-      assert.equal(cliStore.getState().activeRun?.runId, "r-stop-1");
+      assert.equal(cliStoppingRunIdOf(cliStore.getState()), "r-stop-1");
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-stop-1");
       assert.equal(cliStore.getState().lastRun, null);
       assert.equal(esClosed, false);
 
@@ -925,8 +928,8 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       });
 
       const after = cliStore.getState();
-      assert.equal(after.stoppingRunId, null);
-      assert.equal(after.activeRun, null);
+      assert.equal(cliStoppingRunIdOf(after), null);
+      assert.equal(cliActiveRunOf(after), null);
       assert.equal(after.lastRun?.status, "stopped");
       assert.equal(after.lastRun?.signal, "SIGTERM");
       assert.equal(after.lastRun?.output.length, 2);
@@ -969,9 +972,12 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       };
 
       cliStore.setState({
-        catalog: { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context: ctx },
-        catalogFilmQuery: null,
-        confirmPending: null,
+        catalogState: {
+          status: "ready",
+          catalog: { categories: CLI_CATEGORIES, commands: CLI_COMMANDS, context: ctx },
+          filmQuery: null,
+        },
+        runState: { status: "idle", error: null },
       });
 
       openTemplateInWorkbench({
@@ -987,12 +993,12 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       });
       await new Promise((r) => setTimeout(r, 10));
       assert.ok(fetchedUrls.includes("/api/cli/catalog?film=sealed-room"));
-      assert.equal(cliStore.getState().catalogFilmQuery, "sealed-room");
+      assert.equal(cliStore.getState().catalogState.filmQuery, "sealed-room");
 
       setDraftTargetFilm("find", "active");
       await new Promise((r) => setTimeout(r, 10));
       assert.ok(fetchedUrls.includes("/api/cli/catalog"));
-      assert.equal(cliStore.getState().catalogFilmQuery, null);
+      assert.equal(cliStore.getState().catalogState.filmQuery, null);
 
       await dispatchCliRun({
         commandId: "voice:gen",
@@ -1001,10 +1007,10 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         targetFilm: "active",
         mode: "execute",
       });
-      const pending = cliStore.getState().confirmPending;
-      assert.ok(pending);
-      assert.equal(pending.dialog.reason, "Spend ElevenLabs credits?");
-      assert.ok(pending.dialog.displayCommand.includes("voice:gen"));
+      const rs = cliStore.getState().runState;
+      assert.equal(rs.status, "confirming");
+      assert.equal(rs.pending.dialog.reason, "Spend ElevenLabs credits?");
+      assert.ok(rs.pending.dialog.displayCommand.includes("voice:gen"));
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -1027,10 +1033,8 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         });
 
       cliStore.setState({
-        saveDialogOpen: true,
-        savingTemplate: false,
-        saveError: null,
-        runError: null,
+        saveDialog: { status: "open", error: null },
+        runState: { status: "idle", error: null },
       });
 
       const created = await commitSaveTemplate({
@@ -1039,10 +1043,11 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         draft,
       });
       assert.equal(created, null);
-      assert.equal(cliStore.getState().saveDialogOpen, true);
-      assert.equal(cliStore.getState().savingTemplate, false);
-      assert.equal(cliStore.getState().saveError, "Template limit reached");
-      assert.equal(cliStore.getState().runError, null);
+      assert.deepEqual(cliStore.getState().saveDialog, {
+        status: "open",
+        error: "Template limit reached",
+      });
+      assert.equal(cliRunErrorOf(cliStore.getState()), null);
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -1115,7 +1120,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
           status: 409,
           headers: { "Content-Type": "application/json" },
         });
-      cliStore.setState({ view: "browse", runError: null, confirmPending: null });
+      cliStore.setState({ view: "browse", runState: { status: "idle", error: null } });
       await dispatchCliRun(
         {
           commandId: "voice:gen",
@@ -1142,7 +1147,7 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
         },
       );
       assert.equal(cliStore.getState().view, "browse");
-      assert.equal(cliStore.getState().runError?.message, "Film locked by render");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Film locked by render");
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -1170,16 +1175,28 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
           status: 500,
           headers: { "Content-Type": "application/json" },
         });
-      cliStore.setState({ templates: [sampleTpl], templatesError: null });
+      cliStore.setState({
+        templatesState: { status: "ready", templates: [sampleTpl], error: null },
+      });
 
       const deleted = await removeTemplate("tpl-del");
       assert.equal(deleted, false);
-      assert.equal(cliStore.getState().templatesError, "Disk read-only");
-      assert.equal(cliStore.getState().templates.length, 1);
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        "Disk read-only",
+      );
+      assert.equal(cliStore.getState().templatesState.templates.length, 1);
 
       const restored = await restoreDeletedTemplate(sampleTpl);
       assert.equal(restored, false);
-      assert.equal(cliStore.getState().templatesError, "Disk read-only");
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        "Disk read-only",
+      );
 
       globalThis.fetch = async (_url, init) => {
         if (init?.method === "DELETE") {
@@ -1196,13 +1213,23 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
 
       const okDel = await removeTemplate("tpl-del");
       assert.equal(okDel, true);
-      assert.equal(cliStore.getState().templatesError, null);
-      assert.equal(cliStore.getState().templates.length, 0);
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        null,
+      );
+      assert.equal(cliStore.getState().templatesState.templates.length, 0);
 
       const okRes = await restoreDeletedTemplate(sampleTpl);
       assert.equal(okRes, true);
-      assert.equal(cliStore.getState().templatesError, null);
-      assert.equal(cliStore.getState().templates.length, 1);
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        null,
+      );
+      assert.equal(cliStore.getState().templatesState.templates.length, 1);
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -1247,8 +1274,8 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       resolveSlow();
       await p1;
 
-      assert.equal(cliStore.getState().catalog?.context.activeFilm, "sealed-room");
-      assert.equal(cliStore.getState().catalogFilmQuery, "sealed-room");
+      assert.equal(cliCatalogOf(cliStore.getState())?.context.activeFilm, "sealed-room");
+      assert.equal(cliStore.getState().catalogState.filmQuery, "sealed-room");
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -1326,13 +1353,17 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       };
 
       cliStore.setState({
-        catalogError: "Offline",
-        templatesError: "Failed",
-        catalogFilmQuery: null,
+        catalogState: { status: "error", catalog: null, filmQuery: null, error: "Offline" },
+        templatesState: { status: "ready", templates: [], error: "Failed" },
       });
       await retryCliPanel();
-      assert.equal(cliStore.getState().catalogError, null);
-      assert.equal(cliStore.getState().templatesError, null);
+      assert.equal(cliStore.getState().catalogState.status, "ready");
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        null,
+      );
       assert.ok(seen.includes("/api/cli/catalog"));
       assert.ok(seen.includes("/api/cli/templates"));
       assert.ok(seen.includes("/api/cli/runs"));
@@ -1530,13 +1561,17 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         );
 
-      cliStore.setState({ templates: [], templatesError: null, templatesLoaded: false });
+      cliStore.setState({
+        templatesState: { status: "loading", templates: [] },
+      });
       await refreshCliTemplates();
       assert.equal(
-        cliStore.getState().templatesError,
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
         "Saved templates file is corrupted; loaded empty list.",
       );
-      assert.equal(cliStore.getState().templatesLoaded, true);
+      assert.equal(cliStore.getState().templatesState.status, "ready");
 
       globalThis.fetch = async () =>
         new Response(JSON.stringify({ templates: [], warning: null }), {
@@ -1544,7 +1579,12 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
           headers: { "Content-Type": "application/json" },
         });
       await refreshCliTemplates();
-      assert.equal(cliStore.getState().templatesError, null);
+      assert.equal(
+        cliStore.getState().templatesState.status === "ready"
+          ? cliStore.getState().templatesState.error
+          : null,
+        null,
+      );
     } finally {
       globalThis.fetch = origFetch;
       cliStore.setState(savedState);
@@ -2250,8 +2290,9 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
     assert.ok(html.includes("packages/live-studio"));
 
     openTemplateInWorkbench(templates[0]);
-    assert.ok(cliStore.getState().templatesError?.includes("nonexistent:cmd"));
-    cliStore.setState({ templatesError: null });
+    const ts = cliStore.getState().templatesState;
+    assert.ok(ts.status === "ready" && ts.error?.includes("nonexistent:cmd"));
+    cliStore.setState({ templatesState: { status: "ready", templates: ts.templates, error: null } });
   });
 
   test("touch targets, false-string boolean, unique Add labels, coalesced console, and search counts", () => {
@@ -2657,6 +2698,168 @@ describe("CLI store async flows, target preservation & hotkey guard", () => {
       cliStore.setState(prevState);
       globalThis.EventSource = origES;
       globalThis.fetch = origFetch;
+    }
+  });
+
+  test("dispatchCliRun ignores concurrent re-entrant calls while submitting, running, or stopping", async () => {
+    const origFetch = globalThis.fetch;
+    const prevState = cliStore.getState();
+    let calls = 0;
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    try {
+      cliStore.setState({ runState: { status: "idle", error: null } });
+      globalThis.fetch = async () => {
+        calls++;
+        await gate;
+        return Response.json({ error: "Done" }, { status: 400 });
+      };
+      const first = dispatchCliRun({ commandId: "help", targetFilm: "root", mode: "execute" });
+      assert.equal(cliStore.getState().runState.status, "submitting");
+      const second = dispatchCliRun({ commandId: "help", targetFilm: "root", mode: "execute" });
+      assert.equal(calls, 1);
+      release();
+      await Promise.all([first, second]);
+      assert.equal(calls, 1);
+      assert.equal(cliStore.getState().runState.status, "idle");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Done");
+
+      const running = {
+        runId: "r-active",
+        status: "running",
+        commandId: "render",
+        output: [],
+      };
+      cliStore.setState({ runState: { status: "running", run: running, error: null } });
+      await dispatchCliRun({ commandId: "help", targetFilm: "root", mode: "execute" });
+      assert.equal(calls, 1);
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-active");
+      assert.equal(cliStore.getState().runState.status, "running");
+
+      cliStore.setState({ runState: { status: "stopping", run: running } });
+      await dispatchCliRun({ commandId: "help", targetFilm: "root", mode: "execute" });
+      assert.equal(calls, 1);
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-active");
+      assert.equal(cliStore.getState().runState.status, "stopping");
+    } finally {
+      globalThis.fetch = origFetch;
+      cliStore.setState(prevState);
+    }
+  });
+
+  test("stale stopCurrentRun failure never clobbers newer runState or idle state", async () => {
+    const origFetch = globalThis.fetch;
+    const prevState = cliStore.getState();
+    let rejectStop;
+    const stopPromiseGate = new Promise((_, reject) => {
+      rejectStop = reject;
+    });
+    const oldRun = { runId: "r-old", status: "running", commandId: "help", output: [] };
+    const newRun = { runId: "r-new", status: "running", commandId: "render", output: [] };
+    try {
+      cliStore.setState({ runState: { status: "running", run: oldRun, error: null } });
+      globalThis.fetch = () => stopPromiseGate;
+      const stopping = stopCurrentRun("r-old");
+      cliStore.setState({ runState: { status: "running", run: newRun, error: null } });
+      rejectStop(new Error("Stale stop timeout"));
+      await stopping;
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-new");
+      assert.equal(cliRunErrorOf(cliStore.getState()), null);
+    } finally {
+      globalThis.fetch = origFetch;
+      cliStore.setState(prevState);
+    }
+  });
+
+  test("409 BUSY start error survives subsequent syncCliRuns attaching the active run", async () => {
+    const origFetch = globalThis.fetch;
+    const prevState = cliStore.getState();
+    const activeRun = { runId: "r-busy", status: "running", commandId: "render", output: [] };
+    let resolveSyncSeen;
+    const syncSeen = new Promise((resolve) => {
+      resolveSyncSeen = resolve;
+    });
+    try {
+      cliStore.setState({ runState: { status: "idle", error: null } });
+      globalThis.fetch = (url) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (u.endsWith("/api/cli/runs")) {
+          queueMicrotask(resolveSyncSeen);
+          return Promise.resolve(Response.json({ active: activeRun, last: null }));
+        }
+        return Promise.resolve(
+          Response.json(
+            { ok: false, code: "BUSY", error: "Another command is running" },
+            { status: 409 },
+          ),
+        );
+      };
+      await dispatchCliRun({ commandId: "help", targetFilm: "root", mode: "execute" });
+      await syncSeen;
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-busy");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.operation, "start");
+      assert.equal(cliRunErrorOf(cliStore.getState())?.message, "Another command is running");
+    } finally {
+      globalThis.fetch = origFetch;
+      cliStore.setState(prevState);
+    }
+  });
+
+  test("stale non-terminal stopCurrentRun response never tears down a newer run's SSE stream", async () => {
+    const origFetch = globalThis.fetch;
+    const origES = globalThis.EventSource;
+    const prevState = cliStore.getState();
+    const streams = [];
+    class FakeEventSource {
+      constructor(url) {
+        this.url = url;
+        this.closed = false;
+        this.listeners = new Map();
+        streams.push(this);
+      }
+      addEventListener(type, fn) {
+        this.listeners.set(type, fn);
+      }
+      close() {
+        this.closed = true;
+      }
+    }
+    let resolveStop;
+    const stopGate = new Promise((resolve) => {
+      resolveStop = resolve;
+    });
+    const oldRun = { runId: "r-old-stream", status: "running", commandId: "help", output: [] };
+    const newRun = { runId: "r-new-stream", status: "running", commandId: "render", output: [] };
+    try {
+      globalThis.EventSource = FakeEventSource;
+      cliStore.setState({ runState: { status: "running", run: oldRun, error: null } });
+      globalThis.fetch = (url) => {
+        const u = typeof url === "string" ? url : url instanceof URL ? url.href : url.url;
+        if (u.endsWith("/stop")) return stopGate;
+        return Promise.resolve(Response.json({ ok: true, run: newRun }));
+      };
+      const stopping = stopCurrentRun("r-old-stream");
+      cliStore.setState({ runState: { status: "idle", error: null } });
+      await dispatchCliRun({ commandId: "render", targetFilm: "root", mode: "execute" });
+      assert.equal(streams.length, 1);
+      assert.ok(streams[0].url.includes("r-new-stream"));
+
+      resolveStop(Response.json({ run: oldRun }));
+      await stopping;
+      assert.equal(streams.length, 1);
+      assert.equal(streams[0].closed, false);
+      assert.equal(cliActiveRunOf(cliStore.getState())?.runId, "r-new-stream");
+      streams[0].listeners.get("done")?.({
+        data: JSON.stringify({ runId: "r-new-stream", status: "done", exitCode: 0 }),
+      });
+    } finally {
+      globalThis.EventSource = origES;
+      globalThis.fetch = origFetch;
+      cliStore.setState(prevState);
     }
   });
 });

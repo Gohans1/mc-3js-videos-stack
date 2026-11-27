@@ -1,3 +1,4 @@
+import { resolveTextItem } from "film-stage/titles-catalog";
 import { Plus } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -13,7 +14,11 @@ const familyOf = (font?: string) =>
   S.tools?.titles?.fonts.find((f) => f.id === font)?.css ?? "system-ui, sans-serif";
 
 function Look({ p }: { p: Preset }) {
-  const it = p.item;
+  const it = resolveTextItem(
+    p.item as Record<string, unknown>,
+    null,
+    S.tools?.titles?.presets as Parameters<typeof resolveTextItem>[2],
+  ) as Preset["item"];
   const shapeCls =
     it.kind === "box"
       ? "h-9 text-accent-hover"

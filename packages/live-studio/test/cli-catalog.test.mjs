@@ -382,13 +382,14 @@ describe("cli-catalog structure & bidirectional repo drift", () => {
     const categoryIds = new Set(CLI_CATEGORIES.map((c) => c.id));
     const seenCmdIds = new Set();
     const checkRule = (rule, defsByKey) => {
-      for (let cur = rule; cur; cur = cur.and) {
-        expect(defsByKey.has(cur.field)).toBe(true);
-        const target = defsByKey.get(cur.field);
-        if (target?.type === "enum" && target.options && cur.in) {
-          for (const val of cur.in) expect(target.options.includes(val)).toBe(true);
-        }
+      if (!rule) return;
+      expect(defsByKey.has(rule.field)).toBe(true);
+      const target = defsByKey.get(rule.field);
+      if (target?.type === "enum" && target.options && rule.in) {
+        for (const val of rule.in) expect(target.options.includes(val)).toBe(true);
       }
+      if (rule.and) checkRule(rule.and, defsByKey);
+      if (rule.or) checkRule(rule.or, defsByKey);
     };
 
     const checkNode = (cmd, subPath, subNodes) => {
@@ -2275,6 +2276,239 @@ describe("cli-catalog resolver rules", () => {
       "--batch-size",
       "300",
     ]);
+  });
+
+  test("handles single-source vs two-video reference frames flags and preserves --label on timecode with stale remake", () => {
+    const single = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "frames", reference: "renders/draft_video.mp4" },
+        flags: {
+          "--range": "0,20",
+          "--fps": "15",
+          "--label": "OURS",
+          "--start": "1",
+          "--layout": "hstack",
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(single.validationErrors).toEqual([]);
+    expect(single.argvTokens).toEqual([
+      "frames",
+      "renders/draft_video.mp4",
+      "--range",
+      "0,20",
+      "--fps",
+      "15",
+      "--label",
+      "OURS",
+    ]);
+
+    const twoVideo = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: { operation: "frames", reference: "references/ref.mp4", remake: "renders/draft.mp4" },
+        flags: { "--start": "2", "--layout": "hstack", "--label": "STALE" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(twoVideo.validationErrors).toEqual([]);
+    expect(twoVideo.argvTokens).toEqual([
+      "frames",
+      "references/ref.mp4",
+      "renders/draft.mp4",
+      "--start",
+      "2",
+      "--layout",
+      "hstack",
+    ]);
+
+    const timecodeWithStaleRemake = buildCliInvocation(
+      {
+        commandId: "reference",
+        args: {
+          operation: "timecode",
+          reference: "references/ref.mp4",
+          remake: "renders/draft.mp4",
+        },
+        flags: { "--label": "REF" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(timecodeWithStaleRemake.validationErrors).toEqual([]);
+    expect(timecodeWithStaleRemake.argvTokens).toEqual([
+      "timecode",
+      "references/ref.mp4",
+      "--label",
+      "REF",
+    ]);
+
+    const refCmd = findCliCommand("reference");
+    const labelFlag = refCmd?.flags?.find((f) => f.key === "--label");
+    const startFlag = refCmd?.flags?.find((f) => f.key === "--start");
+    const layoutFlag = refCmd?.flags?.find((f) => f.key === "--layout");
+    expect(isFieldVisible(labelFlag?.visibleWhen, { operation: "timecode" })).toBe(true);
+    expect(
+      isFieldVisible(labelFlag?.visibleWhen, {
+        operation: "timecode",
+        remake: "renders/draft.mp4",
+      }),
+    ).toBe(true);
+    expect(isFieldVisible(labelFlag?.visibleWhen, { operation: "frames" })).toBe(true);
+    expect(
+      isFieldVisible(labelFlag?.visibleWhen, { operation: "frames", remake: "renders/draft.mp4" }),
+    ).toBe(false);
+    expect(isFieldVisible(startFlag?.visibleWhen, { operation: "sidebyside" })).toBe(true);
+    expect(isFieldVisible(layoutFlag?.visibleWhen, { operation: "sidebyside" })).toBe(true);
+    expect(isFieldVisible(startFlag?.visibleWhen, { operation: "frames" })).toBe(false);
+    expect(isFieldVisible(layoutFlag?.visibleWhen, { operation: "frames" })).toBe(false);
+    expect(
+      isFieldVisible(startFlag?.visibleWhen, { operation: "frames", remake: "renders/draft.mp4" }),
+    ).toBe(true);
+    expect(
+      isFieldVisible(layoutFlag?.visibleWhen, { operation: "frames", remake: "renders/draft.mp4" }),
+    ).toBe(true);
+    const andBeforeOr = {
+      field: "operation",
+      in: ["frames"],
+      and: { field: "remake", nonEmpty: true },
+      or: { field: "operation", in: ["timecode"] },
+    };
+    expect(isFieldVisible(andBeforeOr, { operation: "timecode" })).toBe(true);
+    expect(isFieldVisible(andBeforeOr, { operation: "frames", remake: "renders/draft.mp4" })).toBe(
+      true,
+    );
+    expect(isFieldVisible(andBeforeOr, { operation: "frames" })).toBe(false);
+  });
+
+  test("exposes render --ref and --ref-region on stills and poster and validates incompatible render flags", () => {
+    const renderCmd = findCliCommand("render");
+    const refFlag = renderCmd?.flags?.find((f) => f.key === "--ref");
+    const regionFlag = renderCmd?.flags?.find((f) => f.key === "--ref-region");
+    expect(refFlag).toBeDefined();
+    expect(regionFlag).toBeDefined();
+    for (const target of ["stills", "poster"]) {
+      expect(isFieldVisible(refFlag?.visibleWhen, { target })).toBe(true);
+      expect(isFieldVisible(regionFlag?.visibleWhen, { target })).toBe(false);
+      expect(
+        isFieldVisible(regionFlag?.visibleWhen, { target, "--ref": "references/ref.mp4" }),
+      ).toBe(true);
+    }
+    for (const target of ["clip", "final", "captions", "all"]) {
+      expect(isFieldVisible(refFlag?.visibleWhen, { target })).toBe(false);
+      expect(
+        isFieldVisible(regionFlag?.visibleWhen, { target, "--ref": "references/ref.mp4" }),
+      ).toBe(false);
+    }
+
+    const regionWithoutRef = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        flags: { "--at": "12", "--ref-region": "0.2,0.2,0.5,0.5" },
+      },
+      BASE_CONTEXT,
+    );
+    expect(regionWithoutRef.validationErrors).toEqual([]);
+    expect(regionWithoutRef.argvTokens).toEqual(["stills", "--at", "12"]);
+
+    const posterRef = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "poster" },
+        flags: {
+          "--at": "12",
+          "--ref": "references/ref.mp4",
+          "--ref-region": "0.2,0.2,0.5,0.5",
+          "--compare": true,
+          "--list": true,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(posterRef.validationErrors).toEqual([]);
+    expect(posterRef.argvTokens).toEqual([
+      "poster",
+      "--at",
+      "12",
+      "--ref",
+      "references/ref.mp4",
+      "--ref-region",
+      "0.2,0.2,0.5,0.5",
+      "--compare",
+    ]);
+
+    const stillsConflict = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        flags: {
+          "--at": "1",
+          "--ref": "references/ref.mp4",
+          "--crop": "0,0,0.5,0.5",
+          "--list": true,
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(
+      stillsConflict.validationErrors.some(
+        (err) => err.includes("--ref") && err.includes("--crop") && err.includes("--list"),
+      ),
+    ).toBe(true);
+
+    const posterConflict = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "poster" },
+        flags: {
+          "--at": "1",
+          "--ref": "references/ref.mp4",
+          "--views": "@views.json",
+          "--entry": "lab/prop.ts",
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(
+      posterConflict.validationErrors.some(
+        (err) => err.includes("--ref") && err.includes("--views") && err.includes("--entry"),
+      ),
+    ).toBe(true);
+
+    const inspectConflict = buildCliInvocation(
+      {
+        commandId: "render",
+        args: { target: "stills" },
+        flags: {
+          "--at": "1",
+          "--ref": "references/ref.mp4",
+          "--inspect": "0,2,5,0,1,0,50",
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(
+      inspectConflict.validationErrors.some(
+        (err) => err.includes("--ref") && err.includes("--inspect"),
+      ),
+    ).toBe(true);
+
+    const helpIgnoresConflict = buildCliInvocation(
+      {
+        commandId: "render",
+        mode: "help",
+        args: { target: "stills" },
+        flags: {
+          "--at": "1",
+          "--ref": "references/ref.mp4",
+          "--crop": "0,0,0.5,0.5",
+        },
+      },
+      BASE_CONTEXT,
+    );
+    expect(helpIgnoresConflict.validationErrors).toEqual([]);
   });
 
   test("resolves reference sidebyside operation with --out, --audio, --layout, and --short-edge", () => {

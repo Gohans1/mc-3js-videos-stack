@@ -53,6 +53,11 @@ export interface PointerCaptureTarget {
   releasePointerCapture(pointerId: number): void;
 }
 
+type SliderAnchor = { raw: number; value: number; fine: boolean };
+type SliderDragState =
+  | { kind: "idle" }
+  | { kind: "dragging"; pointerId: number; changed: boolean; anchor: SliderAnchor | null };
+
 export function createSliderDrag({
   getCurrent,
   onCommit,
@@ -60,45 +65,51 @@ export function createSliderDrag({
   getCurrent: () => number;
   onCommit: (value: number) => void;
 }) {
-  let dragging = false,
-    changed = false,
-    pointerId: number | null = null;
-  const release = (target?: PointerCaptureTarget | null, id = pointerId) => {
-    if (target && id !== null && target.hasPointerCapture(id)) {
+  let state: SliderDragState = { kind: "idle" };
+  const release = (target: PointerCaptureTarget | null | undefined, id: number) => {
+    if (target && target.hasPointerCapture(id)) {
       target.releasePointerCapture(id);
     }
-    pointerId = null;
   };
   return {
     get active() {
-      return dragging;
+      return state.kind === "dragging";
     },
-    start(target: PointerCaptureTarget, id: number, next: number): boolean {
-      dragging = true;
-      changed = next !== getCurrent();
-      pointerId = id;
+    get anchor() {
+      return state.kind === "dragging" ? state.anchor : null;
+    },
+    setAnchor(next: SliderAnchor) {
+      if (state.kind === "dragging") state = { ...state, anchor: next };
+    },
+    start(
+      target: PointerCaptureTarget,
+      id: number,
+      next: number,
+      anchor: SliderAnchor | null = null,
+    ): boolean {
+      const changed = next !== getCurrent();
+      state = { kind: "dragging", pointerId: id, changed, anchor };
       target.setPointerCapture(id);
       return changed;
     },
     move(next: number): boolean {
-      if (!dragging || next === getCurrent()) return false;
-      changed = true;
+      if (state.kind !== "dragging" || next === getCurrent()) return false;
+      state = { ...state, changed: true };
       return true;
     },
     end(target?: PointerCaptureTarget | null, id?: number): boolean {
-      if (!dragging) return false;
-      dragging = false;
-      const didChange = changed;
-      changed = false;
-      release(target, id);
-      if (didChange) onCommit(getCurrent());
-      return didChange;
+      if (state.kind !== "dragging") return false;
+      const prev = state;
+      state = { kind: "idle" };
+      release(target, id ?? prev.pointerId);
+      if (prev.changed) onCommit(getCurrent());
+      return prev.changed;
     },
     cancel(target?: PointerCaptureTarget | null, id?: number): boolean {
-      if (!dragging) return false;
-      dragging = false;
-      changed = false;
-      release(target, id);
+      if (state.kind !== "dragging") return false;
+      const prev = state;
+      state = { kind: "idle" };
+      release(target, id ?? prev.pointerId);
       return true;
     },
   };
@@ -194,7 +205,6 @@ export function Slider({
     onCommit: (v) => onCommitRef.current?.(v),
   });
   const drag = dragRef.current;
-  const anchor = useRef<{ raw: number; value: number; fine: boolean } | null>(null);
 
   const metrics = APPEARANCE[appearance];
   const halfThumb = metrics.halfThumb;
@@ -236,35 +246,34 @@ export function Slider({
     inputRef.current?.focus({ preventScroll: true });
     const raw = valueFromPointer(e.clientX);
     const initial = e.shiftKey ? latestRef.current : raw;
-    anchor.current = { raw, value: initial, fine: e.shiftKey };
     const next = quantize(initial, min, max, step);
-    if (drag.start(e.currentTarget, e.pointerId, next)) emitChange(next);
+    if (drag.start(e.currentTarget, e.pointerId, next, { raw, value: initial, fine: e.shiftKey }))
+      emitChange(next);
   };
 
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.active || disabled) return;
     const raw = valueFromPointer(e.clientX);
-    if (!anchor.current || anchor.current.fine !== e.shiftKey)
-      anchor.current = { raw, value: latestRef.current, fine: e.shiftKey };
-    const at = anchor.current;
+    let at = drag.anchor;
+    if (!at || at.fine !== e.shiftKey) {
+      at = { raw, value: latestRef.current, fine: e.shiftKey };
+      drag.setAnchor(at);
+    }
     const next = quantize(at.value + (raw - at.raw) * (at.fine ? 0.1 : 1), min, max, step);
     if (drag.move(next)) emitChange(next);
   };
 
   const finishPointer = (e: PointerEvent<HTMLDivElement>) => {
-    anchor.current = null;
     drag.end(e.currentTarget, e.pointerId);
   };
 
   const cancelPointer = (e: PointerEvent<HTMLDivElement>) => {
-    anchor.current = null;
     if (drag.cancel(e.type === "lostpointercapture" ? null : e.currentTarget, e.pointerId))
       onValueCancelled?.();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape" && drag.cancel(controlRef.current)) {
-      anchor.current = null;
       onValueCancelled?.();
       e.preventDefault();
     }

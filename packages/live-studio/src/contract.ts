@@ -16,6 +16,7 @@ import {
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
   SOUND_KEYS,
+  TEXT_DOC_KEYS,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
 } from "./contract-keys.ts";
@@ -32,6 +33,7 @@ export {
   SHOT_KEYS,
   SHOT_SLOT_KEYS,
   SOUND_KEYS,
+  TEXT_DOC_KEYS,
   TEXT_KEYS,
   TEXT_SLOT_KEYS,
 };
@@ -1145,31 +1147,96 @@ const TextFx = z.looseObject({
   tint: z.string().min(1).optional(),
   hold: z.number().int().min(1).max(12).optional(),
 });
+const TextStroke = z.looseObject({
+  color: z.string().min(1).optional(),
+  width: z.number().nonnegative().optional(),
+  join: z.enum(["round", "miter", "bevel"]).optional(),
+  miterLimit: z.number().positive().optional(),
+});
+const TextBackground = z.looseObject({
+  color: z.string().min(1).optional(),
+  opacity: unit.optional(),
+});
+const TextShadow = z.union([
+  z.boolean(),
+  z.looseObject({
+    color: z.string().min(1).optional(),
+    blur: z.number().nonnegative().optional(),
+    x: z.number().finite().optional(),
+    y: z.number().finite().optional(),
+  }),
+]);
+const TextSafeArea = z.union([
+  z.boolean(),
+  z.looseObject({
+    left: unit.optional(),
+    right: unit.optional(),
+    top: unit.optional(),
+    bottom: unit.optional(),
+  }),
+]);
+const TextStyleFields = {
+  kind: z.string().min(1).optional(),
+  preset: z.string().min(1).optional(),
+  x: z.number().optional(),
+  y: z.number().optional(),
+  at: z.tuple([z.number(), z.number(), z.number()]).optional(),
+  font: z.string().min(1).optional(),
+  weight: z.number().min(100).max(1000).optional(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  upper: z.boolean().optional(),
+  size: z.number().positive().optional(),
+  line: z.number().positive().optional(),
+  spacing: z.number().finite().optional(),
+  align: z.enum(["left", "center", "right"]).optional(),
+  color: z.string().min(1).optional(),
+  opacity: unit.optional(),
+  scale: z.number().positive().optional(),
+  rotate: z.number().finite().optional(),
+  stroke: TextStroke.nullable().optional(),
+  background: TextBackground.nullable().optional(),
+  shadow: TextShadow.optional(),
+  safeArea: TextSafeArea.optional(),
+  seamlessGap: z.number().nonnegative().optional(),
+  in: TextFx.optional(),
+  out: TextFx.optional(),
+  read: z.boolean().optional(),
+};
 const TextItem = z
   .looseObject({
-    kind: z.string().min(1),
+    ...TextStyleFields,
     from: secs,
     to: secs,
     timebase: OverlayTimebase.optional(),
     track: z.number().int().nonnegative().optional(),
     text: z.string().optional(),
-    x: z.number().optional(),
-    y: z.number().optional(),
-    at: z.tuple([z.number(), z.number(), z.number()]).optional(),
-    in: TextFx.optional(),
-    out: TextFx.optional(),
-    read: z.boolean().optional(),
   })
   .refine((it: any) => it.to > it.from, "to must come after from");
-export const TextTimeline = z.looseObject({
-  items: z.array(TextItem),
-  tracks: z
-    .record(
-      z.string().regex(/^\d+$/),
-      z.looseObject({ lock: z.boolean().optional(), hidden: z.boolean().optional() }),
-    )
-    .optional(),
-});
+export const TextTimeline = z
+  .looseObject({
+    preset: z.string().min(1).optional(),
+    defaults: z.looseObject(TextStyleFields).optional(),
+    items: z.array(TextItem),
+    tracks: z
+      .record(
+        z.string().regex(/^\d+$/),
+        z.looseObject({ lock: z.boolean().optional(), hidden: z.boolean().optional() }),
+      )
+      .optional(),
+  })
+  .superRefine((doc, ctx) => {
+    const inheritedKind = Boolean(doc.preset || doc.defaults?.kind);
+    doc.items.forEach((it, i) => {
+      if (!it.kind && !it.preset && !inheritedKind) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["items", i, "kind"],
+          message: 'expected "kind" (e.g. "text"), or set top-level "preset" / "defaults.kind"',
+        });
+      }
+    });
+  });
 
 export const OpenFilmLayerShape = z.object({
   elements: z.array(PageElementOverride).optional(),

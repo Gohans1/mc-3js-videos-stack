@@ -855,3 +855,38 @@ test("SoundTimeline beds and sfx accept optional boolean muted and reject non-bo
     false,
   );
 });
+
+test("TextTimeline accepts document preset/defaults, inherited kind, stroke join/miterLimit, weight, shadow object, and safeArea overrides", () => {
+  assert.equal(
+    TextTimeline.safeParse({
+      preset: "zack-d-films",
+      defaults: { color: "#FFFFFF" },
+      items: [
+        {
+          from: 0,
+          to: 1.5,
+          text: "it was strange",
+          weight: 700,
+          stroke: { color: "#000000", width: 4, join: "miter", miterLimit: 4 },
+          shadow: { color: "rgba(0,0,0,1)", blur: 0.015, x: 0.034, y: 0.034 },
+          safeArea: { bottom: 0.18 },
+        },
+        { from: 1.5, to: 2.5, text: "edge", safeArea: false, shadow: false, stroke: null },
+      ],
+    }).success,
+    true,
+  );
+  assert.equal(
+    TextTimeline.safeParse({
+      items: [{ from: 0, to: 1, text: "missing kind without preset or defaults" }],
+    }).success,
+    false,
+  );
+  assert.equal(
+    TextTimeline.safeParse({
+      preset: "zack-d-films",
+      items: [{ from: 0, to: 1, text: "bad join", stroke: { join: "sharp" } }],
+    }).success,
+    false,
+  );
+});

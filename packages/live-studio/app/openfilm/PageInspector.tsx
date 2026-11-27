@@ -12,7 +12,9 @@ import { PageProperties } from "./PageProperties";
 import { openFilmDoc, useOpenFilm } from "./state";
 
 export function PageInspector({ itemId }: { itemId: string }) {
-  const selected = useOpenFilm((s) => s.element);
+  const selected = useOpenFilm((s) =>
+    s.selection.kind === "element" && s.selection.id === itemId ? s.selection.selector : null,
+  );
   useOpenFilm((s) => s.doc.revision);
   const [, refresh] = useState(0);
   useEffect(() => {

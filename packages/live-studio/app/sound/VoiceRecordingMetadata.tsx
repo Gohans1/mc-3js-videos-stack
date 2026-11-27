@@ -14,15 +14,14 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
   const [tags, setTags] = useState(item.tags?.join(", ") ?? "");
   const [description, setDescription] = useState(item.description ?? "");
   const [color, setColor] = useState(item.color ?? "");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   return (
     <form
       aria-label="Recording notes and tags"
       className="border-hairline flex flex-col gap-3 border-t pt-4"
       onSubmit={async (event) => {
         event.preventDefault();
-        setSaving(true);
+        setSaveStatus("saving");
         try {
           const result = await patchPlaygroundItem(item.id, {
             tags: [
@@ -36,9 +35,9 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
             description,
             color: color || null,
           });
-          setSaved(Boolean(result));
-        } finally {
-          setSaving(false);
+          setSaveStatus(result ? "saved" : "idle");
+        } catch {
+          setSaveStatus("idle");
         }
       }}
     >
@@ -69,7 +68,7 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
           value={description}
           onChange={(event) => {
             setDescription(event.currentTarget.value);
-            setSaved(false);
+            if (saveStatus === "saved") setSaveStatus("idle");
           }}
           placeholder="When should this take be used?"
         />
@@ -83,7 +82,7 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
           placeholder="Separate with commas"
           onChange={(event) => {
             setTags(event.currentTarget.value);
-            setSaved(false);
+            if (saveStatus === "saved") setSaveStatus("idle");
           }}
         />
       </Field>
@@ -96,7 +95,7 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
             className="h-7 w-9 cursor-pointer rounded"
             onChange={(event) => {
               setColor(event.currentTarget.value);
-              setSaved(false);
+              if (saveStatus === "saved") setSaveStatus("idle");
             }}
           />
         </label>
@@ -107,14 +106,14 @@ export function VoiceRecordingMetadata({ item }: { item: VoicePlaygroundItem }) 
             variant="ghost"
             onClick={() => {
               setColor("");
-              setSaved(false);
+              if (saveStatus === "saved") setSaveStatus("idle");
             }}
           >
             Clear color
           </Button>
         )}
-        <Button type="submit" size="sm" variant="secondary" disabled={saving}>
-          {saving ? "Saving…" : saved ? "Saved" : "Save details"}
+        <Button type="submit" size="sm" variant="secondary" disabled={saveStatus === "saving"}>
+          {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved" : "Save details"}
         </Button>
       </div>
     </form>

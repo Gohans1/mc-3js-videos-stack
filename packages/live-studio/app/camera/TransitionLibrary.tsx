@@ -268,6 +268,11 @@ function Look({ fx }: { fx: TransitionMeta }) {
   );
 }
 
+type TrialState =
+  | { kind: "idle" }
+  | { kind: "pending"; shot: number; snap: string; timer: number }
+  | { kind: "playing"; shot: number; snap: string };
+
 export function TransitionLibrary() { return <AssetSource category="transition"><NativeTransitionLibrary /></AssetSource>; }
 function NativeTransitionLibrary() {
   useStudio((s) => s.ready);
@@ -279,8 +284,13 @@ function NativeTransitionLibrary() {
   const favs = useStudio((s) => s.favorites.effects);
   const [q, setQ] = useState(""),
     [cat, setCat] = useState(ALL),
-    [trialShot, setTrialShot] = useState<number | null>(null);
-  const trial = useRef<{ snap: string; timer: number } | null>(null);
+    [trialState, setTrialState] = useState<TrialState>({ kind: "idle" });
+  const trialRef = useRef<TrialState>({ kind: "idle" });
+  const setTrial = useCallback((next: TrialState) => {
+    trialRef.current = next;
+    setTrialState(next);
+  }, []);
+  const trialShot = trialState.kind === "idle" ? null : trialState.shot;
   const shot = Math.max(
       1,
       picked !== null || key !== null ? shownShot() : (trialShot ?? shownShot()),
@@ -309,25 +319,25 @@ function NativeTransitionLibrary() {
     });
   }, [all, q, activeCat, favs]);
   const leave = useCallback(() => {
-    if (!trial.current) return;
-    clearTimeout(trial.current.timer);
-    shotsDoc.restore(trial.current.snap);
-    trial.current = null;
-    setTrialShot(null);
+    const active = trialRef.current;
+    if (active.kind === "idle") return;
+    if (active.kind === "pending") clearTimeout(active.timer);
+    shotsDoc.restore(active.snap);
+    setTrial({ kind: "idle" });
     stopSpan();
-  }, []);
+  }, [setTrial]);
   const tryOn = (fx: string) => {
     leave();
     if (at === undefined || !transitionRoom(shot)) return;
-    setTrialShot(shot);
-    trial.current = {
-      snap: shotsDoc.snapshot(),
-      timer: window.setTimeout(() => {
-        previewTransition(shot, fx);
-        const [from, to] = transitionSpan(shot);
-        playSpan(Math.max(0, from - 0.3), Math.min(DURATION, to + 0.3), true);
-      }, 180),
-    };
+    const snap = shotsDoc.snapshot();
+    const timer = window.setTimeout(() => {
+      if (trialRef.current.kind !== "pending" || trialRef.current.timer !== timer) return;
+      setTrial({ kind: "playing", shot, snap });
+      previewTransition(shot, fx);
+      const [from, to] = transitionSpan(shot);
+      playSpan(Math.max(0, from - 0.3), Math.min(DURATION, to + 0.3), true);
+    }, 180);
+    setTrial({ kind: "pending", shot, snap, timer });
   };
   useEffect(() => leave, [leave, shot, picked, key, q, activeCat, favs]);
   return (

@@ -35,7 +35,8 @@ inside the film (or set LIVE_PROJECT); package.json's studio script carries the 
   bun run studio --stop     stop this film's recorded studio process
   bun run studio --lan      reachable from other machines on the network too (combinable with --detach)
 Saving the film's code offers "New version" on the page, never reloading it unasked; saving sound.py or anything
-package.json lists under "live-studio".sound remixes. Problems with the film's data print here (offline: bun run check).
+package.json lists under "live-studio".sound remixes. Press V (or click Compare) in Studio to watch REF|OURS side-by-side
+renders from renders/reference/*_vs_*.mp4 (auto-discovered via /api/compare-videos). Problems with the film's data print here (offline: bun run check).
 Ctrl+C or --stop stops it; a port still taken after that belongs to a studio left running.`;
 
 const DETACH_TIMEOUT_MS = 60_000;

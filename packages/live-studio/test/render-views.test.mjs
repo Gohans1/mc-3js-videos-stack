@@ -78,9 +78,9 @@ test("parseViews parses inline specs and @json object/array files and enforces v
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const maxName = `a${"b".repeat(47)}`;
-  assert.deepEqual(parseViews(`a:0,1,2,3,4,5,50;${maxName}:-1,0.5,3,0,0,0,179.5;`, dir), [
+  assert.deepEqual(parseViews(`a:0,1,2,3,4,5,50;${maxName}:-1,0.5,3,0,0,0,179.5,0.25;`, dir), [
     { name: "a", cam: [0, 1, 2, 3, 4, 5, 50] },
-    { name: maxName, cam: [-1, 0.5, 3, 0, 0, 0, 179.5] },
+    { name: maxName, cam: [-1, 0.5, 3, 0, 0, 0, 179.5, 0.25] },
   ]);
 
   writeFileSync(
@@ -97,6 +97,15 @@ test("parseViews parses inline specs and @json object/array files and enforces v
   );
   assert.deepEqual(parseViews("@arr.json", dir), [{ name: "hero", cam: [0, 2, 5, 0, 1, 0, 35] }]);
 
+  assert.deepEqual(parseViews(["@obj.json", "extra:0,1,2,0,0,0,50,0.3"], dir), [
+    { name: "cam.1_wide-top", cam: [1, 2, 3, 4, 5, 6, 45] },
+    { name: "extra", cam: [0, 1, 2, 0, 0, 0, 50, 0.3] },
+  ]);
+  assert.throws(
+    () => parseViews(["@arr.json", "hero:0,1,2,0,0,0,50"], dir),
+    /duplicate view name "hero"/,
+  );
+
   for (const badSpec of [
     "",
     "   ",
@@ -104,7 +113,7 @@ test("parseViews parses inline specs and @json object/array files and enforces v
     "corner",
     ":0,0,5,0,0,0,50",
     "corner:0,0,5,0,0,0",
-    "corner:0,0,5,0,0,0,50,1",
+    "corner:0,0,5,0,0,0,50,1,2",
     "corner:0,0,,0,0,0,50",
     "corner:0,0,NaN,0,0,0,50",
     "corner:0,0,Infinity,0,0,0,50",

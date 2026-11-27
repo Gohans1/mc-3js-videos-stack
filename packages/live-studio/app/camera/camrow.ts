@@ -731,67 +731,77 @@ export const attachCamRow = () => {
     const r = c.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height };
   };
-  let drag: {
-    i: number;
-    group: number[];
-    along: Along | null;
-    x: number;
-    t: number;
-    now: number;
-    snap: string;
-    shots: string;
-    roll: boolean;
-    moved: boolean;
-    magnet: ReturnType<typeof makeSnapper>;
-  } | null = null;
-  let scrub: { resume: boolean } | null = null;
-  let transitionDrag: {
-    shot: number;
-    pointer: number;
-    edge: -1 | 0 | 1;
-    x: number;
-    len: number;
-    snap: string;
-  } | null = null;
-  let animDrag: {
-    i: number;
-    slot: "in" | "out";
-    clock: ReturnType<typeof clockOf>;
-    anchor: number;
-    inAnchor: number;
-    outAnchor: number;
-    seam: boolean;
-    startX: number;
-    pointer: number;
-    want: number;
-    was: number;
-    wasIn: number;
-    wasOut: number;
-    snap: string;
-  } | null = null;
-  let freezeDrag: {
-    i: number;
-    pointer: number;
-    edge: -1 | 1;
-    x: number;
-    duration: number;
-    now: number;
-    snap: string;
-    secondsPerPixel: number;
-  } | null = null;
-  let freezeMove: {
-    i: number;
-    pointer: number;
-    x: number;
-    start: number;
-    target: number;
-    phase: "pending" | "dragging";
-    magnet: ReturnType<typeof makeSnapper>;
-  } | null = null;
-  let press: { x: number; y: number; touch: boolean; shot: number; add: boolean } | null = null;
+  type CamRowGesture =
+    | { kind: "idle" }
+    | { kind: "scrub"; resume: boolean }
+    | { kind: "press"; x: number; y: number; touch: boolean; shot: number; add: boolean }
+    | {
+        kind: "drag";
+        pointer: number;
+        i: number;
+        group: number[];
+        along: Along | null;
+        x: number;
+        t: number;
+        now: number;
+        snap: string;
+        shots: string;
+        roll: boolean;
+        moved: boolean;
+        magnet: ReturnType<typeof makeSnapper>;
+      }
+    | {
+        kind: "transition";
+        shot: number;
+        pointer: number;
+        edge: -1 | 0 | 1;
+        x: number;
+        len: number;
+        snap: string;
+      }
+    | {
+        kind: "anim";
+        i: number;
+        slot: "in" | "out";
+        clock: ReturnType<typeof clockOf>;
+        anchor: number;
+        inAnchor: number;
+        outAnchor: number;
+        seam: boolean;
+        startX: number;
+        pointer: number;
+        want: number;
+        was: number;
+        wasIn: number;
+        wasOut: number;
+        snap: string;
+      }
+    | {
+        kind: "freeze-resize";
+        i: number;
+        pointer: number;
+        edge: -1 | 1;
+        x: number;
+        duration: number;
+        now: number;
+        snap: string;
+        secondsPerPixel: number;
+      }
+    | {
+        kind: "freeze-move";
+        i: number;
+        pointer: number;
+        x: number;
+        start: number;
+        target: number;
+        phase: "pending" | "dragging";
+        magnet: ReturnType<typeof makeSnapper>;
+      };
+
+  let gesture: CamRowGesture = { kind: "idle" };
 
   const startScrub = () => {
-    scrub = { resume: S.playing };
+    gesture = { kind: "scrub", resume: S.playing };
     holdView(true);
     if (S.playing) setPlaying(false);
   };
@@ -820,7 +830,8 @@ export const attachCamRow = () => {
       holdView(true);
       if (S.playing) setPlaying(false);
       if (edge)
-        freezeDrag = {
+        gesture = {
+          kind: "freeze-resize",
           i: freeze,
           pointer: e.pointerId,
           edge,
@@ -831,7 +842,8 @@ export const attachCamRow = () => {
           secondsPerPixel: view().v / w,
         };
       else if (!timing.main)
-        freezeMove = {
+        gesture = {
+          kind: "freeze-move",
           i: freeze,
           pointer: e.pointerId,
           x,
@@ -858,7 +870,8 @@ export const attachCamRow = () => {
       const wasIn = lenOf(edge.i, "in", clock),
         wasOut = lenOf(edge.i, "out", clock),
         was = edge.slot === "in" ? wasIn : wasOut;
-      animDrag = {
+      gesture = {
+        kind: "anim",
         i: edge.i,
         slot: edge.slot,
         clock,
@@ -882,7 +895,8 @@ export const attachCamRow = () => {
       const b = transitionBox(tr, w),
         trEdge = x - b.left < 6 ? -1 : b.right - x < 6 ? 1 : 0;
       pickTransition(tr);
-      transitionDrag = {
+      gesture = {
+        kind: "transition",
         shot: tr,
         pointer: e.pointerId,
         edge: trEdge,
@@ -898,7 +912,7 @@ export const attachCamRow = () => {
         startScrub();
         return;
       }
-      press = { x, y, touch, shot: shotAtX(x, w), add };
+      gesture = { kind: "press", x, y, touch, shot: shotAtX(x, w), add };
       if (!touch) boxStart(e, add);
       return;
     }
@@ -918,7 +932,9 @@ export const attachCamRow = () => {
           : [i];
     if (group.length === 1 && !along) setKey(i);
     if (retimable(i) || rollable(i))
-      drag = {
+      gesture = {
+        kind: "drag",
+        pointer: e.pointerId,
         i,
         group,
         along,
@@ -943,10 +959,10 @@ export const attachCamRow = () => {
     }
   });
   c.addEventListener("pointermove", (e) => {
-    if (animDrag) {
-      if (e.pointerId !== animDrag.pointer) return;
+    if (gesture.kind === "anim") {
+      if (e.pointerId !== gesture.pointer) return;
       const { x, w } = local(e),
-        d = animDrag;
+        d = gesture;
       if (d.seam) {
         if (Math.abs(x - d.startX) < 1) return;
         d.slot = disambiguateSeamSlot(x - d.startX);
@@ -970,9 +986,9 @@ export const attachCamRow = () => {
       say(`${d.slot === "in" ? "In" : "Out"} animation: ${d.want.toFixed(2)} s`, 1200);
       return;
     }
-    if (freezeMove) {
+    if (gesture.kind === "freeze-move") {
       const { x, w } = local(e),
-        d = freezeMove,
+        d = gesture,
         perPx = view().v / w;
       if (d.phase === "pending" && Math.abs(x - d.x) < 3) return;
       d.phase = "dragging";
@@ -1026,9 +1042,9 @@ export const attachCamRow = () => {
       drawCamRow();
       return;
     }
-    if (freezeDrag) {
+    if (gesture.kind === "freeze-resize") {
       const { x } = local(e),
-        d = freezeDrag;
+        d = gesture;
       d.now = Math.max(
         1 / 30,
         Math.round((d.duration + (x - d.x) * d.secondsPerPixel * d.edge) * 30) / 30,
@@ -1040,28 +1056,27 @@ export const attachCamRow = () => {
     }
     const { x, y, w, h } = local(e),
       { v } = view();
-    if (transitionDrag) {
-      const { shot, edge, x: start } = transitionDrag;
+    if (gesture.kind === "transition") {
+      const { shot, edge, x: start } = gesture;
       if (edge && Math.abs(x - start) >= 2) setTransitionEdge(shot, edge, timeAt(x, w));
       return;
     }
-    if (scrub) {
+    if (gesture.kind === "scrub") {
       seek(timeAt(x, w));
       return;
     }
-    if (press) {
-      if (!press.touch) {
+    if (gesture.kind === "press") {
+      if (!gesture.touch) {
         boxMove(e);
         return;
       }
-      if (Math.hypot(x - press.x, y - press.y) >= 4) {
-        press = null;
+      if (Math.hypot(x - gesture.x, y - gesture.y) >= 4) {
         startScrub();
         seek(timeAt(x, w));
       }
       return;
     }
-    if (!drag && get().blade) {
+    if (gesture.kind === "idle" && get().blade) {
       c.style.cursor = get().shots ? BLADE_CURSOR : "not-allowed";
       Object.assign(bladeLine, {
         row: get().shots ? "cam" : null,
@@ -1070,7 +1085,7 @@ export const attachCamRow = () => {
       drawCamRow();
       return;
     }
-    if (!drag) {
+    if (gesture.kind !== "drag") {
       const t = timeAt(x, w),
         f = freezeAt(t),
         i = keyUnder(x, y, w, h, false);
@@ -1105,6 +1120,7 @@ export const attachCamRow = () => {
             : "default";
       return;
     }
+    const drag = gesture;
     if (!drag.moved && Math.abs(x - drag.x) < 3) return;
     drag.moved = true;
     c.style.cursor = drag.roll ? "ew-resize" : "default";
@@ -1147,95 +1163,90 @@ export const attachCamRow = () => {
     );
   });
   const up = (e: PointerEvent) => {
-    if (animDrag) {
-      if (e.pointerId !== animDrag.pointer) return;
-      const d = animDrag;
-      animDrag = null;
-      shotsDoc.restore(d.snap);
-      if (e.type === "pointerup" && d.want !== d.was) setAmount(d.i, d.slot, d.want, true, d.clock);
-      holdView(false);
-      c.style.cursor = "";
-      drawCamRow();
-      return;
-    }
-    if (freezeMove) {
-      const d = freezeMove;
-      freezeMove = null;
-      freezeGhost = null;
-      if (e.type === "pointerup" && d.phase === "dragging" && Math.abs(d.target - d.start) > 1e-6)
-        relocateFreeze(d.i, d.target);
-      holdView(false);
-      snapLine(null);
-      c.style.cursor = "";
-      drawCamRow();
-      return;
-    }
-    if (freezeDrag) {
-      const d = freezeDrag;
-      freezeDrag = null;
-      timingDoc.restore(d.snap);
-      if (e.type === "pointerup" && d.now !== d.duration)
-        setFreezeDuration(d.i, d.now, false, d.edge);
-      holdView(false);
-      c.style.cursor = "";
-      return;
-    }
-    if (transitionDrag) {
-      const { shot, snap, len } = transitionDrag,
-        now = transitionDuration(shot);
-      transitionDrag = null;
-      shotsDoc.restore(snap);
-      if (now !== len && e.type === "pointerup") setTransitionDuration(shot, now);
-      c.style.cursor = "";
-      return;
-    }
-    if (press) {
-      const { shot, add } = press;
-      press = null;
-      if (boxEnd(shot < 0 && e.type === "pointerup" ? e : undefined)) return;
-      if (e.type === "pointerup" && !add) {
-        if (shot < 0) {
-          set(transitionSelection({ kind: "none" }, get().side));
-          S.dirty = true;
-        } else {
-          pickShot(shot);
-          const { x, w } = local(e);
-          if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+    if (gesture.kind === "anim" && e.pointerId !== gesture.pointer) return;
+    const active = gesture;
+    gesture = { kind: "idle" };
+    switch (active.kind) {
+      case "idle":
+        return;
+      case "anim":
+        shotsDoc.restore(active.snap);
+        if (e.type === "pointerup" && active.want !== active.was)
+          setAmount(active.i, active.slot, active.want, true, active.clock);
+        holdView(false);
+        c.style.cursor = "";
+        drawCamRow();
+        return;
+      case "freeze-move":
+        freezeGhost = null;
+        if (
+          e.type === "pointerup" &&
+          active.phase === "dragging" &&
+          Math.abs(active.target - active.start) > 1e-6
+        )
+          relocateFreeze(active.i, active.target);
+        holdView(false);
+        snapLine(null);
+        c.style.cursor = "";
+        drawCamRow();
+        return;
+      case "freeze-resize":
+        timingDoc.restore(active.snap);
+        if (e.type === "pointerup" && active.now !== active.duration)
+          setFreezeDuration(active.i, active.now, false, active.edge);
+        holdView(false);
+        c.style.cursor = "";
+        return;
+      case "transition": {
+        const now = transitionDuration(active.shot);
+        shotsDoc.restore(active.snap);
+        if (now !== active.len && e.type === "pointerup") setTransitionDuration(active.shot, now);
+        c.style.cursor = "";
+        return;
+      }
+      case "press":
+        if (boxEnd(active.shot < 0 && e.type === "pointerup" ? e : undefined)) return;
+        if (e.type === "pointerup" && !active.add) {
+          if (active.shot < 0) {
+            set(transitionSelection({ kind: "none" }, get().side));
+            S.dirty = true;
+          } else {
+            pickShot(active.shot);
+            const { x, w } = local(e);
+            if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
+          }
         }
+        return;
+      case "scrub":
+        holdView(false);
+        if (active.resume) setPlaying(true);
+        return;
+      case "drag": {
+        snapLine(null);
+        const { snap, shots, roll, moved, i, group, along, t: was, now: t } = active;
+        c.style.cursor = "";
+        if (!moved) {
+          if (e.type === "pointerup") {
+            if (group.length > 1 || along) setKey(i);
+            seek(keys[i].t);
+          }
+          return;
+        }
+        shotsDoc.restore(shots);
+        restore(snap);
+        along?.restore();
+        if (e.type !== "pointerup" || t === was) return;
+        if (along)
+          together(() => {
+            shiftCamKeys(group, r3(t - was));
+            along.commit(r3(t - was));
+          });
+        else if (group.length > 1) shiftCamKeys(group, r3(t - was));
+        else if (roll) rollCut(i, t);
+        else retime(i, t);
+        return;
       }
-      return;
     }
-    if (scrub) {
-      const r = scrub.resume;
-      scrub = null;
-      holdView(false);
-      if (r) setPlaying(true);
-      return;
-    }
-    if (!drag) return;
-    snapLine(null);
-    const { snap, shots, roll, moved, i, group, along, t: was, now: t } = drag;
-    drag = null;
-    c.style.cursor = "";
-    if (!moved) {
-      if (e.type === "pointerup") {
-        if (group.length > 1 || along) setKey(i);
-        seek(keys[i].t);
-      }
-      return;
-    }
-    shotsDoc.restore(shots);
-    restore(snap);
-    along?.restore();
-    if (e.type !== "pointerup" || t === was) return;
-    if (along)
-      together(() => {
-        shiftCamKeys(group, r3(t - was));
-        along.commit(r3(t - was));
-      });
-    else if (group.length > 1) shiftCamKeys(group, r3(t - was));
-    else if (roll) rollCut(i, t);
-    else retime(i, t);
   };
   c.addEventListener("pointerup", up);
   c.addEventListener("pointercancel", up);
@@ -1243,34 +1254,43 @@ export const attachCamRow = () => {
   window.addEventListener(
     "keydown",
     (e) => {
-      if (e.key !== "Escape" || (!freezeDrag && !freezeMove && !transitionDrag && !animDrag))
+      if (
+        e.key !== "Escape" ||
+        gesture.kind === "idle" ||
+        gesture.kind === "scrub" ||
+        gesture.kind === "press"
+      )
         return;
-      const pointer =
-        freezeDrag?.pointer ?? freezeMove?.pointer ?? transitionDrag?.pointer ?? animDrag!.pointer;
-      if (freezeMove) {
-        freezeMove = null;
-        freezeGhost = null;
-        holdView(false);
-        snapLine(null);
-        drawCamRow();
-      } else if (freezeDrag) {
-        const d = freezeDrag;
-        freezeDrag = null;
-        timingDoc.restore(d.snap);
-        holdView(false);
-      } else if (transitionDrag) {
-        const d = transitionDrag;
-        transitionDrag = null;
-        shotsDoc.restore(d.snap);
-      } else if (animDrag) {
-        const d = animDrag;
-        animDrag = null;
-        shotsDoc.restore(d.snap);
-        holdView(false);
-        drawCamRow();
+      const active = gesture;
+      gesture = { kind: "idle" };
+      switch (active.kind) {
+        case "freeze-move":
+          freezeGhost = null;
+          holdView(false);
+          snapLine(null);
+          drawCamRow();
+          break;
+        case "freeze-resize":
+          timingDoc.restore(active.snap);
+          holdView(false);
+          break;
+        case "transition":
+          shotsDoc.restore(active.snap);
+          break;
+        case "anim":
+          shotsDoc.restore(active.snap);
+          holdView(false);
+          drawCamRow();
+          break;
+        case "drag":
+          snapLine(null);
+          shotsDoc.restore(active.shots);
+          restore(active.snap);
+          active.along?.restore();
+          break;
       }
       c.style.cursor = "";
-      if (c.hasPointerCapture(pointer)) c.releasePointerCapture(pointer);
+      if (c.hasPointerCapture(active.pointer)) c.releasePointerCapture(active.pointer);
       e.preventDefault();
       e.stopImmediatePropagation();
     },

@@ -42,17 +42,13 @@ export function SoundKitSimilarDrawer({
   onRestoreFocus?: () => void;
   onClose: () => void;
 }) {
+  type SimilarLoadState =
+    | { key: string; status: "ready"; result: SimilarSoundResult }
+    | { key: string; status: "failed" };
+
   const nowPlaying = useSyncExternalStore(subscribeAudition, listening, listening);
   const [retryTick, setRetryTick] = useState(0);
-  const [loaded, setLoaded] = useState<{
-    key: string;
-    result: SimilarSoundResult | null;
-    failed: boolean;
-  }>({
-    key: "",
-    result: null,
-    failed: false,
-  });
+  const [loaded, setLoaded] = useState<SimilarLoadState | null>(null);
 
   const reqKey = `${targetId}\0${retryTick}`;
 
@@ -60,14 +56,16 @@ export function SoundKitSimilarDrawer({
     const controller = new AbortController();
     void fetchSimilarKit(targetId, { limit: 10, signal: controller.signal }).then((res) => {
       if (controller.signal.aborted) return;
-      setLoaded({ key: reqKey, result: res, failed: res === null });
+      setLoaded(
+        res === null ? { key: reqKey, status: "failed" } : { key: reqKey, status: "ready", result: res },
+      );
     });
     return () => controller.abort();
   }, [reqKey, targetId]);
 
-  const loading = loaded.key !== reqKey;
-  const result = loading ? null : loaded.result;
-  const failed = !loading && loaded.failed;
+  const loading = loaded === null || loaded.key !== reqKey;
+  const result = !loading && loaded.status === "ready" ? loaded.result : null;
+  const failed = !loading && loaded.status === "failed";
   const abSlotSet = new Set(kitState.abSlots);
   const targetLib = itemOf(targetId);
   const targetLabel = cleanAudioTitle(targetLib?.title?.trim() || targetId, {

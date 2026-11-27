@@ -2205,3 +2205,112 @@ test("overlapping same-track captions at the same position warn; touching handof
     /items\[0\] "First line" and items\[1\] "Second line" overlap by 0\.050 s/,
   );
 });
+
+test("check redirects render sub-checks, validates text presets/defaults/unknown fonts, and resolves presets before overlap checks", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "studio-check-preset-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  cpSync(join(STUDIO, "demo/src"), join(dir, "src"), { recursive: true });
+  mkdirSync(join(dir, "src/timeline"));
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ "live-studio": { textTimeline: "src/timeline/text.json" } }),
+  );
+  const edit = JSON.parse(readFileSync(join(dir, "src/edit.json"), "utf8"));
+  writeFileSync(join(dir, "src/edit.json"), JSON.stringify({ ...edit, end: 8 }));
+
+  const redir = spawnSync("bun", [CHECK, "pops"], { cwd: dir, encoding: "utf8", timeout: 30000 });
+  assert.equal(redir.status, 2, redir.stdout + redir.stderr);
+  assert.match(redir.stderr, /bun run render stills --check pops/);
+
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      preset: "zack-d-films",
+      defaults: { color: "#FFFFFF" },
+      items: [
+        { from: 0, to: 1.5, text: "it was strange" },
+        {
+          from: 1.4,
+          to: 3.0,
+          y: 0.784,
+          text: "under the bed",
+          font: "missing-font",
+          preset: "no-such-preset",
+        },
+      ],
+    }),
+  );
+  const res = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(res.status, 1, res.stdout + res.stderr);
+  const report = JSON.parse(res.stdout);
+  const probs = (report.problems ?? []).map((p) => p.issue).join("\n");
+  const warns = (report.warnings ?? []).join("\n");
+  assert.match(probs, /no text preset has that name/);
+  assert.match(warns, /overlap by 0\.100 s/);
+  assert.match(warns, /unknown built-in font/);
+
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      items: [
+        { kind: "text", from: 0, to: 0.534, text: "She jumped", x: 0.5, y: 0.784, size: 75 },
+        { kind: "text", from: 0.2, to: 2.0, text: "30,000 FT", x: 0.5, y: 0.2, size: 75 },
+        { kind: "text", from: 0.567, to: 1.5, text: "from a plane", x: 0.5, y: 0.784, size: 75 },
+      ],
+    }),
+  );
+  const gapRes = spawnSync("bun", [CHECK, "--json"], { cwd: dir, encoding: "utf8", timeout: 60000 });
+  assert.equal(gapRes.status, 0, gapRes.stdout + gapRes.stderr);
+  const gapWarns = (JSON.parse(gapRes.stdout).warnings ?? []).join("\n");
+  assert.match(gapWarns, /0\.033 s blank gap/);
+
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      preset: "zack-d-films",
+      items: [
+        { from: 0, to: 0.534, text: "She jumped" },
+        { from: 0.2, to: 2.0, y: 0.2, text: "30,000 FT" },
+        { from: 0.567, to: 1.5, text: "from a plane" },
+      ],
+    }),
+  );
+  const bridgedRes = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(bridgedRes.status, 0, bridgedRes.stdout + bridgedRes.stderr);
+  assert.doesNotMatch((JSON.parse(bridgedRes.stdout).warnings ?? []).join("\n"), /blank gap/);
+
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({
+      "live-studio": {
+        textTimeline: "src/timeline/text.json",
+        timingTimeline: "src/timeline/timing.json",
+      },
+    }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/timing.json"),
+    JSON.stringify({ speeds: [{ from: 0, to: 4, rate: 2 }] }),
+  );
+  writeFileSync(
+    join(dir, "src/timeline/text.json"),
+    JSON.stringify({
+      preset: "zack-d-films",
+      items: [
+        { from: 0, to: 1.0, text: "She jumped" },
+        { from: 1.08, to: 2.5, text: "from a plane" },
+      ],
+    }),
+  );
+  const speedGapRes = spawnSync("bun", [CHECK, "--json"], {
+    cwd: dir,
+    encoding: "utf8",
+    timeout: 60000,
+  });
+  assert.equal(speedGapRes.status, 0, speedGapRes.stdout + speedGapRes.stderr);
+  assert.match((JSON.parse(speedGapRes.stdout).warnings ?? []).join("\n"), /0\.040 s blank gap/);
+});

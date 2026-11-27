@@ -45,17 +45,27 @@ export const INITIAL_VOICE_LIBRARY_STATE: VoiceLibraryClientState = {
   loading: false,
 };
 
+type FullSyncState =
+  | { kind: "idle" }
+  | { kind: "loading"; promise: Promise<void>; queuedReload: boolean; eventDuringLoad: boolean };
+
+type MetaSyncState =
+  | { kind: "idle" }
+  | { kind: "loading"; promise: Promise<void>; queued: boolean };
+
+type ClientDataState =
+  | { kind: "unloaded" }
+  | { kind: "ready" };
+
 export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
   let snapshot: VoiceLibraryClientState = INITIAL_VOICE_LIBRARY_STATE;
-  let inFlight: Promise<void> | null = null;
-  let reloadQueued = false;
-  let eventDuringLoad = false;
-  let hasServerResponse = false;
-  let pendingFullReload = false;
-  let metaInFlight: Promise<void> | null = null;
-  let metaQueued = false;
+  let fullSync: FullSyncState = { kind: "idle" };
+  let metaSync: MetaSyncState = { kind: "idle" };
+  let dataState: ClientDataState = { kind: "unloaded" };
+  const getFullSync = (): FullSyncState => fullSync;
+  const getMetaSync = (): MetaSyncState => metaSync;
+  let deferredRefresh: "none" | "meta" | "full" = "none";
   let activeConsumers = 0;
-  let dirtyWhileHidden = false;
   let cancelTokenWarm: (() => void) | null = null;
   const subs = new Set<() => void>();
 
@@ -63,7 +73,12 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
     for (const fn of subs) fn();
   };
 
-  const setSnapshot = (next: VoiceLibraryClientState) => {
+  const publish = (base: Omit<VoiceLibraryClientState, "loaded" | "loading">) => {
+    const next: VoiceLibraryClientState = {
+      ...base,
+      loaded: dataState.kind === "ready",
+      loading: getFullSync().kind === "loading",
+    };
     const voicesChanged = next.voices !== snapshot.voices;
     snapshot = next;
     if (voicesChanged) {
@@ -79,38 +94,46 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
   };
 
   const loadVoiceLibrary = (force = false): Promise<void> => {
-    if (inFlight) {
-      if (force) reloadQueued = true;
-      return inFlight;
+    if (fullSync.kind === "loading") {
+      if (force) fullSync = { ...fullSync, queuedReload: true };
+      return fullSync.promise;
     }
-    if (!force && snapshot.loaded && snapshot.status === "ready") {
+    if (!force && dataState.kind === "ready" && snapshot.status === "ready") {
       return Promise.resolve();
     }
-    setSnapshot({
-      ...snapshot,
-      loading: true,
-      error: hasServerResponse ? snapshot.error : null,
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
     });
-    inFlight = (async () => {
+    fullSync = {
+      kind: "loading",
+      promise,
+      queuedReload: false,
+      eventDuringLoad: false,
+    };
+    publish({
+      ...snapshot,
+      error: dataState.kind === "ready" ? snapshot.error : null,
+    });
+    void (async () => {
+      let nextPayload: Omit<VoiceLibraryClientState, "loaded" | "loading"> | null = null;
       try {
         const res = await deps
           .fetch("/api/voice/library", { signal: AbortSignal.timeout(FULL_TIMEOUT_MS) })
           .catch(() => null);
         if (!res?.ok) {
-          setSnapshot({
+          nextPayload = {
             ...snapshot,
-            loaded: hasServerResponse,
-            loading: false,
             error: snapshot.error ?? "Could not load voice library",
-          });
+          };
           return;
         }
         const body = (await res.json()) as Partial<VoiceLibraryPayload>;
-        hasServerResponse = true;
-        pendingFullReload = false;
+        dataState = { kind: "ready" };
+        if (deferredRefresh === "full") deferredRefresh = "none";
         const voices = Array.isArray(body.voices) ? body.voices : snapshot.voices;
         if (voices.length) deps.registerVoiceNames(voices);
-        setSnapshot({
+        nextPayload = {
           status: body.status ?? "idle",
           syncedAt: body.syncedAt ?? null,
           totalScanned: body.totalScanned ?? 0,
@@ -121,44 +144,50 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
           error: body.error ?? null,
           truncated: Boolean(body.truncated),
           voices,
-          loaded: true,
-          loading: false,
-        });
+        };
       } catch {
-        setSnapshot({
+        nextPayload = {
           ...snapshot,
-          loaded: hasServerResponse,
-          loading: false,
           error: snapshot.error ?? "Could not load voice library",
-        });
+        };
       } finally {
-        inFlight = null;
-        const queuedReload = reloadQueued;
-        const queuedEvent = eventDuringLoad;
-        reloadQueued = false;
-        eventDuringLoad = false;
-        if (queuedReload) {
-          void loadVoiceLibrary(true);
-        } else if (queuedEvent) {
-          if (!activeConsumers) {
-            dirtyWhileHidden = true;
-          } else if (!snapshot.loaded) {
-            void loadVoiceLibrary(false);
-          } else {
-            void refreshVoiceLibraryMeta();
+        const finished = getFullSync();
+        fullSync = { kind: "idle" };
+        if (nextPayload) publish(nextPayload);
+        if (finished.kind === "loading") {
+          if (finished.queuedReload) {
+            void loadVoiceLibrary(true);
+          } else if (finished.eventDuringLoad) {
+            if (!activeConsumers) {
+              if (deferredRefresh === "none") deferredRefresh = "meta";
+            } else if (dataState.kind !== "ready") {
+              void loadVoiceLibrary(false);
+            } else {
+              void refreshVoiceLibraryMeta();
+            }
           }
         }
+        resolve();
       }
     })();
-    return inFlight;
+    return promise;
   };
 
   const refreshVoiceLibraryMeta = (): Promise<void> => {
-    if (metaInFlight) {
-      metaQueued = true;
-      return metaInFlight;
+    if (metaSync.kind === "loading") {
+      metaSync = { ...metaSync, queued: true };
+      return metaSync.promise;
     }
-    metaInFlight = (async () => {
+    let resolve!: () => void;
+    const promise = new Promise<void>((r) => {
+      resolve = r;
+    });
+    metaSync = {
+      kind: "loading",
+      promise,
+      queued: false,
+    };
+    void (async () => {
       try {
         const res = await deps
           .fetch("/api/voice/library?meta=1", { signal: AbortSignal.timeout(META_TIMEOUT_MS) })
@@ -173,10 +202,10 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
           nextStatus === "ready" &&
           snapshot.voices.length === 0 &&
           ((meta.totalEnglish ?? 0) > 0 || (meta.totalEnglishV4 ?? 0) > 0);
-        const shouldReload = pendingFullReload || syncedAtChanged || finishedEmpty;
-        if (shouldReload) pendingFullReload = true;
+        const shouldReload = deferredRefresh === "full" || syncedAtChanged || finishedEmpty;
+        if (shouldReload) deferredRefresh = "full";
 
-        setSnapshot({
+        publish({
           ...snapshot,
           status: nextStatus,
           syncedAt: shouldReload ? prevSyncedAt : nextSyncedAt,
@@ -187,7 +216,6 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
           hasKey: meta.hasKey ?? snapshot.hasKey,
           error: meta.error === undefined ? snapshot.error : meta.error,
           truncated: meta.truncated ?? snapshot.truncated,
-          loading: Boolean(inFlight),
         });
 
         if (shouldReload) {
@@ -195,26 +223,31 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
         }
       } catch {
       } finally {
-        metaInFlight = null;
-        if (metaQueued) {
-          metaQueued = false;
+        const finished = getMetaSync();
+        metaSync = { kind: "idle" };
+        if (finished.kind === "loading" && finished.queued) {
           void refreshVoiceLibraryMeta();
         }
+        resolve();
       }
     })();
-    return metaInFlight;
+    return promise;
   };
 
   const handleVoiceLibraryEvent = () => {
     if (!activeConsumers) {
-      if (snapshot.loaded || inFlight) dirtyWhileHidden = true;
+      if (fullSync.kind === "loading") {
+        fullSync = { ...fullSync, eventDuringLoad: true };
+      } else if (dataState.kind === "ready" && deferredRefresh === "none") {
+        deferredRefresh = "meta";
+      }
       return;
     }
-    if (inFlight) {
-      eventDuringLoad = true;
+    if (fullSync.kind === "loading") {
+      fullSync = { ...fullSync, eventDuringLoad: true };
       return;
     }
-    if (!snapshot.loaded) {
+    if (dataState.kind !== "ready") {
       void loadVoiceLibrary(false);
       return;
     }
@@ -233,7 +266,7 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
         return false;
       }
       const body = (await res.json()) as Partial<VoiceLibraryState>;
-      setSnapshot({
+      publish({
         ...snapshot,
         status: body.status ?? "syncing",
         totalScanned: body.totalScanned ?? snapshot.totalScanned,
@@ -243,7 +276,6 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
         hasKey: body.hasKey ?? true,
         error: body.error ?? null,
         truncated: body.truncated ?? snapshot.truncated,
-        loading: Boolean(inFlight),
       });
       return true;
     } catch {
@@ -261,17 +293,17 @@ export const createVoiceLibraryClient = (deps: VoiceLibraryClientDeps) => {
 
   const acquireConsumer = (): (() => void) => {
     activeConsumers++;
-    const wasDirty = dirtyWhileHidden;
-    dirtyWhileHidden = false;
-    if (!snapshot.loaded) {
-      if (!inFlight) {
+    const pending = deferredRefresh;
+    if (pending === "meta") deferredRefresh = "none";
+    if (dataState.kind !== "ready") {
+      if (fullSync.kind === "idle") {
         void loadVoiceLibrary(false);
-      } else if (wasDirty) {
-        eventDuringLoad = true;
+      } else if (pending !== "none") {
+        fullSync = { ...fullSync, eventDuringLoad: true };
       }
-    } else if (pendingFullReload) {
+    } else if (pending === "full") {
       void loadVoiceLibrary(true);
-    } else if (wasDirty || snapshot.status === "syncing") {
+    } else if (pending === "meta" || snapshot.status === "syncing") {
       void refreshVoiceLibraryMeta();
     }
     let released = false;

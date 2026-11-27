@@ -19,8 +19,15 @@ type History = {
   next: number | null;
   problem: string | null;
 };
-type Phase =
-  "loading" | "ready" | "load-error" | "saving" | "restoring" | "paging" | "browsing" | "error";
+type HistoryState =
+  | { kind: "loading"; data: History | null; message: string }
+  | { kind: "ready"; data: History; message: string }
+  | { kind: "load-error"; data: History | null; error: string }
+  | { kind: "saving"; data: History | null }
+  | { kind: "restoring"; data: History | null }
+  | { kind: "paging"; data: History }
+  | { kind: "browsing"; data: History }
+  | { kind: "error"; data: History | null; error: string };
 const request = async <T,>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> => {
   const timeout = AbortSignal.timeout(15000);
   const response = await fetch(path, {
@@ -40,13 +47,14 @@ const request = async <T,>(path: string, body?: unknown, signal?: AbortSignal): 
 
 export function HistoryPanel() {
   const nameId = useId();
-  const [data, setData] = useState<History | null>(null);
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [state, setState] = useState<HistoryState>({ kind: "loading", data: null, message: "" });
   const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [requestVersion, refreshLatest] = useReducer((version: number) => version + 1, 0);
-  const watchingLatest = phase === "loading" || phase === "ready" || phase === "load-error";
+  const data = state.data;
+  const error = state.kind === "load-error" || state.kind === "error" ? state.error : "";
+  const message = state.kind === "loading" || state.kind === "ready" ? state.message : "";
+  const watchingLatest =
+    state.kind === "loading" || state.kind === "ready" || state.kind === "load-error";
   useEffect(() => {
     if (!watchingLatest) return;
     const controller = new AbortController();
@@ -54,13 +62,15 @@ export function HistoryPanel() {
       try {
         const got = await request<History>("/api/history", undefined, controller.signal);
         if (controller.signal.aborted) return;
-        setData(got);
-        setPhase("ready");
-        setError("");
+        setState((prev) => ({
+          kind: "ready",
+          data: got,
+          message: prev.kind === "loading" || prev.kind === "ready" ? prev.message : "",
+        }));
       } catch (failed) {
         if (controller.signal.aborted) return;
-        setError(failed instanceof Error ? failed.message : String(failed));
-        setPhase("load-error");
+        const err = failed instanceof Error ? failed.message : String(failed);
+        setState((prev) => ({ kind: "load-error", data: prev.data, error: err }));
       }
     };
     const offHistory = onEvent("history", refreshLatest);
@@ -73,26 +83,24 @@ export function HistoryPanel() {
     };
   }, [watchingLatest, requestVersion]);
   const busy =
-    phase === "loading" || phase === "saving" || phase === "restoring" || phase === "paging";
+    state.kind === "loading" ||
+    state.kind === "saving" ||
+    state.kind === "restoring" ||
+    state.kind === "paging";
   const save = async () => {
-    setPhase("saving");
-    setMessage("");
-    setError("");
+    setState((prev) => ({ kind: "saving", data: prev.data }));
     try {
       await flushDocs();
       await request("/api/history", { name: name.trim() });
       setName("");
-      setMessage("Version saved.");
-      setPhase("loading");
+      setState((prev) => ({ kind: "loading", data: prev.data, message: "Version saved." }));
     } catch (failed) {
-      setError(failed instanceof Error ? failed.message : String(failed));
-      setPhase("error");
+      const err = failed instanceof Error ? failed.message : String(failed);
+      setState((prev) => ({ kind: "error", data: prev.data, error: err }));
     }
   };
   const restore = async (revision: Revision) => {
-    setPhase("restoring");
-    setMessage("");
-    setError("");
+    setState((prev) => ({ kind: "restoring", data: prev.data }));
     try {
       await flushDocs();
       const current = await request<History>("/api/history");
@@ -100,25 +108,26 @@ export function HistoryPanel() {
         "/api/history/restore",
         { id: revision.id, base: current.current.fingerprint },
       );
-      setMessage(
-        `Restored ${revision.name}. Your previous work is saved as “${restored.backup.name}”. ${restored.restartRequired ? "Restart this film's Studio to apply its configuration." : "Load the new preview if Studio offers a new version."}`,
-      );
-      setPhase("loading");
+      const nextMessage = `Restored ${revision.name}. Your previous work is saved as “${restored.backup.name}”. ${restored.restartRequired ? "Restart this film's Studio to apply its configuration." : "Load the new preview if Studio offers a new version."}`;
+      setState((prev) => ({ kind: "loading", data: prev.data, message: nextMessage }));
     } catch (failed) {
-      setError(failed instanceof Error ? failed.message : String(failed));
-      setPhase("error");
+      const err = failed instanceof Error ? failed.message : String(failed);
+      setState((prev) => ({ kind: "error", data: prev.data, error: err }));
     }
   };
   const older = async () => {
     if (!data?.next) return;
-    setPhase("paging");
+    const baseData = data;
+    setState({ kind: "paging", data: baseData });
     try {
-      const got = await request<History>(`/api/history?before=${data.next}`);
-      setData({ ...got, revisions: [...data.revisions, ...got.revisions] });
-      setPhase("browsing");
+      const got = await request<History>(`/api/history?before=${baseData.next}`);
+      setState({
+        kind: "browsing",
+        data: { ...got, revisions: [...baseData.revisions, ...got.revisions] },
+      });
     } catch (failed) {
-      setError(failed instanceof Error ? failed.message : String(failed));
-      setPhase("error");
+      const err = failed instanceof Error ? failed.message : String(failed);
+      setState({ kind: "error", data: baseData, error: err });
     }
   };
   return (
@@ -157,7 +166,11 @@ export function HistoryPanel() {
           variant="quiet"
           disabled={busy}
           onClick={() => {
-            setPhase("loading");
+            setState((prev) => ({
+              kind: "loading",
+              data: prev.data,
+              message: prev.kind === "loading" || prev.kind === "ready" ? prev.message : "",
+            }));
             refreshLatest();
           }}
         >
@@ -176,9 +189,9 @@ export function HistoryPanel() {
       )}
       <p role="status" className="text-muted-foreground text-ui">
         {busy
-          ? phase === "saving"
+          ? state.kind === "saving"
             ? "Saving version…"
-            : phase === "restoring"
+            : state.kind === "restoring"
               ? "Restoring version…"
               : "Loading versions…"
           : message}

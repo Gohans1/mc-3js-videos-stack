@@ -13,7 +13,7 @@ import {
 
 const ELEVENLABS = "https://api.elevenlabs.io";
 const GEMINI = "https://generativelanguage.googleapis.com/v1beta";
-const GEMINI_MODELS = ["gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts"];
+const GEMINI_MODELS = ["gemini-3.8-flash-tts"];
 const ELEVEN_MODELS = [
   ["eleven_v4", "Eleven v4", 10000],
   ["eleven_v3", "Eleven v3", 5000],
@@ -317,10 +317,10 @@ export const openDirectVoiceConnections = ({ env, fetchImpl, configFile }) => {
     const google = connection === "google";
     const base = {
       models: google
-        ? GEMINI_MODELS.map((model_id, index) =>
+        ? GEMINI_MODELS.map((model_id) =>
             modelInfo(connection, {
               model_id,
-              name: index ? "Gemini 3.8 Flash-Lite TTS" : "Gemini 3.8 Flash TTS",
+              name: "Gemini 3.8 Flash TTS",
               supports_similarity: false,
               supports_context: false,
             }),

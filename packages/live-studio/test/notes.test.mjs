@@ -554,3 +554,31 @@ test("blank fix.what with afterData rejects cleanly without writing an orphaned 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("watchNotesFile ignores file changes after close and allows idempotent close/sync", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "notes-watch-close-"));
+  const file = join(dir, "notes", "notes.jsonl");
+  mkdirSync(join(dir, "notes"), { recursive: true });
+  let hits = 0;
+  const w = watchNotesFile(
+    file,
+    () => {
+      hits += 1;
+    },
+    { debounceMs: 20 },
+  );
+  try {
+    writeFileSync(file, '{"id":"pending","t":1,"text":"before close","shot":0,"time":"00:01.000"}\n');
+    await new Promise((r) => setTimeout(r, 5));
+    w.close();
+    assert.doesNotThrow(() => {
+      w.close();
+      w.sync();
+    });
+    writeFileSync(file, '{"id":"late","t":1,"text":"after close","shot":0,"time":"00:01.000"}\n');
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(hits, 0);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

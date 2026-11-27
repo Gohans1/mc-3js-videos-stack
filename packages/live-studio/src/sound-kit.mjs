@@ -647,15 +647,15 @@ export const openSoundKit = (file = SOUND_KIT_FILE) => {
     const parentDir = dirname(dir);
     const dirName = basename(dir).toLowerCase();
     const targetName = basename(file).toLowerCase();
-    let timer = null;
-    let dirWatcher = null;
-    let parentWatcher = null;
+    let watchState = { status: "unwatched" };
     let lastObserved = fileStamp();
 
     const trigger = () => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
+      if (watchState.status !== "watching") return;
+      if (watchState.timer) clearTimeout(watchState.timer);
+      const timer = setTimeout(() => {
+        if (watchState.status !== "watching" || watchState.timer !== timer) return;
+        watchState.timer = null;
         const nextStamp = fileStamp();
         if (nextStamp && nextStamp === selfStamp) {
           lastObserved = nextStamp;
@@ -665,29 +665,33 @@ export const openSoundKit = (file = SOUND_KIT_FILE) => {
         lastObserved = nextStamp;
         onChange();
       }, 80);
+      watchState.timer = timer;
     };
 
     const startDirWatch = () => {
-      if (dirWatcher || !existsSync(dir)) return;
+      if (watchState.status === "watching" || watchState.status === "closed" || !existsSync(dir))
+        return;
       try {
-        dirWatcher = watchFs(dir, (_ev, filename) => {
+        const dirWatcher = watchFs(dir, (_ev, filename) => {
           if (filename && String(filename).toLowerCase() !== targetName) return;
           trigger();
         });
         dirWatcher.on("error", () => {});
-        if (parentWatcher) {
+        const prev = watchState;
+        watchState = { status: "watching", watcher: dirWatcher, timer: null };
+        if (prev.status === "waiting-parent") {
           try {
-            parentWatcher.close();
+            prev.watcher.close();
           } catch {}
-          parentWatcher = null;
         }
       } catch {}
     };
 
     startDirWatch();
-    if (!dirWatcher && existsSync(parentDir)) {
+    if (watchState.status === "unwatched" && existsSync(parentDir)) {
       try {
-        parentWatcher = watchFs(parentDir, (_ev, filename) => {
+        const parentWatcher = watchFs(parentDir, (_ev, filename) => {
+          if (watchState.status !== "waiting-parent") return;
           if (filename && String(filename).toLowerCase() !== dirName) return;
           if (existsSync(dir)) {
             startDirWatch();
@@ -695,17 +699,23 @@ export const openSoundKit = (file = SOUND_KIT_FILE) => {
           }
         });
         parentWatcher.on("error", () => {});
+        watchState = { status: "waiting-parent", watcher: parentWatcher };
       } catch {}
     }
 
     return () => {
-      if (timer) clearTimeout(timer);
-      try {
-        dirWatcher?.close();
-      } catch {}
-      try {
-        parentWatcher?.close();
-      } catch {}
+      const prev = watchState;
+      watchState = { status: "closed" };
+      if (prev.status === "watching") {
+        if (prev.timer) clearTimeout(prev.timer);
+        try {
+          prev.watcher.close();
+        } catch {}
+      } else if (prev.status === "waiting-parent") {
+        try {
+          prev.watcher.close();
+        } catch {}
+      }
     };
   };
 

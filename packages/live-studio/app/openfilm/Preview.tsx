@@ -35,44 +35,72 @@ export function OpenFilmPreview({
       () => 2,
       { on: false },
     );
-    let pending: number | null = null,
-      stopped = false,
-      running: Promise<void> | null = null;
-    const run = async () => {
-      while (pending !== null && !stopped) {
-        const p = pending;
-        pending = null;
-        if (recipe.cat === "transition") {
-          await transition.prepareFrame(0.5 + p * 0.999);
-          transition(0.5 + p * 0.999);
-        } else {
-          renderer.setClearColor(0x30343c);
-          renderer.clear();
-          const duration = (recipe.durationMs ?? 3000) / 1000;
-          await layers.render(
-            [{ id: "preview", asset: recipe.id, from: 0, to: duration, ...props }],
-            Math.min(p, 0.999999) * duration,
-          );
-        }
+    type PreviewLoopState =
+      | { kind: "idle" }
+      | { kind: "running"; promise: Promise<void>; queued: number | null }
+      | { kind: "disposed" };
+    let loop: PreviewLoopState = { kind: "idle" };
+    const currentLoop = () => loop;
+    const renderFrame = async (p: number) => {
+      if (recipe.cat === "transition") {
+        await transition.prepareFrame(0.5 + p * 0.999);
+        if (currentLoop().kind === "disposed") return;
+        transition(0.5 + p * 0.999);
+      } else {
+        renderer.setClearColor(0x30343c);
+        renderer.clear();
+        const duration = (recipe.durationMs ?? 3000) / 1000;
+        await layers.render(
+          [{ id: "preview", asset: recipe.id, from: 0, to: duration, ...props }],
+          Math.min(p, 0.999999) * duration,
+        );
       }
     };
+    const startLoop = (initial: number) => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((r) => {
+        resolve = r;
+      });
+      loop = { kind: "running", promise, queued: initial };
+      void (async () => {
+        try {
+          while (true) {
+            const state = currentLoop();
+            if (state.kind !== "running" || state.queued === null) break;
+            const p = state.queued;
+            state.queued = null;
+            await renderFrame(p);
+          }
+        } catch (e) {
+          if (currentLoop().kind !== "disposed") setError(String((e as Error).message));
+        } finally {
+          const state = currentLoop();
+          if (state.kind === "running") {
+            const nextQueued = state.queued;
+            loop = { kind: "idle" };
+            resolve();
+            if (nextQueued !== null) startLoop(nextQueued);
+          } else {
+            resolve();
+          }
+        }
+      })();
+    };
     paint.current = (p) => {
-      pending = p;
-      if (!running)
-        running = run()
-          .catch((e) => {
-            if (!stopped) setError(String(e.message));
-          })
-          .finally(() => {
-            running = null;
-          });
+      if (loop.kind === "disposed") return;
+      if (loop.kind === "running") {
+        loop.queued = p;
+        return;
+      }
+      startLoop(p);
     };
     setError("");
     paint.current(progressRef.current);
     return () => {
-      stopped = true;
+      const inflight = loop.kind === "running" ? loop.promise : null;
+      loop = { kind: "disposed" };
       paint.current = null;
-      void (running ?? Promise.resolve()).finally(() => {
+      void (inflight ?? Promise.resolve()).finally(() => {
         layers.dispose();
         transition.disposeTransitions();
         renderer.dispose();

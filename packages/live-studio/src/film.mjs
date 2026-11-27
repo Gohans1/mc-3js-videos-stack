@@ -81,6 +81,38 @@ export const heardLength = (project, conf) => {
   return { film: timingClock.duration, layers: Math.max(timingClock.duration, layerDuration()) };
 };
 
+export const transitionCutSeconds = (project, conf = null) => {
+  const read = (rel) => {
+    try {
+      return rel && existsSync(join(project, rel))
+        ? JSON.parse(readFileSync(join(project, rel), "utf8"))
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  const cfg = conf ?? read("package.json")?.["live-studio"] ?? {};
+  const shots = read(cfg.shotsTimeline);
+  if (!Array.isArray(shots)) return [];
+  const edit = read("src/edit.json");
+  const editWarp = edit?.voice?.warp ?? [];
+  const hasClock = heardLength(project, cfg) !== null;
+  return [
+    ...new Set(
+      shots
+        .filter(
+          (s) => Number.isFinite(s?.t) && typeof s?.transition?.fx === "string" && s.transition.fx,
+        )
+        .flatMap((s) => {
+          const sceneT = warp(editWarp, s.t, 0, 1);
+          return hasClock
+            ? [timingClock.outputAt(sceneT, "before"), timingClock.outputAt(sceneT, "after")]
+            : [sceneT];
+        }),
+    ),
+  ];
+};
+
 export const contractFiles = (project) => {
   const pkgFile = join(project, "package.json"),
     conf =
@@ -125,13 +157,6 @@ export const contractFiles = (project) => {
     files.set(file, [previous ? previous[0].and(schema) : schema, text]);
   }
   return Object.fromEntries(files);
-};
-const debounce = (f, ms) => {
-  let h;
-  return (...a) => {
-    clearTimeout(h);
-    h = setTimeout(() => f(...a), ms);
-  };
 };
 
 export const openFilm = (projectDir, { send, activity }) => {
@@ -464,58 +489,97 @@ export const openFilm = (projectDir, { send, activity }) => {
       );
     }));
   };
-  let smallMixing = null,
-    smallSource = null,
-    smallBuildSeq = 0,
+  let smallMixState = { status: "idle", source: null, buildSeq: 0 },
     mixSeq = 0;
   const smallMix = () => {
     if (!existsSync(MIX)) return Promise.resolve();
+    if (smallMixState.status === "building") return smallMixState.promise;
     const mixSt = statSync(MIX);
-    const sameSource = smallSource
-      ? smallBuildSeq === mixSeq &&
-        smallSource.size === mixSt.size &&
-        smallSource.mtimeMs === mixSt.mtimeMs
+    const sameSource = smallMixState.source
+      ? smallMixState.buildSeq === mixSeq &&
+        smallMixState.source.size === mixSt.size &&
+        smallMixState.source.mtimeMs === mixSt.mtimeMs
       : statSync(MIX_SMALL, { throwIfNoEntry: false })?.mtimeMs >= mixSt.mtimeMs;
     if (existsSync(MIX_SMALL) && sameSource) {
-      smallSource ??= { size: mixSt.size, mtimeMs: mixSt.mtimeMs };
-      smallBuildSeq = mixSeq;
+      smallMixState = {
+        status: "idle",
+        source: smallMixState.source ?? { size: mixSt.size, mtimeMs: mixSt.mtimeMs },
+        buildSeq: mixSeq,
+      };
       return Promise.resolve();
     }
     const fresh = MIX_SMALL + ".new.webm";
     const builtForSeq = mixSeq;
-    return (smallMixing ??= new Promise((done) =>
+    const prevSource = smallMixState.source;
+    const prevBuildSeq = smallMixState.buildSeq;
+    let settled = false;
+    const promise = new Promise((done) =>
       spawn(
         "ffmpeg",
         ["-v", "error", "-y", "-i", MIX, "-ac", "1", "-c:a", "libopus", "-b:a", "48k", fresh],
         { stdio: "inherit" },
       )
         .on("error", (e) => {
+          if (settled) return;
+          settled = true;
           console.log("ffmpeg is needed for the small mix:", e.message);
-          smallMixing = null;
+          smallMixState = { status: "idle", source: prevSource, buildSeq: prevBuildSeq };
           done();
         })
         .on("close", async (code) => {
-          if (!code) {
+          if (settled) return;
+          settled = true;
+          if (!code && builtForSeq === mixSeq) {
             await swapIn(fresh, MIX_SMALL);
-            if (builtForSeq === mixSeq) {
-              smallBuildSeq = builtForSeq;
-              smallSource = { size: mixSt.size, mtimeMs: mixSt.mtimeMs };
-            }
+            smallMixState = {
+              status: "idle",
+              source: { size: mixSt.size, mtimeMs: mixSt.mtimeMs },
+              buildSeq: builtForSeq,
+            };
+          } else {
+            rmSync(fresh, { force: true });
+            smallMixState = {
+              status: "idle",
+              source: builtForSeq === mixSeq ? prevSource : null,
+              buildSeq: builtForSeq === mixSeq ? prevBuildSeq : 0,
+            };
           }
-          smallMixing = null;
           done();
         }),
-    ));
+    );
+    smallMixState = { status: "building", promise, source: prevSource, buildSeq: prevBuildSeq };
+    return promise;
   };
 
-  let mixing = false,
-    again = false;
+  let lifecycle = { status: "idle" };
+  const debounce = (f, ms) => {
+    let handle = null;
+    return (...a) => {
+      if (lifecycle.status !== "running") return;
+      const run = lifecycle;
+      if (handle !== null) {
+        clearTimeout(handle);
+        run.timers.delete(handle);
+      }
+      const next = setTimeout(() => {
+        run.timers.delete(next);
+        if (handle === next) handle = null;
+        if (lifecycle !== run) return;
+        f(...a);
+      }, ms);
+      handle = next;
+      run.timers.add(next);
+    };
+  };
+
+  let remixState = "idle";
   const remix = () => {
-    if (mixing) {
-      again = true;
+    if (lifecycle.status === "stopped") return;
+    if (remixState !== "idle") {
+      remixState = "rerun_queued";
       return;
     }
-    mixing = true;
+    remixState = "running";
     send("sound-start");
     const t0 = Date.now(),
       fresh = MIX + ".new.wav";
@@ -525,22 +589,22 @@ export const openFilm = (projectDir, { send, activity }) => {
     }).on("close", async (code) => {
       if (!code && (await swapIn(fresh, MIX))) {
         mixSeq++;
-        smallSource = null;
+        if (smallMixState.status === "idle") {
+          smallMixState = { status: "idle", source: null, buildSeq: 0 };
+        }
         if (LIVE) writeFileSync(LIVE_MARK, "");
         else rmSync(LIVE_MARK, { force: true });
       }
-      mixing = false;
+      const rerun = remixState === "rerun_queued" && lifecycle.status !== "stopped";
+      remixState = "idle";
       console.log(
         code ? "sound mix failed" : `sound mixed in ${((Date.now() - t0) / 1000).toFixed(1)}s`,
       );
-      if (!code) {
+      if (!code && lifecycle.status !== "stopped") {
         send("sound");
         checkContract();
       }
-      if (again) {
-        again = false;
-        remix();
-      }
+      if (rerun) remix();
     });
   };
   const mapVoice = () => {
@@ -553,9 +617,12 @@ export const openFilm = (projectDir, { send, activity }) => {
     }
   };
 
-  const watchers = [];
-  let stopped = false;
-  const watch = (...a) => watchers.push(fsWatch(...a));
+  const watch = (...a) => {
+    if (lifecycle.status !== "running") return null;
+    const w = fsWatch(...a);
+    lifecycle.watchers.add(w);
+    return w;
+  };
   const timelineContent = (file) => {
     const text = textOf(file);
     if (text === undefined) return undefined;
@@ -598,6 +665,16 @@ export const openFilm = (projectDir, { send, activity }) => {
     if (!file.personWrite()) activity?.add({ surface, say });
   };
   const start = () => {
+    if (lifecycle.status !== "idle") return;
+    const run = {
+      status: "running",
+      watchers: new Set(),
+      timers: new Set(),
+      voiceFile: { status: "unwatched" },
+      voiceDir: { status: "unwatched" },
+      refsDir: { status: "unwatched" },
+    };
+    lifecycle = run;
     history.start();
     for (const file of [sound, cam, lights, shots, text, adjustment, timing, ...keyFiles].filter(
       Boolean,
@@ -689,46 +766,44 @@ export const openFilm = (projectDir, { send, activity }) => {
     keyFiles.forEach((file, i) =>
       timeline(file, "keys", "keys", `Edited the keys in ${basename(file.FILE)}`, i),
     );
-    let watchingVoiceFile = false,
-      voiceSeen = existsSync(VOICE) ? statSync(VOICE).mtimeMs : -1;
     const ensureVoiceFileWatch = (initial = false) => {
-      if (watchingVoiceFile || !existsSync(VOICE)) return;
-      watchingVoiceFile = true;
-      voiceSeen = statSync(VOICE).mtimeMs;
+      if (lifecycle !== run || run.voiceFile.status === "watching" || !existsSync(VOICE)) return;
+      run.voiceFile = { status: "watching", mtimeMs: statSync(VOICE).mtimeMs };
       watch(
         VOICE,
         debounce(() => {
-          if (!existsSync(VOICE)) return;
+          if (lifecycle !== run || run.voiceFile.status !== "watching" || !existsSync(VOICE)) return;
           const now = statSync(VOICE).mtimeMs;
-          if (now !== voiceSeen) {
-            voiceSeen = now;
+          if (now !== run.voiceFile.mtimeMs) {
+            run.voiceFile.mtimeMs = now;
             remix();
             mapVoice();
           }
         }, 500),
       );
-      if (!existsSync(VOICE_MAP) || statSync(VOICE_MAP).mtimeMs < voiceSeen) mapVoice();
+      if (!existsSync(VOICE_MAP) || statSync(VOICE_MAP).mtimeMs < run.voiceFile.mtimeMs) mapVoice();
       if (!initial) remix();
     };
     ensureVoiceFileWatch(true);
-    let watchingVoiceDir = false,
-      voiceBootWatcher = null;
     const closeVoiceBootWatcher = () => {
-      if (!voiceBootWatcher) return;
-      const idx = watchers.indexOf(voiceBootWatcher);
-      if (idx >= 0) watchers.splice(idx, 1);
-      voiceBootWatcher.close();
-      voiceBootWatcher = null;
+      if (run.voiceDir.status !== "waiting") return;
+      run.watchers.delete(run.voiceDir.watcher);
+      try {
+        run.voiceDir.watcher.close();
+      } catch {}
+      run.voiceDir = { status: "unwatched" };
     };
     const ensureVoiceWatch = (notify = false) => {
-      if (watchingVoiceDir || !existsSync(voice.VOICE_DIR)) return;
-      watchingVoiceDir = true;
+      if (lifecycle !== run || run.voiceDir.status === "watching" || !existsSync(voice.VOICE_DIR))
+        return;
       closeVoiceBootWatcher();
+      run.voiceDir = { status: "watching" };
       let voiceDirSeen = stampOf(voice.VOICE_DIR);
       watch(
         voice.VOICE_DIR,
         { recursive: true },
         debounce(() => {
+          if (lifecycle !== run) return;
           const now = stampOf(voice.VOICE_DIR);
           if (now !== voiceDirSeen) {
             voiceDirSeen = now;
@@ -743,24 +818,32 @@ export const openFilm = (projectDir, { send, activity }) => {
       }
     };
     ensureVoiceWatch(false);
-    if (!watchingVoiceDir) {
-      voiceBootWatcher = fsWatch(
+    if (run.voiceDir.status === "unwatched") {
+      const watcher = watch(
         PROJECT,
         debounce(() => {
-          if (existsSync(voice.VOICE_DIR)) ensureVoiceWatch(true);
+          if (lifecycle === run && existsSync(voice.VOICE_DIR)) ensureVoiceWatch(true);
         }, 150),
       );
-      watchers.push(voiceBootWatcher);
+      if (watcher) run.voiceDir = { status: "waiting", watcher };
     }
     if (!existsSync(LITE) && has("make_lite.py"))
       spawn(PYTHON, ["make_lite.py"], { cwd: PROJECT, stdio: "inherit" });
-    const notesWatcher = watchNotesFile(notes.file, () => send("notes"), { debounceMs: 80 });
-    watchers.push(notesWatcher);
-    syncNotes = () => notesWatcher.sync();
+    const notesWatcher = watchNotesFile(
+      notes.file,
+      () => {
+        if (lifecycle === run) send("notes");
+      },
+      { debounceMs: 80 },
+    );
+    run.watchers.add(notesWatcher);
+    syncNotes = () => {
+      if (lifecycle === run) notesWatcher.sync();
+    };
     const REFERENCES = join(PROJECT, "references");
     let compareSeen = compareVideosFingerprint(PROJECT);
     const checkCompareVideos = debounce(() => {
-      if (stopped) return;
+      if (lifecycle !== run) return;
       const now = compareVideosFingerprint(PROJECT);
       if (now !== compareSeen) {
         compareSeen = now;
@@ -770,7 +853,7 @@ export const openFilm = (projectDir, { send, activity }) => {
     if (existsSync(RENDERS)) {
       try {
         watch(RENDERS, { recursive: true }, (_ev, filename) => {
-          if (stopped) return;
+          if (lifecycle !== run) return;
           if (typeof filename === "string" && filename) {
             const first = filename.split(/[\\/]/)[0];
             if (first && isSkippedRenderDir(first)) return;
@@ -779,37 +862,34 @@ export const openFilm = (projectDir, { send, activity }) => {
         });
       } catch {}
     }
-    let watchingRefsDir = false;
-    let refsBootWatcher = null;
     const ensureRefsWatch = () => {
-      if (stopped || watchingRefsDir || !existsSync(REFERENCES)) return;
+      if (lifecycle !== run || run.refsDir.status === "watching" || !existsSync(REFERENCES)) return;
       try {
         watch(REFERENCES, checkCompareVideos);
-        watchingRefsDir = true;
-        if (refsBootWatcher) {
+        const prev = run.refsDir;
+        run.refsDir = { status: "watching" };
+        if (prev.status === "waiting") {
           try {
-            refsBootWatcher.close();
+            prev.watcher.close();
           } catch {}
-          const idx = watchers.indexOf(refsBootWatcher);
-          if (idx >= 0) watchers.splice(idx, 1);
-          refsBootWatcher = null;
+          run.watchers.delete(prev.watcher);
         }
       } catch {}
     };
     ensureRefsWatch();
-    if (!watchingRefsDir) {
+    if (run.refsDir.status === "unwatched") {
       try {
-        refsBootWatcher = fsWatch(
+        const watcher = watch(
           PROJECT,
           debounce(() => {
-            if (stopped) return;
+            if (lifecycle !== run) return;
             if (existsSync(REFERENCES)) {
               ensureRefsWatch();
               checkCompareVideos();
             }
           }, 300),
         );
-        watchers.push(refsBootWatcher);
+        if (watcher) run.refsDir = { status: "waiting", watcher };
       } catch {}
     }
     const voiceEdits = () => {
@@ -829,8 +909,11 @@ export const openFilm = (projectDir, { send, activity }) => {
     let editsSeen = voiceEdits(),
       takesSeen = voiceTakes();
     syncVoiceAssemble = () => {
+      if (lifecycle !== run) return;
       soundsSeen = stamps();
-      if (existsSync(VOICE)) voiceSeen = statSync(VOICE).mtimeMs;
+      if (existsSync(VOICE) && run.voiceFile.status === "watching") {
+        run.voiceFile.mtimeMs = statSync(VOICE).mtimeMs;
+      }
       ensureVoiceFileWatch(true);
       editsSeen = voiceEdits();
       takesSeen = voiceTakes();
@@ -1000,9 +1083,22 @@ export const openFilm = (projectDir, { send, activity }) => {
     smallVideo,
     start,
     stop: () => {
-      stopped = true;
+      if (lifecycle.status === "stopped") return;
+      const prev = lifecycle;
+      lifecycle = { status: "stopped" };
+      syncVoiceAssemble = () => {};
+      syncNotes = () => {};
+      if (prev.status === "running") {
+        for (const timer of prev.timers) clearTimeout(timer);
+        prev.timers.clear();
+        for (const w of prev.watchers) {
+          try {
+            w.close();
+          } catch {}
+        }
+        prev.watchers.clear();
+      }
       history.close();
-      watchers.splice(0).forEach((w) => w.close());
     },
   };
 };

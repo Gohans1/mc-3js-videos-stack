@@ -54,12 +54,27 @@ const startStudioAudio = () => {
   void ensureBeatSounds(true);
 };
 const SHUTTLE = [1, 2, 4, 8];
-let shuttle = 0,
-  backFrom = 0,
-  backAt = 0,
-  shown = "";
-let looping = false;
-const activeRate = () => (shuttle > 0 ? shuttle : get().rate);
+type TransportMode =
+  | { kind: "paused" }
+  | { kind: "playing"; looping: boolean }
+  | { kind: "shuttle-forward"; rate: number; looping: boolean; banner: string }
+  | {
+      kind: "shuttle-backward";
+      rate: number;
+      fromTime: number;
+      startedAtMs: number;
+      looping: boolean;
+      banner: string;
+    };
+let mode: TransportMode = { kind: "paused" };
+const shuttleRate = () =>
+  mode.kind === "shuttle-forward"
+    ? mode.rate
+    : mode.kind === "shuttle-backward"
+      ? -mode.rate
+      : 0;
+const isForwardPlaying = () => mode.kind === "playing" || mode.kind === "shuttle-forward";
+const activeRate = () => (mode.kind === "shuttle-forward" ? mode.rate : get().rate);
 const inside = () => {
   const r = get().inOut;
   return !!r && S.t >= r[0] - 1e-6 && S.t < r[1];
@@ -68,11 +83,17 @@ const syncClock = (rate = activeRate()) => {
   S.clockStart = performance.now() - (S.t * 1000) / Math.max(0.05, rate);
 };
 const elapsedTime = (rate: number) => ((performance.now() - S.clockStart) / 1000) * rate;
-const endShuttle = () => {
-  if (!shuttle) return;
-  shuttle = S.shuttle = 0;
+const clearShuttleUi = (prev: TransportMode) => {
+  if (prev.kind !== "shuttle-forward" && prev.kind !== "shuttle-backward") return;
   S.el.audio.playbackRate = get().rate;
-  if (get().status === shown) say("", 0);
+  if (get().status === prev.banner) say("", 0);
+};
+const setMode = (next: TransportMode) => {
+  const prev = mode;
+  mode = next;
+  S.shuttle = shuttleRate();
+  S.playing = next.kind !== "paused";
+  if (next.kind === "paused" || next.kind === "playing") clearShuttleUi(prev);
 };
 const tickStudioAudio = (rate: number) => {
   const audio = S.el.audio;
@@ -105,10 +126,9 @@ export const seekExact = (x: number) => {
       if (time < 0 || pastMix(audio, time)) audio.pause();
     }
   }
-  if (shuttle < 0) {
-    backFrom = S.t;
-    backAt = performance.now();
-  } else if (S.playing) {
+  if (mode.kind === "shuttle-backward") {
+    mode = { ...mode, fromTime: S.t, startedAtMs: performance.now() };
+  } else if (isForwardPlaying()) {
     if (inCompare && compareVideoUsesMediaClock()) {
       if (compareOutside === null) startCompareVideoPlayback(rate);
     } else if (audio.paused && audio.readyState > 0) {
@@ -150,8 +170,7 @@ const comparePauseTime = () => {
   const item = activeCompareVideo(),
     video = S.el.compareVideo;
   if (
-    !S.playing ||
-    shuttle < 0 ||
+    !isForwardPlaying() ||
     !item ||
     !isLiveCompareVideoSynced(video, item) ||
     video.paused ||
@@ -168,18 +187,18 @@ const comparePauseTime = () => {
 
 export const setPlaying = (p: boolean) => {
   if (!S.el || (p && (get().compareVideoMode ? !compareVideoPlayable() : !S.render))) return;
+  let loopNow = false;
   if (p) {
-    const loopNow = inside();
+    loopNow = inside();
     if (stopIfCompareEnded(loopNow)) return;
-    looping = loopNow;
   }
   const audio = S.el.audio;
   const pauseTime = p ? S.t : comparePauseTime();
-  S.playing = p;
   if (!p) {
     pauseCompareVideoPlayback();
     audio.pause();
   }
+  setMode(p ? { kind: "playing", looping: loopNow } : { kind: "paused" });
   set({ playing: p });
   if (p) {
     const rate = get().rate;
@@ -193,7 +212,6 @@ export const setPlaying = (p: boolean) => {
       startStudioAudio();
     }
   } else {
-    endShuttle();
     if (activeCompareVideo()) {
       S.t = pauseTime;
       syncClock();
@@ -205,14 +223,27 @@ compareHooks.pause = () => setPlaying(false);
 compareHooks.seek = seekExact;
 export const shuttleOn = (d: -1 | 1) => {
   if (!S.el || (get().compareVideoMode ? !compareVideoPlayable() : !S.render)) return;
-  const loopNow = S.playing ? looping : inside();
+  const loopNow = mode.kind !== "paused" ? mode.looping : inside();
   if (d > 0 && stopIfCompareEnded(loopNow)) return;
-  const audio = S.el.audio,
-    faster = S.playing && Math.sign(shuttle || 1) === d;
-  const v = faster ? (SHUTTLE.find((x) => x > Math.abs(shuttle || 1)) ?? SHUTTLE.at(-1)!) : 1;
-  looping = loopNow;
-  shuttle = S.shuttle = d * v;
-  S.playing = true;
+  const audio = S.el.audio;
+  const currentShuttle = shuttleRate();
+  const faster = mode.kind !== "paused" && Math.sign(currentShuttle || 1) === d;
+  const v = faster
+    ? (SHUTTLE.find((x) => x > Math.abs(currentShuttle || 1)) ?? SHUTTLE.at(-1)!)
+    : 1;
+  const banner = `${d > 0 ? "Forward" : "Backward"} ${v}× (K stops)`;
+  setMode(
+    d > 0
+      ? { kind: "shuttle-forward", rate: v, looping: loopNow, banner }
+      : {
+          kind: "shuttle-backward",
+          rate: v,
+          fromTime: S.t,
+          startedAtMs: performance.now(),
+          looping: loopNow,
+          banner,
+        },
+  );
   set({ playing: true });
   if (d > 0) {
     audio.playbackRate = v;
@@ -227,18 +258,15 @@ export const shuttleOn = (d: -1 | 1) => {
   } else {
     pauseCompareVideoPlayback();
     audio.pause();
-    backFrom = S.t;
-    backAt = performance.now();
   }
-  say((shown = `${d > 0 ? "Forward" : "Backward"} ${v}× (K stops)`), 0);
+  say(banner, 0);
 };
 export const reloadNow = () => {
   stored.set("t", String(S.t), sessionStorage);
   location.reload();
 };
 export const togglePlay = () => {
-  endShuttle();
-  setPlaying(!S.playing);
+  setPlaying(mode.kind === "paused");
 };
 export const step = (seconds: number) => seek(S.t + seconds);
 export const jumpShot = (d: number) => {
@@ -253,12 +281,13 @@ export const jumpShot = (d: number) => {
 export const setRate = (r: number) => {
   const a = S.el.audio;
   a.defaultPlaybackRate = a.playbackRate = r;
+  const effective = mode.kind === "shuttle-forward" ? mode.rate : r;
   if (S.el.compareVideo) {
     try {
-      S.el.compareVideo.playbackRate = shuttle > 0 ? shuttle : r;
+      S.el.compareVideo.playbackRate = effective;
     } catch {}
   }
-  syncClock(shuttle > 0 ? shuttle : r);
+  syncClock(effective);
   set({ rate: r });
 };
 
@@ -268,7 +297,7 @@ const setAudio = (url: string) => {
   audio.addEventListener(
     "loadedmetadata",
     () => {
-      if (S.playing && shuttle >= 0 && !compareVideoUsesMediaClock()) startSound();
+      if (isForwardPlaying() && !compareVideoUsesMediaClock()) startSound();
       else audio.currentTime = Math.max(0, S.t + compareStudioOffset());
     },
     { once: true },
@@ -318,8 +347,7 @@ const keepSound = () => {
     const dur = compareVideoDuration();
     const { t: videoTime, outside } = filmToVideoTime(S.t, compareItem.startSec, dur);
     if (
-      S.playing &&
-      shuttle >= 0 &&
+      isForwardPlaying() &&
       outside === null &&
       v.paused &&
       v.readyState >= 2 &&
@@ -331,7 +359,7 @@ const keepSound = () => {
     return;
   }
   const a = S.el?.audio;
-  if (S.playing && shuttle >= 0 && a?.paused && a.readyState > 0) startSound();
+  if (isForwardPlaying() && a?.paused && a.readyState > 0) startSound();
 };
 let soundTimer = 0;
 const syncSoundTimer = () => {
@@ -367,14 +395,15 @@ export const nudgeVolume = (up: boolean) => {
 };
 
 export const tick = () => {
-  if (!S.playing) return;
+  if (mode.kind === "paused") return;
+  const loopingNow = mode.looping;
   const r = get().inOut;
   const compareItem = activeCompareVideo();
   const playbackEnd = compareItem ? comparePlaybackEnd() : DURATION;
-  if (shuttle < 0) {
-    S.t = Math.max(0, backFrom + ((performance.now() - backAt) / 1000) * shuttle);
+  if (mode.kind === "shuttle-backward") {
+    S.t = Math.max(0, mode.fromTime - ((performance.now() - mode.startedAtMs) / 1000) * mode.rate);
     if (compareItem) syncCompareVideoElement(S.t, { forceSeek: true });
-    if (looping && r && S.t <= r[0]) {
+    if (loopingNow && r && S.t <= r[0]) {
       seek(r[1]);
       return;
     }
@@ -386,8 +415,8 @@ export const tick = () => {
   if (compareItem) {
     const rawVideo = S.el.compareVideo;
     const video = isLiveCompareVideoSynced(rawVideo, compareItem) ? rawVideo : null;
-    const mode = compareVideoEffectiveAudio();
-    if (mode !== "studio") {
+    const audioMode = compareVideoEffectiveAudio();
+    if (audioMode !== "studio") {
       const dur = compareVideoDuration();
       const { t: videoTime, outside } = filmToVideoTime(S.t, compareItem.startSec, dur);
       const pictureEnded = video?.ended || isCompareVideoTail(videoTime, dur);
@@ -399,10 +428,10 @@ export const tick = () => {
         }
       } else if (!video) {
         syncClock(effectiveRate);
-      } else if (mode === "reference" && pictureEnded) {
+      } else if (audioMode === "reference" && pictureEnded) {
         S.t = Math.max(compareItem.startSec + dur, elapsedTime(effectiveRate));
       } else if (pictureEnded) {
-        if (looping && r && r[0] < compareItem.startSec + dur - 0.02) {
+        if (loopingNow && r && r[0] < compareItem.startSec + dur - 0.02) {
           seek(r[0]);
           return;
         }
@@ -429,7 +458,7 @@ export const tick = () => {
   } else {
     tickStudioAudio(effectiveRate);
   }
-  if (looping && r && S.t >= Math.min(r[1], playbackEnd - 0.02)) {
+  if (loopingNow && r && S.t >= Math.min(r[1], playbackEnd - 0.02)) {
     seek(r[0]);
     return;
   }

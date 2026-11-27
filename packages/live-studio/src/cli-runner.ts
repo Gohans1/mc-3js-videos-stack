@@ -598,29 +598,33 @@ export function sliceUtf8ToByteLimit(text: string, maxBytes: number): string {
   return text.slice(0, end);
 }
 
-export interface CliStreamEvent {
-  event: "chunk" | "done";
-  data:
-    | CliRunChunk
-    | {
-        runId: string;
-        status: CliRunSnapshot["status"];
-        exitCode: number | null;
-        signal: string | null;
-        durationMs: number;
-        truncated: boolean;
-        error?: string;
-      };
+export interface CliRunDoneEventData {
+  runId: string;
+  status: CliRunSnapshot["status"];
+  exitCode: number | null;
+  signal: string | null;
+  durationMs: number;
+  truncated: boolean;
+  error?: string;
 }
+
+export type CliStreamEvent =
+  | { event: "chunk"; data: CliRunChunk }
+  | { event: "done"; data: CliRunDoneEventData };
 
 interface InternalRun {
   snapshot: CliRunSnapshot;
   bytes: number;
   nextSeq: number;
-  stopRequested: boolean;
   kill: () => void;
   listeners: Set<(ev: CliStreamEvent) => void>;
 }
+
+type RunnerSlot =
+  | { kind: "idle" }
+  | { kind: "starting" }
+  | { kind: "running"; run: InternalRun }
+  | { kind: "stopping"; run: InternalRun };
 
 export function createCliRunner(
   film: { PROJECT?: string } | null | undefined,
@@ -632,10 +636,12 @@ export function createCliRunner(
   const pythonBin = opts.pythonBin ?? "python";
   const bashBin = opts.bashBin ?? resolveDefaultBashBin();
 
-  let activeRun: InternalRun | null = null;
-  let startingRun = false;
+  let slot: RunnerSlot = { kind: "idle" };
   let lastRun: InternalRun | null = null;
   const runsById = new Map<string, InternalRun>();
+
+  const activeEntry = (): InternalRun | null =>
+    slot.kind === "running" || slot.kind === "stopping" ? slot.run : null;
 
   const cloneSnapshot = (r: InternalRun | null): CliRunSnapshot | null =>
     r
@@ -652,16 +658,17 @@ export function createCliRunner(
     run: CliRunSnapshot;
     spec: ReturnType<typeof buildCliInvocation>;
   }> {
-    if (activeRun || startingRun) {
+    if (slot.kind !== "idle") {
       throw new CliRunHttpError(409, "BUSY", "Another CLI command is currently running.", {
-        activeRunId: activeRun?.snapshot.runId ?? null,
+        activeRunId: activeEntry()?.snapshot.runId ?? null,
       });
     }
-    startingRun = true;
+    slot = { kind: "starting" };
     try {
       return await startUnchecked(rawBody);
-    } finally {
-      startingRun = false;
+    } catch (err) {
+      if (slot.kind === "starting") slot = { kind: "idle" };
+      throw err;
     }
   }
 
@@ -892,14 +899,13 @@ export function createCliRunner(
       },
       bytes: 0,
       nextSeq: 0,
-      stopRequested: false,
       kill: () => {
         if (child.pid) killProcessTree(child.pid, () => child.kill("SIGKILL"));
       },
       listeners: new Set(),
     };
 
-    activeRun = entry;
+    slot = { kind: "running", run: entry };
     lastRun = entry;
     runsById.set(runId, entry);
     if (runsById.size > 20) {
@@ -942,14 +948,15 @@ export function createCliRunner(
       error?: string,
     ) => {
       if (entry.snapshot.status !== "running") return;
+      const wasStopping = slot.kind === "stopping" && slot.run.snapshot.runId === runId;
       const finishedAt = Date.now();
-      entry.snapshot.status = entry.stopRequested ? "stopped" : status;
+      entry.snapshot.status = wasStopping ? "stopped" : status;
       entry.snapshot.finishedAt = finishedAt;
       entry.snapshot.durationMs = finishedAt - entry.snapshot.startedAt;
       entry.snapshot.exitCode = exitCode;
       entry.snapshot.signal = signal;
       if (error) entry.snapshot.error = error;
-      if (activeRun?.snapshot.runId === runId) activeRun = null;
+      if (activeEntry()?.snapshot.runId === runId) slot = { kind: "idle" };
 
       const doneData = {
         runId,
@@ -973,7 +980,8 @@ export function createCliRunner(
       finish("error", null, null, err.message);
     });
     child.on("close", (code, sig) => {
-      finish(entry.stopRequested ? "stopped" : "done", code, sig);
+      const wasStopping = slot.kind === "stopping" && slot.run.snapshot.runId === runId;
+      finish(wasStopping ? "stopped" : "done", code, sig);
     });
 
     return { run: cloneSnapshot(entry)!, spec };
@@ -982,15 +990,16 @@ export function createCliRunner(
   function stopRun(runId: string): CliRunSnapshot | null {
     const entry = findRun(runId);
     if (!entry) return null;
-    if (entry.snapshot.status === "running" && !entry.stopRequested) {
-      entry.stopRequested = true;
+    if (slot.kind === "running" && slot.run.snapshot.runId === runId) {
+      slot = { kind: "stopping", run: entry };
       entry.kill();
     }
     return cloneSnapshot(entry);
   }
 
   function stopActive(): void {
-    if (activeRun) stopRun(activeRun.snapshot.runId);
+    const current = activeEntry();
+    if (current) stopRun(current.snapshot.runId);
   }
 
   function subscribe(
@@ -1026,7 +1035,7 @@ export function createCliRunner(
 
   function getRuns(): { active: CliRunSnapshot | null; last: CliRunSnapshot | null } {
     return {
-      active: cloneSnapshot(activeRun),
+      active: cloneSnapshot(activeEntry()),
       last: cloneSnapshot(lastRun),
     };
   }

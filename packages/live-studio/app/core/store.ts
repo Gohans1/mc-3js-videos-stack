@@ -37,12 +37,14 @@ export type ModalKind =
   | "cliTemplate"
   | null;
 
+export type VideoDownloadPhase = "idle" | "checking" | "confirming" | "downloading";
+
 interface PageSlice {
   ready: boolean;
   metaRev: number;
   newBuild: boolean;
   hasVideo: boolean;
-  downloading: boolean;
+  videoDownload: VideoDownloadPhase;
   loading: string;
   error: string | null;
   status: string;
@@ -112,7 +114,7 @@ export const studio = createStore<StudioState>(() => ({
   metaRev: 0,
   newBuild: false,
   hasVideo: false,
-  downloading: false,
+  videoDownload: "idle",
   loading: "Loading 3D engine…",
   error: null,
   status: "",

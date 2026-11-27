@@ -958,15 +958,20 @@ const boxAt = (e: PointerEvent) => {
 export const attachTimeline = () => {
   const { ruler, detail } = S.el,
     scroller = detail.closest<HTMLElement>("[data-tracks-scroll]");
+  type ScrubGesture =
+    | { kind: "idle" }
+    | { kind: "captured" }
+    | { kind: "touch_press"; x: number; y: number }
+    | { kind: "scrubbing" };
   const scrub = (
     c: HTMLElement,
     toTime: (e: PointerEvent) => number,
     grab: (e: PointerEvent) => boolean = () => true,
     active: (e: PointerEvent) => boolean = () => true,
   ) => {
-    let press: { x: number; y: number } | null = null;
-    let own = false;
+    let gesture: ScrubGesture = { kind: "idle" };
     const start = (e: PointerEvent) => {
+      gesture = { kind: "scrubbing" };
       S.dragging = { resume: S.playing };
       if (S.playing) setPlaying(false);
       frozenCentre = viewCentre();
@@ -975,17 +980,17 @@ export const attachTimeline = () => {
     };
     const down = (e: PointerEvent) => {
       if (e.button !== 0 || !active(e)) return;
-      own = true;
       c.setPointerCapture(e.pointerId);
       if (grab(e)) start(e);
-      else if (e.pointerType === "touch") press = { x: e.clientX, y: e.clientY };
+      else if (e.pointerType === "touch")
+        gesture = { kind: "touch_press", x: e.clientX, y: e.clientY };
+      else gesture = { kind: "captured" };
     };
     const up = (e: PointerEvent) => {
-      if (!own) return;
-      own = false;
-      const tapped = press !== null && e.type === "pointerup";
-      press = null;
-      if (tapped && !S.dragging) {
+      const prev = gesture;
+      if (prev.kind === "idle") return;
+      gesture = { kind: "idle" };
+      if (prev.kind === "touch_press" && e.type === "pointerup" && !S.dragging) {
         seek(Math.max(0, Math.min(DURATION, toTime(e))));
         return;
       }
@@ -997,13 +1002,15 @@ export const attachTimeline = () => {
       if (r) setPlaying(true);
     };
     const move = (e: PointerEvent) => {
-      if (own) {
-        if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) >= 4) {
-          press = null;
+      if (gesture.kind !== "idle") {
+        if (
+          gesture.kind === "touch_press" &&
+          Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) >= 4
+        ) {
           start(e);
           return;
         }
-        if (!S.dragging) return;
+        if (gesture.kind !== "scrubbing" || !S.dragging) return;
         if (!(e.buttons & 1)) up(e);
         else {
           seek(toTime(e));
@@ -1019,15 +1026,14 @@ export const attachTimeline = () => {
     for (const t of ["pointerup", "pointercancel", "lostpointercapture"] as const)
       c.addEventListener(t, up);
   };
-  let onThing = false;
-  let onThingAdd = false;
+  type DetailPress = { kind: "idle" } | { kind: "empty" } | { kind: "thing"; add: boolean };
+  let detailPress: DetailPress = { kind: "idle" };
   detail.addEventListener("pointerdown", (e) => {
     if (e.button !== 0) return;
     invalidateRects();
     const b = boxAt(e);
     const add = e.shiftKey || e.ctrlKey || e.metaKey;
-    onThing = !!b;
-    onThingAdd = add;
+    detailPress = b ? { kind: "thing", add } : { kind: "empty" };
     selected =
       b?.type === "beat"
         ? { type: "beat", id: b.id }
@@ -1043,12 +1049,11 @@ export const attachTimeline = () => {
   for (const t of ["pointerup", "pointercancel", "lostpointercapture"])
     detail.addEventListener(t, (e) => {
       const ev = e as PointerEvent;
-      const wasThing = onThing;
-      const wasAdd = onThingAdd;
-      onThing = false;
-      onThingAdd = false;
+      const prev = detailPress;
+      detailPress = { kind: "idle" };
+      const wasThing = prev.kind === "thing";
       const boxed = boxEnd(wasThing ? undefined : ev);
-      if (wasThing && !wasAdd && !boxed && ev.type === "pointerup" && !isSelectionModifier(ev))
+      if (wasThing && !prev.add && !boxed && ev.type === "pointerup" && !isSelectionModifier(ev))
         boxPick.seek(ev.clientX);
     });
   boxPick.seek = (x) => {

@@ -176,7 +176,7 @@ export function VoicePlaygroundComposer({
     draft.outputFormat && !OUTPUT_FORMAT_ITEMS.some(({ value }) => value === draft.outputFormat)
       ? [...OUTPUT_FORMAT_ITEMS, { value: draft.outputFormat, label: draft.outputFormat }]
       : OUTPUT_FORMAT_ITEMS;
-  const serviceCatalog = direct ? pg.serviceCatalogs?.[connection] : undefined;
+  const serviceCatalog = direct ? pg.serviceCatalogs?.[connection]?.catalog : undefined;
   const catalog = serviceCatalog ?? pg.catalog;
   const connected = direct
     ? Boolean(status.connections?.[connection]?.configured)
@@ -185,15 +185,25 @@ export function VoicePlaygroundComposer({
     if (connection !== "genvoice") void loadSpeechCatalog(connection);
   }, [connection]);
   const modePresentation = PLAYGROUND_MODE_PRESENTATION[draft.mode];
+  type ReviewFlow =
+    | { status: "idle" }
+    | { status: "checking-quote"; viaKeyboard: boolean; reqId: number }
+    | { status: "quote-error"; message: string }
+    | { status: "confirm-speech"; review: SpeechReview; viaKeyboard: boolean }
+    | { status: "confirm-paid"; viaKeyboard: boolean };
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const generateRef = useRef<HTMLButtonElement>(null);
-  const reviewing = useRef(false);
-  const [keyboardReview, setKeyboardReview] = useState(false);
+  const quoteReqRef = useRef(0);
   const [keyboardFee, setKeyboardFee] = useState(false);
-  const [speechReview, setSpeechReview] = useState<SpeechReview | null>(null);
-  const [reviewPaidAction, setReviewPaidAction] = useState(false);
-  const [checkingQuote, setCheckingQuote] = useState(false);
-  const [quoteError, setQuoteError] = useState("");
+  const [reviewFlow, setReviewFlow] = useState<ReviewFlow>({ status: "idle" });
+  const reviewFlowRef = useRef<ReviewFlow>(reviewFlow);
+  const setFlow = (next: ReviewFlow) => {
+    reviewFlowRef.current = next;
+    setReviewFlow(next);
+  };
+  const checkingQuote = reviewFlow.status === "checking-quote";
+  const quoteError = reviewFlow.status === "quote-error" ? reviewFlow.message : "";
   const playing = useSyncExternalStore(subscribeAudition, listening, listening);
   const sample = draft.voicePreviewUrl
     ? {
@@ -480,31 +490,34 @@ export function VoicePlaygroundComposer({
   ]);
 
   const handleGenerate = (viaKeyboard = true) => {
-    if (!canSubmitGeneration || reviewPaidAction) return;
-    setKeyboardReview(viaKeyboard);
+    const current = reviewFlowRef.current;
+    if (!canSubmitGeneration || current.status === "confirm-paid") return;
     if (genVoiceSpeech) {
-      if (reviewing.current || speechReview) return;
-      reviewing.current = true;
-      setCheckingQuote(true);
-      setQuoteError("");
+      if (current.status === "checking-quote" || current.status === "confirm-speech") return;
+      const reqId = ++quoteReqRef.current;
+      setFlow({ status: "checking-quote", viaKeyboard, reqId });
       void reviewGenVoiceSpeech([])
-        .then(setSpeechReview)
-        .catch((error: unknown) =>
-          setQuoteError(
-            error instanceof TypeError
-              ? "Couldn't get the estimate. Reconnect to Studio, then select Generate speech again."
-              : error instanceof Error
-                ? error.message
-                : "Couldn't get the estimate. Select Generate speech to retry.",
-          ),
-        )
-        .finally(() => {
-          reviewing.current = false;
-          setCheckingQuote(false);
+        .then((review) => {
+          const cur = reviewFlowRef.current;
+          if (cur.status !== "checking-quote" || cur.reqId !== reqId) return;
+          setFlow({ status: "confirm-speech", review, viaKeyboard });
+        })
+        .catch((error: unknown) => {
+          const cur = reviewFlowRef.current;
+          if (cur.status !== "checking-quote" || cur.reqId !== reqId) return;
+          setFlow({
+            status: "quote-error",
+            message:
+              error instanceof TypeError
+                ? "Couldn't get the estimate. Reconnect to Studio, then select Generate speech again."
+                : error instanceof Error
+                  ? error.message
+                  : "Couldn't get the estimate. Select Generate speech to retry.",
+          });
         });
       return;
     }
-    setReviewPaidAction(true);
+    setFlow({ status: "confirm-paid", viaKeyboard });
   };
 
   const confirmPaidAction = () => {
@@ -1795,7 +1808,7 @@ export function VoicePlaygroundComposer({
           </div>
         </div>
       )}
-      {reviewPaidAction && (
+      {reviewFlow.status === "confirm-paid" && (
         <VoicePaidActionConfirmation
           description={voiceBillingNotice(connection)}
           action={
@@ -1806,19 +1819,19 @@ export function VoicePlaygroundComposer({
                 : "Generate speech"
           }
           returnFocus={generateRef}
-          motion={keyboardReview ? "none" : "default"}
+          motion={reviewFlow.viaKeyboard ? "none" : "default"}
           onConfirm={confirmPaidAction}
-          onClose={() => setReviewPaidAction(false)}
+          onClose={() => setFlow({ status: "idle" })}
         />
       )}
-      {speechReview && (
+      {reviewFlow.status === "confirm-speech" && (
         <VoiceSpeechConfirmation
-          review={speechReview}
+          review={reviewFlow.review}
           models={pg.catalog.models}
-          motion={keyboardReview ? "none" : "default"}
+          motion={reviewFlow.viaKeyboard ? "none" : "default"}
           returnFocus={generateRef}
-          onConfirm={() => launchReviewedSpeech(speechReview)}
-          onClose={() => setSpeechReview(null)}
+          onConfirm={() => launchReviewedSpeech(reviewFlow.review)}
+          onClose={() => setFlow({ status: "idle" })}
         />
       )}
     </div>

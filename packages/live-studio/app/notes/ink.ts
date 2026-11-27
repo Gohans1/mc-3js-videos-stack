@@ -58,7 +58,7 @@ export const clearInk = () => {
 };
 let resetActiveInk = () => {};
 export const setInk = (tool: InkKind | null) => {
-  if (tool && get().compareVideoMode && (!activeCompareVideo() || get().compareVideoError)) {
+  if (tool && get().compareVideoMode && (!activeCompareVideo() || get().compareVideo.status === "error")) {
     say("Load a compare video or switch to Live 3D (V) before drawing", 3500);
     return;
   }
@@ -273,7 +273,8 @@ let inked = false;
 export const drawInk = (saved: () => { n: Note; span: [number, number] | null }[]) => {
   const c = S.el?.ink;
   if (!c) return;
-  const { compose, draft, rate, compareVideoMode, compareVideoPath } = get();
+  const { compose, draft, rate, compareVideoMode, compareVideo } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const source = activeCompareNoteSource();
   const raw = S.tools?.free.on ? [] : saved();
   let here: { n: Note; marks: Mark[]; fade: number }[] | null = null;
@@ -442,17 +443,10 @@ const at = (e: PointerEvent): [number, number] => {
   return [+Math.min(1, Math.max(0, x)).toFixed(4), +Math.min(1, Math.max(0, y)).toFixed(4)];
 };
 const canDrawInCurrentSpace = () => {
-  const {
-    compareVideoMode,
-    compareVideoPath,
-    compareVideoError,
-    compose,
-    draft,
-    refs,
-    noteSaving,
-  } = get();
+  const { compareVideoMode, compareVideo, compose, draft, refs, noteSaving } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   if (noteSaving) return false;
-  if (compareVideoMode && (!activeCompareVideo() || Boolean(compareVideoError))) return false;
+  if (compareVideoMode && (!activeCompareVideo() || compareVideo.status === "error")) return false;
   if (!checkCompareFeedbackRange()) return false;
   if (compose?.kind === "edit") {
     ui.focusNote();
@@ -479,7 +473,8 @@ const startStroke = (
   hooks.pause();
   set({ inkDrawing: true });
   hooks.begin(origin, { x: p[0], y: p[1] });
-  const { compareVideoMode, compareVideoPath } = get();
+  const { compareVideoMode, compareVideo } = get();
+  const compareVideoPath = compareVideo.status === "none" ? null : compareVideo.path;
   const mark: Mark = { kind, t: +S.t.toFixed(3), pts: kind === "pen" ? [p] : [p, p] };
   live = { mark, smart, compareVideoMode, compareVideoPath };
   inkMarks.push(mark);
@@ -504,9 +499,10 @@ const endStroke = () => {
   if (!active) return;
   const { mark: m, smart } = active;
   const now = get();
+  const nowPath = now.compareVideo.status === "none" ? null : now.compareVideo.path;
   const spaceChanged =
     now.compareVideoMode !== active.compareVideoMode ||
-    (active.compareVideoMode && now.compareVideoPath !== active.compareVideoPath);
+    (active.compareVideoMode && nowPath !== active.compareVideoPath);
   const r = S.el.ink.getBoundingClientRect(),
     [a, b] = [m.pts[0], m.pts.at(-1)!];
   const big =
@@ -558,28 +554,35 @@ export const sketch = {
   drop: dropStroke,
   on: () => !!live?.smart,
 };
+type PathPressSpace = { compareVideoMode: boolean; compareVideoPath: string | null };
+type AttachedInkState =
+  | { kind: "idle" }
+  | { kind: "pass"; pointerId: number }
+  | { kind: "path"; gesture: Extract<InkGesture, { kind: "path_press" }>; space: PathPressSpace }
+  | { kind: "drawing"; gesture: Exclude<InkGesture, { kind: "idle" | "path_press" }> };
+
+const inkGestureOf = (state: AttachedInkState): InkGesture =>
+  state.kind === "path" || state.kind === "drawing" ? state.gesture : IDLE_INK_GESTURE;
+
 export const attachInk = (opts: typeof hooks) => {
   const c = S.el.ink;
   hooks = opts;
-  let gesture: InkGesture = IDLE_INK_GESTURE;
-  let passPointerId: number | null = null;
-  let pathPressSpace: { compareVideoMode: boolean; compareVideoPath: string | null } | null = null;
+  let state: AttachedInkState = { kind: "idle" };
   const forwardToCanvas = (e: PointerEvent) => {
     try {
       S.el.canvas?.dispatchEvent(new PointerEvent(e.type, e));
     } catch {}
   };
   resetActiveInk = () => {
-    pathPressSpace = null;
-    const res = stepInk(gesture, { type: "reset" });
-    gesture = res.gesture;
+    const res = stepInk(inkGestureOf(state), { type: "reset" });
+    state = { kind: "idle" };
     if (res.effect === "drop") dropStroke();
   };
   c.addEventListener("contextmenu", (e) => e.preventDefault());
   c.addEventListener("pointerdown", (e) => {
     const tool = get().ink;
-    const prev = gesture;
-    const res = stepInk(gesture, {
+    const prevGesture = inkGestureOf(state);
+    const res = stepInk(prevGesture, {
       type: "down",
       id: e.pointerId,
       button: e.button,
@@ -589,64 +592,87 @@ export const attachInk = (opts: typeof hooks) => {
       x: e.clientX,
       y: e.clientY,
     });
-    if (res.gesture === prev) {
-      if (prev.kind === "idle" && e.pointerType === "mouse" && e.button !== 2) {
-        passPointerId = e.pointerId;
+    if (res.gesture === prevGesture) {
+      if (state.kind === "idle" && e.pointerType === "mouse" && e.button !== 2) {
+        state = { kind: "pass", pointerId: e.pointerId };
         forwardToCanvas(e);
       }
       return;
     }
     if (!canDrawInCurrentSpace()) return;
-    passPointerId = null;
     e.preventDefault();
     try {
       c.setPointerCapture(e.pointerId);
     } catch {}
-    gesture = res.gesture;
-    if (res.effect === "start_path") {
+    if (res.gesture.kind === "path_press") {
       const p = at(e);
       hooks.pause();
       hooks.begin(pointerOrigin(e), { x: p[0], y: p[1] });
-      const { compareVideoMode, compareVideoPath } = get();
-      pathPressSpace = { compareVideoMode, compareVideoPath };
-    } else if (res.effect === "start_stroke" && tool && tool !== "path")
-      startStroke(tool, at(e), false, pointerOrigin(e));
+      const { compareVideoMode, compareVideo } = get();
+      state = {
+        kind: "path",
+        gesture: res.gesture,
+        space: {
+          compareVideoMode,
+          compareVideoPath: compareVideo.status === "none" ? null : compareVideo.path,
+        },
+      };
+    } else if (res.gesture.kind !== "idle") {
+      state = { kind: "drawing", gesture: res.gesture };
+      if (res.effect === "start_stroke" && tool && tool !== "path")
+        startStroke(tool, at(e), false, pointerOrigin(e));
+    }
   });
   c.addEventListener("pointermove", (e) => {
-    if (e.pointerId === passPointerId) {
-      forwardToCanvas(e);
+    if (state.kind === "pass") {
+      if (e.pointerId === state.pointerId) forwardToCanvas(e);
       return;
     }
-    const res = stepInk(gesture, { type: "move", id: e.pointerId, x: e.clientX, y: e.clientY });
-    gesture = res.gesture;
+    if (state.kind === "idle") return;
+    const res = stepInk(state.gesture, { type: "move", id: e.pointerId, x: e.clientX, y: e.clientY });
+    if (res.gesture.kind === "idle") {
+      state = { kind: "idle" };
+    } else if (res.gesture.kind === "path_press" && state.kind === "path") {
+      state = { kind: "path", gesture: res.gesture, space: state.space };
+    } else if (res.gesture.kind !== "path_press") {
+      state = { kind: "drawing", gesture: res.gesture };
+    }
     if (res.effect === "move_stroke") moveStroke(e);
   });
   const up = (e: PointerEvent) => {
-    if (e.pointerId === passPointerId) {
-      passPointerId = null;
-      forwardToCanvas(e);
+    if (state.kind === "pass") {
+      if (e.pointerId === state.pointerId) {
+        state = { kind: "idle" };
+        forwardToCanvas(e);
+      }
       return;
     }
-    const res = stepInk(gesture, {
+    if (state.kind === "idle") return;
+    const startedSpace = state.kind === "path" ? state.space : null;
+    const res = stepInk(state.gesture, {
       type: "up",
       id: e.pointerId,
       buttons: e.buttons,
       tool: get().ink,
     });
-    gesture = res.gesture;
+    if (res.gesture.kind === "idle") {
+      state = { kind: "idle" };
+    } else if (res.gesture.kind === "path_press" && startedSpace) {
+      state = { kind: "path", gesture: res.gesture, space: startedSpace };
+    } else if (res.gesture.kind !== "path_press") {
+      state = { kind: "drawing", gesture: res.gesture };
+    }
     if (res.effect === "end_stroke") {
       endStroke();
       return;
     }
     if (res.effect === "commit_path") {
-      const startedSpace = pathPressSpace;
-      pathPressSpace = null;
       const now = get();
+      const nowPath = now.compareVideo.status === "none" ? null : now.compareVideo.path;
       const spaceChanged =
         startedSpace !== null &&
         (now.compareVideoMode !== startedSpace.compareVideoMode ||
-          (startedSpace.compareVideoMode &&
-            now.compareVideoPath !== startedSpace.compareVideoPath));
+          (startedSpace.compareVideoMode && nowPath !== startedSpace.compareVideoPath));
       if (spaceChanged || !canDrawInCurrentSpace()) {
         inkHooks.cancelEmpty();
         return;
@@ -681,22 +707,26 @@ export const attachInk = (opts: typeof hooks) => {
     }
   };
   const cancel = (e: PointerEvent) => {
-    if (e.pointerId === passPointerId) {
-      passPointerId = null;
-      forwardToCanvas(e);
+    if (state.kind === "pass") {
+      if (e.pointerId === state.pointerId) {
+        state = { kind: "idle" };
+        forwardToCanvas(e);
+      }
       return;
     }
-    const res = stepInk(gesture, { type: "cancel", id: e.pointerId });
-    gesture = res.gesture;
+    if (state.kind === "idle") return;
+    const res = stepInk(state.gesture, { type: "cancel", id: e.pointerId });
+    if (res.gesture.kind === "idle") state = { kind: "idle" };
     if (res.effect === "drop") dropStroke();
   };
   const dropCapture = (e: PointerEvent) => {
-    const res = stepInk(gesture, { type: "cancel", id: e.pointerId });
-    gesture = res.gesture;
+    if (state.kind !== "path" && state.kind !== "drawing") return;
+    const res = stepInk(state.gesture, { type: "cancel", id: e.pointerId });
+    if (res.gesture.kind === "idle") state = { kind: "idle" };
     if (res.effect === "drop") dropStroke();
   };
   const clearPassOnWindow = (e: PointerEvent) => {
-    if (e.pointerId === passPointerId) passPointerId = null;
+    if (state.kind === "pass" && e.pointerId === state.pointerId) state = { kind: "idle" };
   };
   c.addEventListener("pointerup", up);
   c.addEventListener("pointercancel", cancel);
@@ -704,9 +734,8 @@ export const attachInk = (opts: typeof hooks) => {
   addEventListener("pointerup", clearPassOnWindow);
   addEventListener("pointercancel", clearPassOnWindow);
   addEventListener("blur", () => {
-    passPointerId = null;
-    const res = stepInk(gesture, { type: "blur" });
-    gesture = res.gesture;
+    const res = stepInk(inkGestureOf(state), { type: "blur" });
+    state = { kind: "idle" };
     if (res.effect === "drop") dropStroke();
   });
 };

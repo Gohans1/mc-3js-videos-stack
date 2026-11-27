@@ -22,6 +22,7 @@ export type ViewportGesture<E = unknown> =
       tap: boolean;
       moved: boolean;
     }
+  | { kind: "pan"; id: number; startX: number; startY: number; fromX: number; fromY: number }
   | { kind: "sketching"; id: number; button?: 0 }
   | { kind: "pending_click"; x: number; y: number };
 
@@ -36,6 +37,7 @@ export type ViewportEvent<E = unknown> =
       free: boolean;
       shiftKey: boolean;
       drawOnLeft?: boolean;
+      pan?: { panX: number; panY: number };
       raw?: E;
     }
   | { type: "move"; id: number; x: number; y: number; canWake: boolean }
@@ -98,6 +100,20 @@ export function stepViewport<E>(
             event: event.raw,
           },
           dropSketch: false,
+        };
+      }
+      if (event.button === 1 && event.pan) {
+        return {
+          gesture: {
+            kind: "pan",
+            id: event.id,
+            startX: event.x,
+            startY: event.y,
+            fromX: event.pan.panX,
+            fromY: event.pan.panY,
+          },
+          dropSketch: false,
+          capture: true,
         };
       }
       if (event.button === 1 && event.free) {
@@ -190,7 +206,10 @@ export function stepViewport<E>(
         (event.buttons & 1) !== 0
       )
         return { gesture, dropSketch: false, armClickAt: null };
-      if (gesture.kind === "cam_drag" && gesture.mode === "slide" && (event.buttons & 4) !== 0)
+      if (
+        ((gesture.kind === "cam_drag" && gesture.mode === "slide") || gesture.kind === "pan") &&
+        (event.buttons & 4) !== 0
+      )
         return { gesture, dropSketch: false, armClickAt: null };
       if (
         gesture.kind === "tap_press" &&

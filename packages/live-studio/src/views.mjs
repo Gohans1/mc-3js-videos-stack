@@ -14,12 +14,12 @@ const validateEntry = (name, cam, seen, label) => {
     throw new Error(`duplicate view name ${JSON.stringify(name)}`);
   }
   seen.add(key);
-  if (!Array.isArray(cam) || cam.length !== 7) {
+  if (!Array.isArray(cam) || (cam.length !== 7 && cam.length !== 8)) {
     throw new Error(
-      `view ${JSON.stringify(name)} takes 7 numbers px,py,pz,lx,ly,lz,fov, got ${Array.isArray(cam) ? cam.length : typeof cam}`,
+      `view ${JSON.stringify(name)} takes 7 or 8 numbers px,py,pz,lx,ly,lz,fov[,roll], got ${Array.isArray(cam) ? cam.length : typeof cam}`,
     );
   }
-  for (let i = 0; i < 7; i++) {
+  for (let i = 0; i < cam.length; i++) {
     if (typeof cam[i] !== "number" || !Number.isFinite(cam[i])) {
       throw new Error(
         `view ${JSON.stringify(name)} item ${i + 1} must be a finite number, got ${JSON.stringify(cam[i])}`,
@@ -34,14 +34,13 @@ const validateEntry = (name, cam, seen, label) => {
   return { name, cam: cam.slice() };
 };
 
-export function parseViews(raw, projectDir = process.cwd()) {
+const parseOneSpec = (raw, projectDir, seen) => {
   const text = String(raw ?? "").trim();
   if (!text) {
     throw new Error(
       'empty spec; use --views "name:px,py,pz,lx,ly,lz,fov;..." or --views "@path/to/views.json"',
     );
   }
-  const seen = new Set();
   if (text.startsWith("@")) {
     const fileSpec = text.slice(1).trim();
     if (!fileSpec) {
@@ -101,4 +100,15 @@ export function parseViews(raw, projectDir = process.cwd()) {
       });
     return validateEntry(name, coords, seen, `item ${idx + 1}`);
   });
+};
+
+export function parseViews(raw, projectDir = process.cwd()) {
+  const seen = new Set();
+  const specs = Array.isArray(raw) ? raw : [raw];
+  if (!specs.length) {
+    throw new Error(
+      'empty spec; use --views "name:px,py,pz,lx,ly,lz,fov;..." or --views "@path/to/views.json"',
+    );
+  }
+  return specs.flatMap((spec) => parseOneSpec(spec, projectDir, seen));
 }

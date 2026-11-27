@@ -12,7 +12,7 @@ import { saveOpenFilm, useOpenFilm } from "./state";
 
 export function OpenFilmTrack() {
   const doc = useOpenFilm((s) => s.doc),
-    selected = useOpenFilm((s) => s.selected);
+    selected = useOpenFilm((s) => (s.selection.kind === "none" ? null : s.selection.id));
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const c = canvas.current;
@@ -113,7 +113,7 @@ export function OpenFilmTrack() {
       void saveOpenFilm(draft)
         .then(() => {
           set({ lib: "openfilm", side: "openfilm" });
-          useOpenFilm.setState({ selected: id, element: null });
+          useOpenFilm.setState({ selection: { kind: "item", id } });
         })
         .catch((e) => say(e.message));
     };

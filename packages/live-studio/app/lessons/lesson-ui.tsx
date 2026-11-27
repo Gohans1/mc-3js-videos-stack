@@ -89,8 +89,8 @@ export function ConfirmDeleteButton({
 export async function removeLessonWithUndo(key: string, onBeforeRemove?: () => void) {
   const { scope, path } = parseLessonKey(key);
   const res = await deleteLesson(key, onBeforeRemove);
-  if (!res.removed) {
-    if (res.conflict || res.missing) return;
+  if (res.kind !== "removed") {
+    if (res.kind === "conflict" || res.kind === "missing") return;
     toast.add({
       title: "Could not delete lesson",
       description: "Check the Studio connection and try deleting again.",

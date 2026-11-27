@@ -127,10 +127,16 @@ export function Stage({ bind, phone = false }: { bind: Bind; phone?: boolean }) 
   const ink = useStudio((s) => s.ink),
     free = useStudio((s) => s.free);
   const compareVideoMode = useStudio((s) => s.compareVideoMode);
-  const compareVideos = useStudio((s) => s.compareVideos);
-  const compareVideoPath = useStudio((s) => s.compareVideoPath);
-  const preferredReference = useStudio((s) => s.compareCanBuild.ref);
-  const compareVideoMeta = useStudio((s) => s.compareVideoMeta);
+  const compareVideos = useStudio((s) => s.compareCatalog.videos);
+  const compareVideoPath = useStudio((s) =>
+    s.compareVideo.status === "none" ? null : s.compareVideo.path,
+  );
+  const preferredReference = useStudio((s) => s.compareCatalog.canBuild.ref);
+  const compareVideoMeta = useStudio((s) =>
+    s.compareVideo.status === "loading" || s.compareVideo.status === "ready"
+      ? s.compareVideo.meta
+      : null,
+  );
   const activeCompareItem =
     compareVideoMode && compareVideoPath
       ? (compareVideos.find((v) => v.path === compareVideoPath) ?? null)

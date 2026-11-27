@@ -95,16 +95,24 @@ declare module "film/scene" {
     tint?: boolean;
     defaultTint?: string;
   }
+  export type TitleSource =
+    | unknown[]
+    | {
+        items?: unknown[];
+        preset?: string;
+        defaults?: Record<string, unknown>;
+        tracks?: Record<string, { hidden?: boolean }>;
+      };
   export interface Titles {
     (
-      list: unknown[],
+      list: TitleSource,
       t: number,
       camera?: THREE.Camera,
       tracks?: Record<string, { hidden?: boolean }>,
       timeAt?: (item: unknown) => number,
     ): void;
     boxes(
-      list: unknown[],
+      list: TitleSource,
       t: number,
       camera?: THREE.Camera,
       tracks?: Record<string, { hidden?: boolean }>,
@@ -116,6 +124,7 @@ declare module "film/scene" {
       anchor?: [number, number];
     }[];
     fonts: { id: string; title: string; css: string; tip?: string }[];
+    presets?: readonly { id: string; title: string; tip?: string; style: Record<string, unknown> }[];
     categories?: { text: readonly string[]; shape: readonly string[] };
     eases?: readonly string[];
     shapes?: readonly { id: string; title: string; tip?: string }[];

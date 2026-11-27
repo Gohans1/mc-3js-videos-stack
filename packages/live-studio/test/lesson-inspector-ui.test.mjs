@@ -622,7 +622,7 @@ test("a failed lesson list load offers recovery without claiming there are no le
   await fillNote("Camera framing");
   await waitFor("document.body.textContent.includes('Files: 1')");
   await view.evaluate(
-    "window.inspectTest.lessons.setState({files:[],loaded:false,loadFailed:true,inspectorLiveEnabled:true})",
+    "window.inspectTest.lessons.setState({files:[],loadState:'failed',inspectorLiveEnabled:true})",
   );
   await waitFor("document.body.textContent.includes('Could not load lesson files.')");
   const controls = await view.evaluate(

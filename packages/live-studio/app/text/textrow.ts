@@ -21,6 +21,7 @@ import {
   nameOf,
   pickText,
   preview,
+  resolveItem,
   restore,
   settle,
   snapshot,
@@ -79,8 +80,9 @@ export const drawTextRow = () => {
     g.fill();
     const px = (x1 - x0) / Math.max(1e-3, it.to - it.from),
       span = it.to - it.from;
-    const ai = it.in?.fx ? (it.in.len ?? 0.5) : 0,
-      ao = it.out?.fx ? (it.out.len ?? 0.5) : 0,
+    const res = resolveItem(it);
+    const ai = res.in?.fx ? (res.in.len ?? 0.5) : 0,
+      ao = res.out?.fx ? (res.out.len ?? 0.5) : 0,
       k = ai + ao > span ? span / (ai + ao) : 1;
     g.fillStyle = tone("anim-shade");
     if (ai) g.fillRect(x0, y + CLIP_H - 5, ai * k * px, 5);
@@ -92,7 +94,7 @@ export const drawTextRow = () => {
     const lx = Math.max(x0, 0) + 3,
       mid = y + CLIP_H / 2;
     g.font = `11px ${UI_FONT}`;
-    const glyph = isShape(it) ? shapeGlyph(it.kind) : "T";
+    const glyph = isShape(it) ? shapeGlyph(res.kind ?? "text") : "T";
     const gw = Math.ceil(g.measureText(glyph).width);
     const tw = g.measureText(nameOf(it)).width + gw + 8;
     g.fillStyle = tone(isShape(it) ? "clip-shape-tag" : "clip-text-tag");
@@ -172,6 +174,12 @@ type Drag = {
   magnet: ReturnType<typeof makeSnapper>;
 };
 
+type TextRowGesture =
+  | { kind: "idle" }
+  | { kind: "scrub"; resume: boolean }
+  | { kind: "box"; add: boolean }
+  | ({ kind: "drag" } & Drag);
+
 export const attachTextRow = () => {
   onClipActivity("text", () => {
     drawTextRow();
@@ -184,9 +192,7 @@ export const attachTextRow = () => {
     const r = c.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top, w: r.width };
   };
-  let drag: Drag | null = null,
-    scrub: { resume: boolean } | null = null,
-    box: { add: boolean } | null = null;
+  let gesture: TextRowGesture = { kind: "idle" };
   const playheadGrab = (b: Box | null, x: number, w: number, touch: boolean) =>
     onPlayhead(x, w, touch) && (!b || (x > b.x0 + EDGE && x < b.x1 - EDGE));
 
@@ -208,11 +214,11 @@ export const attachTextRow = () => {
           pickText([]);
           if (w) seek(Math.max(0, Math.min(DURATION, timeAt(x, w))));
         }
-        scrub = { resume: S.playing };
+        gesture = { kind: "scrub", resume: S.playing };
         holdView(true);
         if (S.playing) setPlaying(false);
       } else {
-        box = { add };
+        gesture = { kind: "box", add };
         boxStart(e, add);
       }
       return;
@@ -241,7 +247,8 @@ export const attachTextRow = () => {
     const mode =
       many || !wide ? "move" : x <= b.x0 + edge ? "start" : x >= b.x1 - edge ? "end" : "move";
     const it = items[b.i];
-    drag = {
+    gesture = {
+      kind: "drag",
       i: b.i,
       group,
       mode,
@@ -264,15 +271,15 @@ export const attachTextRow = () => {
   c.addEventListener("pointermove", (e) => {
     const { x, y, w } = local(e),
       perPx = view().v / w;
-    if (scrub) {
+    if (gesture.kind === "scrub") {
       seek(timeAt(x, w));
       return;
     }
-    if (box) {
+    if (gesture.kind === "box") {
       boxMove(e);
       return;
     }
-    if (!drag) {
+    if (gesture.kind !== "drag") {
       const b = hit(x, y, false),
         edge =
           b &&
@@ -294,6 +301,7 @@ export const attachTextRow = () => {
       }
       return;
     }
+    const drag = gesture;
     if (!drag.moved && Math.abs(x - drag.x) < 3 && Math.abs(y - drag.y) < 6) return;
     if (!drag.moved) drag.copy = e.altKey && drag.mode === "move" && !drag.along;
     drag.moved = true;
@@ -321,23 +329,23 @@ export const attachTextRow = () => {
       }
     }
     preview((f) => {
-      if (drag!.mode === "move") {
-        const moving = (drag!.moving = drag!.copy
+      if (drag.mode === "move") {
+        const moving = (drag.moving = drag.copy
           ? group.map((j) => {
               f.items.push(structuredClone(f.items[j]));
               return f.items.length - 1;
             })
           : group);
         let shift = snapped.time - from;
-        const room = drag!.along?.room ?? [-Infinity, Infinity];
+        const room = drag.along?.room ?? [-Infinity, Infinity];
         shift = Math.max(
           -Math.min(...moving.map((j) => f.items[j].from)),
           room[0],
           Math.min(DURATION - Math.max(...moving.map((j) => f.items[j].to)), room[1], shift),
         );
-        drag!.shift = shift;
+        drag.shift = shift;
         const tracks = moving.map((j) => f.items[j].track ?? 0),
-          dk = Math.max(-Math.min(...tracks), trackAt(y) - trackAt(drag!.y));
+          dk = Math.max(-Math.min(...tracks), trackAt(y) - trackAt(drag.y));
         moving.forEach((j, k) => {
           const it = f.items[j];
           it.from = r3(it.from + shift);
@@ -345,10 +353,10 @@ export const attachTextRow = () => {
           it.track = tracks[k] + dk;
         });
         settle(f.items, moving);
-      } else if (drag!.mode === "end")
+      } else if (drag.mode === "end")
         f.items[i].to = r3(Math.min(DURATION, Math.max(from + 1 / FPS, snapped.time)));
       else f.items[i].from = r3(Math.max(0, Math.min(to - 1 / FPS, snapped.time)));
-      if (drag!.mode !== "move") settle(f.items, [i]);
+      if (drag.mode !== "move") settle(f.items, [i]);
     });
     if (drag.mode === "move") drag.along?.preview(drag.shift);
     const others = drag.mode === "move" ? group.length - 1 + (drag.along?.count ?? 0) : 0,
@@ -372,22 +380,20 @@ export const attachTextRow = () => {
   });
 
   const up = (e: PointerEvent) => {
-    if (scrub) {
-      const r = scrub.resume;
-      scrub = null;
+    const active = gesture;
+    gesture = { kind: "idle" };
+    if (active.kind === "scrub") {
       holdView(false);
-      if (r) setPlaying(true);
+      if (active.resume) setPlaying(true);
       return;
     }
-    if (box) {
-      box = null;
+    if (active.kind === "box") {
       boxEnd(e);
       return;
     }
-    if (!drag) return;
+    if (active.kind !== "drag") return;
     snapLine(null);
-    const { snap, moved, alone, i, copy, moving, along, shift } = drag;
-    drag = null;
+    const { snap, moved, alone, i, copy, moving, along, shift } = active;
     c.style.cursor = "";
     if (!moved) {
       if (e.type === "pointerup") {
@@ -413,7 +419,7 @@ export const attachTextRow = () => {
   c.addEventListener("pointercancel", up);
   c.addEventListener("lostpointercapture", up);
   c.addEventListener("pointerleave", () => {
-    if (hover >= 0 && !drag) {
+    if (hover >= 0 && gesture.kind !== "drag") {
       hover = -1;
       drawTextRow();
     }

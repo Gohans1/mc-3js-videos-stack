@@ -33,27 +33,24 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     deps.clearInterval ??
     ((handle) => globalThis.clearInterval(handle as ReturnType<typeof setInterval>));
 
-  let target = "";
-  let playing = false;
+  type AuditionSession =
+    | { kind: "idle" }
+    | {
+        kind: "element";
+        seq: number;
+        id: string;
+        url: string;
+        playing: boolean;
+        range?: { from: number; to: number };
+        onError?: () => void;
+      }
+    | { kind: "external"; id: string; source: ExternalAuditionSource; playing: boolean }
+    | { kind: "native"; media: Pick<AuditionAudioLike, "pause"> };
+
+  let session: AuditionSession = { kind: "idle" };
   let auditionRev = 0;
   let auditionSeq = 0;
-  let audioOwnedSeq = 0;
-  let loadedUrl = "";
   let auditionTick: unknown = null;
-  let activeRange: { from: number; to: number } | undefined;
-  let onAuditionError: (() => void) | undefined;
-  let nativeMedia: Pick<AuditionAudioLike, "pause"> | null = null;
-  let external: ExternalAuditionSource | null = null;
-  const stopNative = () => {
-    const previous = nativeMedia;
-    nativeMedia = null;
-    previous?.pause();
-  };
-  const stopExternal = () => {
-    const previous = external;
-    external = null;
-    previous?.stop();
-  };
   const auditionSubs = new Set<() => void>();
 
   const notifyAudition = () => {
@@ -72,27 +69,40 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     stopAuditionTick();
     auditionTick = setTimer(updateProgress, 80);
   };
+
+  const teardownNonElement = () => {
+    if (session.kind === "native") {
+      const media = session.media;
+      session = { kind: "idle" };
+      media.pause();
+    } else if (session.kind === "external") {
+      const source = session.source;
+      session = { kind: "idle" };
+      source.stop();
+    }
+  };
+
   const updateProgress = () => {
-    if (!external && activeRange && !audio.paused && audio.currentTime >= activeRange.to) {
+    if (
+      session.kind === "element" &&
+      session.range &&
+      !audio.paused &&
+      audio.currentTime >= session.range.to
+    ) {
       audio.pause();
-      audio.currentTime = activeRange.to;
+      audio.currentTime = session.range.to;
     }
     notifyAudition();
   };
 
   const clearBrokenAudition = (seq: number) => {
-    if (external || seq !== auditionSeq || !target) return;
-    audioOwnedSeq = 0;
-    loadedUrl = "";
+    if (session.kind !== "element" || session.seq !== seq) return;
+    const reportError = session.onError;
+    session = { kind: "idle" };
     stopAuditionTick();
-    playing = false;
-    target = "";
-    activeRange = undefined;
     audio.pause();
     notifyAudition();
     deps.onSoundBump();
-    const reportError = onAuditionError;
-    onAuditionError = undefined;
     if (reportError) reportError();
     else deps.onPlayError("Could not play preview audio");
   };
@@ -103,29 +113,34 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     range?: { from: number; to: number },
     onError?: () => void,
   ) => {
-    stopNative();
-    const hadExternal = external !== null;
-    stopExternal();
-    if (!hadExternal && target === id && !audio.paused) {
+    teardownNonElement();
+    if (session.kind === "element" && session.id === id && !audio.paused) {
       auditionSeq++;
-      audioOwnedSeq = 0;
       stopAuditionTick();
-      playing = false;
+      session = { ...session, seq: 0, playing: false };
       audio.pause();
       notifyAudition();
       deps.onSoundBump();
       return;
     }
     const seq = ++auditionSeq;
-    audioOwnedSeq = seq;
     const resuming =
-      !hadExternal && target === id && audio.paused && loadedUrl === url && Boolean(audio.src);
-    target = id;
-    activeRange = range;
-    onAuditionError = onError;
+      session.kind === "element" &&
+      session.id === id &&
+      audio.paused &&
+      session.url === url &&
+      Boolean(audio.src);
+    session = {
+      kind: "element",
+      seq,
+      id,
+      url,
+      playing: false,
+      range,
+      onError,
+    };
     if (!resuming) {
       audio.src = url;
-      loadedUrl = url;
     }
     try {
       if (range && (!resuming || audio.currentTime < range.from || audio.currentTime >= range.to)) {
@@ -148,76 +163,73 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   };
 
   const listen = (name: string) => {
-    if (external && external.id === name) {
-      external.toggle();
+    if (session.kind === "external" && session.id === name) {
+      session.source.toggle();
       return;
     }
     listenUrl(name, `/api/sfx/${encodeURIComponent(name)}.wav`);
   };
-  const listening = () =>
-    external ? (external.isPlaying() ? target : "") : playing && !audio.paused ? target : "";
-  const auditionTarget = () => target;
+  const listening = () => {
+    if (session.kind === "external") return session.source.isPlaying() ? session.id : "";
+    if (session.kind === "element") return session.playing && !audio.paused ? session.id : "";
+    return "";
+  };
+  const auditionTarget = () =>
+    session.kind === "element" || session.kind === "external" ? session.id : "";
 
   const attachExternalAudition = (src: ExternalAuditionSource) => {
-    stopNative();
-    if (external && external !== src) external.stop();
+    if (session.kind === "native") {
+      const media = session.media;
+      session = { kind: "idle" };
+      media.pause();
+    } else if (session.kind === "external" && session.source !== src) {
+      const prev = session.source;
+      session = { kind: "idle" };
+      prev.stop();
+    }
     auditionSeq++;
-    audioOwnedSeq = 0;
-    loadedUrl = "";
     if (!audio.paused) audio.pause();
     try {
       audio.currentTime = 0;
     } catch {}
-    activeRange = undefined;
-    onAuditionError = undefined;
-    external = src;
-    target = src.id;
-    playing = src.isPlaying();
-    if (playing) startAuditionTick();
+    const isPlaying = src.isPlaying();
+    session = { kind: "external", id: src.id, source: src, playing: isPlaying };
+    if (isPlaying) startAuditionTick();
     else stopAuditionTick();
     notifyAudition();
     deps.onSoundBump();
   };
 
   const releaseExternalAudition = (src: ExternalAuditionSource, keepTarget = false) => {
-    if (external !== src) return;
+    if (session.kind !== "external" || session.source !== src) return;
     stopAuditionTick();
-    playing = false;
-    if (!keepTarget) {
-      external = null;
-      target = "";
-    }
+    session = keepTarget ? { ...session, playing: false } : { kind: "idle" };
     notifyAudition();
     deps.onSoundBump();
   };
 
   const stopAudition = () => {
-    stopNative();
-    const hadExternal = external !== null;
-    stopExternal();
-    if (!target && audio.paused && !hadExternal) return;
+    const prev = session;
+    teardownNonElement();
+    if (prev.kind === "idle" && audio.paused) return;
+    if (prev.kind === "native" && audio.paused) return;
     auditionSeq++;
-    audioOwnedSeq = 0;
-    loadedUrl = "";
     stopAuditionTick();
-    playing = false;
-    target = "";
-    activeRange = undefined;
+    session = { kind: "idle" };
     audio.pause();
     try {
       audio.currentTime = 0;
     } catch {}
-    onAuditionError = undefined;
     notifyAudition();
     deps.onSoundBump();
   };
   const playNativeAudition = (media: Pick<AuditionAudioLike, "pause">) => {
-    if (nativeMedia === media) return;
+    if (session.kind === "native" && session.media === media) return;
     stopAudition();
-    nativeMedia = media;
+    session = { kind: "native", media };
   };
   const releaseNativeAudition = (media: Pick<AuditionAudioLike, "pause">) => {
-    if (nativeMedia === media) nativeMedia = null;
+    if (session.kind === "native" && session.media === media) session = { kind: "idle" };
     media.pause();
   };
 
@@ -231,13 +243,15 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   const auditionSnapshot = () => auditionRev;
 
   const auditionProgress = (fallbackSeconds: number) => {
-    if (external) {
+    if (session.kind === "external") {
       const extDur =
-        Number.isFinite(external.duration) && external.duration > 0 ? external.duration : 0;
+        Number.isFinite(session.source.duration) && session.source.duration > 0
+          ? session.source.duration
+          : 0;
       const known = extDur > 0 || fallbackSeconds > 0;
       if (!known) return { at: 0, duration: 1, known: false };
       const duration = extDur > 0 ? extDur : fallbackSeconds;
-      const rawAt = external.currentTime();
+      const rawAt = session.source.currentTime();
       const at = Number.isFinite(rawAt)
         ? Math.min(Math.max(0.01, duration), Math.max(0, rawAt))
         : 0;
@@ -254,13 +268,13 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   };
 
   const seekAudition = (id: string, toSeconds: number, fallbackSeconds: number) => {
-    if (target !== id) return;
+    if (auditionTarget() !== id) return;
     const { duration, known } = auditionProgress(fallbackSeconds);
     if (!known) return;
     const maxSeek = Math.max(0, duration - 0.02);
     const clamped = Math.min(maxSeek, Math.max(0, toSeconds));
-    if (external) {
-      external.seek?.(clamped);
+    if (session.kind === "external") {
+      session.source.seek?.(clamped);
       notifyAudition();
       return;
     }
@@ -269,38 +283,38 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
   };
 
   audio.addEventListener("ended", () => {
-    if (external || audioOwnedSeq !== auditionSeq) return;
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
     stopAuditionTick();
-    playing = false;
+    session = { ...session, playing: false };
     audio.currentTime = 0;
     notifyAudition();
     deps.onSoundBump();
   });
   audio.addEventListener("play", () => {
-    if (external || audioOwnedSeq !== auditionSeq || !target) return;
-    playing = true;
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
+    session = { ...session, playing: true };
     startAuditionTick();
     notifyAudition();
     deps.onSoundBump();
   });
   audio.addEventListener("pause", () => {
-    if (external || audioOwnedSeq !== auditionSeq) return;
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
     stopAuditionTick();
-    playing = false;
+    session = { ...session, playing: false };
     notifyAudition();
     deps.onSoundBump();
   });
   audio.addEventListener("error", () => {
-    if (external || audioOwnedSeq !== auditionSeq) return;
-    clearBrokenAudition(audioOwnedSeq);
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
+    clearBrokenAudition(session.seq);
   });
   audio.addEventListener("timeupdate", () => {
-    if (external || audioOwnedSeq !== auditionSeq) return;
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
     updateProgress();
   });
   audio.addEventListener("loadedmetadata", () => {
-    if (external || audioOwnedSeq !== auditionSeq) return;
-    if (activeRange) audio.currentTime = activeRange.from;
+    if (session.kind !== "element" || session.seq !== auditionSeq) return;
+    if (session.range) audio.currentTime = session.range.from;
     notifyAudition();
   });
 
@@ -308,7 +322,10 @@ export const createAuditionController = (deps: AuditionControllerDeps) => {
     listenUrl,
     listen,
     listening,
-    auditionActive: () => Boolean(nativeMedia || external?.isPlaying() || !audio.paused),
+    auditionActive: () =>
+      session.kind === "native" ||
+      (session.kind === "external" && session.source.isPlaying()) ||
+      !audio.paused,
     auditionTarget,
     attachExternalAudition,
     releaseExternalAudition,

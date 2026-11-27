@@ -79,11 +79,26 @@ export async function openDubbingResult(job: DubbingJob) {
   setPlaygroundSubTab("inspect");
 }
 
+type DubbingRowAction =
+  | { kind: "idle"; error: string }
+  | { kind: "confirming"; action: "submit" | "retry" | "delete" }
+  | {
+      kind: "running";
+      action: "refresh" | "submit" | "retry" | "delete" | "link";
+      fromConfirm?: "submit" | "retry" | "delete";
+    };
+
 function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
-  const [operation, setOperation] = useState<string | null>(null),
-    [error, setError] = useState(""),
-    [confirm, setConfirm] = useState<"submit" | "retry" | "delete" | null>(null),
+  const [rowAction, setRowAction] = useState<DubbingRowAction>({ kind: "idle", error: "" }),
     [taskId, setTaskId] = useState("");
+  const operation = rowAction.kind === "running" ? rowAction.action : null;
+  const confirm =
+    rowAction.kind === "confirming"
+      ? rowAction.action
+      : rowAction.kind === "running"
+        ? (rowAction.fromConfirm ?? null)
+        : null;
+  const error = rowAction.kind === "idle" ? rowAction.error : "";
   const active = runningPhases.has(job.phase),
     seconds = Math.max(
       0,
@@ -97,9 +112,12 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
     typeof job.estimatedCredits === "number"
       ? `${job.estimatedCredits.toLocaleString()} credits`
       : "an unknown fee";
-  const act = async (action: "refresh" | "submit" | "retry" | "delete" | "link") => {
-    setOperation(action);
-    setError("");
+  const act = async (
+    action: "refresh" | "submit" | "retry" | "delete" | "link",
+    fromConfirm?: "submit" | "retry" | "delete",
+  ) => {
+    setRowAction({ kind: "running", action, ...(fromConfirm ? { fromConfirm } : {}) });
+    let nextError = "";
     try {
       const result =
         action === "delete"
@@ -114,7 +132,6 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
               action === "link" ? { taskId: taskId.trim() } : undefined,
             );
       acceptDubbingJob(result.job);
-      setConfirm(null);
       await loadDubbingJobs();
       say(
         action === "refresh"
@@ -124,15 +141,13 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
             : "Saved Dubbing updated.",
       );
     } catch (cause) {
-      setError(
+      nextError =
         cause instanceof Error
           ? cause.message
-          : "Unable to update this task. Check status before another paid attempt.",
-      );
-      setConfirm(null);
+          : "Unable to update this task. Check status before another paid attempt.";
       await loadDubbingJobs();
     } finally {
-      setOperation(null);
+      setRowAction({ kind: "idle", error: nextError });
     }
   };
   return (
@@ -236,7 +251,7 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
             size="sm"
             variant="secondary"
             disabled={Boolean(operation)}
-            onClick={() => setConfirm("submit")}
+            onClick={() => setRowAction({ kind: "confirming", action: "submit" })}
           >
             {job.phase === "prepared"
               ? "Submit this quote · paid"
@@ -300,7 +315,7 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
               variant="secondary"
               size="sm"
               disabled={Boolean(operation)}
-              onClick={() => setConfirm("retry")}
+              onClick={() => setRowAction({ kind: "confirming", action: "retry" })}
             >
               <RotateCcw />
               Repeat original Dubbing · paid
@@ -309,7 +324,7 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
               variant="ghost"
               size="sm"
               disabled={Boolean(operation)}
-              onClick={() => setConfirm("delete")}
+              onClick={() => setRowAction({ kind: "confirming", action: "delete" })}
             >
               Delete cloud task…
             </Button>
@@ -333,7 +348,7 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
               size="sm"
               variant={confirm === "delete" ? "destructive" : "default"}
               disabled={Boolean(operation)}
-              onClick={() => void act(confirm)}
+              onClick={() => void act(confirm, confirm)}
             >
               {operation ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
               {confirm === "delete"
@@ -346,7 +361,7 @@ function DubbingJobRow({ job, now }: { job: DubbingJob; now: number }) {
               size="sm"
               variant="secondary"
               disabled={Boolean(operation)}
-              onClick={() => setConfirm(null)}
+              onClick={() => setRowAction({ kind: "idle", error: "" })}
             >
               Cancel
             </Button>

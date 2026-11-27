@@ -1,5 +1,5 @@
 import { Download, Loader2, Pause, Play } from "lucide-react";
-import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { type PointerEvent, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { onEvent } from "../core/events";
 import { DURATION } from "../core/filmMeta";
 import { S } from "../core/state";
-import { get, say, set, useDialogModal, useStudio } from "../core/store";
+import { get, say, set, useDialogModal, useStudio, type VideoDownloadPhase } from "../core/store";
 import { noteMarks } from "../notes/notes";
 import { seek, setPlaying, togglePlay } from "../playback/transport";
 import { skimSound } from "../sound/skim";
@@ -158,15 +158,45 @@ const notifyVideo = (
   videoToastId = toast.add({ title: message, description, type });
 };
 
+type VideoDownloadTimer =
+  | { status: "idle" }
+  | { status: "armed"; timer: ReturnType<typeof setTimeout> };
+
+let videoDownloadTimer: VideoDownloadTimer = { status: "idle" };
+let videoCheckSeq = 0;
+
+const transitionVideoDownload = (
+  next: VideoDownloadPhase,
+  extra?: { hasVideo?: boolean },
+) => {
+  if (videoDownloadTimer.status === "armed") {
+    clearTimeout(videoDownloadTimer.timer);
+    videoDownloadTimer = { status: "idle" };
+  }
+  set({ ...extra, videoDownload: next });
+  if (next === "downloading") {
+    const timer = setTimeout(() => {
+      if (videoDownloadTimer.status !== "armed" || videoDownloadTimer.timer !== timer) return;
+      if (get().videoDownload !== "downloading") {
+        videoDownloadTimer = { status: "idle" };
+        return;
+      }
+      transitionVideoDownload("idle");
+      notifyVideo("Video download timed out — check studio", "warning");
+    }, VIDEO_PREP_TIMEOUT_MS);
+    videoDownloadTimer = { status: "armed", timer };
+  }
+};
+
 onEvent("video-ready", () => {
-  if (!get().downloading) return;
-  set({ downloading: false });
+  if (get().videoDownload !== "downloading") return;
+  transitionVideoDownload("idle");
   notifyVideo("Light video ready", "success");
 });
 
 onEvent("video-failed", () => {
-  if (!get().downloading) return;
-  set({ downloading: false, hasVideo: false });
+  if (get().videoDownload !== "downloading") return;
+  transitionVideoDownload("idle", { hasVideo: false });
   notifyVideo("No rendered video yet — run render clip", "warning");
 });
 
@@ -178,52 +208,50 @@ const triggerVideoDownload = (filename: string) => {
 };
 
 function DownloadVideoButton() {
-  const downloading = useStudio((s) => s.downloading);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const phase = useStudio((s) => s.videoDownload);
+  const confirmOpen = phase === "confirming";
   useDialogModal("phoneDownload", confirmOpen);
   const filename = `${(S.film || "film").replace(/[^\w.-]+/g, "_") || "film"}-540p.mp4`;
-  const busy = downloading || checking;
-
-  useEffect(() => {
-    if (!downloading) return;
-    const timer = setTimeout(() => {
-      if (!get().downloading) return;
-      set({ downloading: false });
-      notifyVideo("Video download timed out — check studio", "warning");
-    }, VIDEO_PREP_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [downloading]);
+  const busy = phase === "checking" || phase === "downloading";
 
   const onDownloadTap = async () => {
-    if (busy) return;
-    setChecking(true);
+    if (get().videoDownload !== "idle") return;
+    const seq = ++videoCheckSeq;
+    transitionVideoDownload("checking");
+    let nextPhase: "idle" | "confirming" = "idle";
+    let nextHasVideo: boolean | undefined;
     try {
       const r = await fetch("/api/film.json", {
         cache: "no-store",
         signal: AbortSignal.timeout(5000),
       }).catch(() => null);
+      if (videoCheckSeq !== seq || get().videoDownload !== "checking") return;
       if (!r?.ok) {
         notifyVideo("Couldn’t check video availability", "error");
         return;
       }
       const meta = (await r.json().catch(() => null)) as { video?: boolean } | null;
+      if (videoCheckSeq !== seq || get().videoDownload !== "checking") return;
       if (!meta?.video) {
-        set({ hasVideo: false });
+        nextHasVideo = false;
         notifyVideo("No rendered video yet — run render clip", "warning");
         return;
       }
-      set({ hasVideo: true });
-      setConfirmOpen(true);
+      nextHasVideo = true;
+      nextPhase = "confirming";
     } finally {
-      setChecking(false);
+      if (videoCheckSeq === seq && get().videoDownload === "checking") {
+        transitionVideoDownload(
+          nextPhase,
+          nextHasVideo === undefined ? undefined : { hasVideo: nextHasVideo },
+        );
+      }
     }
   };
 
   const confirmDownload = () => {
-    setConfirmOpen(false);
-    if (downloading) return;
-    set({ downloading: true });
+    if (get().videoDownload !== "confirming") return;
+    transitionVideoDownload("downloading");
     say(PREPARING_VIDEO_MSG, 0);
     triggerVideoDownload(filename);
   };
@@ -240,7 +268,14 @@ function DownloadVideoButton() {
       >
         {busy ? <Loader2 className="motion-safe:animate-spin" /> : <Download />}
       </Button>
-      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <Dialog
+        open={confirmOpen}
+        onOpenChange={(open) => {
+          if (!open && get().videoDownload === "confirming") {
+            transitionVideoDownload("idle");
+          }
+        }}
+      >
         <DialogContent font="md" className="max-w-[min(22rem,calc(100%-2rem))]">
           <DialogHeader>
             <DialogTitle>Download light video?</DialogTitle>

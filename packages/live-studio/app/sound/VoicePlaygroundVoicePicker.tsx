@@ -121,14 +121,22 @@ export function VoicePlaygroundVoicePicker({
   allowedProviders?: readonly PlaygroundProvider[];
   selectedName: string;
   defaultVoices: readonly PlaygroundVoiceOption[];
-  sharedSearch: {
-    voices: PlaygroundVoiceOption[];
-    hasMore: boolean;
-    loading: boolean;
-    error: string | null;
-    queryKey?: string;
-    params?: Record<string, string | number | undefined>;
-  };
+  sharedSearch:
+    | {
+        status: "idle" | "loading" | "ready";
+        voices: PlaygroundVoiceOption[];
+        hasMore: boolean;
+        queryKey?: string;
+        params?: Record<string, string | number | undefined>;
+      }
+    | {
+        status: "error";
+        error: string;
+        voices: PlaygroundVoiceOption[];
+        hasMore: boolean;
+        queryKey?: string;
+        params?: Record<string, string | number | undefined>;
+      };
   onSearchShared: (params: Record<string, string | number | undefined>) => void;
   onLoadMoreShared?: () => void;
   onSelect: (voice: PickedVoice) => void;
@@ -187,15 +195,17 @@ export function VoicePlaygroundVoicePicker({
     setCatalogLimit(80);
   };
   const languageCatalog = useVoicePlaygroundSelector((state) => state.catalog, false);
-  const serviceCatalog = useVoicePlaygroundSelector(
+  const serviceCatalogState = useVoicePlaygroundSelector(
     (state) => (direct ? state.serviceCatalogs?.[connection] : undefined),
     false,
   );
-  const serviceError = useVoicePlaygroundSelector(
-    (state) => (direct ? state.serviceCatalogErrors?.[connection] : undefined),
-    false,
-  );
-  const waitingForVoices = direct && configured && !serviceCatalog && !serviceError;
+  const serviceError =
+    serviceCatalogState?.status === "error" ? serviceCatalogState.error : undefined;
+  const waitingForVoices =
+    direct &&
+    configured &&
+    (!serviceCatalogState ||
+      (serviceCatalogState.status === "loading" && !serviceCatalogState.catalog));
   const ownedClones = useVoicePlaygroundSelector((state) => state.clones, false);
   const ownOptions = useMemo(
     () => ownedClones?.flatMap((clone) => cloneVoiceOption(clone) ?? []) ?? [],
@@ -474,7 +484,7 @@ export function VoicePlaygroundVoicePicker({
                   setTab(id);
                   if (
                     id === "live" &&
-                    !sharedSearch.loading &&
+                    sharedSearch.status !== "loading" &&
                     (!sharedSearch.voices.length ||
                       (sharedSearch.voices[0]?.connection ?? "genvoice") !== connection ||
                       (sharedSearch.voices[0]?.provider ?? "elevenlabs") !== cloudProvider)
@@ -557,10 +567,10 @@ export function VoicePlaygroundVoicePicker({
             <Button
               type="button"
               size="sm"
-              disabled={!configured || sharedSearch.loading}
+              disabled={!configured || sharedSearch.status === "loading"}
               onClick={() => runCloudQuery()}
             >
-              {sharedSearch.loading ? "…" : "Find"}
+              {sharedSearch.status === "loading" ? "…" : "Find"}
             </Button>
           )}
         </div>
@@ -1059,7 +1069,7 @@ export function VoicePlaygroundVoicePicker({
 
           {tab === "live" && (
             <>
-              {sharedSearch.error && (
+              {sharedSearch.status === "error" && (
                 <p className="text-warn-text px-1.5 text-xs">{sharedSearch.error}</p>
               )}
               {cloudVoices.map((v) => (
@@ -1073,10 +1083,12 @@ export function VoicePlaygroundVoicePicker({
                   onSelect={handlePick}
                 />
               ))}
-              {sharedSearch.loading && !cloudVoices.length && (
+              {sharedSearch.status === "loading" && !cloudVoices.length && (
                 <p className="text-muted-foreground px-1.5 py-3 text-xs">Searching voices…</p>
               )}
-              {!sharedSearch.loading && !cloudVoices.length && !sharedSearch.error && (
+              {sharedSearch.status !== "loading" &&
+                !cloudVoices.length &&
+                sharedSearch.status !== "error" && (
                 <p className="text-muted-foreground px-1.5 py-3 text-xs">
                   {onlyFavorites
                     ? "No saved voices match these filters. Turn off Only favorites to browse this source."
@@ -1096,10 +1108,10 @@ export function VoicePlaygroundVoicePicker({
                   type="button"
                   variant="secondary"
                   size="sm"
-                  disabled={sharedSearch.loading}
+                  disabled={sharedSearch.status === "loading"}
                   onClick={() => onLoadMoreShared()}
                 >
-                  {sharedSearch.loading ? "Loading more…" : "Load more shared voices"}
+                  {sharedSearch.status === "loading" ? "Loading more…" : "Load more shared voices"}
                 </Button>
               )}
             </>

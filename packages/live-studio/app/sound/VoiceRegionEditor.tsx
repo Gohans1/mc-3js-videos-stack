@@ -102,10 +102,19 @@ import { VoicePlaybackIcon } from "./VoicePlaybackIcon";
 type EditorTarget = Omit<NonNullable<VoicePlaygroundClientState["regionEditor"]>, "returnToWorkbench">;
 
 type Operation =
-  | { status: "idle" }
-  | { status: "previewing" }
-  | { status: "submitting" }
-  | { status: "waiting"; jobId: string; input: RegionEditInput; replacementItemId?: string };
+  | { status: "idle"; error: string }
+  | { status: "previewing"; startedAt: number; abort: AbortController }
+  | { status: "submitting"; startedAt: number }
+  | {
+      status: "waiting";
+      startedAt: number | null;
+      jobId: string;
+      input: RegionEditInput;
+      replacementItemId?: string;
+    };
+type WordSelection =
+  | { mode: "word"; lastIndex: number | null }
+  | { mode: "range"; startIndex: number | null };
 type Loaded =
   | { status: "loading" }
   | { status: "error"; message: string }
@@ -114,8 +123,7 @@ type Loaded =
 type SectionDraft = {
   mode: "local" | "regenerate";
   selection: number[];
-  wordMode: "word" | "range";
-  wordAnchor: number | null;
+  wordSelection: WordSelection;
   rate: number;
   pitch: number;
   gainDb: number;
@@ -154,15 +162,16 @@ function RegionEditorBody({
   const [loaded, setLoaded] = useState<Loaded>({ status: "loading" });
   const [operation, setOperation] = useState<Operation>(
     failedJobId && initialEdit
-      ? { status: "waiting", jobId: failedJobId, input: initialEdit }
-      : { status: "idle" },
+      ? { status: "waiting", startedAt: null, jobId: failedJobId, input: initialEdit }
+      : { status: "idle", error: "" },
   );
+  const error = operation.status === "idle" ? operation.error : "";
+  const startedAt = operation.status === "idle" ? null : operation.startedAt;
   const [reviewPhrase, setReviewPhrase] = useState<"default" | "none" | null>(null);
   const [reviewedScript, setReviewedScript] = useState<string | null>(
     reopenedDraft?.reviewedScript ?? null,
   );
   const saveButton = useRef<HTMLButtonElement>(null);
-  const [error, setError] = useState("");
   const [mode, setMode] = useState<"local" | "regenerate">(
     reopenedDraft?.mode ?? initialEdit?.mode ?? "local",
   );
@@ -170,8 +179,9 @@ function RegionEditorBody({
     reopenedDraft?.selection ??
       (initialEdit ? [initialEdit.from, initialEdit.to] : [0, Math.min(item.durationSeconds || 1, 1)]),
   );
-  const [wordMode, setWordMode] = useState<"word" | "range">(reopenedDraft?.wordMode ?? "word");
-  const [wordAnchor, setWordAnchor] = useState<number | null>(reopenedDraft?.wordAnchor ?? null);
+  const [wordSelection, setWordSelection] = useState<WordSelection>(
+    reopenedDraft?.wordSelection ?? { mode: "word", lastIndex: null },
+  );
   const [rate, setRate] = useState(
       reopenedDraft?.rate ?? (initialEdit?.mode === "local" ? (initialEdit.rate ?? 1) : 1),
     ),
@@ -204,7 +214,6 @@ function RegionEditorBody({
     reopenedDraft?.name ??
       `${revisionOf || item.title} · ${revisionOf ? "revised" : "edited"}`.slice(0, 120),
   );
-  const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now);
   const [preview, setPreview] = useState<{
     url: string;
@@ -213,7 +222,7 @@ function RegionEditorBody({
     region: number;
   } | null>(null);
   const previewRef = useRef(preview),
-    abortRef = useRef<AbortController | null>(null);
+    operationRef = useRef(operation);
   const resultRef = useRef<HTMLElement>(null);
   const pg = useVoicePlaygroundSelector((state) => state);
   useSyncExternalStore(subscribeAudition, auditionSnapshot, auditionSnapshot);
@@ -270,11 +279,11 @@ function RegionEditorBody({
       return;
     }
     sectionDrafts.set(draftKey, {
-      mode, selection, wordMode, wordAnchor, rate, pitch, gainDb, pause, replacementText,
+      mode, selection, wordSelection, rate, pitch, gainDb, pause, replacementText,
       fullText, fit, voice, modelId, languageCode, name, reviewedScript,
     });
   }, [
-    draftKey, operation.status, job?.status, mode, selection, wordMode, wordAnchor, rate,
+    draftKey, operation.status, job?.status, mode, selection, wordSelection, rate,
     pitch, gainDb, pause, replacementText, fullText, fit, voice, modelId, languageCode, name,
     reviewedScript,
   ]);
@@ -339,7 +348,7 @@ function RegionEditorBody({
   const regionModels =
     replacementRecipe.connection === "genvoice"
       ? pg.catalog.models
-      : pg.serviceCatalogs?.[replacementRecipe.connection]?.models;
+      : pg.serviceCatalogs?.[replacementRecipe.connection]?.catalog?.models;
   const regionModelName =
     regionModels?.find((model) => model.model_id === replacementRecipe.modelId)?.name ??
     replacementRecipe.modelId;
@@ -382,11 +391,14 @@ function RegionEditorBody({
     previewRef.current = preview;
   }, [preview]);
   useEffect(() => {
+    operationRef.current = operation;
+  }, [operation]);
+  useEffect(() => {
     if (auditionTarget().startsWith("region:preview:")) stopAudition();
   }, [key]);
   useEffect(
     () => () => {
-      abortRef.current?.abort();
+      if (operationRef.current.status === "previewing") operationRef.current.abort.abort();
       if (auditionTarget().startsWith("region:")) stopAudition();
       if (previewRef.current) URL.revokeObjectURL(previewRef.current.url);
     },
@@ -411,14 +423,19 @@ function RegionEditorBody({
   };
   const preparePreview = async (eventTime: number) => {
     if (!valid || busy || mode !== "local") return;
-    setOperation({ status: "previewing" });
-    setStartedAt(performance.timeOrigin + eventTime);
-    setError("");
     const abort = new AbortController();
-    abortRef.current = abort;
+    const previewOp: Operation = {
+      status: "previewing",
+      startedAt: performance.timeOrigin + eventTime,
+      abort,
+    };
+    operationRef.current = previewOp;
+    setOperation(previewOp);
     const timeout = setTimeout(() => abort.abort(), 180000);
+    let nextError = "";
     try {
       const result = await previewRecordingRegion(item, input, abort.signal, editSource);
+      if (abort.signal.aborted) return;
       if (previewRef.current) URL.revokeObjectURL(previewRef.current.url);
       const next = {
         url: URL.createObjectURL(result.blob),
@@ -428,20 +445,19 @@ function RegionEditorBody({
       };
       setPreview(next);
       listenUrl(previewId, next.url, { from, to: Math.min(next.duration, from + next.region) });
-    } catch (error) {
+    } catch (cause) {
       if (!abort.signal.aborted)
-        setError(error instanceof Error ? error.message : "Preview failed; try again");
-      else setError("Preview stopped. Try a shorter recording.");
+        nextError = cause instanceof Error ? cause.message : "Preview failed; try again";
+      else nextError = "Preview stopped. Try a shorter recording.";
     } finally {
       clearTimeout(timeout);
-      setOperation({ status: "idle" });
+      setOperation({ status: "idle", error: nextError });
     }
   };
   const save = async (eventTime: number) => {
     if (!valid || busy) return;
-    setOperation({ status: "submitting" });
-    setStartedAt(performance.timeOrigin + eventTime);
-    setError("");
+    const started = performance.timeOrigin + eventTime;
+    setOperation({ status: "submitting", startedAt: started });
     stopAudition();
     try {
       const savedSourceId = filmSource && job?.regionEdit?.itemId;
@@ -452,13 +468,16 @@ function RegionEditorBody({
       sectionDrafts.delete(draftKey);
       setOperation({
         status: "waiting",
+        startedAt: started,
         jobId: queued.id,
         input,
         replacementItemId: reusablePhrase,
       });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : "Could not save; try again");
-      setOperation({ status: "idle" });
+    } catch (cause) {
+      setOperation({
+        status: "idle",
+        error: cause instanceof Error ? cause.message : "Could not save; try again",
+      });
     }
   };
   const entry = saved ? buildUnifiedEntries([saved], [], new Set())[0] : undefined;
@@ -583,32 +602,26 @@ function RegionEditorBody({
                         >
                           <Button
                             size="sm"
-                            variant={wordMode === "word" ? "lit" : "secondary"}
-                            aria-pressed={wordMode === "word"}
+                            variant={wordSelection.mode === "word" ? "lit" : "secondary"}
+                            aria-pressed={wordSelection.mode === "word"}
                             disabled={busy}
-                            onClick={() => {
-                              setWordMode("word");
-                              setWordAnchor(null);
-                            }}
+                            onClick={() => setWordSelection({ mode: "word", lastIndex: null })}
                           >
                             One word
                           </Button>
                           <Button
                             size="sm"
-                            variant={wordMode === "range" ? "lit" : "secondary"}
-                            aria-pressed={wordMode === "range"}
+                            variant={wordSelection.mode === "range" ? "lit" : "secondary"}
+                            aria-pressed={wordSelection.mode === "range"}
                             disabled={busy}
-                            onClick={() => {
-                              setWordMode("range");
-                              setWordAnchor(null);
-                            }}
+                            onClick={() => setWordSelection({ mode: "range", startIndex: null })}
                           >
                             Word range
                           </Button>
                         </div>
                         <p role="status" className="text-muted-foreground mt-2 text-xs">
-                          {wordMode === "range"
-                            ? wordAnchor === null
+                          {wordSelection.mode === "range"
+                            ? wordSelection.startIndex === null
                               ? "Select the first word, then the last word."
                               : "Now select the last word of the phrase."
                             : "Click a word to select its recorded timing."}
@@ -622,11 +635,15 @@ function RegionEditorBody({
                               disabled={busy}
                               aria-pressed={word.s >= from && word.e <= to}
                               onClick={(event) => {
+                                const anchor =
+                                  wordSelection.mode === "range"
+                                    ? wordSelection.startIndex
+                                    : event.shiftKey
+                                      ? wordSelection.lastIndex
+                                      : null;
                                 const span = wordRangeSelection(
                                   info.words,
-                                  (wordMode === "range" || event.shiftKey) && wordAnchor !== null
-                                    ? wordAnchor
-                                    : index,
+                                  anchor !== null ? anchor : index,
                                   index,
                                 );
                                 if (!span) return;
@@ -635,8 +652,13 @@ function RegionEditorBody({
                                   Math.min(info.durationSeconds, span.to),
                                 ]);
                                 setReplacementText(span.text);
-                                setWordAnchor(
-                                  wordMode === "range" && wordAnchor !== null ? null : index,
+                                setWordSelection(
+                                  wordSelection.mode === "range"
+                                    ? {
+                                        mode: "range",
+                                        startIndex: wordSelection.startIndex !== null ? null : index,
+                                      }
+                                    : { mode: "word", lastIndex: index },
                                 );
                               }}
                             >

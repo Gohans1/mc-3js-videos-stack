@@ -13,9 +13,10 @@ export const SIZE_MIN: number;
 export function isRead(
   item: TextItem | null | undefined,
   tracks?: TextData["tracks"],
+  doc?: TextData | null,
 ): item is TextItem & { text: string };
 export function charsOf(text: string): number;
-export function pxOf(item: TextItem): number;
+export function pxOf(item: TextItem, doc?: TextData | null): number;
 export function sizeFaults(item: TextItem, ratio?: Ratio): string[];
 export function heardInOut(
   scene: TextItem,

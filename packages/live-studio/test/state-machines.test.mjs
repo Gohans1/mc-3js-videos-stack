@@ -934,6 +934,37 @@ describe("stepViewport", () => {
       armClickAt: null,
     });
   });
+
+  test("middle-button pan enters pan gesture, ignores chorded releases while held, and ends on release or blur", () => {
+    const started = stepViewport(IDLE_VIEWPORT_GESTURE, {
+      type: "press",
+      id: 7,
+      pointerType: "mouse",
+      button: 1,
+      x: 100,
+      y: 200,
+      free: false,
+      shiftKey: false,
+      pan: { panX: 12, panY: -8 },
+    });
+    assert.deepEqual(started, {
+      gesture: { kind: "pan", id: 7, startX: 100, startY: 200, fromX: 12, fromY: -8 },
+      dropSketch: false,
+      capture: true,
+    });
+    assert.deepEqual(
+      stepViewport(started.gesture, { type: "windowUp", id: 7, x: 140, y: 210, buttons: 4 }),
+      { gesture: started.gesture, dropSketch: false, armClickAt: null },
+    );
+    assert.deepEqual(
+      stepViewport(started.gesture, { type: "windowUp", id: 7, x: 140, y: 210, buttons: 0 }),
+      { gesture: IDLE_VIEWPORT_GESTURE, dropSketch: false, armClickAt: null },
+    );
+    assert.deepEqual(stepViewport(started.gesture, { type: "blur" }), {
+      gesture: IDLE_VIEWPORT_GESTURE,
+      dropSketch: false,
+    });
+  });
 });
 
 describe("stepInk", () => {

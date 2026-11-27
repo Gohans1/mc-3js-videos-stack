@@ -1,4 +1,4 @@
-import { TEXT_ITEM_KEYS } from "film-stage/titles-catalog";
+import { TEXT_ITEM_KEYS, TEXT_PRESETS } from "film-stage/titles-catalog";
 import {
   AlignCenter,
   AlignLeft,
@@ -54,8 +54,10 @@ import {
   items,
   locked,
   nameOf,
+  resolveItem,
   restore,
   snapshot,
+  textDoc,
   type TextItem,
 } from "./text";
 import {
@@ -102,8 +104,9 @@ function Slide({
   unit?: string;
   scale?: number;
 }) {
-  const it = items[useStudio((s) => s.textPicks[0])];
-  if (!it) return null;
+  const raw = items[useStudio((s) => s.textPicks[0])];
+  if (!raw) return null;
+  const it = resolveItem(raw);
   return (
     <SliderRow
       label={label}
@@ -131,7 +134,20 @@ function Colors({
   put: (c: string) => void;
   palette?: readonly string[];
 }) {
-  const pickerHex = /^#[0-9a-f]{6}$/i.test(value) ? value : TINT_SWATCHES[0];
+  const pickerHex = (() => {
+    if (/^#[0-9a-f]{6}$/i.test(value)) return value;
+    const hex3 = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(value);
+    if (hex3) return `#${hex3[1]}${hex3[1]}${hex3[2]}${hex3[2]}${hex3[3]}${hex3[3]}`;
+    const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(value);
+    if (rgb) {
+      const h = (n: string) =>
+        Math.max(0, Math.min(255, Number(n)))
+          .toString(16)
+          .padStart(2, "0");
+      return `#${h(rgb[1]!)}${h(rgb[2]!)}${h(rgb[3]!)}`;
+    }
+    return TINT_SWATCHES[0];
+  })();
   return (
     <FieldRow label={label}>
       {palette.map((c) => (
@@ -252,17 +268,31 @@ function Transform({ it }: { it: TextItem }) {
   );
 }
 
-function Basic({ it, one }: { it: TextItem; one: boolean }) {
+function Basic({ it, raw, one }: { it: TextItem; raw: TextItem; one: boolean }) {
   const fonts = S.tools?.titles?.fonts ?? [];
+  const presets = S.tools?.titles?.presets ?? TEXT_PRESETS;
+  const shadowObj =
+    it.shadow && typeof it.shadow === "object"
+      ? it.shadow
+      : { color: "rgba(0,0,0,0.55)", blur: 0.25, x: 0, y: 0.04 };
+  const inheritedOf = (x: TextItem, k: keyof TextItem) =>
+    resolveItem({ ...x, [k]: undefined } as TextItem);
   const flag = (k: "bold" | "italic" | "upper", label: string, icon: ReactNode) => (
     <Tip label={label}>
       <Toggle
         size="lg"
         aria-label={label}
-        pressed={!!it[k]}
+        pressed={k === "bold" ? (typeof it.weight === "number" ? it.weight >= 700 : !!it.bold) : !!it[k]}
         onPressedChange={(on) =>
           editPicked((x) => {
-            x[k] = on || undefined;
+            const inh = inheritedOf(x, k);
+            if (on) x[k] = true;
+            else if (inh[k]) x[k] = false;
+            else delete x[k];
+            if (k === "bold") {
+              const inhWeight = inheritedOf(x, "weight").weight;
+              if (x.weight !== undefined || inhWeight !== undefined) x.weight = on ? 700 : 500;
+            }
           })
         }
       >
@@ -273,7 +303,49 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
   return (
     <>
       <Section title="Basic">
-        {one && <Words it={it} />}
+        {one && <Words it={raw} />}
+        <FieldRow label="Preset">
+          <Select
+            value={raw.preset ?? "__none__"}
+            items={[
+              {
+                value: "__none__",
+                label: textDoc()?.preset ? `Inherit (${textDoc()?.preset})` : "None",
+              },
+              ...presets.map((p) => ({ value: p.id, label: p.title })),
+            ]}
+            onValueChange={(v) =>
+              editPicked((x) => {
+                if (v === "__none__") {
+                  const kind = resolveItem(x).kind ?? "text";
+                  delete x.preset;
+                  const doc = textDoc();
+                  if (!x.kind && !doc?.preset && !doc?.defaults?.kind) x.kind = kind;
+                } else {
+                  x.preset = v as string;
+                }
+              })
+            }
+          >
+            <SelectTrigger aria-label="Preset" className="h-7 min-w-0 flex-1">
+              <SelectValue>
+                {presets.find((p) => p.id === raw.preset)?.title ??
+                  raw.preset ??
+                  (textDoc()?.preset ? `Inherit (${textDoc()?.preset})` : "None")}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">
+                {textDoc()?.preset ? `Inherit (${textDoc()?.preset})` : "None"}
+              </SelectItem>
+              {presets.map((p) => (
+                <SelectItem key={p.id} value={p.id} title={p.tip}>
+                  {p.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FieldRow>
         <FieldRow label="Font">
           <Select
             value={byId(it.font)?.id ?? "sans"}
@@ -314,6 +386,20 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
           min={12}
           max={300}
           step={1}
+        />
+        <Slide
+          label="Weight"
+          get={(x) =>
+            typeof x.weight === "number" ? x.weight : x.bold ? 700 : x.font === "mono" ? 400 : 500
+          }
+          put={(x, v) => {
+            x.weight = Math.round(v);
+            const inhBold = inheritedOf(x, "bold").bold;
+            x.bold = x.weight >= 700 ? true : inhBold ? false : undefined;
+          }}
+          min={100}
+          max={900}
+          step={100}
         />
         <FieldRow label="Pattern">
           {flag("bold", "Bold", <Bold />)}
@@ -410,7 +496,13 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
         on={!!it.stroke}
         onCheck={(on) =>
           editPicked((x) => {
-            x.stroke = on ? { color: "#100F0F", width: 6 } : undefined;
+            if (!on) {
+              const inh = inheritedOf(x, "stroke");
+              x.stroke = inh.stroke ? null : undefined;
+            } else {
+              delete x.stroke;
+              if (!resolveItem(x).stroke) x.stroke = { color: "#100F0F", width: 6 };
+            }
           })
         }
       >
@@ -421,7 +513,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
               value={it.stroke.color ?? "#100F0F"}
               put={(c) =>
                 editPicked((x) => {
-                  x.stroke = { ...x.stroke, color: c };
+                  x.stroke = { ...resolveItem(x).stroke, color: c };
                 })
               }
             />
@@ -429,12 +521,32 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
               label="Stroke width"
               get={(x) => x.stroke?.width ?? 6}
               put={(x, v) => {
-                x.stroke = { ...x.stroke, width: Math.round(v) };
+                x.stroke = { ...resolveItem(x).stroke, width: Math.round(v) };
               }}
               min={1}
               max={30}
               step={1}
             />
+            <FieldRow label="Join">
+              <Segmented
+                label="Stroke join"
+                className="flex-1"
+                value={it.stroke.join ?? "round"}
+                onChange={(v) =>
+                  editPicked((x) => {
+                    x.stroke = {
+                      ...resolveItem(x).stroke,
+                      join: v as "round" | "miter" | "bevel",
+                    };
+                  })
+                }
+                items={[
+                  { id: "round", title: "Round" },
+                  { id: "miter", title: "Miter" },
+                  { id: "bevel", title: "Bevel" },
+                ]}
+              />
+            </FieldRow>
           </>
         )}
       </Section>
@@ -443,7 +555,13 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
         on={!!it.background}
         onCheck={(on) =>
           editPicked((x) => {
-            x.background = on ? { color: "#100F0F", opacity: 0.6 } : undefined;
+            if (!on) {
+              const inh = inheritedOf(x, "background");
+              x.background = inh.background ? null : undefined;
+            } else {
+              delete x.background;
+              if (!resolveItem(x).background) x.background = { color: "#100F0F", opacity: 0.6 };
+            }
           })
         }
       >
@@ -454,7 +572,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
               value={it.background.color ?? "#100F0F"}
               put={(c) =>
                 editPicked((x) => {
-                  x.background = { ...x.background, color: c };
+                  x.background = { ...resolveItem(x).background, color: c };
                 })
               }
             />
@@ -462,7 +580,7 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
               label="Background opacity"
               get={(x) => x.background?.opacity ?? 0.6}
               put={(x, v) => {
-                x.background = { ...x.background, opacity: +v.toFixed(2) };
+                x.background = { ...resolveItem(x).background, opacity: +v.toFixed(2) };
               }}
               min={0}
               max={100}
@@ -478,17 +596,94 @@ function Basic({ it, one }: { it: TextItem; one: boolean }) {
         on={it.shadow !== false}
         onCheck={(on) =>
           editPicked((x) => {
-            x.shadow = on ? undefined : false;
+            if (!on) {
+              const inh = inheritedOf(x, "shadow");
+              x.shadow = inh.shadow === false ? undefined : false;
+            } else {
+              delete x.shadow;
+              if (resolveItem(x).shadow === false) x.shadow = true;
+            }
           })
         }
-      />
+      >
+        {it.shadow !== false && (
+          <>
+            <Colors
+              label="Shadow color"
+              value={shadowObj.color ?? "rgba(0,0,0,0.55)"}
+              put={(c) =>
+                editPicked((x) => {
+                  const cur = resolveItem(x).shadow;
+                  const base = cur && typeof cur === "object" ? cur : { blur: 0.25, x: 0, y: 0.04 };
+                  x.shadow = { ...base, color: c };
+                })
+              }
+            />
+            <Slide
+              label="Shadow blur"
+              get={(x) => (x.shadow && typeof x.shadow === "object" ? (x.shadow.blur ?? 0.25) : 0.25)}
+              put={(x, v) => {
+                const cur = resolveItem(x).shadow;
+                const base =
+                  cur && typeof cur === "object"
+                    ? cur
+                    : { color: "rgba(0,0,0,0.55)", x: 0, y: 0.04 };
+                x.shadow = { ...base, blur: +v.toFixed(3) };
+              }}
+              min={0}
+              max={50}
+              step={0.5}
+              digits={1}
+              unit="%"
+              scale={100}
+            />
+            <Slide
+              label="Shadow X"
+              get={(x) => (x.shadow && typeof x.shadow === "object" ? (x.shadow.x ?? 0) : 0)}
+              put={(x, v) => {
+                const cur = resolveItem(x).shadow;
+                const base =
+                  cur && typeof cur === "object"
+                    ? cur
+                    : { color: "rgba(0,0,0,0.55)", blur: 0.25, y: 0.04 };
+                x.shadow = { ...base, x: +v.toFixed(3) };
+              }}
+              min={-20}
+              max={20}
+              step={0.5}
+              digits={1}
+              unit="%"
+              scale={100}
+            />
+            <Slide
+              label="Shadow Y"
+              get={(x) => (x.shadow && typeof x.shadow === "object" ? (x.shadow.y ?? 0.04) : 0.04)}
+              put={(x, v) => {
+                const cur = resolveItem(x).shadow;
+                const base =
+                  cur && typeof cur === "object"
+                    ? cur
+                    : { color: "rgba(0,0,0,0.55)", blur: 0.25, x: 0 };
+                x.shadow = { ...base, y: +v.toFixed(3) };
+              }}
+              min={-20}
+              max={20}
+              step={0.5}
+              digits={1}
+              unit="%"
+              scale={100}
+            />
+          </>
+        )}
+      </Section>
       <Transform it={it} />
     </>
   );
 }
 
 function Shape({ it }: { it: TextItem }) {
-  const defaultLen = it.kind === "underline" ? 220 : 160;
+  const kind = resolveItem(it).kind ?? "text";
+  const defaultLen = kind === "underline" ? 220 : 160;
   return (
     <>
       <Section title="Basic">
@@ -511,7 +706,7 @@ function Shape({ it }: { it: TextItem }) {
           max={40}
           step={1}
         />
-        {shapeUsesLength(it.kind) ? (
+        {shapeUsesLength(kind) ? (
           <Slide
             label="Length"
             get={(x) => x.size ?? defaultLen}
@@ -675,35 +870,48 @@ function Anim({ it }: { it: TextItem }) {
     [it.from, it.to, slot],
   );
 
-  const trial = useRef<{ id: string | null; snap: string; timer: number } | null>(null);
+  const trial = useRef<
+    | { kind: "idle" }
+    | { kind: "pending"; id: string | null; snap: string; timer: number }
+    | { kind: "playing"; id: string | null; snap: string }
+  >({ kind: "idle" });
   const leave = useCallback(() => {
-    if (!trial.current) return;
-    clearTimeout(trial.current.timer);
-    restore(trial.current.snap);
-    trial.current = null;
+    const current = trial.current;
+    if (current.kind === "idle") return;
+    trial.current = { kind: "idle" };
+    if (current.kind === "pending") {
+      clearTimeout(current.timer);
+      return;
+    }
+    restore(current.snap);
     stopSpan();
   }, []);
+  const clearSlot = (x: TextItem) => {
+    const inh = resolveItem({ ...x, [slot]: undefined } as TextItem)[slot];
+    if (inh?.fx) x[slot] = { fx: "none" };
+    else delete x[slot];
+  };
   const tryOn = (meta: TitleFxMeta | null) => {
     leave();
     const id = meta?.id ?? null;
     if (id === now) return;
     const snap = snapshot();
-    trial.current = {
-      id,
-      snap,
-      timer: window.setTimeout(() => {
-        editPicked((x) => {
-          if (meta) x[slot] = freshTitleFx(x[slot], meta);
-          else delete x[slot];
-        }, true);
-        playVoice(meta?.len ?? 0.5, true);
-      }, 140),
-    };
+    const timer = window.setTimeout(() => {
+      if (trial.current.kind !== "pending" || trial.current.timer !== timer) return;
+      trial.current = { kind: "playing", id, snap };
+      editPicked((x) => {
+        if (meta) x[slot] = freshTitleFx(x[slot] ?? resolveItem(x)[slot], meta);
+        else clearSlot(x);
+      }, true);
+      playVoice(meta?.len ?? 0.5, true);
+    }, 140);
+    trial.current = { kind: "pending", id, snap, timer };
   };
   const none = activeCat === ALL && !q.trim();
   useEffect(() => {
-    const id = trial.current?.id;
-    if (id !== undefined && !(id === null ? none : shown.some((x) => x.id === id))) leave();
+    if (trial.current.kind === "idle") return;
+    const { id } = trial.current;
+    if (!(id === null ? none : shown.some((x) => x.id === id))) leave();
   }, [shown, none, leave]);
   useEffect(() => leave, [leave, slot, it.kind]);
 
@@ -711,8 +919,8 @@ function Anim({ it }: { it: TextItem }) {
   const pick = (meta: TitleFxMeta | null) => {
     leave();
     editPicked((x) => {
-      if (meta) x[slot] = freshTitleFx(x[slot], meta);
-      else delete x[slot];
+      if (meta) x[slot] = freshTitleFx(x[slot] ?? resolveItem(x)[slot], meta);
+      else clearSlot(x);
     });
     if (meta) playVoice(curFx?.len ?? meta.len);
   };
@@ -721,7 +929,8 @@ function Anim({ it }: { it: TextItem }) {
     live = false,
   ) => {
     editPicked((x) => {
-      if (x[slot]) x[slot] = tidyTitleFx({ ...x[slot]!, ...patch }, fx);
+      const cur = x[slot] ?? resolveItem(x)[slot];
+      if (cur) x[slot] = tidyTitleFx({ ...cur, ...patch }, fx);
     }, live);
   };
   const easeKey = Array.isArray(curFx?.ease)
@@ -826,7 +1035,7 @@ function Anim({ it }: { it: TextItem }) {
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring aria-pressed:text-foreground flex w-full flex-col items-center gap-1 rounded-md text-xs outline-none focus-visible:ring-2"
               >
                 <span className="bg-raised-2 in-aria-pressed:ring-primary ring-hairline-subtle grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2">
-                  <VoiceBadge fx={null} shape={shape} kind={it.kind} />
+                  <VoiceBadge fx={null} shape={shape} kind={resolveItem(it).kind ?? "text"} />
                 </span>
                 <span className="w-full truncate text-center">None</span>
               </button>
@@ -857,7 +1066,7 @@ function Anim({ it }: { it: TextItem }) {
                       "bg-backdrop in-aria-pressed:ring-primary ring-hairline-subtle group-hover:ring-hairline-strong relative grid aspect-square w-full place-items-center rounded-md ring-1 in-aria-pressed:ring-2",
                     )}
                   >
-                    <VoiceBadge fx={x} shape={shape} kind={it.kind} />
+                    <VoiceBadge fx={x} shape={shape} kind={resolveItem(it).kind ?? "text"} />
                     {ownVoice(shape, slot, x) && <FilmMark />}
                   </span>
                   <span
@@ -894,7 +1103,8 @@ function Anim({ it }: { it: TextItem }) {
               label="Duration"
               get={(x) => x[slot]?.len ?? fx?.len ?? 0.5}
               put={(x, v) => {
-                if (x[slot]) x[slot] = tidyTitleFx({ ...x[slot]!, len: +v.toFixed(2) }, fx);
+                const cur = x[slot] ?? resolveItem(x)[slot];
+                if (cur) x[slot] = tidyTitleFx({ ...cur, len: +v.toFixed(2) }, fx);
               }}
               min={0.1}
               max={5}
@@ -992,14 +1202,15 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
   const picks = useStudio((s) => s.textPicks),
     saved = useStudio((s) => s.textSaved);
   useStudio((s) => s.textRev);
-  const it = items[picks[0]];
-  if (!it)
+  const raw = items[picks[0]];
+  if (!raw)
     return (
       <p className="text-ui text-muted-foreground px-3 pt-2">
         Pick a text item on the Text row or the picture to edit it, or add one from the Text
         library.
       </p>
     );
+  const it = resolveItem(raw);
   if (picks.every(locked))
     return (
       <p className="text-ui text-muted-foreground px-3 pt-2">
@@ -1014,7 +1225,7 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
       <p className="text-muted-foreground flex-none truncate px-3 pb-1 text-xs tabular-nums">
         {picks.length > 1
           ? `${picks.length} picked: changes go to all of them`
-          : `${nameOf(it)} · ${stamp(it.from)} – ${stamp(it.to)}`}
+          : `${nameOf(raw)} · ${stamp(raw.from)} – ${stamp(raw.to)}`}
       </p>
       {part === "textAnim" ? (
         <Anim it={it} />
@@ -1024,10 +1235,10 @@ export function TextPanel({ part }: { part: "text" | "textAnim" }) {
         </p>
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          {shapes ? <Shape it={it} /> : <Basic it={it} one={picks.length === 1} />}
+          {shapes ? <Shape it={it} /> : <Basic it={it} raw={raw} one={picks.length === 1} />}
           {picks.length === 1 ? (
             <CustomFields
-              value={it}
+              value={raw}
               known={[...TEXT_KEYS, ...TEXT_ITEM_KEYS, ...TEXT_SLOT_KEYS]}
               onChange={(path, value) => {
                 if (!locked(picks[0]))

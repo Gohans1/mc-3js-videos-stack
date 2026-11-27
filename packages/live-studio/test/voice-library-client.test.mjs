@@ -746,4 +746,221 @@ describe("createVoiceLibraryClient", () => {
     expect(client.getSnapshot().error).toBeNull();
     release();
   });
+
+  test("recovers cleanly when fetch throws synchronously before returning a promise", async () => {
+    let shouldThrowSync = true;
+    const client = createVoiceLibraryClient({
+      fetch: (url) => {
+        if (shouldThrowSync) throw new Error("sync fetch failure");
+        return Promise.resolve(
+          jsonResponse(
+            reqUrl(url).includes("meta=1")
+              ? { status: "ready", syncedAt: "2026-11-17T00:00:00Z", totalEnglish: 1 }
+              : {
+                  status: "ready",
+                  syncedAt: "2026-11-16T00:00:00Z",
+                  totalScanned: 1,
+                  totalEnglish: 1,
+                  totalEnglishV4: 1,
+                  pagesLoaded: 1,
+                  hasKey: true,
+                  error: null,
+                  truncated: false,
+                  voices: [voice("v_recovered")],
+                },
+          ),
+        );
+      },
+      say: () => {},
+      registerVoiceNames: () => {},
+      scheduleIdleBatch: () => () => {},
+      warmVoiceSearchTokens: () => 0,
+    });
+
+    await client.loadVoiceLibrary(true);
+    expect(client.getSnapshot().loading).toBe(false);
+    expect(client.getSnapshot().error).toBe("Could not load voice library");
+
+    shouldThrowSync = false;
+    const release = client.acquireConsumer();
+    await flush();
+    expect(client.getSnapshot().loading).toBe(false);
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_recovered"]);
+    expect(client.getSnapshot().error).toBeNull();
+
+    shouldThrowSync = true;
+    client.handleVoiceLibraryEvent();
+    await flush();
+
+    shouldThrowSync = false;
+    client.handleVoiceLibraryEvent();
+    await flush();
+    await flush();
+    expect(client.getSnapshot().loading).toBe(false);
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_recovered"]);
+    release();
+  });
+
+  test("re-entrant loadVoiceLibrary(true) inside fetch observes loading=true and awaits the real in-flight promise", async () => {
+    const first = Promise.withResolvers();
+    let callCount = 0;
+    let reentrantPromise = null;
+    let sawLoadingDuringFetch = false;
+    const client = createVoiceLibraryClient({
+      fetch: () => {
+        callCount += 1;
+        if (callCount === 1) {
+          sawLoadingDuringFetch = client.getSnapshot().loading;
+          reentrantPromise = client.loadVoiceLibrary(true);
+          return first.promise;
+        }
+        return Promise.resolve(
+          jsonResponse({
+            status: "ready",
+            syncedAt: "2026-11-18T00:00:00Z",
+            totalScanned: 1,
+            totalEnglish: 1,
+            totalEnglishV4: 1,
+            pagesLoaded: 1,
+            hasKey: true,
+            error: null,
+            truncated: false,
+            voices: [voice("v_second")],
+          }),
+        );
+      },
+      say: () => {},
+      registerVoiceNames: () => {},
+      scheduleIdleBatch: () => () => {},
+      warmVoiceSearchTokens: () => 0,
+    });
+
+    const p1 = client.loadVoiceLibrary(true);
+    expect(sawLoadingDuringFetch).toBe(true);
+    expect(reentrantPromise).toBe(p1);
+
+    let reentrantResolved = false;
+    void p1.then(() => {
+      reentrantResolved = true;
+    });
+    await flush();
+    expect(reentrantResolved).toBe(false);
+
+    first.resolve(
+      jsonResponse({
+        status: "ready",
+        syncedAt: "2026-11-17T00:00:00Z",
+        totalScanned: 1,
+        totalEnglish: 1,
+        totalEnglishV4: 1,
+        pagesLoaded: 1,
+        hasKey: true,
+        error: null,
+        truncated: false,
+        voices: [voice("v_first")],
+      }),
+    );
+    await p1;
+    await flush();
+    expect(reentrantResolved).toBe(true);
+    expect(callCount).toBe(2);
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_second"]);
+  });
+
+  test("preserves hidden SSE event arriving during an in-flight post-meta full reload", async () => {
+    const calls = [];
+    let fullCount = 0;
+    let metaCount = 0;
+    let releaseReload;
+    const reloadGate = new Promise((resolve) => {
+      releaseReload = resolve;
+    });
+
+    const client = createVoiceLibraryClient({
+      fetch: async (url) => {
+        const href = reqUrl(url);
+        calls.push(href);
+        if (href === "/api/voice/library?meta=1") {
+          metaCount++;
+          return jsonResponse({
+            status: "ready",
+            syncedAt: metaCount === 1 ? "2026-11-17T02:00:00Z" : "2026-11-17T03:00:00Z",
+            totalScanned: 1,
+            totalEnglish: 1,
+            totalEnglishV4: 1,
+            pagesLoaded: 1,
+            hasKey: true,
+            error: null,
+            truncated: false,
+          });
+        }
+        fullCount++;
+        if (fullCount === 1) {
+          return jsonResponse({
+            status: "ready",
+            syncedAt: "2026-11-17T01:00:00Z",
+            totalScanned: 1,
+            totalEnglish: 1,
+            totalEnglishV4: 1,
+            pagesLoaded: 1,
+            hasKey: true,
+            error: null,
+            truncated: false,
+            voices: [voice("v_1")],
+          });
+        }
+        if (fullCount === 2) {
+          await reloadGate;
+          return jsonResponse({
+            status: "ready",
+            syncedAt: "2026-11-17T02:00:00Z",
+            totalScanned: 1,
+            totalEnglish: 1,
+            totalEnglishV4: 1,
+            pagesLoaded: 1,
+            hasKey: true,
+            error: null,
+            truncated: false,
+            voices: [voice("v_2")],
+          });
+        }
+        return jsonResponse({
+          status: "ready",
+          syncedAt: "2026-11-17T03:00:00Z",
+          totalScanned: 1,
+          totalEnglish: 1,
+          totalEnglishV4: 1,
+          pagesLoaded: 1,
+          hasKey: true,
+          error: null,
+          truncated: false,
+          voices: [voice("v_3")],
+        });
+      },
+      say: () => {},
+      registerVoiceNames: () => {},
+      scheduleIdleBatch: () => () => {},
+      warmVoiceSearchTokens: () => 0,
+    });
+
+    const release1 = client.acquireConsumer();
+    await flush();
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_1"]);
+
+    client.handleVoiceLibraryEvent();
+    await flush();
+    expect(calls).toEqual(["/api/voice/library", "/api/voice/library?meta=1", "/api/voice/library"]);
+
+    release1();
+    client.handleVoiceLibraryEvent();
+    releaseReload();
+    await flush();
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_2"]);
+
+    const release2 = client.acquireConsumer();
+    await flush();
+    await flush();
+    expect(client.getSnapshot().voices.map((v) => v.id)).toEqual(["v_3"]);
+    release2();
+  });
 });

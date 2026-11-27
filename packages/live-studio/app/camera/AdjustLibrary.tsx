@@ -13,7 +13,13 @@ import { applyPreset, gradeOf, gradeTarget, importLut, loadGrades, putGrade } fr
 import { addLayer } from "./layers";
 import { AssetSource } from "../openfilm/Source";
 
-export function ImportLut({ onError }: { onError: (error: string) => void }) {
+export function ImportLut({
+  onError,
+  disabled = false,
+}: {
+  onError: (error: string) => void;
+  disabled?: boolean;
+}) {
   const file = useRef<HTMLInputElement>(null),
     [busy, setBusy] = useState(false);
   const ready = useStudio((s) => s.ready),
@@ -44,7 +50,7 @@ export function ImportLut({ onError }: { onError: (error: string) => void }) {
       <Button
         variant="secondary"
         size="sm"
-        disabled={busy || !ready || !shots || !S.render?.adjustments}
+        disabled={disabled || busy || !ready || !shots || !S.render?.adjustments}
         onClick={() => file.current?.click()}
       >
         <Plus />
@@ -54,11 +60,14 @@ export function ImportLut({ onError }: { onError: (error: string) => void }) {
   );
 }
 
+type ApplyLibraryState = { status: "idle" } | { status: "applying"; id: string };
+
 export function AdjustLibrary() { return <AssetSource category="filter"><NativeAdjustLibrary /></AssetSource>; }
 function NativeAdjustLibrary() {
   const [part, setPart] = useState<"presets" | "luts">("presets"),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState<string | null>(null);
+    [applyState, setApplyState] = useState<ApplyLibraryState>({ status: "idle" }),
+    [error, setError] = useState("");
+  const busy = applyState.status === "applying" ? applyState.id : null;
   const library = useStudio((s) => s.gradeLibrary),
     ready = useStudio((s) => s.ready),
     shots = useStudio((s) => s.shots || s.layerPicks.length > 0);
@@ -108,7 +117,7 @@ function NativeAdjustLibrary() {
         )}
         {part === "luts" && (
           <div>
-            <ImportLut onError={setError} />
+            <ImportLut disabled={busy !== null} onError={setError} />
           </div>
         )}
         {error && <Callout role="alert">{error}</Callout>}
@@ -121,7 +130,7 @@ function NativeAdjustLibrary() {
                 className="w-full"
                 disabled={!ready || !shots || !S.render?.adjustments || busy !== null}
                 onClick={async () => {
-                  setBusy(item.id);
+                  setApplyState({ status: "applying", id: item.id });
                   setError("");
                   const shot = gradeTarget();
                   try {
@@ -131,11 +140,11 @@ function NativeAdjustLibrary() {
                         ...gradeOf(shot),
                         lut: { url: item.id, name: item.name, amount: 100 },
                       });
+                    setApplyState({ status: "idle" });
                     set(transitionSelection({ kind: "adjustTarget", target: shot }, get().side));
                   } catch (e) {
                     setError((e as Error).message);
-                  } finally {
-                    setBusy(null);
+                    setApplyState({ status: "idle" });
                   }
                 }}
               >

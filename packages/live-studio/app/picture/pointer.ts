@@ -59,7 +59,6 @@ export const attachPicture = () => {
   new ResizeObserver(fit).observe(S.el.view.querySelector("[data-preview-pane]") ?? S.el.view);
   let gesture: ViewportGesture<PointerEvent> = IDLE_VIEWPORT_GESTURE;
   const frac = (e: MouseEvent) => picturePoint(e, canvas);
-  let pan: { id: number; x: number; y: number; fromX: number; fromY: number } | null = null;
   const stepCamDrag = (mode: "look" | "orbit" | "slide", dx: number, dy: number) => {
     if (!S.tools || get().freeLocked) return;
     const f = S.tools.free;
@@ -75,16 +74,23 @@ export const attachPicture = () => {
   canvas.addEventListener("pointerdown", (e) => {
     const compareMode = get().compareVideoMode;
     const p = get().preview;
-    if (!PHONE && e.button === 1 && (compareMode || p.zoom !== 100 || !S.tools?.free.on)) {
-      e.preventDefault();
-      pan = { id: e.pointerId, x: e.clientX, y: e.clientY, fromX: p.panX, fromY: p.panY };
-      try {
-        canvas.setPointerCapture(e.pointerId);
-      } catch {}
+    const wantPan = !PHONE && e.button === 1 && (compareMode || p.zoom !== 100 || !S.tools?.free.on);
+    if (wantPan) e.preventDefault();
+    if (
+      !wantPan &&
+      compareMode &&
+      (!activeCompareVideo() || get().compareVideo.status === "error")
+    )
       return;
-    }
-    if (compareMode && (!activeCompareVideo() || Boolean(get().compareVideoError))) return;
-    if (!compareMode && e.button === 0 && e.altKey && S.tools?.free.on && !get().cameraPick) return;
+    if (
+      !wantPan &&
+      !compareMode &&
+      e.button === 0 &&
+      e.altKey &&
+      S.tools?.free.on &&
+      !get().cameraPick
+    )
+      return;
     const prev = gesture;
     const next = stepViewport(gesture, {
       type: "press",
@@ -96,26 +102,30 @@ export const attachPicture = () => {
       free: !compareMode && !!S.tools?.free.on,
       shiftKey: e.shiftKey,
       drawOnLeft: compareMode,
+      ...(wantPan ? { pan: { panX: p.panX, panY: p.panY } } : {}),
       raw: e,
     });
     if (next.gesture === prev) return;
-    if (!compareMode && e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
+    if (!wantPan && !compareMode && e.button === 0 && (gizmoBusy() || cameraGizmoBusy())) {
       gesture = IDLE_VIEWPORT_GESTURE;
       return;
     }
     gesture = next.gesture;
-    if (!compareMode && S.tools?.free.on) rememberFreeView();
+    if (!wantPan && !compareMode && S.tools?.free.on) rememberFreeView();
     if (next.capture)
       try {
         canvas.setPointerCapture(e.pointerId);
       } catch {}
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (pan?.id === e.pointerId) {
-      changePreview({ panX: pan.fromX + e.clientX - pan.x, panY: pan.fromY + e.clientY - pan.y });
+    if ("id" in gesture && e.pointerId !== gesture.id) return;
+    if (gesture.kind === "pan") {
+      changePreview({
+        panX: gesture.fromX + e.clientX - gesture.startX,
+        panY: gesture.fromY + e.clientY - gesture.startY,
+      });
       return;
     }
-    if ("id" in gesture && e.pointerId !== gesture.id) return;
     const prev = gesture;
     const step = stepViewport(prev, {
       type: "move",
@@ -173,7 +183,7 @@ export const attachPicture = () => {
     if (get().compareVideoMode) {
       if (
         !activeCompareVideo() ||
-        Boolean(get().compareVideoError) ||
+        get().compareVideo.status === "error" ||
         Math.hypot(e.clientX - x, e.clientY - y) > 4
       ) {
         return null;
@@ -216,7 +226,6 @@ export const attachPicture = () => {
     }, 0);
   };
   const cancelPointer = (e: PointerEvent) => {
-    if (pan?.id === e.pointerId) pan = null;
     const res = stepViewport(gesture, { type: "cancel", id: e.pointerId });
     gesture = res.gesture;
     if (res.dropSketch || sketch.on()) sketch.drop();
@@ -321,7 +330,6 @@ export const attachPicture = () => {
     return true;
   };
   addEventListener("pointerup", (e) => {
-    if (pan?.id === e.pointerId) pan = null;
     const res = stepViewport(gesture, {
       type: "windowUp",
       id: e.pointerId,
@@ -397,7 +405,6 @@ export const attachPicture = () => {
   );
   addEventListener("keyup", (e) => flight.release(e.code));
   addEventListener("blur", () => {
-    pan = null;
     flight.clear();
     const res = stepViewport(gesture, { type: "blur" });
     gesture = res.gesture;

@@ -63,6 +63,11 @@ interface ExitState extends ComposeExitSnapshot {
   reason: ComposeExitReason;
 }
 
+type ComposePresence =
+  | { kind: "idle" }
+  | { kind: "open"; compose: ComposeSpec }
+  | { kind: "exiting"; exit: ExitState };
+
 export function Compose({
   inline = false,
   dock = false,
@@ -100,22 +105,31 @@ export function Compose({
       ? null
       : rawCompose;
   const animateCompose = PHONE || !dock || stage;
-  const [openCompose, setOpenCompose] = useState<ComposeSpec | null>(compose);
-  const [exitState, setExitState] = useState<ExitState | null>(null);
+  const [presence, setPresence] = useState<ComposePresence>(() =>
+    compose ? { kind: "open", compose } : { kind: "idle" },
+  );
   if (compose) {
-    if (openCompose !== compose) setOpenCompose(compose);
-    if (exitState) setExitState(null);
-  } else if (openCompose) {
-    if (animateCompose) {
-      const snap = composeExitSnapshot(openCompose) ?? { draft: "", drawn: "", refs: [] };
-      setExitState({
-        compose: openCompose,
-        reason: composeExitReason(openCompose),
-        ...snap,
-      });
+    if (presence.kind !== "open" || presence.compose !== compose) {
+      setPresence({ kind: "open", compose });
     }
-    setOpenCompose(null);
+  } else if (presence.kind === "open") {
+    if (animateCompose) {
+      const snap = composeExitSnapshot(presence.compose) ?? { draft: "", drawn: "", refs: [] };
+      setPresence({
+        kind: "exiting",
+        exit: {
+          compose: presence.compose,
+          reason: composeExitReason(presence.compose),
+          ...snap,
+        },
+      });
+    } else {
+      setPresence({ kind: "idle" });
+    }
   }
+  const exitState = presence.kind === "exiting" ? presence.exit : null;
+  const clearExitState = () =>
+    setPresence((prev) => (prev.kind === "exiting" ? { kind: "idle" } : prev));
 
   const [openRef, setOpenRef] = useState<string | null>(null),
     picker = useRef<HTMLInputElement>(null);
@@ -296,14 +310,14 @@ export function Compose({
     const outer = wrapRef.current,
       card = cardRef.current;
     if (!outer || !card || typeof card.animate !== "function") {
-      setExitState(null);
+      clearExitState();
       return;
     }
     const active = document.activeElement;
     if (outer.contains(active) && active instanceof HTMLElement) active.blur();
     const rect = card.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) {
-      setExitState(null);
+      clearExitState();
       return;
     }
     let alive = true;
@@ -371,7 +385,7 @@ export function Compose({
     void Promise.all(running.map((a) => a.finished.catch(() => {}))).finally(() => {
       if (!alive) return;
       finished = true;
-      setExitState(null);
+      clearExitState();
     });
 
     return () => {

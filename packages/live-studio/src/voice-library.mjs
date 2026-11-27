@@ -428,13 +428,7 @@ export const openVoiceLibrary = (opts = {}) => {
   const cacheFile = resolve(opts.cacheFile ?? defaultVoiceCacheFile(opts.project));
   const autoSync = opts.autoSync ?? true;
   let diskCache = null;
-  let activeSync = null;
-  let status = "idle";
-  let pagesLoaded = 0;
-  let liveScanned = 0;
-  let liveEnglish = 0;
-  let liveEnglishV4 = 0;
-  let lastError = null;
+  let syncState = { phase: "idle" };
   let warmAttempted = false;
   let payloadMemo = null;
 
@@ -500,18 +494,31 @@ export const openVoiceLibrary = (opts = {}) => {
 
   const state = () => {
     const disk = readDisk();
-    const syncing = Boolean(activeSync || status === "syncing");
-    const effectiveStatus = syncing ? "syncing" : disk ? "ready" : lastError ? "error" : "idle";
+    if (syncState.phase === "syncing") {
+      return {
+        status: "syncing",
+        syncedAt: disk?.syncedAt ?? null,
+        totalScanned: syncState.totalScanned,
+        totalEnglish: syncState.totalEnglish,
+        totalEnglishV4: syncState.totalEnglishV4,
+        truncated: false,
+        pagesLoaded: syncState.pagesLoaded,
+        hasKey: hasKey(),
+        error: null,
+      };
+    }
+    const error = syncState.phase === "error" ? syncState.error : null;
+    const effectiveStatus = disk ? "ready" : error ? "error" : "idle";
     return {
       status: effectiveStatus,
       syncedAt: disk?.syncedAt ?? null,
-      totalScanned: syncing ? liveScanned : (disk?.totalScanned ?? 0),
-      totalEnglish: syncing ? liveEnglish : (disk?.totalEnglish ?? 0),
-      totalEnglishV4: syncing ? liveEnglishV4 : (disk?.totalEnglishV4 ?? 0),
-      truncated: syncing ? false : Boolean(disk?.truncated),
-      pagesLoaded: syncing ? pagesLoaded : 0,
+      totalScanned: disk?.totalScanned ?? 0,
+      totalEnglish: disk?.totalEnglish ?? 0,
+      totalEnglishV4: disk?.totalEnglishV4 ?? 0,
+      truncated: Boolean(disk?.truncated),
+      pagesLoaded: 0,
       hasKey: hasKey(),
-      error: lastError,
+      error,
     };
   };
 
@@ -520,24 +527,28 @@ export const openVoiceLibrary = (opts = {}) => {
   };
 
   const sync = () => {
-    if (activeSync) return activeSync;
-    status = "syncing";
-    lastError = null;
-    pagesLoaded = 0;
-    liveScanned = 0;
-    liveEnglish = 0;
-    liveEnglishV4 = 0;
+    if (syncState.phase === "syncing") return syncState.promise;
 
     let lastProgressEmit = 0;
-    activeSync = syncVoiceCatalog({
+    const active = {
+      phase: "syncing",
+      promise: null,
+      pagesLoaded: 0,
+      totalScanned: 0,
+      totalEnglish: 0,
+      totalEnglishV4: 0,
+    };
+    syncState = active;
+    active.promise = syncVoiceCatalog({
       ...opts,
       env,
       cacheFile,
       onProgress: (p) => {
-        pagesLoaded = p.pagesLoaded;
-        liveScanned = p.totalScanned;
-        liveEnglish = p.totalEnglish;
-        liveEnglishV4 = p.totalEnglishV4;
+        if (syncState !== active) return;
+        active.pagesLoaded = p.pagesLoaded;
+        active.totalScanned = p.totalScanned;
+        active.totalEnglish = p.totalEnglish;
+        active.totalEnglishV4 = p.totalEnglishV4;
         const now = Date.now();
         if (now - lastProgressEmit >= 400) {
           lastProgressEmit = now;
@@ -546,9 +557,7 @@ export const openVoiceLibrary = (opts = {}) => {
       },
     })
       .then((catalog) => {
-        activeSync = null;
-        status = "ready";
-        lastError = null;
+        syncState = { phase: "ready" };
         warmAttempted = false;
         diskCache = null;
         payloadMemo = null;
@@ -557,29 +566,28 @@ export const openVoiceLibrary = (opts = {}) => {
         return catalog;
       })
       .catch((err) => {
-        activeSync = null;
-        status = "error";
         const { apiKey } = resolveProviderConfig(opts, env);
-        lastError = sanitizeError(err, apiKey);
+        syncState = { phase: "error", error: sanitizeError(err, apiKey) };
         payloadMemo = null;
         emit();
         throw err;
       });
     emit();
-    return activeSync;
+    return active.promise;
   };
 
   const ensureWarm = () => {
     const disk = readDisk();
     if (disk) return false;
-    if (!autoSync || activeSync || warmAttempted || status === "error" || !hasKey()) return false;
+    if (!autoSync || syncState.phase === "syncing" || warmAttempted || syncState.phase === "error" || !hasKey())
+      return false;
     warmAttempted = true;
     sync().catch(() => {});
     return true;
   };
 
   const waitForSync = () =>
-    activeSync ? activeSync : Promise.resolve(readDisk() ?? EMPTY_CATALOG);
+    syncState.phase === "syncing" ? syncState.promise : Promise.resolve(readDisk() ?? EMPTY_CATALOG);
 
   const payloadJson = () => {
     const disk = readDisk() ?? EMPTY_CATALOG;

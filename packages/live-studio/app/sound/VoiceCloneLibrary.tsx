@@ -87,7 +87,15 @@ const PHASE_LABELS = {
 };
 type CloneAction = import("./voice-playground-client").CloneAction;
 type Operation =
-  { status: "idle" } | { status: "creating"; startedAt: number } | { status: "acting"; id: string };
+  | { status: "idle"; error: string; createError: string }
+  | { status: "creating"; startedAt: number }
+  | { status: "acting"; id: string };
+type CloudVoicesState =
+  | { status: "idle"; voices: CloudClone[] }
+  | { status: "loading"; voices: CloudClone[] }
+  | { status: "ready"; voices: CloudClone[] }
+  | { status: "error"; voices: CloudClone[]; error: string };
+type CloneTab = { tab: "saved" } | { tab: "cloud"; linkTarget: PlaygroundClone | null };
 
 function CloneCard({
   clone,
@@ -453,22 +461,51 @@ export function VoiceCloneLibraryButton({
     [permission, setPermission] = useState(false),
     [destination, setDestination] = useState<"project" | "global">("project");
   const configured = useVoicePlaygroundSelector((state) => state.status.configured, false);
-  const [operation, setOperation] = useState<Operation>(
-      initialTab === "cloud" && configured ? { status: "acting", id: "cloud" } : { status: "idle" },
-    ),
-    [error, setError] = useState(""),
-    [createError, setCreateError] = useState(""),
+  const [operation, setOperation] = useState<Operation>({
+      status: "idle",
+      error: "",
+      createError: "",
+    }),
     [now, setNow] = useState(Date.now),
-    [tab, setTab] = useState<"saved" | "cloud">(initialTab),
-    [cloud, setCloud] = useState<CloudClone[]>([]),
-    [linkTarget, setLinkTarget] = useState<PlaygroundClone | null>(null),
+    [tabState, setTabState] = useState<CloneTab>(
+      initialTab === "cloud" ? { tab: "cloud", linkTarget: null } : { tab: "saved" },
+    ),
+    [cloudState, setCloudState] = useState<CloudVoicesState>(
+      initialTab === "cloud" && configured
+        ? { status: "loading", voices: [] }
+        : { status: "idle", voices: [] },
+    ),
     [cloudPermission, setCloudPermission] = useState(false),
     [filter, setFilter] = useState<"all" | "project" | "global">("all");
+  const autoCloudKey = initialTab === "cloud" && configured ? "cloud" : "none";
+  const [prevAutoCloudKey, setPrevAutoCloudKey] = useState(autoCloudKey);
+  if (prevAutoCloudKey !== autoCloudKey) {
+    setPrevAutoCloudKey(autoCloudKey);
+    if (autoCloudKey === "cloud") {
+      setCloudState((prev) =>
+        prev.status === "loading" ? prev : { status: "loading", voices: prev.voices },
+      );
+    } else {
+      setCloudState((prev) =>
+        prev.status === "loading" ? { status: "idle", voices: prev.voices } : prev,
+      );
+    }
+  }
+  const cloudSeqRef = useRef(0);
+  const tab = tabState.tab;
+  const linkTarget = tabState.tab === "cloud" ? tabState.linkTarget : null;
+  const cloudList = cloudState.voices;
+  const loadingCloud = cloudState.status === "loading";
+  const error =
+    operation.status === "idle"
+      ? operation.error || (tab === "cloud" && cloudState.status === "error" ? cloudState.error : "")
+      : "";
+  const createError = operation.status === "idle" ? operation.createError : "";
   const changeOpen = (next: boolean) => {
     setOpen(next);
     if (!next) {
       setFile(null);
-      setCreateError("");
+      setOperation((cur) => (cur.status === "idle" ? { ...cur, createError: "" } : cur));
       if (fileInput.current) fileInput.current.value = "";
     }
   };
@@ -476,9 +513,11 @@ export function VoiceCloneLibraryButton({
   const takes = useVoiceTakes(),
     usage = useVoicePlaygroundSelector((state) => state.usage, false);
   const inUse = activeFilmVoices(takes, usage ?? []);
-  const loading = useVoicePlaygroundSelector((state) => state.clonesLoading, false);
+  const loading = useVoicePlaygroundSelector((state) => state.clonesState.status === "loading", false);
   const loadError = useVoicePlaygroundSelector(
-    (state) => state.clonesError || state.clonesCloudError,
+    (state) =>
+      (state.clonesState.status === "idle" ? state.clonesState.error : null) ||
+      (state.cloneCloudState.status === "error" ? state.cloneCloudState.error : null),
     false,
   );
   const creating = operation.status === "creating";
@@ -505,10 +544,12 @@ export function VoiceCloneLibraryButton({
     action: CloneAction,
     input?: Record<string, unknown>,
   ) => {
+    if (operation.status !== "idle") return;
     setOperation({ status: "acting", id: clone.id });
-    setError("");
+    setCloudState((prev) => (prev.status === "error" ? { status: "idle", voices: prev.voices } : prev));
     try {
       await cloneAction(action, clone.id, clone.scope, input);
+      setOperation({ status: "idle", error: "", createError: "" });
       say(
         action === "copy"
           ? `Voice saved to ${input?.scope === "global" ? "Global" : "this project"}`
@@ -517,9 +558,11 @@ export function VoiceCloneLibraryButton({
             : "Voice library updated",
       );
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to update voice");
-    } finally {
-      setOperation({ status: "idle" });
+      setOperation({
+        status: "idle",
+        error: cause instanceof Error ? cause.message : "Unable to update voice",
+        createError: "",
+      });
     }
   };
   const useVoice = (clone: PlaygroundClone, template = false) => {
@@ -541,32 +584,39 @@ export function VoiceCloneLibraryButton({
     );
   };
   const loadCloud = async (target: PlaygroundClone | null = null) => {
-    setTab("cloud");
-    setLinkTarget(target);
-    setOperation({ status: "acting", id: "cloud" });
-    setError("");
+    const seq = ++cloudSeqRef.current;
+    setTabState({ tab: "cloud", linkTarget: target });
+    setOperation((cur) => (cur.status === "idle" ? { ...cur, error: "" } : cur));
+    setCloudState((prev) => ({ status: "loading", voices: prev.voices }));
     try {
       const data = await cloneAction("cloud", undefined, target?.scope ?? destination);
-      setCloud(data.voices ?? []);
+      if (cloudSeqRef.current !== seq) return;
+      setCloudState({ status: "ready", voices: data.voices ?? [] });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Unable to load cloud voices");
-    } finally {
-      setOperation({ status: "idle" });
+      if (cloudSeqRef.current !== seq) return;
+      setCloudState((prev) => ({
+        status: "error",
+        voices: prev.voices,
+        error: cause instanceof Error ? cause.message : "Unable to load cloud voices",
+      }));
     }
   };
   useEffect(() => {
     if (initialTab !== "cloud" || !configured) return;
     let active = true;
+    const seq = ++cloudSeqRef.current;
     void cloneAction("cloud", undefined, "project")
       .then((data) => {
-        if (active) setCloud(data.voices ?? []);
+        if (!active || cloudSeqRef.current !== seq) return;
+        setCloudState({ status: "ready", voices: data.voices ?? [] });
       })
       .catch((cause) => {
-        if (active)
-          setError(cause instanceof Error ? cause.message : "Unable to load cloud voices");
-      })
-      .finally(() => {
-        if (active) setOperation({ status: "idle" });
+        if (!active || cloudSeqRef.current !== seq) return;
+        setCloudState((prev) => ({
+          status: "error",
+          voices: prev.voices,
+          error: cause instanceof Error ? cause.message : "Unable to load cloud voices",
+        }));
       });
     return () => {
       active = false;
@@ -602,13 +652,16 @@ export function VoiceCloneLibraryButton({
           className="border-hairline flex min-h-0 min-w-0 flex-col overflow-y-auto overscroll-contain border-e"
           onSubmit={async (event) => {
             event.preventDefault();
-            if (!file || !name.trim() || !permission) return;
+            if (operation.status !== "idle" || !file || !name.trim() || !permission) return;
             setOperation({
               status: "creating",
               startedAt: performance.timeOrigin + event.timeStamp,
             });
-            setError("");
-            setCreateError("");
+            setCloudState((prev) =>
+              prev.status === "error" ? { status: "idle", voices: prev.voices } : prev,
+            );
+            let nextError = "";
+            let nextCreateError = "";
             try {
               const created = await createPlaygroundClone(
                 file,
@@ -626,10 +679,9 @@ export function VoiceCloneLibraryButton({
               setFile(null);
               if (fileInput.current) fileInput.current.value = "";
               if (["failed", "uncertain"].includes(created.phase)) {
-                setError(
+                nextError =
                   created.error ||
-                    "The response was not confirmed. Check the saved submission and cloud voices before creating another clone.",
-                );
+                  "The response was not confirmed. Check the saved submission and cloud voices before creating another clone.";
                 say("Sample saved. Check the existing submission before creating again.");
               } else
                 say(
@@ -638,14 +690,13 @@ export function VoiceCloneLibraryButton({
                     : "Sample saved. GenVoice is creating your voice.",
                 );
             } catch (cause) {
-              setCreateError(
+              nextCreateError =
                 cause instanceof Error
                   ? cause.message
-                  : "Clone request failed; inspect saved voices before trying again",
-              );
+                  : "Clone request failed; inspect saved voices before trying again";
               await loadPlaygroundClones();
             } finally {
-              setOperation({ status: "idle" });
+              setOperation({ status: "idle", error: nextError, createError: nextCreateError });
             }
           }}
         >
@@ -675,7 +726,7 @@ export function VoiceCloneLibraryButton({
                 aria-describedby={createError ? `${id}-sample-error` : undefined}
                 onChange={(event) => {
                   setFile(event.target.files?.[0] ?? null);
-                  setCreateError("");
+                  setOperation((cur) => (cur.status === "idle" ? { ...cur, createError: "" } : cur));
                 }}
               />
               {createError && (
@@ -850,7 +901,7 @@ export function VoiceCloneLibraryButton({
               variant="secondary"
               size="sm"
               className="h-auto min-h-6 max-w-full wrap-anywhere whitespace-normal"
-              disabled={operation.status !== "idle" || !configured}
+              disabled={loadingCloud || operation.status !== "idle" || !configured}
               onClick={() => void loadCloud()}
             >
               <CloudDownload />
@@ -878,7 +929,7 @@ export function VoiceCloneLibraryButton({
                 size="sm"
                 className="h-auto min-h-6 max-w-full text-start wrap-anywhere whitespace-normal"
                 onClick={() => {
-                  setTab("saved");
+                  setTabState({ tab: "saved" });
                   setFilter(value.value as typeof filter);
                 }}
               >
@@ -932,7 +983,7 @@ export function VoiceCloneLibraryButton({
                   </FieldLabel>
                 </Field>
               </div>
-              {cloud.map((voice) => (
+              {cloudList.map((voice) => (
                 <article key={voice.id} className="border-hairline rounded-lg border p-3">
                   <h4 className="text-foreground text-sm font-semibold">{voice.voice_name}</h4>
                   <p className="text-muted-foreground mt-1 text-xs">
@@ -949,7 +1000,9 @@ export function VoiceCloneLibraryButton({
                     disabled={!cloudPermission || operation.status !== "idle"}
                     onClick={async () => {
                       setOperation({ status: "acting", id: voice.id });
-                      setError("");
+                      setCloudState((prev) =>
+                        prev.status === "error" ? { status: "idle", voices: prev.voices } : prev,
+                      );
                       try {
                         await cloneAction(
                           linkTarget ? "link" : "adopt",
@@ -957,15 +1010,16 @@ export function VoiceCloneLibraryButton({
                           linkTarget?.scope ?? destination,
                           { remoteId: voice.id, permissionConfirmed: true },
                         );
-                        setTab("saved");
-                        setLinkTarget(null);
+                        setTabState({ tab: "saved" });
+                        setOperation({ status: "idle", error: "", createError: "" });
                         say("Existing cloud voice saved; no new clone was created.");
                       } catch (cause) {
-                        setError(
-                          cause instanceof Error ? cause.message : "Unable to save cloud voice",
-                        );
-                      } finally {
-                        setOperation({ status: "idle" });
+                        setOperation({
+                          status: "idle",
+                          error:
+                            cause instanceof Error ? cause.message : "Unable to save cloud voice",
+                          createError: "",
+                        });
                       }
                     }}
                   >
@@ -975,9 +1029,9 @@ export function VoiceCloneLibraryButton({
                   </Button>
                 </article>
               ))}
-              {!cloud.length && (
+              {!cloudList.length && (
                 <p className="text-muted-foreground text-sm">
-                  {operation.status !== "idle"
+                  {loadingCloud
                     ? "Loading cloud voices…"
                     : "No unassigned, current-project or Global cloud voices were found."}
                 </p>

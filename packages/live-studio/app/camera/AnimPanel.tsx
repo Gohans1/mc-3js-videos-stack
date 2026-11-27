@@ -423,32 +423,40 @@ export function AnimPanel() {
                 : x.cat === activeCat)),
     );
   }, [list, q, activeCat, favs, slot]);
-  const trial = useRef<{ id: string | null; snap: string; timer: number } | null>(null);
+  const trial = useRef<
+    | { kind: "idle" }
+    | { kind: "pending"; id: string | null; snap: string; timer: number }
+    | { kind: "playing"; id: string | null; snap: string }
+  >({ kind: "idle" });
   const leave = useCallback(() => {
-    if (!trial.current) return;
-    clearTimeout(trial.current.timer);
-    shotsDoc.restore(trial.current.snap);
-    trial.current = null;
+    const current = trial.current;
+    if (current.kind === "idle") return;
+    trial.current = { kind: "idle" };
+    if (current.kind === "pending") {
+      clearTimeout(current.timer);
+      return;
+    }
+    shotsDoc.restore(current.snap);
     stopSpan();
   }, []);
   const tryOn = (id: string | null) => {
     leave();
     if (id === now) return;
     const snap = shotsDoc.snapshot();
-    trial.current = {
-      id,
-      snap,
-      timer: window.setTimeout(() => {
-        previewAnim(shot, slot, id);
-        const [a, b] = spanOf(shot, slot);
-        playSpan(a, b, true);
-      }, 140),
-    };
+    const timer = window.setTimeout(() => {
+      if (trial.current.kind !== "pending" || trial.current.timer !== timer) return;
+      trial.current = { kind: "playing", id, snap };
+      previewAnim(shot, slot, id);
+      const [a, b] = spanOf(shot, slot);
+      playSpan(a, b, true);
+    }, 140);
+    trial.current = { kind: "pending", id, snap, timer };
   };
   const none = activeCat === ALL && !q.trim();
   useEffect(() => {
-    const id = trial.current?.id;
-    if (id !== undefined && !(id === null ? none : shown.some((x) => x.id === id))) leave();
+    if (trial.current.kind === "idle") return;
+    const { id } = trial.current;
+    if (!(id === null ? none : shown.some((x) => x.id === id))) leave();
   }, [shown, none, leave]);
   const pick = (id: string | null) => {
     leave();
